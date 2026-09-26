@@ -11514,6 +11514,7 @@ fn ledger_event_cursor_covers_every_cursor_bearing_variant() {
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }));
     assert_eq!(ledger_event_cursor(&completed), Some(cursor.clone()));
 
@@ -23589,6 +23590,7 @@ async fn approval_respond_ledgers_decided_before_unblocked_turn_completion() {
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }));
     });
 
@@ -23690,6 +23692,7 @@ async fn forced_backpressure_fixture_ledgers_terminal_and_latches_failed() {
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }),
     );
 
@@ -25676,6 +25679,7 @@ async fn session_rollback_excludes_dropped_turns_from_thread_turns() {
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }));
     }
 
@@ -27212,6 +27216,7 @@ async fn turn_state_get_falls_back_to_durable_projection_for_evicted() {
         tokens_in: None,
         tokens_out: None,
         session_result: None,
+        token_usage: None,
     }));
 
     let (ws, mut rx) = ws_connection_for_test(8);
@@ -29181,6 +29186,117 @@ async fn should_not_overwrite_terminal_usage_or_fabricate_it_for_ordinary_failur
     }
 }
 
+/// A completed turn's v2 terminal carries the provider's structured usage —
+/// reasoning, cache-read and cache-write tokens included — rather than an
+/// input/output-only projection with hardcoded zeros. A provider that billed
+/// 100 prompt tokens with 75 cache reads and 5 cache writes reports 20
+/// uncached input tokens (cache counts are disjoint from `input_tokens`).
+#[tokio::test]
+async fn should_carry_cached_tokens_on_completed_turn_terminal() {
+    let usage = EnvelopeTokenUsage {
+        input_tokens: 20,
+        output_tokens: 2,
+        reasoning_tokens: 1,
+        cache_read_tokens: 75,
+        cache_write_tokens: 5,
+    };
+    let ledger = UiProtocolLedger::new(16);
+    let session = SessionKey("local:completed-usage".into());
+    let turn = TurnId::new();
+    let state = TokioMutex::new(TurnState::Active);
+    let (ws, _rx) = ws_connection_for_test(16);
+    try_emit_terminal(
+        &state,
+        TerminalReason::Completed,
+        &ws,
+        &ledger,
+        &session,
+        &turn,
+        None,
+        Some(TurnCompletionDetails {
+            tokens_in: Some(20),
+            tokens_out: Some(2),
+            outcome: Some(TurnTerminalOutcome::Completed),
+            token_usage: Some(usage.clone()),
+            ..Default::default()
+        }),
+        None,
+        None,
+    )
+    .await;
+
+    let replay = ledger
+        .replay_after(
+            &session,
+            Some(&UiCursor {
+                stream: session.0.clone(),
+                seq: 0,
+            }),
+        )
+        .unwrap();
+    assert_eq!(replay.len(), 1);
+    let UiProtocolLedgerEvent::Notification(UiNotification::TurnCompleted(completed)) =
+        &replay[0].event
+    else {
+        panic!("expected durable completion");
+    };
+    assert_eq!(completed.token_usage.as_ref(), Some(&usage));
+
+    let projected =
+        project_lifecycle_event_to_v2_wire(&ledger, &replay[0].event, &replay[0].cursor).unwrap();
+    let UiProtocolLedgerEvent::Notification(UiNotification::EnvelopeV2(envelope)) = projected
+    else {
+        panic!("expected native completion projection");
+    };
+    let PayloadV2::TurnTerminal {
+        outcome,
+        error,
+        token_usage,
+    } = envelope.envelope.payload
+    else {
+        panic!("expected terminal");
+    };
+    assert_eq!(outcome, TurnTerminalOutcome::Completed);
+    assert!(error.is_none());
+    assert_eq!(token_usage, Some(usage));
+}
+
+/// Completed rows without structured usage (legacy ledgers, non-LLM paths)
+/// keep today's wire: the field is absent from the lifecycle event and the
+/// terminal projects input/output from `tokens_in` / `tokens_out`.
+#[test]
+fn should_keep_legacy_completed_terminal_projection_without_structured_usage() {
+    let session = SessionKey("local:completed-legacy".into());
+    let turn = TurnId::new();
+    let old_wire = json!({
+        "session_id": session, "turn_id": turn,
+        "tokens_in": 20, "tokens_out": 2
+    });
+    let old: TurnCompletedEvent = serde_json::from_value(old_wire.clone()).unwrap();
+    assert!(old.token_usage.is_none());
+    assert_eq!(serde_json::to_value(&old).unwrap(), old_wire);
+
+    let ledger = UiProtocolLedger::new(16);
+    let source = ledger.append_notification(UiNotification::TurnCompleted(old));
+    let projected =
+        project_lifecycle_event_to_v2_wire(&ledger, &source.event, &source.cursor).unwrap();
+    let UiProtocolLedgerEvent::Notification(UiNotification::EnvelopeV2(envelope)) = projected
+    else {
+        panic!("expected native completion projection");
+    };
+    let PayloadV2::TurnTerminal { token_usage, .. } = envelope.envelope.payload else {
+        panic!("expected terminal");
+    };
+    assert_eq!(
+        token_usage,
+        Some(EnvelopeTokenUsage {
+            input_tokens: 20,
+            output_tokens: 2,
+            ..Default::default()
+        })
+    );
+}
+
 /// A background result is delivered as one canonical child envelope,
 /// independent of any obsolete capability negotiation.
 #[tokio::test]
@@ -30300,6 +30416,7 @@ async fn v2_terminal_waits_behind_canonical_persist_on_session_forwarder() {
             tokens_in: Some(3),
             tokens_out: Some(2),
             session_result: None,
+            token_usage: None,
         }),
     )
     .expect("v2 terminal queued on ordered forwarder");
@@ -44128,6 +44245,7 @@ async fn session_hydrate_preserves_canonical_user_and_terminal_sequences() {
         tokens_in: None,
         tokens_out: None,
         session_result: None,
+        token_usage: None,
     }));
     let (ws, mut rx) = ws_connection_for_test(8);
     handle_session_hydrate(

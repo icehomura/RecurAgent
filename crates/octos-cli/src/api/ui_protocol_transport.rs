@@ -20098,13 +20098,18 @@ fn project_lifecycle_event_to_v2_wire(
                     payload: PayloadV2::TurnTerminal {
                         outcome: TurnTerminalOutcome::Completed,
                         error: None,
-                        token_usage: Some(EnvelopeTokenUsage {
-                            input_tokens: completed.tokens_in.map(u64::from).unwrap_or(0),
-                            output_tokens: completed.tokens_out.map(u64::from).unwrap_or(0),
-                            reasoning_tokens: 0,
-                            cache_read_tokens: 0,
-                            cache_write_tokens: 0,
-                        }),
+                        // Prefer the producer's exact usage; rows without
+                        // it (legacy ledgers, non-LLM paths) keep the
+                        // input/output-only projection.
+                        token_usage: Some(completed.token_usage.clone().unwrap_or_else(|| {
+                            EnvelopeTokenUsage {
+                                input_tokens: completed.tokens_in.map(u64::from).unwrap_or(0),
+                                output_tokens: completed.tokens_out.map(u64::from).unwrap_or(0),
+                                reasoning_tokens: 0,
+                                cache_read_tokens: 0,
+                                cache_write_tokens: 0,
+                            }
+                        })),
                     },
                 },
             }
@@ -40032,7 +40037,8 @@ struct TurnCompletionDetails {
     // combinations that project the terminal outcome into the lifecycle emit.
     #[allow(dead_code)]
     outcome: Option<TurnTerminalOutcome>,
-    /// Exact failed-turn usage, not the input/output session cost snapshot.
+    /// Exact usage of this turn (completed or failed), not the input/output
+    /// session cost snapshot.
     token_usage: Option<EnvelopeTokenUsage>,
     partial_result: Option<TurnErrorPartialResult>,
 }
@@ -40044,7 +40050,8 @@ struct TurnCompletionDetails {
 /// `completion_details` is consulted only when `expected_reason` is
 /// `Completed`, except `token_usage`, which also accompanies an error.
 /// Populated on the standalone-turn path
-/// from `done` (input/output tokens + cursor + per-row identity); left as
+/// from `done` (input/output tokens + structured token usage + cursor +
+/// per-row identity); left as
 /// `None` for paths that do not run the LLM (slash command, review/start
 /// scatter-join, M9 fixture replays).
 #[allow(clippy::too_many_arguments)]
@@ -40121,6 +40128,10 @@ async fn try_emit_terminal(
                     tokens_in,
                     tokens_out,
                     session_result: details.session_result,
+                    // The provider's structured usage for this turn, so the
+                    // v2 `TurnTerminal` projection carries reasoning and
+                    // cache tokens instead of zeros.
+                    token_usage: details.token_usage,
                 }),
             );
             // The canonical `turn_completed` terminal reaches the client as a
@@ -40283,6 +40294,7 @@ async fn try_emit_completed_terminal_with_forced_backpressure(
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }),
     );
 
