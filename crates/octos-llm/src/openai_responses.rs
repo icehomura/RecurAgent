@@ -65,7 +65,7 @@ impl OpenAIResponsesProvider {
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         let base_url = base_url.into();
-        self.prompt_cache_affinity = base_url.trim_end_matches('/') == "https://api.openai.com/v1";
+        self.prompt_cache_affinity = is_official_openai_base_url(&base_url);
         self.base_url = base_url;
         self
     }
@@ -118,7 +118,7 @@ impl OpenAIResponsesProvider {
         if let Some(max) = config.max_tokens {
             body["max_output_tokens"] = max.into();
         }
-        if self.base_url != "https://api.openai.com/v1" {
+        if !is_official_openai_base_url(&self.base_url) {
             if let Some(temperature) = config.temperature {
                 body["temperature"] = temperature.into();
             }
@@ -397,7 +397,7 @@ impl LlmProvider for OpenAIResponsesProvider {
     }
 
     fn provider_metadata(&self) -> ProviderMetadata {
-        let endpoint = if self.base_url != "https://api.openai.com/v1" {
+        let endpoint = if !is_official_openai_base_url(&self.base_url) {
             endpoint_label_from_base_url(&self.base_url)
         } else {
             None
@@ -787,6 +787,12 @@ struct ResponsesStreamState {
     tool_items: std::collections::HashMap<String, usize>,
 }
 
+/// Whether `base_url` is the official OpenAI endpoint, ignoring a trailing
+/// slash (matching the custom-endpoint check in `octos chat`'s wiring).
+fn is_official_openai_base_url(base_url: &str) -> bool {
+    base_url.trim_end_matches('/') == "https://api.openai.com/v1"
+}
+
 fn map_responses_sse(
     state: &mut ResponsesStreamState,
     event: &crate::sse::SseEvent,
@@ -933,7 +939,10 @@ fn map_responses_sse(
             vec![]
         }
 
-        "response.failed" | "error" => {
+        // Like the stream-end sentinel, an error-shaped event after the
+        // stream already reached a terminal (e.g. `response.completed`) must
+        // not surface a synthetic error after Usage/Done.
+        "response.failed" | "error" if !state.terminal => {
             state.terminal = true;
             vec![StreamEvent::Error(data.to_string())]
         }
@@ -943,7 +952,7 @@ fn map_responses_sse(
                 "Responses stream ended before a terminal event".into(),
             )]
         }
-        _ if data.get("error").is_some() => {
+        _ if !state.terminal && data.get("error").is_some() => {
             state.terminal = true;
             vec![StreamEvent::Error(data.to_string())]
         }
@@ -1519,6 +1528,73 @@ mod tests {
             }
             _ => panic!("expected Usage"),
         }
+    }
+
+    #[test]
+    fn should_ignore_error_events_when_stream_already_terminal() {
+        let mut state = ResponsesStreamState::default();
+        let completed = crate::sse::SseEvent {
+            event: None,
+            data: r#"{"type": "response.completed", "response": {"status": "completed", "usage": {"input_tokens": 1, "output_tokens": 1}}}"#.into(),
+        };
+        assert_eq!(map_responses_sse(&mut state, &completed).len(), 2);
+        for late in [
+            r#"{"type": "response.failed", "response": {"status": "failed"}}"#,
+            r#"{"type": "error", "message": "late"}"#,
+            r#"{"type": "something.else", "error": {"message": "late"}}"#,
+            r#"{"type": "octos.stream_end"}"#,
+        ] {
+            let event = crate::sse::SseEvent {
+                event: None,
+                data: late.into(),
+            };
+            assert!(
+                map_responses_sse(&mut state, &event).is_empty(),
+                "late event must not surface after the terminal: {late}"
+            );
+        }
+    }
+
+    #[test]
+    fn should_still_surface_error_events_before_a_terminal() {
+        for early in [
+            r#"{"type": "response.failed", "response": {"status": "failed"}}"#,
+            r#"{"type": "error", "message": "boom"}"#,
+            r#"{"type": "something.else", "error": {"message": "boom"}}"#,
+        ] {
+            let mut state = ResponsesStreamState::default();
+            let event = crate::sse::SseEvent {
+                event: None,
+                data: early.into(),
+            };
+            let events = map_responses_sse(&mut state, &event);
+            assert!(
+                matches!(events.as_slice(), [StreamEvent::Error(_)]),
+                "{early}: {events:?}"
+            );
+            assert!(state.terminal);
+        }
+    }
+
+    #[test]
+    fn should_treat_trailing_slash_official_base_url_as_official() {
+        let config = ChatConfig {
+            temperature: Some(0.3),
+            ..Default::default()
+        };
+        let messages = [Message::user("hi")];
+        for official in ["https://api.openai.com/v1", "https://api.openai.com/v1/"] {
+            let provider = OpenAIResponsesProvider::new("key", "gpt-5").with_base_url(official);
+            let body = provider.build_request(&messages, &[], &config);
+            assert!(
+                body.get("temperature").is_none(),
+                "official endpoint must not receive compat sampler fields: {official}"
+            );
+        }
+        let custom =
+            OpenAIResponsesProvider::new("key", "gpt-5").with_base_url("http://127.0.0.1:8080/v1/");
+        let body = custom.build_request(&messages, &[], &config);
+        assert!(body.get("temperature").is_some());
     }
 
     #[test]
