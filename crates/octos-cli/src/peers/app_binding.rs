@@ -15,7 +15,7 @@
 //! An app can host smaller clients of its own (Rinx's mini apps). They do not
 //! get peers: each gets a **request context** of the app peer — a separate
 //! transcript in a separate workspace under the peer's, with a child memory
-//! namespace and the peer's model lane. Its session key is minted by the
+//! namespace and the peer's model lane. Its session key is derived by the
 //! kernel (`<originator base>#peerctx-<slug>.<context_id>`), and a session
 //! with that topic only runs while its binding is open: an unknown or closed
 //! context is refused at bootstrap and at every turn start, so a stale client
@@ -51,6 +51,99 @@ pub(crate) struct PeerHostBinding {
     pub(crate) cwd: PathBuf,
     /// Validated app/account memory namespace.
     pub(crate) memory_namespace: String,
+    /// SHA-256 (hex) of the host token minted when the peer was created.
+    /// Every later control call on the peer (resume, request contexts, model
+    /// selection) must present that token: the self-reported originator
+    /// session alone does not authorize them.
+    #[serde(default)]
+    pub(crate) token_sha256: String,
+}
+
+/// A fresh 256-bit host token (hex) and its SHA-256 (hex).
+pub(crate) fn mint_host_token() -> Result<(String, String), String> {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|err| format!("no randomness for the host token: {err}"))?;
+    let token: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    let digest = token_digest(&token);
+    Ok((token, digest))
+}
+
+/// SHA-256 (hex) of a host token.
+pub(crate) fn token_digest(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(token.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// Whether `token` is the one `binding` was created with (constant-time over
+/// the digests).
+pub(crate) fn host_token_matches(binding: &PeerHostBinding, token: Option<&str>) -> bool {
+    let Some(token) = token else { return false };
+    if binding.token_sha256.is_empty() {
+        return false;
+    }
+    let presented = token_digest(token);
+    let (a, b) = (presented.as_bytes(), binding.token_sha256.as_bytes());
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// Whether two memory namespaces share stores: equal, or one inside the
+/// other (a peer's request contexts live under `<peer ns>/ctx-…`).
+pub(crate) fn namespaces_overlap(a: &str, b: &str) -> bool {
+    a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
+}
+
+/// Whether two canonical workspaces nest (either contains the other).
+pub(crate) fn workspaces_overlap(a: &Path, b: &Path) -> bool {
+    a.starts_with(b) || b.starts_with(a)
+}
+
+/// Every host-bound peer under `peers_root` (closed ones too: their stores
+/// still hold data), with its slug.
+pub(crate) fn host_bound_peers(peers_root: &Path) -> Vec<(String, PeerHostBinding)> {
+    let Ok(entries) = std::fs::read_dir(peers_root) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let slug = entry.file_name().to_string_lossy().into_owned();
+            let dir = staged_peer_dir(peers_root, &slug)?;
+            Some((slug, read_host_binding_in(&dir)?))
+        })
+        .collect()
+}
+
+/// The first existing host-bound peer (other than `except`) whose namespace
+/// or workspace would share state with a new binding.
+pub(crate) fn binding_conflict(
+    peers_root: &Path,
+    namespace: &str,
+    cwd: &Path,
+    except: Option<&str>,
+) -> Option<String> {
+    host_bound_peers(peers_root)
+        .into_iter()
+        .filter(|(slug, _)| Some(slug.as_str()) != except)
+        .find_map(|(slug, other)| {
+            if namespaces_overlap(namespace, &other.memory_namespace) {
+                Some(format!(
+                    "memory namespace '{namespace}' overlaps peer '{slug}''s '{}'",
+                    other.memory_namespace
+                ))
+            } else if workspaces_overlap(cwd, &other.cwd) {
+                Some(format!(
+                    "workspace {} overlaps peer '{slug}''s {}",
+                    cwd.display(),
+                    other.cwd.display()
+                ))
+            } else {
+                None
+            }
+        })
 }
 
 /// One request context's durable binding.
@@ -90,7 +183,7 @@ pub(crate) fn context_memory_namespace(peer_namespace: &str, context_id: &str) -
     format!("{peer_namespace}/ctx-{context_id}")
 }
 
-/// The kernel-minted session key of a request context: the originator's base
+/// The kernel-derived (not secret) session key of a request context: the originator's base
 /// key with topic `peerctx-<slug>.<context_id>`. A slug never contains `.`,
 /// and a context id never does either, so the split is unambiguous.
 pub(crate) fn context_session_key(
@@ -243,6 +336,17 @@ pub(crate) fn resolve_session_app_binding(
                 memory_namespace: binding.memory_namespace,
             };
         }
+        // Fail closed on a torn or tampered peer dir that still carries a
+        // host binding (brief missing, symlinked dir): never run it as an
+        // ordinary profile session with the profile's memory.
+        let dir = peers_root.join(slug);
+        if std::fs::symlink_metadata(dir.join(HOST_BINDING_LEAF)).is_ok()
+            || std::fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink())
+        {
+            return SessionAppBinding::Refused(format!(
+                "peer '{slug}' has an incomplete host binding"
+            ));
+        }
     }
     SessionAppBinding::Unbound
 }
@@ -265,6 +369,7 @@ mod tests {
                 version: 1,
                 cwd: cwd.to_path_buf(),
                 memory_namespace: ns.to_owned(),
+                token_sha256: token_digest("t"),
             },
         )
         .unwrap();
@@ -389,6 +494,74 @@ mod tests {
             Some(("rinx", "app-a"))
         );
         assert_eq!(parse_context_topic("peer-rinx"), None);
+    }
+
+    #[test]
+    fn should_fail_closed_on_a_torn_host_peer_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let peers = tmp.path().join("peers");
+        let dir = stage(&peers, "rinx", Path::new("/ws/rinx"), "app/rinx/acct-1");
+        std::fs::remove_file(dir.join("brief.md")).unwrap();
+        assert!(matches!(
+            resolve_session_app_binding(&peers, &key("peer-rinx")),
+            SessionAppBinding::Refused(_)
+        ));
+    }
+
+    #[test]
+    fn should_detect_namespace_and_workspace_overlaps() {
+        assert!(namespaces_overlap("app/rinx/a", "app/rinx/a"));
+        assert!(namespaces_overlap("app/rinx/a/ctx-x", "app/rinx/a"));
+        assert!(namespaces_overlap("app/rinx", "app/rinx/a"));
+        assert!(!namespaces_overlap("app/rinx/a", "app/rinx/ab"));
+        let tmp = tempfile::tempdir().unwrap();
+        let peers = tmp.path().join("peers");
+        stage(&peers, "rinx", Path::new("/ws/rinx"), "app/rinx/acct-1");
+        assert!(
+            binding_conflict(
+                &peers,
+                "app/rinx/acct-1/ctx-a",
+                Path::new("/ws/other"),
+                None
+            )
+            .is_some()
+        );
+        assert!(
+            binding_conflict(&peers, "app/notes/acct-1", Path::new("/ws/rinx/sub"), None).is_some()
+        );
+        assert!(binding_conflict(&peers, "app/notes/acct-1", Path::new("/ws"), None).is_some());
+        assert!(
+            binding_conflict(&peers, "app/notes/acct-1", Path::new("/ws/notes"), None).is_none()
+        );
+        assert!(
+            binding_conflict(
+                &peers,
+                "app/rinx/acct-1",
+                Path::new("/ws/rinx"),
+                Some("rinx")
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn should_match_only_the_minted_host_token() {
+        let (token, digest) = mint_host_token().unwrap();
+        assert_eq!(token.len(), 64);
+        let binding = PeerHostBinding {
+            version: 1,
+            cwd: PathBuf::from("/ws"),
+            memory_namespace: "app/x".into(),
+            token_sha256: digest,
+        };
+        assert!(host_token_matches(&binding, Some(&token)));
+        assert!(!host_token_matches(&binding, Some("guess")));
+        assert!(!host_token_matches(&binding, None));
+        let legacy = PeerHostBinding {
+            token_sha256: String::new(),
+            ..binding
+        };
+        assert!(!host_token_matches(&legacy, Some(&token)));
     }
 
     #[test]

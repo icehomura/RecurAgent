@@ -529,10 +529,14 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   the namespace's memory stores (capture, retrieval, prompt injection;
   never the profile's own memory); optional `resume: true` returns an
   existing peer with the same originator, namespace and workspace
-  (`resumed: true`) instead of refusing the name. Result entries add
-  `model` (`{lane, provider?, model?}`, the effective choice),
-  `model_note`, `memory_namespace` and `resumed`. Typed `data.kind`:
-  `peer_originator_mismatch`, `peer_binding_mismatch`, `peer_closed`.
+  (`resumed: true`, requires `host_token`) instead of refusing the name.
+  Result entries add `model` (`{lane, provider?, model?}`, the effective
+  choice), `model_note`, `memory_namespace`, `resumed` and `host_token`
+  (minted once at creation; required for every later control call on the
+  peer). A binding whose namespace or workspace nests with another app
+  peer's is refused. Typed `data.kind`: `peer_originator_mismatch`,
+  `peer_host_token_mismatch`, `peer_binding_mismatch`,
+  `peer_binding_conflict`, `peer_closed`.
 - `peer/model/set` (accepted `UPCR-2026-034`: the peer's originator sets or
   clears (`model: null`) its configured model lane; `{session_id, peer,
   model}` → `{slug, profile_id, model, applies: "next_turn"}`; an unknown

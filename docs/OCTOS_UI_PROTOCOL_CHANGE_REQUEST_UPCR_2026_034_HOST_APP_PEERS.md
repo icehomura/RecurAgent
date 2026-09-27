@@ -48,12 +48,25 @@ scoped like `peer/prepare`.
 | --- | --- |
 | `model?` | Configured `sub_provider` lane key, as `peer_handoff`'s `model`. Unknown lane: `model_note`, primary model. |
 | `memory_namespace?` | Marks a **host-owned app peer**. Requires `session_id` (the owning system-agent session, persisted as the originator), exactly one name, and no `worktree`. `cwd` names the app's host-owned workspace (validated like a session open); without it the kernel provisions `<data_dir>/app-workspaces/<namespace segments>` — the path a remote host uses, since its local paths mean nothing to the kernel. Grammar: 1–8 `/`-separated segments of `[a-z0-9][a-z0-9._-]{0,63}`, at most 200 bytes. |
-| `resume?` | With `memory_namespace`: if the named peer exists with the same originator, namespace and workspace, return it (`resumed: true`) instead of refusing the name. A `model` given on resume updates the lane. |
+| `resume?` | With `memory_namespace`: if the named peer exists with the same originator, namespace and workspace, and `host_token` matches, return it (`resumed: true`) instead of refusing the name. A `model` given on resume updates the lane. |
+| `host_token?` | The credential returned when the host-owned app peer was created. Required to resume it. |
 
 Result entries add `model` (`{lane, provider?, model?}` — the effective
-model; `{lane: "primary"}` otherwise; never credentials), `model_note`,
-`memory_namespace` and `resumed`. Typed `data.kind`:
-`peer_originator_mismatch` (permission denied), `peer_binding_mismatch`,
+model; `{lane: "primary"}` otherwise; never provider credentials),
+`model_note`, `memory_namespace`, `resumed`, and `host_token`. `host_token` is
+a 256-bit random credential, returned only when a host-owned app peer is
+created. Only its SHA-256 is stored.
+
+**Allocation is exclusive.** A new host-owned app peer is refused
+(`peer_binding_conflict`) when its namespace equals or nests with any other
+host-owned peer's namespace. That includes the peer's request-context
+subspace `<ns>/ctx-…`, and closed peers, whose stores still hold data. It is
+also refused when its workspace contains or is contained in another's, or
+lies inside the kernel's memory stores. Two apps therefore never share a
+memory store or a workspace by construction.
+
+Typed `data.kind`: `peer_originator_mismatch` and `peer_host_token_mismatch`
+(permission denied), `peer_binding_mismatch`, `peer_binding_conflict`,
 `peer_closed`.
 
 The binding (`peers/<slug>/host_binding.json`) is written durably BEFORE
@@ -61,9 +74,9 @@ The binding (`peers/<slug>/host_binding.json`) is written durably BEFORE
 
 ### `peer/model/set`
 
-`{session_id, peer, model: string|null, profile_id?}` →
+`{session_id, peer, model: string|null, host_token?, profile_id?}` →
 `{slug, profile_id, model, applies: "next_turn"}`. Originator only. Sets or
-clears the peer's lane; the lane is read at each turn start, so a change
+clears the peer's lane (`host_token` required for a host-owned app peer); the lane is read at each turn start, so a change
 applies between turns. An unknown lane is refused (`peer_model_unknown`,
 with `available`) and nothing changes. The profile default model, the
 profile's lanes and all credentials are untouched.
@@ -75,16 +88,17 @@ transcript, a workspace inside the peer's, and a child memory namespace. It
 is not an agent: it cannot hand off peers, has no blackboard entry and runs
 on its peer's model lane.
 
-`peer/context/open {session_id, peer, context_id, cwd?, profile_id?}` →
+`peer/context/open {session_id, peer, context_id, host_token, cwd?, profile_id?}` →
 `{session_id, topic, slug, context_id, cwd, memory_namespace, model,
-profile_id, created}`. Originator only; `context_id` is
-`[a-z0-9][a-z0-9-]{0,63}`. The session key is minted by the kernel:
-`<originator base key>#peerctx-<slug>.<context_id>`. `cwd` defaults to
+profile_id, created}`. Originator plus host token; `context_id` is
+`[a-z0-9][a-z0-9-]{0,63}`. The session key is derived by the kernel:
+`<originator base key>#peerctx-<slug>.<context_id>`. It is an address, not a
+secret. `cwd` defaults to
 `<peer cwd>/contexts/<context_id>`; an explicit `cwd` must lie strictly
 inside the peer's workspace (`peer_context_workspace_escape`). The memory
 namespace is `<peer namespace>/ctx-<context_id>`. Idempotent while open.
 
-`peer/context/close {session_id, peer, context_id}` →
+`peer/context/close {session_id, peer, context_id, host_token}` →
 `{session_id, slug, context_id, profile_id, closed, was_open, interrupted}`.
 Writes the closed marker first, then interrupts the context's in-flight turn
 (`turn/error`: "interrupted by peer/context/close"). The transcript and
@@ -101,8 +115,10 @@ For a session whose topic is `peer-<slug>` of a host-owned peer, or any
 
 - **Workspace**: the session runs in the bound workspace. `session/open`
   without `cwd` gets it; a different `cwd` is refused.
-- **Refusal**: a closed peer, a closed context, a never-opened context or a
-  malformed `peerctx-` topic cannot bootstrap, and every `turn/start` on a
+- **Refusal**: a closed peer, a closed context, a never-opened context, a
+  malformed `peerctx-` topic, or a torn or tampered peer dir that still carries
+  a host binding (brief missing, symlinked dir) cannot bootstrap. It fails
+  closed and never falls back to an ordinary profile session, and every `turn/start` on a
   cached runtime re-checks the binding (`session_binding_closed` terminal).
 - **Memory namespace**: capture (`save_memory`, episodes), retrieval
   (`recall_memory`, `memory_search`, `memory_load`), the automatic memory
@@ -132,11 +148,18 @@ Ordinary sessions and agent-staged peers are unchanged.
   scheduling across apps, and exposing the namespaces through the
   memory-panel RPCs are not part of this change.
 
-## Risk
+## Trust model and risk
 
-- The binding is only as trustworthy as the raw surface: in the single-user
-  profile model any client that can call `peer/prepare` can create bindings.
-  Hosts must not hand raw OUP to untrusted apps (they broker requests).
+- **Control plane** (resume, request contexts, model selection) is bound to the
+  host token minted at creation, not to the self-reported originator session.
+- **Session plane**: a bound session's *properties* are enforced by the
+  kernel — its workspace, memory namespace and closure. *Who* may drive it is
+  not enforced: a raw client authenticated for the profile can `session/open`
+  or `turn/start` any session of the profile, including a bound one, exactly
+  as for every other session in the single-user profile model. Hosts must not
+  hand raw OUP to untrusted apps; they broker requests (as OctoSense's
+  `octosense-app-peers` does). Where a client must be pinned to one session,
+  the existing session-ingress credential is the mechanism.
 - Namespace stores are cached per process by root (one redb open per file).
 
 ## Tests
@@ -148,6 +171,9 @@ Ordinary sessions and agent-staged peers are unchanged.
 - `should_open_isolated_request_contexts_and_refuse_them_after_close`
 - `should_provision_a_kernel_workspace_when_the_host_names_none`
 - `should_advertise_and_dispatch_the_host_peer_methods`
+- `should_require_the_host_token_for_every_control_call`
+- `should_refuse_a_binding_that_shares_state_with_another_app_peer`
+- `peers::app_binding::…should_fail_closed_on_a_torn_host_peer_dir`
 - `should_never_extract_an_app_bound_session_into_the_profile_memory`
 - `peers::app_binding` and `runtime::memory_namespace` unit tests
 - `spec_section6_catalog_lists_every_advertised_method`

@@ -10,6 +10,26 @@ struct Fixture {
     data_dir: PathBuf,
     apps: PathBuf,
     system: SessionKey,
+    /// Host tokens returned at creation, by peer name.
+    tokens: std::sync::Mutex<std::collections::HashMap<String, String>>,
+}
+
+fn tok(fx: &Fixture, name: &str) -> Value {
+    fx.tokens
+        .lock()
+        .unwrap()
+        .get(name)
+        .map(|t| json!(t))
+        .unwrap_or(Value::Null)
+}
+
+fn remember(fx: &Fixture, name: &str, result: &Value) {
+    if let Some(token) = result["host_token"].as_str() {
+        fx.tokens
+            .lock()
+            .unwrap()
+            .insert(name.to_owned(), token.to_owned());
+    }
 }
 
 async fn fixture() -> Fixture {
@@ -80,6 +100,7 @@ async fn fixture() -> Fixture {
         data_dir,
         apps,
         system: SessionKey::with_profile_topic("dev", "api", "host", "system"),
+        tokens: Default::default(),
         _tmp: tmp,
     }
 }
@@ -106,11 +127,13 @@ async fn prepare_app(
                 "session_id": fx.system,
                 "memory_namespace": ns,
                 "resume": resume,
+                "host_token": tok(fx, name),
             }),
         ),
         None,
     )
     .await
+    .inspect(|result| remember(fx, name, result))
 }
 
 async fn segment(runtime: &crate::runtime::SessionRuntime) -> String {
@@ -221,6 +244,7 @@ async fn should_select_a_configured_model_for_one_peer_without_touching_the_prof
     )
     .await
     .unwrap();
+    remember(&fx, "Rinx", &staged);
     assert_eq!(
         staged["model"],
         json!({ "lane": "strong", "provider": "openai", "model": "gpt-4o" })
@@ -250,7 +274,7 @@ async fn should_select_a_configured_model_for_one_peer_without_touching_the_prof
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_MODEL_SET,
-            json!({ "session_id": fx.system, "peer": "Notes", "model": "strong" }),
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Notes"), "peer": "Notes", "model": "strong" }),
         ),
         None,
     )
@@ -271,7 +295,7 @@ async fn should_select_a_configured_model_for_one_peer_without_touching_the_prof
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_MODEL_SET,
-            json!({ "session_id": fx.system, "peer": "Notes", "model": "turbo" }),
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Notes"), "peer": "Notes", "model": "turbo" }),
         ),
         None,
     )
@@ -285,7 +309,7 @@ async fn should_select_a_configured_model_for_one_peer_without_touching_the_prof
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_MODEL_SET,
-            json!({ "session_id": fx.system, "peer": "Notes", "model": null }),
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Notes"), "peer": "Notes", "model": null }),
         ),
         None,
     )
@@ -405,7 +429,7 @@ async fn should_open_isolated_request_contexts_and_refuse_them_after_close() {
             &fx.state,
             &rpc(
                 APPUI_METHOD_PEER_CONTEXT_OPEN,
-                json!({ "session_id": fx.system, "peer": "Rinx", "context_id": context_id }),
+                json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"), "peer": "Rinx", "context_id": context_id }),
             ),
             None,
         )
@@ -455,7 +479,7 @@ async fn should_open_isolated_request_contexts_and_refuse_them_after_close() {
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_MODEL_SET,
-            json!({ "session_id": fx.system, "peer": "Rinx", "model": "strong" }),
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"), "peer": "Rinx", "model": "strong" }),
         ),
         None,
     )
@@ -472,7 +496,7 @@ async fn should_open_isolated_request_contexts_and_refuse_them_after_close() {
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_CONTEXT_OPEN,
-            json!({ "session_id": fx.system, "peer": "Rinx", "context_id": "mini-c", "cwd": fx.apps.join("notes").to_string_lossy() }),
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"), "peer": "Rinx", "context_id": "mini-c", "cwd": fx.apps.join("notes").to_string_lossy() }),
         ),
         None,
     )
@@ -502,7 +526,7 @@ async fn should_open_isolated_request_contexts_and_refuse_them_after_close() {
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_CONTEXT_CLOSE,
-            json!({ "session_id": fx.system, "peer": "Rinx", "context_id": "mini-a" }),
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"), "peer": "Rinx", "context_id": "mini-a" }),
         ),
         None,
     )
@@ -567,6 +591,7 @@ async fn should_provision_a_kernel_workspace_when_the_host_names_none() {
     )
     .await
     .expect("provisioned");
+    remember(&fx, "Remote Rinx", &staged);
     let cwd = PathBuf::from(staged["cwd"].as_str().unwrap());
     assert_eq!(
         cwd,
@@ -579,6 +604,7 @@ async fn should_provision_a_kernel_workspace_when_the_host_names_none() {
             json!({
                 "brief": "b", "names": ["Remote Rinx"], "session_id": fx.system,
                 "memory_namespace": "app/rinx/acct-9", "resume": true,
+                "host_token": tok(&fx, "Remote Rinx"),
             }),
         ),
         None,
@@ -587,4 +613,121 @@ async fn should_provision_a_kernel_workspace_when_the_host_names_none() {
     .expect("resumed");
     assert_eq!(resumed["resumed"], true);
     assert_eq!(resumed["cwd"], staged["cwd"]);
+}
+
+#[tokio::test]
+async fn should_require_the_host_token_for_every_control_call() {
+    let fx = fixture().await;
+    let staged = prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let token = staged["host_token"]
+        .as_str()
+        .expect("minted once")
+        .to_owned();
+    assert_eq!(token.len(), 64);
+    let peer_dir = fx.data_dir.join("peers/rinx");
+    let stored = std::fs::read_to_string(peer_dir.join("host_binding.json")).unwrap();
+    assert!(!stored.contains(&token), "only the digest is stored");
+    // The originator session alone is not enough.
+    for params in [
+        json!({ "brief": "b", "names": ["Rinx"], "session_id": fx.system,
+                "cwd": fx.apps.join("rinx").to_string_lossy(), "memory_namespace": "app/rinx/acct-1", "resume": true }),
+        json!({ "brief": "b", "names": ["Rinx"], "session_id": fx.system, "host_token": "guess",
+                "cwd": fx.apps.join("rinx").to_string_lossy(), "memory_namespace": "app/rinx/acct-1", "resume": true }),
+    ] {
+        let err = raw_peer_prepare(&fx.state, &rpc(APPUI_METHOD_PEER_PREPARE, params), None)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.data.as_ref().unwrap()["kind"],
+            "peer_host_token_mismatch"
+        );
+    }
+    let err = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({ "session_id": fx.system, "peer": "Rinx", "context_id": "a" }),
+        ),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(
+        err.data.as_ref().unwrap()["kind"],
+        "peer_host_token_mismatch"
+    );
+    let err = raw_peer_model_set(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_MODEL_SET,
+            json!({ "session_id": fx.system, "peer": "Rinx", "model": "strong" }),
+        ),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(
+        err.data.as_ref().unwrap()["kind"],
+        "peer_host_token_mismatch"
+    );
+    // Resume never re-issues the token.
+    let resumed = prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    assert!(resumed["host_token"].is_null());
+}
+
+#[tokio::test]
+async fn should_refuse_a_binding_that_shares_state_with_another_app_peer() {
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    std::fs::create_dir_all(fx.apps.join("rinx/nested")).unwrap();
+    for (name, cwd, ns) in [
+        ("Twin", fx.apps.join("notes"), "app/rinx/acct-1"),
+        (
+            "Inside",
+            fx.apps.join("notes"),
+            "app/rinx/acct-1/ctx-mini-a",
+        ),
+        ("Parent", fx.apps.join("notes"), "app/rinx"),
+        ("Nested", fx.apps.join("rinx/nested"), "app/other/acct-1"),
+        ("Around", fx.apps.clone(), "app/other/acct-2"),
+    ] {
+        let err = raw_peer_prepare(
+            &fx.state,
+            &rpc(
+                APPUI_METHOD_PEER_PREPARE,
+                json!({ "brief": "b", "names": [name], "session_id": fx.system,
+                        "cwd": cwd.to_string_lossy(), "memory_namespace": ns }),
+            ),
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err.data.as_ref().unwrap()["kind"],
+            "peer_binding_conflict",
+            "{name}"
+        );
+    }
+    let stores = fx.data_dir.join("memory-namespaces/app");
+    std::fs::create_dir_all(&stores).unwrap();
+    let err = raw_peer_prepare(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_PREPARE,
+            json!({ "brief": "b", "names": ["Stores"], "session_id": fx.system,
+                    "cwd": stores.to_string_lossy(), "memory_namespace": "app/stores" }),
+        ),
+        None,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err.data.as_ref().unwrap()["kind"], "peer_binding_conflict");
+    // A disjoint app is fine.
+    prepare_app(&fx, "Notes", "notes", "app/notes/acct-1", true)
+        .await
+        .unwrap();
 }

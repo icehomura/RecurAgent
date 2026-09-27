@@ -1056,6 +1056,7 @@ mod tests {
                 version: 1,
                 cwd: dir.path().join("apps/rinx"),
                 memory_namespace: "app/rinx/acct-1".into(),
+                token_sha256: String::new(),
             },
         )
         .unwrap();

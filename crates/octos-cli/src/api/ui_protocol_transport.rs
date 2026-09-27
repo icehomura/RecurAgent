@@ -326,7 +326,7 @@ const APPUI_METHOD_PEER_GATHER: &str = "peer/gather";
 const APPUI_METHOD_PEER_MODEL_SET: &str = "peer/model/set";
 /// UPCR-2026-034 `peer/context/open`: open (idempotently) a bound request
 /// context of a host-owned app peer — a separate transcript, workspace and
-/// child memory namespace under the peer, with a kernel-minted session key.
+/// child memory namespace under the peer, with a kernel-derived session key.
 const APPUI_METHOD_PEER_CONTEXT_OPEN: &str = "peer/context/open";
 /// UPCR-2026-034 `peer/context/close`: close a request context for good,
 /// interrupting its in-flight turn; the context session never runs again.
@@ -14477,6 +14477,10 @@ struct RawPeerPrepareParams {
     /// workspace, return it (`resumed: true`) instead of refusing the name.
     #[serde(default)]
     resume: bool,
+    /// UPCR-2026-034 — the host token returned when this host-owned app peer
+    /// was created. Required to resume it.
+    #[serde(default)]
+    host_token: Option<String>,
 }
 
 /// UPCR-2026-034 — the profile's configured model lanes, from the
@@ -14518,6 +14522,7 @@ fn authorize_host_peer_call(
     peers_root: &Path,
     peer: &str,
     caller: &SessionKey,
+    host_token: Option<&str>,
 ) -> Result<String, RpcError> {
     let slug = resolve_peer_name_to_slug(peers_root, peer)
         .ok_or_else(|| host_peer_error("peer_not_found", format!("no peer named '{peer}'")))?;
@@ -14527,7 +14532,21 @@ fn authorize_host_peer_call(
         ))
         .with_data(json!({ "kind": "peer_originator_mismatch" }))
     })?;
+    // A host-owned app peer is controlled by the credential minted with it,
+    // not by the (self-reported) originator session alone.
+    if let Some(binding) = crate::peers::app_binding::read_peer_host_binding(peers_root, &slug) {
+        if !crate::peers::app_binding::host_token_matches(&binding, host_token) {
+            return Err(host_token_error(&slug));
+        }
+    }
     Ok(slug)
+}
+
+fn host_token_error(slug: &str) -> RpcError {
+    RpcError::permission_denied(format!(
+        "peer '{slug}' is a host-owned app peer: present the host token it was created with"
+    ))
+    .with_data(json!({ "kind": "peer_host_token_mismatch" }))
 }
 
 /// UPCR-2026-034 — resume an existing host-owned app peer after checking
@@ -14542,6 +14561,7 @@ fn resume_host_peer(
     requested_model: Option<&str>,
     lanes: &[crate::config::SubProviderConfig],
     profile_id: &str,
+    host_token: Option<&str>,
 ) -> Result<Value, RpcError> {
     let Some(dir) = staged_peer_dir(peers_root, slug) else {
         return Err(host_peer_error(
@@ -14559,6 +14579,9 @@ fn resume_host_peer(
         RpcError::permission_denied(format!("peer '{slug}' is owned by another session"))
             .with_data(json!({ "kind": "peer_originator_mismatch" }))
     })?;
+    if !crate::peers::app_binding::host_token_matches(&binding, host_token) {
+        return Err(host_token_error(slug));
+    }
     if peer_is_closed(peers_root, slug) {
         return Err(host_peer_error(
             "peer_closed",
@@ -14787,8 +14810,35 @@ async fn raw_peer_prepare(
                 params.model.as_deref(),
                 &model_lanes,
                 &profile_id,
+                params.host_token.as_deref(),
             );
         }
+    }
+    // A new host-owned app peer must not share state with another: its
+    // namespace may not equal or nest with another app peer's (whose request
+    // contexts live under it), its workspace may not nest with another's,
+    // and it may not sit inside the kernel's memory stores.
+    let mut minted_token = None;
+    if let Some(namespace) = host_namespace.as_deref() {
+        let stores = dunce::canonicalize(&data_dir)
+            .unwrap_or_else(|_| data_dir.clone())
+            .join(crate::runtime::memory_namespace::MEMORY_NAMESPACES_DIR);
+        if workspace_root.starts_with(&stores) {
+            return Err(host_peer_error(
+                "peer_binding_conflict",
+                "an app workspace cannot be inside the kernel's memory stores".to_owned(),
+            ));
+        }
+        if let Some(conflict) = crate::peers::app_binding::binding_conflict(
+            &peers_root,
+            namespace,
+            &workspace_root,
+            None,
+        ) {
+            return Err(host_peer_error("peer_binding_conflict", conflict));
+        }
+        minted_token =
+            Some(crate::peers::app_binding::mint_host_token().map_err(RpcError::internal_error)?);
     }
     let host_binding =
         host_namespace
@@ -14797,6 +14847,10 @@ async fn raw_peer_prepare(
                 version: 1,
                 cwd: workspace_root.clone(),
                 memory_namespace: namespace.clone(),
+                token_sha256: minted_token
+                    .as_ref()
+                    .map(|(_, digest)| digest.clone())
+                    .unwrap_or_default(),
             });
 
     // Fleet staging is ALL-OR-NOTHING: each member goes through `stage_peer`
@@ -14887,6 +14941,9 @@ async fn raw_peer_prepare(
             "model_note": model_note,
             "memory_namespace": host_namespace.clone(),
             "resumed": false,
+            // Returned ONCE, at creation: the credential for every later
+            // control call on this host-owned app peer.
+            "host_token": minted_token.as_ref().map(|(token, _)| token.clone()),
         }));
     }
 
@@ -14945,6 +15002,9 @@ struct RawPeerModelSetParams {
     model: Option<String>,
     #[serde(default)]
     profile_id: Option<String>,
+    /// Required for a host-owned app peer.
+    #[serde(default)]
+    host_token: Option<String>,
 }
 
 /// UPCR-2026-034 `peer/model/set` — change an existing peer's model lane.
@@ -14965,7 +15025,12 @@ fn raw_peer_model_set(
     )?;
     let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
     let peers_root = data_dir.join("peers");
-    let slug = authorize_host_peer_call(&peers_root, &params.peer, &params.session_id)?;
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
     if peer_is_closed(&peers_root, &slug) {
         return Err(host_peer_error(
             "peer_closed",
@@ -15023,6 +15088,9 @@ struct RawPeerContextParams {
     cwd: Option<String>,
     #[serde(default)]
     profile_id: Option<String>,
+    /// The host token of the owning app peer.
+    #[serde(default)]
+    host_token: Option<String>,
 }
 
 fn host_peer_context_prelude(
@@ -15048,7 +15116,12 @@ fn host_peer_context_prelude(
     let peers_root = data_dir.join("peers");
     let context_id = crate::peers::app_binding::validate_context_id(&params.context_id)
         .map_err(RpcError::invalid_params)?;
-    let slug = authorize_host_peer_call(&peers_root, &params.peer, &params.session_id)?;
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
     let Some(binding) = crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug)
     else {
         return Err(host_peer_error(
