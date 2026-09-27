@@ -36,6 +36,24 @@ call them), profile scoped, and authorized like UPCR-2026-034 control calls:
 the caller names the peer's originator `session_id` and presents the peer's
 `host_token`.
 
+### Host obligation (normative)
+
+**Hosts MUST call `peer/tools/register` (possibly with an empty set) on the
+connection that drives the peer's turns, after every successful
+`peer/prepare` and again after every reconnect, before any `turn/start`.
+Unregistered host-owned peers get no app memory, tools or app context.**
+
+### Migration for hosts
+
+A host that uses only UPCR-2026-034 today (`peer/prepare`,
+`peer/context/open`, `turn/start`) keeps working, but its peers' turns get
+no app memory, tools or app context until it registers. OctoSense's
+`crates/app-peers` broker currently calls only `peer/prepare`,
+`peer/context/open` and `turn/start`; it will register (the app's pinned
+`tools.json`, or an empty set) in OctoSense's M3 pin-bump PR. Other hosts,
+such as octoscode-web, must do the same: register on the connection that
+drives the turns, after every `peer/prepare` and every reconnect.
+
 ### `peer/tools/register`
 
 ```
