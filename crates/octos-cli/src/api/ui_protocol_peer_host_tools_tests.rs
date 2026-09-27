@@ -1863,10 +1863,17 @@ impl octos_llm::LlmProvider for ScriptedHostToolLlm {
 
 /// The e2e fixture: a profile runtime whose model is `llm`, a staged News
 /// peer, and the host's connection with the tool set registered on it.
-async fn e2e_fixture(llm: Arc<ScriptedHostToolLlm>, tools: Value) -> E2e {
+async fn e2e_fixture(llm: Arc<dyn octos_llm::LlmProvider>, tools: Value) -> E2e {
     let tmp = tempfile::tempdir().unwrap();
     let data_dir = tmp.path().join("data");
-    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::create_dir_all(data_dir.join("memory")).unwrap();
+    // The profile's (the system agent's) private memory: no app turn, and no
+    // foreign turn on an app session, may see it.
+    std::fs::write(
+        data_dir.join("memory/MEMORY.md"),
+        "- PROFILE-PRIVATE-FACT: the owner's bank PIN hint\n",
+    )
+    .unwrap();
     let runtime = {
         let base = crate::runtime::ProfileRuntime::bootstrap(
             &crate::profiles::UserProfile {
@@ -2311,4 +2318,204 @@ async fn should_charge_a_request_contexts_turns_and_tools_to_its_peers_budget() 
         "{}",
         result.output
     );
+}
+
+/// Records every request's full text (system prompt and messages) and ends
+/// the turn at once.
+#[derive(Default)]
+struct RecordingLlm {
+    requests: std::sync::Mutex<Vec<String>>,
+}
+
+#[async_trait::async_trait]
+impl octos_llm::LlmProvider for RecordingLlm {
+    async fn chat(
+        &self,
+        messages: &[Message],
+        _tools: &[octos_llm::ToolSpec],
+        _config: &octos_llm::ChatConfig,
+    ) -> eyre::Result<octos_llm::ChatResponse> {
+        let text = messages
+            .iter()
+            .map(|m| m.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+        self.requests.lock().unwrap().push(text);
+        Ok(octos_llm::ChatResponse {
+            content: Some("ok".into()),
+            reasoning_content: None,
+            tool_calls: Vec::new(),
+            stop_reason: octos_llm::StopReason::EndTurn,
+            usage: octos_llm::TokenUsage {
+                input_tokens: 1,
+                output_tokens: 1,
+                ..Default::default()
+            },
+            provider_index: None,
+        })
+    }
+
+    fn model_id(&self) -> &str {
+        "recording"
+    }
+
+    fn provider_name(&self) -> &str {
+        "stub"
+    }
+}
+
+/// Run one turn on `session` driven by `ws` (or, with `continuation`, as a
+/// kernel-internal continuation) and return the request text the model got.
+async fn recorded_turn(
+    e: &E2e,
+    llm: &RecordingLlm,
+    ws: &WsConnection,
+    session: &SessionKey,
+    continuation: bool,
+) -> String {
+    let before = llm.requests.lock().unwrap().len();
+    let params = TurnStartParams {
+        session_id: session.clone(),
+        turn_id: TurnId::new(),
+        input: vec![InputItem::Text {
+            text: "what do you know about me?".into(),
+        }],
+        media: Vec::new(),
+        topic: None,
+        rewrite_for: None,
+        reasoning_effort: None,
+        tool_context: None,
+        live_video: false,
+    };
+    let ledger = Arc::new(UiProtocolLedger::new(256));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    // Held until the turn has reached the model: dropping the active-turn
+    // entry closes its interrupt channel.
+    let active_turns: SharedActiveTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let connection_turns: SharedConnectionTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    if continuation {
+        let (_interrupt_tx, interrupt_rx) = mpsc::channel(1);
+        run_standalone_turn(
+            ws.clone(),
+            e.state.clone(),
+            ledger,
+            contracts,
+            ConnectionUiFeatures::stdio_defaults(),
+            params,
+            "what do you know about me?".into(),
+            None,
+            None,
+            Arc::new(TokioMutex::new(TurnState::Active)),
+            interrupt_rx,
+            None,
+            true,
+            None,
+            None,
+            None,
+            false,
+            None,
+            false,
+            None,
+        )
+        .await;
+    } else {
+        handle_turn_start(
+            ws,
+            &e.state,
+            &ledger,
+            &contracts,
+            &active_turns,
+            &connection_turns,
+            None,
+            None,
+            ConnectionUiFeatures::stdio_defaults(),
+            "start".into(),
+            params,
+        )
+        .await;
+    }
+    for _ in 0..500 {
+        if llm.requests.lock().unwrap().len() > before {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    let requests = llm.requests.lock().unwrap();
+    assert!(
+        requests.len() > before,
+        "the turn on {session:?} (continuation: {continuation}) reached the model"
+    );
+    requests[before].clone()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_give_app_memory_only_to_the_host_connections_turns() {
+    let llm = Arc::new(RecordingLlm::default());
+    let e = e2e_fixture(llm.clone(), json!({ "tools": [news_list()] })).await;
+    let peer = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    let opened = raw_peer_context_open(
+        &e.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": e.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": e.token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+
+    // The app's private memory, in the peer's and the context's namespaces.
+    let dev = e.state.profiles.get("dev").unwrap().clone();
+    for (key, fact) in [(&peer, "NEWS-PRIVATE-FACT"), (&context, "CTX-PRIVATE-FACT")] {
+        let runtime = e
+            .state
+            .session_cache
+            .get_or_init(&dev, key.clone(), None)
+            .await
+            .unwrap();
+        runtime
+            .memory
+            .memory_store
+            .write_long_term(&format!("- {fact}: follows rust news\n"))
+            .await
+            .unwrap();
+    }
+
+    // The host's own turns carry the app's memory (and never the profile's).
+    let mut e = e;
+    // Drain the host connection like a live client.
+    let mut host_rx = e.rx.take().unwrap();
+    tokio::spawn(async move { while host_rx.recv().await.is_some() {} });
+    let host_peer = recorded_turn(&e, &llm, &e.ws, &peer, false).await;
+    assert!(host_peer.contains("NEWS-PRIVATE-FACT"), "{host_peer}");
+    assert!(!host_peer.contains("PROFILE-PRIVATE-FACT"));
+    let host_ctx = recorded_turn(&e, &llm, &e.ws, &context, false).await;
+    assert!(host_ctx.contains("CTX-PRIVATE-FACT"), "{host_ctx}");
+
+    // Another connection of the profile, on the same sessions: no app memory
+    // and no profile memory.
+    let (foreign, mut foreign_rx) = ws_connection_for_test(256);
+    tokio::spawn(async move { while foreign_rx.recv().await.is_some() {} });
+    for session in [&peer, &context] {
+        let text = recorded_turn(&e, &llm, &foreign, session, false).await;
+        for fact in [
+            "NEWS-PRIVATE-FACT",
+            "CTX-PRIVATE-FACT",
+            "PROFILE-PRIVATE-FACT",
+        ] {
+            assert!(!text.contains(fact), "{session:?} leaked {fact}: {text}");
+        }
+        assert!(text.contains("not the app's host"), "{text}");
+    }
+
+    // A kernel-internal continuation, even on the host's connection: none.
+    let continuation = recorded_turn(&e, &llm, &e.ws, &peer, true).await;
+    for fact in [
+        "NEWS-PRIVATE-FACT",
+        "CTX-PRIVATE-FACT",
+        "PROFILE-PRIVATE-FACT",
+    ] {
+        assert!(!continuation.contains(fact), "continuation leaked {fact}");
+    }
 }

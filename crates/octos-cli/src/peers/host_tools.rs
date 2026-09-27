@@ -854,6 +854,32 @@ fn route_connection_by_key(key: &str) -> Option<u64> {
         .map(|route| route.connection)
 }
 
+/// Whether a turn of `session` driven by `turn_connection` (`None` for a
+/// kernel-internal continuation) may see the app's private context — its
+/// memory namespace, its workspace and instructions. For a host-owned app
+/// peer's session or request context only the peer's host connection (the
+/// one holding its route) may; any other turn, and every continuation, gets
+/// neither the app's context nor the profile's. Every other session: `true`.
+pub(crate) fn app_context_allowed(
+    peers_root: &Path,
+    session: &SessionKey,
+    turn_connection: Option<u64>,
+) -> bool {
+    let is_context = session
+        .topic()
+        .is_some_and(|t| t.starts_with(PEER_CONTEXT_TOPIC_PREFIX));
+    let Some(slug) = host_peer_slug_of(session) else {
+        // A malformed context topic never gets app context.
+        return !is_context;
+    };
+    if !is_context && !super::app_binding::peer_is_host_owned(peers_root, slug) {
+        return true;
+    }
+    turn_connection.is_some()
+        && session_is_on_originator_base(peers_root, slug, session)
+        && host_route_connection(peers_root, slug) == turn_connection
+}
+
 /// Remember that `session` is a session of a peer with a registered set.
 fn note_host_session(session: &SessionKey, peers_root: &Path, slug: &str) {
     HOST_SESSIONS

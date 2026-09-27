@@ -181,6 +181,20 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   registers again.
   **Hosts MUST drive the peer's turns (`turn/start` on the peer and its
   request contexts) on the connection that registered the set.**
+- **App context only for the host's turns.** The app's private context —
+  its memory namespace (the injected memory snapshot, and every earlier
+  `memory_update` event replayed from the session's context history), its
+  workspace hint, the session prompt and the agent's instructions — reaches
+  the model only on turns driven by the peer's host connection (the one
+  holding its route). A turn on `peer-<slug>` or `peerctx-…` from any other
+  connection, and every kernel-internal continuation, gets a fixed minimal
+  system prompt and no memory at all: neither the app's nor the profile's
+  (it never falls back to the profile). A host-owned peer that never
+  registered a set has no host connection, so none of its turns get app
+  context: **hosts register their set (it may be empty) on the connection
+  that drives the peer's turns.** The transcript itself is not filtered:
+  reading or extending a bound session's history from a foreign connection
+  is #2556-1 / #2571.
 - **Kernel-internal continuations get no tools.** A turn the kernel starts
   itself on a peer session (a `peer_send_input` injection, a background
   result, a goal continuation) is nobody's turn: it gets no tools, whichever
@@ -417,7 +431,7 @@ never declares its tools a second way.
   `should_deliver_a_result_taken_before_the_deadline_but_delivered_after_it`
   (an injected pause between taking the call and delivering it; fails on
   the previous ordering)
-- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 26):
+- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 27):
   `should_advertise_and_dispatch_the_peer_tool_methods`,
   `should_refuse_a_registration_without_the_host_token`,
   `should_offer_exactly_the_registered_tools_and_refuse_an_unlisted_one`,
@@ -447,7 +461,12 @@ never declares its tools a second way.
   `should_accept_a_tool_result_only_from_the_connection_the_call_was_sent_to`,
   `should_charge_a_request_contexts_turns_and_tools_to_its_peers_budget`,
   `should_route_a_real_turns_app_tool_call_to_the_host_end_to_end` and
-  `should_ask_the_person_before_a_real_turns_destructive_call_end_to_end`
+  `should_ask_the_person_before_a_real_turns_destructive_call_end_to_end`,
+  `should_give_app_memory_only_to_the_host_connections_turns` (a scripted
+  model's requests: the host's turns on the peer and on a context carry the
+  app's memory and never the profile's; a foreign connection's turns on both
+  and a kernel continuation carry neither, including memory replayed from
+  the host's earlier turns)
   (a real `turn/start` through `run_standalone_turn` with a scripted model:
   roster, host routing, the tool result in the model's context, the approval
   on the host connection),
