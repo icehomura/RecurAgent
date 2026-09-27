@@ -855,6 +855,7 @@ pub mod message;
 pub mod peer_close;
 pub mod peer_gather;
 pub mod peer_handoff;
+pub mod peer_host_tool;
 pub mod peer_list;
 pub mod peer_respond;
 pub mod peer_send_input;
@@ -927,6 +928,10 @@ pub use peer_close::{PeerCloseCallback, PeerCloseTool};
 pub use peer_gather::{PeerGatherCallback, PeerGatherTool};
 pub use peer_handoff::{
     PeerHandoffCallback, PeerHandoffRequest, PeerHandoffStaged, PeerHandoffTool,
+};
+pub use peer_host_tool::{
+    HOST_TOOL_MAX_ARGS_BYTES, HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome,
+    HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter,
 };
 pub use peer_list::{PeerListCallback, PeerListTool};
 pub use peer_respond::{

@@ -1332,6 +1332,15 @@ pub mod methods {
     /// [`PEER_STAGED`]: `session_id` is the ORIGINATING session; durable so
     /// reconnect replay redelivers it, and clients dedup by the closed peer.
     pub const PEER_CLOSED: &str = "peer/closed";
+    /// UPCR-2026-035 `peer/tool/call` — the kernel asks the HOST to run one
+    /// app tool of a host-owned app peer. Sent only to the connection that
+    /// registered the peer's tools with `peer/tools/register`; the host
+    /// answers with `peer/tool/result`. Ephemeral: a host that is gone makes
+    /// the call fail (`host_unavailable`), it is never replayed.
+    pub const PEER_TOOL_CALL: &str = "peer/tool/call";
+    /// UPCR-2026-035 `peer/tool/cancel` — the kernel stopped waiting for a
+    /// `peer/tool/call` (`reason`: `timeout` or `cancelled`).
+    pub const PEER_TOOL_CANCEL: &str = "peer/tool/cancel";
 
     // ---- Smart-home bridge integration ----
     // Device control/state moved server-side from octos-web's client-only
@@ -1489,6 +1498,8 @@ pub const UI_PROTOCOL_NOTIFICATION_METHODS: &[&str] = &[
     methods::PEER_STAGED,
     methods::PEER_CLOSED,
     methods::BACKGROUND_ACTIVITY,
+    methods::PEER_TOOL_CALL,
+    methods::PEER_TOOL_CANCEL,
 ];
 
 /// Request methods currently handled by the first server/runtime slice.

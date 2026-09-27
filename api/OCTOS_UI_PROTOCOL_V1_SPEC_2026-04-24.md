@@ -558,6 +558,29 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   (`session_binding_closed`), and its id is never reopened. Typed
   `data.kind`: `peer_not_host_bound`, `peer_context_closed`,
   `peer_context_not_found`, `peer_context_workspace_escape`)
+- `peer/tools/register` (accepted `UPCR-2026-035`: the host declares a
+  host-owned app peer's app tools and the generic kernel tools it may use;
+  `{session_id, peer, host_token, tools?, generic_tools?, if_version?,
+  call_timeout_ms?, approval_ttl_secs?, max_result_bytes?}` (`tools` are
+  the app bundle's `tools.json` entries: `name`, `description`,
+  `input_schema`, `output_schema?`, `risk`, `background?`, `outward?`,
+  `confirm?` `host`|`app`) →
+  `{slug, version, previous_version, tools, generic_tools, applies:
+  "next_turn"}`. Replaces the set atomically; from the next turn every
+  session of the peer and of its request contexts offers the model exactly
+  those tools. App tool calls are sent to the registering connection as the
+  server notification `peer/tool/call` `{peer, session_id, context_id,
+  turn_id, call_id, tool_call_id, name, args, risk, confirm_required,
+  timeout_ms, tools_version}`; `peer/tool/cancel` `{call_id, reason}` stops
+  one. Destructive and outward tools need an `approval/requested` →
+  `approval/respond` on the calling session first, except `confirm: app`
+  tools called from an open request context, which the app confirms
+  itself. Typed `data.kind`:
+  `peer_not_host_bound`, `peer_tools_invalid`, `peer_tools_version_conflict`)
+- `peer/tool/result` (accepted `UPCR-2026-035`: the host answers one
+  `peer/tool/call`; `{session_id, peer, host_token, call_id, ok, data?,
+  error?}` → `{call_id, accepted, result_too_large?}`; typed `data.kind`
+  `peer_tool_call_not_found` for a finished, timed-out or cancelled call)
 - `peer/gather` (#1801 v2 blackboard read: per staged peer its brief + the
   latest `result.md` — written server-side on every peer-session turn
   terminal — with per-field truncation flags and `result_updated_unix`;
@@ -728,6 +751,16 @@ Peer staging (#1801 v3, ungated):
   `peer-<slug>`). `params` carry the ORIGINATING `session_id` plus `topic`,
   `slug`, and `profile_id`. Durable: reconnect replay redelivers it, so
   clients dedup by the already-closed peer for the topic.
+
+Host-registered peer tools (UPCR-2026-035; sent only to the connection that
+registered a host-owned app peer's tools with `peer/tools/register`):
+
+- `peer/tool/call` — run one app tool: `{peer, session_id, context_id,
+  turn_id, call_id, tool_call_id, name, args, risk, confirm_required,
+  timeout_ms, tools_version}`. The host answers with `peer/tool/result`.
+  Ephemeral: never replayed; a host that is gone fails the call.
+- `peer/tool/cancel` — the kernel stopped waiting for `call_id`
+  (`reason`: `timeout` | `cancelled`).
 
 Background activity — the human sink (#2019, gate `event.background_activity.v1`):
 

@@ -955,6 +955,8 @@ fn ui_protocol_v1_wire_contract_is_golden() {
             "peer/staged",
             "peer/closed",
             "background/activity",
+            "peer/tool/call",
+            "peer/tool/cancel",
         ]
     );
     assert_eq!(
@@ -1179,7 +1181,9 @@ fn ui_protocol_v1_representative_wire_payloads_are_golden() {
                 "session/orchestration",
                 "peer/staged",
                 "peer/closed",
-                "background/activity"
+                "background/activity",
+                "peer/tool/call",
+                "peer/tool/cancel"
             ],
             "supported_features": [
                 "approval.typed.v1",

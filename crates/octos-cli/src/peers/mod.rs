@@ -49,6 +49,7 @@ use crate::build_cache::pool::{BuildCacheConfig, Slot, SlotOutcome};
 use crate::contracts::UiProtocolContractStores;
 
 pub(crate) mod app_binding;
+pub(crate) mod host_tools;
 mod recovery;
 pub(crate) use recovery::*;
 // task-evo-peer-turn-status — the typed lifetime projection lives in

@@ -331,6 +331,11 @@ const APPUI_METHOD_PEER_CONTEXT_OPEN: &str = "peer/context/open";
 /// UPCR-2026-034 `peer/context/close`: close a request context for good,
 /// interrupting its in-flight turn; the context session never runs again.
 const APPUI_METHOD_PEER_CONTEXT_CLOSE: &str = "peer/context/close";
+/// UPCR-2026-035 `peer/tools/register`: the host declares a host-owned app
+/// peer's app tools and allowed generic tools (host token); replaces the set.
+const APPUI_METHOD_PEER_TOOLS_REGISTER: &str = "peer/tools/register";
+/// UPCR-2026-035 `peer/tool/result`: the host answers a `peer/tool/call`.
+const APPUI_METHOD_PEER_TOOL_RESULT: &str = "peer/tool/result";
 /// `turn/steer` — mid-turn prompt injection into the ACTIVE turn (codex
 /// parity: app-server `turn/steer` → `Session::steer_input`). Params
 /// `{session_id, expected_turn_id?, input}`; result `{turn_id, steered}`.
@@ -444,6 +449,8 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_PEER_MODEL_SET,
     APPUI_METHOD_PEER_CONTEXT_OPEN,
     APPUI_METHOD_PEER_CONTEXT_CLOSE,
+    APPUI_METHOD_PEER_TOOLS_REGISTER,
+    APPUI_METHOD_PEER_TOOL_RESULT,
     APPUI_METHOD_TURN_STEER,
     APPUI_METHOD_PROFILE_SKILLS_LIST,
     APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH,
@@ -15299,6 +15306,208 @@ async fn raw_peer_context_close(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+struct RawPeerToolsRegisterParams {
+    /// The owning peer's originator session.
+    session_id: SessionKey,
+    /// Peer name or slug.
+    peer: String,
+    #[serde(default)]
+    host_token: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    /// App tools: the entries of the app bundle's `tools.json`.
+    #[serde(default)]
+    tools: Vec<crate::peers::host_tools::ToolInput>,
+    /// Kernel tool names the app may use.
+    #[serde(default)]
+    generic_tools: Vec<String>,
+    /// Optimistic concurrency: refuse unless the current version matches.
+    #[serde(default)]
+    if_version: Option<u64>,
+    #[serde(flatten)]
+    options: crate::peers::host_tools::ToolSetOptions,
+}
+
+/// UPCR-2026-035 `peer/tools/register` — declare (replace) a host-owned app
+/// peer's tool set and route its app tool calls to THIS connection.
+fn raw_peer_tools_register(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::host_tools::{
+        REGISTRATION_LOCK, StoredToolSet, build_tool_set, read_tool_set, set_host_route,
+        write_tool_set,
+    };
+    let params: RawPeerToolsRegisterParams = parse_raw_params(request)?;
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    let peers_root = data_dir.join("peers");
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    if crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug).is_none() {
+        return Err(host_peer_error(
+            "peer_not_host_bound",
+            format!("peer '{slug}' is not a host-owned app peer"),
+        ));
+    }
+    if peer_is_closed(&peers_root, &slug) {
+        return Err(host_peer_error(
+            "peer_closed",
+            format!("peer '{slug}' is closed"),
+        ));
+    }
+    let mut set = build_tool_set(params.tools, params.generic_tools, params.options)
+        .map_err(|err| host_peer_error("peer_tools_invalid", err))?;
+    let _guard = REGISTRATION_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let current = match read_tool_set(&peers_root, &slug) {
+        StoredToolSet::Registered(existing) => existing.version,
+        StoredToolSet::None | StoredToolSet::Unreadable => 0,
+    };
+    if let Some(expected) = params.if_version {
+        if expected != current {
+            return Err(host_peer_error(
+                "peer_tools_version_conflict",
+                format!("the tool set is at version {current}, not {expected}"),
+            )
+            .with_data(json!({
+                "kind": "peer_tools_version_conflict",
+                "current_version": current,
+            })));
+        }
+    }
+    set.version = current + 1;
+    write_tool_set(&peers_root, &slug, &set).map_err(RpcError::internal_error)?;
+    let route_ws = ws.clone();
+    set_host_route(
+        &peers_root,
+        &slug,
+        Arc::new(move |method, params| {
+            send_raw_notification_ephemeral(&route_ws, method, params).is_ok()
+        }),
+    );
+    let tools: Vec<Value> = set
+        .tools
+        .iter()
+        .map(|tool| {
+            json!({
+                "name": tool.name,
+                "model_name": tool.model_name,
+                "risk": tool.risk.as_str(),
+                "background": tool.background,
+                "outward": tool.outward,
+                "confirm": tool.confirm.as_str(),
+            })
+        })
+        .collect();
+    Ok(json!({
+        "slug": slug,
+        "profile_id": profile_id,
+        "version": set.version,
+        "previous_version": current,
+        "tools": tools,
+        "generic_tools": set.generic_tools,
+        "call_timeout_ms": set.call_timeout_ms,
+        "approval_ttl_secs": set.approval_ttl_secs,
+        "max_result_bytes": set.max_result_bytes,
+        "applies": "next_turn",
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPeerToolResultParams {
+    session_id: SessionKey,
+    peer: String,
+    #[serde(default)]
+    host_token: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    call_id: String,
+    ok: bool,
+    #[serde(default)]
+    data: Option<Value>,
+    /// `{kind?, message}` or a string.
+    #[serde(default)]
+    error: Option<Value>,
+}
+
+/// Longest error message a host may hand the model.
+const PEER_TOOL_ERROR_MESSAGE_MAX_BYTES: usize = 4 * 1024;
+
+/// UPCR-2026-035 `peer/tool/result` — the host answers one `peer/tool/call`.
+fn raw_peer_tool_result(
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::host_tools::{CompleteCall, complete_host_call};
+    let params: RawPeerToolResultParams = parse_raw_params(request)?;
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    let peers_root = data_dir.join("peers");
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    if crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug).is_none() {
+        return Err(host_peer_error(
+            "peer_not_host_bound",
+            format!("peer '{slug}' is not a host-owned app peer"),
+        ));
+    }
+    let outcome = if params.ok {
+        octos_agent::HostToolCallOutcome::Ok(params.data.unwrap_or(Value::Null))
+    } else {
+        let (kind, message) = match params.error {
+            Some(Value::Object(error)) => (
+                error
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .unwrap_or("host_error")
+                    .to_owned(),
+                error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("the app reported an error")
+                    .to_owned(),
+            ),
+            Some(Value::String(message)) => ("host_error".to_owned(), message),
+            _ => (
+                "host_error".to_owned(),
+                "the app reported an error".to_owned(),
+            ),
+        };
+        let (message, _) = crate::peers::capped_utf8(message, PEER_TOOL_ERROR_MESSAGE_MAX_BYTES);
+        octos_agent::HostToolCallOutcome::Error { kind, message }
+    };
+    let status = complete_host_call(&peers_root, &slug, &params.call_id, outcome)
+        .map_err(|err| host_peer_error("peer_tool_call_not_found", err))?;
+    Ok(match status {
+        CompleteCall::Accepted => json!({ "call_id": params.call_id, "accepted": true }),
+        CompleteCall::TooLarge { bytes, max } => json!({
+            "call_id": params.call_id,
+            "accepted": true,
+            "result_too_large": { "bytes": bytes, "max": max },
+        }),
+    })
+}
+
 /// #peer-model — select the `sub_provider` for a lane KEY. LAST match wins,
 /// mirroring `ProviderRouter::register_with_full_meta` (last-registered wins),
 /// so a profile with duplicate lane keys runs a peer on the SAME model a
@@ -19320,6 +19529,12 @@ async fn handle_raw_appui_rpc(
         APPUI_METHOD_PEER_CONTEXT_CLOSE => {
             raw_peer_context_close(state, request, connection_profile_id).await
         }
+        APPUI_METHOD_PEER_TOOLS_REGISTER => {
+            raw_peer_tools_register(ws, state, request, connection_profile_id)
+        }
+        APPUI_METHOD_PEER_TOOL_RESULT => {
+            raw_peer_tool_result(state, request, connection_profile_id)
+        }
         APPUI_METHOD_PROFILE_SKILLS_LIST => {
             raw_profile_skills_list(state, request, connection_profile_id)
         }
@@ -19756,6 +19971,8 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
             | APPUI_METHOD_PEER_MODEL_SET
             | APPUI_METHOD_PEER_CONTEXT_OPEN
             | APPUI_METHOD_PEER_CONTEXT_CLOSE
+            | APPUI_METHOD_PEER_TOOLS_REGISTER
+            | APPUI_METHOD_PEER_TOOL_RESULT
             | APPUI_METHOD_PROFILE_SKILLS_LIST
             | APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH
             | APPUI_METHOD_PROFILE_SKILLS_INSTALL
@@ -37208,6 +37425,22 @@ async fn run_standalone_turn(
     session_runtime
         .profile
         .apply_tool_envelope(&mut tool_registry);
+    // UPCR-2026-035: a host-owned app peer (or one of its request contexts)
+    // with a registered tool set offers the model EXACTLY that set — the
+    // host's app tools (routed to the host) plus the generic tools it allows.
+    // Re-read every turn, so a registration applies from the next turn.
+    {
+        let peers_root = session_runtime.profile.data_dir.join("peers");
+        let resolved =
+            crate::peers::host_tools::resolve_session_host_tools(&peers_root, &session_id);
+        crate::peers::host_tools::apply_session_host_tools(
+            &mut tool_registry,
+            &resolved,
+            &peers_root,
+            &session_id,
+            &turn_id.0.to_string(),
+        );
+    }
     let tool_registry = Arc::new(tool_registry);
 
     // C1 fix: `progress_tx` / `progress_dropped` are now created earlier
@@ -44554,3 +44787,7 @@ mod tests;
 #[cfg(test)]
 #[path = "ui_protocol_host_app_peer_tests.rs"]
 mod host_app_peer_tests;
+
+#[cfg(test)]
+#[path = "ui_protocol_peer_host_tools_tests.rs"]
+mod peer_host_tools_tests;
