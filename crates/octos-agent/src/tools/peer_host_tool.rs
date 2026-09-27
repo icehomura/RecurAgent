@@ -167,8 +167,9 @@ pub struct HostToolAudit {
     pub tool_call_id: String,
     pub risk: &'static str,
     /// `allowed`, `approved`, `app_confirms`, `denied`, `expired`,
-    /// `approval_unavailable`, `duplicate`, `not_background`, `invalid_args`
-    /// (and `late_result`, written by the router).
+    /// `approval_unavailable`, `duplicate`, `outcome_unknown_before`,
+    /// `not_background`, `invalid_args` (and `late_result`, written by the
+    /// router).
     pub decision: &'static str,
     /// `ok`, `error:<kind>`, `unknown` (no answer in time; the app may have
     /// acted), or `not_called`.
@@ -184,6 +185,11 @@ pub trait HostToolRouter: Send + Sync {
     /// Claim the occurrence `(tool_call_id, args_digest)` in this turn.
     /// `false` means it was already claimed: the call is a duplicate.
     fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> bool;
+    /// Whether the same `(tool, args_digest)` already ended `outcome_unknown`
+    /// in this turn: the app may have acted, so it is not sent again.
+    fn outcome_unknown_before(&self, tool: &str, args_digest: &str) -> bool;
+    /// Remember that `(tool, args_digest)` ended `outcome_unknown`.
+    fn mark_outcome_unknown(&self, tool: &str, args_digest: &str);
     /// Deliver the call to the host and wait for its result (the router owns
     /// the timeout, cancellation and result size cap).
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome;
@@ -368,6 +374,24 @@ impl Tool for HostRoutedTool {
             ));
         }
 
+        if self.decl.risk != HostToolRisk::Read
+            && self
+                .router
+                .outcome_unknown_before(&self.decl.name, &args_digest)
+        {
+            return Ok(self.refuse(
+                ctx,
+                started,
+                args_bytes,
+                "outcome_unknown_before",
+                format!(
+                    "{}: the same call with the same arguments already ended with an unknown \
+                     outcome in this turn; the app may have done it. It is not sent again: \
+                     check with a read tool or ask the person.",
+                    self.decl.name
+                ),
+            ));
+        }
         let decision = if self.decl.requires_kernel_approval(attended) {
             let Some(requester) = approvals else {
                 return Ok(self.refuse(
@@ -436,9 +460,14 @@ impl Tool for HostRoutedTool {
                 risk: self.decl.risk,
                 confirm_required: decision == "app_confirms",
                 gated: self.decl.gated(),
-                args_digest,
+                args_digest: args_digest.clone(),
             })
             .await;
+        if matches!(&outcome, HostToolCallOutcome::Error { kind, .. } if kind == "outcome_unknown")
+        {
+            self.router
+                .mark_outcome_unknown(&self.decl.name, &args_digest);
+        }
         let (result, outcome_label, result_bytes) = match outcome {
             HostToolCallOutcome::Ok(data) => {
                 let output = serde_json::to_string(&data).unwrap_or_default();
@@ -504,6 +533,7 @@ mod tests {
         calls: Mutex<Vec<HostToolCall>>,
         audits: Mutex<Vec<HostToolAudit>>,
         claimed: Mutex<std::collections::HashSet<String>>,
+        unknown: Mutex<std::collections::HashSet<String>>,
     }
 
     #[async_trait]
@@ -513,6 +543,18 @@ mod tests {
                 .lock()
                 .unwrap()
                 .insert(format!("{id}/{digest}"))
+        }
+        fn outcome_unknown_before(&self, tool: &str, digest: &str) -> bool {
+            self.unknown
+                .lock()
+                .unwrap()
+                .contains(&format!("{tool}/{digest}"))
+        }
+        fn mark_outcome_unknown(&self, tool: &str, digest: &str) {
+            self.unknown
+                .lock()
+                .unwrap()
+                .insert(format!("{tool}/{digest}"));
         }
         async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
             self.calls.lock().unwrap().push(call.clone());
@@ -730,6 +772,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn should_digest_arguments_independently_of_key_order() {
+        let a: Value = serde_json::from_str(r#"{"b": 1, "a": {"y": 2, "x": 3}}"#).unwrap();
+        let b: Value = serde_json::from_str(r#"{"a": {"x": 3, "y": 2}, "b": 1}"#).unwrap();
+        assert_eq!(
+            crate::approval::digest_tool_args(&a),
+            crate::approval::digest_tool_args(&b)
+        );
+    }
+
     #[tokio::test]
     async fn should_send_an_act_call_once_but_let_reads_repeat() {
         let router = Arc::new(FakeRouter::default());
@@ -760,11 +812,17 @@ mod tests {
 
     #[tokio::test]
     async fn should_report_an_unanswered_act_call_as_unknown_not_failed() {
-        struct SilentRouter(Mutex<Vec<HostToolAudit>>);
+        struct SilentRouter(Mutex<Vec<HostToolAudit>>, Mutex<Vec<String>>);
         #[async_trait]
         impl HostToolRouter for SilentRouter {
             fn claim_occurrence(&self, _: &str, _: &str) -> bool {
                 true
+            }
+            fn outcome_unknown_before(&self, tool: &str, digest: &str) -> bool {
+                self.1.lock().unwrap().contains(&format!("{tool}/{digest}"))
+            }
+            fn mark_outcome_unknown(&self, tool: &str, digest: &str) {
+                self.1.lock().unwrap().push(format!("{tool}/{digest}"));
             }
             async fn call(&self, _: HostToolCall) -> HostToolCallOutcome {
                 HostToolCallOutcome::Error {
@@ -779,7 +837,7 @@ mod tests {
                 Duration::from_secs(1)
             }
         }
-        let router = Arc::new(SilentRouter(Mutex::new(Vec::new())));
+        let router = Arc::new(SilentRouter(Mutex::new(Vec::new()), Mutex::new(Vec::new())));
         let tool = HostRoutedTool::new(
             decl("news.topics_set", HostToolRisk::Act),
             router.clone(),
@@ -787,9 +845,20 @@ mod tests {
             true,
         );
         let approver = Approver::new(Some(ToolApprovalDecision::Approve));
-        let result = run(&tool, Some(approver), "c1", json!({"id": 1})).await;
+        let result = run(&tool, Some(approver.clone()), "c1", json!({"id": 1})).await;
         assert!(!result.success && result.output.contains("do not retry"));
         assert_eq!(router.0.lock().unwrap()[0].outcome, "unknown");
+
+        // A retry under a NEW tool-call id with the same arguments is refused
+        // (the app may have acted); other arguments still go through.
+        let retry = run(&tool, Some(approver.clone()), "c2", json!({"id": 1})).await;
+        assert!(!retry.success && retry.output.contains("not sent again"));
+        assert_eq!(
+            router.0.lock().unwrap()[1].decision,
+            "outcome_unknown_before"
+        );
+        run(&tool, Some(approver), "c3", json!({"id": 2})).await;
+        assert_eq!(router.0.lock().unwrap()[2].decision, "allowed");
     }
 
     #[tokio::test]

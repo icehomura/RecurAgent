@@ -158,7 +158,32 @@ async fn turn_registry(fx: &Fx, key: &SessionKey, turn: &str) -> octos_agent::To
         .expect("bound session");
     let mut registry = runtime.tools.snapshot_excluding(&[]);
     let resolved = resolve_session_host_tools(&peers_root(fx), key);
-    apply_session_host_tools(&mut registry, &resolved, &peers_root(fx), key, turn);
+    // The host's own turn: driven by the connection that registered the set.
+    let host = crate::peers::host_tools::host_route_connection(&peers_root(fx), "news");
+    apply_session_host_tools(&mut registry, &resolved, &peers_root(fx), key, turn, host);
+    registry
+}
+
+/// The registry of a turn on `key` driven by `connection`.
+async fn turn_registry_on(
+    fx: &Fx,
+    key: &SessionKey,
+    turn: &str,
+    connection: u64,
+) -> octos_agent::ToolRegistry {
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
+        .await
+        .expect("bound session");
+    let mut registry = runtime.tools.snapshot_excluding(&[]);
+    let resolved = resolve_session_host_tools(&peers_root(fx), key);
+    apply_session_host_tools(
+        &mut registry,
+        &resolved,
+        &peers_root(fx),
+        key,
+        turn,
+        Some(connection),
+    );
     registry
 }
 
@@ -325,7 +350,7 @@ async fn should_offer_exactly_the_registered_tools_and_refuse_an_unlisted_one() 
         &fx,
         &ws,
         &token,
-        json!({ "tools": [news_list()], "generic_tools": ["read_file", "no_such_tool"] }),
+        json!({ "tools": [news_list()], "generic_tools": ["read_file"] }),
     )
     .expect("registered");
 
@@ -402,7 +427,7 @@ async fn should_route_an_app_tool_call_to_the_host_and_back() {
 
     drop(registry);
     drop(ws);
-    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", Arc::new(|_, _| false));
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
     let calls = host.await.unwrap();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0]["name"], "news.list");
@@ -465,7 +490,7 @@ async fn should_time_out_and_cancel_a_call_the_host_never_answers() {
     assert!(crate::peers::host_tools::pending_calls_for(&peers_root(&fx), "news").is_empty());
 
     // With no live host at all the call fails without waiting.
-    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", Arc::new(|_, _| false));
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
     let result = registry
         .execute_with_context(&call_ctx("c2"), "news_list", &json!({}))
         .await
@@ -592,7 +617,7 @@ async fn should_run_a_destructive_tool_only_after_the_persons_approval() {
     assert!(result.success, "{}", result.output);
 
     drop(ws);
-    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", Arc::new(|_, _| false));
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
     let calls = host.await.unwrap();
     assert_eq!(calls.len(), 1, "only the approved call reached the host");
     assert_eq!(calls[0]["args"], args);
@@ -824,7 +849,7 @@ async fn should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherw
     assert!(run.await.unwrap().success);
 
     drop(ws);
-    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", Arc::new(|_, _| false));
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
     let calls = host.await.unwrap();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0]["context_id"], "ui-1");
@@ -886,6 +911,16 @@ async fn should_report_an_unanswered_act_call_as_unknown_and_never_resend_it() {
         .await
         .unwrap();
     assert!(!again.success && again.output.contains("not asked or sent twice"));
+    // Nor does a retry under a new tool-call id with the same arguments.
+    let retry = registry
+        .execute_with_context(&call_ctx("c2"), "news_topics_set", &args)
+        .await
+        .unwrap();
+    assert!(
+        !retry.success && retry.output.contains("not sent again"),
+        "{}",
+        retry.output
+    );
     assert!(rx.try_recv().is_err(), "no second peer/tool/call");
 
     let rows = audit_rows(&fx);
@@ -1089,7 +1124,7 @@ async fn should_never_answer_or_remember_a_host_tool_approval_by_scope() {
     ));
 
     drop(ws);
-    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", Arc::new(|_, _| false));
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
     assert_eq!(host.await.unwrap().len(), 1);
 }
 
@@ -1128,7 +1163,14 @@ async fn should_give_no_tools_to_a_session_on_a_foreign_base_key() {
         );
         let mut registry = fx.runtime.tool_specs.snapshot_excluding(&[]);
         assert!(!registry.tool_names().is_empty());
-        apply_session_host_tools(&mut registry, &resolved, &peers_root(&fx), &key, "t");
+        apply_session_host_tools(
+            &mut registry,
+            &resolved,
+            &peers_root(&fx),
+            &key,
+            "t",
+            Some(ws.connection_id.0),
+        );
         assert!(registry.tool_names().is_empty(), "{topic}");
     }
     // The owner's own sessions still get the set.
@@ -1153,6 +1195,24 @@ async fn should_refuse_generic_tools_that_escape_the_set() {
         "peer_send_input",
         "goal_dispatch",
         "manage_skills",
+        "message",
+        "send_file",
+        "shell",
+        "bash",
+        "exec_command",
+        "write_stdin",
+        "git",
+        "write_file",
+        "edit_file",
+        "diff_edit",
+        "apply_patch",
+        "browser",
+        "web_fetch",
+        "deep_crawl",
+        "monitor_delete",
+        "check_background_tasks",
+        "read_task_output",
+        "no_such_tool",
     ] {
         let err = register(
             &fx,
@@ -1178,4 +1238,146 @@ async fn should_refuse_generic_tools_that_escape_the_set() {
         "{}",
         err.message
     );
+
+    // Boolean subschemas and additionalProperties are honoured.
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [{"name": "news.list", "description": "x",
+                           "input_schema": {"type": "object",
+                                            "properties": {"any": true},
+                                            "additionalProperties": false},
+                           "risk": "read"}],
+                "generic_tools": ["read_file", "deep_search", "memory_search"] }),
+    )
+    .expect("boolean subschemas are valid");
+    let err = register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [{"name": "news.list", "description": "x",
+                           "input_schema": {"type": "object",
+                                            "additionalProperties": {"type": 7}},
+                           "risk": "read"}] }),
+    )
+    .expect_err("bad additionalProperties");
+    assert!(
+        err.message.contains("additionalProperties"),
+        "{}",
+        err.message
+    );
+
+    // A stale set holding a now-forbidden name is still stripped per turn.
+    let key = peer_key(&fx);
+    let path = peers_root(&fx).join("news/host_tools.json");
+    let mut stored: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    stored["generic_tools"] = json!(["shell", "read_file"]);
+    std::fs::write(&path, stored.to_string()).unwrap();
+    assert_eq!(
+        sorted_names(&turn_registry(&fx, &key, "t").await),
+        ["news_list", "read_file"]
+    );
+}
+
+#[tokio::test]
+async fn should_give_no_tools_to_another_connection_on_the_hosts_base_key() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (host_ws, _host_rx) = ws_connection_for_test(32);
+    register(
+        &fx,
+        &host_ws,
+        &token,
+        json!({ "tools": [news_list(), mail_send()] }),
+    )
+    .unwrap();
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context_key: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+
+    // Another client of the profile opens the same topic on the host's base
+    // key and drives a turn on its own connection.
+    let (spoof_ws, mut spoof_rx) = ws_connection_for_test(32);
+    for key in [context_key.clone(), peer_key(&fx)] {
+        let registry = turn_registry_on(&fx, &key, "turn-x", spoof_ws.connection_id.0).await;
+        assert!(registry.tool_names().is_empty(), "{key:?}");
+
+        // It cannot call the destructive tool, so no approval is ever raised
+        // for it to receive or answer.
+        let contracts = Arc::new(UiProtocolContractStores::default());
+        let approver: Arc<dyn octos_agent::ToolApprovalRequester> =
+            Arc::new(UiProtocolApprovalRequester {
+                ws: spoof_ws.clone(),
+                ledger: Arc::new(UiProtocolLedger::new(64)),
+                contracts: contracts.clone(),
+                state: fx.state.clone(),
+                peers_root: peers_root(&fx),
+                session_id: key.clone(),
+                turn_id: TurnId::new(),
+                features: ConnectionUiFeatures::default(),
+            });
+        let forced = octos_agent::tools::TOOL_APPROVAL_CTX
+            .scope(
+                approver,
+                registry.execute_with_context(
+                    &call_ctx("c1"),
+                    "mail_send",
+                    &json!({"draft_id": "d"}),
+                ),
+            )
+            .await;
+        assert!(forced.is_err(), "unknown tool");
+        assert!(contracts.approvals.pending_for_session(&key).is_empty());
+    }
+    assert!(
+        spoof_rx.try_recv().is_err(),
+        "nothing reached the spoofing connection"
+    );
+
+    // The host's own connection still gets the set; once it closes, nobody does.
+    let registry = turn_registry_on(&fx, &context_key, "turn-h", host_ws.connection_id.0).await;
+    assert_eq!(sorted_names(&registry), ["mail_send", "news_list"]);
+    crate::peers::host_tools::drop_routes_for_connection(host_ws.connection_id.0);
+    let registry = turn_registry_on(&fx, &context_key, "turn-h2", host_ws.connection_id.0).await;
+    assert!(registry.tool_names().is_empty());
+}
+
+#[tokio::test]
+async fn should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(&fx, &ws, &token, json!({ "tools": [news_topics_set()] })).unwrap();
+    let registry = Arc::new(turn_registry(&fx, &key, "turn-1").await);
+    let run = {
+        let registry = registry.clone();
+        tokio::spawn(async move {
+            registry
+                .execute_with_context(&call_ctx("c1"), "news_topics_set", &json!({"topics": []}))
+                .await
+                .unwrap()
+        })
+    };
+    let call = next_frame(&mut rx, "peer/tool/call").await;
+    let call_id = call["call_id"].as_str().unwrap().to_owned();
+    let err = answer(
+        &fx,
+        &token,
+        &call_id,
+        json!({"status": "awaiting_confirmation"}),
+    )
+    .expect_err("an act call is not acknowledged");
+    assert_eq!(err.data.unwrap()["kind"], "peer_tool_ack_not_gated");
+    answer(&fx, &token, &call_id, json!({"ok": true, "data": {}})).unwrap();
+    assert!(run.await.unwrap().success);
 }

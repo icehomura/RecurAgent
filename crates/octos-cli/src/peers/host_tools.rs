@@ -135,37 +135,47 @@ pub(crate) fn validate_app_tool_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Kernel tools a peer's set may never allow: each one runs work outside
-/// the turn's registry (a child agent or pipeline with its own built-in
-/// tools), reaches another session, schedules unfiltered runs, or changes
-/// the tool roster itself.
-const ESCAPE_TOOLS: &[&str] = &[
-    "spawn",
-    "spawn_agent",
-    "send_input",
-    "resume_agent",
-    "wait_agent",
-    "close_agent",
-    "delegate",
-    "delegate_task",
-    "run_pipeline",
-    "manage_skills",
-    "configure_tool",
-    "cron",
-    "monitor_create",
+/// The kernel tools a peer's set may allow: reading and searching the app's
+/// own workspace, research, and the app's own memory namespace. Everything
+/// else (shell, file writes, messaging and channel tools, browsers and raw
+/// fetches, child agents, pipelines, schedulers, other sessions) is refused
+/// at registration and stripped at every turn. Wider tiers would be an
+/// explicit opt-in of a later UPCR.
+pub(crate) const PEER_SAFE_GENERIC_TOOLS: &[&str] = &[
+    // The app's workspace, read-only.
+    "read_file",
+    "list_dir",
+    "glob",
+    "grep",
+    "view_image",
+    // Research.
+    "web_search",
+    "deep_search",
+    "synthesize_research",
+    // The app's memory namespace (UPCR-2026-034) and this session's
+    // truncated tool output.
+    "memory_search",
+    "memory_load",
+    "recall_memory",
+    "save_memory",
+    "record_memory_use",
+    "recall",
+    // Content generation dispatch (its targets are stripped like any other
+    // unlisted tool).
+    "mofa_make",
+    "mofa_describe_content_type",
 ];
-const ESCAPE_TOOL_PREFIXES: &[&str] = &["peer_", "goal_", "admin_", "mcp_"];
 
-/// Whether `name` is a meta/escape tool a peer's set may never allow.
-pub(crate) fn is_escape_tool(name: &str) -> bool {
-    ESCAPE_TOOLS.contains(&name) || ESCAPE_TOOL_PREFIXES.iter().any(|p| name.starts_with(p))
+/// Whether `name` is a generic tool a peer's set may allow.
+pub(crate) fn is_peer_safe_generic_tool(name: &str) -> bool {
+    PEER_SAFE_GENERIC_TOOLS.contains(&name)
 }
 
 fn validate_generic_name(name: &str) -> Result<(), String> {
-    if is_escape_tool(name) {
+    if !is_peer_safe_generic_tool(name) {
         return Err(format!(
-            "generic tool '{name}' runs work outside the peer's tool set (a child agent, \
-             pipeline, another session or the tool roster) and cannot be allowed"
+            "generic tool '{name}' is not one a peer may use (allowed: {})",
+            PEER_SAFE_GENERIC_TOOLS.join(", ")
         ));
     }
     let ok = !name.is_empty()
@@ -210,9 +220,18 @@ fn check_schema_shape(schema: &Value, depth: usize) -> Result<(), String> {
     if depth > MAX_SCHEMA_DEPTH {
         return Err(format!("nested deeper than {MAX_SCHEMA_DEPTH}"));
     }
+    if depth > 0 && schema.is_boolean() {
+        return Ok(());
+    }
     let Some(object) = schema.as_object() else {
         return Err("a schema must be a JSON object".into());
     };
+    if let Some(additional) = object.get("additionalProperties") {
+        if !additional.is_boolean() {
+            check_schema_shape(additional, depth + 1)
+                .map_err(|err| format!("additionalProperties: {err}"))?;
+        }
+    }
     let valid_type = |t: &Value| t.as_str().is_some_and(|t| SCHEMA_TYPES.contains(&t));
     match object.get("type") {
         None => {}
@@ -509,6 +528,7 @@ pub(crate) fn apply_session_host_tools(
     peers_root: &Path,
     session_id: &SessionKey,
     turn_id: &str,
+    turn_connection: Option<u64>,
 ) {
     match resolved {
         SessionHostTools::Unrestricted => {}
@@ -518,8 +538,20 @@ pub(crate) fn apply_session_host_tools(
             context_id,
             set,
         } => {
+            // The base key names the host but is not a secret. Only a turn
+            // driven by the connection that registered the set (and holds
+            // the host token) is the host's; any other connection's turn on
+            // the same topic gets no tools, so it can neither call an app
+            // tool nor receive one of its approvals.
+            if turn_connection.is_none()
+                || host_route_connection(peers_root, slug) != turn_connection
+            {
+                registry.retain(|_| false);
+                return;
+            }
             registry.retain(|name| {
-                !is_escape_tool(name) && set.generic_tools.iter().any(|allowed| allowed == name)
+                is_peer_safe_generic_tool(name)
+                    && set.generic_tools.iter().any(|allowed| allowed == name)
             });
             if set.tools.is_empty() {
                 return;
@@ -578,6 +610,53 @@ struct PendingCall {
     tx: tokio::sync::oneshot::Sender<HostToolCallOutcome>,
     /// Woken by an "awaiting confirmation" acknowledgement.
     ack: Arc<tokio::sync::Notify>,
+    /// Destructive or outward: only such a call may be acknowledged.
+    gated: bool,
+}
+
+/// A peer's tool host: the connection that registered its set.
+#[derive(Clone)]
+struct HostRoute {
+    connection: u64,
+    send: HostSend,
+}
+
+/// Time-bounded, size-bounded set of claimed keys (oldest evicted first,
+/// no full scans).
+#[derive(Default)]
+struct BoundedClaims {
+    order: std::collections::VecDeque<(String, Instant)>,
+    keys: std::collections::HashSet<String>,
+}
+
+impl BoundedClaims {
+    const MAX: usize = 4_096;
+
+    fn evict(&mut self, now: Instant, retention: Duration) {
+        while let Some((key, at)) = self.order.front() {
+            if now.duration_since(*at) < retention && self.order.len() < Self::MAX {
+                break;
+            }
+            self.keys.remove(key);
+            self.order.pop_front();
+        }
+    }
+
+    /// Insert `key`; `false` when it is already present.
+    fn claim(&mut self, key: String, retention: Duration) -> bool {
+        let now = Instant::now();
+        self.evict(now, retention);
+        if !self.keys.insert(key.clone()) {
+            return false;
+        }
+        self.order.push_back((key, now));
+        true
+    }
+
+    fn contains(&mut self, key: &str, retention: Duration) -> bool {
+        self.evict(Instant::now(), retention);
+        self.keys.contains(key)
+    }
 }
 
 /// Calls the kernel stopped waiting for, kept so a late result is audited.
@@ -586,10 +665,12 @@ const FINISHED_MAX: usize = 1_024;
 
 #[derive(Default)]
 struct HostToolHub {
-    routes: Mutex<HashMap<String, HostSend>>,
+    routes: Mutex<HashMap<String, HostRoute>>,
     pending: Mutex<HashMap<String, PendingCall>>,
     finished: Mutex<HashMap<String, (CallMeta, Instant)>>,
-    occurrences: Mutex<HashMap<String, Instant>>,
+    occurrences: Mutex<BoundedClaims>,
+    /// `(session, turn, tool, args digest)` whose outcome is unknown.
+    unknown: Mutex<BoundedClaims>,
 }
 
 static HUB: LazyLock<HostToolHub> = LazyLock::new(HostToolHub::default);
@@ -599,13 +680,31 @@ pub(crate) fn route_key(peers_root: &Path, slug: &str) -> String {
     format!("{}\u{0}{slug}", peers_root.display())
 }
 
-/// Route the peer's app tool calls to `send` (the registering connection),
-/// replacing any earlier route.
-pub(crate) fn set_host_route(peers_root: &Path, slug: &str, send: HostSend) {
+/// Route the peer's app tool calls to `send` on `connection` (the
+/// registering connection), replacing any earlier route. Only turns driven by
+/// that connection get the peer's tools.
+pub(crate) fn set_host_route(peers_root: &Path, slug: &str, connection: u64, send: HostSend) {
     HUB.routes
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .insert(route_key(peers_root, slug), send);
+        .insert(route_key(peers_root, slug), HostRoute { connection, send });
+}
+
+/// The connection that holds the peer's route, if any.
+pub(crate) fn host_route_connection(peers_root: &Path, slug: &str) -> Option<u64> {
+    HUB.routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&route_key(peers_root, slug))
+        .map(|route| route.connection)
+}
+
+/// Drop every route held by `connection` (it closed).
+pub(crate) fn drop_routes_for_connection(connection: u64) {
+    HUB.routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .retain(|_, route| route.connection != connection);
 }
 
 /// Drop the route if it is still `send` (its connection closed).
@@ -613,10 +712,17 @@ fn drop_route_if(key: &str, send: &HostSend) {
     let mut routes = HUB.routes.lock().unwrap_or_else(|p| p.into_inner());
     if routes
         .get(key)
-        .is_some_and(|current| Arc::ptr_eq(current, send))
+        .is_some_and(|current| Arc::ptr_eq(&current.send, send))
     {
         routes.remove(key);
     }
+}
+
+/// Why `peer/tool/result` was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CompleteError {
+    pub(crate) kind: &'static str,
+    pub(crate) message: String,
 }
 
 /// A `peer/tool/result` from the host.
@@ -695,8 +801,12 @@ pub(crate) fn complete_host_call(
     slug: &str,
     call_id: &str,
     reply: HostReply,
-) -> Result<CompleteCall, String> {
+) -> Result<CompleteCall, CompleteError> {
     let key = route_key(peers_root, slug);
+    let not_found = |message: String| CompleteError {
+        kind: "peer_tool_call_not_found",
+        message,
+    };
     let mut pending = HUB.pending.lock().unwrap_or_else(|p| p.into_inner());
     let owned = pending
         .get(call_id)
@@ -712,20 +822,28 @@ pub(crate) fn complete_host_call(
             .map(|(meta, _)| meta.clone());
         if let Some(meta) = finished {
             append_audit(peers_root, slug, &late_result_row(&meta, call_id, &reply));
-            return Err(format!(
+            return Err(not_found(format!(
                 "call '{call_id}' already ended (timed out or cancelled); the late result \
                  was recorded but not given to the model"
-            ));
+            )));
         }
-        return Err(format!(
+        return Err(not_found(format!(
             "no pending call '{call_id}' for peer '{slug}' (finished, timed out or cancelled)"
-        ));
+        )));
     }
     let outcome = match reply {
         HostReply::AwaitingConfirmation => {
-            if let Some(call) = pending.get(call_id) {
-                call.ack.notify_one();
+            let call = pending.get(call_id).expect("checked above");
+            if !call.gated {
+                return Err(CompleteError {
+                    kind: "peer_tool_ack_not_gated",
+                    message: format!(
+                        "call '{call_id}' is not destructive or outward; only such a call may \
+                         be acknowledged as awaiting confirmation"
+                    ),
+                });
             }
+            call.ack.notify_one();
             return Ok(CompleteCall::Acknowledged);
         }
         HostReply::Final(outcome) => outcome,
@@ -815,6 +933,15 @@ pub(crate) struct TurnHostToolRouter {
 }
 
 impl TurnHostToolRouter {
+    fn unknown_key(&self, tool: &str, args_digest: &str) -> String {
+        format!(
+            "{}\u{0}{}/{}/{tool}/{args_digest}",
+            self.peers_root.display(),
+            self.session_id.0,
+            self.turn_id
+        )
+    }
+
     fn error(kind: &str, message: impl Into<String>) -> HostToolCallOutcome {
         HostToolCallOutcome::Error {
             kind: kind.to_owned(),
@@ -835,14 +962,24 @@ impl HostToolRouter for TurnHostToolRouter {
             self.session_id.0,
             self.turn_id
         );
-        let mut seen = HUB.occurrences.lock().unwrap_or_else(|p| p.into_inner());
-        let now = Instant::now();
-        seen.retain(|_, at| now.duration_since(*at) < OCCURRENCE_RETENTION);
-        if seen.contains_key(&key) {
-            return false;
-        }
-        seen.insert(key, now);
-        true
+        HUB.occurrences
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .claim(key, OCCURRENCE_RETENTION)
+    }
+
+    fn outcome_unknown_before(&self, tool: &str, args_digest: &str) -> bool {
+        HUB.unknown
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .contains(&self.unknown_key(tool, args_digest), OCCURRENCE_RETENTION)
+    }
+
+    fn mark_outcome_unknown(&self, tool: &str, args_digest: &str) {
+        HUB.unknown
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .claim(self.unknown_key(tool, args_digest), OCCURRENCE_RETENTION);
     }
 
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
@@ -852,7 +989,7 @@ impl HostToolRouter for TurnHostToolRouter {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .get(&key)
-            .cloned()
+            .map(|route| route.send.clone())
         else {
             return Self::error(
                 "host_unavailable",
@@ -889,6 +1026,7 @@ impl HostToolRouter for TurnHostToolRouter {
                     max_result_bytes: self.max_result_bytes,
                     tx,
                     ack: ack.clone(),
+                    gated: call.gated,
                 },
             );
         }
@@ -952,8 +1090,15 @@ impl HostToolRouter for TurnHostToolRouter {
                 _ = tokio::time::sleep_until(deadline) => break,
             }
         }
+        // Take the call out of the pending set FIRST (under the same lock
+        // `peer/tool/result` completes it under), then look for a result: one
+        // that landed before the removal is delivered, not reported unknown;
+        // one that arrives after it is refused and audited as late.
         guard.reason = "timeout";
         drop(guard);
+        if let Ok(outcome) = rx.try_recv() {
+            return outcome;
+        }
         let waited = deadline.duration_since(started).as_millis();
         if call.risk == HostToolRisk::Read {
             Self::error(
@@ -1047,8 +1192,8 @@ mod tests {
         assert_eq!(set.call_timeout_ms, DEFAULT_CALL_TIMEOUT_MS);
 
         let collision = build_tool_set(
-            vec![tool("news.list", "read"), tool("news_list.x", "read")],
-            vec!["news_list".into()],
+            vec![tool("news.a_b", "read"), tool("news_a.b", "read")],
+            vec![],
             ToolSetOptions::default(),
         );
         assert!(collision.unwrap_err().contains("collides"));

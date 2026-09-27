@@ -56,7 +56,7 @@ never silently weakens a tool:
 | Field | Meaning |
 | --- | --- |
 | `name` | `<app>.<tool>`: 2–4 `.`-separated segments of `[a-z][a-z0-9_]{0,31}`. The model sees it with `.` replaced by `_` (`news.list` → `news_list`; providers refuse `.` in tool names). A registration whose model names collide with each other or with an allowed generic tool is refused. |
-| `input_schema` | JSON Schema object (`"type": "object"`). ≤ 16 KiB. Checked structurally against the meta-schema's shapes: `type` names JSON Schema types, `properties` is an object of schemas, `required` is an array of strings, `items`, `enum` and `anyOf`/`oneOf`/`allOf` are well formed, nesting ≤ 10. |
+| `input_schema` | JSON Schema object (`"type": "object"`). ≤ 16 KiB. Checked structurally against the meta-schema's shapes: `type` names JSON Schema types, `properties` is an object of schemas, `required` is an array of strings, `items`, `additionalProperties`, `enum` and `anyOf`/`oneOf`/`allOf` are well formed (boolean subschemas allowed), nesting ≤ 10. |
 | `output_schema` | Optional, same rules. Stored and echoed; not enforced by the kernel. |
 | `risk` | `read`, `act` or `destructive`. |
 | `background` | May run in a turn with no interactive client. Default `false`. |
@@ -64,16 +64,22 @@ never silently weakens a tool:
 | `confirm` | `host` (default) or `app`: who confirms a gated call with the person. Independent of `risk`. |
 | `shareable` | App Hub metadata; accepted, not acted on yet (see follow-ups). |
 
-`generic_tools` names kernel tools the app may use (`deep_search`, `read_file`,
-…); names that do not exist in a turn's registry are simply absent. Tools
-that run work outside the turn's registry, reach another session, schedule
-unfiltered runs or change the roster are refused (`peer_tools_invalid`) and
-are also stripped at every turn: `spawn`, `spawn_agent`, `send_input`,
-`resume_agent`, `wait_agent`, `close_agent`, `delegate`, `delegate_task`,
-`run_pipeline`, `manage_skills`, `configure_tool`, `cron`, `monitor_create`,
-and every `peer_*`, `goal_*`, `admin_*` and `mcp_*` tool. (A child agent or
-pipeline builds its own registry with the built-in tools, shell and file
-writes included, so allowing one would escape the set.)
+`generic_tools` names kernel tools the app may use, from an **allowlist** of
+peer-safe tools: reading and searching the app's workspace (`read_file`,
+`list_dir`, `glob`, `grep`, `view_image`), research (`web_search`,
+`deep_search`, `synthesize_research`), the app's memory namespace
+(`memory_search`, `memory_load`, `recall_memory`, `save_memory`,
+`record_memory_use`, `recall`) and content generation (`mofa_make`,
+`mofa_describe_content_type`). Any other name is refused
+(`peer_tools_invalid`) and also stripped at every turn: shell and exec tools,
+file writes and patches, messaging and channel tools (`message`,
+`send_file`, …), browsers and raw fetches (`browser`, `web_fetch`,
+`deep_crawl`), child agents and pipelines (`spawn`, `delegate`,
+`run_pipeline`, which build registries of their own with the built-in
+tools), schedulers and monitors, background-task readers, other sessions'
+tools (`peer_*`, `goal_*`) and admin tools. Wider tiers (shell, files) would
+be an explicit opt-in of a later UPCR. A generic tool the kernel does not
+offer in a turn is simply absent.
 
 Limits: 64 app tools, 32 generic tools, 2 KiB per description. Options are
 clamped, and a host may raise the defaults up to the maximum:
@@ -154,12 +160,23 @@ it the host MUST NOT execute the call.
 For a session whose topic is `peer-<slug>` of a host-owned peer with a
 registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
 
-- **Caller identity.** The topic alone names no caller: any client of the
-  profile can open `<its own base>#peerctx-<slug>.<id>`. Only a session on
-  the base key of the peer's recorded originator (the host's) is one of the
-  app's sessions. A session with a peer or context topic on any other base
-  key, or with a malformed context topic, gets no tools at all, whether or
-  not a set is registered.
+- **Caller identity.** Neither the topic nor the base key is a credential:
+  any client of the profile can open `<base>#peerctx-<slug>.<id>`, and the
+  host's base key can be listed. A turn gets the peer's set only when BOTH
+  hold:
+  - the session is on the base key of the peer's recorded originator, and
+  - the turn is driven by the connection that registered the set (the one
+    that presented the host token and is the peer's tool host).
+
+  Any other turn on a peer or context topic, and any turn with a malformed
+  context topic, gets **no tools at all**. As approvals are raised only by
+  the tools, a turn on another connection can neither call an app tool nor
+  receive or answer one of its approvals: approvals of host-routed calls
+  reach only the host's connection. When the host's connection closes its
+  routes are dropped, and the peer's turns get no tools until the host
+  registers again.
+  **Hosts MUST drive the peer's turns (`turn/start` on the peer and its
+  request contexts) on the connection that registered the set.**
 - **Visibility.** The turn's tool registry is cut down to the allowed generic
   tools and then gets one routed tool per declared app tool. Nothing else is
   advertised, and a call to any other name is refused by the registry
@@ -205,7 +222,10 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
     `approval/respond` records no scope from one (the decision applies to
     this call only). Otherwise a single "always" would approve every later
     call of the tool on the session, whatever its arguments and whoever
-    started the run.
+    started the run. The other approval bridges honour the flag as well: the
+    `octos chat` requester neither auto-resolves a once-only request from a
+    session "always" nor records one from it, and the approved-tool replay
+    path refuses it.
   - The person-absent approvals of `confirm: app` and `confirm: host` tools
     are raised on the peer's own session (`peer-<slug>`); the host surfaces
     them in the app's conversation (for native modules, OctoSense's
@@ -213,16 +233,28 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
 - **One execution per occurrence.** Every non-`read` call is claimed before
   any approval or host call under
   `<session>/<turn>/<tool_call_id>/<argument digest>` (the `peer_send_input`
-  occurrence shape plus a SHA-256 of the arguments). A re-dispatch of the
-  same call is refused (`duplicate`): it neither asks again nor reaches the
-  host again. A provider that reuses tool-call ids (`call_1`) with other
-  arguments is a different occurrence. `read` calls may repeat.
+  occurrence shape plus a SHA-256 of the arguments, whose object keys are
+  sorted, so key order does not matter). A re-dispatch of the same call is
+  refused (`duplicate`): it neither asks again nor reaches the host again. A
+  provider that reuses tool-call ids (`call_1`) with other arguments is a
+  different occurrence. `read` calls may repeat. Claims are kept 24 h, at
+  most 4 096, oldest evicted first.
+- **No retry after an unknown outcome.** Once a call ends `outcome_unknown`,
+  the same tool with the same arguments is refused for the rest of the turn
+  (`outcome_unknown_before`), under any tool-call id: the kernel enforces
+  "do not retry" instead of only advising it.
 - **Routing and waiting.** At most 16 calls in flight per peer
   (`host_busy`). A call waits `call_timeout_ms`; a `confirm_required` call
   waits the approval TTL instead (the app's sheet may take as long as an
   approval would), and a gated call's wait extends to the approval TTL on an
-  `awaiting_confirmation` acknowledgement. When the wait runs out the kernel
-  sends `peer/tool/cancel`, and:
+  `awaiting_confirmation` acknowledgement (an acknowledgement of a call that
+  is not gated is refused, `peer_tool_ack_not_gated`). A call waiting on the
+  person holds one of the peer's 16 slots for as long as `approval_ttl_secs`
+  (up to 7 days); hosts that confirm slowly should keep the TTL short. When
+  the wait runs out the kernel first takes the call out of the pending set
+  and then looks for a result, so an answer that landed at the deadline is
+  delivered rather than reported unknown; after that it sends
+  `peer/tool/cancel`, and:
   - a `read` call ends with `timeout`;
   - any other call ends with `outcome_unknown`: the model is told the app may
     or may not have acted and must not retry, but check with a read tool or
@@ -265,7 +297,7 @@ never declares its tools a second way.
   and size.
 - **Durable host routing across restarts.** The route is in memory; after a
   kernel or host restart the host re-registers (the set itself is durable, so
-  enforcement never lapses in between — calls fail with `host_unavailable`).
+  enforcement never lapses in between — the peer's turns get no tools).
 - **A durable approval park for unattended runs.** Background runs woken by
   events (News M3) run through the host's AppUI connection and get the
   normal approval bridge. A runner with no client at all refuses gated tools
@@ -283,7 +315,7 @@ never declares its tools a second way.
 
 ## Tests
 
-- `peer_host_tool` unit tests (octos-agent, 10):
+- `peer_host_tool` unit tests (octos-agent, 11):
   `should_run_read_and_act_tools_without_approval`,
   `should_run_destructive_only_after_an_explicit_approve_with_the_exact_arguments`
   (the request is once-only),
@@ -291,15 +323,18 @@ never declares its tools a second way.
   `should_gate_an_outward_act_tool_like_destructive`,
   `should_raise_one_approval_per_occurrence` (and a reused id with other
   arguments is a new call),
+  `should_digest_arguments_independently_of_key_order`,
   `should_send_an_act_call_once_but_let_reads_repeat`,
-  `should_report_an_unanswered_act_call_as_unknown_not_failed`,
+  `should_report_an_unanswered_act_call_as_unknown_not_failed` (and refuses a
+  retry under a new id),
   `should_let_the_app_confirm_when_the_person_is_present`,
   `should_ask_for_a_kernel_approval_when_an_app_confirmed_tool_runs_without_the_person`,
   `should_refuse_foreground_tools_unattended_and_bad_arguments`
+- `agent::execution` (octos-agent, 1): `should_never_auto_approve_a_once_only_request`
 - `peers::host_tools` unit tests (2):
   `should_validate_names_schemas_and_collisions`,
   `should_accept_a_tools_json_entry_and_refuse_unknown_fields`
-- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 14):
+- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 16):
   `should_advertise_and_dispatch_the_peer_tool_methods`,
   `should_refuse_a_registration_without_the_host_token`,
   `should_offer_exactly_the_registered_tools_and_refuse_an_unlisted_one`,
@@ -315,5 +350,12 @@ never declares its tools a second way.
   `should_wait_for_the_apps_confirmation_sheet_instead_of_timing_out`,
   `should_never_answer_or_remember_a_host_tool_approval_by_scope`,
   `should_give_no_tools_to_a_session_on_a_foreign_base_key`,
-  `should_refuse_generic_tools_that_escape_the_set`
+  `should_give_no_tools_to_another_connection_on_the_hosts_base_key`,
+  `should_refuse_generic_tools_that_escape_the_set` (the allowlist, schema
+  shapes, and per-turn stripping of a stale set),
+  `should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated`
 - `spec_section6_catalog_lists_every_advertised_method`
+
+The deadline race (a result landing exactly at the deadline) is closed by
+ordering (remove from the pending set, then `try_recv`) rather than by a
+timing test.

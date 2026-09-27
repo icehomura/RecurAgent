@@ -7658,6 +7658,8 @@ async fn ui_protocol_connection(
         &contracts.user_questions,
     )
     .await;
+    // UPCR-2026-035: a closed connection is no peer's tool host any more.
+    crate::peers::host_tools::drop_routes_for_connection(ws.connection_id.0);
     abort_live_forwarders(&live_forwarders, &ledger).await;
     abort_btw_aside_tasks(&mut btw_aside_tasks).await;
     // Dropping `ws` lets the writer task drain & exit; await it so the socket
@@ -8527,6 +8529,7 @@ where
         .await;
     }
     abort_btw_aside_tasks(&mut btw_aside_tasks).await;
+    crate::peers::host_tools::drop_routes_for_connection(ws.connection_id.0);
     cleanup_stdio_connection_resources(
         &active_turns,
         &connection_turns,
@@ -15402,6 +15405,7 @@ fn raw_peer_tools_register(
     set_host_route(
         &peers_root,
         &slug,
+        ws.connection_id.0,
         Arc::new(move |method, params| {
             send_raw_notification_ephemeral(&route_ws, method, params).is_ok()
         }),
@@ -15532,7 +15536,7 @@ fn raw_peer_tool_result(
         None => HostReply::AwaitingConfirmation,
     };
     let status = complete_host_call(&peers_root, &slug, &params.call_id, reply)
-        .map_err(|err| host_peer_error("peer_tool_call_not_found", err))?;
+        .map_err(|err| host_peer_error(err.kind, err.message))?;
     Ok(match status {
         CompleteCall::Accepted => json!({ "call_id": params.call_id, "accepted": true }),
         CompleteCall::Acknowledged => json!({
@@ -37509,6 +37513,7 @@ async fn run_standalone_turn(
             &peers_root,
             &session_id,
             &turn_id.0.to_string(),
+            Some(ws.connection_id.0),
         );
     }
     let tool_registry = Arc::new(tool_registry);
