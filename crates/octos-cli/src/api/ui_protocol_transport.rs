@@ -19576,11 +19576,22 @@ async fn handle_raw_appui_rpc(
         APPUI_METHOD_SNAPSHOT_RESTORE => {
             raw_snapshot_restore(state, request, connection_profile_id).await
         }
-        APPUI_METHOD_PEER_PREPARE => raw_peer_prepare(state, request, connection_profile_id).await,
+        APPUI_METHOD_PEER_PREPARE => {
+            let result = raw_peer_prepare(state, request, connection_profile_id).await;
+            if let Ok(value) = &result {
+                invalidate_bound_topics(state, value["peers"].as_array().into_iter().flatten())
+                    .await;
+            }
+            result
+        }
         APPUI_METHOD_PEER_GATHER => raw_peer_gather(state, request, connection_profile_id),
         APPUI_METHOD_PEER_MODEL_SET => raw_peer_model_set(state, request, connection_profile_id),
         APPUI_METHOD_PEER_CONTEXT_OPEN => {
-            raw_peer_context_open(state, request, connection_profile_id)
+            let result = raw_peer_context_open(state, request, connection_profile_id);
+            if let Ok(value) = &result {
+                invalidate_bound_topics(state, std::iter::once(value)).await;
+            }
+            result
         }
         APPUI_METHOD_PEER_CONTEXT_CLOSE => {
             raw_peer_context_close(state, request, connection_profile_id).await
@@ -20867,6 +20878,22 @@ fn stdio_session_open_candidate_profile(
 /// caught up). `Err` is only the #924 BLOCK 2 writer-fatal pair — a closed
 /// writer OR a latched failure both mean further pumps produce FatalClosed
 /// forever, so the caller must stop spinning.
+/// UPCR-2026-035: after `peer/prepare` / `peer/context/open` bound a topic,
+/// drop any session runtime cached for it before the binding (under any base
+/// key). The cache also re-checks the binding on every lookup; this makes the
+/// rebuild immediate.
+async fn invalidate_bound_topics<'a>(state: &AppState, entries: impl Iterator<Item = &'a Value>) {
+    let topics: Vec<String> = entries
+        .filter_map(|entry| entry["topic"].as_str().map(ToOwned::to_owned))
+        .collect();
+    for topic in topics {
+        state
+            .session_cache
+            .invalidate_sessions_with_topic(&topic)
+            .await;
+    }
+}
+
 /// UPCR-2026-035: whether `connection` may see this ledger event. Only the
 /// approval events of host-routed calls are restricted (to the peer's host
 /// connection); every other event is visible.

@@ -1649,3 +1649,110 @@ async fn should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated
     answer(&fx, &token, &call_id, json!({"ok": true, "data": {}})).unwrap();
     assert!(run.await.unwrap().success);
 }
+
+/// Round-4 review regression: a runtime cached for `<host base>#peer-news`
+/// BEFORE `peer/prepare` bound the topic must never be reused afterwards —
+/// it carries the profile's memory, the profile workspace and unclamped
+/// host filesystem access.
+#[tokio::test]
+async fn should_rebuild_a_session_runtime_cached_before_the_peer_was_bound() {
+    let fx = fixture().await;
+    let key = peer_key(&fx);
+    let cache = &fx.state.session_cache;
+    let epoch = cache.session_generation(&key);
+    let stale = cache
+        .get_or_init_with_permissions(
+            &fx.runtime,
+            key.clone(),
+            None,
+            octos_agent::EffectivePermissions::danger_full_access(),
+            epoch,
+        )
+        .await
+        .expect("an ordinary session before the peer exists");
+    assert!(stale.permissions.filesystem_scope.is_host());
+    assert!(stale.memory.namespace.is_none());
+
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_list()], "generic_tools": ["read_file", "memory_search"] }),
+    )
+    .unwrap();
+
+    let epoch = cache.session_generation(&key);
+    let fresh = cache
+        .get_or_init_with_permissions(
+            &fx.runtime,
+            key.clone(),
+            None,
+            octos_agent::EffectivePermissions::danger_full_access(),
+            epoch,
+        )
+        .await
+        .expect("the bound session");
+    assert!(
+        !Arc::ptr_eq(&stale, &fresh),
+        "the stale runtime is not reused"
+    );
+    assert!(!fresh.permissions.filesystem_scope.is_host(), "clamped");
+    assert!(fresh.agent.session_scope().is_some(), "scoped");
+    assert_eq!(fresh.memory.namespace.as_deref(), Some("app/news/acct-1"));
+    assert_eq!(
+        dunce::canonicalize(&fresh.workspace_root).unwrap(),
+        dunce::canonicalize(fx.apps.join("news")).unwrap()
+    );
+
+    // The host's turn roster is built on the rebuilt runtime.
+    let mut registry = fresh.tools.snapshot_excluding(&[]);
+    let resolved = resolve_session_host_tools(&peers_root(&fx), &key);
+    apply_session_host_tools(
+        &mut registry,
+        &resolved,
+        &peers_root(&fx),
+        &key,
+        "t",
+        Some(ws.connection_id.0),
+    );
+    assert_eq!(
+        sorted_names(&registry),
+        ["memory_search", "news_list", "read_file"]
+    );
+
+    // A context topic cached before `peer/context/open` is dropped by the
+    // bind-time invalidation as well.
+    let ctx_key = SessionKey(format!("{}#peerctx-news.ui-9", fx.system.base_key()));
+    let epoch = cache.session_generation(&ctx_key);
+    // Never opened: it cannot even bootstrap.
+    assert!(
+        cache
+            .get_or_init_with_permissions(
+                &fx.runtime,
+                ctx_key.clone(),
+                None,
+                octos_agent::EffectivePermissions::workspace_write(),
+                epoch,
+            )
+            .await
+            .is_err()
+    );
+    invalidate_bound_topics(&fx.state, std::iter::once(&json!({"topic": "peer-news"}))).await;
+    let epoch = cache.session_generation(&key);
+    let again = cache
+        .get_or_init_with_permissions(
+            &fx.runtime,
+            key.clone(),
+            None,
+            octos_agent::EffectivePermissions::workspace_write(),
+            epoch,
+        )
+        .await
+        .unwrap();
+    assert!(
+        !Arc::ptr_eq(&fresh, &again),
+        "bind-time invalidation drops the entry"
+    );
+}

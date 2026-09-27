@@ -150,9 +150,27 @@ pub struct SessionRuntime {
     /// the profile's own, or — for a host-bound app peer or one of its
     /// request contexts (UPCR-2026-034) — the bound app/account namespace.
     pub memory: super::memory_namespace::SessionMemory,
+
+    /// The app binding (UPCR-2026-034) this runtime was built for, and the
+    /// `peers/` root it was resolved under. A binding decides the workspace,
+    /// the memory stores and the permission clamp, so a runtime built for
+    /// another binding must be rebuilt, never reused
+    /// ([`Self::app_binding_is_current`]).
+    pub(crate) app_binding: crate::peers::app_binding::SessionAppBinding,
+    pub(crate) binding_peers_root: PathBuf,
 }
 
 impl SessionRuntime {
+    /// Whether the durable app binding of this session still equals the one
+    /// this runtime was built for. `false` means the runtime is stale (e.g.
+    /// cached before `peer/prepare` bound the session) and must be rebuilt.
+    pub(crate) fn app_binding_is_current(&self) -> bool {
+        crate::peers::app_binding::resolve_session_app_binding(
+            &self.binding_peers_root,
+            &self.session_key,
+        ) == self.app_binding
+    }
+
     /// Construct a [`SessionRuntime`] for the given session key.
     ///
     /// See the M11-C contract in `workstreams/M11-runtime-unification.md`
@@ -309,10 +327,15 @@ impl SessionRuntime {
         // namespace; a closed or never-opened binding refuses to run at all.
         // The binding is durable kernel state written by `peer/prepare` /
         // `peer/context/open`, never taken from this open's parameters.
+        let binding_peers_root = profile.data_dir.join("peers");
         let app_binding = crate::peers::app_binding::resolve_session_app_binding(
-            &profile.data_dir.join("peers"),
+            &binding_peers_root,
             &session_key,
         );
+        // Kept on the runtime: a cached runtime whose binding no longer
+        // matches the durable one (the session was bound by `peer/prepare` or
+        // `peer/context/open` after it was cached) is never reused.
+        let bootstrapped_binding = app_binding.clone();
         let (workspace_hint, bound_memory_namespace) = match app_binding {
             crate::peers::app_binding::SessionAppBinding::Unbound => (workspace_hint, None),
             crate::peers::app_binding::SessionAppBinding::Refused(reason) => {
@@ -838,6 +861,8 @@ impl SessionRuntime {
             sessions_root,
             sessions,
             memory,
+            app_binding: bootstrapped_binding,
+            binding_peers_root,
         }))
     }
 }

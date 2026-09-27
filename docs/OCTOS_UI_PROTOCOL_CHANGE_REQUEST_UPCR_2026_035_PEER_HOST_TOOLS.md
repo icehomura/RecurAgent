@@ -202,6 +202,13 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   clamps them to workspace access (keeping the approval policy), and such a
   session always carries its workspace scope; if the scope cannot be built,
   the session does not start.
+- **No stale runtimes.** A session runtime records the app binding it was
+  built for. The runtime cache re-checks it on every lookup and rebuilds a
+  runtime whose binding changed — e.g. one cached for `<base>#peer-<slug>`
+  before `peer/prepare` bound the topic, which would otherwise keep the
+  profile's memory and workspace and unclamped permissions. `peer/prepare`
+  and `peer/context/open` also drop every runtime cached for the bound topic
+  at once.
 - **Visibility.** The turn's tool registry is cut down to the allowed generic
   tools and then gets one routed tool per declared app tool. Nothing else is
   advertised, and a call to any other name is refused by the registry
@@ -347,9 +354,7 @@ never declares its tools a second way.
 - **Host-chosen bindings (UPCR-2026-034).** The peer's `cwd` is validated
   like a session open but not restricted further (a host could bind `$HOME`
   or the profile dir), and the memory namespace is only syntax-checked, not
-  tied to an app id. Restricting both, and evicting a session runtime cached
-  before `peer/prepare` bound its session (it could keep the profile's
-  memory), are follow-ups of UPCR-2026-034.
+  tied to an app id. Restricting both is a follow-up.
 - **Schema enforcement.** The kernel checks only an object shape and
   `required`; `additionalProperties`, types and formats are the host's to
   enforce.
@@ -387,7 +392,7 @@ never declares its tools a second way.
   `should_deliver_a_result_taken_before_the_deadline_but_delivered_after_it`
   (an injected pause between taking the call and delivering it; fails on
   the previous ordering)
-- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 20):
+- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 21):
   `should_advertise_and_dispatch_the_peer_tool_methods`,
   `should_refuse_a_registration_without_the_host_token`,
   `should_offer_exactly_the_registered_tools_and_refuse_an_unlisted_one`,
@@ -411,6 +416,8 @@ never declares its tools a second way.
   (live forwarding filtered, `approval/respond` and `turn/interrupt` /
   `turn/steer` refused from another connection, the host answers),
   `should_clamp_host_filesystem_access_for_a_bound_app_session`,
+  `should_rebuild_a_session_runtime_cached_before_the_peer_was_bound`
+  (fails without the cache re-check),
   `should_refuse_generic_tools_that_escape_the_set` (the allowlist, schema
   shapes, and per-turn stripping of a stale set),
   `should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated`
