@@ -517,6 +517,43 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   staged member and is echoed in each result entry. The limit persists by peer
   slug across session reconnects. Usage is charged after each turn, so one
   turn can overshoot; later turns end with `peer_token_budget_exceeded`.)
+- `peer/prepare` host-owned app peers (accepted `UPCR-2026-034`, additive
+  fields; a server that lists `peer/context/open` honors them): optional
+  `model` names a configured `sub_provider` lane exactly like
+  `peer_handoff`'s `model` (unknown lane: `model_note`, primary model);
+  optional `memory_namespace` marks a host-owned app peer — requires
+  `session_id` (the owning system-agent session, persisted as originator),
+  exactly one name and no `worktree`; `cwd` is the app's host-owned
+  workspace, or, when omitted, a kernel-provisioned
+  `<data_dir>/app-workspaces/<namespace>` (for remote hosts); binds every session of the peer to that workspace and to
+  the namespace's memory stores (capture, retrieval, prompt injection;
+  never the profile's own memory); optional `resume: true` returns an
+  existing peer with the same originator, namespace and workspace
+  (`resumed: true`, requires `host_token`) instead of refusing the name.
+  Result entries add `model` (`{lane, provider?, model?}`, the effective
+  choice), `model_note`, `memory_namespace`, `resumed` and `host_token`
+  (minted once at creation; required for every later control call on the
+  peer). A binding whose namespace or workspace nests with another app
+  peer's is refused. Typed `data.kind`: `peer_originator_mismatch`,
+  `peer_host_token_mismatch`, `peer_binding_mismatch`,
+  `peer_binding_conflict`, `peer_closed`.
+- `peer/model/set` (accepted `UPCR-2026-034`: the peer's originator sets or
+  clears (`model: null`) its configured model lane; `{session_id, peer,
+  model}` → `{slug, profile_id, model, applies: "next_turn"}`; an unknown
+  lane is refused with `peer_model_unknown` and changes nothing; the profile
+  default is untouched)
+- `peer/context/open`, `peer/context/close` (accepted `UPCR-2026-034`: bound
+  request contexts of a host-owned app peer. `{session_id, peer,
+  context_id, cwd?}`; open returns the kernel-minted `session_id`
+  (`<originator base>#peerctx-<slug>.<context_id>`), `cwd` (inside the
+  peer's workspace, default `contexts/<context_id>`), the child
+  `memory_namespace` (`<peer ns>/ctx-<context_id>`), the peer's `model` and
+  `created`; idempotent while open. Close marks the binding closed and
+  interrupts the context's in-flight turn; a closed or never-opened
+  context session is refused at `session/open` and at every `turn/start`
+  (`session_binding_closed`), and its id is never reopened. Typed
+  `data.kind`: `peer_not_host_bound`, `peer_context_closed`,
+  `peer_context_not_found`, `peer_context_workspace_escape`)
 - `peer/gather` (#1801 v2 blackboard read: per staged peer its brief + the
   latest `result.md` — written server-side on every peer-session turn
   terminal — with per-field truncation flags and `result_updated_unix`;

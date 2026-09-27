@@ -145,6 +145,11 @@ pub struct SessionRuntime {
     /// Opened at [`Self::sessions_root`] (which is
     /// [`ProfileRuntime::data_dir`] unless the session is cwd-scoped).
     pub sessions: Arc<tokio::sync::Mutex<SessionManager>>,
+
+    /// The memory stores this session captures into and is injected from:
+    /// the profile's own, or — for a host-bound app peer or one of its
+    /// request contexts (UPCR-2026-034) — the bound app/account namespace.
+    pub memory: super::memory_namespace::SessionMemory,
 }
 
 impl SessionRuntime {
@@ -298,6 +303,39 @@ impl SessionRuntime {
         // BEFORE it is consumed — the sessions-root resolution below keys off
         // "was this a cwd/coding-agent session" (a hint), not off the derived
         // workspace path.
+        //
+        // UPCR-2026-034: a host-bound app peer (or one of its request
+        // contexts) runs ONLY in its bound workspace and on its bound memory
+        // namespace; a closed or never-opened binding refuses to run at all.
+        // The binding is durable kernel state written by `peer/prepare` /
+        // `peer/context/open`, never taken from this open's parameters.
+        let app_binding = crate::peers::app_binding::resolve_session_app_binding(
+            &profile.data_dir.join("peers"),
+            &session_key,
+        );
+        let (workspace_hint, bound_memory_namespace) = match app_binding {
+            crate::peers::app_binding::SessionAppBinding::Unbound => (workspace_hint, None),
+            crate::peers::app_binding::SessionAppBinding::Refused(reason) => {
+                eyre::bail!("session {session_key} cannot run: {reason}");
+            }
+            crate::peers::app_binding::SessionAppBinding::Bound {
+                cwd,
+                memory_namespace,
+            } => {
+                if let Some(hint) = workspace_hint.as_ref() {
+                    let hint_canon = dunce::canonicalize(hint).unwrap_or_else(|_| hint.clone());
+                    let cwd_canon = dunce::canonicalize(&cwd).unwrap_or_else(|_| cwd.clone());
+                    if hint_canon != cwd_canon {
+                        eyre::bail!(
+                            "session {session_key} is bound to workspace {}; refusing {}",
+                            cwd.display(),
+                            hint.display()
+                        );
+                    }
+                }
+                (Some(cwd), Some(memory_namespace))
+            }
+        };
         let had_workspace_hint = workspace_hint.is_some();
         let workspace_root = resolve_workspace_root(profile, &session_key, workspace_hint)?;
         let workspace_profile = profile.for_workspace(&workspace_root).await?;
@@ -402,6 +440,22 @@ impl SessionRuntime {
         // enabled tool is emitted every turn, so there is no per-session
         // meta-tool to re-register or wire.
         profile.apply_tool_envelope(&mut tools);
+        let memory = match bound_memory_namespace.as_deref() {
+            Some(namespace) => {
+                let memory =
+                    super::memory_namespace::SessionMemory::namespaced(profile, namespace).await?;
+                super::memory_namespace::rebind_memory_tools(
+                    &mut tools,
+                    &memory,
+                    profile.embedder.clone(),
+                );
+                // `run_pipeline` captures episodes into the PROFILE's memory;
+                // a namespaced session must not write there.
+                tools.retain(|name| name != "run_pipeline");
+                memory
+            }
+            None => super::memory_namespace::SessionMemory::profile(profile),
+        };
         let tools = Arc::new(tools);
 
         // Step 5: build the per-session Agent. This is the only
@@ -584,7 +638,7 @@ impl SessionRuntime {
             AgentId::new("api"),
             profile.llm.clone(),
             Arc::clone(&tools),
-            profile.memory.clone(),
+            memory.episodes.clone(),
         )
         .with_config(
             profile
@@ -612,7 +666,7 @@ impl SessionRuntime {
         // runtime-held agent exactly like the per-turn AppUI rebuild does.
         .with_parent_session_key(session_key.to_string())
         .with_workspace_root(workspace_root.clone())
-        .with_recall(profile.recall.clone());
+        .with_recall(memory.recall.clone());
 
         if let Some(coding_profile) = profile.agent_profile.clone() {
             let definitions = Arc::new(octos_agent::agents::AgentDefinitions::load_dir(
@@ -653,26 +707,29 @@ impl SessionRuntime {
         // the segment at each turn start when MEMORY.md / daily notes /
         // bank change on disk (one fingerprint stat per turn otherwise).
         agent.set_prompt_segment(SLASH_COMMANDS_SEGMENT_NAME, String::new());
-        let memory_ctx = profile
+        let memory_ctx = memory
             .memory_store
             .get_injectable_context(profile.memory_inject_tokens)
             .await;
         agent.set_prompt_segment(
             octos_agent::MEMORY_SEGMENT_NAME,
-            octos_agent::compose_memory_segment(&memory_ctx, profile.memory_refresh_enabled),
+            octos_agent::compose_memory_segment(&memory_ctx, memory.refresh_enabled),
         );
         // Contract parity with chat.rs: `memory.refresh.enabled = false`
         // means NO per-turn memory re-read — the segment stays as seeded
         // at session bootstrap. Default-on makes disabled an explicit
         // opt-out.
-        if profile.memory_refresh_enabled {
+        // A namespaced session always re-renders per turn (its own
+        // `save_memory` writes must show up), without the capture policy that
+        // advertises the profile-only `memory_note` path.
+        if profile.memory_refresh_enabled || memory.namespace.is_some() {
             agent.add_prompt_segment_provider(Arc::new(
                 octos_agent::MemorySegmentProvider::new(
-                    profile.memory_store.clone(),
+                    memory.memory_store.clone(),
                     profile.memory_inject_tokens,
-                    true,
+                    memory.refresh_enabled,
                 )
-                .with_recall(profile.recall.clone(), profile.embedder.clone()),
+                .with_recall(memory.recall.clone(), profile.embedder.clone()),
             ));
         }
         // Post-memory half AFTER the named segment — the pre-refactor
@@ -753,6 +810,7 @@ impl SessionRuntime {
             agent,
             sessions_root,
             sessions,
+            memory,
         }))
     }
 }

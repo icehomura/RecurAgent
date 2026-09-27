@@ -321,6 +321,16 @@ const APPUI_METHOD_PEER_PREPARE: &str = "peer/prepare";
 /// session. Read-only; results survive client crashes/reconnects because
 /// they are files, not connection state.
 const APPUI_METHOD_PEER_GATHER: &str = "peer/gather";
+/// UPCR-2026-034 `peer/model/set`: the ORIGINATOR changes (or clears) an
+/// existing peer's configured model lane; applies from the peer's next turn.
+const APPUI_METHOD_PEER_MODEL_SET: &str = "peer/model/set";
+/// UPCR-2026-034 `peer/context/open`: open (idempotently) a bound request
+/// context of a host-owned app peer — a separate transcript, workspace and
+/// child memory namespace under the peer, with a kernel-derived session key.
+const APPUI_METHOD_PEER_CONTEXT_OPEN: &str = "peer/context/open";
+/// UPCR-2026-034 `peer/context/close`: close a request context for good,
+/// interrupting its in-flight turn; the context session never runs again.
+const APPUI_METHOD_PEER_CONTEXT_CLOSE: &str = "peer/context/close";
 /// `turn/steer` — mid-turn prompt injection into the ACTIVE turn (codex
 /// parity: app-server `turn/steer` → `Session::steer_input`). Params
 /// `{session_id, expected_turn_id?, input}`; result `{turn_id, steered}`.
@@ -431,6 +441,9 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_SNAPSHOT_RESTORE,
     APPUI_METHOD_PEER_PREPARE,
     APPUI_METHOD_PEER_GATHER,
+    APPUI_METHOD_PEER_MODEL_SET,
+    APPUI_METHOD_PEER_CONTEXT_OPEN,
+    APPUI_METHOD_PEER_CONTEXT_CLOSE,
     APPUI_METHOD_TURN_STEER,
     APPUI_METHOD_PROFILE_SKILLS_LIST,
     APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH,
@@ -1777,6 +1790,8 @@ enum InterruptOrigin {
     Client,
     /// `peer_close` retired the peer while this turn was still running.
     PeerClose,
+    /// UPCR-2026-034 `peer/context/close` released the request context.
+    ContextClose,
 }
 
 impl InterruptOrigin {
@@ -1787,6 +1802,10 @@ impl InterruptOrigin {
             Self::PeerClose => {
                 "turn interrupted by peer_close — the peer was retired while this \
                  turn was still running, so its in-flight work was discarded"
+            }
+            Self::ContextClose => {
+                "turn interrupted by peer/context/close — the request context was \
+                 released, so its in-flight work was discarded"
             }
         }
     }
@@ -14440,6 +14459,163 @@ struct RawPeerPrepareParams {
     session_id: Option<SessionKey>,
     #[serde(default)]
     profile_id: Option<String>,
+    /// UPCR-2026-034 — `peer_handoff` parity: an optional model LANE key
+    /// naming a configured `sub_provider`. A valid lane is recorded for the
+    /// peer; an unknown lane is reported in `model_note` and the peer runs on
+    /// the primary model. The result's `model` reports the effective choice.
+    #[serde(default)]
+    model: Option<String>,
+    /// UPCR-2026-034 — marks a HOST-OWNED APP PEER and binds it to this
+    /// app/account memory namespace. Requires `session_id` (the owning system
+    /// agent session, recorded as originator), `cwd` (the app's host-owned
+    /// workspace), exactly one name and no worktree. Every session of the
+    /// peer then runs only in `cwd` and on the namespace's memory stores.
+    #[serde(default)]
+    memory_namespace: Option<String>,
+    /// UPCR-2026-034 — create-or-resume for a host-owned app peer: when the
+    /// named peer already exists with the SAME originator, namespace and
+    /// workspace, return it (`resumed: true`) instead of refusing the name.
+    #[serde(default)]
+    resume: bool,
+    /// UPCR-2026-034 — the host token returned when this host-owned app peer
+    /// was created. Required to resume it.
+    #[serde(default)]
+    host_token: Option<String>,
+}
+
+/// UPCR-2026-034 — the profile's configured model lanes, from the
+/// bootstrapped runtime when there is one (what turns actually resolve
+/// against) and otherwise from the stored profile.
+fn profile_model_lanes(
+    state: &AppState,
+    profile_id: &str,
+) -> Vec<crate::config::SubProviderConfig> {
+    if let Some(runtime) = resolve_session_profile_runtime(state, Some(profile_id)) {
+        return runtime.config.sub_providers.clone();
+    }
+    profile_store(state)
+        .ok()
+        .and_then(|store| store.get(profile_id).ok().flatten())
+        .map(|profile| profile.config.sub_providers.clone())
+        .unwrap_or_default()
+}
+
+/// UPCR-2026-034 — the effective model of a peer: its recorded lane's
+/// provider/model, or `{"lane": "primary"}`. Never carries credentials.
+fn peer_effective_model_json(
+    lanes: &[crate::config::SubProviderConfig],
+    lane: Option<&str>,
+) -> Value {
+    match lane.and_then(|lane| lanes.iter().rev().find(|sp| sp.key == lane)) {
+        Some(sp) => json!({ "lane": sp.key, "provider": sp.provider, "model": sp.model }),
+        None => json!({ "lane": "primary" }),
+    }
+}
+
+fn host_peer_error(kind: &str, message: String) -> RpcError {
+    RpcError::invalid_params(message).with_data(json!({ "kind": kind }))
+}
+
+/// UPCR-2026-034 — authorize a host call against a peer: the caller must be
+/// the peer's recorded originator. Resolves a name or slug.
+fn authorize_host_peer_call(
+    peers_root: &Path,
+    peer: &str,
+    caller: &SessionKey,
+    host_token: Option<&str>,
+) -> Result<String, RpcError> {
+    let slug = resolve_peer_name_to_slug(peers_root, peer)
+        .ok_or_else(|| host_peer_error("peer_not_found", format!("no peer named '{peer}'")))?;
+    peer_send_input_authorized(peers_root, &slug, &caller.0).map_err(|_| {
+        RpcError::permission_denied(format!(
+            "only the session that owns peer '{peer}' may do this"
+        ))
+        .with_data(json!({ "kind": "peer_originator_mismatch" }))
+    })?;
+    // A host-owned app peer is controlled by the credential minted with it,
+    // not by the (self-reported) originator session alone.
+    if let Some(binding) = crate::peers::app_binding::read_peer_host_binding(peers_root, &slug) {
+        if !crate::peers::app_binding::host_token_matches(&binding, host_token) {
+            return Err(host_token_error(&slug));
+        }
+    }
+    Ok(slug)
+}
+
+fn host_token_error(slug: &str) -> RpcError {
+    RpcError::permission_denied(format!(
+        "peer '{slug}' is a host-owned app peer: present the host token it was created with"
+    ))
+    .with_data(json!({ "kind": "peer_host_token_mismatch" }))
+}
+
+/// UPCR-2026-034 — resume an existing host-owned app peer after checking
+/// that the caller owns it and that its durable binding is unchanged.
+#[allow(clippy::too_many_arguments)]
+fn resume_host_peer(
+    peers_root: &Path,
+    slug: &str,
+    originator: &SessionKey,
+    namespace: &str,
+    workspace_root: &Path,
+    requested_model: Option<&str>,
+    lanes: &[crate::config::SubProviderConfig],
+    profile_id: &str,
+    host_token: Option<&str>,
+) -> Result<Value, RpcError> {
+    let Some(dir) = staged_peer_dir(peers_root, slug) else {
+        return Err(host_peer_error(
+            "peer_not_found",
+            format!("peer '{slug}' is not staged"),
+        ));
+    };
+    let Some(binding) = crate::peers::app_binding::read_host_binding_in(&dir) else {
+        return Err(host_peer_error(
+            "peer_binding_mismatch",
+            format!("peer '{slug}' exists but is not a host-owned app peer"),
+        ));
+    };
+    peer_send_input_authorized(peers_root, slug, &originator.0).map_err(|_| {
+        RpcError::permission_denied(format!("peer '{slug}' is owned by another session"))
+            .with_data(json!({ "kind": "peer_originator_mismatch" }))
+    })?;
+    if !crate::peers::app_binding::host_token_matches(&binding, host_token) {
+        return Err(host_token_error(slug));
+    }
+    if peer_is_closed(peers_root, slug) {
+        return Err(host_peer_error(
+            "peer_closed",
+            format!("peer '{slug}' was closed; stage a new peer under a new name"),
+        ));
+    }
+    if binding.memory_namespace != namespace || binding.cwd != workspace_root {
+        return Err(host_peer_error(
+            "peer_binding_mismatch",
+            format!("peer '{slug}' is bound to a different workspace or memory namespace"),
+        ));
+    }
+    let lane_keys: Vec<String> = lanes.iter().map(|sp| sp.key.clone()).collect();
+    let model_note = match requested_model {
+        Some(model) => record_peer_model_lane(peers_root, slug, Some(model), &lane_keys),
+        None => None,
+    };
+    let lane = read_peer_model_lane(peers_root, slug);
+    let entry = json!({
+        "slug": slug,
+        "topic": format!("peer-{slug}"),
+        "brief_path": dir.join("brief.md").to_string_lossy(),
+        "cwd": binding.cwd.to_string_lossy(),
+        "worktree_branch": Value::Null,
+        "profile_id": profile_id,
+        "token_budget": Value::Null,
+        "model": peer_effective_model_json(lanes, lane.as_deref()),
+        "model_note": model_note,
+        "memory_namespace": binding.memory_namespace,
+        "resumed": true,
+    });
+    let mut result = entry.as_object().cloned().unwrap_or_default();
+    result.insert("peers".into(), Value::Array(vec![entry]));
+    Ok(Value::Object(result))
 }
 
 /// `peer/prepare` (#1800): stage a peer-agent spin-off. Writes the durable
@@ -14469,10 +14645,62 @@ async fn raw_peer_prepare(
     )?;
     let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
 
+    // UPCR-2026-034 — a host-owned app peer: the host names the owning
+    // system session, the app workspace and the memory namespace.
+    let host_namespace = match params.memory_namespace.as_deref() {
+        Some(raw) => Some(
+            crate::runtime::memory_namespace::validate_memory_namespace(raw)
+                .map_err(RpcError::invalid_params)?,
+        ),
+        None => None,
+    };
+    if params.resume && host_namespace.is_none() {
+        return Err(RpcError::invalid_params(
+            "resume is only for host-owned app peers: pass memory_namespace",
+        ));
+    }
+    if host_namespace.is_some() {
+        if params.session_id.is_none() {
+            return Err(RpcError::invalid_params(
+                "a host-owned app peer needs session_id: the system agent session that owns it",
+            ));
+        }
+        if params.worktree {
+            return Err(RpcError::invalid_params(
+                "a host-owned app peer runs in its app workspace; worktree is not supported",
+            ));
+        }
+        if params.n.unwrap_or(1) != 1 || params.names.as_ref().is_none_or(|names| names.len() != 1)
+        {
+            return Err(RpcError::invalid_params(
+                "a host-owned app peer is staged alone, with exactly one name",
+            ));
+        }
+    }
+    let model_lanes = profile_model_lanes(state, &profile_id);
+    let model_lane_keys: Vec<String> = model_lanes.iter().map(|sp| sp.key.clone()).collect();
+
     // Workspace root: explicit cwd (validated like a session open) beats the
     // calling session's root. A worktree needs SOME root; a plain peer does
     // too (its session open will carry it as cwd).
-    let workspace_root = match params.cwd.as_deref() {
+    // UPCR-2026-034 — a host-owned app peer without `cwd` gets a
+    // KERNEL-provisioned workspace under the profile data dir, named by its
+    // namespace. This is how a remote client (whose local paths mean nothing
+    // here) obtains a scoped workspace instead of broadening access.
+    let provisioned_cwd = match (host_namespace.as_deref(), params.cwd.as_deref()) {
+        (Some(namespace), None) => {
+            let dir = crate::runtime::memory_namespace::app_workspace_root(&data_dir, namespace);
+            std::fs::create_dir_all(&dir).map_err(|err| {
+                RpcError::internal_error(format!(
+                    "failed to provision the app workspace {}: {err}",
+                    dir.display()
+                ))
+            })?;
+            Some(dir.to_string_lossy().into_owned())
+        }
+        _ => None,
+    };
+    let workspace_root = match params.cwd.as_deref().or(provisioned_cwd.as_deref()) {
         Some(cwd) => {
             let path = PathBuf::from(cwd);
             // dunce strips the `\\?\` prefix std canonicalize returns on
@@ -14569,6 +14797,62 @@ async fn raw_peer_prepare(
         None => None,
     };
 
+    let peers_root_for_host = peers_root.clone();
+    if let (Some(namespace), true) = (host_namespace.as_deref(), params.resume) {
+        let name = &names.as_ref().expect("validated above")[0];
+        if let Some(slug) = resolve_peer_name_to_slug(&peers_root_for_host, name) {
+            return resume_host_peer(
+                &peers_root_for_host,
+                &slug,
+                params.session_id.as_ref().expect("validated above"),
+                namespace,
+                &workspace_root,
+                params.model.as_deref(),
+                &model_lanes,
+                &profile_id,
+                params.host_token.as_deref(),
+            );
+        }
+    }
+    // A new host-owned app peer must not share state with another: its
+    // namespace may not equal or nest with another app peer's (whose request
+    // contexts live under it), its workspace may not nest with another's,
+    // and it may not sit inside the kernel's memory stores.
+    let mut minted_token = None;
+    if let Some(namespace) = host_namespace.as_deref() {
+        let stores = dunce::canonicalize(&data_dir)
+            .unwrap_or_else(|_| data_dir.clone())
+            .join(crate::runtime::memory_namespace::MEMORY_NAMESPACES_DIR);
+        if workspace_root.starts_with(&stores) {
+            return Err(host_peer_error(
+                "peer_binding_conflict",
+                "an app workspace cannot be inside the kernel's memory stores".to_owned(),
+            ));
+        }
+        if let Some(conflict) = crate::peers::app_binding::binding_conflict(
+            &peers_root,
+            namespace,
+            &workspace_root,
+            None,
+        ) {
+            return Err(host_peer_error("peer_binding_conflict", conflict));
+        }
+        minted_token =
+            Some(crate::peers::app_binding::mint_host_token().map_err(RpcError::internal_error)?);
+    }
+    let host_binding =
+        host_namespace
+            .as_ref()
+            .map(|namespace| crate::peers::app_binding::PeerHostBinding {
+                version: 1,
+                cwd: workspace_root.clone(),
+                memory_namespace: namespace.clone(),
+                token_sha256: minted_token
+                    .as_ref()
+                    .map(|(_, digest)| digest.clone())
+                    .unwrap_or_default(),
+            });
+
     // Fleet staging is ALL-OR-NOTHING: each member goes through `stage_peer`
     // (reserve → optional worktree fence → atomic brief write; the failing
     // member rolls ITSELF back inside the helper), and any member failure
@@ -14592,6 +14876,7 @@ async fn raw_peer_prepare(
             .session_id
             .as_ref()
             .map(|session| session.to_string());
+        let member_host_binding = host_binding.clone();
         let member = tokio::task::spawn_blocking(move || {
             stage_peer_with_budget(
                 &member_peers_root,
@@ -14608,6 +14893,7 @@ async fn raw_peer_prepare(
                 None,
                 None,
                 member_token_budget,
+                member_host_binding.as_ref(),
             )
         })
         .await
@@ -14633,6 +14919,16 @@ async fn raw_peer_prepare(
         // Track the member for the fleet-level rollback: the reserved dir is
         // the brief's parent (`peers/<slug>`), same claim `stage_peer` made.
         staged.push((member.slug.clone(), peers_root.join(&member.slug)));
+        // UPCR-2026-034 — `peer_handoff` model parity: record the lane the
+        // caller named (an unknown lane is a truthful note, never a failure)
+        // and report the EFFECTIVE model.
+        let model_note = record_peer_model_lane(
+            &peers_root,
+            &member.slug,
+            params.model.as_deref(),
+            &model_lane_keys,
+        );
+        let lane = read_peer_model_lane(&peers_root, &member.slug);
         entries.push(json!({
             "slug": member.slug,
             "topic": member.topic,
@@ -14641,6 +14937,13 @@ async fn raw_peer_prepare(
             "worktree_branch": member.worktree_branch,
             "profile_id": profile_id.clone(),
             "token_budget": member_token_budget,
+            "model": peer_effective_model_json(&model_lanes, lane.as_deref()),
+            "model_note": model_note,
+            "memory_namespace": host_namespace.clone(),
+            "resumed": false,
+            // Returned ONCE, at creation: the credential for every later
+            // control call on this host-owned app peer.
+            "host_token": minted_token.as_ref().map(|(token, _)| token.clone()),
         }));
     }
 
@@ -14685,6 +14988,315 @@ async fn cleanup_staged_peers(workspace_root: &Path, staged: &[(String, PathBuf)
         }
     })
     .await;
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPeerModelSetParams {
+    /// The peer's originator (owning) session.
+    session_id: SessionKey,
+    /// Peer name or slug.
+    peer: String,
+    /// A configured `sub_provider` lane key; `null`/empty returns the peer to
+    /// the profile's primary model.
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    /// Required for a host-owned app peer.
+    #[serde(default)]
+    host_token: Option<String>,
+}
+
+/// UPCR-2026-034 `peer/model/set` — change an existing peer's model lane.
+/// Originator-only. An unknown lane is REFUSED (nothing changes), unlike the
+/// staging paths, because the caller asked for this change explicitly. The
+/// lane is read at each turn start, so the change applies between turns;
+/// the profile default and credentials are untouched.
+fn raw_peer_model_set(
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    let params: RawPeerModelSetParams = parse_raw_params(request)?;
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    let peers_root = data_dir.join("peers");
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    if peer_is_closed(&peers_root, &slug) {
+        return Err(host_peer_error(
+            "peer_closed",
+            format!("peer '{slug}' is closed"),
+        ));
+    }
+    let lanes = profile_model_lanes(state, &profile_id);
+    let requested = params
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|lane| !lane.is_empty() && *lane != "primary");
+    let dir = staged_peer_dir(&peers_root, &slug)
+        .ok_or_else(|| host_peer_error("peer_not_found", format!("peer '{slug}' is not staged")))?;
+    match requested {
+        Some(lane) => {
+            if !lanes.iter().any(|sp| sp.key == lane) {
+                let available: Vec<&str> = lanes.iter().map(|sp| sp.key.as_str()).collect();
+                return Err(RpcError::invalid_params(format!(
+                    "model lane '{lane}' is not configured for this profile"
+                ))
+                .with_data(json!({ "kind": "peer_model_unknown", "available": available })));
+            }
+            peer_io::write_peer_file_atomic(&dir, "model", lane).map_err(|err| {
+                RpcError::internal_error(format!("failed to record peer model lane: {err}"))
+            })?;
+        }
+        None => {
+            peer_io::write_peer_file_atomic(&dir, "model", "").map_err(|err| {
+                RpcError::internal_error(format!("failed to clear peer model lane: {err}"))
+            })?;
+        }
+    }
+    let lane = read_peer_model_lane(&peers_root, &slug);
+    Ok(json!({
+        "slug": slug,
+        "profile_id": profile_id,
+        "model": peer_effective_model_json(&lanes, lane.as_deref()),
+        "applies": "next_turn",
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct RawPeerContextParams {
+    /// The owning peer's originator session.
+    session_id: SessionKey,
+    /// Peer name or slug.
+    peer: String,
+    /// `[a-z0-9][a-z0-9-]{0,63}`, chosen by the host (one per client
+    /// instance and generation).
+    context_id: String,
+    /// Optional workspace, which must lie inside the peer's workspace.
+    /// Defaults to `<peer cwd>/contexts/<context_id>`.
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    /// The host token of the owning app peer.
+    #[serde(default)]
+    host_token: Option<String>,
+}
+
+fn host_peer_context_prelude(
+    state: &Arc<AppState>,
+    params: &RawPeerContextParams,
+    connection_profile_id: Option<&str>,
+) -> Result<
+    (
+        String,
+        PathBuf,
+        String,
+        String,
+        crate::peers::app_binding::PeerHostBinding,
+    ),
+    RpcError,
+> {
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    let peers_root = data_dir.join("peers");
+    let context_id = crate::peers::app_binding::validate_context_id(&params.context_id)
+        .map_err(RpcError::invalid_params)?;
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    let Some(binding) = crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug)
+    else {
+        return Err(host_peer_error(
+            "peer_not_host_bound",
+            format!("peer '{slug}' is not a host-owned app peer"),
+        ));
+    };
+    Ok((profile_id, peers_root, slug, context_id, binding))
+}
+
+/// UPCR-2026-034 `peer/context/open` — open a bound request context of a
+/// host-owned app peer. Idempotent for an open context; a closed context id
+/// is never reopened (the host mints a new id per client generation).
+fn raw_peer_context_open(
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::app_binding::{
+        PeerContextBinding, context_memory_namespace, context_session_key, read_context_binding,
+        write_context_binding,
+    };
+    let params: RawPeerContextParams = parse_raw_params(request)?;
+    let (profile_id, peers_root, slug, context_id, peer) =
+        host_peer_context_prelude(state, &params, connection_profile_id)?;
+    if peer_is_closed(&peers_root, &slug) {
+        return Err(host_peer_error(
+            "peer_closed",
+            format!("peer '{slug}' is closed"),
+        ));
+    }
+    let namespace = crate::runtime::memory_namespace::validate_memory_namespace(
+        &context_memory_namespace(&peer.memory_namespace, &context_id),
+    )
+    .map_err(|err| host_peer_error("peer_context_namespace_too_long", err))?;
+    let peer_root = dunce::canonicalize(&peer.cwd).map_err(|err| {
+        RpcError::internal_error(format!(
+            "peer workspace {} is not usable: {err}",
+            peer.cwd.display()
+        ))
+    })?;
+    let requested_cwd = match params.cwd.as_deref() {
+        Some(cwd) => {
+            let canonical = dunce::canonicalize(cwd).map_err(|err| {
+                RpcError::invalid_params(format!("cwd {cwd} is not usable: {err}"))
+            })?;
+            if !canonical.is_dir() {
+                return Err(RpcError::invalid_params(format!(
+                    "cwd {cwd} is not a directory"
+                )));
+            }
+            canonical
+        }
+        None => {
+            let default = peer_root.join("contexts").join(&context_id);
+            std::fs::create_dir_all(&default).map_err(|err| {
+                RpcError::internal_error(format!(
+                    "failed to create context workspace {}: {err}",
+                    default.display()
+                ))
+            })?;
+            dunce::canonicalize(&default).map_err(|err| {
+                RpcError::internal_error(format!("context workspace is not usable: {err}"))
+            })?
+        }
+    };
+    if requested_cwd == peer_root
+        || !crate::peers::app_binding::path_is_within(&peer_root, &requested_cwd)
+    {
+        return Err(host_peer_error(
+            "peer_context_workspace_escape",
+            format!(
+                "a request context's workspace must be inside the peer's workspace {}",
+                peer_root.display()
+            ),
+        ));
+    }
+    validate_session_workspace_path_safety(&requested_cwd)?;
+    let created = match read_context_binding(&peers_root, &slug, &context_id) {
+        Some(existing) if existing.closed => {
+            return Err(host_peer_error(
+                "peer_context_closed",
+                format!("request context '{context_id}' was closed; open a new context id"),
+            ));
+        }
+        Some(existing) => {
+            if params.cwd.is_some() && existing.cwd != requested_cwd {
+                return Err(host_peer_error(
+                    "peer_binding_mismatch",
+                    format!("request context '{context_id}' is bound to another workspace"),
+                ));
+            }
+            false
+        }
+        None => {
+            write_context_binding(
+                &peers_root,
+                &slug,
+                &context_id,
+                &PeerContextBinding {
+                    version: 1,
+                    cwd: requested_cwd.clone(),
+                    memory_namespace: namespace.clone(),
+                    closed: false,
+                },
+            )
+            .map_err(RpcError::internal_error)?;
+            true
+        }
+    };
+    let binding = read_context_binding(&peers_root, &slug, &context_id).ok_or_else(|| {
+        RpcError::internal_error("request context binding vanished after it was written")
+    })?;
+    let session_id = context_session_key(&params.session_id, &slug, &context_id);
+    let lanes = profile_model_lanes(state, &profile_id);
+    let lane = read_peer_model_lane(&peers_root, &slug);
+    Ok(json!({
+        "session_id": session_id,
+        "topic": session_id.topic(),
+        "slug": slug,
+        "context_id": context_id,
+        "cwd": binding.cwd.to_string_lossy(),
+        "memory_namespace": binding.memory_namespace,
+        "model": peer_effective_model_json(&lanes, lane.as_deref()),
+        "profile_id": profile_id,
+        "created": created,
+    }))
+}
+
+/// UPCR-2026-034 `peer/context/close` — close a request context for good and
+/// interrupt its in-flight turn. Idempotent. The transcript and workspace
+/// stay on disk (the host decides retention); the session never runs again.
+async fn raw_peer_context_close(
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::app_binding::{
+        context_session_key, read_context_binding, write_context_binding,
+    };
+    let params: RawPeerContextParams = parse_raw_params(request)?;
+    let (profile_id, peers_root, slug, context_id, _peer) =
+        host_peer_context_prelude(state, &params, connection_profile_id)?;
+    let Some(mut binding) = read_context_binding(&peers_root, &slug, &context_id) else {
+        return Err(host_peer_error(
+            "peer_context_not_found",
+            format!("request context '{context_id}' of peer '{slug}' was never opened"),
+        ));
+    };
+    let was_open = !binding.closed;
+    if was_open {
+        binding.closed = true;
+        write_context_binding(&peers_root, &slug, &context_id, &binding)
+            .map_err(RpcError::internal_error)?;
+    }
+    let session_id = context_session_key(&params.session_id, &slug, &context_id);
+    // Marker first (refuses every later turn start), then abort the live turn.
+    let interrupted = matches!(
+        interrupt_active_turn_for_session(
+            &active_turns_registry(),
+            &session_id,
+            InterruptOrigin::ContextClose,
+        )
+        .await,
+        InterruptOutcome::Captured { .. }
+    );
+    Ok(json!({
+        "session_id": session_id,
+        "slug": slug,
+        "context_id": context_id,
+        "profile_id": profile_id,
+        "closed": true,
+        "was_open": was_open,
+        "interrupted": interrupted,
+    }))
 }
 
 /// #peer-model — select the `sub_provider` for a lane KEY. LAST match wins,
@@ -14781,7 +15393,18 @@ fn peer_lane_provider_for(
     session_id: &SessionKey,
     session_runtime: &crate::runtime::SessionRuntime,
 ) -> Option<Arc<dyn octos_llm::LlmProvider>> {
-    let (_profile_id, slug) = peer_slug_and_profile(session_id)?;
+    // UPCR-2026-034 — a request context runs on its owning peer's lane.
+    let slug = match peer_slug_and_profile(session_id) {
+        Some((_profile_id, slug)) => slug,
+        None => {
+            let (slug, _context) =
+                crate::peers::app_binding::parse_context_topic(session_id.topic()?)?;
+            if !peer_slug_is_safe(slug) {
+                return None;
+            }
+            slug
+        }
+    };
     let peers_root = session_runtime.profile.data_dir.join("peers");
     resolve_peer_lane_provider(&peers_root, slug, &session_runtime.profile.config)
 }
@@ -18627,6 +19250,13 @@ async fn handle_raw_appui_rpc(
         }
         APPUI_METHOD_PEER_PREPARE => raw_peer_prepare(state, request, connection_profile_id).await,
         APPUI_METHOD_PEER_GATHER => raw_peer_gather(state, request, connection_profile_id),
+        APPUI_METHOD_PEER_MODEL_SET => raw_peer_model_set(state, request, connection_profile_id),
+        APPUI_METHOD_PEER_CONTEXT_OPEN => {
+            raw_peer_context_open(state, request, connection_profile_id)
+        }
+        APPUI_METHOD_PEER_CONTEXT_CLOSE => {
+            raw_peer_context_close(state, request, connection_profile_id).await
+        }
         APPUI_METHOD_PROFILE_SKILLS_LIST => {
             raw_profile_skills_list(state, request, connection_profile_id)
         }
@@ -19060,6 +19690,9 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
             | APPUI_METHOD_SNAPSHOT_RESTORE
             | APPUI_METHOD_PEER_PREPARE
             | APPUI_METHOD_PEER_GATHER
+            | APPUI_METHOD_PEER_MODEL_SET
+            | APPUI_METHOD_PEER_CONTEXT_OPEN
+            | APPUI_METHOD_PEER_CONTEXT_CLOSE
             | APPUI_METHOD_PROFILE_SKILLS_LIST
             | APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH
             | APPUI_METHOD_PROFILE_SKILLS_INSTALL
@@ -32602,7 +33235,7 @@ async fn run_native_code_review_turn(
             .map(|template| template.runtime_policy_stamp("supervisor", "native_review", None));
     let workspace_root = session_runtime.workspace_root.clone();
     let llm_provider = session_runtime.profile.llm.clone();
-    let memory_store = session_runtime.profile.memory.clone();
+    let memory_store = session_runtime.memory.episodes.clone();
     // #2055 review round 2 (hole c) — the review specialists run on a FRESH
     // snapshot registry whose supervisor used to carry no observers, so
     // their `native_agent` registrations were invisible to the goal ledger.
@@ -34786,6 +35419,31 @@ async fn run_standalone_turn(
     // its frame instead, to stay inside the 5s interrupt-ack deadline.
     // Resolved once here from the same profile the turn's agent hooks come
     // from; `None` (no hooks configured) makes each fire a no-op.
+    // UPCR-2026-034 — a cached runtime outlives its binding: re-check it at
+    // every turn start so a closed app peer or request context never runs
+    // again, even when its runtime is still cached.
+    if let crate::peers::app_binding::SessionAppBinding::Refused(reason) =
+        crate::peers::app_binding::resolve_session_app_binding(
+            &session_runtime.profile.data_dir.join("peers"),
+            &session_id,
+        )
+    {
+        try_emit_terminal(
+            &turn_state,
+            TerminalReason::Errored,
+            &ws,
+            &ledger,
+            &session_id,
+            &turn_id,
+            Some(("session_binding_closed", &reason)),
+            None,
+            steer_buffer.as_ref(),
+            None,
+        )
+        .await;
+        contracts.scopes.evict_turn(&session_id, &turn_id);
+        return;
+    }
     let turn_end_hooks = session_runtime.profile.hook_executor.clone();
     let turn_end_hook_ctx = octos_agent::HookContext {
         session_id: Some(session_id.to_string()),
@@ -35003,7 +35661,7 @@ async fn run_standalone_turn(
     let llm_provider: Arc<dyn octos_llm::LlmProvider> =
         peer_lane_provider_for(&session_id, &session_runtime)
             .unwrap_or_else(|| session_runtime.profile.llm.clone());
-    let memory_store: Arc<octos_memory::EpisodeStore> = session_runtime.profile.memory.clone();
+    let memory_store: Arc<octos_memory::EpisodeStore> = session_runtime.memory.episodes.clone();
     let mut agent_config = session_runtime.agent.agent_config();
     // A human-driven turn does not become unattended merely because it
     // arrived over OUP. Local chat/ACP and remote interactive clients share
@@ -35075,10 +35733,10 @@ async fn run_standalone_turn(
         .unwrap_or_default();
     let volatile_memory_context = octos_agent::volatile_memory_content(
         &combined_memory_segment,
-        session_runtime.profile.memory_refresh_enabled,
+        session_runtime.memory.refresh_enabled,
     );
     let stable_memory_policy =
-        octos_agent::stable_memory_instructions(session_runtime.profile.memory_refresh_enabled);
+        octos_agent::stable_memory_instructions(session_runtime.memory.refresh_enabled);
     let agent_snapshot = session_runtime
         .agent
         .system_prompt_snapshot_replacing_segment(
@@ -35969,7 +36627,14 @@ async fn run_standalone_turn(
         // `ProfileRuntime::bootstrap` (see `runtime/profile.rs`), and we
         // clone the `Arc` here for every spawn-tool child closure
         // invocation.
-        if let Some(pipeline_factory) = session_runtime.profile.pipeline_factory.clone() {
+        // UPCR-2026-034: pipelines capture into the PROFILE's memory, so a
+        // namespaced (app-bound) session's children do not get them.
+        if let Some(pipeline_factory) = session_runtime
+            .profile
+            .pipeline_factory
+            .clone()
+            .filter(|_| session_runtime.memory.namespace.is_none())
+        {
             // #1607 (codex round 4): bind spawn-child `run_pipeline` instances to
             // the SESSION-effective sandbox (`session_runtime.sandbox`, set by
             // `bootstrap_with_permissions_and_sandbox`), NOT the profile-time
@@ -43799,3 +44464,7 @@ fn flush_replay_lossy(
 #[cfg(test)]
 #[path = "ui_protocol_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ui_protocol_host_app_peer_tests.rs"]
+mod host_app_peer_tests;

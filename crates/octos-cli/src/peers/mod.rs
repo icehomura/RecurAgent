@@ -48,6 +48,7 @@ use crate::autonomy::agent_orchestrator::default_agent_orchestrator;
 use crate::build_cache::pool::{BuildCacheConfig, Slot, SlotOutcome};
 use crate::contracts::UiProtocolContractStores;
 
+pub(crate) mod app_binding;
 mod recovery;
 pub(crate) use recovery::*;
 // task-evo-peer-turn-status — the typed lifetime projection lives in
@@ -3140,6 +3141,7 @@ pub(crate) fn stage_peer(
         goal_id,
         task_id,
         None,
+        None,
     )
 }
 
@@ -3157,6 +3159,10 @@ pub(crate) fn stage_peer_with_budget(
     goal_id: Option<&str>,
     task_id: Option<&str>,
     token_budget: Option<u64>,
+    // UPCR-2026-034 — a host-owned app peer's durable binding (workspace +
+    // memory namespace), written BEFORE `brief.md` so the peer never becomes
+    // visible unbound. `None` for every agent-staged peer.
+    host_binding: Option<&app_binding::PeerHostBinding>,
 ) -> Result<StagedPeer, RpcError> {
     if token_budget == Some(0) {
         return Err(RpcError::invalid_params(
@@ -3288,6 +3294,15 @@ pub(crate) fn stage_peer_with_budget(
             cleanup_staged_peer(workspace_root, &slug, &peer_dir);
             return Err(RpcError::internal_error(format!(
                 "failed to record peer originator: {err}"
+            )));
+        }
+    }
+
+    if let Some(binding) = host_binding {
+        if let Err(err) = app_binding::write_host_binding_in(&peer_dir, binding) {
+            cleanup_staged_peer(workspace_root, &slug, &peer_dir);
+            return Err(RpcError::internal_error(format!(
+                "failed to record the peer's host binding: {err}"
             )));
         }
     }
@@ -3601,9 +3616,9 @@ pub(crate) const PEER_HANDOFFS_PER_TURN_MAX: u32 = 4;
 /// recursively, and the tool is not even visible to the model there.
 #[cfg(any(feature = "api", test))]
 pub(crate) fn peer_handoff_allowed_for_session(session_id: &SessionKey) -> bool {
-    !session_id
-        .topic()
-        .is_some_and(|topic| topic.starts_with("peer-"))
+    !session_id.topic().is_some_and(|topic| {
+        topic.starts_with("peer-") || topic.starts_with(app_binding::PEER_CONTEXT_TOPIC_PREFIX)
+    })
 }
 
 /// #20a (smart worktree fencing) — a collision risk REASON. When the model
@@ -3776,6 +3791,7 @@ pub(crate) fn build_peer_handoff_callback(
             resolved_goal_id.as_deref(),
             request.task_id.as_deref(),
             request.token_budget,
+            None,
         )
         .map_err(|err| err.message)?;
         // #peer-model — optional model lane. Record a VALID lane symlink-safely
