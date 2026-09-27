@@ -620,6 +620,8 @@ struct PendingCall {
     ack: Arc<tokio::sync::Notify>,
     /// Destructive or outward: only such a call may be acknowledged.
     gated: bool,
+    /// The host connection the call was sent to: only it may answer.
+    connection: u64,
 }
 
 /// A peer's tool host: the connection that registered its set.
@@ -948,6 +950,7 @@ pub(crate) fn complete_host_call(
     peers_root: &Path,
     slug: &str,
     call_id: &str,
+    from_connection: u64,
     reply: HostReply,
 ) -> Result<CompleteCall, CompleteError> {
     let key = route_key(peers_root, slug);
@@ -978,6 +981,17 @@ pub(crate) fn complete_host_call(
         return Err(not_found(format!(
             "no pending call '{call_id}' for peer '{slug}' (finished, timed out or cancelled)"
         )));
+    }
+    if pending
+        .get(call_id)
+        .is_some_and(|call| call.connection != from_connection)
+    {
+        return Err(CompleteError {
+            kind: "peer_tool_result_wrong_connection",
+            message: format!(
+                "call '{call_id}' was sent to another connection; only that connection may answer it"
+            ),
+        });
     }
     let outcome = match reply {
         HostReply::AwaitingConfirmation => {
@@ -1163,13 +1177,28 @@ impl HostToolRouter for TurnHostToolRouter {
     }
 
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
+        // #2500: an app whose peer budget is spent (or unreadable) cannot keep
+        // working through its tools mid-turn, from any of its sessions.
+        match super::peer_token_budget_status(&self.peers_root, &self.slug) {
+            Ok(Some(status)) if status.used >= status.limit => {
+                return Self::error(
+                    "budget_exhausted",
+                    format!(
+                        "peer '{}' token budget exhausted ({} used / {} limit)",
+                        self.slug, status.used, status.limit
+                    ),
+                );
+            }
+            Err(message) => return Self::error("budget_unavailable", message),
+            Ok(_) => {}
+        }
         let key = route_key(&self.peers_root, &self.slug);
-        let Some(send) = HUB
+        let Some((send, connection)) = HUB
             .routes
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .get(&key)
-            .map(|route| route.send.clone())
+            .map(|route| (route.send.clone(), route.connection))
         else {
             return Self::error(
                 "host_unavailable",
@@ -1208,6 +1237,7 @@ impl HostToolRouter for TurnHostToolRouter {
                     tx,
                     ack: ack.clone(),
                     gated: call.gated,
+                    connection,
                 },
             );
         }
@@ -1494,6 +1524,7 @@ mod tests {
                 tmp.path(),
                 &slug,
                 &call_id,
+                7_000 + round,
                 HostReply::Final(HostToolCallOutcome::Ok(json!({"n": round}))),
             )
             .expect("accepted");
@@ -1585,6 +1616,7 @@ mod tests {
                 &peers_root,
                 "gap",
                 &call_id,
+                9_001,
                 HostReply::Final(HostToolCallOutcome::Ok(json!({"done": true}))),
             )
         });

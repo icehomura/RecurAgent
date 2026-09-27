@@ -231,7 +231,16 @@ fn answer(fx: &Fx, token: &str, call_id: &str, reply: Value) -> Result<Value, Rp
     for (key, value) in reply.as_object().unwrap() {
         params[key] = value.clone();
     }
-    raw_peer_tool_result(&fx.state, &rpc(APPUI_METHOD_PEER_TOOL_RESULT, params), None)
+    // Answered on the connection that holds the route (the one the call
+    // was sent to).
+    let host = crate::peers::host_tools::host_route_connection(&peers_root(fx), "news")
+        .unwrap_or_default();
+    raw_peer_tool_result(
+        host,
+        &fx.state,
+        &rpc(APPUI_METHOD_PEER_TOOL_RESULT, params),
+        None,
+    )
 }
 
 /// A fake host: answers every `peer/tool/call` with `reply(params)`.
@@ -243,6 +252,7 @@ fn spawn_fake_host(
 ) -> tokio::task::JoinHandle<Vec<Value>> {
     let state = fx.state.clone();
     let system = fx.system.clone();
+    let peers_root = peers_root(fx);
     tokio::spawn(async move {
         let mut calls = Vec::new();
         while let Some(message) = rx.recv().await {
@@ -260,8 +270,15 @@ fn spawn_fake_host(
             for (key, value) in reply(&params).as_object().unwrap() {
                 body[key] = value.clone();
             }
-            raw_peer_tool_result(&state, &rpc(APPUI_METHOD_PEER_TOOL_RESULT, body), None)
-                .expect("the kernel accepts the result");
+            let host = crate::peers::host_tools::host_route_connection(&peers_root, "news")
+                .unwrap_or_default();
+            raw_peer_tool_result(
+                host,
+                &state,
+                &rpc(APPUI_METHOD_PEER_TOOL_RESULT, body),
+                None,
+            )
+            .expect("the kernel accepts the result");
             calls.push(params);
         }
         calls
@@ -1754,5 +1771,544 @@ async fn should_rebuild_a_session_runtime_cached_before_the_peer_was_bound() {
     assert!(
         !Arc::ptr_eq(&fresh, &again),
         "bind-time invalidation drops the entry"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// End to end through `turn/start` → `run_standalone_turn`
+// ---------------------------------------------------------------------------
+
+/// A scripted model: on its first call it asks for `tool` with `args`, then
+/// ends the turn. Records the tool roster it was offered on every call and
+/// the tool result it was given.
+struct ScriptedHostToolLlm {
+    tool: String,
+    args: Value,
+    calls: std::sync::atomic::AtomicUsize,
+    rosters: std::sync::Mutex<Vec<Vec<String>>>,
+    tool_results: std::sync::Mutex<Vec<String>>,
+}
+
+impl ScriptedHostToolLlm {
+    fn new(tool: &str, args: Value) -> Arc<Self> {
+        Arc::new(Self {
+            tool: tool.to_owned(),
+            args,
+            calls: Default::default(),
+            rosters: Default::default(),
+            tool_results: Default::default(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl octos_llm::LlmProvider for ScriptedHostToolLlm {
+    async fn chat(
+        &self,
+        messages: &[Message],
+        tools: &[octos_llm::ToolSpec],
+        _config: &octos_llm::ChatConfig,
+    ) -> eyre::Result<octos_llm::ChatResponse> {
+        let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let mut roster: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
+        roster.sort();
+        self.rosters.lock().unwrap().push(roster);
+        for message in messages {
+            if message.role == MessageRole::Tool {
+                self.tool_results
+                    .lock()
+                    .unwrap()
+                    .push(message.content.clone());
+            }
+        }
+        let usage = octos_llm::TokenUsage {
+            input_tokens: 10,
+            output_tokens: 5,
+            ..Default::default()
+        };
+        if call == 0 {
+            Ok(octos_llm::ChatResponse {
+                content: None,
+                reasoning_content: None,
+                tool_calls: vec![octos_core::ToolCall {
+                    id: "call_1".into(),
+                    name: self.tool.clone(),
+                    arguments: self.args.clone(),
+                    metadata: None,
+                }],
+                stop_reason: octos_llm::StopReason::ToolUse,
+                usage,
+                provider_index: None,
+            })
+        } else {
+            Ok(octos_llm::ChatResponse {
+                content: Some("done".into()),
+                reasoning_content: None,
+                tool_calls: Vec::new(),
+                stop_reason: octos_llm::StopReason::EndTurn,
+                usage,
+                provider_index: None,
+            })
+        }
+    }
+
+    fn model_id(&self) -> &str {
+        "scripted-host-tool"
+    }
+
+    fn provider_name(&self) -> &str {
+        "stub"
+    }
+}
+
+/// The e2e fixture: a profile runtime whose model is `llm`, a staged News
+/// peer, and the host's connection with the tool set registered on it.
+async fn e2e_fixture(llm: Arc<ScriptedHostToolLlm>, tools: Value) -> E2e {
+    let tmp = tempfile::tempdir().unwrap();
+    let data_dir = tmp.path().join("data");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let runtime = {
+        let base = crate::runtime::ProfileRuntime::bootstrap(
+            &crate::profiles::UserProfile {
+                id: "dev".to_string(),
+                name: "Dev".to_string(),
+                enabled: true,
+                data_dir: None,
+                parent_id: None,
+                public_subdomain: None,
+                config: crate::profiles::ProfileConfig {
+                    llm: Some(crate::profiles::LlmProfileConfig {
+                        primary: Some(crate::profiles::LlmModelSelectionConfig {
+                            family_id: Some("openai".to_string()),
+                            model_id: Some("gpt-4o-mini".to_string()),
+                            route: Some(crate::profiles::LlmRouteConfig {
+                                route_id: None,
+                                label: None,
+                                base_url: None,
+                                api_key_env: Some("HOST_TOOLS_E2E_KEY".to_string()),
+                                api_type: None,
+                            }),
+                            ..Default::default()
+                        }),
+                        fallbacks: Vec::new(),
+                    }),
+                    env_vars: [("HOST_TOOLS_E2E_KEY".to_string(), "k".to_string())]
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                },
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+            &data_dir,
+            None,
+            crate::runtime::BootstrapRole::Serve,
+        )
+        .await
+        .expect("bootstrap");
+        // Swap in the scripted model.
+        let Ok(mut runtime) = Arc::try_unwrap(base) else {
+            panic!("the freshly bootstrapped runtime has one owner");
+        };
+        runtime.llm = llm.clone();
+        Arc::new(runtime)
+    };
+    let mut state = AppState::empty_for_tests();
+    state.profiles.insert("dev".to_string(), runtime.clone());
+    state.sessions = Some(Arc::new(tokio::sync::Mutex::new(
+        octos_bus::SessionManager::open(&data_dir).unwrap(),
+    )));
+    let state = Arc::new(state);
+    let apps = tmp.path().join("apps");
+    std::fs::create_dir_all(apps.join("news")).unwrap();
+    let system = SessionKey::with_profile_topic("dev", "api", "host", "system");
+    let prepared = raw_peer_prepare(
+        &state,
+        &rpc(
+            APPUI_METHOD_PEER_PREPARE,
+            json!({
+                "brief": "You are the News app's assistant.",
+                "names": ["News"],
+                "cwd": apps.join("news").to_string_lossy(),
+                "session_id": system,
+                "memory_namespace": "app/news/acct-1",
+                "resume": true,
+            }),
+        ),
+        None,
+    )
+    .await
+    .expect("prepare");
+    let token = prepared["host_token"].as_str().unwrap().to_owned();
+    let (ws, rx) = ws_connection_for_test(256);
+    let mut params = json!({"session_id": system, "peer": "news", "host_token": token});
+    for (key, value) in tools.as_object().unwrap() {
+        params[key] = value.clone();
+    }
+    raw_peer_tools_register(
+        &ws,
+        &state,
+        &rpc(APPUI_METHOD_PEER_TOOLS_REGISTER, params),
+        None,
+    )
+    .expect("register");
+    E2e {
+        _tmp: tmp,
+        state,
+        data_dir,
+        system,
+        token,
+        ws,
+        rx: Some(rx),
+    }
+}
+
+struct E2e {
+    _tmp: tempfile::TempDir,
+    state: Arc<AppState>,
+    data_dir: PathBuf,
+    system: SessionKey,
+    token: String,
+    ws: WsConnection,
+    rx: Option<mpsc::Receiver<WsMessage>>,
+}
+
+/// Drive one `turn/start` on `session` from the host connection. The fake
+/// host answers `peer/tool/call` with `{"items": ["hn-1"]}` and approves any
+/// `approval/requested`. Returns the tool calls the host saw and the
+/// approvals it was asked.
+async fn e2e_turn(
+    e: &mut E2e,
+    session: &SessionKey,
+    llm: &ScriptedHostToolLlm,
+) -> (Vec<Value>, Vec<Value>) {
+    let ledger = Arc::new(UiProtocolLedger::new(256));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let active_turns: SharedActiveTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let connection_turns: SharedConnectionTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let mut rx = e.rx.take().unwrap();
+    let state = e.state.clone();
+    let system = e.system.clone();
+    let token = e.token.clone();
+    let connection = e.ws.connection_id.0;
+    let host_contracts = contracts.clone();
+    let host_session = session.clone();
+    let host = tokio::spawn(async move {
+        let mut calls = Vec::new();
+        let mut approvals = Vec::new();
+        while let Some(message) = rx.recv().await {
+            let WsMessage::Text(text) = message else {
+                continue;
+            };
+            let frame: Value = serde_json::from_str(text.as_str()).unwrap();
+            match frame["method"].as_str() {
+                Some("peer/tool/call") => {
+                    let params = frame["params"].clone();
+                    raw_peer_tool_result(
+                        connection,
+                        &state,
+                        &rpc(
+                            APPUI_METHOD_PEER_TOOL_RESULT,
+                            json!({
+                                "session_id": system, "peer": "news", "host_token": token,
+                                "call_id": params["call_id"], "ok": true,
+                                "data": {"items": ["hn-1"]},
+                            }),
+                        ),
+                        None,
+                    )
+                    .expect("result accepted");
+                    calls.push(params);
+                }
+                Some("approval/requested") => {
+                    let params = frame["params"].clone();
+                    let approval_id: ApprovalId =
+                        serde_json::from_value(params["approval_id"].clone()).unwrap();
+                    host_contracts
+                        .approvals
+                        .respond_with_context(ApprovalRespondParams::new(
+                            host_session.clone(),
+                            approval_id,
+                            ApprovalDecision::Approve,
+                        ))
+                        .expect("the person approves in the app");
+                    approvals.push(params);
+                }
+                _ => {}
+            }
+            if frame["method"] == "__stop__" {
+                break;
+            }
+        }
+        (calls, approvals)
+    });
+    handle_turn_start(
+        &e.ws,
+        &e.state,
+        &ledger,
+        &contracts,
+        &active_turns,
+        &connection_turns,
+        None,
+        None,
+        ConnectionUiFeatures::stdio_defaults(),
+        "start-1".into(),
+        TurnStartParams {
+            session_id: session.clone(),
+            turn_id: TurnId::new(),
+            input: vec![InputItem::Text {
+                text: "what's new?".into(),
+            }],
+            media: Vec::new(),
+            topic: None,
+            rewrite_for: None,
+            reasoning_effort: None,
+            tool_context: None,
+            live_video: false,
+        },
+    )
+    .await;
+    for _ in 0..500 {
+        if llm.calls.load(std::sync::atomic::Ordering::SeqCst) >= 2 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(
+        llm.calls.load(std::sync::atomic::Ordering::SeqCst) >= 2,
+        "the turn ran to its second model call"
+    );
+    // Let the turn finish, then stop the fake host.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let _ = send_raw_notification_ephemeral(&e.ws, "__stop__", json!({}));
+    tokio::time::timeout(std::time::Duration::from_secs(5), host)
+        .await
+        .expect("fake host stops")
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_route_a_real_turns_app_tool_call_to_the_host_end_to_end() {
+    let llm = ScriptedHostToolLlm::new("news_list", json!({"topic": "rust"}));
+    let mut e = e2e_fixture(
+        llm.clone(),
+        json!({ "tools": [news_list()], "generic_tools": ["read_file"] }),
+    )
+    .await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    let (calls, approvals) = e2e_turn(&mut e, &session, &llm).await;
+
+    // The model was offered exactly the registered set.
+    assert_eq!(llm.rosters.lock().unwrap()[0], ["news_list", "read_file"]);
+    // Its tool call reached the host, and the host's data reached the model.
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0]["name"], "news.list");
+    assert_eq!(calls[0]["args"], json!({"topic": "rust"}));
+    assert_eq!(calls[0]["session_id"], json!(session));
+    assert!(approvals.is_empty(), "a read tool needs no approval");
+    assert!(
+        llm.tool_results
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|r| r.contains("hn-1")),
+        "the host's result is the tool result"
+    );
+    let audit = std::fs::read_to_string(e.data_dir.join("peers/news/tool_audit.jsonl")).unwrap();
+    assert!(audit.contains("\"decision\":\"allowed\"") && audit.contains("\"outcome\":\"ok\""));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_ask_the_person_before_a_real_turns_destructive_call_end_to_end() {
+    let llm = ScriptedHostToolLlm::new("mail_send", json!({"draft_id": "d-1"}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [mail_send()] })).await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    let (calls, approvals) = e2e_turn(&mut e, &session, &llm).await;
+
+    assert_eq!(llm.rosters.lock().unwrap()[0], ["mail_send"]);
+    assert_eq!(approvals.len(), 1, "one approval, on the host connection");
+    assert!(
+        approvals[0]["body"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("d-1")
+            || approvals[0].to_string().contains("d-1"),
+        "the approval carries the exact arguments: {}",
+        approvals[0]
+    );
+    assert_eq!(calls.len(), 1, "the approved call reached the host");
+    assert_eq!(calls[0]["confirm_required"], false);
+}
+
+#[tokio::test]
+async fn should_refuse_to_fork_an_app_peer_session() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context_key: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+    // Even the host's own connection cannot fork: a fork drops the topic and
+    // with it the binding, so there is no binding-preserving fork.
+    let (host_ws, mut rx) = ws_connection_for_test(8);
+    register(&fx, &host_ws, &token, json!({ "tools": [news_list()] })).unwrap();
+    for session in [peer_key(&fx), context_key] {
+        handle_session_fork(
+            &host_ws,
+            &fx.state,
+            None,
+            None,
+            "f1".into(),
+            octos_core::ui_protocol::SessionForkParams {
+                session_id: session.clone(),
+                new_chat_id: "copy".into(),
+                copy_messages: None,
+            },
+        )
+        .await;
+        let frame = frame_json(rx.recv().await.unwrap());
+        assert_eq!(
+            frame["error"]["data"]["kind"], "app_peer_fork_refused",
+            "{session:?}"
+        );
+    }
+    // An ordinary session is not affected by the refusal (it proceeds to the
+    // ordinary checks).
+    handle_session_fork(
+        &host_ws,
+        &fx.state,
+        None,
+        None,
+        "f2".into(),
+        octos_core::ui_protocol::SessionForkParams {
+            session_id: SessionKey::with_profile_topic("dev", "api", "host", "notes"),
+            new_chat_id: "copy".into(),
+            copy_messages: None,
+        },
+    )
+    .await;
+    let frame = frame_json(rx.recv().await.unwrap());
+    assert_ne!(frame["error"]["data"]["kind"], "app_peer_fork_refused");
+}
+
+#[tokio::test]
+async fn should_accept_a_tool_result_only_from_the_connection_the_call_was_sent_to() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(&fx, &ws, &token, json!({ "tools": [news_list()] })).unwrap();
+    let registry = Arc::new(turn_registry(&fx, &key, "turn-1").await);
+    let run = {
+        let registry = registry.clone();
+        tokio::spawn(async move {
+            registry
+                .execute_with_context(&call_ctx("c1"), "news_list", &json!({}))
+                .await
+                .unwrap()
+        })
+    };
+    let call = next_frame(&mut rx, "peer/tool/call").await;
+    let body = json!({
+        "session_id": fx.system, "peer": "news", "host_token": token,
+        "call_id": call["call_id"], "ok": true, "data": {"items": ["forged"]},
+    });
+    // Another connection holding the token cannot answer the call.
+    let (other, _other_rx) = ws_connection_for_test(8);
+    let err = raw_peer_tool_result(
+        other.connection_id.0,
+        &fx.state,
+        &rpc(APPUI_METHOD_PEER_TOOL_RESULT, body.clone()),
+        None,
+    )
+    .expect_err("wrong connection");
+    assert_eq!(
+        err.data.unwrap()["kind"],
+        "peer_tool_result_wrong_connection"
+    );
+    // The connection it was sent to can.
+    let mut good = body;
+    good["data"] = json!({"items": ["hn-1"]});
+    raw_peer_tool_result(
+        ws.connection_id.0,
+        &fx.state,
+        &rpc(APPUI_METHOD_PEER_TOOL_RESULT, good),
+        None,
+    )
+    .unwrap();
+    let result = run.await.unwrap();
+    assert!(result.output.contains("hn-1") && !result.output.contains("forged"));
+}
+
+#[tokio::test]
+async fn should_charge_a_request_contexts_turns_and_tools_to_its_peers_budget() {
+    let fx = fixture().await;
+    let prepared = raw_peer_prepare(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_PREPARE,
+            json!({
+                "brief": "News.", "names": ["News"],
+                "cwd": fx.apps.join("news").to_string_lossy(),
+                "session_id": fx.system, "memory_namespace": "app/news/acct-1",
+                "resume": true, "token_budget": 100,
+            }),
+        ),
+        None,
+    )
+    .await
+    .expect("prepare with a budget");
+    let token = prepared["host_token"].as_str().unwrap().to_owned();
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context_key: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+    assert_eq!(crate::peers::budget_peer_slug(&context_key), Some("news"));
+
+    // A finished context turn is charged to the peer, not skipped.
+    write_peer_result_if_peer_session(
+        &fx.state,
+        &context_key,
+        &TurnId::new(),
+        octos_core::ui_protocol::TurnTerminalOutcome::Completed,
+        "done",
+        150,
+        None,
+    );
+    let status = crate::peers::peer_token_budget_status(&peers_root(&fx), "news")
+        .unwrap()
+        .expect("budgeted");
+    assert_eq!(status.used, 150);
+    assert!(
+        !peers_root(&fx).join("news/result.md").exists(),
+        "a context writes no peer blackboard result"
+    );
+
+    // With the budget spent, app tool calls stop, from any session.
+    let (ws, _rx) = ws_connection_for_test(8);
+    register(&fx, &ws, &token, json!({ "tools": [news_list()] })).unwrap();
+    let registry = turn_registry(&fx, &context_key, "turn-2").await;
+    let result = registry
+        .execute_with_context(&call_ctx("c1"), "news_list", &json!({}))
+        .await
+        .unwrap();
+    assert!(
+        result.output.contains("budget_exhausted"),
+        "{}",
+        result.output
     );
 }

@@ -148,7 +148,10 @@ the host answers again later. `data` above `max_result_bytes` (serialized) is
 not given to the model: the call ends with `result_too_large`. An error
 `kind` must match `[a-z0-9_]{1,32}` and reaches the model as `host:<kind>`
 (anything else becomes `host:error`), so a host can never pose as a kernel
-outcome; the message is capped at 4 KiB. A result for a call that finished,
+outcome; the message is capped at 4 KiB. A result is accepted only from the
+connection the call was sent to (the peer's tool host at that moment);
+another connection holding the token is refused
+(`peer_tool_result_wrong_connection`). A result for a call that finished,
 timed out or was cancelled is refused (`peer_tool_call_not_found`) and, when
 the kernel still remembers the call (one hour, 1 024 calls), audited as
 `late_result`.
@@ -209,6 +212,25 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   profile's memory and workspace and unclamped permissions. `peer/prepare`
   and `peer/context/open` also drop every runtime cached for the bound topic
   at once.
+- **No copies of an app session.** `session/fork` of a host-owned app
+  peer's session (`peer-<slug>` of a host-bound peer) or of any request
+  context (`peerctx-…`) is refused for every caller, the host included
+  (`app_peer_fork_refused`): a fork's child key drops the topic, so the copy
+  would lose the binding — workspace, memory namespace and tool set — while
+  keeping the app's history. There is no binding-preserving fork; a host
+  that wants a fresh line of conversation opens a new request context. The
+  other ways a session could be copied were audited: the serve surface has
+  no export/import, move, clone or branch-from-message method
+  (`session/title.set` renames the title only, `session/rollback` truncates
+  in place, `session/delete` removes); the gateway's `/new`
+  (`fork_from_parent_if_missing`) runs only in the gateway process, which
+  never hosts app peers.
+- **Budget (#2500).** A request context's turns are charged to the OWNING
+  peer's token budget and gated by it at `turn/start`, like the peer's own
+  turns (no blackboard result is written for a context). An app tool call is
+  refused (`budget_exhausted`, or `budget_unavailable` when the accounting
+  cannot be read) once the peer's budget is spent, from any of its sessions;
+  the tokens a tool result costs are part of the turn's spend.
 - **Visibility.** The turn's tool registry is cut down to the allowed generic
   tools and then gets one routed tool per declared app tool. Nothing else is
   advertised, and a call to any other name is refused by the registry
@@ -358,13 +380,16 @@ never declares its tools a second way.
 - **Schema enforcement.** The kernel checks only an object shape and
   `required`; `additionalProperties`, types and formats are the host's to
   enforce.
-- **Reconnects.** In-flight calls follow the route: a host that reconnects
-  and registers again with the same token receives later calls and can
-  still answer earlier ones.
-- **End-to-end turn test.** The enforcement is exercised on the registry a
-  turn uses (`apply_session_host_tools` after the session's own roster); a
-  test that drives `run_standalone_turn` with a scripted model is a
-  follow-up.
+- **Reconnects.** A host that reconnects and registers again with the same
+  token receives later calls; a call sent to its old connection can only be
+  answered there, so it times out (a non-`read` call as `outcome_unknown`).
+- **Risk labels are the host's declaration.** The kernel enforces exactly
+  what the host declares (risk, `outward`, `confirm`, `background`); it does
+  not judge whether `news.delete` is honestly labelled. The check on the
+  declaration is App Hub's admission gate on the app bundle's `tools.json`,
+  which pins it. The strength of the whole mechanism is the secrecy of the
+  host token, which today is minted once and never rotated or revoked:
+  rotation and recovery are tracked in #2562 (item 2).
 
 ## Tests
 
@@ -392,7 +417,7 @@ never declares its tools a second way.
   `should_deliver_a_result_taken_before_the_deadline_but_delivered_after_it`
   (an injected pause between taking the call and delivering it; fails on
   the previous ordering)
-- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 21):
+- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 26):
   `should_advertise_and_dispatch_the_peer_tool_methods`,
   `should_refuse_a_registration_without_the_host_token`,
   `should_offer_exactly_the_registered_tools_and_refuse_an_unlisted_one`,
@@ -418,6 +443,14 @@ never declares its tools a second way.
   `should_clamp_host_filesystem_access_for_a_bound_app_session`,
   `should_rebuild_a_session_runtime_cached_before_the_peer_was_bound`
   (fails without the cache re-check),
+  `should_refuse_to_fork_an_app_peer_session`,
+  `should_accept_a_tool_result_only_from_the_connection_the_call_was_sent_to`,
+  `should_charge_a_request_contexts_turns_and_tools_to_its_peers_budget`,
+  `should_route_a_real_turns_app_tool_call_to_the_host_end_to_end` and
+  `should_ask_the_person_before_a_real_turns_destructive_call_end_to_end`
+  (a real `turn/start` through `run_standalone_turn` with a scripted model:
+  roster, host routing, the tool result in the model's context, the approval
+  on the host connection),
   `should_refuse_generic_tools_that_escape_the_set` (the allowlist, schema
   shapes, and per-turn stripping of a stale set),
   `should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated`

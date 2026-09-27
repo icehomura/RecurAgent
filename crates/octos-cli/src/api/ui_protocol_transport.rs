@@ -15476,6 +15476,7 @@ const PEER_TOOL_ERROR_MESSAGE_MAX_BYTES: usize = 4 * 1024;
 
 /// UPCR-2026-035 `peer/tool/result` — the host answers one `peer/tool/call`.
 fn raw_peer_tool_result(
+    connection: u64,
     state: &Arc<AppState>,
     request: &RpcRequest<Value>,
     connection_profile_id: Option<&str>,
@@ -15547,7 +15548,7 @@ fn raw_peer_tool_result(
         Some(outcome) => HostReply::Final(outcome),
         None => HostReply::AwaitingConfirmation,
     };
-    let status = complete_host_call(&peers_root, &slug, &params.call_id, reply)
+    let status = complete_host_call(&peers_root, &slug, &params.call_id, connection, reply)
         .map_err(|err| host_peer_error(err.kind, err.message))?;
     Ok(match status {
         CompleteCall::Accepted => json!({ "call_id": params.call_id, "accepted": true }),
@@ -16634,6 +16635,24 @@ fn write_peer_result_if_peer_session(
     tokens_consumed: u64,
     lifetime_turn: Option<&PeerLifetimeTurn>,
 ) {
+    // UPCR-2026-035: a request context writes no blackboard result, but its
+    // turn is charged to the owning peer's budget (#2500).
+    if session_id.topic().is_some_and(|topic| {
+        topic.starts_with(crate::peers::app_binding::PEER_CONTEXT_TOPIC_PREFIX)
+    }) {
+        if let (Some(slug), Some(runtime)) = (
+            crate::peers::budget_peer_slug(session_id),
+            resolve_session_profile_runtime(state, session_id.profile_id()),
+        ) && let Err(error) = charge_peer_token_budget(
+            &runtime.data_dir.join("peers"),
+            slug,
+            &turn_id.0.to_string(),
+            tokens_consumed,
+        ) {
+            tracing::warn!(slug, %error, "failed to charge a request context's turn to its peer's budget");
+        }
+        return;
+    }
     let Some(slug) = session_id
         .topic()
         .and_then(|topic| topic.strip_prefix("peer-"))
@@ -19600,7 +19619,7 @@ async fn handle_raw_appui_rpc(
             raw_peer_tools_register(ws, state, request, connection_profile_id)
         }
         APPUI_METHOD_PEER_TOOL_RESULT => {
-            raw_peer_tool_result(state, request, connection_profile_id)
+            raw_peer_tool_result(ws.connection_id.0, state, request, connection_profile_id)
         }
         APPUI_METHOD_PROFILE_SKILLS_LIST => {
             raw_profile_skills_list(state, request, connection_profile_id)
@@ -27841,6 +27860,32 @@ impl Drop for ForkReservation {
 /// affordance had no wire surface for the SPA; `SessionManager::fork`
 /// existed but had no production caller). MUTATING: writes the child
 /// session (parent tracked via `parent_key`).
+/// Whether `session` is a session of a host-owned app peer (`peer-<slug>` of
+/// a host-bound peer) or any request-context (`peerctx-…`) session. Fails
+/// closed: an unresolvable profile counts as bound for a `peer-` topic.
+fn session_is_app_peer_bound(
+    state: &Arc<AppState>,
+    session: &SessionKey,
+    connection_profile_id: Option<&str>,
+) -> bool {
+    let Some(topic) = session.topic() else {
+        return false;
+    };
+    if topic.starts_with(crate::peers::app_binding::PEER_CONTEXT_TOPIC_PREFIX) {
+        return true;
+    }
+    let Some(slug) = topic.strip_prefix("peer-") else {
+        return false;
+    };
+    let profile_id = raw_scoped_llm_profile_id(None, Some(session), connection_profile_id).ok();
+    match resolve_profile_data_dir(state, profile_id.as_deref()) {
+        Ok((_, data_dir)) => {
+            crate::peers::app_binding::peer_is_host_owned(&data_dir.join("peers"), slug)
+        }
+        Err(_) => true,
+    }
+}
+
 async fn handle_session_fork(
     ws: &WsConnection,
     state: &Arc<AppState>,
@@ -27852,6 +27897,21 @@ async fn handle_session_fork(
     let method = octos_core::ui_protocol::methods::SESSION_FORK;
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
+        return;
+    }
+    // UPCR-2026-035: a fork drops the topic, so a forked app-peer session
+    // would lose its binding (workspace, memory namespace, tool set) while
+    // keeping a copy of the app's history. Refused for every caller.
+    if session_is_app_peer_bound(state, &params.session_id, connection_profile_id) {
+        let _ = send_rpc_error(
+            ws,
+            Some(id),
+            RpcError::invalid_params(format!(
+                "{method}: a host-owned app peer's session cannot be forked (the fork would \
+                 lose the app binding); open a new request context with peer/context/open"
+            ))
+            .with_data(json!({ "kind": "app_peer_fork_refused" })),
+        );
         return;
     }
     // The child chat-id becomes a filesystem path component and a wire
@@ -35786,7 +35846,8 @@ async fn run_standalone_turn(
     // The optional OUP launch budget belongs to the peer slug, so reconnects
     // cannot reset it by opening a different session id. A turn may overshoot
     // the limit; its spend is charged at the terminal boundary below.
-    if let Some((_, slug)) = peer_slug_and_profile(&session_id) {
+    // UPCR-2026-035: a request context's turns spend the OWNING peer's budget.
+    if let Some(slug) = crate::peers::budget_peer_slug(&session_id) {
         let peer_budget_root = profile_runtime.data_dir.join("peers");
         match peer_token_budget_status(&peer_budget_root, slug) {
             Ok(Some(status)) if status.used >= status.limit => {
@@ -39902,11 +39963,15 @@ async fn run_standalone_turn(
     // Completed and errored peer turns charged in the terminal writer above.
     // An interrupted turn never reaches that writer, but the live tracker
     // still gives us its partial spend before the interrupt terminal fires.
+    let budget_root = session_runtime.profile.data_dir.join("peers");
     if interrupt_observed
-        && let Some((_, slug)) = peer_slug_and_profile(&session_id)
-        && let Some(root) = peers_root.as_ref()
-        && let Err(error) =
-            charge_peer_token_budget(root, slug, &turn_id.0.to_string(), final_tokens_consumed)
+        && let Some(slug) = crate::peers::budget_peer_slug(&session_id)
+        && let Err(error) = charge_peer_token_budget(
+            &budget_root,
+            slug,
+            &turn_id.0.to_string(),
+            final_tokens_consumed,
+        )
     {
         tracing::warn!(slug, %error, "failed to charge interrupted peer token budget");
     }
