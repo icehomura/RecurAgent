@@ -936,7 +936,7 @@ pub use peer_handoff::{
 };
 pub use peer_host_tool::{
     HOST_TOOL_MAX_ARGS_BYTES, HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome,
-    HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter,
+    HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim,
 };
 pub use peer_list::{PeerListCallback, PeerListTool};
 pub use peer_respond::{

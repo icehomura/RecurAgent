@@ -6027,6 +6027,18 @@ impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
             .contracts
             .approvals
             .request_runtime_with(event.clone(), once_only);
+        // UPCR-2026-035: a host-routed call's approval belongs to the peer's
+        // host connection only: other connections neither see it (live or on
+        // replay) nor answer it. Registered before the ledger append below.
+        if once_only {
+            if let Some(slug) = crate::peers::host_tools::host_peer_slug_of(&self.session_id) {
+                crate::peers::host_tools::register_host_approval(
+                    &approval_id.0.to_string(),
+                    &self.peers_root,
+                    slug,
+                );
+            }
+        }
 
         // #1449 drop-guard: arm a guard keyed to THIS pending approval the
         // instant it is registered. If our future is dropped before a clean
@@ -20855,6 +20867,25 @@ fn stdio_session_open_candidate_profile(
 /// caught up). `Err` is only the #924 BLOCK 2 writer-fatal pair — a closed
 /// writer OR a latched failure both mean further pumps produce FatalClosed
 /// forever, so the caller must stop spinning.
+/// UPCR-2026-035: whether `connection` may see this ledger event. Only the
+/// approval events of host-routed calls are restricted (to the peer's host
+/// connection); every other event is visible.
+fn ledger_event_visible_to_connection(
+    event: &UiProtocolLedgerEvent,
+    connection: ConnectionId,
+) -> bool {
+    let approval_id = match event {
+        UiProtocolLedgerEvent::Notification(UiNotification::ApprovalRequested(e)) => &e.approval_id,
+        UiProtocolLedgerEvent::Notification(UiNotification::ApprovalDecided(e)) => &e.approval_id,
+        UiProtocolLedgerEvent::Notification(UiNotification::ApprovalCancelled(e)) => &e.approval_id,
+        UiProtocolLedgerEvent::Notification(UiNotification::ApprovalAutoResolved(e)) => {
+            &e.approval_id
+        }
+        _ => return true,
+    };
+    crate::peers::host_tools::host_approval_visible(&approval_id.0.to_string(), connection.0)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn forward_live_ledger_event(
     ws: &WsConnection,
@@ -20870,6 +20901,9 @@ async fn forward_live_ledger_event(
         return Ok(());
     }
     if event.from_connection == Some(self_connection_id) {
+        return Ok(());
+    }
+    if !ledger_event_visible_to_connection(&event.event, self_connection_id) {
         return Ok(());
     }
     if !ledger_event_matches_topic_scope(&event.event, topic_scope) {
@@ -21621,6 +21655,7 @@ async fn open_session_result(
     replay.retain(|event| {
         ledger_event_matches_topic_scope(&event.event, topic_scope.as_deref())
             && ledger_event_matches_profile_scope(&event.event, profile_scope.as_deref())
+            && ledger_event_visible_to_connection(&event.event, connection_id)
     });
     let replayed_approval_ids = replay
         .iter()
@@ -21641,6 +21676,12 @@ async fn open_session_result(
             ledger_event_matches_topic_scope(&event, topic_scope.as_deref())
         })
         .filter(|approval| !replayed_approval_ids.contains(&approval.approval_id))
+        .filter(|approval| {
+            crate::peers::host_tools::host_approval_visible(
+                &approval.approval_id.0.to_string(),
+                connection_id.0,
+            )
+        })
         .collect::<Vec<_>>();
 
     // UPCR-2026-023: replay still-pending structured user-questions on
@@ -24038,7 +24079,12 @@ async fn handle_voice_commit_admission(
         return;
     }
     if let Some(superseded) = params.supersedes_turn_id.as_ref() {
-        if let Err(error) = await_superseded_turn(active_turns, &session_id, superseded).await {
+        let refused = refuse_foreign_host_turn_control(&session_id, ws, "turn/interrupt");
+        let superseded = match refused {
+            Some(error) => Err(error),
+            None => await_superseded_turn(active_turns, &session_id, superseded).await,
+        };
+        if let Err(error) = superseded {
             contracts
                 .voice_admissions
                 .release(&params.admission_id, &params.turn.turn_id);
@@ -24548,6 +24594,10 @@ async fn handle_turn_steer(
     };
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
+        return;
+    }
+    if let Some(error) = refuse_foreign_host_turn_control(&params.session_id, ws, "turn/steer") {
+        let _ = send_rpc_error(ws, Some(id), error);
         return;
     }
     let Some(prompt) = prompt_text(&params.input) else {
@@ -25866,6 +25916,11 @@ async fn handle_turn_interrupt(
     // task-turn-interrupt-steer-correlation-logs: make the interrupt's
     // receipt, decision and ack reconstructible from the log alone.
     crate::turn_trace::log_interrupt_received(&params.session_id, &params.turn_id);
+    if let Some(error) = refuse_foreign_host_turn_control(&params.session_id, ws, "turn/interrupt")
+    {
+        let _ = send_rpc_error(ws, Some(id), error);
+        return;
+    }
     let outcome = decide_interrupt(active_turns, &params).await;
     let outcome_label: String = match &outcome {
         InterruptOutcome::Unknown => "unknown".into(),
@@ -26134,6 +26189,27 @@ fn record_approval_scope(
     true
 }
 
+/// UPCR-2026-035: a control of a host-owned app peer's session attempted from
+/// a connection that is not the peer's tool host.
+fn host_connection_only_error(method: &str) -> RpcError {
+    RpcError::permission_denied(format!(
+        "{method} on a host-owned app peer's session is accepted only from the connection \
+         that registered its tools"
+    ))
+    .with_data(json!({ "kind": "peer_host_connection_only" }))
+}
+
+/// Refuse a turn control of a registered host peer's session from any
+/// connection but its host connection.
+fn refuse_foreign_host_turn_control(
+    session_id: &SessionKey,
+    ws: &WsConnection,
+    method: &str,
+) -> Option<RpcError> {
+    let controller = crate::peers::host_tools::host_session_controller(session_id)?;
+    (controller != Some(ws.connection_id.0)).then(|| host_connection_only_error(method))
+}
+
 async fn handle_approval_respond(
     ws: &WsConnection,
     state: &Arc<AppState>,
@@ -26145,6 +26221,15 @@ async fn handle_approval_respond(
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
+        return;
+    }
+    // UPCR-2026-035: a host-routed call's approval is answered only on the
+    // peer's host connection.
+    if !crate::peers::host_tools::host_approval_visible(
+        &params.approval_id.0.to_string(),
+        ws.connection_id.0,
+    ) {
+        let _ = send_rpc_error(ws, Some(id), host_connection_only_error("approval/respond"));
         return;
     }
 
@@ -27144,7 +27229,7 @@ async fn handle_session_hydrate(
     // Atomic snapshot of (events ≥ after, head cursor) — closes the
     // codex-flagged gap where reading events and head separately could
     // miss any event committed in between.
-    let (replayed, head_cursor) =
+    let (mut replayed, head_cursor) =
         match ledger.snapshot_with_cursor(&params.session_id, params.after.as_ref()) {
             Ok(snapshot) => snapshot,
             Err(error) => {
@@ -27152,6 +27237,7 @@ async fn handle_session_hydrate(
                 return;
             }
         };
+    replayed.retain(|event| ledger_event_visible_to_connection(&event.event, ws.connection_id));
 
     let include_set = HydrateIncludeSet::from_request(&params.include);
     // #919.1: route to the profile's session manager when the connection
@@ -27410,7 +27496,18 @@ async fn handle_session_hydrate(
     };
 
     let pending_approvals = if include_set.pending_approvals {
-        Some(approvals.pending_for_session(&params.session_id))
+        Some(
+            approvals
+                .pending_for_session(&params.session_id)
+                .into_iter()
+                .filter(|approval| {
+                    crate::peers::host_tools::host_approval_visible(
+                        &approval.approval_id.0.to_string(),
+                        ws.connection_id.0,
+                    )
+                })
+                .collect(),
+        )
     } else {
         None
     };
@@ -37513,7 +37610,11 @@ async fn run_standalone_turn(
             &peers_root,
             &session_id,
             &turn_id.0.to_string(),
-            Some(ws.connection_id.0),
+            // A kernel-internal continuation (a peer_send_input injection,
+            // a background result) is nobody's turn: it never gets a host
+            // peer's tools, whichever connection it happens to run on. The
+            // host drives the peer's runs itself.
+            (!internal_master_continuation).then_some(ws.connection_id.0),
         );
     }
     let tool_registry = Arc::new(tool_registry);

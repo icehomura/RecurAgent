@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use octos_agent::{
     HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome, HostToolConfirm,
-    HostToolDecl, HostToolRisk, HostToolRouter, ToolRegistry,
+    HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim, ToolRegistry,
 };
 use octos_core::SessionKey;
 use serde::{Deserialize, Serialize};
@@ -147,19 +147,15 @@ pub(crate) const PEER_SAFE_GENERIC_TOOLS: &[&str] = &[
     "list_dir",
     "glob",
     "grep",
-    "view_image",
     // Research.
     "web_search",
     "deep_search",
-    "synthesize_research",
-    // The app's memory namespace (UPCR-2026-034) and this session's
-    // truncated tool output.
+    // The app's memory namespace (UPCR-2026-034).
     "memory_search",
     "memory_load",
     "recall_memory",
     "save_memory",
     "record_memory_use",
-    "recall",
     // Content generation dispatch (its targets are stripped like any other
     // unlisted tool).
     "mofa_make",
@@ -538,6 +534,7 @@ pub(crate) fn apply_session_host_tools(
             context_id,
             set,
         } => {
+            note_host_session(session_id, peers_root, slug);
             // The base key names the host but is not a secret. Only a turn
             // driven by the connection that registered the set (and holds
             // the host token) is the host's; any other connection's turn on
@@ -602,7 +599,18 @@ struct CallMeta {
     tool: String,
     tool_call_id: String,
     risk: &'static str,
+    args_digest: String,
 }
+
+/// Process-wide key of an unknown-outcome marker: the calling session, the
+/// tool and the argument digest (not the turn: a later turn must not resend
+/// it either).
+fn unknown_key(route_key: &str, session: &SessionKey, tool: &str, args_digest: &str) -> String {
+    format!("{route_key}\u{0}{}/{tool}/{args_digest}", session.0)
+}
+
+/// How long an unknown outcome blocks the same call.
+const UNKNOWN_RETENTION: Duration = Duration::from_secs(24 * 3_600);
 
 struct PendingCall {
     meta: CallMeta,
@@ -629,12 +637,22 @@ struct BoundedClaims {
     keys: std::collections::HashSet<String>,
 }
 
+/// Result of claiming a key in a [`BoundedClaims`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Claim {
+    Claimed,
+    AlreadyClaimed,
+    /// The set is full of unexpired claims.
+    Full,
+}
+
 impl BoundedClaims {
     const MAX: usize = 4_096;
 
-    fn evict(&mut self, now: Instant, retention: Duration) {
+    /// Drop expired claims only (oldest first; no full scan).
+    fn evict_expired(&mut self, now: Instant, retention: Duration) {
         while let Some((key, at)) = self.order.front() {
-            if now.duration_since(*at) < retention && self.order.len() < Self::MAX {
+            if now.duration_since(*at) < retention {
                 break;
             }
             self.keys.remove(key);
@@ -642,20 +660,47 @@ impl BoundedClaims {
         }
     }
 
-    /// Insert `key`; `false` when it is already present.
-    fn claim(&mut self, key: String, retention: Duration) -> bool {
+    /// Insert `key`. A full set never drops an unexpired claim.
+    fn claim(&mut self, key: String, retention: Duration) -> Claim {
         let now = Instant::now();
-        self.evict(now, retention);
-        if !self.keys.insert(key.clone()) {
-            return false;
+        self.evict_expired(now, retention);
+        if self.keys.contains(&key) {
+            return Claim::AlreadyClaimed;
         }
+        if self.order.len() >= Self::MAX {
+            return Claim::Full;
+        }
+        self.keys.insert(key.clone());
         self.order.push_back((key, now));
-        true
+        Claim::Claimed
+    }
+
+    /// Insert `key`, evicting the oldest claim when full (for markers whose
+    /// loss is preferable to refusing work).
+    fn mark(&mut self, key: String, retention: Duration) {
+        let now = Instant::now();
+        self.evict_expired(now, retention);
+        if self.keys.contains(&key) {
+            return;
+        }
+        if self.order.len() >= Self::MAX {
+            if let Some((oldest, _)) = self.order.pop_front() {
+                self.keys.remove(&oldest);
+            }
+        }
+        self.keys.insert(key.clone());
+        self.order.push_back((key, now));
     }
 
     fn contains(&mut self, key: &str, retention: Duration) -> bool {
-        self.evict(Instant::now(), retention);
+        self.evict_expired(Instant::now(), retention);
         self.keys.contains(key)
+    }
+
+    fn remove(&mut self, key: &str) {
+        if self.keys.remove(key) {
+            self.order.retain(|(k, _)| k != key);
+        }
     }
 }
 
@@ -723,6 +768,109 @@ fn drop_route_if(key: &str, send: &HostSend) {
 pub(crate) struct CompleteError {
     pub(crate) kind: &'static str,
     pub(crate) message: String,
+}
+
+/// A small insertion-ordered map that evicts its oldest entry when full.
+struct BoundedMap {
+    order: std::collections::VecDeque<String>,
+    map: HashMap<String, String>,
+}
+
+impl BoundedMap {
+    const MAX: usize = 4_096;
+
+    fn new() -> Self {
+        Self {
+            order: std::collections::VecDeque::new(),
+            map: HashMap::new(),
+        }
+    }
+
+    fn insert(&mut self, key: String, value: String) {
+        if self.map.insert(key.clone(), value).is_none() {
+            self.order.push_back(key);
+            while self.order.len() > Self::MAX {
+                if let Some(oldest) = self.order.pop_front() {
+                    self.map.remove(&oldest);
+                }
+            }
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<&String> {
+        self.map.get(key)
+    }
+}
+
+/// Approvals raised by host-routed calls: approval id → the peer's route key.
+static HOST_APPROVALS: LazyLock<Mutex<BoundedMap>> =
+    LazyLock::new(|| Mutex::new(BoundedMap::new()));
+
+/// Sessions of peers with a registered set: session key → route key.
+static HOST_SESSIONS: LazyLock<Mutex<BoundedMap>> = LazyLock::new(|| Mutex::new(BoundedMap::new()));
+
+/// The host-owned peer slug a `peer-<slug>` / `peerctx-<slug>.<id>` session
+/// belongs to (syntax only).
+pub(crate) fn host_peer_slug_of(session: &SessionKey) -> Option<&str> {
+    let topic = session.topic()?;
+    let slug = match topic.strip_prefix(PEER_CONTEXT_TOPIC_PREFIX) {
+        Some(_) => parse_context_topic(topic)?.0,
+        None => topic.strip_prefix("peer-")?,
+    };
+    peer_slug_is_safe(slug).then_some(slug)
+}
+
+/// Record that approval `approval_id` was raised by a host-routed call of the
+/// peer `slug`: only that peer's host connection may see or answer it.
+pub(crate) fn register_host_approval(approval_id: &str, peers_root: &Path, slug: &str) {
+    HOST_APPROVALS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(approval_id.to_owned(), route_key(peers_root, slug));
+}
+
+/// Whether `connection` may see or answer approval `approval_id`: any
+/// connection for an ordinary approval; only the peer's current host
+/// connection for a host-routed one.
+pub(crate) fn host_approval_visible(approval_id: &str, connection: u64) -> bool {
+    let Some(key) = HOST_APPROVALS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(approval_id)
+        .cloned()
+    else {
+        return true;
+    };
+    route_connection_by_key(&key) == Some(connection)
+}
+
+fn route_connection_by_key(key: &str) -> Option<u64> {
+    HUB.routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(key)
+        .map(|route| route.connection)
+}
+
+/// Remember that `session` is a session of a peer with a registered set.
+fn note_host_session(session: &SessionKey, peers_root: &Path, slug: &str) {
+    HOST_SESSIONS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(session.0.clone(), route_key(peers_root, slug));
+}
+
+/// For a session of a peer with a registered set: `Some(host connection)`
+/// (`Some(None)` while no host is connected). `None` for any other session.
+/// Controls of such a session's turns (`turn/steer`, `turn/interrupt`)
+/// belong to the host connection only.
+pub(crate) fn host_session_controller(session: &SessionKey) -> Option<Option<u64>> {
+    let key = HOST_SESSIONS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&session.0)
+        .cloned()?;
+    Some(route_connection_by_key(&key))
 }
 
 /// A `peer/tool/result` from the host.
@@ -848,8 +996,13 @@ pub(crate) fn complete_host_call(
         }
         HostReply::Final(outcome) => outcome,
     };
+    // Remove AND deliver under the pending lock: a waiter whose deadline
+    // fires concurrently either finds the call gone with the outcome already
+    // in its channel, or removes it first (and this result is refused as
+    // late). Never "removed but not yet delivered".
     let call = pending.remove(call_id).expect("checked above");
-    drop(pending);
+    #[cfg(test)]
+    test_hooks::between_remove_and_deliver(slug);
     let (outcome, status) = match outcome {
         HostToolCallOutcome::Ok(data) => {
             let bytes = serde_json::to_string(&data).map(|s| s.len()).unwrap_or(0);
@@ -874,6 +1027,7 @@ pub(crate) fn complete_host_call(
         error => (error, CompleteCall::Accepted),
     };
     let _ = call.tx.send(outcome);
+    drop(pending);
     Ok(status)
 }
 
@@ -896,6 +1050,19 @@ impl Drop for PendingGuard {
         let Some(call) = removed else {
             return;
         };
+        // The host may be acting on it: an interrupted or timed-out non-read
+        // call must not be resent as if it never happened.
+        if call.meta.risk != "read" {
+            HUB.unknown.lock().unwrap_or_else(|p| p.into_inner()).mark(
+                unknown_key(
+                    &call.meta.route_key,
+                    &call.meta.session_id,
+                    &call.meta.tool,
+                    &call.meta.args_digest,
+                ),
+                UNKNOWN_RETENTION,
+            );
+        }
         {
             let mut finished = HUB.finished.lock().unwrap_or_else(|p| p.into_inner());
             let now = Instant::now();
@@ -934,11 +1101,11 @@ pub(crate) struct TurnHostToolRouter {
 
 impl TurnHostToolRouter {
     fn unknown_key(&self, tool: &str, args_digest: &str) -> String {
-        format!(
-            "{}\u{0}{}/{}/{tool}/{args_digest}",
-            self.peers_root.display(),
-            self.session_id.0,
-            self.turn_id
+        unknown_key(
+            &route_key(&self.peers_root, &self.slug),
+            &self.session_id,
+            tool,
+            args_digest,
         )
     }
 
@@ -952,7 +1119,7 @@ impl TurnHostToolRouter {
 
 #[async_trait::async_trait]
 impl HostToolRouter for TurnHostToolRouter {
-    fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> bool {
+    fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> OccurrenceClaim {
         // The `peer_send_input` occurrence shape (calling session, turn,
         // provider tool-call id) plus the argument digest, scoped to this
         // profile's peers root.
@@ -962,24 +1129,37 @@ impl HostToolRouter for TurnHostToolRouter {
             self.session_id.0,
             self.turn_id
         );
-        HUB.occurrences
+        match HUB
+            .occurrences
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .claim(key, OCCURRENCE_RETENTION)
+        {
+            Claim::Claimed => OccurrenceClaim::Claimed,
+            Claim::AlreadyClaimed => OccurrenceClaim::Duplicate,
+            Claim::Full => OccurrenceClaim::Busy,
+        }
     }
 
     fn outcome_unknown_before(&self, tool: &str, args_digest: &str) -> bool {
         HUB.unknown
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .contains(&self.unknown_key(tool, args_digest), OCCURRENCE_RETENTION)
+            .contains(&self.unknown_key(tool, args_digest), UNKNOWN_RETENTION)
     }
 
     fn mark_outcome_unknown(&self, tool: &str, args_digest: &str) {
         HUB.unknown
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .claim(self.unknown_key(tool, args_digest), OCCURRENCE_RETENTION);
+            .mark(self.unknown_key(tool, args_digest), UNKNOWN_RETENTION);
+    }
+
+    fn clear_outcome_unknown(&self, tool: &str, args_digest: &str) {
+        HUB.unknown
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&self.unknown_key(tool, args_digest));
     }
 
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
@@ -1022,6 +1202,7 @@ impl HostToolRouter for TurnHostToolRouter {
                         tool: call.name.clone(),
                         tool_call_id: call.tool_call_id.clone(),
                         risk: call.risk.as_str(),
+                        args_digest: call.args_digest.clone(),
                     },
                     max_result_bytes: self.max_result_bytes,
                     tx,
@@ -1142,6 +1323,31 @@ impl HostToolRouter for TurnHostToolRouter {
     }
 }
 
+/// Test-only pause injected between taking a call out of the pending set
+/// and delivering its result, to prove no waiter observes the gap.
+#[cfg(test)]
+pub(crate) mod test_hooks {
+    use std::sync::Mutex;
+
+    static DELAY: Mutex<Option<(String, std::time::Duration)>> = Mutex::new(None);
+
+    pub(crate) fn delay_delivery_for(slug: &str, delay: std::time::Duration) {
+        *DELAY.lock().unwrap() = Some((slug.to_owned(), delay));
+    }
+
+    pub(super) fn between_remove_and_deliver(slug: &str) {
+        let delay = DELAY
+            .lock()
+            .unwrap()
+            .as_ref()
+            .filter(|(s, _)| s == slug)
+            .map(|(_, d)| *d);
+        if let Some(delay) = delay {
+            std::thread::sleep(delay);
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn pending_calls_for(peers_root: &Path, slug: &str) -> Vec<String> {
     let key = route_key(peers_root, slug);
@@ -1232,5 +1438,158 @@ mod tests {
             "risk": "read", "confirm": "nobody"
         }));
         assert!(bad_confirm.is_err());
+    }
+
+    /// A result that lands at the deadline is delivered, never reported as
+    /// `outcome_unknown` while the host was told `accepted`. Paused time
+    /// makes the deadline and the result ready at the same poll, so the
+    /// `select!` takes either branch across iterations; both must deliver.
+    #[tokio::test(start_paused = true)]
+    async fn should_deliver_a_result_that_lands_at_the_deadline() {
+        let tmp = tempfile::tempdir().unwrap();
+        for round in 0..40 {
+            let slug = format!("race{round}");
+            let (tx, rx) = std::sync::mpsc::channel::<(String, Value)>();
+            let tx = std::sync::Mutex::new(tx);
+            set_host_route(
+                tmp.path(),
+                &slug,
+                7_000 + round,
+                Arc::new(move |method, params| {
+                    tx.lock().unwrap().send((method.to_owned(), params)).is_ok()
+                }),
+            );
+            let router = TurnHostToolRouter {
+                peers_root: tmp.path().to_path_buf(),
+                slug: slug.clone(),
+                context_id: None,
+                session_id: SessionKey(format!("octos:api:host#peer-{slug}")),
+                turn_id: "t".into(),
+                version: 1,
+                call_timeout: Duration::from_millis(100),
+                approval_ttl: Duration::from_secs(60),
+                max_result_bytes: 1024,
+            };
+            let task = tokio::spawn(async move {
+                router
+                    .call(HostToolCall {
+                        tool_call_id: "c1".into(),
+                        name: "news.topics_set".into(),
+                        args: json!({}),
+                        risk: HostToolRisk::Act,
+                        confirm_required: false,
+                        gated: false,
+                        args_digest: "sha256:x".into(),
+                    })
+                    .await
+            });
+            let call_id = loop {
+                tokio::task::yield_now().await;
+                if let Ok((method, params)) = rx.try_recv() {
+                    assert_eq!(method, PEER_TOOL_CALL_NOTIFICATION);
+                    break params["call_id"].as_str().unwrap().to_owned();
+                }
+            };
+            let accepted = complete_host_call(
+                tmp.path(),
+                &slug,
+                &call_id,
+                HostReply::Final(HostToolCallOutcome::Ok(json!({"n": round}))),
+            )
+            .expect("accepted");
+            assert_eq!(accepted, CompleteCall::Accepted);
+            tokio::time::advance(Duration::from_millis(500)).await;
+            assert_eq!(
+                task.await.unwrap(),
+                HostToolCallOutcome::Ok(json!({"n": round})),
+                "round {round}"
+            );
+            assert!(
+                rx.try_iter()
+                    .all(|(method, _)| method != PEER_TOOL_CANCEL_NOTIFICATION),
+                "an answered call is never cancelled"
+            );
+        }
+    }
+
+    #[test]
+    fn should_evict_only_expired_claims_and_refuse_when_full() {
+        let mut claims = BoundedClaims::default();
+        let retention = Duration::from_secs(3_600);
+        for i in 0..BoundedClaims::MAX {
+            assert_eq!(claims.claim(format!("k{i}"), retention), Claim::Claimed);
+        }
+        assert_eq!(claims.claim("k0".into(), retention), Claim::AlreadyClaimed);
+        assert_eq!(claims.claim("new".into(), retention), Claim::Full);
+        assert!(
+            claims.contains("k0", retention),
+            "a fresh claim is never evicted"
+        );
+        // Expired claims make room.
+        assert_eq!(claims.claim("new".into(), Duration::ZERO), Claim::Claimed);
+    }
+
+    /// Deterministic: the host's result is taken out of the pending set just
+    /// before the waiter's deadline and delivered after it (an injected
+    /// pause). The waiter must still deliver it, not report
+    /// `outcome_unknown`, and send no cancel.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn should_deliver_a_result_taken_before_the_deadline_but_delivered_after_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let slug = "gap".to_owned();
+        let (tx, rx) = std::sync::mpsc::channel::<(String, Value)>();
+        let tx = std::sync::Mutex::new(tx);
+        set_host_route(
+            tmp.path(),
+            &slug,
+            9_001,
+            Arc::new(move |method, params| {
+                tx.lock().unwrap().send((method.to_owned(), params)).is_ok()
+            }),
+        );
+        test_hooks::delay_delivery_for(&slug, Duration::from_millis(400));
+        let router = TurnHostToolRouter {
+            peers_root: tmp.path().to_path_buf(),
+            slug: slug.clone(),
+            context_id: None,
+            session_id: SessionKey("octos:api:host#peer-gap".into()),
+            turn_id: "t".into(),
+            version: 1,
+            call_timeout: Duration::from_millis(200),
+            approval_ttl: Duration::from_secs(60),
+            max_result_bytes: 1024,
+        };
+        let task = tokio::spawn(async move {
+            router
+                .call(HostToolCall {
+                    tool_call_id: "c1".into(),
+                    name: "news.topics_set".into(),
+                    args: json!({}),
+                    risk: HostToolRisk::Act,
+                    confirm_required: false,
+                    gated: false,
+                    args_digest: "sha256:x".into(),
+                })
+                .await
+        });
+        let (_, params) = tokio::task::spawn_blocking(move || rx.recv().unwrap())
+            .await
+            .unwrap();
+        let call_id = params["call_id"].as_str().unwrap().to_owned();
+        let peers_root = tmp.path().to_path_buf();
+        let completer = std::thread::spawn(move || {
+            // Start completing at ~50 ms; the pause holds the delivery until
+            // ~450 ms, well past the 200 ms deadline.
+            std::thread::sleep(Duration::from_millis(50));
+            complete_host_call(
+                &peers_root,
+                "gap",
+                &call_id,
+                HostReply::Final(HostToolCallOutcome::Ok(json!({"done": true}))),
+            )
+        });
+        let outcome = task.await.unwrap();
+        assert_eq!(completer.join().unwrap(), Ok(CompleteCall::Accepted));
+        assert_eq!(outcome, HostToolCallOutcome::Ok(json!({"done": true})));
     }
 }

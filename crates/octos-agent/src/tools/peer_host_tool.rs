@@ -167,9 +167,9 @@ pub struct HostToolAudit {
     pub tool_call_id: String,
     pub risk: &'static str,
     /// `allowed`, `approved`, `app_confirms`, `denied`, `expired`,
-    /// `approval_unavailable`, `duplicate`, `outcome_unknown_before`,
-    /// `not_background`, `invalid_args` (and `late_result`, written by the
-    /// router).
+    /// `approval_unavailable`, `duplicate`, `busy`, `outcome_unknown_before`,
+    /// `approved_after_unknown`, `not_background`, `invalid_args` (and
+    /// `late_result`, written by the router).
     pub decision: &'static str,
     /// `ok`, `error:<kind>`, `unknown` (no answer in time; the app may have
     /// acted), or `not_called`.
@@ -179,17 +179,28 @@ pub struct HostToolAudit {
     pub result_bytes: usize,
 }
 
+/// Result of [`HostToolRouter::claim_occurrence`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OccurrenceClaim {
+    Claimed,
+    /// Already claimed: the call is a re-dispatch.
+    Duplicate,
+    /// Too many unexpired claims are held; the call is refused (host_busy).
+    Busy,
+}
+
 /// The serve-side half: delivers calls to the host and records them.
 #[async_trait]
 pub trait HostToolRouter: Send + Sync {
     /// Claim the occurrence `(tool_call_id, args_digest)` in this turn.
-    /// `false` means it was already claimed: the call is a duplicate.
-    fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> bool;
-    /// Whether the same `(tool, args_digest)` already ended `outcome_unknown`
-    /// in this turn: the app may have acted, so it is not sent again.
+    fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> OccurrenceClaim;
+    /// Whether the same `(tool, args_digest)` ended `outcome_unknown` for
+    /// this session (within the router's retention): the app may have acted.
     fn outcome_unknown_before(&self, tool: &str, args_digest: &str) -> bool;
     /// Remember that `(tool, args_digest)` ended `outcome_unknown`.
     fn mark_outcome_unknown(&self, tool: &str, args_digest: &str);
+    /// Forget the marker (the person approved running it again).
+    fn clear_outcome_unknown(&self, tool: &str, args_digest: &str);
     /// Deliver the call to the host and wait for its result (the router owns
     /// the timeout, cancellation and result size cap).
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome;
@@ -359,59 +370,85 @@ impl Tool for HostRoutedTool {
         }
 
         let args_digest = crate::approval::digest_tool_args(args);
-        if self.decl.risk != HostToolRisk::Read
-            && !self.router.claim_occurrence(&ctx.tool_id, &args_digest)
-        {
-            return Ok(self.refuse(
-                ctx,
-                started,
-                args_bytes,
-                "duplicate",
-                format!(
-                    "{}: this exact call was already submitted; it is not asked or sent twice",
-                    self.decl.name
-                ),
-            ));
+        if self.decl.risk != HostToolRisk::Read {
+            match self.router.claim_occurrence(&ctx.tool_id, &args_digest) {
+                OccurrenceClaim::Claimed => {}
+                OccurrenceClaim::Duplicate => {
+                    return Ok(self.refuse(
+                        ctx,
+                        started,
+                        args_bytes,
+                        "duplicate",
+                        format!(
+                            "{}: this exact call was already submitted; it is not asked or sent twice",
+                            self.decl.name
+                        ),
+                    ));
+                }
+                OccurrenceClaim::Busy => {
+                    return Ok(self.refuse(
+                        ctx,
+                        started,
+                        args_bytes,
+                        "busy",
+                        format!(
+                            "{}: too many calls are being tracked right now (host_busy); try later",
+                            self.decl.name
+                        ),
+                    ));
+                }
+            }
         }
 
-        if self.decl.risk != HostToolRisk::Read
+        // A call whose earlier identical run ended with an unknown outcome
+        // (timed out or interrupted while the app worked) is sent again only
+        // after the person approves it knowing that.
+        let unknown_before = self.decl.risk != HostToolRisk::Read
             && self
                 .router
-                .outcome_unknown_before(&self.decl.name, &args_digest)
-        {
-            return Ok(self.refuse(
-                ctx,
-                started,
-                args_bytes,
-                "outcome_unknown_before",
-                format!(
-                    "{}: the same call with the same arguments already ended with an unknown \
-                     outcome in this turn; the app may have done it. It is not sent again: \
-                     check with a read tool or ask the person.",
-                    self.decl.name
-                ),
-            ));
-        }
-        let decision = if self.decl.requires_kernel_approval(attended) {
+                .outcome_unknown_before(&self.decl.name, &args_digest);
+        let decision = if self.decl.requires_kernel_approval(attended) || unknown_before {
             let Some(requester) = approvals else {
-                return Ok(self.refuse(
-                    ctx,
-                    started,
-                    args_bytes,
-                    "approval_unavailable",
-                    format!(
-                        "{} needs the person's approval and no approval channel is available; it was not run",
-                        self.decl.name
-                    ),
-                ));
+                let (decision, message) = if unknown_before {
+                    (
+                        "outcome_unknown_before",
+                        format!(
+                            "{}: the same call with the same arguments already ended with an \
+                             unknown outcome; the app may have done it. It is not sent again \
+                             without the person's approval: check with a read tool or ask the \
+                             person.",
+                            self.decl.name
+                        ),
+                    )
+                } else {
+                    (
+                        "approval_unavailable",
+                        format!(
+                            "{} needs the person's approval and no approval channel is available; it was not run",
+                            self.decl.name
+                        ),
+                    )
+                };
+                return Ok(self.refuse(ctx, started, args_bytes, decision, message));
             };
             let pretty = serde_json::to_string_pretty(args).unwrap_or(args_text.clone());
+            let warning = if unknown_before {
+                "The same call with these exact arguments ran before and its outcome is \
+                 UNKNOWN: the app may already have done it. Approve only if it should run \
+                 again.\n\n"
+            } else {
+                ""
+            };
             let request = ToolApprovalRequest {
                 tool_id: ctx.tool_id.clone(),
                 tool_name: self.decl.model_name.clone(),
-                title: format!("Approve {}", self.decl.name),
+                title: if unknown_before {
+                    format!("Run {} again? (earlier outcome unknown)", self.decl.name)
+                } else {
+                    format!("Approve {}", self.decl.name)
+                },
                 body: format!(
-                    "{} ({}{}) wants to run with these exact arguments:\n{pretty}",
+                    "{warning}{} ({}{}) wants to run with these exact arguments:\n{pretty}",
                     self.decl.name,
                     self.decl.risk.as_str(),
                     if self.decl.outward { ", outward" } else { "" },
@@ -442,6 +479,11 @@ impl Tool for HostRoutedTool {
                         "denied",
                         format!("{}: the person declined; it was not run", self.decl.name),
                     ));
+                }
+                Ok(ToolApprovalDecision::Approve) if unknown_before => {
+                    self.router
+                        .clear_outcome_unknown(&self.decl.name, &args_digest);
+                    "approved_after_unknown"
                 }
                 Ok(ToolApprovalDecision::Approve) => "approved",
             }
@@ -538,11 +580,23 @@ mod tests {
 
     #[async_trait]
     impl HostToolRouter for FakeRouter {
-        fn claim_occurrence(&self, id: &str, digest: &str) -> bool {
-            self.claimed
+        fn claim_occurrence(&self, id: &str, digest: &str) -> OccurrenceClaim {
+            if self
+                .claimed
                 .lock()
                 .unwrap()
                 .insert(format!("{id}/{digest}"))
+            {
+                OccurrenceClaim::Claimed
+            } else {
+                OccurrenceClaim::Duplicate
+            }
+        }
+        fn clear_outcome_unknown(&self, tool: &str, digest: &str) {
+            self.unknown
+                .lock()
+                .unwrap()
+                .remove(&format!("{tool}/{digest}"));
         }
         fn outcome_unknown_before(&self, tool: &str, digest: &str) -> bool {
             self.unknown
@@ -815,8 +869,14 @@ mod tests {
         struct SilentRouter(Mutex<Vec<HostToolAudit>>, Mutex<Vec<String>>);
         #[async_trait]
         impl HostToolRouter for SilentRouter {
-            fn claim_occurrence(&self, _: &str, _: &str) -> bool {
-                true
+            fn claim_occurrence(&self, _: &str, _: &str) -> OccurrenceClaim {
+                OccurrenceClaim::Claimed
+            }
+            fn clear_outcome_unknown(&self, tool: &str, digest: &str) {
+                self.1
+                    .lock()
+                    .unwrap()
+                    .retain(|k| k != &format!("{tool}/{digest}"));
             }
             fn outcome_unknown_before(&self, tool: &str, digest: &str) -> bool {
                 self.1.lock().unwrap().contains(&format!("{tool}/{digest}"))
@@ -838,27 +898,47 @@ mod tests {
             }
         }
         let router = Arc::new(SilentRouter(Mutex::new(Vec::new()), Mutex::new(Vec::new())));
-        let tool = HostRoutedTool::new(
-            decl("news.topics_set", HostToolRisk::Act),
-            router.clone(),
-            TTL,
-            true,
-        );
+        let mut act = decl("news.topics_set", HostToolRisk::Act);
+        act.background = true;
+        let tool = HostRoutedTool::new(act, router.clone(), TTL, true);
         let approver = Approver::new(Some(ToolApprovalDecision::Approve));
         let result = run(&tool, Some(approver.clone()), "c1", json!({"id": 1})).await;
         assert!(!result.success && result.output.contains("do not retry"));
         assert_eq!(router.0.lock().unwrap()[0].outcome, "unknown");
+        assert_eq!(approver.asked(), 0, "an act call needs no approval");
 
-        // A retry under a NEW tool-call id with the same arguments is refused
-        // (the app may have acted); other arguments still go through.
-        let retry = run(&tool, Some(approver.clone()), "c2", json!({"id": 1})).await;
+        // A retry under a NEW tool-call id with the same arguments is not
+        // sent without the person: refused with no approval channel...
+        let retry = run(&tool, None, "c2", json!({"id": 1})).await;
         assert!(!retry.success && retry.output.contains("not sent again"));
         assert_eq!(
             router.0.lock().unwrap()[1].decision,
             "outcome_unknown_before"
         );
-        run(&tool, Some(approver), "c3", json!({"id": 2})).await;
-        assert_eq!(router.0.lock().unwrap()[2].decision, "allowed");
+
+        // ...declined when the person says no to a request that states the
+        // earlier outcome is unknown...
+        let decline = Approver::new(Some(ToolApprovalDecision::Deny));
+        let declined = run(&tool, Some(decline.clone()), "c3", json!({"id": 1})).await;
+        assert!(!declined.success);
+        let asked = decline.last.lock().unwrap().clone().unwrap();
+        assert!(
+            asked.body.contains("UNKNOWN") && asked.once_only,
+            "{}",
+            asked.body
+        );
+
+        // ...and sent again only after the person approves exactly that.
+        run(&tool, Some(approver.clone()), "c4", json!({"id": 1})).await;
+        assert_eq!(approver.asked(), 1);
+        assert_eq!(
+            router.0.lock().unwrap()[3].decision,
+            "approved_after_unknown"
+        );
+
+        // Other arguments are a different call.
+        run(&tool, Some(approver), "c5", json!({"id": 2})).await;
+        assert_eq!(router.0.lock().unwrap()[4].decision, "allowed");
     }
 
     #[tokio::test]

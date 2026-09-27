@@ -923,9 +923,274 @@ async fn should_report_an_unanswered_act_call_as_unknown_and_never_resend_it() {
     );
     assert!(rx.try_recv().is_err(), "no second peer/tool/call");
 
+    // A later turn of the same session does not resend it either.
+    let later = turn_registry(&fx, &key, "turn-2").await;
+    let again = later
+        .execute_with_context(&call_ctx("c1"), "news_topics_set", &args)
+        .await
+        .unwrap();
+    assert!(
+        !again.success && again.output.contains("not sent again"),
+        "{}",
+        again.output
+    );
+    assert!(rx.try_recv().is_err(), "no second peer/tool/call");
+
     let rows = audit_rows(&fx);
     assert_eq!(rows[0]["outcome"], "unknown");
     assert_eq!(rows[1]["decision"], "duplicate");
+}
+
+#[tokio::test]
+async fn should_treat_a_call_interrupted_while_the_host_worked_as_unknown() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(&fx, &ws, &token, json!({ "tools": [news_topics_set()] })).unwrap();
+    let registry = Arc::new(turn_registry(&fx, &key, "turn-1").await);
+    let args = json!({"topics": ["rust"]});
+    let task = {
+        let registry = registry.clone();
+        let args = args.clone();
+        tokio::spawn(async move {
+            registry
+                .execute_with_context(&call_ctx("c1"), "news_topics_set", &args)
+                .await
+        })
+    };
+    next_frame(&mut rx, "peer/tool/call").await;
+    // The turn is interrupted while the host is working on the call.
+    task.abort();
+    let _ = task.await;
+    assert_eq!(
+        next_frame(&mut rx, "peer/tool/cancel").await["reason"],
+        "cancelled"
+    );
+
+    let later = turn_registry(&fx, &key, "turn-2").await;
+    let again = later
+        .execute_with_context(&call_ctx("c9"), "news_topics_set", &args)
+        .await
+        .unwrap();
+    assert!(
+        !again.success && again.output.contains("not sent again"),
+        "{}",
+        again.output
+    );
+    assert!(rx.try_recv().is_err(), "not sent to the host again");
+}
+
+#[tokio::test]
+async fn should_give_no_tools_to_a_kernel_internal_continuation() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, _rx) = ws_connection_for_test(8);
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_list()], "generic_tools": ["read_file"] }),
+    )
+    .unwrap();
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
+        .await
+        .unwrap();
+    let mut registry = runtime.tools.snapshot_excluding(&[]);
+    let resolved = resolve_session_host_tools(&peers_root(&fx), &key);
+    // `run_standalone_turn` passes no connection for an internal continuation.
+    apply_session_host_tools(&mut registry, &resolved, &peers_root(&fx), &key, "t", None);
+    assert!(registry.tool_names().is_empty());
+}
+
+#[tokio::test]
+async fn should_clamp_host_filesystem_access_for_a_bound_app_session() {
+    let fx = fixture().await;
+    prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let runtime = crate::runtime::SessionRuntime::bootstrap_with_permissions(
+        &fx.runtime,
+        key,
+        None,
+        octos_agent::EffectivePermissions::danger_full_access(),
+    )
+    .await
+    .expect("bound session");
+    assert!(
+        !runtime.permissions.filesystem_scope.is_host(),
+        "a bound app session never gets host filesystem access"
+    );
+    assert!(
+        runtime.agent.session_scope().is_some(),
+        "file tools are fenced"
+    );
+
+    // An ordinary session keeps the operator's grant.
+    let plain = crate::runtime::SessionRuntime::bootstrap_with_permissions(
+        &fx.runtime,
+        SessionKey::with_profile_topic("dev", "api", "host", "plain"),
+        None,
+        octos_agent::EffectivePermissions::danger_full_access(),
+    )
+    .await
+    .unwrap();
+    assert!(plain.permissions.filesystem_scope.is_host());
+}
+
+fn rpc_error_kind(message: WsMessage) -> Value {
+    frame_json(message)["error"]["data"]["kind"].clone()
+}
+
+#[tokio::test]
+async fn should_keep_a_host_tool_approval_and_turn_controls_on_the_host_connection() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (host_ws, host_rx) = ws_connection_for_test(64);
+    register(&fx, &host_ws, &token, json!({ "tools": [mail_send()] })).unwrap();
+    let host = spawn_fake_host(
+        &fx,
+        token.clone(),
+        host_rx,
+        |_| json!({ "ok": true, "data": {} }),
+    );
+    let registry = Arc::new(turn_registry(&fx, &key, "turn-1").await);
+    let ledger = Arc::new(UiProtocolLedger::new(64));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let turn = TurnId::new();
+    // The host's own turn: its approval bridge writes to the shared ledger.
+    let (bridge_ws, _bridge_rx) = ws_connection_for_test(64);
+    let approver: Arc<dyn octos_agent::ToolApprovalRequester> =
+        Arc::new(UiProtocolApprovalRequester {
+            ws: bridge_ws,
+            ledger: ledger.clone(),
+            contracts: contracts.clone(),
+            state: fx.state.clone(),
+            peers_root: peers_root(&fx),
+            session_id: key.clone(),
+            turn_id: turn.clone(),
+            features: ConnectionUiFeatures::default(),
+        });
+    let run = {
+        let registry = registry.clone();
+        tokio::spawn(
+            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+                registry
+                    .execute_with_context(&call_ctx("c1"), "mail_send", &json!({"draft_id": "d"}))
+                    .await
+                    .unwrap()
+            }),
+        )
+    };
+    let pending = wait_for_pending(&contracts, &key).await;
+    let approval_id = pending[0].approval_id.clone();
+
+    // Another connection of the profile, on the same session.
+    let (spoof_ws, mut spoof_rx) = ws_connection_for_test(64);
+    let mut requested = None;
+    for _ in 0..200 {
+        requested = ledger
+            .replay_after(
+                &key,
+                Some(&UiCursor {
+                    stream: key.0.clone(),
+                    seq: 0,
+                }),
+            )
+            .unwrap()
+            .into_iter()
+            .find(|e| {
+                matches!(
+                    &e.event,
+                    UiProtocolLedgerEvent::Notification(UiNotification::ApprovalRequested(_))
+                )
+            });
+        if requested.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let requested = requested.expect("the approval is in the shared ledger");
+    // Neither live forwarding nor replay shows it to that connection...
+    assert!(!ledger_event_visible_to_connection(
+        &requested.event,
+        spoof_ws.connection_id
+    ));
+    assert!(ledger_event_visible_to_connection(
+        &requested.event,
+        host_ws.connection_id
+    ));
+    forward_live_ledger_event(
+        &spoof_ws,
+        &ledger,
+        requested.clone(),
+        0,
+        spoof_ws.connection_id,
+        ConnectionUiFeatures::default(),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(spoof_rx.try_recv().is_err(), "not forwarded live");
+
+    // ...and it cannot answer it.
+    let respond = |approval_id: ApprovalId| {
+        ApprovalRespondParams::new(key.clone(), approval_id, ApprovalDecision::Approve)
+    };
+    handle_approval_respond(
+        &spoof_ws,
+        &fx.state,
+        &ledger,
+        &contracts,
+        None,
+        "r1".into(),
+        respond(approval_id.clone()),
+    )
+    .await;
+    assert_eq!(
+        rpc_error_kind(spoof_rx.recv().await.unwrap()),
+        "peer_host_connection_only"
+    );
+    assert_eq!(contracts.approvals.pending_for_session(&key).len(), 1);
+
+    // Nor steer or interrupt the host's turn.
+    let active_turns: SharedActiveTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    handle_turn_interrupt(
+        &spoof_ws,
+        &ledger,
+        &active_turns,
+        &contracts,
+        "i1".into(),
+        TurnInterruptParams {
+            session_id: key.clone(),
+            turn_id: turn.clone(),
+        },
+    )
+    .await;
+    assert_eq!(
+        rpc_error_kind(spoof_rx.recv().await.unwrap()),
+        "peer_host_connection_only"
+    );
+    assert!(refuse_foreign_host_turn_control(&key, &spoof_ws, "turn/steer").is_some());
+    assert!(refuse_foreign_host_turn_control(&key, &host_ws, "turn/steer").is_none());
+
+    // The host connection answers it.
+    handle_approval_respond(
+        &host_ws,
+        &fx.state,
+        &ledger,
+        &contracts,
+        None,
+        "r2".into(),
+        respond(approval_id),
+    )
+    .await;
+    assert!(run.await.unwrap().success);
+    drop(host_ws);
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
+    assert_eq!(host.await.unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -1212,6 +1477,9 @@ async fn should_refuse_generic_tools_that_escape_the_set() {
         "monitor_delete",
         "check_background_tasks",
         "read_task_output",
+        "synthesize_research",
+        "view_image",
+        "recall",
         "no_such_tool",
     ] {
         let err = register(

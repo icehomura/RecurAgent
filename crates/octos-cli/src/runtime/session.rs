@@ -336,6 +336,28 @@ impl SessionRuntime {
                 (Some(cwd), Some(memory_namespace))
             }
         };
+        // UPCR-2026-035: a host-bound app session never runs with host
+        // filesystem access. `Host` (danger_full_access, e.g. a Solo profile
+        // run with `--danger-full-access`) leaves file tools unscoped and the
+        // sandbox off, so an app's read tools would accept any absolute path.
+        // Clamp it to workspace access, keeping the approval policy; the
+        // session scope is then attached below like for any other session.
+        let (permissions, sandbox_override) =
+            if bound_memory_namespace.is_some() && permissions.filesystem_scope.is_host() {
+                tracing::warn!(
+                    session = %session_key,
+                    "host-bound app session: clamping host filesystem access to its workspace"
+                );
+                (
+                    EffectivePermissions {
+                        approval_policy: permissions.approval_policy,
+                        ..EffectivePermissions::workspace_write()
+                    },
+                    None,
+                )
+            } else {
+                (permissions, sandbox_override)
+            };
         let had_workspace_hint = workspace_hint.is_some();
         let workspace_root = resolve_workspace_root(profile, &session_key, workspace_hint)?;
         let workspace_profile = profile.for_workspace(&workspace_root).await?;
@@ -629,6 +651,11 @@ impl SessionRuntime {
                 }
             }
         };
+        // A host-bound app session is always fenced to its workspace: never
+        // fall back to the unscoped legacy resolver.
+        if bound_memory_namespace.is_some() && session_scope.is_none() {
+            eyre::bail!("session {session_key} is host-bound but its workspace scope failed");
+        }
 
         // The prompt's slash commands (`/router`, `/queue`, …) are handled by
         // bus channels only; serve sessions get the client's own commands
