@@ -135,7 +135,39 @@ pub(crate) fn validate_app_tool_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Kernel tools a peer's set may never allow: each one runs work outside
+/// the turn's registry (a child agent or pipeline with its own built-in
+/// tools), reaches another session, schedules unfiltered runs, or changes
+/// the tool roster itself.
+const ESCAPE_TOOLS: &[&str] = &[
+    "spawn",
+    "spawn_agent",
+    "send_input",
+    "resume_agent",
+    "wait_agent",
+    "close_agent",
+    "delegate",
+    "delegate_task",
+    "run_pipeline",
+    "manage_skills",
+    "configure_tool",
+    "cron",
+    "monitor_create",
+];
+const ESCAPE_TOOL_PREFIXES: &[&str] = &["peer_", "goal_", "admin_", "mcp_"];
+
+/// Whether `name` is a meta/escape tool a peer's set may never allow.
+pub(crate) fn is_escape_tool(name: &str) -> bool {
+    ESCAPE_TOOLS.contains(&name) || ESCAPE_TOOL_PREFIXES.iter().any(|p| name.starts_with(p))
+}
+
 fn validate_generic_name(name: &str) -> Result<(), String> {
+    if is_escape_tool(name) {
+        return Err(format!(
+            "generic tool '{name}' runs work outside the peer's tool set (a child agent, \
+             pipeline, another session or the tool roster) and cannot be allowed"
+        ));
+    }
     let ok = !name.is_empty()
         && name.len() <= MAX_MODEL_NAME_BYTES
         && name
@@ -162,7 +194,75 @@ fn parse_schema(tool: &str, field: &str, schema: Value) -> Result<Value, String>
             "{tool}: {field} must be a JSON Schema object (\"type\": \"object\")"
         ));
     }
+    check_schema_shape(&schema, 0).map_err(|err| format!("{tool}: {field}: {err}"))?;
     Ok(schema)
+}
+
+const MAX_SCHEMA_DEPTH: usize = 10;
+const SCHEMA_TYPES: &[&str] = &[
+    "object", "array", "string", "number", "integer", "boolean", "null",
+];
+
+/// Structural check against the JSON Schema meta-schema's shapes for the
+/// keywords that matter here: `type`, `properties`, `required`, `items`,
+/// `enum`, the combinators, and a nesting depth of 10.
+fn check_schema_shape(schema: &Value, depth: usize) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err(format!("nested deeper than {MAX_SCHEMA_DEPTH}"));
+    }
+    let Some(object) = schema.as_object() else {
+        return Err("a schema must be a JSON object".into());
+    };
+    let valid_type = |t: &Value| t.as_str().is_some_and(|t| SCHEMA_TYPES.contains(&t));
+    match object.get("type") {
+        None => {}
+        Some(Value::Array(types)) if !types.is_empty() && types.iter().all(valid_type) => {}
+        Some(t) if valid_type(t) => {}
+        Some(other) => return Err(format!("\"type\" {other} is not a JSON Schema type")),
+    }
+    if let Some(properties) = object.get("properties") {
+        let Some(properties) = properties.as_object() else {
+            return Err("\"properties\" must be an object".into());
+        };
+        for (name, sub) in properties {
+            check_schema_shape(sub, depth + 1).map_err(|err| format!("{name}: {err}"))?;
+        }
+    }
+    if let Some(required) = object.get("required") {
+        if !required
+            .as_array()
+            .is_some_and(|r| r.iter().all(Value::is_string))
+        {
+            return Err("\"required\" must be an array of strings".into());
+        }
+    }
+    if let Some(items) = object.get("items") {
+        match items {
+            Value::Array(list) => {
+                for sub in list {
+                    check_schema_shape(sub, depth + 1)?;
+                }
+            }
+            Value::Bool(_) => {}
+            sub => check_schema_shape(sub, depth + 1)?,
+        }
+    }
+    if let Some(values) = object.get("enum") {
+        if !values.is_array() {
+            return Err("\"enum\" must be an array".into());
+        }
+    }
+    for combinator in ["anyOf", "oneOf", "allOf"] {
+        if let Some(list) = object.get(combinator) {
+            let Some(list) = list.as_array() else {
+                return Err(format!("\"{combinator}\" must be an array"));
+            };
+            for sub in list {
+                check_schema_shape(sub, depth + 1)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Validate a registration and build the next set (`version` is filled by
@@ -298,8 +398,18 @@ pub(crate) fn write_tool_set(
         .map_err(|err| format!("failed to record the tool set: {err}"))
 }
 
-/// Serializes read-modify-write of a peer's set (version bump).
-pub(crate) static REGISTRATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+/// Serializes read-modify-write of ONE peer's set (version bump); other
+/// peers' registrations never wait on it.
+pub(crate) fn registration_lock(peers_root: &Path, slug: &str) -> Arc<Mutex<()>> {
+    static LOCKS: LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    LOCKS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .entry(route_key(peers_root, slug))
+        .or_default()
+        .clone()
+}
 
 // ---------------------------------------------------------------------------
 // Per-session enforcement
@@ -330,10 +440,17 @@ pub(crate) fn resolve_session_host_tools(
     };
     let (slug, context_id) = if topic.starts_with(PEER_CONTEXT_TOPIC_PREFIX) {
         match parse_context_topic(topic) {
-            Some((slug, context)) if validate_context_id(context).is_ok() => {
+            Some((slug, context))
+                if validate_context_id(context).is_ok() && peer_slug_is_safe(slug) =>
+            {
                 (slug, Some(context.to_owned()))
             }
-            _ => return SessionHostTools::Unrestricted,
+            // Never an ordinary roster for a malformed context topic.
+            _ => {
+                return SessionHostTools::FailClosed {
+                    slug: String::new(),
+                };
+            }
         }
     } else if let Some(slug) = topic.strip_prefix("peer-") {
         (slug, None)
@@ -342,6 +459,15 @@ pub(crate) fn resolve_session_host_tools(
     };
     if !peer_slug_is_safe(slug) || !super::app_binding::peer_is_host_owned(peers_root, slug) {
         return SessionHostTools::Unrestricted;
+    }
+    // The topic alone does not identify the caller: any client of the profile
+    // can name `<its own base>#peerctx-<slug>.<id>`. Only sessions on the
+    // peer originator's base key (the host's) are the app's sessions; every
+    // other one gets no tools at all.
+    if !session_is_on_originator_base(peers_root, slug, session) {
+        return SessionHostTools::FailClosed {
+            slug: slug.to_owned(),
+        };
     }
     match read_tool_set(peers_root, slug) {
         StoredToolSet::None => SessionHostTools::Unrestricted,
@@ -353,6 +479,25 @@ pub(crate) fn resolve_session_host_tools(
         StoredToolSet::Unreadable => SessionHostTools::FailClosed {
             slug: slug.to_owned(),
         },
+    }
+}
+
+/// Whether `session` shares the base key of peer `slug`'s recorded
+/// originator. A missing or unreadable originator is `false`.
+pub(crate) fn session_is_on_originator_base(
+    peers_root: &Path,
+    slug: &str,
+    session: &SessionKey,
+) -> bool {
+    let Some(dir) = staged_peer_dir(peers_root, slug) else {
+        return false;
+    };
+    match peer_io::read_peer_file(&dir, "originator", peer_io::PEER_FILE_READ_CAP_SMALL) {
+        Some(recorded) => {
+            let originator = SessionKey(recorded.trim().to_owned());
+            !originator.0.is_empty() && originator.base_key() == session.base_key()
+        }
+        None => false,
     }
 }
 
@@ -373,7 +518,9 @@ pub(crate) fn apply_session_host_tools(
             context_id,
             set,
         } => {
-            registry.retain(|name| set.generic_tools.iter().any(|allowed| allowed == name));
+            registry.retain(|name| {
+                !is_escape_tool(name) && set.generic_tools.iter().any(|allowed| allowed == name)
+            });
             if set.tools.is_empty() {
                 return;
             }
@@ -385,6 +532,7 @@ pub(crate) fn apply_session_host_tools(
                 turn_id: turn_id.to_owned(),
                 version: set.version,
                 call_timeout: Duration::from_millis(set.call_timeout_ms),
+                approval_ttl: Duration::from_secs(set.approval_ttl_secs),
                 max_result_bytes: set.max_result_bytes,
             });
             let ttl = Duration::from_secs(set.approval_ttl_secs);
@@ -410,16 +558,37 @@ pub(crate) fn apply_session_host_tools(
 /// Sends one notification to the host connection; `false` when it is gone.
 pub(crate) type HostSend = Arc<dyn Fn(&'static str, Value) -> bool + Send + Sync>;
 
-struct PendingCall {
+/// What the audit needs to know about a call after it left the pending set.
+#[derive(Clone)]
+struct CallMeta {
     route_key: String,
+    slug: String,
+    context_id: Option<String>,
+    session_id: SessionKey,
+    turn_id: String,
+    version: u64,
+    tool: String,
+    tool_call_id: String,
+    risk: &'static str,
+}
+
+struct PendingCall {
+    meta: CallMeta,
     max_result_bytes: usize,
     tx: tokio::sync::oneshot::Sender<HostToolCallOutcome>,
+    /// Woken by an "awaiting confirmation" acknowledgement.
+    ack: Arc<tokio::sync::Notify>,
 }
+
+/// Calls the kernel stopped waiting for, kept so a late result is audited.
+const FINISHED_RETENTION: Duration = Duration::from_secs(3_600);
+const FINISHED_MAX: usize = 1_024;
 
 #[derive(Default)]
 struct HostToolHub {
     routes: Mutex<HashMap<String, HostSend>>,
     pending: Mutex<HashMap<String, PendingCall>>,
+    finished: Mutex<HashMap<String, (CallMeta, Instant)>>,
     occurrences: Mutex<HashMap<String, Instant>>,
 }
 
@@ -439,6 +608,26 @@ pub(crate) fn set_host_route(peers_root: &Path, slug: &str, send: HostSend) {
         .insert(route_key(peers_root, slug), send);
 }
 
+/// Drop the route if it is still `send` (its connection closed).
+fn drop_route_if(key: &str, send: &HostSend) {
+    let mut routes = HUB.routes.lock().unwrap_or_else(|p| p.into_inner());
+    if routes
+        .get(key)
+        .is_some_and(|current| Arc::ptr_eq(current, send))
+    {
+        routes.remove(key);
+    }
+}
+
+/// A `peer/tool/result` from the host.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum HostReply {
+    /// The call's final result.
+    Final(HostToolCallOutcome),
+    /// The app is asking the person; keep waiting (up to the approval TTL).
+    AwaitingConfirmation,
+}
+
 /// Result of `peer/tool/result`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CompleteCall {
@@ -448,28 +637,101 @@ pub(crate) enum CompleteCall {
         bytes: usize,
         max: usize,
     },
+    /// The acknowledgement extended the wait.
+    Acknowledged,
 }
 
-/// Complete a pending call of the peer at `peers_root`/`slug`.
+/// Append one audit row to the peer's `tool_audit.jsonl`, unless the file
+/// has reached its cap (then one `audit_full` marker is kept at the end).
+pub(crate) fn append_audit(peers_root: &Path, slug: &str, row: &Value) {
+    let Some(dir) = staged_peer_dir(peers_root, slug) else {
+        return;
+    };
+    let size = std::fs::symlink_metadata(dir.join(TOOL_AUDIT_LEAF))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let line = if size >= AUDIT_MAX_BYTES {
+        return;
+    } else if size + 1_024 >= AUDIT_MAX_BYTES {
+        json!({ "ts": chrono::Utc::now().to_rfc3339(), "audit_full": true }).to_string()
+    } else {
+        row.to_string()
+    };
+    if let Err(error) = peer_io::append_peer_line(&dir, TOOL_AUDIT_LEAF, &format!("{line}\n")) {
+        tracing::warn!(slug, %error, "failed to append the peer tool audit row");
+    }
+}
+
+/// Upper bound of `tool_audit.jsonl`; the host owns rotation.
+pub(crate) const AUDIT_MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+fn late_result_row(meta: &CallMeta, call_id: &str, reply: &HostReply) -> Value {
+    let outcome = match reply {
+        HostReply::Final(HostToolCallOutcome::Ok(_)) => "ok".to_owned(),
+        HostReply::Final(HostToolCallOutcome::Error { kind, .. }) => format!("error:{kind}"),
+        HostReply::AwaitingConfirmation => "awaiting_confirmation".to_owned(),
+    };
+    json!({
+        "ts": chrono::Utc::now().to_rfc3339(),
+        "peer": meta.slug,
+        "context_id": meta.context_id,
+        "session_id": meta.session_id,
+        "turn_id": meta.turn_id,
+        "tools_version": meta.version,
+        "tool": meta.tool,
+        "tool_call_id": meta.tool_call_id,
+        "call_id": call_id,
+        "risk": meta.risk,
+        "decision": "late_result",
+        "outcome": outcome,
+    })
+}
+
+/// Complete (or acknowledge) a pending call of the peer at
+/// `peers_root`/`slug`. A result for a call the kernel stopped waiting for is
+/// refused and audited as `late_result`.
 pub(crate) fn complete_host_call(
     peers_root: &Path,
     slug: &str,
     call_id: &str,
-    outcome: HostToolCallOutcome,
+    reply: HostReply,
 ) -> Result<CompleteCall, String> {
     let key = route_key(peers_root, slug);
-    let pending = {
-        let mut pending = HUB.pending.lock().unwrap_or_else(|p| p.into_inner());
-        match pending.get(call_id) {
-            Some(call) if call.route_key == key => pending.remove(call_id),
-            _ => None,
+    let mut pending = HUB.pending.lock().unwrap_or_else(|p| p.into_inner());
+    let owned = pending
+        .get(call_id)
+        .is_some_and(|call| call.meta.route_key == key);
+    if !owned {
+        drop(pending);
+        let finished = HUB
+            .finished
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(call_id)
+            .filter(|(meta, _)| meta.route_key == key)
+            .map(|(meta, _)| meta.clone());
+        if let Some(meta) = finished {
+            append_audit(peers_root, slug, &late_result_row(&meta, call_id, &reply));
+            return Err(format!(
+                "call '{call_id}' already ended (timed out or cancelled); the late result \
+                 was recorded but not given to the model"
+            ));
         }
-    };
-    let Some(call) = pending else {
         return Err(format!(
             "no pending call '{call_id}' for peer '{slug}' (finished, timed out or cancelled)"
         ));
+    }
+    let outcome = match reply {
+        HostReply::AwaitingConfirmation => {
+            if let Some(call) = pending.get(call_id) {
+                call.ack.notify_one();
+            }
+            return Ok(CompleteCall::Acknowledged);
+        }
+        HostReply::Final(outcome) => outcome,
     };
+    let call = pending.remove(call_id).expect("checked above");
+    drop(pending);
     let (outcome, status) = match outcome {
         HostToolCallOutcome::Ok(data) => {
             let bytes = serde_json::to_string(&data).map(|s| s.len()).unwrap_or(0);
@@ -497,11 +759,13 @@ pub(crate) fn complete_host_call(
     Ok(status)
 }
 
-/// Removes a pending call and tells the host to stop it unless disarmed.
+/// Removes a pending call when the wait ends for any reason; if the kernel
+/// gave up on it (timeout or turn interrupt), tells the host to stop it and
+/// remembers it so a late result is audited.
 struct PendingGuard {
     call_id: String,
     send: HostSend,
-    armed: bool,
+    reason: &'static str,
 }
 
 impl Drop for PendingGuard {
@@ -510,14 +774,29 @@ impl Drop for PendingGuard {
             .pending
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .remove(&self.call_id)
-            .is_some();
-        if self.armed && removed {
-            let _ = (self.send)(
-                PEER_TOOL_CANCEL_NOTIFICATION,
-                json!({ "call_id": self.call_id, "reason": "cancelled" }),
-            );
+            .remove(&self.call_id);
+        let Some(call) = removed else {
+            return;
+        };
+        {
+            let mut finished = HUB.finished.lock().unwrap_or_else(|p| p.into_inner());
+            let now = Instant::now();
+            finished.retain(|_, (_, at)| now.duration_since(*at) < FINISHED_RETENTION);
+            if finished.len() >= FINISHED_MAX {
+                if let Some(oldest) = finished
+                    .iter()
+                    .min_by_key(|(_, (_, at))| *at)
+                    .map(|(id, _)| id.clone())
+                {
+                    finished.remove(&oldest);
+                }
+            }
+            finished.insert(self.call_id.clone(), (call.meta, now));
         }
+        let _ = (self.send)(
+            PEER_TOOL_CANCEL_NOTIFICATION,
+            json!({ "call_id": self.call_id, "reason": self.reason }),
+        );
     }
 }
 
@@ -530,6 +809,8 @@ pub(crate) struct TurnHostToolRouter {
     pub(crate) turn_id: String,
     pub(crate) version: u64,
     pub(crate) call_timeout: Duration,
+    /// How long a call may wait on the person (the app's confirmation sheet).
+    pub(crate) approval_ttl: Duration,
     pub(crate) max_result_bytes: usize,
 }
 
@@ -544,11 +825,12 @@ impl TurnHostToolRouter {
 
 #[async_trait::async_trait]
 impl HostToolRouter for TurnHostToolRouter {
-    fn claim_occurrence(&self, tool_call_id: &str) -> bool {
-        // Same occurrence shape as `peer_send_input` (calling session, turn,
-        // provider tool-call id), scoped to this profile's peers root.
+    fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> bool {
+        // The `peer_send_input` occurrence shape (calling session, turn,
+        // provider tool-call id) plus the argument digest, scoped to this
+        // profile's peers root.
         let key = format!(
-            "{}\u{0}{}/{}/{tool_call_id}",
+            "{}\u{0}{}/{}/{tool_call_id}/{args_digest}",
             self.peers_root.display(),
             self.session_id.0,
             self.turn_id
@@ -578,10 +860,12 @@ impl HostToolRouter for TurnHostToolRouter {
             );
         };
         let call_id = format!("ptc-{}", uuid::Uuid::new_v4().simple());
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        let ack = Arc::new(tokio::sync::Notify::new());
         {
             let mut pending = HUB.pending.lock().unwrap_or_else(|p| p.into_inner());
-            if pending.values().filter(|p| p.route_key == key).count() >= MAX_PENDING_CALLS_PER_PEER
+            if pending.values().filter(|p| p.meta.route_key == key).count()
+                >= MAX_PENDING_CALLS_PER_PEER
             {
                 return Self::error(
                     "host_busy",
@@ -591,17 +875,40 @@ impl HostToolRouter for TurnHostToolRouter {
             pending.insert(
                 call_id.clone(),
                 PendingCall {
-                    route_key: key,
+                    meta: CallMeta {
+                        route_key: key.clone(),
+                        slug: self.slug.clone(),
+                        context_id: self.context_id.clone(),
+                        session_id: self.session_id.clone(),
+                        turn_id: self.turn_id.clone(),
+                        version: self.version,
+                        tool: call.name.clone(),
+                        tool_call_id: call.tool_call_id.clone(),
+                        risk: call.risk.as_str(),
+                    },
                     max_result_bytes: self.max_result_bytes,
                     tx,
+                    ack: ack.clone(),
                 },
             );
         }
+        // Dropped on every exit: a turn interrupt drops this future and the
+        // guard cancels the call with the host.
         let mut guard = PendingGuard {
             call_id: call_id.clone(),
             send: send.clone(),
-            armed: true,
+            reason: "cancelled",
         };
+        // A call the app must confirm with the person waits as long as an
+        // approval would; any other call waits `call_timeout`, extended to
+        // the approval TTL when the host acknowledges it is asking the person.
+        let started = tokio::time::Instant::now();
+        let mut deadline = started
+            + if call.confirm_required {
+                self.approval_ttl.max(self.call_timeout)
+            } else {
+                self.call_timeout
+            };
         let delivered = send(
             PEER_TOOL_CALL_NOTIFICATION,
             json!({
@@ -611,42 +918,57 @@ impl HostToolRouter for TurnHostToolRouter {
                 "turn_id": self.turn_id,
                 "call_id": call_id,
                 "tool_call_id": call.tool_call_id,
+                "args_digest": call.args_digest,
                 "name": call.name,
                 "args": call.args,
                 "risk": call.risk.as_str(),
                 "confirm_required": call.confirm_required,
-                "timeout_ms": self.call_timeout.as_millis() as u64,
+                "timeout_ms": deadline.duration_since(started).as_millis() as u64,
                 "tools_version": self.version,
             }),
         );
         if !delivered {
-            guard.armed = false;
+            HUB.pending
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .remove(&call_id);
+            drop_route_if(&key, &send);
             return Self::error("host_unavailable", "the app's host connection is closed");
         }
-        match tokio::time::timeout(self.call_timeout, rx).await {
-            Ok(Ok(outcome)) => {
-                guard.armed = false;
-                outcome
+        loop {
+            tokio::select! {
+                result = &mut rx => {
+                    return match result {
+                        Ok(outcome) => outcome,
+                        Err(_) => Self::error(
+                            "cancelled",
+                            "the call was dropped before the app answered",
+                        ),
+                    };
+                }
+                _ = ack.notified(), if call.gated => {
+                    deadline = deadline.max(started + self.approval_ttl);
+                }
+                _ = tokio::time::sleep_until(deadline) => break,
             }
-            Ok(Err(_)) => {
-                guard.armed = false;
-                Self::error("cancelled", "the call was dropped before the app answered")
-            }
-            Err(_) => {
-                guard.armed = false;
-                drop(guard);
-                let _ = send(
-                    PEER_TOOL_CANCEL_NOTIFICATION,
-                    json!({ "call_id": call_id, "reason": "timeout" }),
-                );
-                Self::error(
-                    "timeout",
-                    format!(
-                        "the app did not answer within {} ms",
-                        self.call_timeout.as_millis()
-                    ),
-                )
-            }
+        }
+        guard.reason = "timeout";
+        drop(guard);
+        let waited = deadline.duration_since(started).as_millis();
+        if call.risk == HostToolRisk::Read {
+            Self::error(
+                "timeout",
+                format!("the app did not answer within {waited} ms"),
+            )
+        } else {
+            Self::error(
+                "outcome_unknown",
+                format!(
+                    "the app did not answer within {waited} ms, so it is unknown whether it \
+                     did this. Do not retry this call: check the result with a read tool or \
+                     ask the person."
+                ),
+            )
         }
     }
 
@@ -667,12 +989,7 @@ impl HostToolRouter for TurnHostToolRouter {
             "args_bytes": audit.args_bytes,
             "result_bytes": audit.result_bytes,
         });
-        let Some(dir) = staged_peer_dir(&self.peers_root, &self.slug) else {
-            return;
-        };
-        if let Err(error) = peer_io::append_peer_line(&dir, TOOL_AUDIT_LEAF, &format!("{row}\n")) {
-            tracing::warn!(slug = %self.slug, %error, "failed to append the peer tool audit row");
-        }
+        append_audit(&self.peers_root, &self.slug, &row);
     }
 
     fn call_timeout(&self) -> Duration {
@@ -687,7 +1004,7 @@ pub(crate) fn pending_calls_for(peers_root: &Path, slug: &str) -> Vec<String> {
         .lock()
         .unwrap()
         .iter()
-        .filter(|(_, call)| call.route_key == key)
+        .filter(|(_, call)| call.meta.route_key == key)
         .map(|(id, _)| id.clone())
         .collect()
 }

@@ -288,6 +288,7 @@ async fn request_command_approval(
                     body: format!("Run command: {command}"),
                     command: Some(command.to_owned()),
                     cwd: Some(cwd.to_string_lossy().into_owned()),
+                    once_only: false,
                 })
                 .await;
             if matches!(decision, ToolApprovalDecision::Deny) {

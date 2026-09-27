@@ -56,7 +56,7 @@ never silently weakens a tool:
 | Field | Meaning |
 | --- | --- |
 | `name` | `<app>.<tool>`: 2–4 `.`-separated segments of `[a-z][a-z0-9_]{0,31}`. The model sees it with `.` replaced by `_` (`news.list` → `news_list`; providers refuse `.` in tool names). A registration whose model names collide with each other or with an allowed generic tool is refused. |
-| `input_schema` | JSON Schema object (`"type": "object"`). ≤ 16 KiB. |
+| `input_schema` | JSON Schema object (`"type": "object"`). ≤ 16 KiB. Checked structurally against the meta-schema's shapes: `type` names JSON Schema types, `properties` is an object of schemas, `required` is an array of strings, `items`, `enum` and `anyOf`/`oneOf`/`allOf` are well formed, nesting ≤ 10. |
 | `output_schema` | Optional, same rules. Stored and echoed; not enforced by the kernel. |
 | `risk` | `read`, `act` or `destructive`. |
 | `background` | May run in a turn with no interactive client. Default `false`. |
@@ -65,19 +65,31 @@ never silently weakens a tool:
 | `shareable` | App Hub metadata; accepted, not acted on yet (see follow-ups). |
 
 `generic_tools` names kernel tools the app may use (`deep_search`, `read_file`,
-…); names that do not exist in a turn's registry are simply absent. Limits:
-64 app tools, 32 generic tools, 2 KiB per description. Options are clamped:
+…); names that do not exist in a turn's registry are simply absent. Tools
+that run work outside the turn's registry, reach another session, schedule
+unfiltered runs or change the roster are refused (`peer_tools_invalid`) and
+are also stripped at every turn: `spawn`, `spawn_agent`, `send_input`,
+`resume_agent`, `wait_agent`, `close_agent`, `delegate`, `delegate_task`,
+`run_pipeline`, `manage_skills`, `configure_tool`, `cron`, `monitor_create`,
+and every `peer_*`, `goal_*`, `admin_*` and `mcp_*` tool. (A child agent or
+pipeline builds its own registry with the built-in tools, shell and file
+writes included, so allowing one would escape the set.)
+
+Limits: 64 app tools, 32 generic tools, 2 KiB per description. Options are
+clamped, and a host may raise the defaults up to the maximum:
 `call_timeout_ms` 1–300 000 (default 30 000), `approval_ttl_secs` 1–604 800
 (default 3 600), `max_result_bytes` 1–1 048 576 (default 262 144).
 
 The set **replaces** the previous one whole; `version` increments on every
 registration (the first is 1). With `if_version`, a registration whose
 expected version is not the current one is refused
-(`peer_tools_version_conflict`, `data.current_version`). The set is durable
-(`peers/<slug>/host_tools.json`) and applies from the next turn start. The
-registering connection becomes the peer's **tool host**: every later
-`peer/tool/call` goes to it (a later registration from another connection
-moves the route).
+(`peer_tools_version_conflict`, `data.current_version`). Registrations of one
+peer are serialized; different peers never wait on each other. The set is
+durable (`peers/<slug>/host_tools.json`) and applies from the next turn
+start. The registering connection becomes the peer's **tool host**: every
+later `peer/tool/call` goes to it (a later registration from another
+connection moves the route; a route whose connection is found closed is
+dropped).
 
 Typed `data.kind`: `peer_host_token_mismatch`, `peer_originator_mismatch`,
 `peer_not_found`, `peer_not_host_bound`, `peer_closed`, `peer_tools_invalid`,
@@ -86,8 +98,8 @@ Typed `data.kind`: `peer_host_token_mismatch`, `peer_originator_mismatch`,
 ### `peer/tool/call` (server → host notification)
 
 ```
-{peer, session_id, context_id, turn_id, call_id, tool_call_id, name, args,
- risk, confirm_required, timeout_ms, tools_version}
+{peer, session_id, context_id, turn_id, call_id, tool_call_id, args_digest,
+ name, args, risk, confirm_required, timeout_ms, tools_version}
 ```
 
 `session_id` / `context_id` identify the calling session (the peer's own, or
@@ -95,33 +107,59 @@ one of its request contexts): the caller's identity for the host service.
 `name` is the declared name (`news.list`). `confirm_required` is true when
 the app must confirm the call with the person itself (`confirm: app`, person
 present); it is false when the kernel already holds the person's approval,
-so the person is never asked twice. The
-notification is ephemeral: if the host connection is gone the call fails
-with `host_unavailable`; it is never replayed.
+so the person is never asked twice. `timeout_ms` is how long the kernel will
+wait. The notification is ephemeral: if the host connection is gone the call
+fails with `host_unavailable`; it is never replayed.
+
+**Host obligations (MUST).** A host:
+
+- MUST execute a call at most once per `(session_id, turn_id, tool_call_id,
+  args_digest)`, answering a repeat with the first result;
+- MUST NOT execute a call after it received `peer/tool/cancel` for its
+  `call_id`, nor after `timeout_ms` has passed without an
+  `awaiting_confirmation` acknowledgement;
+- MUST send `status: "awaiting_confirmation"` before showing its own
+  confirmation sheet for a gated call whose `confirm_required` is false
+  (for `confirm_required: true` the kernel already waits the approval TTL).
 
 ### `peer/tool/result`
 
 ```
-{session_id, peer, host_token, profile_id?, call_id, ok,
- data?, error?: {kind?, message} | string}
-→ {call_id, accepted: true, result_too_large?: {bytes, max}}
+{session_id, peer, host_token, profile_id?, call_id,
+ ok?, data?, error?: {kind?, message} | string,
+ status?: "awaiting_confirmation"}
+→ {call_id, accepted: true, result_too_large?: {bytes, max},
+   awaiting_confirmation?: true}
 ```
 
-`data` above `max_result_bytes` (serialized) is not given to the model: the
-call ends with `result_too_large`. An error message is capped at 4 KiB.
-A result for a call that finished, timed out or was cancelled is refused
-(`peer_tool_call_not_found`).
+`status: "awaiting_confirmation"` is not a result: for a gated call it
+extends the kernel's wait to the approval TTL (counted from the call), and
+the host answers again later. `data` above `max_result_bytes` (serialized) is
+not given to the model: the call ends with `result_too_large`. An error
+`kind` must match `[a-z0-9_]{1,32}` and reaches the model as `host:<kind>`
+(anything else becomes `host:error`), so a host can never pose as a kernel
+outcome; the message is capped at 4 KiB. A result for a call that finished,
+timed out or was cancelled is refused (`peer_tool_call_not_found`) and, when
+the kernel still remembers the call (one hour, 1 024 calls), audited as
+`late_result`.
 
 ### `peer/tool/cancel` (server → host notification)
 
-`{call_id, reason}`, `reason` = `timeout` (no result within `timeout_ms`) or
-`cancelled` (the turn was interrupted while the call was in flight).
+`{call_id, reason}`, `reason` = `timeout` (no result within the wait) or
+`cancelled` (the turn was interrupted while the call was in flight). After
+it the host MUST NOT execute the call.
 
 ## Enforcement
 
 For a session whose topic is `peer-<slug>` of a host-owned peer with a
 registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
 
+- **Caller identity.** The topic alone names no caller: any client of the
+  profile can open `<its own base>#peerctx-<slug>.<id>`. Only a session on
+  the base key of the peer's recorded originator (the host's) is one of the
+  app's sessions. A session with a peer or context topic on any other base
+  key, or with a malformed context topic, gets no tools at all, whether or
+  not a set is registered.
 - **Visibility.** The turn's tool registry is cut down to the allowed generic
   tools and then gets one routed tool per declared app tool. Nothing else is
   advertised, and a call to any other name is refused by the registry
@@ -161,20 +199,45 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
     host with `confirm_required: false`.
   - A turn with no approval bridge never runs a gated call that needs an
     approval: error (`approval_unavailable`), host not called.
-  - One approval per occurrence: the kernel claims
-    `<session>/<turn>/<tool_call_id>` (the `peer_send_input` occurrence
-    shape) before raising an approval; a re-dispatch of the same occurrence
-    is refused (`duplicate`) instead of asking twice.
-- **Routing.** At most 16 calls in flight per peer (`host_busy`); each call
-  waits at most `call_timeout_ms` (`timeout`, then `peer/tool/cancel`).
+  - Kernel approvals are **once-only**: they cover exactly this call and
+    its arguments. A remembered approval scope (`approve_for_tool`,
+    `approve_for_session`, `approve_for_turn`) never answers one, and
+    `approval/respond` records no scope from one (the decision applies to
+    this call only). Otherwise a single "always" would approve every later
+    call of the tool on the session, whatever its arguments and whoever
+    started the run.
+  - The person-absent approvals of `confirm: app` and `confirm: host` tools
+    are raised on the peer's own session (`peer-<slug>`); the host surfaces
+    them in the app's conversation (for native modules, OctoSense's
+    `crates/app-peers` broker does).
+- **One execution per occurrence.** Every non-`read` call is claimed before
+  any approval or host call under
+  `<session>/<turn>/<tool_call_id>/<argument digest>` (the `peer_send_input`
+  occurrence shape plus a SHA-256 of the arguments). A re-dispatch of the
+  same call is refused (`duplicate`): it neither asks again nor reaches the
+  host again. A provider that reuses tool-call ids (`call_1`) with other
+  arguments is a different occurrence. `read` calls may repeat.
+- **Routing and waiting.** At most 16 calls in flight per peer
+  (`host_busy`). A call waits `call_timeout_ms`; a `confirm_required` call
+  waits the approval TTL instead (the app's sheet may take as long as an
+  approval would), and a gated call's wait extends to the approval TTL on an
+  `awaiting_confirmation` acknowledgement. When the wait runs out the kernel
+  sends `peer/tool/cancel`, and:
+  - a `read` call ends with `timeout`;
+  - any other call ends with `outcome_unknown`: the model is told the app may
+    or may not have acted and must not retry, but check with a read tool or
+    ask the person. The audit outcome is `unknown`.
 - **Audit.** Every call, including refused ones, appends one JSON line to
   `peers/<slug>/tool_audit.jsonl`: `ts, peer, context_id, session_id,
   turn_id, tools_version, tool, tool_call_id, risk, decision, outcome,
   duration_ms, args_bytes, result_bytes`. `decision` is one of `allowed`,
   `approved`, `app_confirms`, `denied`, `expired`, `approval_unavailable`,
-  `duplicate`, `not_background`, `invalid_args`; `outcome` is `ok`,
-  `error:<kind>` or `not_called`. Arguments and results themselves are not
-  logged.
+  `duplicate`, `not_background`, `invalid_args`, or `late_result` (a host
+  answer after the kernel stopped waiting, with its `call_id`); `outcome` is
+  `ok`, `error:<kind>`, `unknown` or `not_called`. Arguments and results
+  themselves are not logged. The file is capped at 16 MiB: at the cap one
+  `audit_full` marker is written and later rows are dropped; the host owns
+  rotation.
 
 ## One declaration source: `tools.json`
 
@@ -207,33 +270,50 @@ never declares its tools a second way.
   events (News M3) run through the host's AppUI connection and get the
   normal approval bridge. A runner with no client at all refuses gated tools
   today; parking those for a later client is a follow-up.
-- **Audit retention.** `tool_audit.jsonl` grows without rotation; the host
-  owns retention of the peer dir, as for transcripts.
-- **Skill actions** (`skill/action/invoke`) on a peer session are
-  client-driven and are not filtered by the set.
+- **Audit rotation.** `tool_audit.jsonl` stops at 16 MiB; rotating it is the
+  host's, as for transcripts.
+- **Paths that do not build the turn registry here** are not filtered by the
+  set: `skill/action/invoke` on a peer session (client-driven),
+  `review/start` (its own review agent), and `octos chat` / gateway sessions
+  (which never serve host-owned peers).
+- **End-to-end turn test.** The enforcement is exercised on the registry a
+  turn uses (`apply_session_host_tools` after the session's own roster); a
+  test that drives `run_standalone_turn` with a scripted model is a
+  follow-up.
 
 ## Tests
 
-- `peer_host_tool` unit tests (octos-agent):
+- `peer_host_tool` unit tests (octos-agent, 10):
   `should_run_read_and_act_tools_without_approval`,
-  `should_run_destructive_only_after_an_explicit_approve_with_the_exact_arguments`,
+  `should_run_destructive_only_after_an_explicit_approve_with_the_exact_arguments`
+  (the request is once-only),
   `should_never_call_the_host_when_approval_is_declined_expired_or_unavailable`,
   `should_gate_an_outward_act_tool_like_destructive`,
-  `should_raise_one_approval_per_occurrence`,
+  `should_raise_one_approval_per_occurrence` (and a reused id with other
+  arguments is a new call),
+  `should_send_an_act_call_once_but_let_reads_repeat`,
+  `should_report_an_unanswered_act_call_as_unknown_not_failed`,
   `should_let_the_app_confirm_when_the_person_is_present`,
   `should_ask_for_a_kernel_approval_when_an_app_confirmed_tool_runs_without_the_person`,
   `should_refuse_foreground_tools_unattended_and_bad_arguments`
-- `peers::host_tools` unit tests: `should_validate_names_schemas_and_collisions`,
+- `peers::host_tools` unit tests (2):
+  `should_validate_names_schemas_and_collisions`,
   `should_accept_a_tools_json_entry_and_refuse_unknown_fields`
-- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions):
+- `peer_host_tools_tests` (octos-cli, real profile runtime and sessions, 14):
   `should_advertise_and_dispatch_the_peer_tool_methods`,
   `should_refuse_a_registration_without_the_host_token`,
   `should_offer_exactly_the_registered_tools_and_refuse_an_unlisted_one`,
   `should_route_an_app_tool_call_to_the_host_and_back`,
-  `should_time_out_and_cancel_a_call_the_host_never_answers`,
+  `should_time_out_and_cancel_a_call_the_host_never_answers` (late result
+  audited),
   `should_run_a_destructive_tool_only_after_the_persons_approval` (includes
   the system agent's `peer_respond` being refused),
   `should_not_run_a_declined_or_expired_destructive_call_nor_ask_twice`,
   `should_replace_the_tool_set_atomically_and_refuse_a_stale_version`,
-  `should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherwise`
+  `should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherwise`,
+  `should_report_an_unanswered_act_call_as_unknown_and_never_resend_it`,
+  `should_wait_for_the_apps_confirmation_sheet_instead_of_timing_out`,
+  `should_never_answer_or_remember_a_host_tool_approval_by_scope`,
+  `should_give_no_tools_to_a_session_on_a_foreign_base_key`,
+  `should_refuse_generic_tools_that_escape_the_set`
 - `spec_section6_catalog_lists_every_advertised_method`

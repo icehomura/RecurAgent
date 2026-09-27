@@ -5907,6 +5907,9 @@ struct UiProtocolApprovalRequester {
 impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
     async fn request_approval(&self, request: ToolApprovalRequest) -> ToolApprovalDecision {
         let approval_id = ApprovalId::new();
+        // UPCR-2026-035: a once-only approval (a host-routed app tool's exact
+        // call) is never answered by a remembered scope.
+        let once_only = request.once_only;
         let event = approval_event_from_tool_request(
             request,
             self.session_id.clone(),
@@ -5928,10 +5931,13 @@ impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
         // The audit log writer also runs here so auto-resolved decisions
         // appear in the JSON-Lines log next to manual ones (compliance
         // requirement: every decision is recorded).
-        if let Some(hit) =
-            self.contracts
-                .scopes
-                .lookup(&self.session_id, &event.tool_name, &self.turn_id)
+        if let Some(hit) = (!once_only)
+            .then(|| {
+                self.contracts
+                    .scopes
+                    .lookup(&self.session_id, &event.tool_name, &self.turn_id)
+            })
+            .flatten()
         {
             // FIX-01: `ApprovalDecision` is non-Copy because of `Unknown(String)`;
             // clone for the wire payload so the original survives for the
@@ -6017,7 +6023,10 @@ impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
             return ToolApprovalDecision::Deny;
         }
 
-        let response_rx = self.contracts.approvals.request_runtime(event.clone());
+        let response_rx = self
+            .contracts
+            .approvals
+            .request_runtime_with(event.clone(), once_only);
 
         // #1449 drop-guard: arm a guard keyed to THIS pending approval the
         // instant it is registered. If our future is dropped before a clean
@@ -15338,7 +15347,7 @@ fn raw_peer_tools_register(
     connection_profile_id: Option<&str>,
 ) -> Result<Value, RpcError> {
     use crate::peers::host_tools::{
-        REGISTRATION_LOCK, StoredToolSet, build_tool_set, read_tool_set, set_host_route,
+        StoredToolSet, build_tool_set, read_tool_set, registration_lock, set_host_route,
         write_tool_set,
     };
     let params: RawPeerToolsRegisterParams = parse_raw_params(request)?;
@@ -15369,7 +15378,8 @@ fn raw_peer_tools_register(
     }
     let mut set = build_tool_set(params.tools, params.generic_tools, params.options)
         .map_err(|err| host_peer_error("peer_tools_invalid", err))?;
-    let _guard = REGISTRATION_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let lock = registration_lock(&peers_root, &slug);
+    let _guard = lock.lock().unwrap_or_else(|p| p.into_inner());
     let current = match read_tool_set(&peers_root, &slug) {
         StoredToolSet::Registered(existing) => existing.version,
         StoredToolSet::None | StoredToolSet::Unreadable => 0,
@@ -15433,7 +15443,11 @@ struct RawPeerToolResultParams {
     #[serde(default)]
     profile_id: Option<String>,
     call_id: String,
+    #[serde(default)]
     ok: bool,
+    /// `"awaiting_confirmation"`: the app is asking the person; not a result.
+    #[serde(default)]
+    status: Option<String>,
     #[serde(default)]
     data: Option<Value>,
     /// `{kind?, message}` or a string.
@@ -15450,7 +15464,7 @@ fn raw_peer_tool_result(
     request: &RpcRequest<Value>,
     connection_profile_id: Option<&str>,
 ) -> Result<Value, RpcError> {
-    use crate::peers::host_tools::{CompleteCall, complete_host_call};
+    use crate::peers::host_tools::{CompleteCall, HostReply, complete_host_call};
     let params: RawPeerToolResultParams = parse_raw_params(request)?;
     let profile_id = raw_scoped_llm_profile_id(
         params.profile_id.clone(),
@@ -15471,15 +15485,23 @@ fn raw_peer_tool_result(
             format!("peer '{slug}' is not a host-owned app peer"),
         ));
     }
-    let outcome = if params.ok {
-        octos_agent::HostToolCallOutcome::Ok(params.data.unwrap_or(Value::Null))
+    let outcome = if params.status.as_deref() == Some("awaiting_confirmation") {
+        None
+    } else if let Some(status) = params.status.as_deref() {
+        return Err(RpcError::invalid_params(format!(
+            "unknown status '{status}' (only \"awaiting_confirmation\")"
+        )));
+    } else if params.ok {
+        Some(octos_agent::HostToolCallOutcome::Ok(
+            params.data.unwrap_or(Value::Null),
+        ))
     } else {
         let (kind, message) = match params.error {
             Some(Value::Object(error)) => (
                 error
                     .get("kind")
                     .and_then(Value::as_str)
-                    .unwrap_or("host_error")
+                    .unwrap_or("error")
                     .to_owned(),
                 error
                     .get("message")
@@ -15487,19 +15509,37 @@ fn raw_peer_tool_result(
                     .unwrap_or("the app reported an error")
                     .to_owned(),
             ),
-            Some(Value::String(message)) => ("host_error".to_owned(), message),
-            _ => (
-                "host_error".to_owned(),
-                "the app reported an error".to_owned(),
-            ),
+            Some(Value::String(message)) => ("error".to_owned(), message),
+            _ => ("error".to_owned(), "the app reported an error".to_owned()),
         };
         let (message, _) = crate::peers::capped_utf8(message, PEER_TOOL_ERROR_MESSAGE_MAX_BYTES);
-        octos_agent::HostToolCallOutcome::Error { kind, message }
+        // A host error kind is `host:<kind>` with `[a-z0-9_]{1,32}`, so it can
+        // never pose as a kernel outcome (`outcome_unknown`, `timeout`, …).
+        let kind = if !kind.is_empty()
+            && kind.len() <= 32
+            && kind
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+        {
+            format!("host:{kind}")
+        } else {
+            "host:error".to_owned()
+        };
+        Some(octos_agent::HostToolCallOutcome::Error { kind, message })
     };
-    let status = complete_host_call(&peers_root, &slug, &params.call_id, outcome)
+    let reply = match outcome {
+        Some(outcome) => HostReply::Final(outcome),
+        None => HostReply::AwaitingConfirmation,
+    };
+    let status = complete_host_call(&peers_root, &slug, &params.call_id, reply)
         .map_err(|err| host_peer_error("peer_tool_call_not_found", err))?;
     Ok(match status {
         CompleteCall::Accepted => json!({ "call_id": params.call_id, "accepted": true }),
+        CompleteCall::Acknowledged => json!({
+            "call_id": params.call_id,
+            "accepted": true,
+            "awaiting_confirmation": true,
+        }),
         CompleteCall::TooLarge { bytes, max } => json!({
             "call_id": params.call_id,
             "accepted": true,
@@ -26057,6 +26097,39 @@ fn audit_approval_decided(
     }
 }
 
+/// FIX-06: record the remembered scope the person picked, if any. A once-only
+/// approval (UPCR-2026-035) records none: it answered exactly one call.
+/// Returns whether a scope was recorded.
+fn record_approval_scope(
+    contracts: &UiProtocolContractStores,
+    session_id: &SessionKey,
+    scope_string: Option<&str>,
+    context: Option<&crate::contracts::approvals::RespondedApprovalContext>,
+    decision: ApprovalDecision,
+) -> bool {
+    let (Some(scope_string), Some(context)) = (scope_string, context) else {
+        return false;
+    };
+    let scope_kind = ApprovalScopeKind::from_scope_str(scope_string);
+    if !scope_kind.is_recordable() {
+        return false;
+    }
+    if context.once_only {
+        tracing::info!(
+            target: "octos.approvals.decision",
+            tool = %context.tool_name,
+            scope = scope_string,
+            "not recording a remembered scope from a once-only approval"
+        );
+        return false;
+    }
+    let match_key = match_key_for(scope_kind, &context.tool_name, &context.turn_id);
+    contracts
+        .scopes
+        .record(session_id, scope_kind, match_key, decision);
+    true
+}
+
 async fn handle_approval_respond(
     ws: &WsConnection,
     state: &Arc<AppState>,
@@ -26105,16 +26178,13 @@ async fn handle_approval_respond(
     // unknown scope strings collapse to `approve_once` and are not recorded
     // — preserving backward compat with clients that send future scope
     // tokens we don't yet recognise.
-    if let (Some(scope_string), Some(context)) = (scope_string.as_deref(), outcome.context.as_ref())
-    {
-        let scope_kind = ApprovalScopeKind::from_scope_str(scope_string);
-        if scope_kind.is_recordable() {
-            let match_key = match_key_for(scope_kind, &context.tool_name, &context.turn_id);
-            contracts
-                .scopes
-                .record(&session_id, scope_kind, match_key, decision);
-        }
-    }
+    record_approval_scope(
+        contracts,
+        &session_id,
+        scope_string.as_deref(),
+        outcome.context.as_ref(),
+        decision,
+    );
 
     let result = match serde_json::to_value(&outcome.result) {
         Ok(value) => value,

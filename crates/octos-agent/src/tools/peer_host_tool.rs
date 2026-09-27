@@ -27,9 +27,14 @@
 //!   goes straight to the host when attended, with `confirm_required: true`
 //!   and no kernel approval, so the person is never asked twice. With the
 //!   person absent it needs the kernel approval exactly like `confirm: host`.
-//! - One approval per occurrence: the router claims the occurrence
-//!   (`<session>/<turn>/<tool_call_id>`) before an approval is raised, so a
-//!   re-dispatch of the same call never raises a second one.
+//! - Every non-`read` call is claimed once, before any approval or host
+//!   call, under `<session>/<turn>/<tool_call_id>/<argument digest>`: a
+//!   re-dispatch of the same call never raises a second approval or reaches
+//!   the host twice, while a provider that reuses ids (`call_1`) with other
+//!   arguments is not mistaken for a duplicate.
+//! - A non-`read` call whose host answer does not arrive in time ends as
+//!   `outcome_unknown` ("do not retry"), never as a plain failure the model
+//!   would retry.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -138,6 +143,11 @@ pub struct HostToolCall {
     /// The app must confirm with the person itself (`confirm: app`,
     /// attended). `false` when the kernel already has the person's approval.
     pub confirm_required: bool,
+    /// Destructive or outward: the host may still be waiting on the person,
+    /// so the router honours an "awaiting confirmation" acknowledgement.
+    pub gated: bool,
+    /// `sha256:<hex>` of the arguments, for the host's own dedupe.
+    pub args_digest: String,
 }
 
 /// How a routed call ended.
@@ -157,9 +167,11 @@ pub struct HostToolAudit {
     pub tool_call_id: String,
     pub risk: &'static str,
     /// `allowed`, `approved`, `app_confirms`, `denied`, `expired`,
-    /// `approval_unavailable`, `duplicate`, `not_background`, `invalid_args`.
+    /// `approval_unavailable`, `duplicate`, `not_background`, `invalid_args`
+    /// (and `late_result`, written by the router).
     pub decision: &'static str,
-    /// `ok`, `error:<kind>`, or `not_called`.
+    /// `ok`, `error:<kind>`, `unknown` (no answer in time; the app may have
+    /// acted), or `not_called`.
     pub outcome: String,
     pub duration_ms: u64,
     pub args_bytes: usize,
@@ -169,9 +181,9 @@ pub struct HostToolAudit {
 /// The serve-side half: delivers calls to the host and records them.
 #[async_trait]
 pub trait HostToolRouter: Send + Sync {
-    /// Claim the approval occurrence of `tool_call_id` in this turn. `false`
-    /// means it was already claimed: the call is a duplicate.
-    fn claim_occurrence(&self, tool_call_id: &str) -> bool;
+    /// Claim the occurrence `(tool_call_id, args_digest)` in this turn.
+    /// `false` means it was already claimed: the call is a duplicate.
+    fn claim_occurrence(&self, tool_call_id: &str, args_digest: &str) -> bool;
     /// Deliver the call to the host and wait for its result (the router owns
     /// the timeout, cancellation and result size cap).
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome;
@@ -340,19 +352,23 @@ impl Tool for HostRoutedTool {
             ));
         }
 
+        let args_digest = crate::approval::digest_tool_args(args);
+        if self.decl.risk != HostToolRisk::Read
+            && !self.router.claim_occurrence(&ctx.tool_id, &args_digest)
+        {
+            return Ok(self.refuse(
+                ctx,
+                started,
+                args_bytes,
+                "duplicate",
+                format!(
+                    "{}: this exact call was already submitted; it is not asked or sent twice",
+                    self.decl.name
+                ),
+            ));
+        }
+
         let decision = if self.decl.requires_kernel_approval(attended) {
-            if !self.router.claim_occurrence(&ctx.tool_id) {
-                return Ok(self.refuse(
-                    ctx,
-                    started,
-                    args_bytes,
-                    "duplicate",
-                    format!(
-                        "{}: this call was already submitted for approval; it is not asked twice",
-                        self.decl.name
-                    ),
-                ));
-            }
             let Some(requester) = approvals else {
                 return Ok(self.refuse(
                     ctx,
@@ -378,6 +394,7 @@ impl Tool for HostRoutedTool {
                 ),
                 command: None,
                 cwd: None,
+                once_only: true,
             };
             match tokio::time::timeout(self.approval_ttl, requester.request_approval(request)).await
             {
@@ -418,6 +435,8 @@ impl Tool for HostRoutedTool {
                 args: args.clone(),
                 risk: self.decl.risk,
                 confirm_required: decision == "app_confirms",
+                gated: self.decl.gated(),
+                args_digest,
             })
             .await;
         let (result, outcome_label, result_bytes) = match outcome {
@@ -451,7 +470,11 @@ impl Tool for HostRoutedTool {
                     })),
                     ..Default::default()
                 },
-                format!("error:{kind}"),
+                if kind == "outcome_unknown" {
+                    "unknown".to_owned()
+                } else {
+                    format!("error:{kind}")
+                },
                 message.len(),
             ),
         };
@@ -485,8 +508,11 @@ mod tests {
 
     #[async_trait]
     impl HostToolRouter for FakeRouter {
-        fn claim_occurrence(&self, id: &str) -> bool {
-            self.claimed.lock().unwrap().insert(id.to_owned())
+        fn claim_occurrence(&self, id: &str, digest: &str) -> bool {
+            self.claimed
+                .lock()
+                .unwrap()
+                .insert(format!("{id}/{digest}"))
         }
         async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
             self.calls.lock().unwrap().push(call.clone());
@@ -626,6 +652,7 @@ mod tests {
         assert_eq!(asked.tool_id, "c1");
         assert_eq!(asked.tool_name, "mail_send");
         assert!(asked.body.contains("\"draft-7\""), "{}", asked.body);
+        assert!(asked.once_only, "never answered or remembered by a scope");
         let calls = router.calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert!(!calls[0].confirm_required, "the person already approved");
@@ -685,9 +712,84 @@ mod tests {
                 .success
         );
         let again = run(&tool, Some(approver.clone()), "c1", json!({"id": 1})).await;
-        assert!(!again.success && again.output.contains("not asked twice"));
+        assert!(!again.success && again.output.contains("not asked or sent twice"));
         assert_eq!(approver.asked(), 1);
         assert_eq!(router.calls.lock().unwrap().len(), 1);
+
+        // A provider reusing `c1` with other arguments is a new call.
+        assert!(
+            run(&tool, Some(approver.clone()), "c1", json!({"id": 2}))
+                .await
+                .success
+        );
+        assert_eq!(approver.asked(), 2);
+        assert!(
+            router.calls.lock().unwrap()[0]
+                .args_digest
+                .starts_with("sha256:")
+        );
+    }
+
+    #[tokio::test]
+    async fn should_send_an_act_call_once_but_let_reads_repeat() {
+        let router = Arc::new(FakeRouter::default());
+        let approver = Approver::new(Some(ToolApprovalDecision::Approve));
+        let act = in_app(decl("news.topics_set", HostToolRisk::Act), &router, TTL);
+        assert!(
+            run(&act, Some(approver.clone()), "c1", json!({"id": 1}))
+                .await
+                .success
+        );
+        let again = run(&act, Some(approver.clone()), "c1", json!({"id": 1})).await;
+        assert!(!again.success && again.output.contains("not asked or sent twice"));
+
+        let read = in_app(decl("news.list", HostToolRisk::Read), &router, TTL);
+        assert!(
+            run(&read, Some(approver.clone()), "c2", json!({"id": 1}))
+                .await
+                .success
+        );
+        assert!(
+            run(&read, Some(approver.clone()), "c2", json!({"id": 1}))
+                .await
+                .success
+        );
+        assert_eq!(router.calls.lock().unwrap().len(), 3);
+        assert_eq!(approver.asked(), 0);
+    }
+
+    #[tokio::test]
+    async fn should_report_an_unanswered_act_call_as_unknown_not_failed() {
+        struct SilentRouter(Mutex<Vec<HostToolAudit>>);
+        #[async_trait]
+        impl HostToolRouter for SilentRouter {
+            fn claim_occurrence(&self, _: &str, _: &str) -> bool {
+                true
+            }
+            async fn call(&self, _: HostToolCall) -> HostToolCallOutcome {
+                HostToolCallOutcome::Error {
+                    kind: "outcome_unknown".into(),
+                    message: "do not retry".into(),
+                }
+            }
+            fn record(&self, audit: HostToolAudit) {
+                self.0.lock().unwrap().push(audit);
+            }
+            fn call_timeout(&self) -> Duration {
+                Duration::from_secs(1)
+            }
+        }
+        let router = Arc::new(SilentRouter(Mutex::new(Vec::new())));
+        let tool = HostRoutedTool::new(
+            decl("news.topics_set", HostToolRisk::Act),
+            router.clone(),
+            TTL,
+            true,
+        );
+        let approver = Approver::new(Some(ToolApprovalDecision::Approve));
+        let result = run(&tool, Some(approver), "c1", json!({"id": 1})).await;
+        assert!(!result.success && result.output.contains("do not retry"));
+        assert_eq!(router.0.lock().unwrap()[0].outcome, "unknown");
     }
 
     #[tokio::test]

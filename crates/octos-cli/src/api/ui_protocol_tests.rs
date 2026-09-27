@@ -9663,6 +9663,7 @@ impl octos_agent::Tool for ContextAwareActionTool {
                         body: "test approval bridge".to_string(),
                         command: None,
                         cwd: None,
+                        once_only: false,
                     })
                     .await,
                 ToolApprovalDecision::Approve
@@ -13986,6 +13987,7 @@ fn shell_approval_event_is_typed_only_after_negotiation() {
         body: "Command:\ncargo test".into(),
         command: Some("cargo test".into()),
         cwd: Some("/Users/yuechen/home/octos".into()),
+        once_only: false,
     };
     let session_id = SessionKey("local:test".into());
     let approval_id = ApprovalId::new();
@@ -14071,6 +14073,7 @@ fn risk_default_is_unspecified_when_manifest_silent() {
         body: "Command:\nls".into(),
         command: Some("ls".into()),
         cwd: Some("/tmp".into()),
+        once_only: false,
     };
     let event = approval_event_from_tool_request(
         request,
@@ -14187,6 +14190,7 @@ fn plugin_high_risk_approval_emits_risk_field_on_wire() {
         body: "Plugin 'weather' tool 'weather_lookup' is declared high risk.".into(),
         command: None,
         cwd: Some("/tmp/weather-plugin".into()),
+        once_only: false,
     };
     let event = approval_event_from_tool_request(
         request,
@@ -14258,6 +14262,7 @@ fn plugin_critical_risk_approval_emits_risk_critical() {
         body: "Plugin 'apocalypse' tool 'destroy_world' is declared critical risk.".into(),
         command: None,
         cwd: None,
+        once_only: false,
     };
     let event = approval_event_from_tool_request(
         request,
@@ -14322,6 +14327,7 @@ fn shell_approval_still_emits_risk_field() {
         body: "Command:\ncargo test".into(),
         command: Some("cargo test".into()),
         cwd: Some("/tmp/work".into()),
+        once_only: false,
     };
     let event = approval_event_from_tool_request(
         request,
@@ -14393,6 +14399,7 @@ fn tool_with_no_risk_classification_does_not_emit_risk_field() {
         body: "Plugin tool approval".into(),
         command: None,
         cwd: Some("/tmp/weather-plugin".into()),
+        once_only: false,
     };
     // `typed_approvals: false` — legacy client.
     let event = approval_event_from_tool_request(
@@ -14429,6 +14436,7 @@ fn approval_cwd_is_sanitized_against_path_spoof() {
         body: "Command:\nls".into(),
         command: Some("ls".into()),
         cwd: Some(spoof_cwd.into()),
+        once_only: false,
     };
     let typed = approval_event_from_tool_request(
         request,
@@ -24044,6 +24052,7 @@ async fn approval_request_closed_ws_keeps_pending_runtime_waiter() {
                 body: "cargo test".into(),
                 command: Some("cargo test".into()),
                 cwd: None,
+                once_only: false,
             },
         )
         .await
@@ -24134,6 +24143,7 @@ async fn dropped_approval_waiter_cancels_pending_entry() {
                 body: "cargo test".into(),
                 command: Some("cargo test".into()),
                 cwd: None,
+                once_only: false,
             },
         )
         .await
@@ -31587,6 +31597,7 @@ async fn real_peer_approval_park_wakes_originator() {
         body: "rm -rf ./build-cache".to_owned(),
         command: Some("rm -rf ./build-cache".to_owned()),
         cwd: None,
+        once_only: false,
     };
     let handle = tokio::spawn(async move { requester.request_approval(request).await });
 
@@ -31669,6 +31680,7 @@ async fn real_auto_resolved_approval_does_not_wake() {
         body: "echo hi".to_owned(),
         command: Some("echo hi".to_owned()),
         cwd: None,
+        once_only: false,
     };
     // Auto-resolve returns immediately (no oneshot to await), so call directly.
     let decision = requester.request_approval(request).await;
@@ -31922,6 +31934,7 @@ async fn should_refuse_a_peer_park_when_the_peer_is_closed_under_a_raw_client_se
             body: "rm -rf ./build-cache".to_owned(),
             command: Some("rm -rf ./build-cache".to_owned()),
             cwd: None,
+            once_only: false,
         }),
     )
     .await
@@ -32125,6 +32138,7 @@ async fn should_allow_a_peer_park_again_when_the_closed_peer_is_restaged() {
                 body: "cargo test".to_owned(),
                 command: Some("cargo test".to_owned()),
                 cwd: None,
+                once_only: false,
             })
             .await
     });

@@ -439,6 +439,11 @@ pub struct ToolApprovalRequest {
     pub body: String,
     pub command: Option<String>,
     pub cwd: Option<String>,
+    /// This approval covers exactly this call: a remembered approval scope
+    /// (`approve_for_tool`, `approve_for_session`, …) must neither answer it
+    /// nor be recorded from it. Set by host-routed app tools (UPCR-2026-035),
+    /// whose approvals carry the exact arguments.
+    pub once_only: bool,
 }
 
 /// Decision returned to a blocked tool after client approval handling.

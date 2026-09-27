@@ -15,6 +15,9 @@ struct ApprovalEntry {
     request: Option<ApprovalRequestedEvent>,
     runtime_resumable: bool,
     response_tx: Option<tokio::sync::oneshot::Sender<ApprovalDecision>>,
+    /// Covers exactly one call: no remembered scope may be recorded from it
+    /// (UPCR-2026-035 host-routed app tools).
+    once_only: bool,
 }
 
 #[derive(Debug)]
@@ -54,6 +57,8 @@ pub(crate) struct PendingApprovalStore {
 pub(crate) struct RespondedApprovalContext {
     pub(crate) tool_name: String,
     pub(crate) turn_id: TurnId,
+    /// The approval covers exactly one call; record no scope from it.
+    pub(crate) once_only: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +107,7 @@ impl PendingApprovalStore {
                     .map(|request| RespondedApprovalContext {
                         tool_name: request.tool_name.clone(),
                         turn_id: request.turn_id.clone(),
+                        once_only: entry.once_only,
                     });
                 Ok(RespondOutcome {
                     result: ApprovalRespondResult::accepted_with_runtime_resumed(
@@ -228,6 +234,7 @@ impl PendingApprovalStore {
                 request: None,
                 runtime_resumable: false,
                 response_tx: None,
+                once_only: false,
             },
         );
     }
@@ -242,6 +249,7 @@ impl PendingApprovalStore {
                 request: Some(event.clone()),
                 runtime_resumable: false,
                 response_tx: None,
+                once_only: false,
             },
         );
         event
@@ -250,6 +258,16 @@ impl PendingApprovalStore {
     pub(crate) fn request_runtime(
         &self,
         event: ApprovalRequestedEvent,
+    ) -> tokio::sync::oneshot::Receiver<ApprovalDecision> {
+        self.request_runtime_with(event, false)
+    }
+
+    /// [`Self::request_runtime`] for an approval that covers exactly one
+    /// call: `approval/respond` never records a remembered scope from it.
+    pub(crate) fn request_runtime_with(
+        &self,
+        event: ApprovalRequestedEvent,
+        once_only: bool,
     ) -> tokio::sync::oneshot::Receiver<ApprovalDecision> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let mut entries = self.entries.write().unwrap_or_else(|p| p.into_inner());
@@ -261,6 +279,7 @@ impl PendingApprovalStore {
                 request: Some(event),
                 runtime_resumable: true,
                 response_tx: Some(tx),
+                once_only,
             },
         );
         rx

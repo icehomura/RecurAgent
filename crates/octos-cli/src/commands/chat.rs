@@ -1658,6 +1658,7 @@ mod tests {
             body: "Run command: sudo echo hi".into(),
             command: Some("sudo echo hi".into()),
             cwd: None,
+            once_only: false,
         };
         let decision = requester.request_approval(request).await;
         assert_eq!(decision, ToolApprovalDecision::Approve);

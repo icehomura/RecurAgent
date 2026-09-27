@@ -450,7 +450,7 @@ async fn should_time_out_and_cancel_a_call_the_host_never_answers() {
     assert_eq!(cancel["call_id"], call["call_id"]);
     assert_eq!(cancel["reason"], "timeout");
 
-    // A late answer finds nothing to complete.
+    // A late answer is refused and audited.
     let late = answer(
         &fx,
         &token,
@@ -459,6 +459,9 @@ async fn should_time_out_and_cancel_a_call_the_host_never_answers() {
     )
     .expect_err("late result");
     assert_eq!(late.data.unwrap()["kind"], "peer_tool_call_not_found");
+    let rows = audit_rows(&fx);
+    assert_eq!(rows.last().unwrap()["decision"], "late_result");
+    assert_eq!(rows.last().unwrap()["call_id"], call["call_id"]);
     assert!(crate::peers::host_tools::pending_calls_for(&peers_root(&fx), "news").is_empty());
 
     // With no live host at all the call fails without waiting.
@@ -474,8 +477,10 @@ async fn should_time_out_and_cancel_a_call_the_host_never_answers() {
     );
 }
 
-/// The app's own conversation: the approval bridge of a turn on the peer's
-/// session, as the serve turn installs it.
+/// The approval bridge the serve turn installs for a `turn/start` on `key`:
+/// approvals park on that session (a request context's is the app's own
+/// conversation; the peer's own session is where the host surfaces the
+/// person-absent approvals).
 fn app_approver(
     fx: &Fx,
     key: &SessionKey,
@@ -654,7 +659,7 @@ async fn should_not_run_a_declined_or_expired_destructive_call_nor_ask_twice() {
         )
         .await
         .unwrap();
-    assert!(!again.success && again.output.contains("not asked twice"));
+    assert!(!again.success && again.output.contains("not asked or sent twice"));
     assert!(contracts.approvals.pending_for_session(&key).is_empty());
 
     // Expired: nobody answers within the TTL; the parked approval is released.
@@ -831,4 +836,346 @@ async fn should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherw
         .map(|r| r["decision"].clone())
         .collect();
     assert_eq!(decisions, [json!("app_confirms"), json!("approved")]);
+}
+
+fn news_topics_set() -> Value {
+    json!({
+        "name": "news.topics_set",
+        "description": "Replace the followed topics.",
+        "input_schema": {"type": "object", "required": ["topics"]},
+        "risk": "act",
+        "background": true,
+    })
+}
+
+#[tokio::test]
+async fn should_report_an_unanswered_act_call_as_unknown_and_never_resend_it() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_topics_set()], "call_timeout_ms": 100 }),
+    )
+    .unwrap();
+    let registry = turn_registry(&fx, &key, "turn-1").await;
+    let args = json!({"topics": ["rust"]});
+    let result = registry
+        .execute_with_context(&call_ctx("c1"), "news_topics_set", &args)
+        .await
+        .unwrap();
+    assert!(!result.success, "{}", result.output);
+    assert!(
+        result.output.contains("outcome_unknown") && result.output.contains("Do not retry"),
+        "{}",
+        result.output
+    );
+    let call = next_frame(&mut rx, "peer/tool/call").await;
+    assert!(call["args_digest"].as_str().unwrap().starts_with("sha256:"));
+    assert_eq!(
+        next_frame(&mut rx, "peer/tool/cancel").await["reason"],
+        "timeout"
+    );
+
+    // A re-dispatch of the same call never reaches the host again.
+    let again = registry
+        .execute_with_context(&call_ctx("c1"), "news_topics_set", &args)
+        .await
+        .unwrap();
+    assert!(!again.success && again.output.contains("not asked or sent twice"));
+    assert!(rx.try_recv().is_err(), "no second peer/tool/call");
+
+    let rows = audit_rows(&fx);
+    assert_eq!(rows[0]["outcome"], "unknown");
+    assert_eq!(rows[1]["decision"], "duplicate");
+}
+
+#[tokio::test]
+async fn should_wait_for_the_apps_confirmation_sheet_instead_of_timing_out() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({
+            "tools": [{
+                "name": "news.share",
+                "description": "Share a story with a contact.",
+                "input_schema": {"type": "object", "required": ["story"]},
+                "risk": "destructive",
+                "confirm": "app",
+            }, mail_send()],
+            "call_timeout_ms": 100,
+            "approval_ttl_secs": 30,
+        }),
+    )
+    .unwrap();
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context_key: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+    let registry = Arc::new(turn_registry(&fx, &context_key, "turn-1").await);
+    let contracts = Arc::new(UiProtocolContractStores::default());
+
+    // confirm=app, person present: the sheet takes longer than the call
+    // timeout; the kernel keeps waiting and sends no cancel.
+    let run = {
+        let registry = registry.clone();
+        let approver = app_approver(&fx, &context_key, &contracts, &TurnId::new());
+        tokio::spawn(
+            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+                registry
+                    .execute_with_context(&call_ctx("c1"), "news_share", &json!({"story": "hn-1"}))
+                    .await
+                    .unwrap()
+            }),
+        )
+    };
+    let call = next_frame(&mut rx, "peer/tool/call").await;
+    assert_eq!(call["confirm_required"], true);
+    assert!(call["timeout_ms"].as_u64().unwrap() >= 30_000);
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    answer(
+        &fx,
+        &token,
+        call["call_id"].as_str().unwrap(),
+        json!({"ok": true, "data": {"shared": 1}}),
+    )
+    .expect("the answer after the sheet is accepted");
+    assert!(run.await.unwrap().success);
+
+    // An approved confirm=host call: the host acknowledges it is still asking
+    // the person, which extends the wait past the call timeout.
+    let run = {
+        let registry = registry.clone();
+        let approver = app_approver(&fx, &context_key, &contracts, &TurnId::new());
+        tokio::spawn(
+            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+                registry
+                    .execute_with_context(&call_ctx("c2"), "mail_send", &json!({"draft_id": "d-1"}))
+                    .await
+                    .unwrap()
+            }),
+        )
+    };
+    let pending = wait_for_pending(&contracts, &context_key).await;
+    contracts
+        .approvals
+        .respond_with_context(ApprovalRespondParams::new(
+            context_key.clone(),
+            pending[0].approval_id.clone(),
+            ApprovalDecision::Approve,
+        ))
+        .unwrap();
+    let call = next_frame(&mut rx, "peer/tool/call").await;
+    let call_id = call["call_id"].as_str().unwrap().to_owned();
+    let ack = answer(
+        &fx,
+        &token,
+        &call_id,
+        json!({"status": "awaiting_confirmation"}),
+    )
+    .unwrap();
+    assert_eq!(ack["awaiting_confirmation"], true);
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    answer(
+        &fx,
+        &token,
+        &call_id,
+        json!({"ok": true, "data": {"sent": true}}),
+    )
+    .unwrap();
+    assert!(run.await.unwrap().success);
+    while let Ok(frame) = rx.try_recv() {
+        assert_ne!(frame_json(frame)["method"], "peer/tool/cancel");
+    }
+}
+
+#[tokio::test]
+async fn should_never_answer_or_remember_a_host_tool_approval_by_scope() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, rx) = ws_connection_for_test(32);
+    register(&fx, &ws, &token, json!({ "tools": [mail_send()] })).unwrap();
+    let host = spawn_fake_host(
+        &fx,
+        token.clone(),
+        rx,
+        |_| json!({ "ok": true, "data": {} }),
+    );
+    let registry = Arc::new(turn_registry(&fx, &key, "turn-1").await);
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let turn = TurnId::new();
+
+    // A remembered session-wide scope for this tool exists already...
+    contracts.scopes.record(
+        &key,
+        ApprovalScopeKind::from_scope_str("approve_for_session"),
+        match_key_for(
+            ApprovalScopeKind::from_scope_str("approve_for_session"),
+            "mail_send",
+            &turn,
+        ),
+        ApprovalDecision::Approve,
+    );
+    // ...yet the call still asks the person.
+    let run = {
+        let registry = registry.clone();
+        let approver = app_approver(&fx, &key, &contracts, &turn);
+        tokio::spawn(
+            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
+                registry
+                    .execute_with_context(&call_ctx("c1"), "mail_send", &json!({"draft_id": "d-1"}))
+                    .await
+                    .unwrap()
+            }),
+        )
+    };
+    let pending = wait_for_pending(&contracts, &key).await;
+
+    // Answering with a scope decides this call only and records no scope.
+    let mut params = ApprovalRespondParams::new(
+        key.clone(),
+        pending[0].approval_id.clone(),
+        ApprovalDecision::Approve,
+    );
+    params.approval_scope = Some("approve_for_tool".into());
+    let fresh = UiProtocolContractStores::default();
+    let outcome = contracts
+        .approvals
+        .respond_with_context(params.clone())
+        .unwrap();
+    assert!(outcome.context.as_ref().unwrap().once_only);
+    assert!(!record_approval_scope(
+        &fresh,
+        &key,
+        params.approval_scope.as_deref(),
+        outcome.context.as_ref(),
+        ApprovalDecision::Approve,
+    ));
+    assert!(
+        fresh
+            .scopes
+            .lookup(&key, "mail_send", &TurnId::new())
+            .is_none()
+    );
+    assert!(run.await.unwrap().success);
+
+    // An ordinary approval still records its scope.
+    let ordinary = crate::contracts::approvals::RespondedApprovalContext {
+        tool_name: "shell".into(),
+        turn_id: TurnId::new(),
+        once_only: false,
+    };
+    assert!(record_approval_scope(
+        &fresh,
+        &key,
+        Some("approve_for_tool"),
+        Some(&ordinary),
+        ApprovalDecision::Approve,
+    ));
+
+    drop(ws);
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", Arc::new(|_, _| false));
+    assert_eq!(host.await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn should_give_no_tools_to_a_session_on_a_foreign_base_key() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_list(), mail_send()], "generic_tools": ["read_file"] }),
+    )
+    .unwrap();
+    let _ = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let foreign_base = SessionKey::with_profile_topic("dev", "api", "intruder", "x");
+    for topic in ["peerctx-news.ui-1", "peer-news"] {
+        let key = SessionKey(format!("{}#{topic}", foreign_base.base_key()));
+        let resolved = resolve_session_host_tools(&peers_root(&fx), &key);
+        assert!(
+            matches!(
+                resolved,
+                crate::peers::host_tools::SessionHostTools::FailClosed { .. }
+            ),
+            "{topic}: {resolved:?}"
+        );
+        let mut registry = fx.runtime.tool_specs.snapshot_excluding(&[]);
+        assert!(!registry.tool_names().is_empty());
+        apply_session_host_tools(&mut registry, &resolved, &peers_root(&fx), &key, "t");
+        assert!(registry.tool_names().is_empty(), "{topic}");
+    }
+    // The owner's own sessions still get the set.
+    let own = SessionKey(format!("{}#peerctx-news.ui-1", fx.system.base_key()));
+    assert!(matches!(
+        resolve_session_host_tools(&peers_root(&fx), &own),
+        crate::peers::host_tools::SessionHostTools::Enforced { .. }
+    ));
+}
+
+#[tokio::test]
+async fn should_refuse_generic_tools_that_escape_the_set() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    for escape in [
+        "spawn",
+        "spawn_agent",
+        "delegate",
+        "run_pipeline",
+        "peer_handoff",
+        "peer_send_input",
+        "goal_dispatch",
+        "manage_skills",
+    ] {
+        let err = register(
+            &fx,
+            &ws,
+            &token,
+            json!({ "tools": [news_list()], "generic_tools": [escape] }),
+        )
+        .expect_err(escape);
+        assert_eq!(err.data.unwrap()["kind"], "peer_tools_invalid", "{escape}");
+    }
+    let err = register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [{"name": "news.list", "description": "x",
+                           "input_schema": {"type": "object",
+                                            "properties": {"n": {"type": "whole"}}},
+                           "risk": "read"}] }),
+    )
+    .expect_err("bad schema type");
+    assert!(
+        err.message.contains("not a JSON Schema type"),
+        "{}",
+        err.message
+    );
 }

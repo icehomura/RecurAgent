@@ -568,19 +568,26 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   `{slug, version, previous_version, tools, generic_tools, applies:
   "next_turn"}`. Replaces the set atomically; from the next turn every
   session of the peer and of its request contexts offers the model exactly
-  those tools. App tool calls are sent to the registering connection as the
+  those tools (only sessions on the peer originator's base key; any other
+  gets none). App tool calls are sent to the registering connection as the
   server notification `peer/tool/call` `{peer, session_id, context_id,
-  turn_id, call_id, tool_call_id, name, args, risk, confirm_required,
-  timeout_ms, tools_version}`; `peer/tool/cancel` `{call_id, reason}` stops
-  one. Destructive and outward tools need an `approval/requested` →
+  turn_id, call_id, tool_call_id, args_digest, name, args, risk,
+  confirm_required, timeout_ms, tools_version}`; `peer/tool/cancel`
+  `{call_id, reason}` stops one, after which the host must not execute it.
+  Meta tools (`spawn`, `delegate`, `run_pipeline`, `peer_*`, …) are refused
+  as generic tools. Kernel approvals of these calls are once-only: no
+  remembered scope answers them or is recorded from them. Destructive and outward tools need an `approval/requested` →
   `approval/respond` on the calling session first, except `confirm: app`
   tools called from an open request context, which the app confirms
   itself. Typed `data.kind`:
   `peer_not_host_bound`, `peer_tools_invalid`, `peer_tools_version_conflict`)
 - `peer/tool/result` (accepted `UPCR-2026-035`: the host answers one
-  `peer/tool/call`; `{session_id, peer, host_token, call_id, ok, data?,
-  error?}` → `{call_id, accepted, result_too_large?}`; typed `data.kind`
-  `peer_tool_call_not_found` for a finished, timed-out or cancelled call)
+  `peer/tool/call`; `{session_id, peer, host_token, call_id, ok?, data?,
+  error?, status?: "awaiting_confirmation"}` → `{call_id, accepted,
+  result_too_large?, awaiting_confirmation?}`; an acknowledgement extends a
+  gated call's wait to the approval TTL; an unanswered non-read call ends as
+  `outcome_unknown`; typed `data.kind` `peer_tool_call_not_found` for a
+  finished, timed-out or cancelled call, whose late result is audited)
 - `peer/gather` (#1801 v2 blackboard read: per staged peer its brief + the
   latest `result.md` — written server-side on every peer-session turn
   terminal — with per-field truncation flags and `result_updated_unix`;
