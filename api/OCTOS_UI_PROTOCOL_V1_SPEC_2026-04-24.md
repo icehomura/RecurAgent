@@ -568,15 +568,17 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   `confirm?` `host`|`app`) →
   `{slug, version, previous_version, tools, generic_tools, applies:
   "next_turn"}`. Replaces the set atomically; from the next turn every
-  session of the peer and of its request contexts offers the model exactly
-  those tools, but only for turns on the peer originator's base key that
-  are driven by the registering connection; any other turn on those topics
-  gets none (hosts must drive the peer's turns on that connection). App tool calls are sent to the registering connection as the
+  session of the peer and of its request contexts ADDS those app tools to
+  the peer's usual kernel tools (narrowed to `generic_tools` only when that
+  list is non-empty), but only for turns on the peer originator's base key
+  that are driven by the registering connection; any other turn on those
+  topics gets no tools (hosts must drive the peer's turns on that
+  connection). App tool calls are sent to the registering connection as the
   server notification `peer/tool/call` `{peer, session_id, context_id,
   turn_id, call_id, tool_call_id, args_digest, name, args, risk,
   confirm_required, timeout_ms, tools_version}`; `peer/tool/cancel`
   `{call_id, reason}` stops one, after which the host must not execute it.
-  `generic_tools` must come from the peer-safe allowlist (workspace read and
+  A non-empty `generic_tools` must come from the peer-safe allowlist (workspace read and
   search, research, the app's memory, `mofa_make`); anything else is
   refused. Approvals of these calls, and `turn/steer` / `turn/interrupt` on
   the peer's sessions, belong to the host connection: other connections do
@@ -773,6 +775,11 @@ registered a host-owned app peer's tools with `peer/tools/register`):
   Ephemeral: never replayed; a host that is gone fails the call.
 - `peer/tool/cancel` — the kernel stopped waiting for `call_id`
   (`reason`: `timeout` | `cancelled`).
+- `peer/input` — the system agent's `peer_send_input` to a host-owned peer:
+  `{peer, session_id, input_id, turn_id, text}`. The host starts the peer's
+  turn itself (`turn/start` on `session_id` with `turn_id` and the text, on
+  the same connection). Never run as a kernel-internal turn; with no host
+  connected `peer_send_input` fails and nothing is queued. Ephemeral.
 
 Background activity — the human sink (#2019, gate `event.background_activity.v1`):
 

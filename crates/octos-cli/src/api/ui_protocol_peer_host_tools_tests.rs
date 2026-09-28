@@ -6,7 +6,7 @@
 use super::*;
 
 use crate::peers::host_tools::{apply_session_host_tools, resolve_session_host_tools};
-use octos_core::ui_protocol::ApprovalRespondParams;
+use octos_core::ui_protocol::{ApprovalRespondParams, QuestionId, UserQuestionAnswer};
 
 struct Fx {
     _tmp: tempfile::TempDir,
@@ -739,12 +739,11 @@ async fn should_replace_the_tool_set_atomically_and_refuse_a_stale_version() {
     let fx = fixture().await;
     let token = prepare_news(&fx).await;
     let key = peer_key(&fx);
+    let usual = sorted_names(&turn_registry(&fx, &key, "t0").await);
     let (ws, _rx) = ws_connection_for_test(8);
     register(&fx, &ws, &token, json!({ "tools": [news_list()] })).unwrap();
-    assert_eq!(
-        sorted_names(&turn_registry(&fx, &key, "t1").await),
-        ["news_list"]
-    );
+    let names = sorted_names(&turn_registry(&fx, &key, "t1").await);
+    assert!(names.contains(&"news_list".to_owned()), "{names:?}");
 
     let mut read = news_list();
     read["name"] = json!("news.read");
@@ -757,10 +756,10 @@ async fn should_replace_the_tool_set_atomically_and_refuse_a_stale_version() {
     .unwrap();
     assert_eq!(v2["version"], 2);
     assert_eq!(v2["previous_version"], 1);
-    assert_eq!(
-        sorted_names(&turn_registry(&fx, &key, "t2").await),
-        ["news_read"],
-        "the old tool is gone, not merged"
+    let names = sorted_names(&turn_registry(&fx, &key, "t2").await);
+    assert!(
+        names.contains(&"news_read".to_owned()) && !names.contains(&"news_list".to_owned()),
+        "the old tool is gone, not merged: {names:?}"
     );
 
     let stale = register(
@@ -774,9 +773,10 @@ async fn should_replace_the_tool_set_atomically_and_refuse_a_stale_version() {
     assert_eq!(data["kind"], "peer_tools_version_conflict");
     assert_eq!(data["current_version"], 2);
 
-    // An empty registration leaves the model with no tools, never the default roster.
+    // An empty registration leaves the peer's usual kernel tools and no app
+    // tool.
     register(&fx, &ws, &token, json!({ "tools": [] })).unwrap();
-    assert!(turn_registry(&fx, &key, "t3").await.tool_names().is_empty());
+    assert_eq!(sorted_names(&turn_registry(&fx, &key, "t3").await), usual);
 }
 
 #[tokio::test]
@@ -1632,7 +1632,7 @@ async fn should_give_no_tools_to_another_connection_on_the_hosts_base_key() {
 
     // The host's own connection still gets the set; once it closes, nobody does.
     let registry = turn_registry_on(&fx, &context_key, "turn-h", host_ws.connection_id.0).await;
-    assert_eq!(sorted_names(&registry), ["mail_send", "news_list"]);
+    assert!(registry.get("mail_send").is_some() && registry.get("news_list").is_some());
     crate::peers::host_tools::drop_routes_for_connection(host_ws.connection_id.0);
     let registry = turn_registry_on(&fx, &context_key, "turn-h2", host_ws.connection_id.0).await;
     assert!(registry.tool_names().is_empty());
@@ -1991,6 +1991,17 @@ async fn e2e_turn(
     session: &SessionKey,
     llm: &ScriptedHostToolLlm,
 ) -> (Vec<Value>, Vec<Value>) {
+    e2e_turn_with(e, session, llm, "what's new?", TurnId::new()).await
+}
+
+/// [`e2e_turn`] with the turn's input text and id.
+async fn e2e_turn_with(
+    e: &mut E2e,
+    session: &SessionKey,
+    llm: &ScriptedHostToolLlm,
+    text: &str,
+    turn_id: TurnId,
+) -> (Vec<Value>, Vec<Value>) {
     let ledger = Arc::new(UiProtocolLedger::new(256));
     let contracts = Arc::new(UiProtocolContractStores::default());
     let active_turns: SharedActiveTurns = Arc::new(TokioMutex::new(HashMap::new()));
@@ -2064,10 +2075,8 @@ async fn e2e_turn(
         "start-1".into(),
         TurnStartParams {
             session_id: session.clone(),
-            turn_id: TurnId::new(),
-            input: vec![InputItem::Text {
-                text: "what's new?".into(),
-            }],
+            turn_id,
+            input: vec![InputItem::Text { text: text.into() }],
             media: Vec::new(),
             topic: None,
             rewrite_for: None,
@@ -2134,7 +2143,12 @@ async fn should_ask_the_person_before_a_real_turns_destructive_call_end_to_end()
     let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
     let (calls, approvals) = e2e_turn(&mut e, &session, &llm).await;
 
-    assert_eq!(llm.rosters.lock().unwrap()[0], ["mail_send"]);
+    let roster = llm.rosters.lock().unwrap()[0].clone();
+    assert!(
+        roster.contains(&"mail_send".to_owned())
+            && roster.contains(&"ask_user_question".to_owned()),
+        "the app tool is added to the peer's usual tools: {roster:?}"
+    );
     assert_eq!(approvals.len(), 1, "one approval, on the host connection");
     assert!(
         approvals[0]["body"]
@@ -2796,4 +2810,312 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
     )
     .await;
     assert!(contracts.approvals.pending_for_session(&key).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Registration adds app tools; the system agent's input goes to the host
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn should_keep_the_peers_kernel_tools_when_it_registers_an_empty_set() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let usual = sorted_names(&turn_registry(&fx, &key, "turn-0").await);
+    for tool in [
+        "ask_user_question",
+        "read_file",
+        "memory_search",
+        "web_search",
+    ] {
+        assert!(usual.contains(&tool.to_owned()), "{tool} in {usual:?}");
+    }
+
+    // The mandatory registration, with no app tools, takes nothing away.
+    let (ws, _rx) = ws_connection_for_test(8);
+    register(&fx, &ws, &token, json!({ "tools": [] })).unwrap();
+    assert_eq!(
+        sorted_names(&turn_registry(&fx, &key, "turn-1").await),
+        usual
+    );
+
+    // App tools are added to the usual tools, as host-routed tools.
+    register(&fx, &ws, &token, json!({ "tools": [news_list()] })).unwrap();
+    let registry = turn_registry(&fx, &key, "turn-2").await;
+    let mut expected = usual.clone();
+    expected.push("news_list".to_owned());
+    expected.sort();
+    assert_eq!(sorted_names(&registry), expected);
+    assert_eq!(
+        registry.origin("news_list"),
+        Some(octos_agent::ToolOrigin::HostRouted)
+    );
+    assert_eq!(
+        registry.origin("read_file"),
+        Some(octos_agent::ToolOrigin::Builtin)
+    );
+
+    // A request context of the peer gets the same.
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context_key: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+    let context = turn_registry(&fx, &context_key, "turn-3").await;
+    assert!(context.get("news_list").is_some() && context.get("ask_user_question").is_some());
+}
+
+#[tokio::test]
+async fn should_never_let_an_app_tool_shadow_a_kernel_tool() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, _rx) = ws_connection_for_test(8);
+    // `web.fetch` is seen as `web_fetch`, a kernel tool of the peer's roster.
+    let mut fetch = news_list();
+    fetch["name"] = json!("web.fetch");
+    register(&fx, &ws, &token, json!({ "tools": [fetch] })).unwrap();
+    let registry = turn_registry(&fx, &key, "turn-1").await;
+    assert_eq!(
+        registry.origin("web_fetch"),
+        Some(octos_agent::ToolOrigin::Builtin),
+        "the kernel tool wins"
+    );
+}
+
+fn send_input_request(message: &str, occurrence: &str) -> octos_agent::PeerSendInputRequest {
+    octos_agent::PeerSendInputRequest {
+        slug: "news".into(),
+        message: message.into(),
+        occurrence_id: occurrence.into(),
+    }
+}
+
+#[tokio::test]
+async fn should_deliver_the_system_agents_input_to_the_host_connection_when_the_peer_is_host_owned()
+{
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (host_ws, mut host_rx) = ws_connection_for_test(16);
+    register(&fx, &host_ws, &token, json!({ "tools": [] })).unwrap();
+    // Another connection of the profile, and an external one: neither is the
+    // peer's host.
+    let (other_ws, mut other_rx) = ws_connection_for_test(16);
+    let (ext_ws, mut ext_rx) = external_ws(16);
+    let system_turn = TurnId::new();
+
+    let delivery = deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &system_turn,
+        send_input_request("QUESTION_ME", "call_1"),
+    )
+    .expect("delivered");
+    assert_eq!(delivery, octos_agent::PeerSendInputDelivery::Queued);
+    let input = next_frame(&mut host_rx, "peer/input").await;
+    assert_eq!(input["peer"], "news");
+    assert_eq!(input["session_id"], json!(peer_key(&fx)));
+    assert_eq!(input["text"], "QUESTION_ME");
+    assert!(input["input_id"].as_str().is_some());
+    assert!(input["turn_id"].as_str().is_some());
+    // It is not a kernel-internal turn: nothing was queued for the peer.
+    assert!(
+        !crate::autonomy::agent_orchestrator::default_agent_orchestrator()
+            .has_pending_peer_send_input_for_peer("dev", "news")
+    );
+    // The same call again (a re-dispatch) is not sent twice.
+    assert_eq!(
+        deliver_peer_send_input(
+            "dev",
+            &peers_root(&fx),
+            &fx.system.0,
+            &system_turn,
+            send_input_request("QUESTION_ME", "call_1"),
+        )
+        .unwrap(),
+        octos_agent::PeerSendInputDelivery::AlreadyQueued
+    );
+    // The same tool-call id in a LATER turn is a new input.
+    deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("SECOND_INPUT", "call_1"),
+    )
+    .unwrap();
+    let second = next_frame(&mut host_rx, "peer/input").await;
+    assert_eq!(second["text"], "SECOND_INPUT");
+    assert!(host_rx.try_recv().is_err(), "exactly two inputs");
+    assert!(other_rx.try_recv().is_err() && ext_rx.try_recv().is_err());
+    drop((other_ws, ext_ws));
+
+    // Only the peer's originator may send it input.
+    let foreign = SessionKey::with_profile_topic("dev", "api", "other", "system");
+    assert!(
+        deliver_peer_send_input(
+            "dev",
+            &peers_root(&fx),
+            &foreign.0,
+            &TurnId::new(),
+            send_input_request("x", "call_9"),
+        )
+        .is_err()
+    );
+}
+
+#[tokio::test]
+async fn should_fail_visibly_and_run_nothing_when_the_app_is_not_connected() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    // Never registered: no host connection.
+    let error = deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("hello", "call_1"),
+    )
+    .unwrap_err();
+    assert!(error.contains("not connected"), "{error}");
+
+    // Registered, then the host connection closed.
+    let (ws, rx) = ws_connection_for_test(8);
+    register(&fx, &ws, &token, json!({ "tools": [] })).unwrap();
+    crate::peers::host_tools::drop_routes_for_connection(ws.connection_id.0);
+    drop(rx);
+    let error = deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("hello", "call_2"),
+    )
+    .unwrap_err();
+    assert!(error.contains("not connected"), "{error}");
+
+    // A host whose connection is gone without a close: the send fails, the
+    // route is dropped.
+    let (ws, rx) = ws_connection_for_test(8);
+    register(&fx, &ws, &token, json!({ "tools": [] })).unwrap();
+    drop(rx);
+    let error = deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("hello", "call_3"),
+    )
+    .unwrap_err();
+    assert!(error.contains("not connected"), "{error}");
+    assert_eq!(
+        crate::peers::host_tools::host_route_connection(&peers_root(&fx), "news"),
+        None
+    );
+    assert!(
+        !crate::autonomy::agent_orchestrator::default_agent_orchestrator()
+            .has_pending_peer_send_input_for_peer("dev", "news"),
+        "never a tool-less kernel turn instead"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_run_the_system_agents_input_as_a_host_driven_turn_with_tools_end_to_end() {
+    let llm = ScriptedHostToolLlm::new("mail_send", json!({"draft_id": "d-7"}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [mail_send()] })).await;
+    let peers = e.data_dir.join("peers");
+    deliver_peer_send_input(
+        "dev",
+        &peers,
+        &e.system.0,
+        &TurnId::new(),
+        send_input_request("SEND_THE_DRAFT", "call_1"),
+    )
+    .expect("delivered to the host");
+    // The host receives the input...
+    let mut rx = e.rx.take().unwrap();
+    let input = next_frame(&mut rx, "peer/input").await;
+    e.rx = Some(rx);
+    let session: SessionKey = serde_json::from_value(input["session_id"].clone()).unwrap();
+    let turn_id: TurnId = serde_json::from_value(input["turn_id"].clone()).unwrap();
+    assert_eq!(session.0, format!("{}#peer-news", e.system.base_key()));
+    // ...and starts the peer's turn on its own connection.
+    let (calls, approvals) = e2e_turn_with(
+        &mut e,
+        &session,
+        &llm,
+        input["text"].as_str().unwrap(),
+        turn_id,
+    )
+    .await;
+
+    let roster = llm.rosters.lock().unwrap()[0].clone();
+    for tool in ["mail_send", "ask_user_question", "read_file"] {
+        assert!(roster.contains(&tool.to_owned()), "{tool} in {roster:?}");
+    }
+    // The destructive call's approval went to the app (the host connection)
+    // and, once the person approved it there, the call reached the host.
+    assert_eq!(approvals.len(), 1, "{approvals:?}");
+    assert!(approvals[0].to_string().contains("d-7"));
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0]["session_id"], json!(session));
+}
+
+#[tokio::test]
+async fn should_answer_a_host_peer_sessions_questions_only_on_the_owning_or_host_connection() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (host_ws, mut host_rx) = ws_connection_for_test(16);
+    register(&fx, &host_ws, &token, json!({ "tools": [] })).unwrap();
+    // A turn of the host marks the session as the host peer's.
+    let _ = turn_registry(&fx, &key, "turn-q").await;
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let question_id = QuestionId::new();
+    let _waiter = contracts.user_questions.request_runtime_owned(
+        UserQuestionRequestedEvent::new(
+            key.clone(),
+            question_id.clone(),
+            TurnId::new(),
+            "Pick a number",
+            "Which number should I use?",
+            vec![octos_core::ui_protocol::UserQuestion {
+                header: "Number".into(),
+                question: "Which number?".into(),
+                options: vec![octos_core::ui_protocol::UserQuestionOption {
+                    label: "42".into(),
+                    description: "the answer".into(),
+                }],
+                multi_select: false,
+                allow_free_text: true,
+            }],
+        ),
+        Some(host_ws.connection_id.0),
+    );
+    let answer = || {
+        UserQuestionRespondParams::new(
+            key.clone(),
+            question_id.clone(),
+            vec![UserQuestionAnswer {
+                selected_labels: vec!["42".into()],
+                free_text: None,
+            }],
+        )
+    };
+    let (other_ws, mut other_rx) = ws_connection_for_test(16);
+    handle_user_question_respond(&other_ws, &contracts, None, None, "q1".into(), answer()).await;
+    assert_eq!(
+        rpc_error_kind(other_rx.recv().await.unwrap()),
+        "peer_host_connection_only"
+    );
+    handle_user_question_respond(&host_ws, &contracts, None, None, "q2".into(), answer()).await;
+    let reply = frame_json(host_rx.recv().await.unwrap());
+    assert!(reply.get("error").is_none(), "{reply}");
 }

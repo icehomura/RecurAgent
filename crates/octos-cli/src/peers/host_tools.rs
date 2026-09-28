@@ -3,11 +3,12 @@
 //! The host declares a peer's app tools and the generic kernel tools the app
 //! may use with `peer/tools/register` (host-token authorized). The set is
 //! durable (`peers/<slug>/host_tools.json`), versioned, and replaced whole.
-//! Once a peer has a set, every turn of the peer's session and of each of its
-//! request contexts offers the model EXACTLY that set: the registered app
-//! tools plus the allowed generic tools that exist in the turn's registry.
-//! Everything else is removed from the turn's registry, so it is neither
-//! advertised nor callable (the registry refuses an unknown name).
+//! Once a peer has a set, a host-driven turn of the peer's session or of one
+//! of its request contexts keeps the peer's usual kernel tools (narrowed to
+//! the set's `generic_tools` when that list is non-empty) and ADDS the
+//! registered app tools. Any other turn on those sessions gets no tools.
+//! The system agent's input to a host-owned peer is delivered to the host
+//! as `peer/input` ([`deliver_peer_input`]), never run as a kernel turn.
 //!
 //! App tool calls go to the host: the kernel sends `peer/tool/call` to the
 //! connection that registered the set and waits for `peer/tool/result`
@@ -43,6 +44,8 @@ pub(crate) const PEER_TOOL_CALL_NOTIFICATION: &str =
 /// Server → host: stop a call the kernel no longer waits for.
 pub(crate) const PEER_TOOL_CANCEL_NOTIFICATION: &str =
     octos_core::ui_protocol::methods::PEER_TOOL_CANCEL;
+/// Server → host: the system agent's input for a host-owned peer.
+pub(crate) const PEER_INPUT_NOTIFICATION: &str = octos_core::ui_protocol::methods::PEER_INPUT;
 
 pub(crate) const MAX_APP_TOOLS: usize = 64;
 pub(crate) const MAX_GENERIC_TOOLS: usize = 32;
@@ -554,10 +557,15 @@ pub(crate) fn apply_session_host_tools(
                 registry.retain(|_| false);
                 return;
             }
-            registry.retain(|name| {
-                is_peer_safe_generic_tool(name)
-                    && set.generic_tools.iter().any(|allowed| allowed == name)
-            });
+            // Registration ADDS the app's tools: the host's own turns keep
+            // the peer's usual kernel roster. A non-empty `generic_tools`
+            // narrows that roster to the listed peer-safe tools.
+            if !set.generic_tools.is_empty() {
+                registry.retain(|name| {
+                    is_peer_safe_generic_tool(name)
+                        && set.generic_tools.iter().any(|allowed| allowed == name)
+                });
+            }
             if set.tools.is_empty() {
                 return;
             }
@@ -577,6 +585,18 @@ pub(crate) fn apply_session_host_tools(
             // clients; the peer's own session is not.
             let interactive = context_id.is_some();
             for decl in &set.tools {
+                // A kernel tool of the same name wins: an app tool never
+                // shadows one (the model, the audit and every filter must be
+                // able to tell them apart).
+                if registry.get(&decl.model_name).is_some() {
+                    tracing::warn!(
+                        peer = %slug,
+                        tool = %decl.name,
+                        model_name = %decl.model_name,
+                        "not offering an app tool whose name a kernel tool already has"
+                    );
+                    continue;
+                }
                 registry.register(HostRoutedTool::new(
                     decl.clone(),
                     router.clone(),
@@ -721,6 +741,8 @@ const FINISHED_MAX: usize = 1_024;
 #[derive(Default)]
 struct HostToolHub {
     routes: Mutex<HashMap<String, HostRoute>>,
+    /// `peer/input` deliveries already sent: `(route, input id)`.
+    inputs: Mutex<BoundedClaims>,
     pending: Mutex<HashMap<String, PendingCall>>,
     finished: Mutex<HashMap<String, (CallMeta, Instant)>>,
     occurrences: Mutex<BoundedClaims>,
@@ -743,6 +765,90 @@ pub(crate) fn set_host_route(peers_root: &Path, slug: &str, connection: u64, sen
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .insert(route_key(peers_root, slug), HostRoute { connection, send });
+}
+
+/// How long a delivered `peer/input` is remembered for deduplication.
+const INPUT_RETENTION: Duration = Duration::from_secs(24 * 3_600);
+
+/// Result of [`deliver_peer_input`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PeerInputDelivery {
+    /// Sent to the host connection.
+    Sent,
+    /// This input (same id) was already sent; nothing was sent again.
+    AlreadySent,
+}
+
+/// The session a host-owned peer's own turns run on:
+/// `<originator base>#peer-<slug>`.
+pub(crate) fn host_peer_session(peers_root: &Path, slug: &str) -> Option<SessionKey> {
+    let dir = staged_peer_dir(peers_root, slug)?;
+    let recorded = peer_io::read_peer_file(&dir, "originator", peer_io::PEER_FILE_READ_CAP_SMALL)?;
+    let originator = SessionKey(recorded.trim().to_owned());
+    (!originator.0.is_empty()).then(|| SessionKey(format!("{}#peer-{slug}", originator.base_key())))
+}
+
+/// Deliver the system agent's input for the host-owned peer `slug` to the
+/// peer's host connection as `peer/input`. The host starts the turn itself,
+/// so it runs host-driven: with the peer's tools and the app's approval
+/// routing. A host-owned peer never runs a kernel-internal turn for input.
+///
+/// Fails, and sends nothing, when no host connection holds the peer's route
+/// (it never registered, or it disconnected). `input_id` deduplicates: the
+/// same input is sent at most once.
+pub(crate) fn deliver_peer_input(
+    peers_root: &Path,
+    slug: &str,
+    input_id: &str,
+    text: &str,
+) -> Result<PeerInputDelivery, String> {
+    let not_connected = || {
+        format!(
+            "the app that owns peer '{slug}' is not connected, so the input was not \
+             delivered; try again once the app is open"
+        )
+    };
+    let session = host_peer_session(peers_root, slug)
+        .ok_or_else(|| format!("peer '{slug}' has no recorded originator"))?;
+    let key = route_key(peers_root, slug);
+    let send = HUB
+        .routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&key)
+        .map(|route| route.send.clone())
+        .ok_or_else(not_connected)?;
+    let claim_key = format!("{key}\u{0}{input_id}");
+    match HUB
+        .inputs
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .claim(claim_key.clone(), INPUT_RETENTION)
+    {
+        Claim::Claimed => {}
+        Claim::AlreadyClaimed => return Ok(PeerInputDelivery::AlreadySent),
+        Claim::Full => {
+            return Err(format!(
+                "too many recent inputs for peer '{slug}'; try again later"
+            ));
+        }
+    }
+    let params = json!({
+        "peer": slug,
+        "session_id": session,
+        "input_id": input_id,
+        "turn_id": octos_core::ui_protocol::TurnId::new(),
+        "text": text,
+    });
+    if send(PEER_INPUT_NOTIFICATION, params) {
+        return Ok(PeerInputDelivery::Sent);
+    }
+    HUB.inputs
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(&claim_key);
+    drop_route_if(&key, &send);
+    Err(not_connected())
 }
 
 /// The connection that holds the peer's route, if any.

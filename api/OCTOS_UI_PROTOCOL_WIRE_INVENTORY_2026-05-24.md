@@ -185,6 +185,7 @@ spec and UPCR documents. The authoritative source remains code:
 | `agent/updated` | shipped, UPCR-2026-019 / UPCR-2026-021 |
 | `peer/tool/call` | shipped raw notification to the registering host connection, UPCR-2026-035 |
 | `peer/tool/cancel` | shipped raw notification to the registering host connection, UPCR-2026-035 |
+| `peer/input` | shipped raw notification to the registering host connection, UPCR-2026-035 |
 | `agent/output/delta` | shipped, UPCR-2026-019 / UPCR-2026-021 |
 | `agent/artifact/updated` | shipped, UPCR-2026-019 / UPCR-2026-021 |
 | `session/goal/updated` | shipped, UPCR-2026-021 |

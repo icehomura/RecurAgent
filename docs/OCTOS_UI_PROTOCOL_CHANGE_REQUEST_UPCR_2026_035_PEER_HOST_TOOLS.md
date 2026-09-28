@@ -7,9 +7,10 @@
 - Target protocol: `octos-ui/v1alpha1`
 - Status: implemented
 - Scope: two additive raw AppUI methods, `peer/tools/register` and
-  `peer/tool/result`; two additive server notifications, `peer/tool/call`
-  and `peer/tool/cancel`; per-turn enforcement of a host-owned app peer's
-  tool list and tool risk levels
+  `peer/tool/result`; three additive server notifications, `peer/tool/call`,
+  `peer/tool/cancel` and `peer/input`; per-turn enforcement of a host-owned
+  app peer's app tools and tool risk levels; the system agent's input to a
+  host-owned peer delivered to its host
 - Builds on: UPCR-2026-034 (host-owned app peers, host token, request
   contexts)
 - Origin: OctoSense ADR 0002 "Event-driven app agents", sections 4 ("Apps
@@ -30,7 +31,8 @@ outward or destructive call for the person.
 
 Discovery: a server that lists `peer/tools/register` in
 `config/capabilities/list` `supported_methods` implements this whole UPCR;
-`peer/tool/call` and `peer/tool/cancel` are in `supported_notifications`.
+`peer/tool/call`, `peer/tool/cancel` and `peer/input` are in
+`supported_notifications`.
 Both methods are raw-surface methods (a session-ingress connection cannot
 call them), profile scoped, and authorized like UPCR-2026-034 control calls:
 the caller names the peer's originator `session_id` and presents the peer's
@@ -41,13 +43,21 @@ the caller names the peer's originator `session_id` and presents the peer's
 **Hosts MUST call `peer/tools/register` (possibly with an empty set) on the
 connection that drives the peer's turns, after every successful
 `peer/prepare` and again after every reconnect, before any `turn/start`.
-Unregistered host-owned peers get no app memory, tools or app context.**
+Unregistered host-owned peers get no app memory or app context, and the
+system agent's input cannot reach them. Hosts MUST handle `peer/input` by
+starting the peer's turn on that connection.**
+
+Registration only ADDS: a registered peer's own (host-driven) turns keep
+the kernel tools the peer has without a registration (under the existing
+peer restrictions), plus the host's app tools, plus the usual question and
+approval flow. An empty set takes nothing away.
 
 ### Migration for hosts
 
 A host that uses only UPCR-2026-034 today (`peer/prepare`,
-`peer/context/open`, `turn/start`) keeps working, but its peers' turns get
-no app memory, tools or app context until it registers. OctoSense's
+`peer/context/open`, `turn/start`) keeps its peers' tools, but their turns
+get no app memory or app context, and the system agent's `peer_send_input`
+to them fails, until it registers and handles `peer/input`. OctoSense's
 `crates/app-peers` broker currently calls only `peer/prepare`,
 `peer/context/open` and `turn/start`; it will register (the app's pinned
 `tools.json`, or an empty set) in OctoSense's M3 pin-bump PR. Other hosts,
@@ -82,26 +92,26 @@ never silently weakens a tool:
 | `confirm` | `host` (default) or `app`: who confirms a gated call with the person. Independent of `risk`. |
 | `shareable` | App Hub metadata; accepted, not acted on yet (see follow-ups). |
 
-`generic_tools` names kernel tools the app may use, from an **allowlist** of
-peer-safe tools: reading and searching the app's workspace (`read_file`,
-`list_dir`, `glob`, `grep`, all fenced to the session scope), research
-(`web_search`, `deep_search`), the app's memory namespace (`memory_search`,
-`memory_load`, `recall_memory`, `save_memory`, `record_memory_use`) and
-content generation (`mofa_make`, `mofa_describe_content_type`). Deliberately
-not on it: `synthesize_research` (its model-chosen `research_dir` is limited
-only to the profile data dir, so it could read the person's memory and other
-apps' files), `view_image` (it resolves upload handles, bare names and the
-global upload directory without the session scope) and `recall` (not
-registered in serve). Any other name is refused
-(`peer_tools_invalid`) and also stripped at every turn: shell and exec tools,
-file writes and patches, messaging and channel tools (`message`,
-`send_file`, …), browsers and raw fetches (`browser`, `web_fetch`,
-`deep_crawl`), child agents and pipelines (`spawn`, `delegate`,
-`run_pipeline`, which build registries of their own with the built-in
-tools), schedulers and monitors, background-task readers, other sessions'
-tools (`peer_*`, `goal_*`) and admin tools. Wider tiers (shell, files) would
-be an explicit opt-in of a later UPCR. A generic tool the kernel does not
-offer in a turn is simply absent.
+`generic_tools` is optional and only ever NARROWS. Omitted or empty (`[]`),
+the peer's host-driven turns keep the kernel tools the peer has without a
+registration. A non-empty list cuts those down to the listed names, which
+must come from an **allowlist** of peer-safe tools: reading and searching
+the app's workspace (`read_file`, `list_dir`, `glob`, `grep`, all fenced to
+the session scope), research (`web_search`, `deep_search`), the app's memory
+namespace (`memory_search`, `memory_load`, `recall_memory`, `save_memory`,
+`record_memory_use`) and content generation (`mofa_make`,
+`mofa_describe_content_type`). Deliberately not on it: `synthesize_research`
+(its model-chosen `research_dir` is limited only to the profile data dir, so
+it could read the person's memory and other apps' files), `view_image` (it
+resolves upload handles, bare names and the global upload directory without
+the session scope) and `recall` (not registered in serve). Any other name is
+refused (`peer_tools_invalid`): shell and exec tools, file writes and
+patches, messaging and channel tools (`message`, `send_file`, …), browsers
+and raw fetches (`browser`, `web_fetch`, `deep_crawl`), child agents and
+pipelines (`spawn`, `delegate`, `run_pipeline`), schedulers and monitors,
+background-task readers, other sessions' tools (`peer_*`, `goal_*`) and
+admin tools. A listed tool the kernel does not offer in a turn is simply
+absent.
 
 Limits: 64 app tools, 32 generic tools, 2 KiB per description. Options are
 clamped, and a host may raise the defaults up to the maximum:
@@ -174,6 +184,46 @@ timed out or was cancelled is refused (`peer_tool_call_not_found`) and, when
 the kernel still remembers the call (one hour, 1 024 calls), audited as
 `late_result`.
 
+### `peer/input` (server → host notification)
+
+```
+{peer, session_id, input_id, turn_id, text}
+```
+
+The system agent's `peer_send_input` to a host-owned peer. The kernel never
+runs it as a kernel-internal turn (which would have no tools and no app
+routing): it sends `peer/input` to the peer's host connection, the one that
+registered the peer's tools, and the host starts the turn itself:
+
+```
+turn/start {session_id: <session_id>, turn_id: <turn_id>,
+            input: [{kind: "text", text: <text>}]}
+```
+
+on that same connection, so the turn is host-driven: it gets the peer's
+tools, its approvals and questions are raised on the peer's session (the
+app's conversation) and answered by the person in the app, and the system
+agent follows it through the existing peer paths (question parks wake the
+system agent, which answers with `peer_respond`; `peer_gather` and the
+transcript carry the reply).
+
+- `session_id` is the peer's own session, `<originator base>#peer-<slug>`.
+- `input_id` identifies this input (the system agent's session, turn and
+  tool call) and is the reply handle; the kernel sends one input once, so a
+  re-dispatched tool call is not sent again. Hosts SHOULD also drop a
+  repeated `input_id`.
+- `turn_id` is a fresh id minted by the kernel; hosts SHOULD start the turn
+  with it (a turn already running on the peer, or a retry, then fails with
+  the usual `turn/start` errors instead of starting twice).
+- Ephemeral: only the host connection receives it. If no host connection
+  holds the peer's route (never registered, or disconnected),
+  `peer_send_input` fails with an error that says the app is not connected,
+  and nothing is queued or run. External clients of `serve --host-managed`
+  never receive it (they can never register).
+
+Peers that are not host-owned keep today's behaviour (the gateway inbox or
+the serve continuation queue).
+
 ### `peer/tool/cancel` (server → host notification)
 
 `{call_id, reason}`, `reason` = `timeout` (no result within the wait) or
@@ -214,10 +264,12 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   reading or extending a bound session's history from a foreign connection
   is #2556-1 / #2571.
 - **Kernel-internal continuations get no tools.** A turn the kernel starts
-  itself on a peer session (a `peer_send_input` injection, a background
-  result, a goal continuation) is nobody's turn: it gets no tools, whichever
-  connection it happens to run on. Runs in the person's absence are the
-  host's: it starts them with `turn/start` on its own connection.
+  itself on a peer session (a background result, a goal continuation) is
+  nobody's turn: it gets no tools, whichever connection it happens to run
+  on. Runs in the person's absence are the host's: it starts them with
+  `turn/start` on its own connection. The system agent's `peer_send_input`
+  to a host-owned peer is never such a turn: it is delivered to the host as
+  `peer/input` (above).
 - **Approvals stay with the host.** An approval raised by a host-routed
   call is tagged with the peer. Its `approval/requested` (and the matching
   `approval/decided`, `approval/cancelled`) is written to the session's
@@ -263,15 +315,16 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   refused (`budget_exhausted`, or `budget_unavailable` when the accounting
   cannot be read) once the peer's budget is spent, from any of its sessions;
   the tokens a tool result costs are part of the turn's spend.
-- **Visibility.** The turn's tool registry is cut down to the allowed generic
-  tools and then gets one routed tool per declared app tool. Nothing else is
-  advertised, and a call to any other name is refused by the registry
-  (`unknown tool`). This runs after the profile tool policy and envelope, so
-  it cannot be widened by them. An empty registration means no tools, never
-  the default roster. A set file that exists but cannot be read fails closed:
-  no tools at all.
+- **Visibility (additive).** A host-driven turn keeps the peer's usual
+  kernel tools (cut down to `generic_tools` only when that list is
+  non-empty) and gets one routed tool per declared app tool, recorded with
+  the tool origin `HostRouted`. An app tool whose model name a kernel tool
+  already has is not offered (the kernel tool wins), and a name equal to a
+  peer-safe generic tool is refused at registration. This runs after the
+  profile tool policy and envelope, so it cannot be widened by them. A set
+  file that exists but cannot be read fails closed: no tools at all.
 - **Unchanged without a registration.** A host-owned peer that never
-  registered keeps today's roster, so existing hosts keep working.
+  registered keeps today's roster, so existing hosts keep their tools.
 - **Arguments.** Must be an object carrying every `required` property of the
   input schema and at most 64 KiB serialized; the host validates the rest.
 - **Person present or absent.** A call is *attended* when it comes from an
@@ -519,4 +572,20 @@ never declares its tools a second way.
   `should_refuse_generic_tools_that_escape_the_set` (the allowlist, schema
   shapes, and per-turn stripping of a stale set),
   `should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated`
+- Additive registration and `peer/input` (octos-cli `peer_host_tools_tests`):
+  `should_keep_the_peers_kernel_tools_when_it_registers_an_empty_set`,
+  `should_never_let_an_app_tool_shadow_a_kernel_tool`,
+  `should_deliver_the_system_agents_input_to_the_host_connection_when_the_peer_is_host_owned`
+  (no kernel turn queued; one input sent once; a later turn's reused
+  tool-call id is a new input; only the host connection receives it),
+  `should_fail_visibly_and_run_nothing_when_the_app_is_not_connected`,
+  `should_run_the_system_agents_input_as_a_host_driven_turn_with_tools_end_to_end`
+  (the host starts the turn from `peer/input`; the model gets the usual tools
+  plus the app tool; the destructive call's approval goes to the app),
+  `should_answer_a_host_peer_sessions_questions_only_on_the_owning_or_host_connection`
+- Host-managed serve (UPCR-2026-036): `should_refuse_host_tool_registration_and_results_when_the_connection_is_external`,
+  `should_never_give_an_external_turn_a_host_routed_tool_when_one_is_registered`,
+  `should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids_collide`,
+  `should_refuse_a_host_tool_whose_model_name_is_a_kernel_tools`, and in
+  octos-agent `should_mark_a_host_routed_tool_by_origin_whatever_its_name`
 - `spec_section6_catalog_lists_every_advertised_method`

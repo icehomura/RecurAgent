@@ -15504,6 +15504,137 @@ struct RawPeerToolsRegisterParams {
 
 /// UPCR-2026-035 `peer/tools/register` — declare (replace) a host-owned app
 /// peer's tool set and route its app tool calls to THIS connection.
+/// One `peer_send_input` call of the session `origin_session` (its turn
+/// `turn_id`) in profile `profile_id`: authorize it, then deliver the input.
+/// A host-owned app peer's input goes to its host connection as `peer/input`
+/// (UPCR-2026-035) and never runs as a kernel-internal turn; every other
+/// peer's input takes the gateway inbox or the serve continuation queue.
+fn deliver_peer_send_input(
+    profile_id: &str,
+    peers_root: &Path,
+    origin_session: &str,
+    turn_id: &TurnId,
+    req: octos_agent::PeerSendInputRequest,
+) -> Result<octos_agent::PeerSendInputDelivery, String> {
+    // Resolve the identifier (peer NAME or slug) to the actual
+    // slug BEFORE any auth / path / wire op — names are the
+    // primary address. Unknown identifier → a clear error.
+    let slug = resolve_peer_name_to_slug(peers_root, &req.slug).ok_or_else(|| {
+        format!(
+            "no peer named '{ident}' — check the name (or slug) with peer_list",
+            ident = req.slug
+        )
+    })?;
+    // The resolved slug is a real staged dir name; keep the
+    // guard as defense-in-depth (guards BOTH delivery paths).
+    if !peer_slug_is_safe(&slug) {
+        return Err(format!("invalid peer slug '{slug}'"));
+    }
+    // #436 P1 #6 — authorize before any delivery path: only the
+    // peer's recorded originator may inject.
+    peer_send_input_authorized(peers_root, &slug, origin_session)?;
+    // A closed peer (retired via peer_close) refuses input on
+    // BOTH delivery paths — check here, before the Path 1
+    // fast-path inbox send, not just the continuation queue.
+    if peer_is_closed(peers_root, &slug) {
+        return Err(format!("peer '{slug}' is closed and cannot receive input"));
+    }
+    invalidate_peer_lifetime_for_input(peers_root, &slug)
+        .map_err(|error| format!("cannot persist peer input lifetime: {error}"))?;
+    // UPCR-2026-035: a host-owned app peer's input goes to its host
+    // connection, which starts the peer's turn itself (host-driven: the
+    // peer's tools, the app's approvals). No kernel-internal turn, and no
+    // delivery at all while the app is not connected.
+    if crate::peers::app_binding::peer_is_host_owned(peers_root, &slug) {
+        let delivery = crate::peers::host_tools::deliver_peer_input(
+            peers_root,
+            &slug,
+            &peer_send_input_occurrence_id(origin_session, turn_id, &req.occurrence_id),
+            &req.message,
+        )?;
+        if delivery == crate::peers::host_tools::PeerInputDelivery::AlreadySent {
+            return Ok(octos_agent::PeerSendInputDelivery::AlreadyQueued);
+        }
+        if let Some(dir) = staged_peer_dir(peers_root, &slug) {
+            crate::peers::record_peer_brief(&dir, &req.message);
+        }
+        return Ok(octos_agent::PeerSendInputDelivery::Queued);
+    }
+    // Record the instruction as a numbered round (#2026), once,
+    // BEFORE the path split so BOTH delivery routes (gateway
+    // in-process inbox and serve continuation queue) capture it.
+    // `peer_send_input` lands in the peer's RUNNING session,
+    // which is not persisted, so without this the instruction
+    // that drove round N is unrecoverable after the fact.
+    // Anchored on the REAL staged dir so a swapped `<slug>`
+    // symlink cannot redirect the write; best-effort, so losing
+    // the audit copy never fails the injection itself.
+    if let Some(dir) = staged_peer_dir(peers_root, &slug) {
+        crate::peers::record_peer_brief(&dir, &req.message);
+    }
+    let key = peer_wire_key(profile_id, &slug);
+
+    // Path 1: gateway in-process inbox (fast, direct).
+    let inbox_tx = crate::session_actor::peer_inbox_registry()
+        .lock()
+        .unwrap()
+        .get(&key)
+        .cloned();
+    if let Some(tx) = inbox_tx {
+        let inbound = InboundMessage {
+            channel: String::new(),
+            sender_id: String::new(),
+            chat_id: String::new(),
+            content: req.message,
+            timestamp: chrono::Utc::now(),
+            media: vec![],
+            metadata: serde_json::json!({"origin": "peer_send_input"}),
+            message_id: None,
+            origin: MessageOrigin::Synthetic,
+        };
+        let actor_msg = crate::session_actor::ActorMessage::Inbound {
+            message: inbound,
+            image_media: vec![],
+            attachment_media: vec![],
+            attachment_prompt: None,
+        };
+        return tx
+            .try_send(actor_msg)
+            .map(|()| octos_agent::PeerSendInputDelivery::Queued)
+            .map_err(|e| format!("peer session '{slug}' inbox is full or closed: {e}"));
+    }
+
+    // Path 2: serve continuation queue.
+    let Some(target) = peer_wire_registry().resolve(&key) else {
+        return Err(format!(
+            "peer session '{slug}' is not open — the user must open \
+                 the staged peer session before it can receive input"
+        ));
+    };
+    // A deleted peer must not silently swallow injections into a
+    // queue nothing will drain: require the staged dir to exist,
+    // anchored (O_NOFOLLOW|O_DIRECTORY) so a symlink swapped in
+    // for the removed `<slug>` can't spoof the gate (#1824).
+    if !peer_io::peer_dir_exists(&peers_root.join(&slug)) {
+        return Err(format!(
+            "peer '{slug}' no longer exists (its staged directory was removed)"
+        ));
+    }
+    // #436 P1 #3/#4 — enqueue keyed on the unique occurrence id
+    // (distinct calls never collapse) and map the REAL delivery
+    // status to the result: a durable-persist failure is an
+    // error, not a false success ack; Queued/Duplicate are ok.
+    default_agent_orchestrator()
+        .enqueue_peer_send_input_continuation(
+            &target,
+            profile_id,
+            &slug,
+            &peer_send_input_occurrence_id(origin_session, turn_id, &req.occurrence_id),
+            &req.message,
+        )
+        .into_callback_result(&slug)
+}
+
 /// The connection a turn counts as driven by for a host peer's tools
 /// (UPCR-2026-035). A kernel-internal continuation (a peer_send_input
 /// injection, a background result) is nobody's turn: it never gets a host
@@ -37823,112 +37954,13 @@ async fn run_standalone_turn(
             let send_turn_id = turn_id.clone();
             let send_input: octos_agent::PeerSendInputCallback =
                 Arc::new(move |req: octos_agent::PeerSendInputRequest| {
-                    // Resolve the identifier (peer NAME or slug) to the actual
-                    // slug BEFORE any auth / path / wire op — names are the
-                    // primary address. Unknown identifier → a clear error.
-                    let slug = resolve_peer_name_to_slug(&send_peers_root, &req.slug).ok_or_else(
-                        || {
-                            format!(
-                                "no peer named '{ident}' — check the name (or slug) with peer_list",
-                                ident = req.slug
-                            )
-                        },
-                    )?;
-                    // The resolved slug is a real staged dir name; keep the
-                    // guard as defense-in-depth (guards BOTH delivery paths).
-                    if !peer_slug_is_safe(&slug) {
-                        return Err(format!("invalid peer slug '{slug}'"));
-                    }
-                    // #436 P1 #6 — authorize before any delivery path: only the
-                    // peer's recorded originator may inject.
-                    peer_send_input_authorized(&send_peers_root, &slug, &send_origin_session)?;
-                    // A closed peer (retired via peer_close) refuses input on
-                    // BOTH delivery paths — check here, before the Path 1
-                    // fast-path inbox send, not just the continuation queue.
-                    if peer_is_closed(&send_peers_root, &slug) {
-                        return Err(format!("peer '{slug}' is closed and cannot receive input"));
-                    }
-                    invalidate_peer_lifetime_for_input(&send_peers_root, &slug)
-                        .map_err(|error| format!("cannot persist peer input lifetime: {error}"))?;
-                    // Record the instruction as a numbered round (#2026), once,
-                    // BEFORE the path split so BOTH delivery routes (gateway
-                    // in-process inbox and serve continuation queue) capture it.
-                    // `peer_send_input` lands in the peer's RUNNING session,
-                    // which is not persisted, so without this the instruction
-                    // that drove round N is unrecoverable after the fact.
-                    // Anchored on the REAL staged dir so a swapped `<slug>`
-                    // symlink cannot redirect the write; best-effort, so losing
-                    // the audit copy never fails the injection itself.
-                    if let Some(dir) = staged_peer_dir(&send_peers_root, &slug) {
-                        crate::peers::record_peer_brief(&dir, &req.message);
-                    }
-                    let key = peer_wire_key(&send_profile_id, &slug);
-
-                    // Path 1: gateway in-process inbox (fast, direct).
-                    let inbox_tx = crate::session_actor::peer_inbox_registry()
-                        .lock()
-                        .unwrap()
-                        .get(&key)
-                        .cloned();
-                    if let Some(tx) = inbox_tx {
-                        let inbound = InboundMessage {
-                            channel: String::new(),
-                            sender_id: String::new(),
-                            chat_id: String::new(),
-                            content: req.message,
-                            timestamp: chrono::Utc::now(),
-                            media: vec![],
-                            metadata: serde_json::json!({"origin": "peer_send_input"}),
-                            message_id: None,
-                            origin: MessageOrigin::Synthetic,
-                        };
-                        let actor_msg = crate::session_actor::ActorMessage::Inbound {
-                            message: inbound,
-                            image_media: vec![],
-                            attachment_media: vec![],
-                            attachment_prompt: None,
-                        };
-                        return tx
-                            .try_send(actor_msg)
-                            .map(|()| octos_agent::PeerSendInputDelivery::Queued)
-                            .map_err(|e| {
-                                format!("peer session '{slug}' inbox is full or closed: {e}")
-                            });
-                    }
-
-                    // Path 2: serve continuation queue.
-                    let Some(target) = peer_wire_registry().resolve(&key) else {
-                        return Err(format!(
-                            "peer session '{slug}' is not open — the user must open \
-                             the staged peer session before it can receive input"
-                        ));
-                    };
-                    // A deleted peer must not silently swallow injections into a
-                    // queue nothing will drain: require the staged dir to exist,
-                    // anchored (O_NOFOLLOW|O_DIRECTORY) so a symlink swapped in
-                    // for the removed `<slug>` can't spoof the gate (#1824).
-                    if !peer_io::peer_dir_exists(&send_peers_root.join(&slug)) {
-                        return Err(format!(
-                            "peer '{slug}' no longer exists (its staged directory was removed)"
-                        ));
-                    }
-                    // #436 P1 #3/#4 — enqueue keyed on the unique occurrence id
-                    // (distinct calls never collapse) and map the REAL delivery
-                    // status to the result: a durable-persist failure is an
-                    // error, not a false success ack; Queued/Duplicate are ok.
-                    default_agent_orchestrator()
-                        .enqueue_peer_send_input_continuation(
-                            &target,
-                            &send_profile_id,
-                            &slug,
-                            &peer_send_input_occurrence_id(
-                                &send_origin_session,
-                                &send_turn_id,
-                                &req.occurrence_id,
-                            ),
-                            &req.message,
-                        )
-                        .into_callback_result(&slug)
+                    deliver_peer_send_input(
+                        &send_profile_id,
+                        &send_peers_root,
+                        &send_origin_session,
+                        &send_turn_id,
+                        req,
+                    )
                 });
             tool_registry.register(octos_agent::PeerSendInputTool::new(send_input));
 
@@ -38115,9 +38147,9 @@ async fn run_standalone_turn(
         .profile
         .apply_tool_envelope(&mut tool_registry);
     // UPCR-2026-035: a host-owned app peer (or one of its request contexts)
-    // with a registered tool set offers the model EXACTLY that set — the
-    // host's app tools (routed to the host) plus the generic tools it allows.
-    // Re-read every turn, so a registration applies from the next turn.
+    // with a registered tool set: the host's own turns keep the usual tools
+    // and gain the host's app tools (routed to the host); any other turn gets
+    // none. Re-read every turn, so a registration applies from the next turn.
     {
         let peers_root = session_runtime.profile.data_dir.join("peers");
         let resolved =

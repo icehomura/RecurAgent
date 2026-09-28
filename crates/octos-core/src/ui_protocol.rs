@@ -1379,6 +1379,12 @@ pub mod methods {
     /// UPCR-2026-035 `peer/tool/cancel` — the kernel stopped waiting for a
     /// `peer/tool/call` (`reason`: `timeout` or `cancelled`).
     pub const PEER_TOOL_CANCEL: &str = "peer/tool/cancel";
+    /// UPCR-2026-035 `peer/input` — the system agent's `peer_send_input` to a
+    /// host-owned app peer, delivered to the peer's host connection instead
+    /// of running as a kernel-internal turn. The host starts the peer's turn
+    /// itself (`turn/start` on the given `session_id`, ideally with the given
+    /// `turn_id`). Ephemeral: with no host connected the send fails.
+    pub const PEER_INPUT: &str = "peer/input";
 
     // ---- Smart-home bridge integration ----
     // Device control/state moved server-side from octos-web's client-only
@@ -1538,6 +1544,7 @@ pub const UI_PROTOCOL_NOTIFICATION_METHODS: &[&str] = &[
     methods::BACKGROUND_ACTIVITY,
     methods::PEER_TOOL_CALL,
     methods::PEER_TOOL_CANCEL,
+    methods::PEER_INPUT,
 ];
 
 /// Request methods currently handled by the first server/runtime slice.

@@ -957,6 +957,7 @@ fn ui_protocol_v1_wire_contract_is_golden() {
             "background/activity",
             "peer/tool/call",
             "peer/tool/cancel",
+            "peer/input",
         ]
     );
     assert_eq!(
@@ -1183,7 +1184,8 @@ fn ui_protocol_v1_representative_wire_payloads_are_golden() {
                 "peer/closed",
                 "background/activity",
                 "peer/tool/call",
-                "peer/tool/cancel"
+                "peer/tool/cancel",
+                "peer/input"
             ],
             "supported_features": [
                 "approval.typed.v1",
