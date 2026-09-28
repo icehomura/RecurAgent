@@ -31,6 +31,8 @@ pub mod reader;
 pub mod robots;
 pub mod text;
 pub mod throttle;
+#[cfg(all(feature = "metasearch", feature = "extract"))]
+pub mod toolbox;
 pub mod urls;
 
 pub use filter::{DomainCap, Filters, OneOrMany};
