@@ -49,6 +49,10 @@ struct Input {
     /// them (unknown-language results are kept).
     #[serde(default)]
     lang: research::LangInput,
+    /// The query in each language's own words, e.g. `{"zh": "人工智能 监管"}`.
+    /// Its languages are searched too.
+    #[serde(default)]
+    query_by_lang: std::collections::BTreeMap<String, String>,
     /// ISO 3166-1 alpha-2 region (Google News edition, Brave/Serper country).
     #[serde(default)]
     region: Option<String>,
@@ -612,8 +616,9 @@ async fn run_deep_search(
     // -----------------------------------------------------------------------
     progress(1, max_rounds, &format!("Searching: \"{query}\""));
     for lang in &langs {
-        let round = research::search_round(opts, engine, query, lang.as_deref(), max_results).await;
-        log.add(query, lang.as_deref(), round);
+        let q = opts.query_for(query, lang.as_deref());
+        let round = research::search_round(opts, engine, q, lang.as_deref(), max_results).await;
+        log.add(q, lang.as_deref(), round);
     }
     if log.hits.is_empty() {
         // Empty result, not a scrape: say what was tried and how to get

@@ -166,6 +166,9 @@ struct Input {
     /// BCP-47 language(s): a string, a list, or comma-separated.
     #[serde(default)]
     lang: octos_research::OneOrMany,
+    /// The query per language (tag → query).
+    #[serde(default)]
+    query_by_lang: std::collections::BTreeMap<String, String>,
     /// ISO 3166-1 alpha-2 region (Google News edition).
     #[serde(default)]
     region: Option<String>,
@@ -180,6 +183,8 @@ struct Input {
 /// Parsed free-tier controls.
 pub(crate) struct FreeTierControls {
     pub filters: octos_research::Filters,
+    /// Per-language queries (normalized tag → query).
+    pub query_by_lang: std::collections::BTreeMap<String, String>,
     pub region: Option<String>,
     pub news: bool,
     /// Metasearch category (`news`, `general`, `science`, `it`, `social`).
@@ -194,13 +199,12 @@ impl FreeTierControls {
             None | Some("") => None,
             Some(s) => Some(octos_research::date::Since::parse(s, now)?),
         };
-        let filters = octos_research::Filters::new(
-            input.lang.clone().into_vec(),
-            since,
-            Vec::new(),
-            Vec::new(),
-            None,
-        )?;
+        let query_by_lang = octos_research::lang::parse_query_by_lang(&input.query_by_lang)?;
+        let mut langs = input.lang.clone().into_vec();
+        if !langs.is_empty() {
+            langs.extend(query_by_lang.keys().cloned());
+        }
+        let filters = octos_research::Filters::new(langs, since, Vec::new(), Vec::new(), None)?;
         let category = octos_research::Category::parse(input.category.as_deref())?;
         let news = category.is_news(&input.query, filters.since.as_ref(), now);
         let ms_category = category.metasearch_category(&input.query, filters.since.as_ref(), now);
@@ -211,6 +215,7 @@ impl FreeTierControls {
             .filter(|r| r.len() == 2);
         Ok(Self {
             filters,
+            query_by_lang,
             region,
             news,
             category: ms_category,
@@ -220,11 +225,22 @@ impl FreeTierControls {
 
     /// Languages to query: requested ones, else a script guess, else default.
     fn langs(&self, query: &str) -> Vec<Option<String>> {
-        if self.filters.langs.is_empty() {
+        let mut langs: Vec<Option<String>> = if self.filters.langs.is_empty() {
             vec![octos_research::lang::guess_from_script(query).map(String::from)]
         } else {
             self.filters.langs.iter().cloned().map(Some).collect()
+        };
+        for l in self.query_by_lang.keys() {
+            if !langs.iter().flatten().any(|x| x == l) {
+                langs.push(Some(l.clone()));
+            }
         }
+        langs
+    }
+
+    /// The query for one language.
+    fn query_for<'a>(&'a self, query: &'a str, lang: Option<&str>) -> &'a str {
+        octos_research::lang::query_for(query, &self.query_by_lang, lang)
     }
 }
 
@@ -387,6 +403,11 @@ impl Tool for WebSearchTool {
                         {"type": "string"},
                         {"type": "array", "items": {"type": "string"}}
                     ]
+                },
+                "query_by_lang": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "The query in each language's own words, keyed by BCP-47 tag, e.g. {\"zh\": \"人工智能 监管\"}; each language is searched with its own query. Translate the query yourself when searching several languages."
                 },
                 "region": {
                     "type": "string",
@@ -789,6 +810,7 @@ impl WebSearchTool {
         langs: &[Option<String>],
     ) -> octos_research::metasearch::SearchResponse {
         let mut req = octos_research::metasearch::SearchRequest::new(query, c.category);
+        req.query_by_lang = c.query_by_lang.clone();
         req.langs = langs.iter().flatten().cloned().collect();
         req.region = c.region.clone();
         req.since = c.filters.since.clone();
@@ -879,7 +901,13 @@ impl WebSearchTool {
                 calls.push(async move {
                     let r = tokio::time::timeout(
                         Duration::from_secs(40),
-                        self.free_provider(*p, query, lang.as_deref(), count, c),
+                        self.free_provider(
+                            *p,
+                            c.query_for(query, lang.as_deref()),
+                            lang.as_deref(),
+                            count,
+                            c,
+                        ),
                     )
                     .await
                     .unwrap_or_else(|_| Err("timed out".to_string()));
@@ -2184,6 +2212,24 @@ mod tests {
         let bad: Input =
             serde_json::from_value(serde_json::json!({"query": "q", "since": "soon"})).unwrap();
         assert!(FreeTierControls::parse(&bad).is_err());
+    }
+
+    #[test]
+    fn should_search_each_language_in_its_own_words() {
+        let input: Input = serde_json::from_value(serde_json::json!({
+            "query": "AI regulation",
+            "lang": "en",
+            "query_by_lang": {"zh-cn": "人工智能 监管"}
+        }))
+        .unwrap();
+        let c = FreeTierControls::parse(&input).unwrap();
+        assert_eq!(c.filters.langs, vec!["en", "zh-CN"]);
+        assert_eq!(
+            c.langs(&input.query),
+            vec![Some("en".to_string()), Some("zh-CN".to_string())]
+        );
+        assert_eq!(c.query_for(&input.query, Some("zh-CN")), "人工智能 监管");
+        assert_eq!(c.query_for(&input.query, Some("en")), "AI regulation");
     }
 
     #[tokio::test]

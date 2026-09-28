@@ -17,6 +17,7 @@ The `search` tool does multi-round research: octos's key-less metasearch first, 
 - **query** (required); **depth** 1-3 (default 2; 10/30/50 pages); **max_results** per provider per round (default 8).
 - **output**: `report` (default, Markdown) or `items` (structured JSON; the report is still written).
 - **lang**: BCP-47 code(s), e.g. `"en"` or `["en", "zh-CN", "es"]`. Each language is searched separately and results are kept to those languages (unknown-language results are kept).
+- **query_by_lang**: the query in each language's own words, e.g. `{"zh": "人工智能 监管"}` with query `"AI regulation"`. Without it every language gets the same text, so an English query finds few Chinese pages; translate the query yourself when researching several languages.
 - **region**: ISO country, e.g. `US`, `TW` (Google News edition, Brave/Serper country).
 - **since**: ISO date or `24h` / `7d` / `2w` / `3m` / `1y`. Sent to providers that support it and applied to feed/page dates (undated results are kept). Use this instead of adding years or "latest" to the query.
 - **category**: `news`, `general`, `science`, `it`, `social` or `auto` (default: news when `since` ≤ 31 days or the query mentions news/latest/today, else general).

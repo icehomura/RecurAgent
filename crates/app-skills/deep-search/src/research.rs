@@ -39,6 +39,8 @@ const READ_CONCURRENCY: usize = 8;
 /// Parsed research controls.
 pub(crate) struct Options {
     pub items_mode: bool,
+    /// Per-language queries (normalized tag → query).
+    pub query_by_lang: std::collections::BTreeMap<String, String>,
     pub filters: Filters,
     pub region: Option<String>,
     pub category: Category,
@@ -64,8 +66,15 @@ impl Options {
             None | Some("") => None,
             Some(s) => Some(Since::parse(s, now)?),
         };
+        let query_by_lang = octos_research::lang::parse_query_by_lang(&input.query_by_lang)?;
+        let mut langs = input.lang.clone().into_vec();
+        // Languages with their own query are searched (and, when the caller
+        // restricted languages, kept) too.
+        if !langs.is_empty() {
+            langs.extend(query_by_lang.keys().cloned());
+        }
         let filters = Filters::new(
-            input.lang.clone().into_vec(),
+            langs,
             since,
             input.domains_allow.clone(),
             input.domains_deny.clone(),
@@ -90,6 +99,7 @@ impl Options {
         };
         Ok(Self {
             items_mode,
+            query_by_lang,
             filters,
             region,
             category: Category::parse(input.category.as_deref())?,
@@ -102,11 +112,22 @@ impl Options {
     /// Languages to search in: the requested ones, else a guess from the
     /// query script, else "provider default" (`None`).
     pub fn search_langs(&self, query: &str) -> Vec<Option<String>> {
-        if self.filters.langs.is_empty() {
+        let mut langs: Vec<Option<String>> = if self.filters.langs.is_empty() {
             vec![octos_research::lang::guess_from_script(query).map(String::from)]
         } else {
             self.filters.langs.iter().cloned().map(Some).collect()
+        };
+        for l in self.query_by_lang.keys() {
+            if !langs.iter().flatten().any(|x| x == l) {
+                langs.push(Some(l.clone()));
+            }
         }
+        langs
+    }
+
+    /// The query for one language round.
+    pub fn query_for<'a>(&'a self, query: &'a str, lang: Option<&str>) -> &'a str {
+        octos_research::lang::query_for(query, &self.query_by_lang, lang)
     }
 
     pub fn is_news(&self, query: &str) -> bool {
@@ -885,6 +906,42 @@ mod tests {
 
     fn now() -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 9, 27, 12, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn should_search_each_language_in_its_own_words() {
+        let o = Options::from_input(
+            &input(serde_json::json!({
+                "query": "AI regulation",
+                "query_by_lang": {"zh-cn": "人工智能 监管"}
+            })),
+            now(),
+        )
+        .unwrap();
+        assert!(o.filters.langs.is_empty(), "no lang filter was asked for");
+        let langs = o.search_langs("AI regulation");
+        assert!(langs.contains(&Some("zh-CN".to_string())), "{langs:?}");
+        assert_eq!(o.query_for("AI regulation", Some("zh-CN")), "人工智能 监管");
+        assert_eq!(o.query_for("AI regulation", Some("zh")), "人工智能 监管");
+        assert_eq!(o.query_for("AI regulation", None), "AI regulation");
+
+        let o = Options::from_input(
+            &input(serde_json::json!({
+                "query": "AI regulation",
+                "lang": "en",
+                "query_by_lang": {"zh": "人工智能 监管"}
+            })),
+            now(),
+        )
+        .unwrap();
+        assert_eq!(o.filters.langs, vec!["en", "zh"], "kept, not filtered out");
+
+        for bad in [
+            serde_json::json!({"query": "q", "query_by_lang": {"chinese!": "x"}}),
+            serde_json::json!({"query": "q", "query_by_lang": {"zh": "  "}}),
+        ] {
+            assert!(Options::from_input(&input(bad), now()).is_err());
+        }
     }
 
     #[test]

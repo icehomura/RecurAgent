@@ -599,3 +599,57 @@ fn parse_response(response, opts) {
         EngineStatus::Ok
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn should_search_each_language_with_its_own_query() {
+    let fetch = MockFetch::default();
+    fetch.on("multi.example.org", ok(hits(&[("https://m.org/1", "M")])));
+    fetch.on("single.example.org", ok(hits(&[("https://s.org/1", "S")])));
+    let ms = search(
+        vec![
+            test_engine(
+                "multi",
+                "multi.example.org",
+                serde_json::json!({"multi_language": true}),
+            ),
+            test_engine("single", "single.example.org", serde_json::json!({})),
+        ],
+        &fetch,
+        Config::default(),
+    );
+    let mut req = request("AI regulation");
+    req.langs = vec!["en".into(), "zh-CN".into()];
+    req.query_by_lang
+        .insert("zh".into(), "人工智能 监管".into());
+    assert_eq!(req.query_for(Some("zh-CN")), "人工智能 监管");
+    assert_eq!(req.query_for(Some("en")), "AI regulation");
+    assert_eq!(req.query_for(None), "AI regulation");
+    ms.search(&req).await;
+
+    let q = |host: &str| -> Vec<String> {
+        let mut v: Vec<String> = fetch
+            .calls_to(host)
+            .iter()
+            .map(|(_, r)| {
+                url::Url::parse(&r.url)
+                    .unwrap()
+                    .query_pairs()
+                    .find(|(k, _)| k == "q")
+                    .unwrap()
+                    .1
+                    .into_owned()
+            })
+            .collect();
+        v.sort();
+        v
+    };
+    // The multi-language engine is split because the queries differ.
+    assert_eq!(
+        q("multi.example.org"),
+        vec!["AI regulation", "人工智能 监管"]
+    );
+    assert_eq!(
+        q("single.example.org"),
+        vec!["AI regulation", "人工智能 监管"]
+    );
+}

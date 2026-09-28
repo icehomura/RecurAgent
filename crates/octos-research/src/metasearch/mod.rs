@@ -173,6 +173,10 @@ impl Config {
 #[derive(Debug, Clone)]
 pub struct SearchRequest {
     pub query: String,
+    /// Query per language (BCP-47 tag or primary subtag → query), used for
+    /// calls in that language instead of `query`. Lets a caller search each
+    /// language in its own words ("AI regulation" / "人工智能 监管").
+    pub query_by_lang: BTreeMap<String, String>,
     /// Normalized BCP-47 tags to search in; empty = engine default.
     pub langs: Vec<String>,
     /// ISO 3166-1 alpha-2.
@@ -200,6 +204,7 @@ impl SearchRequest {
     pub fn new(query: &str, category: &str) -> Self {
         Self {
             query: query.trim().to_string(),
+            query_by_lang: BTreeMap::new(),
             langs: Vec::new(),
             region: None,
             since: None,
@@ -212,6 +217,11 @@ impl SearchRequest {
             deadline: Duration::from_secs(25),
             now: Utc::now(),
         }
+    }
+
+    /// The query for a call in `lang` (see [`lang::query_for`]).
+    pub fn query_for(&self, lang: Option<&str>) -> &str {
+        lang::query_for(&self.query, &self.query_by_lang, lang)
     }
 }
 
@@ -440,7 +450,12 @@ impl Metasearch {
             if supported.is_empty() {
                 continue;
             }
-            if m.multi_language {
+            // One call can cover several languages only when they share a
+            // query.
+            let own_queries = supported
+                .iter()
+                .any(|l| req.query_for(Some(l)) != req.query);
+            if m.multi_language && !own_queries {
                 calls.push(Call {
                     engine: e,
                     langs: supported,
@@ -715,7 +730,13 @@ impl Metasearch {
             allow_http: m.allow_http,
         };
         let opts = self.opts_json(call, req);
-        let sreq = sandbox::build_request(&sb, &req.query, &opts)
+        let query = req.query_for(
+            call.langs
+                .first()
+                .map(String::as_str)
+                .filter(|_| call.langs.len() == 1),
+        );
+        let sreq = sandbox::build_request(&sb, query, &opts)
             .map_err(|err| CallError::Failed(err, None))?;
         let url =
             url::Url::parse(&sreq.url).map_err(|err| CallError::Failed(err.to_string(), None))?;
