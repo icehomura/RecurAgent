@@ -22,6 +22,7 @@ fn sources() -> Vec<PathBuf> {
     for file in [
         "octos-agent/src/tools/web_search.rs",
         "octos-agent/src/tools/deep_search.rs",
+        "octos-agent/src/tools/site_crawl.rs",
     ] {
         out.push(crates.join(file));
     }
