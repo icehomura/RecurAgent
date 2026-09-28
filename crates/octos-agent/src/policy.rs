@@ -343,8 +343,24 @@ impl Default for SafePolicy {
     }
 }
 
+/// Whether `command` names another process's environment or command line
+/// (`/proc/<pid>/environ`, `/proc/<pid>/cmdline`): where a parent or sibling
+/// process's secrets live. A textual guard (the sandbox is the boundary);
+/// it catches the direct reads a model would write.
+pub fn names_process_secrets(command: &str) -> bool {
+    let normalized: String = command
+        .chars()
+        .filter(|c| !matches!(c, '"' | '\'' | '\\'))
+        .collect();
+    normalized.contains("/proc/")
+        && (normalized.contains("environ") || normalized.contains("cmdline"))
+}
+
 impl CommandPolicy for SafePolicy {
     fn check(&self, command: &str, _cwd: &std::path::Path) -> Decision {
+        if names_process_secrets(command) {
+            return Decision::Deny;
+        }
         crate::shell_analysis::evaluate(command, &self.deny_patterns, &self.ask_patterns)
     }
 }
@@ -367,6 +383,27 @@ mod tests {
         assert_eq!(
             policy.check("dd if=/dev/zero of=/dev/sda", Path::new("/tmp")),
             Decision::Deny
+        );
+    }
+
+    #[test]
+    fn should_deny_reading_process_environments_and_command_lines() {
+        let policy = SafePolicy::default();
+        for command in [
+            "cat /proc/1234/environ",
+            "tr '\\0' '\\n' < /proc/$PPID/environ",
+            "cat \"/proc/self/cmdline\"",
+            "xxd /proc/1/task/1/environ",
+        ] {
+            assert_eq!(
+                policy.check(command, Path::new("/tmp")),
+                Decision::Deny,
+                "{command}"
+            );
+        }
+        assert_eq!(
+            policy.check("cat /proc/cpuinfo", Path::new("/tmp")),
+            Decision::Allow
         );
     }
 
