@@ -24,6 +24,8 @@ ono = "ono"
 scaned = "scaned"
 # Timezone abbreviation (IST)
 ist = "ist"
+# Channel NewsAsia (CNA), a publisher-feeds source
+CNA = "CNA"
 # Test data fragment in SSE test
 hel = "hel"
 # Homoglyph security test string
