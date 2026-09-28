@@ -61,6 +61,38 @@ pub const EXTERNAL_ROUTE: &str = "/api/ui-protocol/ws";
 /// `data.kind` of a refused external answer to a host-owned peer.
 pub const HOST_OWNED_PEER_ANSWER_DENIED: &str = "host_owned_peer_answer_denied";
 
+/// `data.kind` of a refused external call to the host-owned app-peer control
+/// plane.
+pub const HOST_OWNED_PEER_CONTROL_DENIED: &str = "host_owned_peer_control_denied";
+
+/// Whether an external connection may make this raw call. Host-owned app
+/// peers (UPCR-2026-034) are the host's: an external client may neither
+/// create, resume nor bind one (`peer/prepare` with `memory_namespace`,
+/// `resume` or `host_token`), nor change its lane or open or close its
+/// request contexts. Their originator check trusts a self-reported
+/// `session_id`, and a namespace may nest with a legitimate app's (the
+/// #2556 residuals), so this mode keeps the whole control plane host-only.
+/// Ordinary peers stay available.
+pub fn external_may_call(method: &str, params: Option<&serde_json::Value>) -> bool {
+    match method {
+        "peer/model/set" | "peer/context/open" | "peer/context/close" => false,
+        "peer/prepare" => !params.is_some_and(|params| {
+            ["memory_namespace", "resume", "host_token"]
+                .iter()
+                .any(|field| params.get(field).is_some_and(|value| !value.is_null()))
+        }),
+        _ => true,
+    }
+}
+
+/// The refusal for [`external_may_call`].
+pub fn peer_control_denied(method: &str) -> octos_core::ui_protocol::RpcError {
+    octos_core::ui_protocol::RpcError::permission_denied(format!(
+        "{method}: host-owned app peers are managed by the host, not external clients"
+    ))
+    .with_data(serde_json::json!({ "kind": HOST_OWNED_PEER_CONTROL_DENIED }))
+}
+
 /// Host-managed authentication and lifecycle state (`AppState::host_managed`).
 pub struct HostManaged {
     host_token: String,
@@ -240,7 +272,10 @@ pub(crate) async fn host_header_guard(
 /// `POST /api/admin/host/pairing` (host token only): mint a one-time code a
 /// loopback web client exchanges for the EXTERNAL token at `/pair/claim`.
 /// The host calls this only while its pairing UI is open.
-pub(crate) async fn enable_pairing(State(state): State<Arc<AppState>>) -> Response {
+pub(crate) async fn enable_pairing(
+    State(state): State<Arc<AppState>>,
+    identity: Option<axum::Extension<AuthIdentity>>,
+) -> Response {
     let Some(host_managed) = &state.host_managed else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -251,6 +286,19 @@ pub(crate) async fn enable_pairing(State(state): State<Arc<AppState>>) -> Respon
         )
             .into_response();
     };
+    // Audited without the code: who enabled pairing, and for how long.
+    if let Err(error) = super::admin_audit::record_admin_action(
+        &state,
+        identity.as_ref().map(|identity| &identity.0),
+        "host.pairing.enable",
+        "external",
+        None,
+        Some(serde_json::json!({ "expires_in_secs": super::pairing::PAIR_CODE_TTL.as_secs() })),
+    ) {
+        host_managed.disable_pairing();
+        tracing::error!(%error, "could not audit the pairing; pairing stays off");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
     axum::Json(serde_json::json!({
         "code": pairing.printed_code(),
         "server_origin": pairing.server_origin(),
@@ -260,11 +308,25 @@ pub(crate) async fn enable_pairing(State(state): State<Arc<AppState>>) -> Respon
 }
 
 /// `DELETE /api/admin/host/pairing` (host token only): pairing off.
-pub(crate) async fn disable_pairing(State(state): State<Arc<AppState>>) -> Response {
+pub(crate) async fn disable_pairing(
+    State(state): State<Arc<AppState>>,
+    identity: Option<axum::Extension<AuthIdentity>>,
+) -> Response {
     let Some(host_managed) = &state.host_managed else {
         return StatusCode::NOT_FOUND.into_response();
     };
     host_managed.disable_pairing();
+    // Off regardless; a failed audit write is logged, not undone.
+    if let Err(error) = super::admin_audit::record_admin_action(
+        &state,
+        identity.as_ref().map(|identity| &identity.0),
+        "host.pairing.disable",
+        "external",
+        None,
+        None,
+    ) {
+        tracing::error!(%error, "could not audit turning pairing off");
+    }
     StatusCode::NO_CONTENT.into_response()
 }
 
@@ -301,10 +363,17 @@ fn wait_for_eof(mut input: impl std::io::Read) {
 }
 
 /// Linux/Android: ask the kernel for SIGTERM when the parent dies (SIGTERM
-/// takes the same graceful path as `stop`). Stdin EOF is the primary
-/// lifeline; this covers a host that leaked its end of the pipe. The signal
-/// follows the parent THREAD that spawned us, so hosts spawn from a
-/// long-lived thread.
+/// takes the same graceful path as `stop`).
+///
+/// Orphan posture on every platform: stdin EOF is the lifeline. When the
+/// host process ends for any reason (exit, crash, SIGKILL, Windows
+/// TerminateProcess), the OS closes its end of the pipe and the server
+/// stops; `tests/serve_host_managed.rs` SIGKILLs the pipe's holder to prove
+/// it. What EOF cannot see is a host whose pipe end outlives it (inherited by
+/// another process it spawned). Linux/Android add this parent-death signal
+/// for that case; elsewhere the host must not leak the write end (spawn it
+/// close-on-exec, as Rust's `std::process` does). The signal follows the
+/// parent THREAD that spawned us, so hosts spawn from a long-lived thread.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) fn bind_to_parent() -> eyre::Result<()> {
     use eyre::WrapErr;

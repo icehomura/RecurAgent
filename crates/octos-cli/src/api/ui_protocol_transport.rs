@@ -7093,6 +7093,18 @@ async fn ui_protocol_connection(
             );
             continue;
         }
+        // `octos serve --host-managed`: host-owned app peers' control plane
+        // is the host's, never an external client's (UPCR-2026-036).
+        if connection_is_external
+            && !super::host_managed::external_may_call(&request.method, Some(&request.params))
+        {
+            let _ = send_rpc_error(
+                &ws,
+                Some(id),
+                super::host_managed::peer_control_denied(&request.method),
+            );
+            continue;
+        }
         if handle_raw_appui_rpc(
             &ws,
             &state,

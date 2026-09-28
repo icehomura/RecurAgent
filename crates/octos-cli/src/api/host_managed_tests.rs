@@ -19,6 +19,7 @@ struct Server {
     addr: SocketAddr,
     state: Arc<AppState>,
     handle: tokio::task::JoinHandle<()>,
+    _audit: tempfile::TempDir,
 }
 
 impl Drop for Server {
@@ -36,7 +37,11 @@ async fn serve(external: bool) -> Server {
         addr.port(),
     )
     .unwrap();
+    let audit = tempfile::tempdir().unwrap();
     let state = Arc::new(AppState {
+        admin_audit_store: Some(Arc::new(
+            crate::admin_audit_store::AdminAuditStore::open(audit.path()).unwrap(),
+        )),
         auth_token: Some(HOST.to_owned()),
         appui_allowed_origins: vec![WEB.to_owned()],
         host_managed: Some(Arc::new(host_managed)),
@@ -55,6 +60,7 @@ async fn serve(external: bool) -> Server {
         addr,
         state,
         handle,
+        _audit: audit,
     }
 }
 
@@ -429,4 +435,130 @@ fn should_adopt_only_a_loopback_tcp_listener_descriptor() {
         super::adopt_listener_fd(1).is_err(),
         "stdio is never adopted"
     );
+}
+
+#[test]
+fn should_keep_the_host_owned_peer_control_plane_from_external_clients() {
+    use super::external_may_call;
+    use serde_json::json;
+    for method in ["peer/model/set", "peer/context/open", "peer/context/close"] {
+        assert!(!external_may_call(method, Some(&json!({}))), "{method}");
+    }
+    for field in ["memory_namespace", "resume", "host_token"] {
+        assert!(
+            !external_may_call("peer/prepare", Some(&json!({ field: "app/rinx" }))),
+            "peer/prepare with {field}"
+        );
+    }
+    assert!(external_may_call(
+        "peer/prepare",
+        Some(&json!({"names": ["a"], "memory_namespace": null}))
+    ));
+    assert!(external_may_call("peer/gather", Some(&json!({}))));
+    assert!(external_may_call("session/open", None));
+}
+
+async fn ws_rpc(
+    addr: SocketAddr,
+    token: &str,
+    method: &str,
+    params: serde_json::Value,
+) -> serde_json::Value {
+    use futures::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let mut request = format!("ws://{addr}/api/ui-protocol/ws")
+        .into_client_request()
+        .unwrap();
+    bearer(token)(&mut request);
+    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let frame =
+        serde_json::json!({"jsonrpc": "2.0", "id": "x", "method": method, "params": params});
+    socket
+        .send(Message::Text(frame.to_string().into()))
+        .await
+        .unwrap();
+    loop {
+        let message = tokio::time::timeout(std::time::Duration::from_secs(10), socket.next())
+            .await
+            .expect("a reply")
+            .expect("open")
+            .expect("frame");
+        if let Message::Text(text) = message {
+            let value: serde_json::Value = serde_json::from_str(text.as_str()).unwrap();
+            if value["id"] == "x" {
+                return value;
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn should_refuse_external_calls_to_the_host_owned_peer_control_plane() {
+    use serde_json::json;
+    let server = serve(true).await;
+    let kind = |reply: &serde_json::Value| reply["error"]["data"]["kind"].clone();
+    for (method, params) in [
+        (
+            "peer/context/open",
+            json!({"session_id": "_main:api:octosense#system", "peer": "rinx", "context_id": "a"}),
+        ),
+        (
+            "peer/model/set",
+            json!({"session_id": "_main:api:octosense#system", "peer": "rinx", "model": null}),
+        ),
+        (
+            "peer/prepare",
+            json!({"session_id": "_main:api:octosense#system", "names": ["rinx"], "memory_namespace": "app/rinx"}),
+        ),
+    ] {
+        let external = ws_rpc(server.addr, EXTERNAL, method, params.clone()).await;
+        assert_eq!(
+            kind(&external),
+            json!(super::HOST_OWNED_PEER_CONTROL_DENIED),
+            "{method}: {external}"
+        );
+        let host = ws_rpc(server.addr, HOST, method, params).await;
+        assert_ne!(
+            kind(&host),
+            json!(super::HOST_OWNED_PEER_CONTROL_DENIED),
+            "{method}: the host passes the gate"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_audit_the_pairing_ceremony_without_the_code() {
+    let server = serve(true).await;
+    let client = reqwest::Client::new();
+    let base = format!("http://{}", server.addr);
+    let enabled: serde_json::Value = client
+        .post(format!("{base}/api/admin/host/pairing"))
+        .bearer_auth(HOST)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let code = enabled["code"].as_str().unwrap().to_owned();
+    client
+        .delete(format!("{base}/api/admin/host/pairing"))
+        .bearer_auth(HOST)
+        .send()
+        .await
+        .unwrap();
+    let audit = client
+        .get(format!("{base}/api/admin/audit"))
+        .bearer_auth(HOST)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(
+        audit.contains("host.pairing.enable") && audit.contains("host.pairing.disable"),
+        "{audit}"
+    );
+    assert!(!audit.contains(&code) && !audit.contains(EXTERNAL) && !audit.contains(HOST));
 }

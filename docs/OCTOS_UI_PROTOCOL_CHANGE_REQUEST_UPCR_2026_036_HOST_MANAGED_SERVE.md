@@ -80,6 +80,15 @@ client still answers prompts on every other session of its profile, such as the
 shared system conversation. This extends UPCR-2026-034's "Approvals belong to
 the person" from the owning system agent to external clients.
 
+### Host-owned app peers are the host's to manage
+
+On a host-managed server, a connection that is not authenticated with the
+host token cannot call `peer/model/set`, `peer/context/open` or
+`peer/context/close`, nor `peer/prepare` with `memory_namespace`, `resume`
+or `host_token` (non-null). These calls fail with `permission_denied`,
+`data.kind: "host_owned_peer_control_denied"`. Ordinary `peer/prepare` and the
+other raw methods are unchanged.
+
 ### `server/shutdown`
 
 A host-managed server never advertises `server/shutdown` in
@@ -94,6 +103,15 @@ never enables. The host stops the server by closing its stdin.
   a client to the person's assistant means. The UPCR-2026-034 session-plane
   caveat applies: hosts must not give raw protocol access to untrusted apps.
   The external token is for a client the person chose to attach.
+- **Without the control-plane gate,** an external client could combine
+  the two #2556 residuals. `peer/prepare` trusts a self-reported originator
+  `session_id`, and a new host-owned peer's namespace is checked only against
+  existing peers, not against what the host will later create. An external
+  client could therefore mint a host-owned peer that shares memory stores
+  with a legitimate app's peer. Under host-managed those calls would ride the
+  host's authority context. This UPCR removes that path by keeping the whole
+  host-owned control plane host-only. #2556 remains the general fix for
+  other deployments.
 - A peer topic prefix is the refusal criterion, so ordinary agent-staged
   peers' prompts are also host-only for external clients. Their originator
   answers them through `peer_respond`, which is unchanged.
@@ -111,3 +129,8 @@ never enables. The host stops the server by closing its stdin.
 - `should_let_an_external_client_answer_its_own_session_approval`
 - `should_admit_only_configured_origins_on_a_host_managed_ws_upgrade`
 - `stdio_default_feature_list_matches_the_stdio_defaults`
+- `should_keep_the_host_owned_peer_control_plane_from_external_clients`
+- `should_refuse_external_calls_to_the_host_owned_peer_control_plane`
+- `should_audit_the_pairing_ceremony_without_the_code`
+- `tests/serve_host_managed.rs`: stdin EOF, host SIGKILL, inherited listener
+  (serial CI step)

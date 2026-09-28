@@ -1587,41 +1587,50 @@ mod tests {
             // registered by a no-subscriber sibling test first (the JustOne
             // rebuilder only asks the current thread's default), leaving a
             // stale NEVER in the interest cache. Force a rebuild so the
-            // victim's DEBUG span is re-asked under this subscriber.
-            tracing_core::callsite::rebuild_interest_cache();
-            runtime.block_on(async {
-                for uri in [
-                    "/api/ui-protocol/ws?token=synthetic-query-marker%21&feature=chat",
-                    "/api/preview-signed/synthetic-preview-marker/assets/index.html",
-                    "/api/register/setup-script/test-user/synthetic-setup-marker",
-                    "/v1/session_ingress/ws/synthetic-session?token=synthetic-ingress-marker",
-                ] {
+            // victim's DEBUG span is re-asked under this subscriber. A sibling
+            // that is mid-registration while we rebuild can still store NEVER
+            // after us, so re-ask and replay (bounded) until the span shows;
+            // the no-credential assertions below cover every attempt's logs.
+            for _attempt in 0..3 {
+                tracing_core::callsite::rebuild_interest_cache();
+                runtime.block_on(async {
+                    for uri in [
+                        "/api/ui-protocol/ws?token=synthetic-query-marker%21&feature=chat",
+                        "/api/preview-signed/synthetic-preview-marker/assets/index.html",
+                        "/api/register/setup-script/test-user/synthetic-setup-marker",
+                        "/v1/session_ingress/ws/synthetic-session?token=synthetic-ingress-marker",
+                    ] {
+                        let response = app
+                            .clone()
+                            .oneshot(
+                                Request::builder()
+                                    .method(Method::GET)
+                                    .uri(uri)
+                                    .body(axum::body::Body::empty())
+                                    .unwrap(),
+                            )
+                            .await
+                            .unwrap();
+                        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+                    }
+
                     let response = app
                         .clone()
                         .oneshot(
                             Request::builder()
                                 .method(Method::GET)
-                                .uri(uri)
+                                .uri("/synthetic-unmatched-marker")
                                 .body(axum::body::Body::empty())
                                 .unwrap(),
                         )
                         .await
                         .unwrap();
-                    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+                    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+                });
+                if captured.as_string().contains("path=/api/ui-protocol/ws") {
+                    break;
                 }
-
-                let response = app
-                    .oneshot(
-                        Request::builder()
-                            .method(Method::GET)
-                            .uri("/synthetic-unmatched-marker")
-                            .body(axum::body::Body::empty())
-                            .unwrap(),
-                    )
-                    .await
-                    .unwrap();
-                assert_eq!(response.status(), StatusCode::NOT_FOUND);
-            });
+            }
         });
 
         let logs = captured.as_string();

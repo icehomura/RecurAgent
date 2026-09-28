@@ -1,7 +1,10 @@
 //! Integration test: `octos serve --host-managed` (UPCR-2026-036) with the REAL
-//! binary. The host owns the process: closing its end of stdin stops the
-//! server, no pairing code is printed, and an inherited listener descriptor is
-//! served instead of a freshly bound port.
+//! binary. The host owns the process: closing its end of stdin (or dying,
+//! even by SIGKILL) stops the server, no pairing code is printed, and an
+//! inherited listener descriptor is served instead of a freshly bound port.
+//!
+//! Serial CI step (the broad integration step skips it):
+//! `cargo test -p octos-cli --features api --test serve_host_managed -- --test-threads=1`
 //!
 //! Unix-only (descriptor passing and process control), like `serve_sigterm`.
 
@@ -140,6 +143,34 @@ mod serve_host_managed {
                 .any(|line| line.contains(HOST) || line.contains(EXTERNAL)),
             "no token on stdout: {printed:?}"
         );
+    }
+
+    /// A host that is SIGKILLed never closes anything itself: the OS closes
+    /// its end of the pipe, and the server stops. The pipe's only writer here
+    /// is a `sleep` standing in for the host; this test holds no copy.
+    #[test]
+    fn serve_host_managed_stops_when_its_host_is_sigkilled() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let mut host = Command::new("sleep")
+            .arg("600")
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let lifeline = host.stdout.take().unwrap();
+        let mut child = command(dir.path(), &["--port", "0"])
+            .stdin(Stdio::from(lifeline))
+            .spawn()
+            .unwrap();
+        let (port, _lines) = announced_port(&mut child);
+        assert!(health(port).contains(" 200 "));
+        host.kill().unwrap(); // SIGKILL
+        host.wait().unwrap();
+        let status = exits_within(&mut child, Duration::from_secs(30)).unwrap_or_else(|| {
+            let _ = child.kill();
+            panic!("the server outlived its SIGKILLed host");
+        });
+        assert!(status.success(), "{status}");
     }
 
     #[test]
