@@ -397,10 +397,8 @@ async fn read_into(
                     opts.filters
                         .check(&page.final_url, lang.as_deref(), published.as_deref())
                 {
-                    st.skipped.push(SkippedUrl {
-                        url: hit.url.clone(),
-                        reason: reason.to_string(),
-                    });
+                    st.skipped
+                        .push(SkippedUrl::new(hit.url.clone(), reason.to_string()));
                     continue;
                 }
                 let canonical = page.canonical_url();
@@ -411,19 +409,15 @@ async fn read_into(
                     continue;
                 }
                 if !st.cap.admit(&canonical) {
-                    st.skipped.push(SkippedUrl {
-                        url: hit.url.clone(),
-                        reason: "per_domain_cap".to_string(),
-                    });
+                    st.skipped
+                        .push(SkippedUrl::new(hit.url.clone(), "per_domain_cap"));
                     continue;
                 }
                 st.sources.push(CitedSource { hit, page });
             }
-            Err(reason) => {
-                st.skipped.push(SkippedUrl {
-                    url: hit.url.clone(),
-                    reason,
-                });
+            Err(err) => {
+                st.skipped
+                    .push(SkippedUrl::read_failed(hit.url.clone(), &err));
                 st.unread.push(hit);
             }
         }
@@ -498,6 +492,7 @@ fn source_item(s: &CitedSource, citation: usize, cited: bool, file: &str) -> Res
         provider: s.hit.provider.clone(),
         engines: s.hit.engines.clone(),
         score: s.hit.score,
+        kind: s.hit.kind,
         read: true,
         rendered: s.page.rendered,
         citation: (citation > 0).then_some(citation),
@@ -535,6 +530,7 @@ fn unread_item(hit: &SearchHit, citation: Option<usize>, cited: bool) -> Researc
         provider: hit.provider.clone(),
         engines: hit.engines.clone(),
         score: hit.score,
+        kind: hit.kind,
         read: false,
         rendered: false,
         citation,
@@ -676,10 +672,7 @@ async fn run_deep_search(
     // become headline-only sources instead of using the budget.
     let (readable, denied) = reader.robots_partition(kept).await;
     for (hit, reason) in denied {
-        st.skipped.push(SkippedUrl {
-            url: hit.url.clone(),
-            reason,
-        });
+        st.skipped.push(SkippedUrl::new(hit.url.clone(), reason));
         st.unread.push(hit);
     }
     let to_read: Vec<SearchHit> = readable.into_iter().take(max_pages).collect();
@@ -3129,10 +3122,7 @@ mod tests {
 
         let mut doc = ItemsDocument::new("cumbre", serde_json::json!({"lang": ["es"]}));
         doc.items = vec![item, unread];
-        doc.skipped = vec![SkippedUrl {
-            url: gnews.url.clone(),
-            reason: "robots".into(),
-        }];
+        doc.skipped = vec![SkippedUrl::new(gnews.url.clone(), "robots")];
         let v = serde_json::to_value(&doc).unwrap();
         assert_eq!(v["schema"], "octos.research.items.v1");
         assert_eq!(v["items"].as_array().unwrap().len(), 2);
