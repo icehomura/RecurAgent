@@ -24,6 +24,8 @@ ono = "ono"
 scaned = "scaned"
 # Timezone abbreviation (IST)
 ist = "ist"
+# Spanish test page in octos-research's extract tests ("reconocieron avances")
+avances = "avances"
 # Test data fragment in SSE test
 hel = "hel"
 # Homoglyph security test string
@@ -61,4 +63,12 @@ BRE = "BRE"
 WRONLY = "WRONLY"
 
 [files]
-extend-exclude = ["**/*.js", "**/*.css", "**/*.html", "examples/*/static/**/*.*"]
+extend-exclude = [
+    "**/*.js",
+    "**/*.css",
+    "**/*.html",
+    "examples/*/static/**/*.*",
+    # Recorded provider responses (metasearch engine fixtures): third-party
+    # text and encoded IDs, replayed byte-for-byte by the fixture tests.
+    "crates/octos-research/engines/*/fixtures/**",
+]
