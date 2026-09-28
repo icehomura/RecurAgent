@@ -17,7 +17,7 @@ octos-research (Rust, trusted)                      engines/<id>/ (sandboxed Oct
  ├─ dispatcher: parallel fan-out, deadline           ├─ manifest.json   id, categories, languages, hosts,
  ├─ engine suspension on errors (doubling backoff)   │                  auth, rate_limit, docs_url, license_note
  ├─ HTTP: per-host spacing, Retry-After, ETag /      ├─ engine.octoscript
- │   If-Modified-Since cache, octos UA   │    build_request(query, opts)  -> {url, method, headers, body}
+ │   If-Modified-Since cache, octos UA   │    build_request(query, opts)  -> request | [request] (≤ max_requests)
  ├─ merge: canonical URL + near-duplicate titles     │    parse_response(response, opts) -> [item] | {items, backoff, error}
  ├─ rank: engine weight / √(1+position), recency     └─ fixtures/        recorded responses + expected items
  └─ filters: lang, since, domain allow/deny, cap
@@ -54,6 +54,7 @@ octos-research (Rust, trusted)                      engines/<id>/ (sandboxed Oct
 | `github` | it | REST search repositories | optional `GITHUB_TOKEN` | 6 s | https://docs.github.com/en/rest/search/search#search-repositories |
 | `stackexchange` | it | API 2.3 `/search/advanced` | optional `STACKEXCHANGE_KEY` | 2 s + `backoff` | https://api.stackexchange.com/docs/advanced-search, https://api.stackexchange.com/docs/throttle |
 | `mastodon` | social, news | public hashtag timeline | none | 1.5 s | https://docs.joinmastodon.org/methods/timelines/#tag, https://docs.joinmastodon.org/api/rate-limits/ |
+| `publisher_feeds` | news | publishers' own RSS feeds (en: NPR, France 24, CNA; zh: RFI 中文, 自由亚洲电台, 中央社, 端傳媒), filtered by the query | none | 1 s, 15 min cache | each publisher's feed and terms page (see the manifest) |
 | `brave` | general, news | Brave Search API web/news | **required** `BRAVE_API_KEY` | 1.1 s | https://api-dashboard.search.brave.com/app/documentation/web-search/query |
 
 Notes:
@@ -61,6 +62,7 @@ Notes:
 - **`general` without a key is thin.** Key-less general search is Wikipedia and Wikidata only, and results say so.
 - **Google News.** Headlines, publisher and date only; article redirect links are cited, never fetched. Google doesn't document the feed, and its text limits it to personal, non-commercial feed-reader use, which is how an octos agent acting for one person uses it.
 - **Mastodon.** Uses the public hashtag timeline, because full-text search needs a user token. Set another instance with `OCTOS_METASEARCH_MASTODON_INSTANCE`.
+- **Publisher feeds.** Feeds can't be searched, so the engine reads the feeds for the requested languages (one request per feed, each cached 15 minutes) and keeps entries that mention the query terms; English terms match whole words, Chinese terms match anywhere. Headline, source, date and link only. Publishers whose terms forbid AI or automated use (BBC, The Guardian, Al Jazeera, DW, NYT 中文网) are not included.
 - **Small key-less quotas.** OpenAlex allows about 100 searches a day per IP without a key. Stack Exchange allows 300 requests a day.
 
 ### Clean-room method

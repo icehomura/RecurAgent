@@ -599,3 +599,105 @@ fn parse_response(response, opts) {
         EngineStatus::Ok
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn should_search_each_language_with_its_own_query() {
+    let fetch = MockFetch::default();
+    fetch.on("multi.example.org", ok(hits(&[("https://m.org/1", "M")])));
+    fetch.on("single.example.org", ok(hits(&[("https://s.org/1", "S")])));
+    let ms = search(
+        vec![
+            test_engine(
+                "multi",
+                "multi.example.org",
+                serde_json::json!({"multi_language": true}),
+            ),
+            test_engine("single", "single.example.org", serde_json::json!({})),
+        ],
+        &fetch,
+        Config::default(),
+    );
+    let mut req = request("AI regulation");
+    req.langs = vec!["en".into(), "zh-CN".into()];
+    req.query_by_lang
+        .insert("zh".into(), "人工智能 监管".into());
+    assert_eq!(req.query_for(Some("zh-CN")), "人工智能 监管");
+    assert_eq!(req.query_for(Some("en")), "AI regulation");
+    assert_eq!(req.query_for(None), "AI regulation");
+    ms.search(&req).await;
+
+    let q = |host: &str| -> Vec<String> {
+        let mut v: Vec<String> = fetch
+            .calls_to(host)
+            .iter()
+            .map(|(_, r)| {
+                url::Url::parse(&r.url)
+                    .unwrap()
+                    .query_pairs()
+                    .find(|(k, _)| k == "q")
+                    .unwrap()
+                    .1
+                    .into_owned()
+            })
+            .collect();
+        v.sort();
+        v
+    };
+    // The multi-language engine is split because the queries differ.
+    assert_eq!(
+        q("multi.example.org"),
+        vec!["AI regulation", "人工智能 监管"]
+    );
+    assert_eq!(
+        q("single.example.org"),
+        vec!["AI regulation", "人工智能 监管"]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn should_report_failed_requests_when_a_multi_request_engine_partly_fails() {
+    let source = r#"use mod.net
+use mod.std.array
+use mod.std.object
+
+fn build_request(query, opts) {
+    return [net.request({url: "https://feed-a.example.org/rss"}), net.request({url: "https://feed-b.example.org/rss"})]
+}
+
+fn parse_response(response, opts) {
+    let out = []
+    for h in object.get(response.json, "hits", []) {
+        array.push(out, h)
+    }
+    return out
+}
+"#;
+    let manifest = serde_json::json!({
+        "id": "feeds",
+        "name": "feeds",
+        "categories": ["news"],
+        "hosts": ["feed-a.example.org", "feed-b.example.org"],
+        "rate_limit": {"min_interval_ms": 1000},
+        "docs_url": ["https://example.org/docs"],
+        "license_note": "test",
+        "timeout_secs": 2,
+        "max_requests": 2
+    });
+    let engine = Engine::load(&manifest.to_string(), source, EngineOrigin::Builtin).unwrap();
+    let fetch = MockFetch::default();
+    fetch.on(
+        "feed-a.example.org",
+        ok(hits(&[("https://a.org/1", "One")])),
+    );
+    fetch.on(
+        "feed-b.example.org",
+        Behavior::Respond(500, Vec::new(), "boom".into()),
+    );
+    let ms = search(vec![engine], &fetch, Config::default());
+    let resp = ms.search(&request("q")).await;
+    let report = resp.engines.iter().find(|r| r.engine == "feeds").unwrap();
+    assert_eq!(report.status, EngineStatus::Ok, "one feed still answered");
+    assert_eq!(resp.items.len(), 1);
+    let err = report.error.as_deref().unwrap_or_default();
+    assert!(err.starts_with("1 of 2 requests failed"), "{err}");
+}

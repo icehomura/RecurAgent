@@ -74,6 +74,8 @@ struct Input {
     #[serde(default)]
     lang: octos_research::OneOrMany,
     #[serde(default)]
+    query_by_lang: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
     region: Option<String>,
     #[serde(default)]
     since: Option<String>,
@@ -149,6 +151,11 @@ impl Tool for DeepSearchTool {
                         {"type": "array", "items": {"type": "string"}}
                     ]
                 },
+                "query_by_lang": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "The query in each language's own words, keyed by BCP-47 tag, e.g. {\"zh\": \"人工智能 监管\"}; each language is searched with its own query. Translate the query yourself when searching several languages."
+                },
                 "region": {
                     "type": "string",
                     "description": "ISO 3166-1 alpha-2 region, e.g. US"
@@ -218,6 +225,14 @@ impl Tool for DeepSearchTool {
             ("region", serde_json::json!(input.region)),
             ("since", serde_json::json!(input.since)),
             ("category", serde_json::json!(input.category)),
+            (
+                "query_by_lang",
+                if input.query_by_lang.is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::json!(input.query_by_lang)
+                },
+            ),
         ] {
             if !value.is_null() {
                 search_args[key] = value;
@@ -460,6 +475,8 @@ fn page_item(
         snippet: page.meta.excerpt.clone().unwrap_or_default(),
         fetched_at: Some(page.fetched_at.clone()),
         provider: "web_search".to_string(),
+        engines: Vec::new(),
+        score: None,
         read: true,
         rendered: page.rendered,
         citation: Some(citation),

@@ -53,7 +53,9 @@ impl MetaItem {
             source_url: self.source_url.clone(),
             lang: self.lang.clone(),
             published: self.published.clone(),
-            provider: self.engines.join("+"),
+            provider: super::PROVIDER_ID.to_string(),
+            engines: self.engines.clone(),
+            score: Some(self.score),
         }
     }
 }
@@ -379,6 +381,28 @@ mod tests {
             &title_tokens("Rust"),
             &title_tokens("Rust")
         ));
+    }
+
+    #[test]
+    fn should_carry_engines_and_score_into_hits() {
+        let items = merge(
+            vec![
+                hit("gdelt", 0, "https://a.org/x", "Story"),
+                hit("hackernews", 1, "https://a.org/x", "Story"),
+            ],
+            "news",
+            opts(),
+        );
+        let h = items[0].to_hit();
+        assert_eq!(h.provider, "metasearch");
+        assert_eq!(h.engines, vec!["gdelt", "hackernews"]);
+        assert_eq!(h.score, Some(items[0].score));
+        let v = serde_json::to_value(&h).unwrap();
+        assert_eq!(v["engines"], serde_json::json!(["gdelt", "hackernews"]));
+        let plain = serde_json::to_value(SearchHit::default()).unwrap();
+        assert!(plain.get("engines").is_none() && plain.get("score").is_none());
+        let out = crate::providers::format_hits("q", &[h]);
+        assert!(out.contains("via metasearch: gdelt, hackernews"), "{out}");
     }
 
     #[test]

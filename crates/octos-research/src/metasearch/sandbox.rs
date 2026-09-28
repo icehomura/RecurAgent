@@ -311,7 +311,7 @@ fn runtime(engine: &SandboxEngine<'_>, body: Option<&str>) -> Result<Runtime, St
         vec![
             (
                 "request",
-                4,
+                MAX_REQUESTS,
                 Box::new(move |v| request_tool(v, &hosts_req, allow_http)),
             ),
             (
@@ -369,12 +369,16 @@ fn strip_source_path(d: &str) -> String {
     }
 }
 
-/// Run `build_request(input.query, input.opts)`.
+/// Most requests one `build_request` may return.
+pub const MAX_REQUESTS: usize = 16;
+
+/// Run `build_request(input.query, input.opts)`. The script returns one
+/// request, a list of requests (e.g. one per feed), or `nil` for none.
 pub fn build_request(
     engine: &SandboxEngine<'_>,
     query: &str,
     opts: &Value,
-) -> Result<ScriptRequest, String> {
+) -> Result<Vec<ScriptRequest>, String> {
     let input = json!({ "query": query, "opts": opts });
     let v = run(
         engine,
@@ -382,9 +386,21 @@ pub fn build_request(
         None,
         "build_request(input.query, input.opts)",
     )?;
+    let list = match v {
+        Value::Null => Vec::new(),
+        Value::Array(a) => a,
+        other => vec![other],
+    };
+    if list.len() > MAX_REQUESTS {
+        return Err(format!("{}: more than {MAX_REQUESTS} requests", engine.id));
+    }
+    list.iter().map(|r| checked_request(engine, r)).collect()
+}
+
+fn checked_request(engine: &SandboxEngine<'_>, v: &Value) -> Result<ScriptRequest, String> {
     // Re-check what came back: the script might return a literal record
     // instead of going through net.request.
-    let checked = request_tool(&v, engine.allowed_hosts, engine.allow_http)
+    let checked = request_tool(v, engine.allowed_hosts, engine.allow_http)
         .map_err(|e| format!("{}: {e}", engine.id))?;
     Ok(ScriptRequest {
         method: checked["method"].as_str().unwrap_or("GET").to_string(),
@@ -401,12 +417,13 @@ pub fn build_request(
     })
 }
 
-/// Run `parse_response(response, opts)` with `response = {status, headers,
+/// Run `parse_response(response, opts)` with `response = {url, status, headers,
 /// json, body}`: `json` is the decoded body (or `nil`), `body` the raw text
 /// when it is not JSON.
 pub fn parse_response(
     engine: &SandboxEngine<'_>,
     opts: &Value,
+    url: &str,
     status: u16,
     headers: &[(String, String)],
     body: &str,
@@ -427,6 +444,7 @@ pub fn parse_response(
     let is_json = data.is_some();
     let input = json!({
         "response": {
+            "url": url,
             "status": status,
             "headers": headers,
             "json": data,
@@ -527,7 +545,9 @@ fn parse_response(response, opts) {
         let hosts = vec!["api.example.org".to_string()];
         let e = engine(OK, &hosts);
         check_engine_source(OK).unwrap();
-        let req = build_request(&e, "rust & tokio", &json!({"count": 5})).unwrap();
+        let reqs = build_request(&e, "rust & tokio", &json!({"count": 5})).unwrap();
+        assert_eq!(reqs.len(), 1);
+        let req = &reqs[0];
         assert_eq!(req.method, "GET");
         assert_eq!(
             req.url,
@@ -538,12 +558,44 @@ fn parse_response(response, opts) {
             vec![("accept".into(), "application/json".into())]
         );
         let body = r#"{"hits":[{"url":"https://a.org/1","title":"One"}],"backoff":10}"#;
-        let parsed = parse_response(&e, &json!({}), 200, &[], body).unwrap();
+        let parsed = parse_response(&e, &json!({}), &req.url, 200, &[], body).unwrap();
         assert_eq!(
             parsed.items,
             vec![json!({"url":"https://a.org/1","title":"One"})]
         );
         assert_eq!(parsed.backoff, Some(Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn should_accept_a_list_of_requests_and_check_each() {
+        let hosts = vec!["a.example.org".to_string(), "b.example.org".to_string()];
+        let two = "use mod.net\nfn build_request(query, opts) {\nreturn [net.request({url: \"https://a.example.org/rss\"}), net.request({url: \"https://b.example.org/rss\"})]\n}\nfn parse_response(response, opts) {\nreturn [{url: response.url, title: \"t\"}]\n}\n";
+        let reqs = build_request(&engine(two, &hosts), "q", &json!({})).unwrap();
+        assert_eq!(reqs.len(), 2);
+        let parsed = parse_response(
+            &engine(two, &hosts),
+            &json!({}),
+            &reqs[1].url,
+            200,
+            &[],
+            "<rss/>",
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.items[0]["url"], "https://b.example.org/rss",
+            "parse_response sees which request it answers"
+        );
+
+        // A literal list entry on an undeclared host is refused.
+        let sneaky = "use mod.net\nfn build_request(query, opts) {\nreturn [net.request({url: \"https://a.example.org/rss\"}), {url: \"https://evil.example.com/\"}]\n}\nfn parse_response(response, opts) {\nreturn []\n}\n";
+        let err = build_request(&engine(sneaky, &hosts), "q", &json!({})).unwrap_err();
+        assert!(err.contains("not declared"), "{err}");
+        let none = "fn build_request(query, opts) {\nreturn nil\n}\nfn parse_response(response, opts) {\nreturn []\n}\n";
+        assert!(
+            build_request(&engine(none, &hosts), "q", &json!({}))
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

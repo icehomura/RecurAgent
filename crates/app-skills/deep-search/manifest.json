@@ -68,6 +68,13 @@
               }
             ]
           },
+          "query_by_lang": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The query in each language's own words, keyed by BCP-47 tag, e.g. {\"zh\": \"人工智能 监管\"} alongside query \"AI regulation\". Each language is searched with its own query (and searched even if not listed in lang). Translate the query yourself when researching several languages."
+          },
           "region": {
             "type": "string",
             "description": "ISO 3166-1 alpha-2 region, e.g. US or TW (Google News edition, Brave/Serper country)."

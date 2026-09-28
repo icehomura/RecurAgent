@@ -117,6 +117,7 @@ pub fn parse_gdelt(body: &str) -> Result<Vec<SearchHit>, String> {
                     .and_then(|d| d.as_str())
                     .and_then(date::to_iso),
                 provider: "gdelt".to_string(),
+                ..Default::default()
             })
         })
         .collect())
@@ -380,6 +381,7 @@ fn finish_entry(en: FeedEntry, provider: &str, lang_tag: Option<&str>) -> Option
         lang: lang_tag.map(String::from),
         published: date::to_iso(&en.published),
         provider: provider.to_string(),
+        ..Default::default()
     };
     Some((hit, en.authors))
 }
@@ -453,6 +455,7 @@ pub fn parse_searxng(body: &str) -> Result<Vec<SearchHit>, String> {
                     .and_then(|d| date::to_iso(&d)),
                 provider: "searxng".to_string(),
                 url,
+                ..Default::default()
             })
         })
         .collect())
@@ -478,9 +481,16 @@ pub fn format_hits(query: &str, hits: &[SearchHit]) -> String {
         .flatten()
         .collect();
         let mut meta_line = meta.join(" · ");
+        let via = if h.engines.is_empty() {
+            h.provider.clone()
+        } else {
+            format!("{}: {}", h.provider, h.engines.join(", "))
+        };
         if !meta_line.is_empty() {
-            meta_line = format!("{meta_line} · via {}", h.provider);
+            meta_line = format!("{meta_line} · via {via}");
             out.push_str(&format!("   {meta_line}\n"));
+        } else if !h.engines.is_empty() {
+            out.push_str(&format!("   via {via}\n"));
         }
         if !h.snippet.is_empty() {
             out.push_str(&format!("   {}\n", h.snippet));

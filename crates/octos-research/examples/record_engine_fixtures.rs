@@ -156,6 +156,15 @@ const CASES: &[Case] = &[
         source: Source::Live,
     },
     Case {
+        engine: "publisher_feeds",
+        name: "news_en_zh",
+        query: "AI",
+        langs: &["en", "zh"],
+        since: None,
+        category: "news",
+        source: Source::Live,
+    },
+    Case {
         engine: "brave",
         name: "general_synthetic",
         query: "octos agent",
@@ -166,12 +175,12 @@ const CASES: &[Case] = &[
     },
 ];
 
-/// Records the last request and response.
+/// Records every request and response of one search.
 #[derive(Clone)]
 struct Recorder {
     live: Arc<ReqwestFetch>,
     replay: Option<String>,
-    last: Arc<Mutex<Option<(HttpRequest, HttpResponse)>>>,
+    seen: Arc<Mutex<Vec<(HttpRequest, HttpResponse)>>>,
 }
 
 impl Fetch for Recorder {
@@ -185,7 +194,7 @@ impl Fetch for Recorder {
                 },
                 None => self.live.fetch(req.clone()).await?,
             };
-            *self.last.lock().unwrap() = Some((req, resp.clone()));
+            self.seen.lock().unwrap().push((req, resp.clone()));
             Ok(resp)
         })
     }
@@ -211,7 +220,7 @@ async fn main() {
         let rec = Recorder {
             live: Arc::new(ReqwestFetch::new()),
             replay,
-            last: Arc::default(),
+            seen: Arc::default(),
         };
         let mut registry = Registry::default();
         registry.insert(
@@ -243,7 +252,9 @@ async fn main() {
             .map(|s| octos_research::date::Since::parse(s, now).unwrap());
         let resp = ms.search(&req).await;
         let report = &resp.engines[0];
-        let Some((http, body)) = rec.last.lock().unwrap().clone() else {
+        let mut seen = rec.seen.lock().unwrap().clone();
+        seen.sort_by(|a, b| a.0.url.cmp(&b.0.url));
+        let Some((http, body)) = seen.first().cloned() else {
             eprintln!("{}/{}: no request made: {report:?}", case.engine, case.name);
             continue;
         };
@@ -257,9 +268,24 @@ async fn main() {
             .join("fixtures");
         std::fs::create_dir_all(&dir).unwrap();
         let body_file = format!("{}.body", case.name);
-        if !matches!(case.source, Source::File(p) if Path::new(p).ends_with(&body_file)) {
+        if seen.len() == 1
+            && !matches!(case.source, Source::File(p) if Path::new(p).ends_with(&body_file))
+        {
             std::fs::write(dir.join(&body_file), &body.body).unwrap();
         }
+        // Engines that build several requests (one per feed) record each.
+        let exchanges: Vec<serde_json::Value> = if seen.len() > 1 {
+            seen.iter()
+                .enumerate()
+                .map(|(i, (rq, rs))| {
+                    let file = format!("{}.{i}.body", case.name);
+                    std::fs::write(dir.join(&file), &rs.body).unwrap();
+                    serde_json::json!({"method": rq.method, "url": rq.url, "status": rs.status, "body_file": file})
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         let expect: Vec<serde_json::Value> = resp
             .items
             .iter()
@@ -296,6 +322,11 @@ async fn main() {
             "body_file": body_file,
             "expect": expect,
         });
+        let mut doc = doc;
+        if !exchanges.is_empty() {
+            doc["exchanges"] = serde_json::json!(exchanges);
+            doc.as_object_mut().unwrap().remove("body_file");
+        }
         std::fs::write(
             dir.join(format!("{}.json", case.name)),
             serde_json::to_string_pretty(&doc).unwrap() + "\n",

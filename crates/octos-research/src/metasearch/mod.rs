@@ -173,6 +173,10 @@ impl Config {
 #[derive(Debug, Clone)]
 pub struct SearchRequest {
     pub query: String,
+    /// Query per language (BCP-47 tag or primary subtag → query), used for
+    /// calls in that language instead of `query`. Lets a caller search each
+    /// language in its own words ("AI regulation" / "人工智能 监管").
+    pub query_by_lang: BTreeMap<String, String>,
     /// Normalized BCP-47 tags to search in; empty = engine default.
     pub langs: Vec<String>,
     /// ISO 3166-1 alpha-2.
@@ -200,6 +204,7 @@ impl SearchRequest {
     pub fn new(query: &str, category: &str) -> Self {
         Self {
             query: query.trim().to_string(),
+            query_by_lang: BTreeMap::new(),
             langs: Vec::new(),
             region: None,
             since: None,
@@ -212,6 +217,11 @@ impl SearchRequest {
             deadline: Duration::from_secs(25),
             now: Utc::now(),
         }
+    }
+
+    /// The query for a call in `lang` (see [`lang::query_for`]).
+    pub fn query_for(&self, lang: Option<&str>) -> &str {
+        lang::query_for(&self.query, &self.query_by_lang, lang)
     }
 }
 
@@ -440,7 +450,12 @@ impl Metasearch {
             if supported.is_empty() {
                 continue;
             }
-            if m.multi_language {
+            // One call can cover several languages only when they share a
+            // query.
+            let own_queries = supported
+                .iter()
+                .any(|l| req.query_for(Some(l)) != req.query);
+            if m.multi_language && !own_queries {
                 calls.push(Call {
                     engine: e,
                     langs: supported,
@@ -607,7 +622,14 @@ impl Metasearch {
             "compact": req.now.format("%Y%m%d%H%M%S").to_string(),
             "unix": req.now.timestamp(),
         });
+        let query = req.query_for(
+            call.langs
+                .first()
+                .map(String::as_str)
+                .filter(|_| call.langs.len() == 1),
+        );
         json!({
+            "query": query,
             "now": now,
             "langs": langs,
             "lang": langs.first().cloned(),
@@ -673,14 +695,14 @@ impl Metasearch {
             );
         }
         match self.call_engine(call, req, started).await {
-            Ok((hits, cached)) => {
+            Ok((hits, cached, partial)) => {
                 let status = if hits.is_empty() {
                     EngineStatus::Empty
                 } else {
                     EngineStatus::Ok
                 };
                 self.record(&m.id, status, None);
-                (report(status, hits.len(), None, cached), hits)
+                (report(status, hits.len(), partial, cached), hits)
             }
             Err(CallError::Timeout) => {
                 self.record(&m.id, EngineStatus::Timeout, None);
@@ -704,7 +726,7 @@ impl Metasearch {
         call: &Call<'_>,
         req: &SearchRequest,
         started: Instant,
-    ) -> Result<(Vec<RankedHit>, bool), CallError> {
+    ) -> Result<(Vec<RankedHit>, bool, Option<String>), CallError> {
         let e = call.engine;
         let m = &e.manifest;
         let hosts = self.allowed_hosts(m);
@@ -715,12 +737,109 @@ impl Metasearch {
             allow_http: m.allow_http,
         };
         let opts = self.opts_json(call, req);
-        let sreq = sandbox::build_request(&sb, &req.query, &opts)
+        let query = req.query_for(
+            call.langs
+                .first()
+                .map(String::as_str)
+                .filter(|_| call.langs.len() == 1),
+        );
+        let requests = sandbox::build_request(&sb, query, &opts)
             .map_err(|err| CallError::Failed(err, None))?;
+        if requests.is_empty() {
+            return Ok((Vec::new(), false, None));
+        }
+        if requests.len() > m.max_requests {
+            return Err(CallError::Failed(
+                format!(
+                    "{}: built {} requests, manifest allows {}",
+                    m.id,
+                    requests.len(),
+                    m.max_requests
+                ),
+                None,
+            ));
+        }
+
+        // One request per feed/page; each keeps its own host's spacing.
+        let results = futures::future::join_all(
+            requests
+                .iter()
+                .map(|sreq| self.fetch_and_parse(&sb, m, sreq, &opts, req, started)),
+        )
+        .await;
+        let single = results.len() == 1;
+        let mut lists = Vec::new();
+        let mut all_cached = true;
+        let mut first_err = None;
+        let mut failed = 0usize;
+        for (sreq, r) in requests.iter().zip(results) {
+            match r {
+                Ok((items, cached)) => {
+                    all_cached &= cached;
+                    lists.push(items);
+                }
+                Err(err) => {
+                    failed += 1;
+                    if !single {
+                        tracing::warn!(engine = %m.id, url = %sreq.url, "metasearch request failed");
+                    }
+                    first_err.get_or_insert(err);
+                }
+            }
+        }
+        if lists.is_empty() {
+            return Err(first_err.unwrap_or(CallError::Failed("no response".into(), None)));
+        }
+        // Some requests of a multi-request engine failed: say so in the
+        // report instead of only in the log.
+        let partial = (failed > 0).then(|| {
+            let why = match &first_err {
+                Some(CallError::Failed(msg, _)) => msg.clone(),
+                Some(CallError::Timeout) => "timed out".to_string(),
+                Some(CallError::Skip(_, msg)) => msg.clone(),
+                None => String::new(),
+            };
+            format!("{failed} of {} requests failed: {why}", requests.len())
+        });
+        // Interleave so no single feed/page takes every top position.
+        let mut items = Vec::new();
+        let longest = lists.iter().map(Vec::len).max().unwrap_or(0);
+        for k in 0..longest {
+            for list in &lists {
+                if let Some(v) = list.get(k) {
+                    items.push(v.clone());
+                }
+            }
+        }
+        let default_lang = (call.langs.len() == 1).then(|| call.langs[0].clone());
+        let hits = items
+            .iter()
+            .filter_map(|v| normalize_item(v, &m.id, default_lang.as_deref()))
+            .take(req.count.max(1))
+            .map(|hit| RankedHit {
+                engine: m.id.clone(),
+                position: 0,
+                weight: m.weight,
+                hit,
+            })
+            .collect();
+        Ok((hits, all_cached, partial))
+    }
+
+    /// Perform one request an engine built (robots when enabled, cache,
+    /// host spacing, key, status handling) and run `parse_response` on it.
+    async fn fetch_and_parse(
+        &self,
+        sb: &SandboxEngine<'_>,
+        m: &EngineManifest,
+        sreq: &sandbox::ScriptRequest,
+        opts: &Value,
+        req: &SearchRequest,
+        started: Instant,
+    ) -> Result<(Vec<Value>, bool), CallError> {
         let url =
             url::Url::parse(&sreq.url).map_err(|err| CallError::Failed(err.to_string(), None))?;
         let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-
         // robots.txt: only when the operator turned checks on.
         let mut interval = m.min_interval();
         if m.robots && self.inner.config.respect_robots {
@@ -839,8 +958,9 @@ impl Metasearch {
             ));
         }
         let parsed = sandbox::parse_response(
-            &sb,
-            &opts,
+            sb,
+            opts,
+            &sreq.url,
             response.status,
             &response.headers,
             &response.body,
@@ -858,20 +978,7 @@ impl Metasearch {
                 .cache
                 .store(&cache_key, &response, Duration::from_secs(m.cache_ttl_secs));
         }
-        let default_lang = (call.langs.len() == 1).then(|| call.langs[0].clone());
-        let hits = parsed
-            .items
-            .iter()
-            .filter_map(|v| normalize_item(v, &m.id, default_lang.as_deref()))
-            .take(req.count.max(1))
-            .map(|hit| RankedHit {
-                engine: m.id.clone(),
-                position: 0,
-                weight: m.weight,
-                hit,
-            })
-            .collect();
-        Ok((hits, cached))
+        Ok((parsed.items, cached))
     }
 
     fn attach_key(&self, m: &EngineManifest, http: &mut HttpRequest) -> Result<(), CallError> {
@@ -950,6 +1057,7 @@ fn normalize_item(v: &Value, engine: &str, default_lang: Option<&str>) -> Option
         lang,
         published,
         provider: engine.to_string(),
+        ..Default::default()
     })
 }
 

@@ -58,7 +58,27 @@ pub fn is_private_ip(ip: &IpAddr) -> bool {
                 || v6
                     .to_ipv4()
                     .is_some_and(|v4| is_private_ip(&IpAddr::V4(v4)))
+                // NAT64 local-use prefix 64:ff9b:1::/48 (RFC 8215).
+                || v6.segments()[..3] == [0x64, 0xff9b, 1]
+                || embedded_v4(v6).is_some_and(|v4| is_private_ip(&IpAddr::V4(v4)))
         }
+    }
+}
+
+/// The IPv4 address a translation prefix carries: NAT64 well-known prefix
+/// 64:ff9b::/96 (RFC 6052) or 6to4 2002::/16 (RFC 3056). A private address
+/// behind either is still private.
+fn embedded_v4(v6: &std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
+    let s = v6.segments();
+    let from = |hi: u16, lo: u16| {
+        std::net::Ipv4Addr::new((hi >> 8) as u8, hi as u8, (lo >> 8) as u8, lo as u8)
+    };
+    if s[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+        Some(from(s[6], s[7]))
+    } else if s[0] == 0x2002 {
+        Some(from(s[1], s[2]))
+    } else {
+        None
     }
 }
 
@@ -216,10 +236,21 @@ mod tests {
             "fe80::1",
             "::ffff:169.254.169.254",
             "::ffff:10.0.0.1",
+            "64:ff9b::a9fe:a9fe",
+            "64:ff9b::7f00:1",
+            "64:ff9b:1::1",
+            "2002:a9fe:a9fe::1",
+            "2002:c0a8:0101::1",
         ] {
             assert!(is_private_ip(&ip.parse().unwrap()), "{ip}");
         }
-        for ip in ["8.8.8.8", "93.184.216.34", "2606:4700::1111"] {
+        for ip in [
+            "8.8.8.8",
+            "93.184.216.34",
+            "2606:4700::1111",
+            "64:ff9b::808:808",
+            "2002:0808:0808::1",
+        ] {
             assert!(!is_private_ip(&ip.parse().unwrap()), "{ip}");
         }
         assert!(is_private_host("localhost"));

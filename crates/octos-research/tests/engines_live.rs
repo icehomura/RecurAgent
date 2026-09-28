@@ -50,3 +50,4 @@ live!(hackernews_live, "hackernews", "rust", "it");
 live!(github_live, "github", "tokio", "it");
 live!(stackexchange_live, "stackexchange", "tokio select", "it");
 live!(mastodon_live, "mastodon", "rustlang", "social");
+live!(publisher_feeds_live, "publisher_feeds", "AI", "news");
