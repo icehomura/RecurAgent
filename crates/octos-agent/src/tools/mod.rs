@@ -816,29 +816,12 @@ pub trait Tool: Send + Sync {
     }
 }
 
-/// Where a registered tool comes from. Filters that must exclude a whole
-/// class of tools whatever their names (an external client's turn, for
-/// instance) select on this rather than on a name list.
-///
-/// Minimal today: only host-routed app tools (UPCR-2026-035) are told apart.
-/// More origins (plugin, MCP, ...) are expected; match non-exhaustively.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum ToolOrigin {
-    /// Compiled into octos (the default for every tool that does not say
-    /// otherwise).
-    Builtin,
-    /// An app tool a host registered for a host-owned app peer; each call is
-    /// routed to the host connection (UPCR-2026-035).
-    HostRouted,
-}
-
 // Tool registry (extracted to its own module)
 /// Observe-only probe for the read-paging decision (changes no behaviour).
 pub(crate) mod read_paging_probe;
 pub(crate) mod read_window;
 mod registry;
-pub use registry::ToolRegistry;
+pub use registry::{RESERVED_BUILTIN_TOOL_NAMES, ToolOrigin, ToolRegistry};
 
 // Tool policy
 pub mod policy;

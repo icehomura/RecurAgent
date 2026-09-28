@@ -743,7 +743,6 @@ impl WsConnection {
         self.failure_signal().mark_failed();
     }
 
-    #[cfg(test)]
     pub(crate) fn connection_id(&self) -> ConnectionId {
         self.connection_id
     }
@@ -1975,6 +1974,12 @@ struct ActiveTurn {
     /// codex's `ActiveTurnNotSteerable` for review/compact turn kinds.
     steer: Option<octos_agent::SharedSteerBuffer>,
     abort: AbortHandle,
+    /// The connection whose request started the turn (`turn/start`,
+    /// `review/start`); `None` for server-initiated turns (continuations).
+    /// `octos serve --host-managed` lets an external connection steer,
+    /// interrupt and answer only turns it owns (UPCR-2026-036): turn ids are
+    /// client-chosen, so a bare id proves nothing.
+    owner: Option<ConnectionId>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -6056,20 +6061,18 @@ impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
         // UPCR-2026-035: a host-routed call's approval belongs to the peer's
         // host connection only: other connections neither see it (live or on
         // replay) nor answer it. Registered before the ledger append below.
-        // The entry records who raised it, so `approval/respond` checks the
-        // connection, never just the (client-chosen) turn id.
+        // The entry records the owning connection and the peer's route, so
+        // `approval/respond` checks connections, never a (client-chosen) turn
+        // id.
         let host_slug = once_only
             .then(|| crate::peers::host_tools::host_peer_slug_of(&self.session_id))
             .flatten();
-        let owner = crate::contracts::approvals::ApprovalOwner {
-            connection: self.ws.connection_id.0,
-            host_route: host_slug
-                .map(|slug| crate::peers::host_tools::route_key(&self.peers_root, slug)),
-        };
-        let response_rx =
-            self.contracts
-                .approvals
-                .request_runtime_owned(event.clone(), once_only, Some(owner));
+        let response_rx = self.contracts.approvals.request_runtime_entry(
+            event.clone(),
+            Some(self.ws.connection_id().0),
+            once_only,
+            host_slug.map(|slug| crate::peers::host_tools::route_key(&self.peers_root, slug)),
+        );
         if let Some(slug) = host_slug {
             crate::peers::host_tools::register_host_approval(
                 &approval_id.0.to_string(),
@@ -6418,7 +6421,10 @@ impl octos_agent::UserQuestionRequester for SessionUserQuestionRequester {
             return UserQuestionOutcome::Cancelled;
         }
 
-        let response_rx = self.contracts.user_questions.request_runtime(event.clone());
+        let response_rx = self
+            .contracts
+            .user_questions
+            .request_runtime_owned(event.clone(), Some(self.ws.connection_id().0));
 
         // #2 — RAII drop-guard. Arm a guard keyed to THIS pending entry the
         // instant it is registered. If our future is dropped before a clean
@@ -6947,9 +6953,9 @@ async fn ui_protocol_connection(
         super::host_managed::is_external(&state, connection_identity.as_ref());
     // Sessions this external connection opened; it answers prompts only there.
     let mut external_opened_sessions: HashSet<String> = HashSet::new();
-    // Turns this external connection started (and got accepted); it steers,
-    // interrupts and answers prompts of those only.
-    let mut external_turns: HashSet<String> = HashSet::new();
+    // Turn ownership is NOT tracked here by turn id (ids are client-chosen):
+    // the active-turn registry and each pending approval or question record
+    // the owning connection, and the handlers check it (UPCR-2026-036).
     let (ws_sink, mut ws_rx) = socket.split();
     // Decouple the network sink from request handlers via a bounded channel
     // and a dedicated drainer task. No handler ever holds a lock across an
@@ -7183,7 +7189,6 @@ async fn ui_protocol_connection(
                 &request.method,
                 &request.params,
                 &external_opened_sessions,
-                &external_turns,
             ) {
                 let _ = send_rpc_error(&ws, Some(id), error);
                 continue;
@@ -7290,8 +7295,7 @@ async fn ui_protocol_connection(
                 }
             }
             UiCommand::TurnStart(params) => {
-                let turn_id = params.turn_id.0.to_string();
-                let accepted = handle_turn_start(
+                handle_turn_start(
                     &ws,
                     &state,
                     &ledger,
@@ -7307,9 +7311,6 @@ async fn ui_protocol_connection(
                     params,
                 )
                 .await;
-                if accepted && connection_is_external {
-                    external_turns.insert(turn_id);
-                }
             }
             UiCommand::TurnInterrupt(params) => {
                 handle_turn_interrupt(&ws, &ledger, &active_turns, &contracts, id, params).await;
@@ -7321,7 +7322,7 @@ async fn ui_protocol_connection(
                     &ledger,
                     &contracts,
                     connection_profile_id,
-                    connection_is_external.then_some(&external_turns),
+                    connection_is_external.then(|| ws.connection_id()),
                     id,
                     params,
                 )
@@ -7342,7 +7343,7 @@ async fn ui_protocol_connection(
                     &ws,
                     &contracts,
                     connection_profile_id,
-                    connection_is_external.then_some(&external_turns),
+                    connection_is_external.then(|| ws.connection_id()),
                     id,
                     params,
                 )
@@ -23926,21 +23927,16 @@ async fn handle_review_start(
         .await;
     });
 
-    // `None` => admitted. `Some(turn_id)` => refused, carrying the id of the
-    // turn that actually holds the session. The id is captured in the SAME
+    // `None` => admitted. `Some(refusal)` => refused; an occupied session
+    // carries the id of the turn that actually holds it. The id is captured in the SAME
     // lock scope that makes the decision (never by re-acquiring the registry
     // afterwards, which could name a different turn) and it costs no new
     // await under the lock — it is a clone of a field already in hand.
     let occupied_by = {
         let mut active = active_turns.lock().await;
-        let occupied = match active.get(&session_id) {
-            Some(existing) => {
-                let existing_state = existing.state.lock().await;
-                (!matches!(*existing_state, TurnState::Terminal(_)))
-                    .then(|| existing.turn_id.clone())
-            }
-            None => None,
-        };
+        let occupied =
+            turn_admission_refusal(&active, &session_id, &turn_id, state.host_managed.is_some())
+                .await;
         if occupied.is_none() {
             // Client-supplied turn ids carry no uniqueness guarantee — a
             // reused id must not inherit a prior turn's `session/btw` draft.
@@ -23956,14 +23952,15 @@ async fn handle_review_start(
                     // `ActiveTurnNotSteerable` for the Review turn kind).
                     steer: None,
                     abort: handle.abort_handle(),
+                    owner: Some(ws.connection_id()),
                 },
             );
         }
         occupied
     };
-    if let Some(running_turn_id) = occupied_by {
+    if let Some(refusal) = occupied_by {
         handle.abort();
-        let _ = send_rpc_error(ws, Some(id), turn_in_progress_refusal(&running_turn_id));
+        let _ = send_rpc_error(ws, Some(id), refusal.into_error(ws.is_external()));
         return;
     }
 
@@ -24207,7 +24204,7 @@ async fn await_superseded_turn(
     };
     match decide_interrupt(active_turns, &params).await {
         InterruptOutcome::Unknown | InterruptOutcome::AlreadyTerminal(_) => Ok(()),
-        InterruptOutcome::Mismatch => Err(RpcError::invalid_request(
+        InterruptOutcome::Mismatch | InterruptOutcome::NotOwner => Err(RpcError::invalid_request(
             "the superseded turn is not the active turn for this session",
         )),
         InterruptOutcome::Captured { ack_rx } => {
@@ -24618,8 +24615,8 @@ async fn handle_turn_start_with_accept(
         }
     });
 
-    // `None` => admitted. `Some(turn_id)` => refused, carrying the id of the
-    // turn that actually holds the session. The id is captured in the SAME
+    // `None` => admitted. `Some(refusal)` => refused; an occupied session
+    // carries the id of the turn that actually holds it. The id is captured in the SAME
     // lock scope that makes the decision (never by re-acquiring the registry
     // afterwards, which could name a different turn) and it costs no new
     // await under the lock — it is a clone of a field already in hand.
@@ -24629,14 +24626,9 @@ async fn handle_turn_start_with_accept(
         // we keep the entry only so a follow-up `turn/interrupt` can return
         // `terminal_state` instead of `unknown_turn`. Any non-terminal entry
         // means there is still a turn running for this session.
-        let occupied = match active.get(&session_id) {
-            Some(existing) => {
-                let existing_state = existing.state.lock().await;
-                (!matches!(*existing_state, TurnState::Terminal(_)))
-                    .then(|| existing.turn_id.clone())
-            }
-            None => None,
-        };
+        let occupied =
+            turn_admission_refusal(&active, &session_id, &turn_id, state.host_managed.is_some())
+                .await;
         if occupied.is_none() {
             // Client-supplied turn ids carry no uniqueness guarantee — a
             // reused id must not inherit a prior turn's `session/btw` draft.
@@ -24650,14 +24642,15 @@ async fn handle_turn_start_with_accept(
                     interrupt_tx,
                     steer: steer_buffer,
                     abort: handle.abort_handle(),
+                    owner: Some(ws.connection_id()),
                 },
             );
         }
         occupied
     };
-    if let Some(running_turn_id) = occupied_by {
+    if let Some(refusal) = occupied_by {
         handle.abort();
-        let _ = send_rpc_error(ws, Some(id), turn_in_progress_refusal(&running_turn_id));
+        let _ = send_rpc_error(ws, Some(id), refusal.into_error(ws.is_external()));
         return false;
     }
 
@@ -24779,6 +24772,9 @@ enum TurnSteerDecision {
     /// A live turn exists but registered no steer buffer (code review / M9
     /// fixture turns) — codex `ActiveTurnNotSteerable`.
     NotSteerable,
+    /// `octos serve --host-managed`: an external connection named a session
+    /// whose turn another connection owns.
+    NotOwner,
     /// No live turn — fall back to the ordinary `turn/start` path (codex
     /// `NoActiveTurn` → `spawn_task(RegularTask)`).
     NoActiveTurn,
@@ -24831,6 +24827,9 @@ async fn handle_turn_steer(
         return;
     };
 
+    // `octos serve --host-managed`: an external connection steers only turns
+    // it started, judged under the same lock as the push.
+    let required_owner = ws.is_external().then(|| ws.connection_id());
     let decision = {
         let active = active_turns.lock().await;
         match active.get(&params.session_id) {
@@ -24857,6 +24856,8 @@ async fn handle_turn_steer(
                 let interrupting = matches!(*state, TurnState::Interrupting { .. });
                 if terminal {
                     TurnSteerDecision::NoActiveTurn
+                } else if required_owner.is_some_and(|owner| existing.owner != Some(owner)) {
+                    TurnSteerDecision::NotOwner
                 } else if params
                     .expected_turn_id
                     .as_ref()
@@ -24899,6 +24900,13 @@ async fn handle_turn_steer(
                     "expected_turn_id does not match the active turn ({})",
                     active_turn_id.0
                 )),
+            );
+        }
+        TurnSteerDecision::NotOwner => {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::external_turn_denied("turn/steer"),
             );
         }
         TurnSteerDecision::NotSteerable => {
@@ -25427,6 +25435,7 @@ async fn maybe_spawn_appui_master_continuation_runner(
             interrupt_tx,
             steer: Some(steer_buffer),
             abort: handle.abort_handle(),
+            owner: None,
         },
     );
     drop(active);
@@ -25568,9 +25577,72 @@ async fn drain_appui_due_master_continuations(
 /// condition. `turn_id` names the turn that actually holds the session, so a
 /// client can address it (`turn/interrupt`, or just "the other window is busy
 /// on turn X") instead of guessing.
-fn turn_in_progress_refusal(running_turn_id: &TurnId) -> RpcError {
-    RpcError::invalid_request("a turn is already running for this session")
-        .with_data(json!({ "kind": "turn_in_progress", "turn_id": running_turn_id }))
+///
+/// `octos serve --host-managed` (UPCR-2026-036): an external connection gets
+/// the refusal without `turn_id`. The session it collided with may be the
+/// host's, and a host turn's id is not the external client's to address.
+fn turn_in_progress_refusal(running_turn_id: Option<&TurnId>) -> RpcError {
+    let data = match running_turn_id {
+        Some(turn_id) => json!({ "kind": "turn_in_progress", "turn_id": turn_id }),
+        None => json!({ "kind": "turn_in_progress" }),
+    };
+    RpcError::invalid_request("a turn is already running for this session").with_data(data)
+}
+
+/// `data.kind` of a `turn/start` refused because its client-chosen `turn_id`
+/// names a turn still running in another session (`octos serve
+/// --host-managed`, UPCR-2026-036).
+pub(crate) const TURN_ID_IN_USE: &str = "turn_id_in_use";
+
+/// Why a turn admission (`turn/start`, `review/start`) was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TurnAdmissionRefusal {
+    /// The session already runs this turn.
+    Occupied(TurnId),
+    /// The turn id is live in another session.
+    TurnIdInUse,
+}
+
+impl TurnAdmissionRefusal {
+    fn into_error(self, external: bool) -> RpcError {
+        match self {
+            Self::Occupied(running) => turn_in_progress_refusal((!external).then_some(&running)),
+            Self::TurnIdInUse => RpcError::invalid_request(
+                "turn_id is already in use by a running turn; choose a fresh turn_id",
+            )
+            .with_data(json!({ "kind": TURN_ID_IN_USE })),
+        }
+    }
+}
+
+/// Decide a turn admission under the active-turn registry lock. A session
+/// holds one live (non-`Terminal`) turn. With `unique_turn_ids` (`octos serve
+/// --host-managed`) a live turn id also may not be reused in ANY session:
+/// client-chosen ids are not unique, and a reused id must never make one
+/// client's turn look like another's.
+async fn turn_admission_refusal(
+    active: &HashMap<SessionKey, ActiveTurn>,
+    session_id: &SessionKey,
+    turn_id: &TurnId,
+    unique_turn_ids: bool,
+) -> Option<TurnAdmissionRefusal> {
+    if let Some(existing) = active.get(session_id) {
+        let existing_state = existing.state.lock().await;
+        if !matches!(*existing_state, TurnState::Terminal(_)) {
+            return Some(TurnAdmissionRefusal::Occupied(existing.turn_id.clone()));
+        }
+    }
+    if unique_turn_ids {
+        for (other_session, other) in active {
+            if other_session == session_id || other.turn_id != *turn_id {
+                continue;
+            }
+            if !matches!(*other.state.lock().await, TurnState::Terminal(_)) {
+                return Some(TurnAdmissionRefusal::TurnIdInUse);
+            }
+        }
+    }
+    None
 }
 
 /// Snapshot of sessions that currently have an in-flight (non-terminal) turn in
@@ -26143,10 +26215,12 @@ async fn handle_turn_interrupt(
         let _ = send_rpc_error(ws, Some(id), error);
         return;
     }
-    let outcome = decide_interrupt(active_turns, &params).await;
+    let required_owner = ws.is_external().then(|| ws.connection_id());
+    let outcome = decide_interrupt_as(active_turns, &params, required_owner).await;
     let outcome_label: String = match &outcome {
         InterruptOutcome::Unknown => "unknown".into(),
         InterruptOutcome::Mismatch => "mismatch".into(),
+        InterruptOutcome::NotOwner => "not_owner".into(),
         InterruptOutcome::AlreadyTerminal(reason) => {
             format!("already_terminal:{}", reason.as_str())
         }
@@ -26157,6 +26231,13 @@ async fn handle_turn_interrupt(
     match outcome {
         InterruptOutcome::Unknown => {
             let _ = send_rpc_error(ws, Some(id), unknown_turn_error(&params.turn_id));
+        }
+        InterruptOutcome::NotOwner => {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::external_turn_denied("turn/interrupt"),
+            );
         }
         InterruptOutcome::Mismatch => {
             // Codified by accepted UPCR-2026-008: typed `reason` field on
@@ -26238,19 +26319,38 @@ fn send_typed_interrupt_result(
 enum InterruptOutcome {
     Unknown,
     Mismatch,
+    /// `octos serve --host-managed`: the turn belongs to another connection.
+    NotOwner,
     AlreadyTerminal(TerminalReason),
     AlreadyInterrupting,
-    Captured { ack_rx: oneshot::Receiver<()> },
+    Captured {
+        ack_rx: oneshot::Receiver<()>,
+    },
 }
 
 async fn decide_interrupt(
     active_turns: &SharedActiveTurns,
     params: &TurnInterruptParams,
 ) -> InterruptOutcome {
+    decide_interrupt_as(active_turns, params, None).await
+}
+
+/// [`decide_interrupt`] for a caller that may interrupt only turns it owns
+/// (`required_owner`: an external connection of `octos serve --host-managed`).
+/// Ownership is judged in the same registry lock scope as the id match, so a
+/// turn replaced in between can never be interrupted on another's behalf.
+async fn decide_interrupt_as(
+    active_turns: &SharedActiveTurns,
+    params: &TurnInterruptParams,
+    required_owner: Option<ConnectionId>,
+) -> InterruptOutcome {
     let registry = active_turns.lock().await;
     let Some(active) = registry.get(&params.session_id) else {
         return InterruptOutcome::Unknown;
     };
+    if required_owner.is_some_and(|owner| active.owner != Some(owner)) {
+        return InterruptOutcome::NotOwner;
+    }
     if active.turn_id != params.turn_id {
         return InterruptOutcome::Mismatch;
     }
@@ -26421,6 +26521,24 @@ fn host_connection_only_error(method: &str) -> RpcError {
     .with_data(json!({ "kind": "peer_host_connection_only" }))
 }
 
+/// Whether `ws` may answer a prompt (approval or question) owned by
+/// `owner` on `session_id`. On a registered host peer's session only the
+/// prompt's owning connection or the peer's host connection may; on every
+/// other session this adds no restriction.
+fn host_session_answer_allowed(
+    session_id: &SessionKey,
+    owner: Option<u64>,
+    ws: &WsConnection,
+) -> bool {
+    match crate::peers::host_tools::host_session_controller(session_id) {
+        None => true,
+        Some(controller) => {
+            let me = ws.connection_id.0;
+            controller == Some(me) || owner == Some(me)
+        }
+    }
+}
+
 /// Refuse a turn control of a registered host peer's session from any
 /// connection but its host connection.
 fn refuse_foreign_host_turn_control(
@@ -26439,7 +26557,7 @@ async fn handle_approval_respond(
     ledger: &Arc<UiProtocolLedger>,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
-    external_turns: Option<&HashSet<String>>,
+    external_owner: Option<ConnectionId>,
     id: String,
     mut params: octos_core::ui_protocol::ApprovalRespondParams,
 ) {
@@ -26451,7 +26569,7 @@ async fn handle_approval_respond(
     // to the person, in the app (UPCR-2026-034). An external client (web or
     // terminal UI on the external token) never answers them; the approval
     // stays parked. UPCR-2026-036.
-    if let Some(turns) = external_turns {
+    if let Some(owner) = external_owner {
         if super::host_managed::is_peer_session(&params.session_id) {
             let _ = send_rpc_error(
                 ws,
@@ -26460,21 +26578,14 @@ async fn handle_approval_respond(
             );
             return;
         }
-        // Only an approval of a turn this external connection started, and
-        // once: an external answer never records a session-wide scope. Turn
-        // ids are client-chosen and not unique, so the approval must also
-        // have been raised on this very connection.
-        let raised_here = contracts
+        // Only an approval raised by a turn this external connection owns
+        // (recorded on the approval, never inferred from a client-chosen turn
+        // id), and once: an external answer never records a session-wide
+        // scope.
+        let own = contracts
             .approvals
-            .owner(&params.approval_id)
-            .is_some_and(|owner| owner.connection == ws.connection_id.0);
-        let own = raised_here
-            && contracts
-                .approvals
-                .pending_for_session(&params.session_id)
-                .into_iter()
-                .find(|pending| pending.approval_id == params.approval_id)
-                .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+            .pending_owner(&params.session_id, &params.approval_id)
+            == Some(Some(owner.0));
         if !own {
             let _ = send_rpc_error(
                 ws,
@@ -26487,17 +26598,23 @@ async fn handle_approval_respond(
     }
     // UPCR-2026-035: a host-routed call's approval is answered only on the
     // connection that raised it or the peer's current host connection.
-    let host_owner_ok = contracts
-        .approvals
-        .owner(&params.approval_id)
-        .and_then(|owner| owner.host_route.map(|route| (route, owner.connection)))
-        .is_none_or(|(route, raised_on)| {
-            crate::peers::host_tools::host_approval_answerable(
-                &route,
-                raised_on,
-                ws.connection_id.0,
-            )
-        });
+    // Every other approval on a host peer's session (a kernel tool's, in a
+    // host-driven turn) likewise: its owning connection or the host's.
+    let host_owner_ok = match contracts.approvals.host_route_owner(&params.approval_id) {
+        Some((route, raised_on)) => crate::peers::host_tools::host_approval_answerable(
+            &route,
+            raised_on,
+            ws.connection_id.0,
+        ),
+        None => host_session_answer_allowed(
+            &params.session_id,
+            contracts
+                .approvals
+                .pending_owner(&params.session_id, &params.approval_id)
+                .flatten(),
+            ws,
+        ),
+    };
     if !host_owner_ok
         || !crate::peers::host_tools::host_approval_visible(
             &params.approval_id.0.to_string(),
@@ -26579,7 +26696,7 @@ async fn handle_user_question_respond(
     ws: &WsConnection,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
-    external_turns: Option<&HashSet<String>>,
+    external_owner: Option<ConnectionId>,
     id: String,
     params: UserQuestionRespondParams,
 ) {
@@ -26589,7 +26706,7 @@ async fn handle_user_question_respond(
     }
     // Same rule as `handle_approval_respond` for a host-owned peer's
     // questions (UPCR-2026-036).
-    if let Some(turns) = external_turns {
+    if let Some(owner) = external_owner {
         if super::host_managed::is_peer_session(&params.session_id) {
             let _ = send_rpc_error(
                 ws,
@@ -26600,10 +26717,8 @@ async fn handle_user_question_respond(
         }
         let own = contracts
             .user_questions
-            .pending_for_session(&params.session_id)
-            .into_iter()
-            .find(|pending| pending.question_id == params.question_id)
-            .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+            .pending_owner(&params.session_id, &params.question_id)
+            == Some(Some(owner.0));
         if !own {
             let _ = send_rpc_error(
                 ws,
@@ -26612,6 +26727,24 @@ async fn handle_user_question_respond(
             );
             return;
         }
+    }
+    // UPCR-2026-035: on a registered host peer's session a question is
+    // answered by its owning connection or the peer's host connection (the
+    // system agent answers through `peer_respond`, not here).
+    if !host_session_answer_allowed(
+        &params.session_id,
+        contracts
+            .user_questions
+            .pending_owner(&params.session_id, &params.question_id)
+            .flatten(),
+        ws,
+    ) {
+        let _ = send_rpc_error(
+            ws,
+            Some(id),
+            host_connection_only_error("user_question/respond"),
+        );
+        return;
     }
 
     let outcome = match contracts.user_questions.respond_with_context(&params) {
@@ -38001,9 +38134,10 @@ async fn run_standalone_turn(
     // `octos serve --host-managed`: an external client's turn keeps only the
     // external tool allowlist, applied to the FINISHED registry so nothing
     // registered above (spawn, peer_*, send_file, task tools, MCP, plugins)
-    // survives (UPCR-2026-036).
+    // survives, and only compiled-in tools: a plugin or MCP tool with an
+    // allowlisted name is dropped too (UPCR-2026-036).
     if ws.is_external() {
-        tool_registry.retain_with_origin(super::host_managed::external_turn_tool_kept);
+        super::host_managed::confine_external_turn_tools(&mut tool_registry);
     }
     let tool_registry = Arc::new(tool_registry);
 

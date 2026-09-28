@@ -858,8 +858,12 @@ pub(crate) fn host_approval_visible(approval_id: &str, connection: u64) -> bool 
 /// connection `raised_on` raised for the peer route `route_key`: only that
 /// connection or the peer's current host connection. Read from the approval
 /// entry itself, so it never fails open.
-pub(crate) fn host_approval_answerable(route_key: &str, raised_on: u64, connection: u64) -> bool {
-    connection == raised_on || route_connection_by_key(route_key) == Some(connection)
+pub(crate) fn host_approval_answerable(
+    route_key: &str,
+    raised_on: Option<u64>,
+    connection: u64,
+) -> bool {
+    raised_on == Some(connection) || route_connection_by_key(route_key) == Some(connection)
 }
 
 fn route_connection_by_key(key: &str) -> Option<u64> {

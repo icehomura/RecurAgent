@@ -1048,7 +1048,7 @@ mod tests {
         assert_eq!(snapshot.origin("news_list"), None);
 
         // Selecting by origin drops every host tool, keeps the built-ins.
-        registry.retain_with_origin(|_, origin| origin == ToolOrigin::Builtin);
+        registry.retain_builtin(|_| true);
         let names = registry.tool_names();
         assert!(!names.iter().any(|n| n == "news_list" || n == "grep"));
         assert!(names.iter().any(|n| n == "read_file"));

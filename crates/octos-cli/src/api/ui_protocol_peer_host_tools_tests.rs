@@ -2547,13 +2547,8 @@ async fn should_refuse_host_tool_registration_and_results_when_the_connection_is
         APPUI_METHOD_PEER_TOOLS_REGISTER,
         APPUI_METHOD_PEER_TOOL_RESULT,
     ] {
-        let error = super::super::host_managed::external_gate(
-            method,
-            &params,
-            &HashSet::new(),
-            &HashSet::new(),
-        )
-        .unwrap_err();
+        let error = super::super::host_managed::external_gate(method, &params, &HashSet::new())
+            .unwrap_err();
         assert_eq!(
             error.data.unwrap()["kind"],
             super::super::host_managed::EXTERNAL_METHOD_DENIED
@@ -2622,7 +2617,6 @@ async fn should_never_give_an_external_turn_a_host_routed_tool_when_one_is_regis
                 method,
                 &json!({ "session_id": key }),
                 &HashSet::new(),
-                &HashSet::new(),
             )
             .is_err()
         );
@@ -2656,12 +2650,8 @@ async fn should_never_give_an_external_turn_a_host_routed_tool_when_one_is_regis
         registry.origin("news_list"),
         Some(octos_agent::ToolOrigin::HostRouted)
     );
-    registry.retain_with_origin(super::super::host_managed::external_turn_tool_kept);
+    super::super::host_managed::confine_external_turn_tools(&mut registry);
     assert_eq!(sorted_names(&registry), vec!["grep"]);
-    assert!(!super::super::host_managed::external_turn_tool_kept(
-        "grep",
-        octos_agent::ToolOrigin::HostRouted
-    ));
 }
 
 #[test]
@@ -2699,12 +2689,11 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
     };
     // A client-chosen turn id another connection also claims.
     let turn = TurnId::new();
-    let claimed: HashSet<String> = std::iter::once(turn.0.to_string()).collect();
 
     // A host-routed approval whose side-table entry is gone (evicted): the
     // ownership recorded on the approval itself still decides.
     let approval_id = ApprovalId::new();
-    let _rx = contracts.approvals.request_runtime_owned(
+    let _rx = contracts.approvals.request_runtime_entry(
         ApprovalRequestedEvent::generic(
             key.clone(),
             approval_id.clone(),
@@ -2713,21 +2702,19 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
             "Send mail",
             "draft d",
         ),
+        Some(host_ws.connection_id.0),
         true,
-        Some(crate::contracts::approvals::ApprovalOwner {
-            connection: host_ws.connection_id.0,
-            host_route: Some(crate::peers::host_tools::route_key(
-                &peers_root(&fx),
-                "news",
-            )),
-        }),
+        Some(crate::peers::host_tools::route_key(
+            &peers_root(&fx),
+            "news",
+        )),
     );
     assert!(crate::peers::host_tools::host_approval_visible(
         &approval_id.0.to_string(),
         u64::MAX
     ));
 
-    // An external client that "owns" the same turn id: refused.
+    // An external client that used the same turn id: refused.
     let (ext_ws, mut ext_rx) = external_ws(8);
     handle_approval_respond(
         &ext_ws,
@@ -2735,7 +2722,7 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
         &ledger,
         &contracts,
         None,
-        Some(&claimed),
+        Some(ext_ws.connection_id()),
         "e1".into(),
         respond(&key, &approval_id),
     )
@@ -2764,8 +2751,8 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
     assert_eq!(contracts.approvals.pending_for_session(&key).len(), 1);
 
     // An ordinary approval on a shared session, raised by the host's turn
-    // with the same turn id: an external client claiming that turn id cannot
-    // answer it either, because it was raised on another connection.
+    // with the same turn id: an external client cannot answer it either,
+    // because it was raised on another connection.
     let shared = SessionKey("dev:api:host#shared".into());
     let shared_id = ApprovalId::new();
     let _shared_rx = contracts.approvals.request_runtime_owned(
@@ -2777,11 +2764,7 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
             "Run",
             "ls",
         ),
-        false,
-        Some(crate::contracts::approvals::ApprovalOwner {
-            connection: host_ws.connection_id.0,
-            host_route: None,
-        }),
+        Some(host_ws.connection_id.0),
     );
     handle_approval_respond(
         &ext_ws,
@@ -2789,7 +2772,7 @@ async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids
         &ledger,
         &contracts,
         None,
-        Some(&claimed),
+        Some(ext_ws.connection_id()),
         "e2".into(),
         respond(&shared, &shared_id),
     )
