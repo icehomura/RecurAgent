@@ -3123,6 +3123,7 @@ mod tests {
             command: None,
             cwd: None,
             once_only,
+            host_tool: None,
         };
         let approver = super::ApprovedToolAutoApprover;
         assert_eq!(

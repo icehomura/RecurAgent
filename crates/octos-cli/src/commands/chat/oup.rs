@@ -95,6 +95,7 @@ impl OupFrontend for TerminalFrontend {
                         command: None,
                         cwd: None,
                         once_only: false,
+                        host_tool: None,
                     })
                     .await;
                 return Ok(Some(UiCommand::ApprovalRespond(

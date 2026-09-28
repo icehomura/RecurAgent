@@ -1542,6 +1542,7 @@ fn generic_and_typed_approval_payloads_round_trip() {
                 filesystem: None,
                 network: None,
                 sandbox_escalation: None,
+                host_tool: None,
             }),
             ..generic.clone()
         },
@@ -1564,6 +1565,7 @@ fn generic_and_typed_approval_payloads_round_trip() {
                 }),
                 network: None,
                 sandbox_escalation: None,
+                host_tool: None,
             }),
             ..generic.clone()
         },
@@ -1586,6 +1588,7 @@ fn generic_and_typed_approval_payloads_round_trip() {
                     urls: vec!["https://api.openai.com/v1/responses".into()],
                 }),
                 sandbox_escalation: None,
+                host_tool: None,
             }),
             ..generic.clone()
         },
@@ -1618,6 +1621,7 @@ fn generic_and_typed_approval_payloads_round_trip() {
                     justification: Some("Run integration tests".into()),
                     suggested_prefix_rule: vec!["cargo".into(), "test".into()],
                 }),
+                host_tool: None,
             }),
             ..generic
         },

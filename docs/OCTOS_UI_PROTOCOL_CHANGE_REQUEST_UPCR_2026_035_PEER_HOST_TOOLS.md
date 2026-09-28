@@ -50,7 +50,8 @@ starting the peer's turn on that connection.**
 Registration only ADDS: a registered peer's own (host-driven) turns keep
 the kernel tools the peer has without a registration (under the existing
 peer restrictions), plus the host's app tools, plus the usual question and
-approval flow. An empty set takes nothing away.
+approval flow. An empty set takes nothing away. A host that sets
+`generic_tools` chooses the peer's kernel tools EXACTLY (see below).
 
 ### Migration for hosts
 
@@ -90,30 +91,22 @@ never silently weakens a tool:
 | `background` | May run in a turn with no interactive client. Default `false`. |
 | `outward` | Reaches past the app (send, post, share, buy). Gated like `destructive`. |
 | `confirm` | `host` (default) or `app`: who confirms a gated call with the person. Independent of `risk`. |
-| `shareable` | App Hub metadata; accepted, not acted on yet (see follow-ups). |
+| `app` | Optional. The app that OWNS the tool, `[a-z][a-z0-9_.-]{0,63}`; defaults to the name's first segment. A cross-app tool (another app's tool the host granted to this peer) names its owner here. Echoed in the result, in every `peer/tool/call`, in the approval details and in the audit. |
+| `shareable` | App Hub metadata; accepted, not acted on by the kernel (the host decides cross-app grants). |
 
-`generic_tools` is optional and only ever NARROWS. Omitted or empty (`[]`),
-the peer's host-driven turns keep the kernel tools the peer has without a
-registration. A non-empty list cuts those down to the listed names, which
-must come from an **allowlist** of peer-safe tools: reading and searching
-the app's workspace (`read_file`, `list_dir`, `glob`, `grep`, all fenced to
-the session scope), research (`web_search`, `deep_search`), the app's memory
-namespace (`memory_search`, `memory_load`, `recall_memory`, `save_memory`,
-`record_memory_use`) and content generation (`mofa_make`,
-`mofa_describe_content_type`). Deliberately not on it: `synthesize_research`
-(its model-chosen `research_dir` is limited only to the profile data dir, so
-it could read the person's memory and other apps' files), `view_image` (it
-resolves upload handles, bare names and the global upload directory without
-the session scope) and `recall` (not registered in serve). Any other name is
-refused (`peer_tools_invalid`): shell and exec tools, file writes and
-patches, messaging and channel tools (`message`, `send_file`, …), browsers
-and raw fetches (`browser`, `web_fetch`, `deep_crawl`), child agents and
-pipelines (`spawn`, `delegate`, `run_pipeline`), schedulers and monitors,
-background-task readers, other sessions' tools (`peer_*`, `goal_*`) and
-admin tools. A listed tool the kernel does not offer in a turn is simply
-absent.
+`generic_tools` is optional. Omitted (or `null`), the peer's host-driven
+turns keep the kernel tools the peer has without a registration. Given (an
+array, even empty), it is the peer's kernel tool set EXACTLY: the host
+allows what the app's manifest declares and the person granted at install,
+narrowing or widening the usual set as it sees fit. The kernel bakes in no
+exclusions (research, command execution and anything else the peer's
+session has may be listed), but a list never adds a tool the peer's session
+does not have (for example the `peer_*` tools, which a peer session never
+has), and names are only checked to be kernel tool names (no `.`; app tools
+are dotted). A set stored before this field became optional (a plain list)
+reads as that exact list.
 
-Limits: 64 app tools, 32 generic tools, 2 KiB per description. Options are
+Limits: 64 app tools, 256 generic tools, 2 KiB per description. Options are
 clamped, and a host may raise the defaults up to the maximum:
 `call_timeout_ms` 1–300 000 (default 30 000), `approval_ttl_secs` 1–604 800
 (default 3 600), `max_result_bytes` 1–1 048 576 (default 262 144).
@@ -137,9 +130,19 @@ Typed `data.kind`: `peer_host_token_mismatch`, `peer_originator_mismatch`,
 
 ```
 {peer, session_id, context_id, turn_id, call_id, tool_call_id, args_digest,
- name, args, risk, confirm_required, timeout_ms, tools_version}
+ name, app, caller: {kind, peer, session_id, context_id, turn_id}, args,
+ risk, confirm_required, timeout_ms, tools_version}
 ```
 
+`app` is the tool's owning app and `caller` the calling side: `kind` is
+`"app_peer"` (a system agent that runs as a host-owned app peer is its peer
+too), `peer` is the app peer whose session makes the call (the peer the set
+is registered on), `session_id` / `context_id` / `turn_id` the calling
+session and turn. The host authorizes, audits and routes every call to the
+owning app's executor from these, and the owning app's confirmation sheet
+shows the caller. With a cross-app tool the
+two differ, and the host authorizes the call against its grants from them.
+The top-level `peer`, `session_id` and `context_id` repeat the caller.
 `session_id` / `context_id` identify the calling session (the peer's own, or
 one of its request contexts): the caller's identity for the host service.
 `name` is the declared name (`news.list`). `confirm_required` is true when
@@ -316,11 +319,12 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   cannot be read) once the peer's budget is spent, from any of its sessions;
   the tokens a tool result costs are part of the turn's spend.
 - **Visibility (additive).** A host-driven turn keeps the peer's usual
-  kernel tools (cut down to `generic_tools` only when that list is
-  non-empty) and gets one routed tool per declared app tool, recorded with
-  the tool origin `HostRouted`. An app tool whose model name a kernel tool
+  kernel tools (exactly `generic_tools` of them when the host sets that
+  list) and gets one routed tool per declared app tool, recorded with the
+  tool origin `HostRouted`. An app tool whose model name a kernel tool
   already has is not offered (the kernel tool wins), and a name equal to a
-  peer-safe generic tool is refused at registration. This runs after the
+  reserved built-in tool name (`RESERVED_BUILTIN_TOOL_NAMES`) is refused at
+  registration. This runs after the
   profile tool policy and envelope, so it cannot be widened by them. A set
   file that exists but cannot be read fails closed: no tools at all.
 - **Unchanged without a registration.** A host-owned peer that never
@@ -346,13 +350,15 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
     cancelled. The host is not called in either case. UPCR-2026-034's rule
     holds: the system agent cannot answer these approvals through
     `peer_respond`; the person answers them in the app.
-  - Gated, `confirm: app`, attended: the call goes to the host at once with
-    `confirm_required: true` and no kernel approval — the app's own
-    confirmation sheet is the only prompt (e.g. a messaging app's
-    `send_message`).
-  - Gated, `confirm: app`, unattended: exactly like `confirm: host` — an
-    approval request in the app's conversation; an approved call reaches the
-    host with `confirm_required: false`.
+  - Gated, `confirm: app`, from any caller (the owning app's agent, another
+    app's agent, the system agent's input, attended or not): the call goes
+    to the host at once with `confirm_required: true` and no kernel
+    approval. The host hands the confirmation to the OWNING app, whose own
+    sheet shows who is calling (`caller`) and is the only prompt (e.g. a
+    messaging app's `send_message`). If the owning app is not running or
+    nobody is there, the host keeps the call waiting (up to the approval
+    TTL, after an `awaiting_confirmation` acknowledgement) or refuses it
+    visibly with an error result.
   - A turn with no approval bridge never runs a gated call that needs an
     approval: error (`approval_unavailable`), host not called.
   - Kernel approvals are **once-only**: they cover exactly this call and
@@ -459,11 +465,37 @@ when it opens (or resumes) the peer and after every App Hub update, and
 executes each `peer/tool/call` with the calling session's identity. A module
 never declares its tools a second way.
 
+## Cross-app tools and approval rendering
+
+- **Cross-app tools.** An app agent may call another app's tools when the
+  calling app's manifest asks for them and the host granted them. The host
+  registers such a tool on the calling app's peer like any other, with
+  `app` naming its owner. The kernel routes it to the host and enforces its
+  risk; the host authorizes every call against its grants (from `app` and
+  `caller` on `peer/tool/call`). There is no second, agent-level consent.
+  The system agent gets app tools the same way when it runs as a host-owned
+  app peer; registering tools on a session that is not a peer is not part of
+  this change.
+- **The host renders every approval.** A host-routed call's approval is sent
+  only to the host connection, with `approval_kind: "host_tool"` and
+  `typed_details.host_tool` = `{app, tool, args, risk, outward,
+  calling_peer?, calling_session_id, context_id?, tool_call_id?,
+  outcome_unknown_before}` (always, whatever the connection negotiated). The
+  host draws the sheet (in the app's conversation or batched in the system
+  chat) and answers with `approval/respond`. An agent's own text is never an
+  approval surface. `confirm: host` is the normal path; `confirm: app` means
+  the app's own sheet, also host UI.
+- **Standing rules are the host's.** Outward and destructive tools always
+  need the person: a live approval in the host UI, or a standing rule the
+  host keeps, keyed to (owning app, tool) and showing the calling app. The
+  kernel never remembers a decision for a host-routed call (once-only); a
+  host with a standing rule answers the approval itself.
+
 ## Non-goals and follow-ups
 
-- **Shareable tools / other callers.** Tools of other apps, granted and
-  marked `shareable`, and calls from the system agent are not part of this
-  change; a peer's set only offers its own tools.
+- **Tools on a non-peer session.** Registering host-routed tools on a
+  session that is not a host-owned app peer (for example a system agent
+  conversation that is not a peer) is not part of this change.
 - **Presence beyond request contexts.** Attended means "an open request
   context with an approval bridge". A host that wants a finer signal (the
   app window focused, the screen on) would need a per-turn flag; not in this
@@ -506,7 +538,9 @@ never declares its tools a second way.
 
 ## Tests
 
-- `peer_host_tool` unit tests (octos-agent, 11):
+- `peer_host_tool` unit tests (octos-agent, 13; also
+  `should_describe_the_owning_app_the_tool_and_the_caller_when_asking_for_approval`
+  and `should_mark_a_host_routed_tool_by_origin_whatever_its_name`):
   `should_run_read_and_act_tools_without_approval`,
   `should_run_destructive_only_after_an_explicit_approve_with_the_exact_arguments`
   (the request is once-only),
@@ -519,7 +553,7 @@ never declares its tools a second way.
   `should_report_an_unanswered_act_call_as_unknown_not_failed` (no resend
   without an approval stating the unknown outcome; approved → resent),
   `should_let_the_app_confirm_when_the_person_is_present`,
-  `should_ask_for_a_kernel_approval_when_an_app_confirmed_tool_runs_without_the_person`,
+  `should_hand_an_app_confirmed_call_to_the_owning_app_whoever_calls`,
   `should_refuse_foreground_tools_unattended_and_bad_arguments`
 - `agent::execution` (octos-agent, 1): `should_never_auto_approve_a_once_only_request`
 - `peers::host_tools` unit tests (5):
@@ -541,7 +575,7 @@ never declares its tools a second way.
   the system agent's `peer_respond` being refused),
   `should_not_run_a_declined_or_expired_destructive_call_nor_ask_twice`,
   `should_replace_the_tool_set_atomically_and_refuse_a_stale_version`,
-  `should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherwise`,
+  `should_hand_a_confirm_app_call_to_the_owning_app_whoever_calls`,
   `should_report_an_unanswered_act_call_as_unknown_and_never_resend_it`
   (also in a later turn),
   `should_treat_a_call_interrupted_while_the_host_worked_as_unknown`,
@@ -569,8 +603,9 @@ never declares its tools a second way.
   (a real `turn/start` through `run_standalone_turn` with a scripted model:
   roster, host routing, the tool result in the model's context, the approval
   on the host connection),
-  `should_refuse_generic_tools_that_escape_the_set` (the allowlist, schema
-  shapes, and per-turn stripping of a stale set),
+  `should_offer_exactly_the_generic_tools_the_host_sets` (exact sets with no
+  kernel-side exclusions, never adding a tool the session lacks, schema
+  shapes),
   `should_refuse_an_awaiting_confirmation_ack_for_a_call_that_is_not_gated`
 - Additive registration and `peer/input` (octos-cli `peer_host_tools_tests`):
   `should_keep_the_peers_kernel_tools_when_it_registers_an_empty_set`,
@@ -582,7 +617,8 @@ never declares its tools a second way.
   `should_run_the_system_agents_input_as_a_host_driven_turn_with_tools_end_to_end`
   (the host starts the turn from `peer/input`; the model gets the usual tools
   plus the app tool; the destructive call's approval goes to the app),
-  `should_answer_a_host_peer_sessions_questions_only_on_the_owning_or_host_connection`
+  `should_answer_a_host_peer_sessions_questions_only_on_the_owning_or_host_connection`,
+  `should_carry_the_owning_app_and_the_caller_when_a_cross_app_tool_is_called`
 - Host-managed serve (UPCR-2026-036): `should_refuse_host_tool_registration_and_results_when_the_connection_is_external`,
   `should_never_give_an_external_turn_a_host_routed_tool_when_one_is_registered`,
   `should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids_collide`,

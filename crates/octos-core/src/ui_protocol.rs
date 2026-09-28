@@ -448,6 +448,9 @@ pub mod approval_kinds {
     pub const FILESYSTEM: &str = "filesystem";
     pub const NETWORK: &str = "network";
     pub const SANDBOX_ESCALATION: &str = "sandbox_escalation";
+    /// UPCR-2026-035: a host-routed app tool's call. The host renders the
+    /// sheet from `typed_details.host_tool`.
+    pub const HOST_TOOL: &str = "host_tool";
 }
 
 pub mod approval_scopes {
@@ -5462,6 +5465,36 @@ pub struct ApprovalSandboxEscalationDetails {
     pub suggested_prefix_rule: Vec<String>,
 }
 
+/// UPCR-2026-035: what a host-routed app tool's approval is about, for the
+/// host to render its own approval sheet: the app that owns the tool, the
+/// tool, the exact arguments, and who is calling.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApprovalHostToolDetails {
+    /// The app that owns the tool (the declaration's `app`).
+    pub app: String,
+    /// The declared tool name (`<app>.<tool>`).
+    pub tool: String,
+    /// The exact arguments the call will run with.
+    pub args: serde_json::Value,
+    /// `read` | `act` | `destructive`.
+    pub risk: String,
+    #[serde(default)]
+    pub outward: bool,
+    /// The calling app peer's slug (the peer whose session makes the call).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calling_peer: Option<String>,
+    /// The calling session.
+    pub calling_session_id: String,
+    /// The calling request context, when the call comes from one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    /// The same call ran before and its outcome is unknown.
+    #[serde(default)]
+    pub outcome_unknown_before: bool,
+}
+
 /// UPCR-2026-001 typed approval payload. `kind` is intentionally a string
 /// registry so unknown future values can fall back to generic approval text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -5479,6 +5512,9 @@ pub struct ApprovalTypedDetails {
     pub network: Option<ApprovalNetworkDetails>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox_escalation: Option<ApprovalSandboxEscalationDetails>,
+    /// UPCR-2026-035 `kind: "host_tool"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_tool: Option<ApprovalHostToolDetails>,
 }
 
 impl ApprovalTypedDetails {
@@ -5494,6 +5530,21 @@ impl ApprovalTypedDetails {
             filesystem: None,
             network: None,
             sandbox_escalation: None,
+            host_tool: None,
+        }
+    }
+
+    /// A host-routed app tool's approval (UPCR-2026-035).
+    pub fn host_tool(details: ApprovalHostToolDetails) -> Self {
+        Self {
+            kind: approval_kinds::HOST_TOOL.to_owned(),
+            command: None,
+            sandbox: None,
+            diff: None,
+            filesystem: None,
+            network: None,
+            sandbox_escalation: None,
+            host_tool: Some(details),
         }
     }
 }

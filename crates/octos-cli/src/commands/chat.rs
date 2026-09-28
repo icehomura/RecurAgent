@@ -1664,6 +1664,7 @@ mod tests {
             command: Some("sudo echo hi".into()),
             cwd: None,
             once_only: false,
+            host_tool: None,
         };
         let decision = requester.request_approval(request).await;
         assert_eq!(decision, ToolApprovalDecision::Approve);

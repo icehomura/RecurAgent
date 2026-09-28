@@ -4,8 +4,8 @@
 //! may use with `peer/tools/register` (host-token authorized). The set is
 //! durable (`peers/<slug>/host_tools.json`), versioned, and replaced whole.
 //! Once a peer has a set, a host-driven turn of the peer's session or of one
-//! of its request contexts keeps the peer's usual kernel tools (narrowed to
-//! the set's `generic_tools` when that list is non-empty) and ADDS the
+//! of its request contexts keeps the peer's usual kernel tools (exactly the
+//! set's `generic_tools` of them when the host sets that list) and ADDS the
 //! registered app tools. Any other turn on those sessions gets no tools.
 //! The system agent's input to a host-owned peer is delivered to the host
 //! as `peer/input` ([`deliver_peer_input`]), never run as a kernel turn.
@@ -23,8 +23,8 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use octos_agent::{
-    HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome, HostToolConfirm,
-    HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim, ToolRegistry,
+    HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome, HostToolCaller,
+    HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim, ToolRegistry,
 };
 use octos_core::SessionKey;
 use serde::{Deserialize, Serialize};
@@ -48,7 +48,7 @@ pub(crate) const PEER_TOOL_CANCEL_NOTIFICATION: &str =
 pub(crate) const PEER_INPUT_NOTIFICATION: &str = octos_core::ui_protocol::methods::PEER_INPUT;
 
 pub(crate) const MAX_APP_TOOLS: usize = 64;
-pub(crate) const MAX_GENERIC_TOOLS: usize = 32;
+pub(crate) const MAX_GENERIC_TOOLS: usize = 256;
 const MAX_DESCRIPTION_BYTES: usize = 2 * 1024;
 const MAX_SCHEMA_BYTES: usize = 16 * 1024;
 const MAX_MODEL_NAME_BYTES: usize = 64;
@@ -69,8 +69,12 @@ pub(crate) struct PeerHostToolSet {
     /// Starts at 1; every registration increments it.
     pub(crate) version: u64,
     pub(crate) tools: Vec<HostToolDecl>,
-    /// Kernel tool names the app may use (e.g. `deep_search`).
-    pub(crate) generic_tools: Vec<String>,
+    /// The peer's kernel tools, EXACTLY (e.g. `["read_file",
+    /// "deep_search"]`), as the host allows from the app's declared and
+    /// granted tools. `None`: the peer's usual kernel tools. Only tools the
+    /// peer's session has can be offered; the list never adds others.
+    #[serde(default)]
+    pub(crate) generic_tools: Option<Vec<String>>,
     pub(crate) call_timeout_ms: u64,
     pub(crate) approval_ttl_secs: u64,
     pub(crate) max_result_bytes: usize,
@@ -87,6 +91,11 @@ pub(crate) struct PeerHostToolSet {
 #[serde(deny_unknown_fields)]
 pub(crate) struct ToolInput {
     pub(crate) name: String,
+    /// The app that owns the tool; defaults to the name's first segment. A
+    /// cross-app tool (another app's tool registered on this peer, as the
+    /// host granted it) names its owner here.
+    #[serde(default)]
+    pub(crate) app: Option<String>,
     #[serde(default)]
     pub(crate) description: String,
     pub(crate) input_schema: Value,
@@ -127,6 +136,22 @@ fn segment_is_valid(segment: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'_')
 }
 
+/// An owning app id: `[a-z][a-z0-9_.-]{0,63}`.
+fn validate_app_id(app: &str) -> Result<(), String> {
+    let bytes = app.as_bytes();
+    let ok = !bytes.is_empty()
+        && bytes.len() <= 64
+        && bytes[0].is_ascii_lowercase()
+        && bytes.iter().all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'.' | b'-')
+        });
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("app '{app}' must match [a-z][a-z0-9_.-]{{0,63}}"))
+    }
+}
+
 /// `<app>.<tool>[.<more>]`: 2–4 segments of `[a-z][a-z0-9_]{0,31}`.
 pub(crate) fn validate_app_tool_name(name: &str) -> Result<(), String> {
     let segments: Vec<&str> = name.split('.').collect();
@@ -138,45 +163,8 @@ pub(crate) fn validate_app_tool_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The kernel tools a peer's set may allow: reading and searching the app's
-/// own workspace, research, and the app's own memory namespace. Everything
-/// else (shell, file writes, messaging and channel tools, browsers and raw
-/// fetches, child agents, pipelines, schedulers, other sessions) is refused
-/// at registration and stripped at every turn. Wider tiers would be an
-/// explicit opt-in of a later UPCR.
-pub(crate) const PEER_SAFE_GENERIC_TOOLS: &[&str] = &[
-    // The app's workspace, read-only.
-    "read_file",
-    "list_dir",
-    "glob",
-    "grep",
-    // Research.
-    "web_search",
-    "deep_search",
-    // The app's memory namespace (UPCR-2026-034).
-    "memory_search",
-    "memory_load",
-    "recall_memory",
-    "save_memory",
-    "record_memory_use",
-    // Content generation dispatch (its targets are stripped like any other
-    // unlisted tool).
-    "mofa_make",
-    "mofa_describe_content_type",
-];
-
-/// Whether `name` is a generic tool a peer's set may allow.
-pub(crate) fn is_peer_safe_generic_tool(name: &str) -> bool {
-    PEER_SAFE_GENERIC_TOOLS.contains(&name)
-}
-
+/// A kernel tool name: `[A-Za-z0-9_-]`, no `.` (app tools are dotted).
 fn validate_generic_name(name: &str) -> Result<(), String> {
-    if !is_peer_safe_generic_tool(name) {
-        return Err(format!(
-            "generic tool '{name}' is not one a peer may use (allowed: {})",
-            PEER_SAFE_GENERIC_TOOLS.join(", ")
-        ));
-    }
     let ok = !name.is_empty()
         && name.len() <= MAX_MODEL_NAME_BYTES
         && name
@@ -287,26 +275,32 @@ fn check_schema_shape(schema: &Value, depth: usize) -> Result<(), String> {
 /// the caller).
 pub(crate) fn build_tool_set(
     flat: Vec<ToolInput>,
-    generic_tools: Vec<String>,
+    generic_tools: Option<Vec<String>>,
     options: ToolSetOptions,
 ) -> Result<PeerHostToolSet, String> {
     if flat.len() > MAX_APP_TOOLS {
         return Err(format!("{} app tools (max {MAX_APP_TOOLS})", flat.len()));
     }
-    if generic_tools.len() > MAX_GENERIC_TOOLS {
-        return Err(format!(
-            "{} generic tools (max {MAX_GENERIC_TOOLS})",
-            generic_tools.len()
-        ));
-    }
-    let mut generic: Vec<String> = Vec::new();
-    for name in generic_tools {
-        validate_generic_name(&name)?;
-        if !generic.contains(&name) {
-            generic.push(name);
+    let generic = match generic_tools {
+        None => None,
+        Some(names) => {
+            if names.len() > MAX_GENERIC_TOOLS {
+                return Err(format!(
+                    "{} generic tools (max {MAX_GENERIC_TOOLS})",
+                    names.len()
+                ));
+            }
+            let mut generic: Vec<String> = Vec::new();
+            for name in names {
+                validate_generic_name(&name)?;
+                if !generic.contains(&name) {
+                    generic.push(name);
+                }
+            }
+            Some(generic)
         }
-    }
-    let mut seen_model_names: Vec<String> = generic.clone();
+    };
+    let mut seen_model_names: Vec<String> = generic.clone().unwrap_or_default();
     let mut decls = Vec::with_capacity(flat.len());
     for tool in flat {
         validate_app_tool_name(&tool.name)?;
@@ -316,7 +310,7 @@ pub(crate) fn build_tool_set(
         }
         // A host tool never takes a kernel tool's name: the model, the audit
         // and every name-based filter must be able to tell them apart.
-        if is_peer_safe_generic_tool(&model_name) {
+        if octos_agent::tools::RESERVED_BUILTIN_TOOL_NAMES.contains(&model_name.as_str()) {
             return Err(format!(
                 "tool '{}' would be seen by the model as the kernel tool '{model_name}'",
                 tool.name
@@ -341,8 +335,16 @@ pub(crate) fn build_tool_set(
             Some(Value::Null) | None => None,
             Some(raw) => Some(parse_schema(&tool.name, "output_schema", raw)?),
         };
+        let app = match tool.app {
+            Some(app) => {
+                validate_app_id(&app)?;
+                app
+            }
+            None => tool.name.split('.').next().unwrap_or_default().to_owned(),
+        };
         decls.push(HostToolDecl {
             name: tool.name,
+            app,
             model_name,
             description,
             input_schema,
@@ -558,13 +560,10 @@ pub(crate) fn apply_session_host_tools(
                 return;
             }
             // Registration ADDS the app's tools: the host's own turns keep
-            // the peer's usual kernel roster. A non-empty `generic_tools`
-            // narrows that roster to the listed peer-safe tools.
-            if !set.generic_tools.is_empty() {
-                registry.retain(|name| {
-                    is_peer_safe_generic_tool(name)
-                        && set.generic_tools.iter().any(|allowed| allowed == name)
-                });
+            // the peer's usual kernel tools, or EXACTLY the host's
+            // `generic_tools` of them when it sets that list.
+            if let Some(allowed) = &set.generic_tools {
+                registry.retain(|name| allowed.iter().any(|a| a == name));
             }
             if set.tools.is_empty() {
                 return;
@@ -597,12 +596,14 @@ pub(crate) fn apply_session_host_tools(
                     );
                     continue;
                 }
-                registry.register(HostRoutedTool::new(
-                    decl.clone(),
-                    router.clone(),
-                    ttl,
-                    interactive,
-                ));
+                registry.register(
+                    HostRoutedTool::new(decl.clone(), router.clone(), ttl, interactive)
+                        .with_caller(HostToolCaller {
+                            peer: Some(slug.clone()),
+                            session_id: session_id.0.clone(),
+                            context_id: context_id.clone(),
+                        }),
+                );
             }
         }
     }
@@ -1421,6 +1422,14 @@ impl HostToolRouter for TurnHostToolRouter {
                 "tool_call_id": call.tool_call_id,
                 "args_digest": call.args_digest,
                 "name": call.name,
+                "app": call.app,
+                "caller": {
+                    "kind": "app_peer",
+                    "peer": self.slug,
+                    "session_id": self.session_id,
+                    "context_id": self.context_id,
+                    "turn_id": self.turn_id,
+                },
                 "args": call.args,
                 "risk": call.risk.as_str(),
                 "confirm_required": call.confirm_required,
@@ -1489,6 +1498,7 @@ impl HostToolRouter for TurnHostToolRouter {
             "turn_id": self.turn_id,
             "tools_version": self.version,
             "tool": audit.tool,
+            "app": audit.app,
             "tool_call_id": audit.tool_call_id,
             "risk": audit.risk,
             "decision": audit.decision,
@@ -1571,25 +1581,25 @@ mod tests {
         }
         let set = build_tool_set(
             vec![tool("news.list", "read")],
-            vec!["deep_search".into(), "deep_search".into()],
+            Some(vec!["deep_search".into(), "deep_search".into()]),
             ToolSetOptions::default(),
         )
         .unwrap();
         assert_eq!(set.tools[0].model_name, "news_list");
-        assert_eq!(set.generic_tools, ["deep_search"]);
+        assert_eq!(set.generic_tools, Some(vec!["deep_search".to_owned()]));
         assert_eq!(set.call_timeout_ms, DEFAULT_CALL_TIMEOUT_MS);
 
         let collision = build_tool_set(
             vec![tool("news.a_b", "read"), tool("news_a.b", "read")],
-            vec![],
+            None,
             ToolSetOptions::default(),
         );
         assert!(collision.unwrap_err().contains("collides"));
 
         let mut not_object = tool("news.list", "read");
         not_object.input_schema = json!({"type": "string"});
-        assert!(build_tool_set(vec![not_object], vec![], Default::default()).is_err());
-        assert!(build_tool_set(vec![], vec!["rm -rf".into()], Default::default()).is_err());
+        assert!(build_tool_set(vec![not_object], None, Default::default()).is_err());
+        assert!(build_tool_set(vec![], Some(vec!["rm -rf".into()]), Default::default()).is_err());
     }
 
     #[test]
@@ -1604,7 +1614,7 @@ mod tests {
              "risk": "destructive", "confirm": "app"}
         ]))
         .unwrap();
-        let set = build_tool_set(tools, vec![], Default::default()).unwrap();
+        let set = build_tool_set(tools, None, Default::default()).unwrap();
         assert_eq!(set.tools[0].confirm, HostToolConfirm::Host, "default");
         assert!(set.tools[0].background);
         assert_eq!(set.tools[1].confirm, HostToolConfirm::App);
@@ -1657,6 +1667,7 @@ mod tests {
                     .call(HostToolCall {
                         tool_call_id: "c1".into(),
                         name: "news.topics_set".into(),
+                        app: "news".into(),
                         args: json!({}),
                         risk: HostToolRisk::Act,
                         confirm_required: false,
@@ -1747,6 +1758,7 @@ mod tests {
                 .call(HostToolCall {
                     tool_call_id: "c1".into(),
                     name: "news.topics_set".into(),
+                    app: "news".into(),
                     args: json!({}),
                     risk: HostToolRisk::Act,
                     confirm_required: false,

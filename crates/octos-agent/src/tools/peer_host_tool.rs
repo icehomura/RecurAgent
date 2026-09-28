@@ -100,6 +100,11 @@ impl HostToolRisk {
 pub struct HostToolDecl {
     /// Declared name in the app's namespace, e.g. `news.list`.
     pub name: String,
+    /// The app that owns the tool (a cross-app tool may be registered on
+    /// another app's peer). Empty in sets stored before the field existed;
+    /// see [`HostToolDecl::owner_app`].
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub app: String,
     /// Name the model sees (`news_list`): provider tool names cannot hold `.`.
     pub model_name: String,
     pub description: String,
@@ -120,14 +125,26 @@ pub struct HostToolDecl {
 }
 
 impl HostToolDecl {
+    /// The owning app: `app`, or the first segment of `name`.
+    pub fn owner_app(&self) -> &str {
+        if self.app.is_empty() {
+            self.name.split('.').next().unwrap_or_default()
+        } else {
+            &self.app
+        }
+    }
+
     /// Destructive or outward: the person must confirm.
     pub fn gated(&self) -> bool {
         self.risk == HostToolRisk::Destructive || self.outward
     }
 
-    /// Whether a call needs the kernel's explicit approval first.
-    pub fn requires_kernel_approval(&self, attended: bool) -> bool {
-        self.gated() && !(attended && self.confirm == HostToolConfirm::App)
+    /// Whether a call needs the kernel's explicit approval first: a gated
+    /// tool the HOST confirms. A `confirm: app` tool's confirmation is the
+    /// owning app's own sheet, for callers of every kind (the host hands it
+    /// to the app), so the kernel asks nothing.
+    pub fn requires_kernel_approval(&self) -> bool {
+        self.gated() && self.confirm != HostToolConfirm::App
     }
 }
 
@@ -138,6 +155,8 @@ pub struct HostToolCall {
     pub tool_call_id: String,
     /// Declared name (`news.list`).
     pub name: String,
+    /// The app that owns the tool.
+    pub app: String,
     pub args: Value,
     pub risk: HostToolRisk,
     /// The app must confirm with the person itself (`confirm: app`,
@@ -164,6 +183,8 @@ pub enum HostToolCallOutcome {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HostToolAudit {
     pub tool: String,
+    /// The app that owns the tool.
+    pub app: String,
     pub tool_call_id: String,
     pub risk: &'static str,
     /// `allowed`, `approved`, `app_confirms`, `denied`, `expired`,
@@ -210,9 +231,18 @@ pub trait HostToolRouter: Send + Sync {
     fn call_timeout(&self) -> Duration;
 }
 
+/// The calling side of a host-routed tool: the peer whose session calls it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostToolCaller {
+    pub peer: Option<String>,
+    pub session_id: String,
+    pub context_id: Option<String>,
+}
+
 /// A host-declared app tool offered to the model.
 pub struct HostRoutedTool {
     decl: HostToolDecl,
+    caller: HostToolCaller,
     router: Arc<dyn HostToolRouter>,
     approval_ttl: Duration,
     /// The calling session is one of the app's interactive clients (an open
@@ -229,10 +259,17 @@ impl HostRoutedTool {
     ) -> Self {
         Self {
             decl,
+            caller: HostToolCaller::default(),
             router,
             approval_ttl,
             interactive_session,
         }
+    }
+
+    /// Who calls through this tool (shown on its approvals).
+    pub fn with_caller(mut self, caller: HostToolCaller) -> Self {
+        self.caller = caller;
+        self
     }
 
     pub fn decl(&self) -> &HostToolDecl {
@@ -249,6 +286,7 @@ impl HostRoutedTool {
     ) -> ToolResult {
         self.router.record(HostToolAudit {
             tool: self.decl.name.clone(),
+            app: self.decl.owner_app().to_owned(),
             tool_call_id: ctx.tool_id.clone(),
             risk: self.decl.risk.as_str(),
             decision,
@@ -411,7 +449,7 @@ impl Tool for HostRoutedTool {
             && self
                 .router
                 .outcome_unknown_before(&self.decl.name, &args_digest);
-        let decision = if self.decl.requires_kernel_approval(attended) || unknown_before {
+        let decision = if self.decl.requires_kernel_approval() || unknown_before {
             let Some(requester) = approvals else {
                 let (decision, message) = if unknown_before {
                     (
@@ -460,6 +498,18 @@ impl Tool for HostRoutedTool {
                 command: None,
                 cwd: None,
                 once_only: true,
+                host_tool: Some(octos_core::ui_protocol::ApprovalHostToolDetails {
+                    app: self.decl.owner_app().to_owned(),
+                    tool: self.decl.name.clone(),
+                    args: args.clone(),
+                    risk: self.decl.risk.as_str().to_owned(),
+                    outward: self.decl.outward,
+                    calling_peer: self.caller.peer.clone(),
+                    calling_session_id: self.caller.session_id.clone(),
+                    context_id: self.caller.context_id.clone(),
+                    tool_call_id: Some(ctx.tool_id.clone()),
+                    outcome_unknown_before: unknown_before,
+                }),
             };
             match tokio::time::timeout(self.approval_ttl, requester.request_approval(request)).await
             {
@@ -502,6 +552,7 @@ impl Tool for HostRoutedTool {
             .call(HostToolCall {
                 tool_call_id: ctx.tool_id.clone(),
                 name: self.decl.name.clone(),
+                app: self.decl.owner_app().to_owned(),
                 args: args.clone(),
                 risk: self.decl.risk,
                 confirm_required: decision == "app_confirms",
@@ -555,6 +606,7 @@ impl Tool for HostRoutedTool {
         };
         self.router.record(HostToolAudit {
             tool: self.decl.name.clone(),
+            app: self.decl.owner_app().to_owned(),
             tool_call_id: ctx.tool_id.clone(),
             risk: self.decl.risk.as_str(),
             decision,
@@ -671,6 +723,7 @@ mod tests {
     fn decl(name: &str, risk: HostToolRisk) -> HostToolDecl {
         HostToolDecl {
             name: name.into(),
+            app: String::new(),
             model_name: name.replace('.', "_"),
             description: format!("{name} tool"),
             input_schema: json!({"type": "object", "required": ["id"]}),
@@ -757,6 +810,37 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert!(!calls[0].confirm_required, "the person already approved");
         assert_eq!(router.decisions(), ["approved"]);
+    }
+
+    #[tokio::test]
+    async fn should_describe_the_owning_app_the_tool_and_the_caller_when_asking_for_approval() {
+        let router = Arc::new(FakeRouter::default());
+        // A cross-app tool: Mail's `mail.send`, registered on the News peer.
+        let mut cross = decl("mail.send", HostToolRisk::Destructive);
+        cross.app = "mail".into();
+        cross.outward = true;
+        let tool = in_app(cross, &router, TTL).with_caller(HostToolCaller {
+            peer: Some("news".into()),
+            session_id: "dev:api:host#peerctx-news.ui-1".into(),
+            context_id: Some("ui-1".into()),
+        });
+        let approver = Approver::new(Some(ToolApprovalDecision::Deny));
+        run(&tool, Some(approver.clone()), "c9", json!({"id": "d-1"})).await;
+        let asked = approver.last.lock().unwrap().clone().unwrap();
+        let details = asked
+            .host_tool
+            .expect("host-tool details for the host's sheet");
+        assert_eq!(details.app, "mail");
+        assert_eq!(details.tool, "mail.send");
+        assert_eq!(details.args, json!({"id": "d-1"}));
+        assert_eq!(details.risk, "destructive");
+        assert!(details.outward);
+        assert_eq!(details.calling_peer.as_deref(), Some("news"));
+        assert_eq!(details.calling_session_id, "dev:api:host#peerctx-news.ui-1");
+        assert_eq!(details.context_id.as_deref(), Some("ui-1"));
+        assert_eq!(details.tool_call_id.as_deref(), Some("c9"));
+        // Without an explicit `app`, the owner is the name's first segment.
+        assert_eq!(decl("news.list", HostToolRisk::Read).owner_app(), "news");
     }
 
     #[tokio::test]
@@ -963,31 +1047,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_ask_for_a_kernel_approval_when_an_app_confirmed_tool_runs_without_the_person() {
+    async fn should_hand_an_app_confirmed_call_to_the_owning_app_whoever_calls() {
         let router = Arc::new(FakeRouter::default());
         let mut send = decl("rinx.send_message", HostToolRisk::Destructive);
         send.confirm = HostToolConfirm::App;
         send.background = true;
 
-        // The peer's own session (a background run): the approval goes to the
-        // app's conversation, and an approved call is not confirmed again.
-        let tool = in_peer(send.clone(), &router, TTL);
+        // The peer's own session (a background run, the system agent's
+        // input), with or without an approval bridge: never a kernel
+        // approval; the owning app confirms with its own sheet.
         let approver = Approver::new(Some(ToolApprovalDecision::Approve));
+        let tool = in_peer(send.clone(), &router, TTL);
         assert!(
             run(&tool, Some(approver.clone()), "c1", json!({"id": 1}))
                 .await
                 .success
         );
-        assert_eq!(approver.asked(), 1);
-        assert!(!router.calls.lock().unwrap()[0].confirm_required);
-
-        // An in-app session whose turn has no approval bridge: the person is
-        // not reachable, so the app cannot confirm either.
         let tool = in_app(send, &router, TTL);
-        let refused = run(&tool, None, "c2", json!({"id": 1})).await;
-        assert!(!refused.success && refused.output.contains("no approval channel"));
-        assert_eq!(router.calls.lock().unwrap().len(), 1);
-        assert_eq!(router.decisions(), ["approved", "approval_unavailable"]);
+        assert!(run(&tool, None, "c2", json!({"id": 1})).await.success);
+        assert_eq!(approver.asked(), 0);
+        let calls = router.calls.lock().unwrap();
+        assert!(calls.iter().all(|c| c.confirm_required), "{calls:?}");
+        assert_eq!(router.decisions(), ["app_confirms", "app_confirms"]);
     }
 
     #[tokio::test]

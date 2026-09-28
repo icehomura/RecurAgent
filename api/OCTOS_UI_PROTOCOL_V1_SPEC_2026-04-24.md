@@ -569,24 +569,26 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   `{slug, version, previous_version, tools, generic_tools, applies:
   "next_turn"}`. Replaces the set atomically; from the next turn every
   session of the peer and of its request contexts ADDS those app tools to
-  the peer's usual kernel tools (narrowed to `generic_tools` only when that
-  list is non-empty), but only for turns on the peer originator's base key
+  the peer's usual kernel tools (exactly `generic_tools` of them when the
+  host sets that list), but only for turns on the peer originator's base key
   that are driven by the registering connection; any other turn on those
   topics gets no tools (hosts must drive the peer's turns on that
   connection). App tool calls are sent to the registering connection as the
   server notification `peer/tool/call` `{peer, session_id, context_id,
-  turn_id, call_id, tool_call_id, args_digest, name, args, risk,
-  confirm_required, timeout_ms, tools_version}`; `peer/tool/cancel`
+  turn_id, call_id, tool_call_id, args_digest, name, app, caller: {peer,
+  session_id, context_id}, args, risk, confirm_required, timeout_ms,
+  tools_version}` (`app` = the tool's owning app, which a cross-app tool
+  names in its declaration; `caller` = `{kind, peer, session_id,
+  context_id, turn_id}`, the calling peer, session and turn); `peer/tool/cancel`
   `{call_id, reason}` stops one, after which the host must not execute it.
-  A non-empty `generic_tools` must come from the peer-safe allowlist (workspace read and
-  search, research, the app's memory, `mofa_make`); anything else is
-  refused. Approvals of these calls, and `turn/steer` / `turn/interrupt` on
+  `generic_tools`, when given, is the peer's kernel tool set exactly (no
+  kernel-side exclusions; it never adds a tool the session lacks). Approvals of these calls, and `turn/steer` / `turn/interrupt` on
   the peer's sessions, belong to the host connection: other connections do
   not see those approvals and are refused (`peer_host_connection_only`). Kernel approvals of these calls are once-only: no
   remembered scope answers them or is recorded from them. Destructive and outward tools need an `approval/requested` →
-  `approval/respond` on the calling session first, except `confirm: app`
-  tools called from an open request context, which the app confirms
-  itself. Typed `data.kind`:
+  `approval/respond` on the calling session first (the host renders it),
+  except `confirm: app` tools, which the host hands to the owning app's own
+  sheet for callers of every kind (`confirm_required: true`). Typed `data.kind`:
   `peer_not_host_bound`, `peer_tools_invalid`, `peer_tools_version_conflict`)
 - `peer/tool/result` (accepted `UPCR-2026-035`: the host answers one
   `peer/tool/call`; `{session_id, peer, host_token, call_id, ok?, data?,
@@ -770,8 +772,12 @@ Host-registered peer tools (UPCR-2026-035; sent only to the connection that
 registered a host-owned app peer's tools with `peer/tools/register`):
 
 - `peer/tool/call` — run one app tool: `{peer, session_id, context_id,
-  turn_id, call_id, tool_call_id, name, args, risk, confirm_required,
-  timeout_ms, tools_version}`. The host answers with `peer/tool/result`.
+  turn_id, call_id, tool_call_id, args_digest, name, app, caller, args,
+  risk, confirm_required, timeout_ms, tools_version}`. Approvals of these
+  calls carry `approval_kind: "host_tool"` and `typed_details.host_tool`
+  `{app, tool, args, risk, outward, calling_peer?, calling_session_id,
+  context_id?, tool_call_id?, outcome_unknown_before}` for the host's own
+  sheet. The host answers with `peer/tool/result`.
   Ephemeral: never replayed; a host that is gone fails the call.
 - `peer/tool/cancel` — the kernel stopped waiting for `call_id`
   (`reason`: `timeout` | `cancelled`).
@@ -2189,7 +2195,8 @@ Optional typed fields from accepted `UPCR-2026-001`:
 
 - `approval_kind`
   String registry with initial values `command`, `diff`, `filesystem`,
-  `network`, and `sandbox_escalation`.
+  `network`, and `sandbox_escalation`; `host_tool` (UPCR-2026-035) for a
+  host-routed app tool's call, with `typed_details.host_tool`.
 - `risk`
   Display/audit risk label.
 - `typed_details`

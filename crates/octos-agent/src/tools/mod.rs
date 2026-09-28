@@ -444,6 +444,9 @@ pub struct ToolApprovalRequest {
     /// nor be recorded from it. Set by host-routed app tools (UPCR-2026-035),
     /// whose approvals carry the exact arguments.
     pub once_only: bool,
+    /// A host-routed app tool's call (UPCR-2026-035): the owning app, the
+    /// tool, the exact arguments and the caller, for the host's own sheet.
+    pub host_tool: Option<octos_core::ui_protocol::ApprovalHostToolDetails>,
 }
 
 /// Decision returned to a blocked tool after client approval handling.
@@ -943,7 +946,7 @@ pub use peer_handoff::{
 };
 pub use peer_host_tool::{
     HOST_TOOL_MAX_ARGS_BYTES, HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome,
-    HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim,
+    HostToolCaller, HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim,
 };
 pub use peer_list::{PeerListCallback, PeerListTool};
 pub use peer_respond::{

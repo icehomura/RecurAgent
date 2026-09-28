@@ -6541,6 +6541,16 @@ fn approval_event_from_tool_request(
         request.body,
     );
 
+    // UPCR-2026-035: a host-routed app tool's approval always carries what
+    // the host needs to render its own sheet (the owning app, the tool, the
+    // exact arguments, the caller). It is only ever sent to the host.
+    if let Some(details) = request.host_tool {
+        event.approval_kind = Some(approval_kinds::HOST_TOOL.to_owned());
+        event.risk = Some(details.risk.clone());
+        event.typed_details = Some(ApprovalTypedDetails::host_tool(details));
+        return event;
+    }
+
     if features.typed_approvals {
         // Risk is derived from the tool manifest, not from the tool's own
         // payload — a malicious tool cannot self-attest as `low`. Default
@@ -15492,9 +15502,9 @@ struct RawPeerToolsRegisterParams {
     /// App tools: the entries of the app bundle's `tools.json`.
     #[serde(default)]
     tools: Vec<crate::peers::host_tools::ToolInput>,
-    /// Kernel tool names the app may use.
+    /// The peer's kernel tools, exactly; omitted = its usual kernel tools.
     #[serde(default)]
-    generic_tools: Vec<String>,
+    generic_tools: Option<Vec<String>>,
     /// Optimistic concurrency: refuse unless the current version matches.
     #[serde(default)]
     if_version: Option<u64>,
@@ -15726,6 +15736,7 @@ fn raw_peer_tools_register(
         .map(|tool| {
             json!({
                 "name": tool.name,
+                "app": tool.owner_app(),
                 "model_name": tool.model_name,
                 "risk": tool.risk.as_str(),
                 "background": tool.background,

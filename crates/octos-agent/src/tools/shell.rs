@@ -1097,6 +1097,7 @@ impl Tool for ShellTool {
                         command: Some(input.command.clone()),
                         cwd: Some(effective_cwd.to_string_lossy().into_owned()),
                         once_only: false,
+                        host_tool: None,
                     })
                     .await;
                 if matches!(decision, ToolApprovalDecision::Deny) {

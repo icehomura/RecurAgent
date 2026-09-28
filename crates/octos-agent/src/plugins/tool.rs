@@ -2629,6 +2629,7 @@ impl Tool for PluginTool {
                         .as_ref()
                         .map(|p| p.to_string_lossy().into_owned()),
                     once_only: false,
+                    host_tool: None,
                 })
                 .await;
             if matches!(decision, ToolApprovalDecision::Deny) {

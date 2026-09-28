@@ -289,6 +289,7 @@ async fn request_command_approval(
                     command: Some(command.to_owned()),
                     cwd: Some(cwd.to_string_lossy().into_owned()),
                     once_only: false,
+                    host_tool: None,
                 })
                 .await;
             if matches!(decision, ToolApprovalDecision::Deny) {

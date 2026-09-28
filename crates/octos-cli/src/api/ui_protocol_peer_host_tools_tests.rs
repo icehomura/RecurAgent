@@ -780,7 +780,7 @@ async fn should_replace_the_tool_set_atomically_and_refuse_a_stale_version() {
 }
 
 #[tokio::test]
-async fn should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherwise() {
+async fn should_hand_a_confirm_app_call_to_the_owning_app_whoever_calls() {
     let fx = fixture().await;
     let token = prepare_news(&fx).await;
     let key = peer_key(&fx);
@@ -838,32 +838,19 @@ async fn should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherw
             .is_empty()
     );
 
-    // Person absent (the peer's own session): an approval request in the
-    // app's conversation, and an approved call is not confirmed again.
-    let registry = Arc::new(turn_registry(&fx, &key, "turn-2").await);
+    // The peer's own session (no person in the app, e.g. the system agent's
+    // input): still the owning app's own sheet, never a kernel approval.
+    let registry = turn_registry(&fx, &key, "turn-2").await;
     let approver = app_approver(&fx, &key, &contracts, &TurnId::new());
-    let run = {
-        let registry = registry.clone();
-        let args = args.clone();
-        tokio::spawn(
-            octos_agent::tools::TOOL_APPROVAL_CTX.scope(approver, async move {
-                registry
-                    .execute_with_context(&call_ctx("c2"), "news_share", &args)
-                    .await
-                    .unwrap()
-            }),
+    let absent = octos_agent::tools::TOOL_APPROVAL_CTX
+        .scope(
+            approver,
+            registry.execute_with_context(&call_ctx("c2"), "news_share", &args),
         )
-    };
-    let pending = wait_for_pending(&contracts, &key).await;
-    contracts
-        .approvals
-        .respond_with_context(ApprovalRespondParams::new(
-            key.clone(),
-            pending[0].approval_id.clone(),
-            ApprovalDecision::Approve,
-        ))
+        .await
         .unwrap();
-    assert!(run.await.unwrap().success);
+    assert!(absent.success, "{}", absent.output);
+    assert!(contracts.approvals.pending_for_session(&key).is_empty());
 
     drop(ws);
     crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
@@ -872,12 +859,12 @@ async fn should_let_the_app_confirm_when_the_person_is_in_the_app_and_ask_otherw
     assert_eq!(calls[0]["context_id"], "ui-1");
     assert_eq!(calls[0]["confirm_required"], true);
     assert_eq!(calls[1]["context_id"], Value::Null);
-    assert_eq!(calls[1]["confirm_required"], false);
+    assert_eq!(calls[1]["confirm_required"], true);
     let decisions: Vec<Value> = audit_rows(&fx)
         .iter()
         .map(|r| r["decision"].clone())
         .collect();
-    assert_eq!(decisions, [json!("app_confirms"), json!("approved")]);
+    assert_eq!(decisions, [json!("app_confirms"), json!("app_confirms")]);
 }
 
 fn news_topics_set() -> Value {
@@ -1466,49 +1453,57 @@ async fn should_give_no_tools_to_a_session_on_a_foreign_base_key() {
 }
 
 #[tokio::test]
-async fn should_refuse_generic_tools_that_escape_the_set() {
+async fn should_offer_exactly_the_generic_tools_the_host_sets() {
     let fx = fixture().await;
     let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let usual = sorted_names(&turn_registry(&fx, &key, "t0").await);
     let (ws, _rx) = ws_connection_for_test(8);
-    for escape in [
-        "spawn",
-        "spawn_agent",
-        "delegate",
-        "run_pipeline",
-        "peer_handoff",
-        "peer_send_input",
-        "goal_dispatch",
-        "manage_skills",
-        "message",
-        "send_file",
-        "shell",
-        "bash",
-        "exec_command",
-        "write_stdin",
-        "git",
-        "write_file",
-        "edit_file",
-        "diff_edit",
-        "apply_patch",
-        "browser",
-        "web_fetch",
-        "deep_crawl",
-        "monitor_delete",
-        "check_background_tasks",
-        "read_task_output",
-        "synthesize_research",
-        "view_image",
-        "recall",
-        "no_such_tool",
-    ] {
-        let err = register(
-            &fx,
-            &ws,
-            &token,
-            json!({ "tools": [news_list()], "generic_tools": [escape] }),
-        )
-        .expect_err(escape);
-        assert_eq!(err.data.unwrap()["kind"], "peer_tools_invalid", "{escape}");
+    // No hard-coded exclusions: research, command execution, whatever the
+    // app declared and the host granted.
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_list()],
+                "generic_tools": ["web_search", "deep_search", "shell", "read_file"] }),
+    )
+    .expect("any kernel tool name");
+    let names = sorted_names(&turn_registry(&fx, &key, "t1").await);
+    let mut expected: Vec<String> = ["web_search", "deep_search", "shell", "read_file"]
+        .into_iter()
+        .filter(|t| usual.contains(&t.to_string()))
+        .map(str::to_owned)
+        .collect();
+    expected.push("news_list".into());
+    expected.sort();
+    assert_eq!(names, expected, "exactly the host's set plus the app tool");
+    assert!(names.contains(&"shell".to_owned()));
+    // An explicit empty list: no kernel tools at all, only the app's.
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_list()], "generic_tools": [] }),
+    )
+    .unwrap();
+    assert_eq!(
+        sorted_names(&turn_registry(&fx, &key, "t2").await),
+        ["news_list"]
+    );
+    // The list never adds a tool the peer's session does not have.
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [], "generic_tools": ["peer_send_input", "no_such_tool"] }),
+    )
+    .unwrap();
+    assert!(turn_registry(&fx, &key, "t3").await.tool_names().is_empty());
+    // Names must look like kernel tool names (an app tool is dotted).
+    for bad in ["news.list", "rm -rf", ""] {
+        let err = register(&fx, &ws, &token, json!({ "generic_tools": [bad] })).expect_err(bad);
+        assert_eq!(err.data.unwrap()["kind"], "peer_tools_invalid", "{bad}");
     }
     let err = register(
         &fx,
@@ -1555,14 +1550,14 @@ async fn should_refuse_generic_tools_that_escape_the_set() {
         err.message
     );
 
-    // A stale set holding a now-forbidden name is still stripped per turn.
-    let key = peer_key(&fx);
+    // A set stored before `generic_tools` became optional (a plain list)
+    // still reads as that exact list.
     let path = peers_root(&fx).join("news/host_tools.json");
     let mut stored: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    stored["generic_tools"] = json!(["shell", "read_file"]);
+    stored["generic_tools"] = json!(["read_file"]);
     std::fs::write(&path, stored.to_string()).unwrap();
     assert_eq!(
-        sorted_names(&turn_registry(&fx, &key, "t").await),
+        sorted_names(&turn_registry(&fx, &key, "t4").await),
         ["news_list", "read_file"]
     );
 }
@@ -2086,7 +2081,8 @@ async fn e2e_turn_with(
         },
     )
     .await;
-    for _ in 0..500 {
+    // Generous: under a loaded test run the turn can take seconds.
+    for _ in 0..3000 {
         if llm.calls.load(std::sync::atomic::Ordering::SeqCst) >= 2 {
             break;
         }
@@ -2161,6 +2157,13 @@ async fn should_ask_the_person_before_a_real_turns_destructive_call_end_to_end()
     );
     assert_eq!(calls.len(), 1, "the approved call reached the host");
     assert_eq!(calls[0]["confirm_required"], false);
+    // The host renders the sheet from the typed details.
+    assert_eq!(approvals[0]["approval_kind"], "host_tool");
+    let details = &approvals[0]["typed_details"]["host_tool"];
+    assert_eq!(details["app"], "mail");
+    assert_eq!(details["tool"], "mail.send");
+    assert_eq!(details["args"], json!({"draft_id": "d-1"}));
+    assert_eq!(details["calling_peer"], "news");
 }
 
 #[tokio::test]
@@ -2678,7 +2681,7 @@ fn should_refuse_a_host_tool_whose_model_name_is_a_kernel_tools() {
             "risk": "read",
         }]))
         .unwrap(),
-        Vec::new(),
+        None,
         serde_json::from_value(json!({})).unwrap(),
     )
     .unwrap_err();
@@ -2877,13 +2880,18 @@ async fn should_never_let_an_app_tool_shadow_a_kernel_tool() {
     let token = prepare_news(&fx).await;
     let key = peer_key(&fx);
     let (ws, _rx) = ws_connection_for_test(8);
-    // `web.fetch` is seen as `web_fetch`, a kernel tool of the peer's roster.
+    // A reserved built-in name is refused at registration...
     let mut fetch = news_list();
     fetch["name"] = json!("web.fetch");
-    register(&fx, &ws, &token, json!({ "tools": [fetch] })).unwrap();
+    let err = register(&fx, &ws, &token, json!({ "tools": [fetch] })).unwrap_err();
+    assert_eq!(err.data.unwrap()["kind"], "peer_tools_invalid");
+    // ...and any other kernel tool of the peer's roster wins at turn time.
+    let mut exec = news_list();
+    exec["name"] = json!("exec.command");
+    register(&fx, &ws, &token, json!({ "tools": [exec] })).unwrap();
     let registry = turn_registry(&fx, &key, "turn-1").await;
     assert_eq!(
-        registry.origin("web_fetch"),
+        registry.origin("exec_command"),
         Some(octos_agent::ToolOrigin::Builtin),
         "the kernel tool wins"
     );
@@ -3118,4 +3126,77 @@ async fn should_answer_a_host_peer_sessions_questions_only_on_the_owning_or_host
     handle_user_question_respond(&host_ws, &contracts, None, None, "q2".into(), answer()).await;
     let reply = frame_json(host_rx.recv().await.unwrap());
     assert!(reply.get("error").is_none(), "{reply}");
+}
+
+// ---------------------------------------------------------------------------
+// Cross-app tools: each tool names its owning app, each call its caller
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn should_carry_the_owning_app_and_the_caller_when_a_cross_app_tool_is_called() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, rx) = ws_connection_for_test(32);
+    // The host granted News the Calendar app's read tool.
+    let mut cross = news_list();
+    cross["name"] = json!("calendar.today");
+    cross["app"] = json!("calendar");
+    let registered = register(&fx, &ws, &token, json!({ "tools": [news_list(), cross] })).unwrap();
+    let apps: Vec<(&str, &str)> = registered["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| (t["name"].as_str().unwrap(), t["app"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        apps,
+        [("news.list", "news"), ("calendar.today", "calendar")]
+    );
+
+    // A call from one of News's request contexts.
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let context_key: SessionKey = serde_json::from_value(opened["session_id"].clone()).unwrap();
+    let host = spawn_fake_host(
+        &fx,
+        token.clone(),
+        rx,
+        |_| json!({ "ok": true, "data": {"events": []} }),
+    );
+    let registry = turn_registry(&fx, &context_key, "turn-1").await;
+    let result = registry
+        .execute_with_context(&call_ctx("c1"), "calendar_today", &json!({"topic": "x"}))
+        .await
+        .unwrap();
+    assert!(result.success, "{}", result.output);
+    drop(registry);
+    drop(ws);
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
+    let calls = host.await.unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0]["name"], "calendar.today");
+    assert_eq!(calls[0]["app"], "calendar", "the owning app");
+    assert_eq!(
+        calls[0]["caller"],
+        json!({"kind": "app_peer", "peer": "news", "session_id": context_key,
+               "context_id": "ui-1", "turn_id": "turn-1"}),
+        "the calling peer and session"
+    );
+    let rows = audit_rows(&fx);
+    assert_eq!(rows[0]["app"], "calendar");
+
+    // An owning app id must be well formed.
+    let mut bad = news_list();
+    bad["app"] = json!("Calendar App");
+    let (ws2, _rx2) = ws_connection_for_test(8);
+    let error = register(&fx, &ws2, &token, json!({ "tools": [bad] })).unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_tools_invalid");
 }
