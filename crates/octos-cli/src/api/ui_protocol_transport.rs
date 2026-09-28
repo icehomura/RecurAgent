@@ -6165,21 +6165,19 @@ impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
         // The entry records the owning connection and the peer's route, so
         // `approval/respond` checks connections, never a (client-chosen) turn
         // id.
-        let host_slug = once_only
-            .then(|| crate::peers::host_tools::host_peer_slug_of(&self.session_id))
+        let host_route = (event.approval_kind.as_deref() == Some(approval_kinds::HOST_TOOL))
+            .then(|| {
+                crate::peers::host_tools::host_route_for_session(&self.peers_root, &self.session_id)
+            })
             .flatten();
         let response_rx = self.contracts.approvals.request_runtime_entry(
             event.clone(),
             Some(self.ws.connection_id().0),
             once_only,
-            host_slug.map(|slug| crate::peers::host_tools::route_key(&self.peers_root, slug)),
+            host_route.clone(),
         );
-        if let Some(slug) = host_slug {
-            crate::peers::host_tools::register_host_approval(
-                &approval_id.0.to_string(),
-                &self.peers_root,
-                slug,
-            );
+        if let Some(route) = host_route {
+            crate::peers::host_tools::register_host_approval(&approval_id.0.to_string(), route);
         }
 
         // #1449 drop-guard: arm a guard keyed to THIS pending approval the
@@ -7351,6 +7349,14 @@ async fn ui_protocol_connection(
                 let _ = send_rpc_error(&ws, Some(id), error);
                 continue;
             }
+        }
+        // UPCR-2026-035 (#2571): the turns of a registered host peer's
+        // session are driven by its host connection only.
+        if let Some(error) =
+            refuse_foreign_host_peer_session_call(&state, &ws, &request.method, &request.params)
+        {
+            let _ = send_rpc_error(&ws, Some(id), error);
+            continue;
         }
         if handle_raw_appui_rpc(
             &ws,
@@ -15639,10 +15645,13 @@ async fn raw_peer_context_close(
 
 #[derive(Debug, Deserialize)]
 struct RawPeerToolsRegisterParams {
-    /// The owning peer's originator session.
+    /// The owning peer's originator session; without `peer`, the host session
+    /// the set is registered on.
     session_id: SessionKey,
-    /// Peer name or slug.
-    peer: String,
+    /// Peer name or slug. Omitted: register on the host session `session_id`
+    /// itself (e.g. the system agent's conversation).
+    #[serde(default)]
+    peer: Option<String>,
     #[serde(default)]
     host_token: Option<String>,
     #[serde(default)]
@@ -15660,8 +15669,6 @@ struct RawPeerToolsRegisterParams {
     options: crate::peers::host_tools::ToolSetOptions,
 }
 
-/// UPCR-2026-035 `peer/tools/register` — declare (replace) a host-owned app
-/// peer's tool set and route its app tool calls to THIS connection.
 /// One `peer_send_input` call of the session `origin_session` (its turn
 /// `turn_id`) in profile `profile_id`: authorize it, then deliver the input.
 /// A host-owned app peer's input goes to its host connection as `peer/input`
@@ -15811,6 +15818,113 @@ fn external_host_tools_denied(method: &str) -> RpcError {
     .with_data(json!({ "kind": super::host_managed::EXTERNAL_METHOD_DENIED }))
 }
 
+/// The host credential for a host SESSION (not a peer): a host token of an
+/// app peer that `session` itself originated. Only the host that prepared
+/// the session's app peers holds one. A `peer-`/`peerctx-` session is never
+/// a host session (its tools are the peer's).
+fn authorize_host_session_call(
+    peers_root: &Path,
+    session: &SessionKey,
+    host_token: Option<&str>,
+) -> Result<(), RpcError> {
+    if session.topic().is_some_and(|topic| {
+        topic.starts_with("peer-")
+            || topic.starts_with(crate::peers::app_binding::PEER_CONTEXT_TOPIC_PREFIX)
+    }) {
+        return Err(RpcError::invalid_params(
+            "an app peer's session takes its tools from its peer: name the peer".to_owned(),
+        )
+        .with_data(json!({ "kind": "peer_tools_invalid" })));
+    }
+    let proven = crate::peers::app_binding::host_bound_peers(peers_root)
+        .into_iter()
+        .any(|(slug, binding)| {
+            peer_send_input_authorized(peers_root, &slug, &session.0).is_ok()
+                && crate::peers::app_binding::host_token_matches(&binding, host_token)
+        });
+    if proven {
+        Ok(())
+    } else {
+        Err(RpcError::permission_denied(format!(
+            "registering tools on session '{}' needs the host token of an app peer that \
+             session prepared",
+            session.0
+        ))
+        .with_data(json!({ "kind": "peer_host_token_mismatch" })))
+    }
+}
+
+/// `peer/tools/register` without `peer`: the tool set of the host session
+/// `session_id` (e.g. the system agent calling the app tools the host granted
+/// it). Lives as long as this connection; only this connection's turns on the
+/// session get the tools, and every call is routed back to it.
+fn raw_session_tools_register(
+    ws: &WsConnection,
+    peers_root: &Path,
+    profile_id: &str,
+    params: RawPeerToolsRegisterParams,
+) -> Result<Value, RpcError> {
+    use crate::peers::host_tools::{
+        SessionRegisterError, build_tool_set, register_session_tool_set,
+    };
+    authorize_host_session_call(peers_root, &params.session_id, params.host_token.as_deref())?;
+    let set = build_tool_set(params.tools, params.generic_tools, params.options)
+        .map_err(|err| host_peer_error("peer_tools_invalid", err))?;
+    let route_ws = ws.clone();
+    let (previous, version) = register_session_tool_set(
+        peers_root,
+        &params.session_id,
+        ws.connection_id.0,
+        Arc::new(move |method, params| {
+            send_raw_notification_ephemeral(&route_ws, method, params).is_ok()
+        }),
+        set.clone(),
+        params.if_version,
+    )
+    .map_err(|SessionRegisterError::VersionConflict(current)| {
+        host_peer_error(
+            "peer_tools_version_conflict",
+            format!("the tool set is at version {current}"),
+        )
+        .with_data(json!({
+            "kind": "peer_tools_version_conflict",
+            "current_version": current,
+        }))
+    })?;
+    Ok(json!({
+        "session_id": params.session_id,
+        "profile_id": profile_id,
+        "version": version,
+        "previous_version": previous,
+        "tools": registered_tools_json(&set),
+        "generic_tools": set.generic_tools,
+        "call_timeout_ms": set.call_timeout_ms,
+        "approval_ttl_secs": set.approval_ttl_secs,
+        "max_result_bytes": set.max_result_bytes,
+        "applies": "next_turn",
+    }))
+}
+
+fn registered_tools_json(set: &crate::peers::host_tools::PeerHostToolSet) -> Vec<Value> {
+    set.tools
+        .iter()
+        .map(|tool| {
+            json!({
+                "name": tool.name,
+                "app": tool.owner_app(),
+                "model_name": tool.model_name,
+                "risk": tool.risk.as_str(),
+                "background": tool.background,
+                "outward": tool.outward,
+                "confirm": tool.confirm.as_str(),
+            })
+        })
+        .collect()
+}
+
+/// UPCR-2026-035 `peer/tools/register` — declare (replace) a host-owned app
+/// peer's tool set (or a host session's) and route its app tool calls to THIS
+/// connection.
 fn raw_peer_tools_register(
     ws: &WsConnection,
     state: &Arc<AppState>,
@@ -15821,6 +15935,9 @@ fn raw_peer_tools_register(
         StoredToolSet, build_tool_set, read_tool_set, registration_lock, set_host_route,
         write_tool_set,
     };
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
     let params: RawPeerToolsRegisterParams = parse_raw_params(request)?;
     let profile_id = raw_scoped_llm_profile_id(
         params.profile_id.clone(),
@@ -15829,9 +15946,12 @@ fn raw_peer_tools_register(
     )?;
     let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
     let peers_root = data_dir.join("peers");
+    let Some(peer) = params.peer.clone() else {
+        return raw_session_tools_register(ws, &peers_root, &profile_id, params);
+    };
     let slug = authorize_host_peer_call(
         &peers_root,
-        &params.peer,
+        &peer,
         &params.session_id,
         params.host_token.as_deref(),
     )?;
@@ -15878,21 +15998,7 @@ fn raw_peer_tools_register(
             send_raw_notification_ephemeral(&route_ws, method, params).is_ok()
         }),
     );
-    let tools: Vec<Value> = set
-        .tools
-        .iter()
-        .map(|tool| {
-            json!({
-                "name": tool.name,
-                "app": tool.owner_app(),
-                "model_name": tool.model_name,
-                "risk": tool.risk.as_str(),
-                "background": tool.background,
-                "outward": tool.outward,
-                "confirm": tool.confirm.as_str(),
-            })
-        })
-        .collect();
+    let tools = registered_tools_json(&set);
     Ok(json!({
         "slug": slug,
         "profile_id": profile_id,
@@ -15910,7 +16016,9 @@ fn raw_peer_tools_register(
 #[derive(Debug, Deserialize)]
 struct RawPeerToolResultParams {
     session_id: SessionKey,
-    peer: String,
+    /// Omitted for a call of a host SESSION tool set.
+    #[serde(default)]
+    peer: Option<String>,
     #[serde(default)]
     host_token: Option<String>,
     #[serde(default)]
@@ -15947,18 +16055,31 @@ fn raw_peer_tool_result(
     )?;
     let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
     let peers_root = data_dir.join("peers");
-    let slug = authorize_host_peer_call(
-        &peers_root,
-        &params.peer,
-        &params.session_id,
-        params.host_token.as_deref(),
-    )?;
-    if crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug).is_none() {
-        return Err(host_peer_error(
-            "peer_not_host_bound",
-            format!("peer '{slug}' is not a host-owned app peer"),
-        ));
-    }
+    let host = match params.peer.as_deref() {
+        Some(peer) => {
+            let slug = authorize_host_peer_call(
+                &peers_root,
+                peer,
+                &params.session_id,
+                params.host_token.as_deref(),
+            )?;
+            if crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug).is_none() {
+                return Err(host_peer_error(
+                    "peer_not_host_bound",
+                    format!("peer '{slug}' is not a host-owned app peer"),
+                ));
+            }
+            crate::peers::host_tools::ToolHost::Peer(slug)
+        }
+        None => {
+            authorize_host_session_call(
+                &peers_root,
+                &params.session_id,
+                params.host_token.as_deref(),
+            )?;
+            crate::peers::host_tools::ToolHost::Session(params.session_id.clone())
+        }
+    };
     let outcome = if params.status.as_deref() == Some("awaiting_confirmation") {
         None
     } else if let Some(status) = params.status.as_deref() {
@@ -16005,7 +16126,7 @@ fn raw_peer_tool_result(
         Some(outcome) => HostReply::Final(outcome),
         None => HostReply::AwaitingConfirmation,
     };
-    let status = complete_host_call(&peers_root, &slug, &params.call_id, connection, reply)
+    let status = complete_host_call(&peers_root, &host, &params.call_id, connection, reply)
         .map_err(|err| host_peer_error(err.kind, err.message))?;
     Ok(match status {
         CompleteCall::Accepted => json!({ "call_id": params.call_id, "accepted": true }),
@@ -21388,7 +21509,9 @@ fn ledger_event_visible_to_connection(
     connection: ConnectionId,
 ) -> bool {
     let approval_id = match event {
-        UiProtocolLedgerEvent::Notification(UiNotification::ApprovalRequested(e)) => &e.approval_id,
+        UiProtocolLedgerEvent::Notification(UiNotification::ApprovalRequested(e)) => {
+            return crate::peers::host_tools::host_approval_event_visible(e, connection.0);
+        }
         UiProtocolLedgerEvent::Notification(UiNotification::ApprovalDecided(e)) => &e.approval_id,
         UiProtocolLedgerEvent::Notification(UiNotification::ApprovalCancelled(e)) => &e.approval_id,
         UiProtocolLedgerEvent::Notification(UiNotification::ApprovalAutoResolved(e)) => {
@@ -22190,10 +22313,7 @@ async fn open_session_result(
         })
         .filter(|approval| !replayed_approval_ids.contains(&approval.approval_id))
         .filter(|approval| {
-            crate::peers::host_tools::host_approval_visible(
-                &approval.approval_id.0.to_string(),
-                connection_id.0,
-            )
+            crate::peers::host_tools::host_approval_event_visible(approval, connection_id.0)
         })
         .collect::<Vec<_>>();
 
@@ -26829,6 +26949,45 @@ fn host_session_answer_allowed(
     }
 }
 
+/// Calls that start, steer, stop or rewrite the turns of a session.
+const HOST_PEER_SESSION_WRITE_METHODS: &[&str] = &[
+    "turn/start",
+    "turn/steer",
+    "turn/interrupt",
+    "session/rollback",
+    "session/goal/set",
+    "session/goal/clear",
+    "session/goal/operator_transition",
+    "loop/create",
+];
+
+/// UPCR-2026-035 (#2571): refuse a call that starts, steers, stops or
+/// rewrites the turns of a registered host peer's session (`peer-<slug>` or
+/// `peerctx-<slug>.<id>` with a tool set on disk) from any connection but the
+/// peer's host connection. Such a write would put text in front of a turn
+/// that has the app's act tools. Decided from the persisted tool set, so it
+/// holds from the first call after a restart.
+fn refuse_foreign_host_peer_session_call(
+    state: &AppState,
+    ws: &WsConnection,
+    method: &str,
+    params: &Value,
+) -> Option<RpcError> {
+    if !HOST_PEER_SESSION_WRITE_METHODS.contains(&method) {
+        return None;
+    }
+    let session_id = params.get("session_id")?.as_str()?;
+    let session = session_key_with_optional_topic(
+        &SessionKey(session_id.to_owned()),
+        params.get("topic").and_then(Value::as_str),
+    );
+    crate::peers::host_tools::host_peer_slug_of(&session)?;
+    let (_, data_dir) = resolve_profile_data_dir(state, session.profile_id()).ok()?;
+    let controller =
+        crate::peers::host_tools::host_peer_session_controller(&data_dir.join("peers"), &session)?;
+    (controller != Some(ws.connection_id.0)).then(|| host_connection_only_error(method))
+}
+
 /// Refuse a turn control of a registered host peer's session from any
 /// connection but its host connection.
 fn refuse_foreign_host_turn_control(
@@ -28226,8 +28385,8 @@ async fn handle_session_hydrate(
                 .pending_for_session(&params.session_id)
                 .into_iter()
                 .filter(|approval| {
-                    crate::peers::host_tools::host_approval_visible(
-                        &approval.approval_id.0.to_string(),
+                    crate::peers::host_tools::host_approval_event_visible(
+                        approval,
                         ws.connection_id.0,
                     )
                 })
@@ -38321,6 +38480,15 @@ async fn run_standalone_turn(
             &turn_id.0.to_string(),
             host_tools_turn_connection(&ws, internal_master_continuation),
         );
+        // A host SESSION tool set (e.g. the system agent calling the app
+        // tools the host granted it): only the host's own turns on it.
+        crate::peers::host_tools::apply_session_owned_host_tools(
+            &mut tool_registry,
+            &peers_root,
+            &session_id,
+            &turn_id.0.to_string(),
+            host_tools_turn_connection(&ws, internal_master_continuation),
+        );
     }
     // `octos serve --host-managed`: an external client's turn keeps only the
     // external tool allowlist, applied to the FINISHED registry so nothing
@@ -40838,6 +41006,11 @@ async fn run_standalone_turn(
         // LLM / web_search future at its next poll. Idempotent: already-
         // terminal tasks return `AlreadyTerminal` and are skipped.
         cancel_session_spawn_only_tasks(&tool_registry.supervisor(), &session_id);
+        // UPCR-2026-035: host-routed calls run in their own tool tasks, which
+        // `agent_task.abort()` does not reach. End their waits now: the host
+        // gets `peer/tool/cancel`, and a non-read call is an unknown outcome
+        // that is not resent.
+        crate::peers::host_tools::cancel_host_calls_for_turn(&session_id, &turn_id.0.to_string());
         // #1707 round 5 (board item #7): a terminal mirror that lands AFTER
         // this interrupt (task-status re-forward, restart replay into a
         // fresh runtime) must not re-enter the session as a

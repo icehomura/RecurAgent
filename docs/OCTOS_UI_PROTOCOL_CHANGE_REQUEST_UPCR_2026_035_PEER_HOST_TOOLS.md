@@ -68,7 +68,7 @@ drives the turns, after every `peer/prepare` and every reconnect.
 ### `peer/tools/register`
 
 ```
-{session_id, peer, host_token, profile_id?,
+{session_id, peer?, host_token, profile_id?,
  tools?: [ToolDecl], generic_tools?: [string], if_version?: u64,
  call_timeout_ms?, approval_ttl_secs?, max_result_bytes?}
 → {slug, profile_id, version, previous_version,
@@ -76,6 +76,27 @@ drives the turns, after every `peer/prepare` and every reconnect.
    generic_tools, call_timeout_ms, approval_ttl_secs, max_result_bytes,
    applies: "next_turn"}
 ```
+
+**Host session target.** Without `peer`, the set is registered on the host
+session `session_id` itself: a session that is not an app peer, typically
+the system agent's conversation, so the system agent can call the app tools
+the host granted it. The credential is the host token of an app peer that
+`session_id` prepared (only the host that prepared that session's app peers
+holds one); a `peer-`/`peerctx-` session is refused (`peer_tools_invalid`),
+as is an external connection of `serve --host-managed`. The result carries
+`session_id` instead of `slug`. Such a set:
+
+- lives in memory as long as the registering connection (the host registers
+  again after every reconnect, as for a peer; `if_version` works the same);
+- is ADDED to the turns the registering connection drives on that session,
+  and only to those: every other turn on the session (an external web client,
+  a kernel continuation) keeps exactly its usual tools and gets no app tool,
+  and the session's other clients are not locked out of it;
+- routes its calls to that connection with `caller.kind: "system"` and
+  `peer: null`; they are answered with `peer/tool/result` without `peer`
+  (same credential); its approvals are host-routed like a peer's; its audit
+  goes to `host_session_tool_audit.jsonl` in the profile data dir (the same
+  row shape, `peer: null`).
 
 `ToolDecl` is one entry of the app bundle's `tools.json`: `{name,
 description, input_schema, output_schema?, risk, background?, outward?,
@@ -166,7 +187,7 @@ fails with `host_unavailable`; it is never replayed.
 ### `peer/tool/result`
 
 ```
-{session_id, peer, host_token, profile_id?, call_id,
+{session_id, peer?, host_token, profile_id?, call_id,
  ok?, data?, error?: {kind?, message} | string,
  status?: "awaiting_confirmation"}
 → {call_id, accepted: true, result_too_large?: {bytes, max},
@@ -223,6 +244,12 @@ transcript carry the reply).
   `peer_send_input` fails with an error that says the app is not connected,
   and nothing is queued or run. External clients of `serve --host-managed`
   never receive it (they can never register).
+- `peer_send_input` reporting `queued` means the notification was written to
+  the host connection's socket, not that the host started (or will start)
+  the turn; the system agent follows the turn through the peer paths.
+- A turn the host starts with that `turn_id` on the peer's session is the
+  system agent's request made for the person, so it counts as *attended*
+  (below): the app's foreground tools run in it, as in a request context.
 
 Peers that are not host-owned keep today's behaviour (the gateway inbox or
 the serve continuation queue).
@@ -281,11 +308,31 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   `session/hydrate`; `approval/respond` for it from any other connection is
   refused (`peer_host_connection_only`). The tag is held in memory; after a
   kernel restart the pending approvals are gone anyway (their waiters were),
-  and only the historical events remain in the ledger.
-- **Turn controls stay with the host.** `turn/steer` and `turn/interrupt`
-  (including a voice turn's `supersedes_turn_id`) on the session of a peer
-  with a registered set are accepted only from the peer's host connection
-  (`peer_host_connection_only`).
+  and only the historical events remain in the ledger. Those historical
+  `approval/requested` events carry the exact arguments
+  (`approval_kind: "host_tool"`), so visibility is decided from the event
+  too: a `host_tool` approval whose host the kernel no longer knows (after a
+  restart or an eviction of the in-memory tag) is shown to no connection on
+  replay, in pending lists or in `session/hydrate`.
+- **Turns and turn controls stay with the host (#2571).** On the session of
+  a peer with a registered set (the `peer-<slug>` session and its request
+  contexts, on the originator's base key), `turn/start`, `turn/steer`,
+  `turn/interrupt` (including a voice turn's `supersedes_turn_id`),
+  `session/rollback`, `session/goal/set`, `session/goal/clear`,
+  `session/goal/operator_transition` and `loop/create` are accepted only
+  from the peer's host connection (`peer_host_connection_only`): anything
+  else written into such a session would be text in front of a turn that
+  has the app's act tools. The rule is derived from the tool set on disk,
+  so it holds from the first call after a kernel restart (then nobody
+  drives the session until the host registers again).
+  - **Interrupting a turn ends its host calls.** App tool calls run in their
+    own tool tasks; `turn/interrupt` (and a voice supersede) ends every call
+    of the turn still waiting on the host: the host gets
+    `peer/tool/cancel {reason: "cancelled"}`, and a non-`read` call is an
+    unknown outcome that is not resent.
+  - **A host connection that closes ends its calls.** Every call in flight
+    to it ends at once (a `read` call as `host_unavailable`, any other as
+    `outcome_unknown`) instead of waiting out its timeout.
 - **No host filesystem access.** A host-bound app session never runs with
   `Host` filesystem permissions (`danger_full_access`, e.g. a Solo profile
   with `--danger-full-access` or `permission/profile/set`): the kernel
@@ -324,19 +371,23 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   tool origin `HostRouted`. An app tool whose model name a kernel tool
   already has is not offered (the kernel tool wins), and a name equal to a
   reserved built-in tool name (`RESERVED_BUILTIN_TOOL_NAMES`) is refused at
-  registration. This runs after the
-  profile tool policy and envelope, so it cannot be widened by them. A set
-  file that exists but cannot be read fails closed: no tools at all.
+  registration. The set is applied after the profile `tool_policy` and
+  tool envelope: `generic_tools` narrows what they left, and the app tools
+  are added after them, so the profile policy does NOT filter app tools
+  (the host, which authorizes every call, is their authority). A set file
+  that exists but cannot be read fails closed: no tools at all.
 - **Unchanged without a registration.** A host-owned peer that never
   registered keeps today's roster, so existing hosts keep their tools.
 - **Arguments.** Must be an object carrying every `required` property of the
   input schema and at most 64 KiB serialized; the host validates the rest.
-- **Person present or absent.** A call is *attended* when it comes from an
+- **Person present or absent.** A call is *attended* when its turn carries
+  an approval bridge (every AppUI `turn/start` does) and it comes from an
   open request context of the peer (one of the app's interactive clients,
-  the app's own conversation, UPCR-2026-034) and its turn carries an
-  approval bridge (every AppUI `turn/start` does). A call from the peer's
-  own session (the app agent's background runs, the system agent's
-  requests) or from a turn with no bridge is *unattended*.
+  the app's own conversation, UPCR-2026-034), from a host turn started from
+  a kernel `peer/input` (the system agent's request made for the person), or
+  from a host session set (the host's own conversation). A call from any
+  other turn of the peer's own session (the app agent's background runs) or
+  from a turn with no bridge is *unattended*.
 - **Risk.** A tool is *gated* when it is `destructive` or marked `outward`.
   - `read` and `act` run. A tool not marked `background` runs only attended
     (`not_background`).
@@ -414,8 +465,9 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
     ask the person. The audit outcome is `unknown`.
 - **Audit.** Every call, including refused ones, appends one JSON line to
   `peers/<slug>/tool_audit.jsonl`: `ts, peer, context_id, session_id,
-  turn_id, tools_version, tool, tool_call_id, risk, decision, outcome,
-  duration_ms, args_bytes, result_bytes`. `decision` is one of `allowed`,
+  turn_id, tools_version, tool, app, tool_call_id, risk, decision, outcome,
+  duration_ms, args_bytes, result_bytes` (a `late_result` row carries `app`
+  and `call_id` too). `decision` is one of `allowed`,
   `approved`, `approved_after_unknown`, `app_confirms`, `denied`, `expired`,
   `approval_unavailable`, `duplicate`, `busy`, `outcome_unknown_before`,
   `not_background`, `invalid_args`, or `late_result` (a host
@@ -493,9 +545,13 @@ never declares its tools a second way.
 
 ## Non-goals and follow-ups
 
-- **Tools on a non-peer session.** Registering host-routed tools on a
-  session that is not a host-owned app peer (for example a system agent
-  conversation that is not a peer) is not part of this change.
+- **Transcript reads by foreign clients (#2556-1).** A foreign connection
+  of the profile can still `session/open`, `session/hydrate` and page the
+  messages of a host peer's session (the write side is closed above). Under
+  `serve --host-managed` external clients cannot name peer sessions at all,
+  so only non-host-managed servers are affected, where every client of the
+  profile holds the profile's own credential; binding the read side to the
+  host is #2556-1.
 - **Presence beyond request contexts.** Attended means "an open request
   context with an approval bridge". A host that wants a finer signal (the
   app window focused, the screen on) would need a per-turn flag; not in this
@@ -526,8 +582,8 @@ never declares its tools a second way.
   `required`; `additionalProperties`, types and formats are the host's to
   enforce.
 - **Reconnects.** A host that reconnects and registers again with the same
-  token receives later calls; a call sent to its old connection can only be
-  answered there, so it times out (a non-`read` call as `outcome_unknown`).
+  token receives later calls; a call sent to its old connection ends when
+  that connection closes (a non-`read` call as `outcome_unknown`).
 - **Risk labels are the host's declaration.** The kernel enforces exactly
   what the host declares (risk, `outward`, `confirm`, `background`); it does
   not judge whether `news.delete` is honestly labelled. The check on the
@@ -624,4 +680,12 @@ never declares its tools a second way.
   `should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids_collide`,
   `should_refuse_a_host_tool_whose_model_name_is_a_kernel_tools`, and in
   octos-agent `should_mark_a_host_routed_tool_by_origin_whatever_its_name`
+- Round 11 (octos-cli `peer_host_tools_tests`):
+  `should_cancel_an_in_flight_host_call_when_the_turn_is_interrupted`
+  (a real `turn/start` + `turn/interrupt`; fails without the fix),
+  `should_end_in_flight_calls_at_once_when_the_host_connection_drops`,
+  `should_run_a_foreground_tool_in_a_host_turn_started_from_peer_input`,
+  `should_hide_a_host_tool_approval_whose_host_is_unknown`,
+  `should_refuse_foreign_writes_to_a_host_peer_session_when_its_set_is_on_disk`,
+  `should_give_the_system_agent_the_app_tools_the_host_registers_on_its_session`
 - `spec_section6_catalog_lists_every_advertised_method`

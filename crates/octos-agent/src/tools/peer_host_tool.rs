@@ -234,6 +234,8 @@ pub trait HostToolRouter: Send + Sync {
 /// The calling side of a host-routed tool: the peer whose session calls it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HostToolCaller {
+    /// `app_peer` or `system` (a host session that is not a peer).
+    pub kind: String,
     pub peer: Option<String>,
     pub session_id: String,
     pub context_id: Option<String>,
@@ -504,6 +506,7 @@ impl Tool for HostRoutedTool {
                     args: args.clone(),
                     risk: self.decl.risk.as_str().to_owned(),
                     outward: self.decl.outward,
+                    calling_kind: self.caller.kind.clone(),
                     calling_peer: self.caller.peer.clone(),
                     calling_session_id: self.caller.session_id.clone(),
                     context_id: self.caller.context_id.clone(),
@@ -820,6 +823,7 @@ mod tests {
         cross.app = "mail".into();
         cross.outward = true;
         let tool = in_app(cross, &router, TTL).with_caller(HostToolCaller {
+            kind: "app_peer".into(),
             peer: Some("news".into()),
             session_id: "dev:api:host#peerctx-news.ui-1".into(),
             context_id: Some("ui-1".into()),
@@ -835,6 +839,7 @@ mod tests {
         assert_eq!(details.args, json!({"id": "d-1"}));
         assert_eq!(details.risk, "destructive");
         assert!(details.outward);
+        assert_eq!(details.calling_kind, "app_peer");
         assert_eq!(details.calling_peer.as_deref(), Some("news"));
         assert_eq!(details.calling_session_id, "dev:api:host#peerctx-news.ui-1");
         assert_eq!(details.context_id.as_deref(), Some("ui-1"));

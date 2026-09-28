@@ -561,7 +561,12 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   `peer_context_not_found`, `peer_context_workspace_escape`)
 - `peer/tools/register` (accepted `UPCR-2026-035`: the host declares a
   host-owned app peer's app tools and the generic kernel tools it may use;
-  `{session_id, peer, host_token, tools?, generic_tools?, if_version?,
+  without `peer`, the tools of the host SESSION `session_id` itself (e.g.
+  the system agent's conversation; credential: the host token of an app
+  peer that session prepared; only the registering connection's turns get
+  them, calls carry `caller.kind: "system"`, and the set lives as long as
+  that connection);
+  `{session_id, peer?, host_token, tools?, generic_tools?, if_version?,
   call_timeout_ms?, approval_ttl_secs?, max_result_bytes?}` (`tools` are
   the app bundle's `tools.json` entries: `name`, `description`,
   `input_schema`, `output_schema?`, `risk`, `background?`, `outward?`,
@@ -591,7 +596,7 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   sheet for callers of every kind (`confirm_required: true`). Typed `data.kind`:
   `peer_not_host_bound`, `peer_tools_invalid`, `peer_tools_version_conflict`)
 - `peer/tool/result` (accepted `UPCR-2026-035`: the host answers one
-  `peer/tool/call`; `{session_id, peer, host_token, call_id, ok?, data?,
+  `peer/tool/call`; `{session_id, peer?, host_token, call_id, ok?, data?,
   error?, status?: "awaiting_confirmation"}` → `{call_id, accepted,
   result_too_large?, awaiting_confirmation?}`; an acknowledgement extends a
   gated call's wait to the approval TTL; an unanswered non-read call ends as

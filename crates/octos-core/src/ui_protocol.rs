@@ -5480,6 +5480,10 @@ pub struct ApprovalHostToolDetails {
     pub risk: String,
     #[serde(default)]
     pub outward: bool,
+    /// `app_peer` (an app peer's session makes the call) or `system` (a
+    /// host session that is not a peer, e.g. the system agent's).
+    #[serde(default)]
+    pub calling_kind: String,
     /// The calling app peer's slug (the peer whose session makes the call).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calling_peer: Option<String>,

@@ -3200,3 +3200,401 @@ async fn should_carry_the_owning_app_and_the_caller_when_a_cross_app_tool_is_cal
     let error = register(&fx, &ws2, &token, json!({ "tools": [bad] })).unwrap_err();
     assert_eq!(error.data.unwrap()["kind"], "peer_tools_invalid");
 }
+
+// ---------------------------------------------------------------------------
+// Round 11: interrupt, host SESSION tool sets, visibility, attended input,
+// host drop, write-side confinement
+// ---------------------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_cancel_an_in_flight_host_call_when_the_turn_is_interrupted() {
+    let llm = ScriptedHostToolLlm::new("news_topics_set", json!({"topics": ["rust"]}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [news_topics_set()] })).await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    let mut rx = e.rx.take().unwrap();
+    let ledger = Arc::new(UiProtocolLedger::new(256));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let active_turns: SharedActiveTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let connection_turns: SharedConnectionTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let turn_id = TurnId::new();
+    handle_turn_start(
+        &e.ws,
+        &e.state,
+        &ledger,
+        &contracts,
+        &active_turns,
+        &connection_turns,
+        None,
+        None,
+        ConnectionUiFeatures::stdio_defaults(),
+        "start-1".into(),
+        TurnStartParams {
+            session_id: session.clone(),
+            turn_id: turn_id.clone(),
+            input: vec![InputItem::Text {
+                text: "follow rust".into(),
+            }],
+            media: Vec::new(),
+            topic: None,
+            rewrite_for: None,
+            reasoning_effort: None,
+            tool_context: None,
+            live_video: false,
+        },
+    )
+    .await;
+    // The host receives the call and is working on it (never answers).
+    let call = next_frame(&mut rx, "peer/tool/call").await;
+    // The person interrupts the turn.
+    handle_turn_interrupt(
+        &e.ws,
+        &ledger,
+        &active_turns,
+        &contracts,
+        "int-1".into(),
+        TurnInterruptParams {
+            session_id: session.clone(),
+            turn_id: turn_id.clone(),
+        },
+    )
+    .await;
+    // The host is told to stop that very call...
+    let cancel = next_frame(&mut rx, "peer/tool/cancel").await;
+    assert_eq!(cancel["call_id"], call["call_id"]);
+    assert_eq!(cancel["reason"], "cancelled");
+    // ...and the call ends as an unknown outcome (it is not resent later).
+    let peers_root = e.data_dir.join("peers");
+    let mut unknown = false;
+    for _ in 0..200 {
+        let audit =
+            std::fs::read_to_string(peers_root.join("news/tool_audit.jsonl")).unwrap_or_default();
+        if audit.contains("\"outcome\":\"unknown\"") {
+            unknown = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(unknown, "the interrupted call is audited as unknown");
+    assert!(crate::peers::host_tools::pending_calls_for(&peers_root, "news").is_empty());
+}
+
+#[tokio::test]
+async fn should_end_in_flight_calls_at_once_when_the_host_connection_drops() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(&fx, &ws, &token, json!({ "tools": [news_topics_set()] })).unwrap();
+    let registry = Arc::new(turn_registry(&fx, &key, "turn-1").await);
+    let task = {
+        let registry = registry.clone();
+        tokio::spawn(async move {
+            registry
+                .execute_with_context(
+                    &call_ctx("c1"),
+                    "news_topics_set",
+                    &json!({"topics": ["rust"]}),
+                )
+                .await
+                .unwrap()
+        })
+    };
+    next_frame(&mut rx, "peer/tool/call").await;
+    let started = std::time::Instant::now();
+    crate::peers::host_tools::drop_routes_for_connection(ws.connection_id.0);
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), task)
+        .await
+        .expect("ends at once, not after the call timeout")
+        .unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    assert!(!result.success);
+    assert!(
+        result.output.contains("outcome_unknown"),
+        "{}",
+        result.output
+    );
+}
+
+#[tokio::test]
+async fn should_run_a_foreground_tool_in_a_host_turn_started_from_peer_input() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    let mut foreground = news_list();
+    foreground["background"] = json!(false);
+    register(&fx, &ws, &token, json!({ "tools": [foreground] })).unwrap();
+    deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("what's new?", "call_1"),
+    )
+    .unwrap();
+    let input = next_frame(&mut rx, "peer/input").await;
+    let input_turn = input["turn_id"].as_str().unwrap().to_owned();
+    let host = spawn_fake_host(
+        &fx,
+        token.clone(),
+        rx,
+        |_| json!({ "ok": true, "data": [] }),
+    );
+
+    // The host's turn started from `peer/input`: the system agent's request,
+    // made for the person, runs the foreground tool.
+    let registry = turn_registry(&fx, &key, &input_turn).await;
+    let approver = app_approver(
+        &fx,
+        &key,
+        &Arc::new(UiProtocolContractStores::default()),
+        &TurnId::new(),
+    );
+    let ran = octos_agent::tools::TOOL_APPROVAL_CTX
+        .scope(
+            approver.clone(),
+            registry.execute_with_context(&call_ctx("c1"), "news_list", &json!({})),
+        )
+        .await
+        .unwrap();
+    assert!(ran.success, "{}", ran.output);
+    // Any other turn of the peer's own session is a background run.
+    let registry = turn_registry(&fx, &key, "turn-other").await;
+    let refused = octos_agent::tools::TOOL_APPROVAL_CTX
+        .scope(
+            approver,
+            registry.execute_with_context(&call_ctx("c2"), "news_list", &json!({})),
+        )
+        .await
+        .unwrap();
+    assert!(
+        !refused.success && refused.output.contains("background"),
+        "{}",
+        refused.output
+    );
+    drop(ws);
+    crate::peers::host_tools::set_host_route(&peers_root(&fx), "news", 0, Arc::new(|_, _| false));
+    assert_eq!(host.await.unwrap().len(), 1);
+}
+
+#[test]
+fn should_hide_a_host_tool_approval_whose_host_is_unknown() {
+    let session = SessionKey("dev:api:host#peer-news".into());
+    let mut host_tool = ApprovalRequestedEvent::generic(
+        session.clone(),
+        ApprovalId::new(),
+        TurnId::new(),
+        "mail_send",
+        "Approve mail.send",
+        "the email body",
+    );
+    host_tool.approval_kind = Some("host_tool".into());
+    // Not known to this kernel (a restart, an eviction): nobody sees it.
+    assert!(!crate::peers::host_tools::host_approval_event_visible(
+        &host_tool, 1
+    ));
+    assert!(!ledger_event_visible_to_connection(
+        &UiProtocolLedgerEvent::Notification(UiNotification::ApprovalRequested(host_tool)),
+        ConnectionId(1),
+    ));
+    // Other approvals are unaffected.
+    let ordinary = ApprovalRequestedEvent::generic(
+        session,
+        ApprovalId::new(),
+        TurnId::new(),
+        "shell",
+        "Run",
+        "ls",
+    );
+    assert!(crate::peers::host_tools::host_approval_event_visible(
+        &ordinary, 1
+    ));
+}
+
+#[tokio::test]
+async fn should_refuse_foreign_writes_to_a_host_peer_session_when_its_set_is_on_disk() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (host_ws, _host_rx) = ws_connection_for_test(8);
+    let (other_ws, _other_rx) = ws_connection_for_test(8);
+    let by_session = json!({ "session_id": key });
+    let by_topic = json!({ "session_id": fx.system, "topic": "peer-news" });
+    // Before registration nothing is confined.
+    assert!(
+        refuse_foreign_host_peer_session_call(&fx.state, &other_ws, "turn/start", &by_session)
+            .is_none()
+    );
+    register(&fx, &host_ws, &token, json!({ "tools": [] })).unwrap();
+    for method in [
+        "turn/start",
+        "turn/steer",
+        "turn/interrupt",
+        "session/rollback",
+        "session/goal/set",
+        "loop/create",
+    ] {
+        for params in [&by_session, &by_topic] {
+            let error = refuse_foreign_host_peer_session_call(&fx.state, &other_ws, method, params)
+                .unwrap_or_else(|| panic!("{method} {params}"));
+            assert_eq!(error.data.unwrap()["kind"], "peer_host_connection_only");
+            assert!(
+                refuse_foreign_host_peer_session_call(&fx.state, &host_ws, method, params)
+                    .is_none()
+            );
+        }
+    }
+    // Reads and other sessions are not confined.
+    assert!(
+        refuse_foreign_host_peer_session_call(&fx.state, &other_ws, "session/hydrate", &by_session)
+            .is_none()
+    );
+    assert!(
+        refuse_foreign_host_peer_session_call(
+            &fx.state,
+            &other_ws,
+            "turn/start",
+            &json!({ "session_id": fx.system }),
+        )
+        .is_none()
+    );
+    // After the host's connection closed (or a restart: nothing in memory),
+    // nobody drives it until the host registers again.
+    crate::peers::host_tools::drop_routes_for_connection(host_ws.connection_id.0);
+    assert!(
+        refuse_foreign_host_peer_session_call(&fx.state, &host_ws, "turn/start", &by_session)
+            .is_some()
+    );
+}
+
+fn register_on_session(
+    fx: &Fx,
+    ws: &WsConnection,
+    token: Option<&str>,
+    session: &SessionKey,
+    extra: Value,
+) -> Result<Value, RpcError> {
+    let mut params = json!({ "session_id": session, "host_token": token });
+    for (key, value) in extra.as_object().unwrap() {
+        params[key] = value.clone();
+    }
+    raw_peer_tools_register(
+        ws,
+        &fx.state,
+        &rpc(APPUI_METHOD_PEER_TOOLS_REGISTER, params),
+        None,
+    )
+}
+
+fn calendar_today() -> Value {
+    json!({
+        "name": "calendar.today",
+        "app": "calendar",
+        "description": "Today's events.",
+        "input_schema": {"type": "object"},
+        "risk": "read",
+        "background": true,
+    })
+}
+
+#[tokio::test]
+async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_session() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, mut rx) = ws_connection_for_test(32);
+    let tools = json!({ "tools": [calendar_today()] });
+
+    // The host credential: a host token of an app peer this session prepared.
+    let refused = register_on_session(&fx, &ws, None, &fx.system, tools.clone()).unwrap_err();
+    assert_eq!(refused.data.unwrap()["kind"], "peer_host_token_mismatch");
+    let other = SessionKey::with_profile_topic("dev", "api", "host", "other");
+    let refused = register_on_session(&fx, &ws, Some(&token), &other, tools.clone()).unwrap_err();
+    assert_eq!(refused.data.unwrap()["kind"], "peer_host_token_mismatch");
+    let refused =
+        register_on_session(&fx, &ws, Some(&token), &peer_key(&fx), tools.clone()).unwrap_err();
+    assert_eq!(refused.data.unwrap()["kind"], "peer_tools_invalid");
+    let (ext_ws, _ext_rx) = external_ws(8);
+    assert!(register_on_session(&fx, &ext_ws, Some(&token), &fx.system, tools.clone()).is_err());
+
+    let registered = register_on_session(&fx, &ws, Some(&token), &fx.system, tools).unwrap();
+    assert_eq!(registered["version"], 1);
+    assert_eq!(registered["tools"][0]["app"], "calendar");
+
+    // The host's own turn on the system session: its usual tools plus the
+    // granted app tool, routed to the host.
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, fx.system.clone(), None)
+        .await
+        .unwrap();
+    let mut host_turn = runtime.tools.snapshot_excluding(&[]);
+    let usual = sorted_names(&host_turn);
+    crate::peers::host_tools::apply_session_owned_host_tools(
+        &mut host_turn,
+        &peers_root(&fx),
+        &fx.system,
+        "turn-s1",
+        Some(ws.connection_id.0),
+    );
+    assert_eq!(
+        host_turn.origin("calendar_today"),
+        Some(octos_agent::ToolOrigin::HostRouted)
+    );
+    assert!(usual.iter().all(|name| host_turn.get(name).is_some()));
+    // Any other connection's turn (a web client, a continuation) is untouched.
+    let (other_ws, _other_rx) = ws_connection_for_test(8);
+    for connection in [Some(other_ws.connection_id.0), None] {
+        let mut foreign = runtime.tools.snapshot_excluding(&[]);
+        crate::peers::host_tools::apply_session_owned_host_tools(
+            &mut foreign,
+            &peers_root(&fx),
+            &fx.system,
+            "turn-s2",
+            connection,
+        );
+        assert_eq!(sorted_names(&foreign), usual);
+    }
+
+    // A call reaches the host with the caller marked as the system agent.
+    let state = fx.state.clone();
+    let system = fx.system.clone();
+    let host_token = token.clone();
+    let connection = ws.connection_id.0;
+    let host = tokio::spawn(async move {
+        let call = next_frame(&mut rx, "peer/tool/call").await;
+        raw_peer_tool_result(
+            connection,
+            &state,
+            &rpc(
+                APPUI_METHOD_PEER_TOOL_RESULT,
+                json!({"session_id": system, "host_token": host_token,
+                       "call_id": call["call_id"], "ok": true, "data": {"events": 2}}),
+            ),
+            None,
+        )
+        .expect("the host answers a session call");
+        call
+    });
+    let result = host_turn
+        .execute_with_context(&call_ctx("c1"), "calendar_today", &json!({}))
+        .await
+        .unwrap();
+    assert!(result.success, "{}", result.output);
+    let call = host.await.unwrap();
+    assert_eq!(call["app"], "calendar");
+    assert_eq!(call["peer"], Value::Null);
+    assert_eq!(call["caller"]["kind"], "system");
+    assert_eq!(call["caller"]["session_id"], json!(fx.system));
+    let audit = std::fs::read_to_string(fx.data_dir.join("host_session_tool_audit.jsonl")).unwrap();
+    assert!(audit.contains("\"app\":\"calendar\""), "{audit}");
+
+    // The set lives as long as the host connection.
+    crate::peers::host_tools::drop_routes_for_connection(ws.connection_id.0);
+    let mut after = runtime.tools.snapshot_excluding(&[]);
+    crate::peers::host_tools::apply_session_owned_host_tools(
+        &mut after,
+        &peers_root(&fx),
+        &fx.system,
+        "turn-s3",
+        Some(ws.connection_id.0),
+    );
+    assert!(after.get("calendar_today").is_none());
+}

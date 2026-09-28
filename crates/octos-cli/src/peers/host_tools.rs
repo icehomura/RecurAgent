@@ -570,7 +570,7 @@ pub(crate) fn apply_session_host_tools(
             }
             let router: Arc<dyn HostToolRouter> = Arc::new(TurnHostToolRouter {
                 peers_root: peers_root.to_path_buf(),
-                slug: slug.clone(),
+                host: ToolHost::Peer(slug.clone()),
                 context_id: context_id.clone(),
                 session_id: session_id.clone(),
                 turn_id: turn_id.to_owned(),
@@ -581,8 +581,11 @@ pub(crate) fn apply_session_host_tools(
             });
             let ttl = Duration::from_secs(set.approval_ttl_secs);
             // An open request context is one of the app's interactive
-            // clients; the peer's own session is not.
-            let interactive = context_id.is_some();
+            // clients; the peer's own session is not, except for a turn the
+            // host started from the kernel's `peer/input` (the system
+            // agent's request, made on the person's behalf).
+            let interactive =
+                context_id.is_some() || is_peer_input_turn(&route_key(peers_root, slug), turn_id);
             for decl in &set.tools {
                 // A kernel tool of the same name wins: an app tool never
                 // shadows one (the model, the audit and every filter must be
@@ -599,6 +602,7 @@ pub(crate) fn apply_session_host_tools(
                 registry.register(
                     HostRoutedTool::new(decl.clone(), router.clone(), ttl, interactive)
                         .with_caller(HostToolCaller {
+                            kind: "app_peer".into(),
                             peer: Some(slug.clone()),
                             session_id: session_id.0.clone(),
                             context_id: context_id.clone(),
@@ -606,6 +610,150 @@ pub(crate) fn apply_session_host_tools(
                 );
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Host SESSION tool sets (the system agent calling granted app tools)
+// ---------------------------------------------------------------------------
+
+/// A tool set registered on a host session that is not an app peer. It lives
+/// as long as the registering connection: the host registers again after
+/// every reconnect, as for a peer.
+#[derive(Clone)]
+struct SessionToolSet {
+    connection: u64,
+    set: PeerHostToolSet,
+}
+
+/// Host session tool sets: session route key → set.
+static SESSION_SETS: LazyLock<Mutex<HashMap<String, SessionToolSet>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Why a session registration was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SessionRegisterError {
+    /// `if_version` did not match; the current version.
+    VersionConflict(u64),
+}
+
+/// Register (replace) the tool set of the host session `session`, routed to
+/// `connection`. Returns `(previous_version, version)`.
+pub(crate) fn register_session_tool_set(
+    peers_root: &Path,
+    session: &SessionKey,
+    connection: u64,
+    send: HostSend,
+    mut set: PeerHostToolSet,
+    if_version: Option<u64>,
+) -> Result<(u64, u64), SessionRegisterError> {
+    let key = session_route_key(peers_root, session);
+    let mut sets = SESSION_SETS.lock().unwrap_or_else(|p| p.into_inner());
+    let current = sets
+        .get(&key)
+        .map_or(0, |registered| registered.set.version);
+    if let Some(expected) = if_version {
+        if expected != current {
+            return Err(SessionRegisterError::VersionConflict(current));
+        }
+    }
+    set.version = current + 1;
+    let version = set.version;
+    sets.insert(key.clone(), SessionToolSet { connection, set });
+    drop(sets);
+    HUB.routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(key, HostRoute { connection, send });
+    Ok((current, version))
+}
+
+/// The route key of the host tool set a call on `session` belongs to: the
+/// app peer's for a `peer-`/`peerctx-` session, the session's own when a
+/// host session set is registered on it.
+pub(crate) fn host_route_for_session(peers_root: &Path, session: &SessionKey) -> Option<String> {
+    if let Some(slug) = host_peer_slug_of(session) {
+        return Some(route_key(peers_root, slug));
+    }
+    let key = session_route_key(peers_root, session);
+    SESSION_SETS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .contains_key(&key)
+        .then_some(key)
+}
+
+/// Add the host SESSION tool set of `session_id` (if any) to one turn.
+///
+/// Only a turn driven by the registering connection gets it: the host's own
+/// turns on its session, e.g. the system agent's conversation. Every other
+/// turn on the session (an external web client, a kernel continuation) is
+/// left exactly as it was: no host tool, nothing taken away. `peer-` and
+/// `peerctx-` sessions are the peer path's ([`apply_session_host_tools`]).
+pub(crate) fn apply_session_owned_host_tools(
+    registry: &mut ToolRegistry,
+    peers_root: &Path,
+    session_id: &SessionKey,
+    turn_id: &str,
+    turn_connection: Option<u64>,
+) {
+    if session_id.topic().is_some_and(|topic| {
+        topic.starts_with("peer-") || topic.starts_with(PEER_CONTEXT_TOPIC_PREFIX)
+    }) {
+        return;
+    }
+    let key = session_route_key(peers_root, session_id);
+    let Some(registered) = SESSION_SETS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&key)
+        .cloned()
+    else {
+        return;
+    };
+    if turn_connection.is_none()
+        || turn_connection != Some(registered.connection)
+        || route_connection_by_key(&key) != turn_connection
+    {
+        return;
+    }
+    let set = registered.set;
+    if let Some(allowed) = &set.generic_tools {
+        registry.retain(|name| allowed.iter().any(|a| a == name));
+    }
+    let router: Arc<dyn HostToolRouter> = Arc::new(TurnHostToolRouter {
+        peers_root: peers_root.to_path_buf(),
+        host: ToolHost::Session(session_id.clone()),
+        context_id: None,
+        session_id: session_id.clone(),
+        turn_id: turn_id.to_owned(),
+        version: set.version,
+        call_timeout: Duration::from_millis(set.call_timeout_ms),
+        approval_ttl: Duration::from_secs(set.approval_ttl_secs),
+        max_result_bytes: set.max_result_bytes,
+    });
+    let ttl = Duration::from_secs(set.approval_ttl_secs);
+    for decl in &set.tools {
+        if registry.get(&decl.model_name).is_some() {
+            tracing::warn!(
+                session = %session_id,
+                tool = %decl.name,
+                "not offering an app tool whose name a kernel tool already has"
+            );
+            continue;
+        }
+        // The host drives this session's turns itself (the person's own
+        // conversation with the system agent): attended.
+        registry.register(
+            HostRoutedTool::new(decl.clone(), router.clone(), ttl, true).with_caller(
+                HostToolCaller {
+                    kind: "system".into(),
+                    peer: None,
+                    session_id: session_id.0.clone(),
+                    context_id: None,
+                },
+            ),
+        );
     }
 }
 
@@ -620,7 +768,8 @@ pub(crate) type HostSend = Arc<dyn Fn(&'static str, Value) -> bool + Send + Sync
 #[derive(Clone)]
 struct CallMeta {
     route_key: String,
-    slug: String,
+    host: ToolHost,
+    app: String,
     context_id: Option<String>,
     session_id: SessionKey,
     turn_id: String,
@@ -651,6 +800,50 @@ struct PendingCall {
     gated: bool,
     /// The host connection the call was sent to: only it may answer.
     connection: u64,
+    /// Fired when the kernel stops waiting early: the turn was interrupted
+    /// or the host connection closed.
+    cancel: Arc<CallCancel>,
+}
+
+/// Early end of a pending call's wait.
+#[derive(Default)]
+struct CallCancel {
+    notify: tokio::sync::Notify,
+    reason: Mutex<Option<&'static str>>,
+}
+
+impl CallCancel {
+    fn fire(&self, reason: &'static str) {
+        let mut slot = self.reason.lock().unwrap_or_else(|p| p.into_inner());
+        if slot.is_none() {
+            *slot = Some(reason);
+        }
+        drop(slot);
+        self.notify.notify_one();
+    }
+
+    fn reason(&self) -> &'static str {
+        self.reason
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .unwrap_or("cancelled")
+    }
+}
+
+/// Stop waiting for every host call of turn `turn_id` on `session` (the turn
+/// was interrupted). Each ends as `cancelled` for the host (`peer/tool/cancel`)
+/// and, unless it only read, as an unknown outcome that is not resent.
+/// Returns how many calls were cancelled.
+pub(crate) fn cancel_host_calls_for_turn(session: &SessionKey, turn_id: &str) -> usize {
+    let pending = HUB.pending.lock().unwrap_or_else(|p| p.into_inner());
+    let mut cancelled = 0;
+    for call in pending.values() {
+        if call.meta.session_id == *session && call.meta.turn_id == turn_id {
+            call.cancel.fire("cancelled");
+            cancelled += 1;
+        }
+    }
+    cancelled
 }
 
 /// A peer's tool host: the connection that registered its set.
@@ -744,6 +937,10 @@ struct HostToolHub {
     routes: Mutex<HashMap<String, HostRoute>>,
     /// `peer/input` deliveries already sent: `(route, input id)`.
     inputs: Mutex<BoundedClaims>,
+    /// Turn ids the kernel handed out in `peer/input`: `(route, turn id)`.
+    /// The host starting such a turn runs the system agent's request, on
+    /// the person's behalf: it counts as attended.
+    input_turns: Mutex<BoundedClaims>,
     pending: Mutex<HashMap<String, PendingCall>>,
     finished: Mutex<HashMap<String, (CallMeta, Instant)>>,
     occurrences: Mutex<BoundedClaims>,
@@ -758,6 +955,73 @@ pub(crate) fn route_key(peers_root: &Path, slug: &str) -> String {
     format!("{}\u{0}{slug}", peers_root.display())
 }
 
+/// Process-wide key of a host SESSION's route (a tool set registered on a
+/// session that is not an app peer, e.g. the system agent's conversation).
+/// Never equal to a peer's key: a slug has no NUL.
+pub(crate) fn session_route_key(peers_root: &Path, session: &SessionKey) -> String {
+    format!("{}\u{0}session\u{0}{}", peers_root.display(), session.0)
+}
+
+/// Whose tool set a call belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ToolHost {
+    /// A host-owned app peer (its session and request contexts).
+    Peer(String),
+    /// A host session that is not a peer (e.g. the system agent's).
+    Session(SessionKey),
+}
+
+impl ToolHost {
+    pub(crate) fn route_key(&self, peers_root: &Path) -> String {
+        match self {
+            Self::Peer(slug) => route_key(peers_root, slug),
+            Self::Session(session) => session_route_key(peers_root, session),
+        }
+    }
+
+    pub(crate) fn peer(&self) -> Option<&str> {
+        match self {
+            Self::Peer(slug) => Some(slug),
+            Self::Session(_) => None,
+        }
+    }
+
+    /// `caller.kind` of a call made through this set.
+    fn caller_kind(&self) -> &'static str {
+        match self {
+            Self::Peer(_) => "app_peer",
+            Self::Session(_) => "system",
+        }
+    }
+
+    fn audit(&self, peers_root: &Path, row: &Value) {
+        match self {
+            Self::Peer(slug) => append_audit(peers_root, slug, row),
+            Self::Session(_) => append_session_audit(peers_root, row),
+        }
+    }
+}
+
+/// Audit leaf (in the profile data dir) of calls made through host SESSION
+/// tool sets.
+pub(crate) const SESSION_TOOL_AUDIT_LEAF: &str = "host_session_tool_audit.jsonl";
+
+fn append_session_audit(peers_root: &Path, row: &Value) {
+    let Some(dir) = peers_root.parent() else {
+        return;
+    };
+    let size = std::fs::symlink_metadata(dir.join(SESSION_TOOL_AUDIT_LEAF))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    if size >= AUDIT_MAX_BYTES {
+        return;
+    }
+    if let Err(error) = peer_io::append_peer_line(dir, SESSION_TOOL_AUDIT_LEAF, &format!("{row}\n"))
+    {
+        tracing::warn!(%error, "failed to append the host session tool audit row");
+    }
+}
+
 /// Route the peer's app tool calls to `send` on `connection` (the
 /// registering connection), replacing any earlier route. Only turns driven by
 /// that connection get the peer's tools.
@@ -770,6 +1034,15 @@ pub(crate) fn set_host_route(peers_root: &Path, slug: &str, connection: u64, sen
 
 /// How long a delivered `peer/input` is remembered for deduplication.
 const INPUT_RETENTION: Duration = Duration::from_secs(24 * 3_600);
+
+/// Whether `turn_id` is a turn the kernel handed out in a `peer/input` of
+/// the route `route_key`.
+fn is_peer_input_turn(route_key: &str, turn_id: &str) -> bool {
+    HUB.input_turns
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .contains(&format!("{route_key}\u{0}{turn_id}"), INPUT_RETENTION)
+}
 
 /// Result of [`deliver_peer_input`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -834,11 +1107,16 @@ pub(crate) fn deliver_peer_input(
             ));
         }
     }
+    let turn_id = octos_core::ui_protocol::TurnId::new();
+    HUB.input_turns
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .mark(format!("{key}\u{0}{}", turn_id.0), INPUT_RETENTION);
     let params = json!({
         "peer": slug,
         "session_id": session,
         "input_id": input_id,
-        "turn_id": octos_core::ui_protocol::TurnId::new(),
+        "turn_id": turn_id,
         "text": text,
     });
     if send(PEER_INPUT_NOTIFICATION, params) {
@@ -861,12 +1139,28 @@ pub(crate) fn host_route_connection(peers_root: &Path, slug: &str) -> Option<u64
         .map(|route| route.connection)
 }
 
-/// Drop every route held by `connection` (it closed).
+/// Drop every route held by `connection` (it closed), end every call in
+/// flight to it at once (as an unknown outcome unless it only read), and
+/// forget the session tool sets it registered.
 pub(crate) fn drop_routes_for_connection(connection: u64) {
     HUB.routes
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .retain(|_, route| route.connection != connection);
+    for call in HUB
+        .pending
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .values()
+    {
+        if call.connection == connection {
+            call.cancel.fire("host_gone");
+        }
+    }
+    SESSION_SETS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .retain(|_, registered| registered.connection != connection);
 }
 
 /// Drop the route if it is still `send` (its connection closed).
@@ -938,12 +1232,37 @@ pub(crate) fn host_peer_slug_of(session: &SessionKey) -> Option<&str> {
 }
 
 /// Record that approval `approval_id` was raised by a host-routed call of the
-/// peer `slug`: only that peer's host connection may see or answer it.
-pub(crate) fn register_host_approval(approval_id: &str, peers_root: &Path, slug: &str) {
+/// set whose route is `route_key`: only that host connection may see or
+/// answer it.
+pub(crate) fn register_host_approval(approval_id: &str, route_key: String) {
     HOST_APPROVALS
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .insert(approval_id.to_owned(), route_key(peers_root, slug));
+        .insert(approval_id.to_owned(), route_key);
+}
+
+/// Whether `connection` may see the `approval/requested` event `event` (live,
+/// on replay, in pending lists and hydrate). A host-routed call's approval
+/// (`approval_kind: "host_tool"`, which carries the exact arguments) is
+/// visible only to its host connection, and to nobody when the kernel no
+/// longer knows its host (after a restart or an eviction). Every other
+/// approval is decided by [`host_approval_visible`].
+pub(crate) fn host_approval_event_visible(
+    event: &octos_core::ui_protocol::ApprovalRequestedEvent,
+    connection: u64,
+) -> bool {
+    let key = HOST_APPROVALS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&event.approval_id.0.to_string())
+        .cloned();
+    match key {
+        Some(key) => route_connection_by_key(&key) == Some(connection),
+        None => {
+            event.approval_kind.as_deref()
+                != Some(octos_core::ui_protocol::approval_kinds::HOST_TOOL)
+        }
+    }
 }
 
 /// Whether `connection` may see or answer approval `approval_id`: any
@@ -1015,6 +1334,26 @@ fn note_host_session(session: &SessionKey, peers_root: &Path, slug: &str) {
         .insert(session.0.clone(), route_key(peers_root, slug));
 }
 
+/// [`host_session_controller`] derived from what is on disk, so it holds
+/// after a kernel restart too: for a `peer-`/`peerctx-` session of a
+/// host-owned peer with a registered (or unreadable) tool set, on the peer
+/// originator's base key, `Some(host connection)` (`Some(None)` while no host
+/// is connected). `None` for any other session.
+pub(crate) fn host_peer_session_controller(
+    peers_root: &Path,
+    session: &SessionKey,
+) -> Option<Option<u64>> {
+    let slug = host_peer_slug_of(session)?;
+    if !super::app_binding::peer_is_host_owned(peers_root, slug)
+        || matches!(read_tool_set(peers_root, slug), StoredToolSet::None)
+        || !session_is_on_originator_base(peers_root, slug, session)
+    {
+        return None;
+    }
+    note_host_session(session, peers_root, slug);
+    Some(host_route_connection(peers_root, slug))
+}
+
 /// For a session of a peer with a registered set: `Some(host connection)`
 /// (`Some(None)` while no host is connected). `None` for any other session.
 /// Controls of such a session's turns (`turn/steer`, `turn/interrupt`)
@@ -1082,7 +1421,8 @@ fn late_result_row(meta: &CallMeta, call_id: &str, reply: &HostReply) -> Value {
     };
     json!({
         "ts": chrono::Utc::now().to_rfc3339(),
-        "peer": meta.slug,
+        "peer": meta.host.peer(),
+        "app": meta.app,
         "context_id": meta.context_id,
         "session_id": meta.session_id,
         "turn_id": meta.turn_id,
@@ -1101,12 +1441,16 @@ fn late_result_row(meta: &CallMeta, call_id: &str, reply: &HostReply) -> Value {
 /// refused and audited as `late_result`.
 pub(crate) fn complete_host_call(
     peers_root: &Path,
-    slug: &str,
+    host: &ToolHost,
     call_id: &str,
     from_connection: u64,
     reply: HostReply,
 ) -> Result<CompleteCall, CompleteError> {
-    let key = route_key(peers_root, slug);
+    let key = host.route_key(peers_root);
+    let owner = match host {
+        ToolHost::Peer(slug) => format!("peer '{slug}'"),
+        ToolHost::Session(session) => format!("session '{}'", session.0),
+    };
     let not_found = |message: String| CompleteError {
         kind: "peer_tool_call_not_found",
         message,
@@ -1125,14 +1469,14 @@ pub(crate) fn complete_host_call(
             .filter(|(meta, _)| meta.route_key == key)
             .map(|(meta, _)| meta.clone());
         if let Some(meta) = finished {
-            append_audit(peers_root, slug, &late_result_row(&meta, call_id, &reply));
+            host.audit(peers_root, &late_result_row(&meta, call_id, &reply));
             return Err(not_found(format!(
                 "call '{call_id}' already ended (timed out or cancelled); the late result \
                  was recorded but not given to the model"
             )));
         }
         return Err(not_found(format!(
-            "no pending call '{call_id}' for peer '{slug}' (finished, timed out or cancelled)"
+            "no pending call '{call_id}' for {owner} (finished, timed out or cancelled)"
         )));
     }
     if pending
@@ -1169,7 +1513,7 @@ pub(crate) fn complete_host_call(
     // late). Never "removed but not yet delivered".
     let call = pending.remove(call_id).expect("checked above");
     #[cfg(test)]
-    test_hooks::between_remove_and_deliver(slug);
+    test_hooks::between_remove_and_deliver(host.peer().unwrap_or_default());
     let (outcome, status) = match outcome {
         HostToolCallOutcome::Ok(data) => {
             let bytes = serde_json::to_string(&data).map(|s| s.len()).unwrap_or(0);
@@ -1255,7 +1599,7 @@ impl Drop for PendingGuard {
 /// The per-turn router of one host peer session.
 pub(crate) struct TurnHostToolRouter {
     pub(crate) peers_root: PathBuf,
-    pub(crate) slug: String,
+    pub(crate) host: ToolHost,
     pub(crate) context_id: Option<String>,
     pub(crate) session_id: SessionKey,
     pub(crate) turn_id: String,
@@ -1269,7 +1613,7 @@ pub(crate) struct TurnHostToolRouter {
 impl TurnHostToolRouter {
     fn unknown_key(&self, tool: &str, args_digest: &str) -> String {
         unknown_key(
-            &route_key(&self.peers_root, &self.slug),
+            &self.host.route_key(&self.peers_root),
             &self.session_id,
             tool,
             args_digest,
@@ -1332,20 +1676,22 @@ impl HostToolRouter for TurnHostToolRouter {
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
         // #2500: an app whose peer budget is spent (or unreadable) cannot keep
         // working through its tools mid-turn, from any of its sessions.
-        match super::peer_token_budget_status(&self.peers_root, &self.slug) {
-            Ok(Some(status)) if status.used >= status.limit => {
-                return Self::error(
-                    "budget_exhausted",
-                    format!(
-                        "peer '{}' token budget exhausted ({} used / {} limit)",
-                        self.slug, status.used, status.limit
-                    ),
-                );
+        if let ToolHost::Peer(slug) = &self.host {
+            match super::peer_token_budget_status(&self.peers_root, slug) {
+                Ok(Some(status)) if status.used >= status.limit => {
+                    return Self::error(
+                        "budget_exhausted",
+                        format!(
+                            "peer '{}' token budget exhausted ({} used / {} limit)",
+                            slug, status.used, status.limit
+                        ),
+                    );
+                }
+                Err(message) => return Self::error("budget_unavailable", message),
+                Ok(_) => {}
             }
-            Err(message) => return Self::error("budget_unavailable", message),
-            Ok(_) => {}
         }
-        let key = route_key(&self.peers_root, &self.slug);
+        let key = self.host.route_key(&self.peers_root);
         let Some((send, connection)) = HUB
             .routes
             .lock()
@@ -1361,6 +1707,7 @@ impl HostToolRouter for TurnHostToolRouter {
         let call_id = format!("ptc-{}", uuid::Uuid::new_v4().simple());
         let (tx, mut rx) = tokio::sync::oneshot::channel();
         let ack = Arc::new(tokio::sync::Notify::new());
+        let cancel = Arc::new(CallCancel::default());
         {
             let mut pending = HUB.pending.lock().unwrap_or_else(|p| p.into_inner());
             if pending.values().filter(|p| p.meta.route_key == key).count()
@@ -1376,7 +1723,8 @@ impl HostToolRouter for TurnHostToolRouter {
                 PendingCall {
                     meta: CallMeta {
                         route_key: key.clone(),
-                        slug: self.slug.clone(),
+                        host: self.host.clone(),
+                        app: call.app.clone(),
                         context_id: self.context_id.clone(),
                         session_id: self.session_id.clone(),
                         turn_id: self.turn_id.clone(),
@@ -1391,6 +1739,7 @@ impl HostToolRouter for TurnHostToolRouter {
                     ack: ack.clone(),
                     gated: call.gated,
                     connection,
+                    cancel: cancel.clone(),
                 },
             );
         }
@@ -1414,7 +1763,7 @@ impl HostToolRouter for TurnHostToolRouter {
         let delivered = send(
             PEER_TOOL_CALL_NOTIFICATION,
             json!({
-                "peer": self.slug,
+                "peer": self.host.peer(),
                 "session_id": self.session_id,
                 "context_id": self.context_id,
                 "turn_id": self.turn_id,
@@ -1424,8 +1773,8 @@ impl HostToolRouter for TurnHostToolRouter {
                 "name": call.name,
                 "app": call.app,
                 "caller": {
-                    "kind": "app_peer",
-                    "peer": self.slug,
+                    "kind": self.host.caller_kind(),
+                    "peer": self.host.peer(),
                     "session_id": self.session_id,
                     "context_id": self.context_id,
                     "turn_id": self.turn_id,
@@ -1460,6 +1809,34 @@ impl HostToolRouter for TurnHostToolRouter {
                     deadline = deadline.max(started + self.approval_ttl);
                 }
                 _ = tokio::time::sleep_until(deadline) => break,
+                _ = cancel.notify.notified() => {
+                    // Interrupted turn or closed host connection: stop now.
+                    let reason = cancel.reason();
+                    // The host is told `cancelled` either way (a closed
+                    // connection will not hear it).
+                    guard.reason = "cancelled";
+                    drop(guard);
+                    if let Ok(outcome) = rx.try_recv() {
+                        return outcome;
+                    }
+                    let (kind, what) = if reason == "host_gone" {
+                        ("host_unavailable", "the app's host connection closed")
+                    } else {
+                        ("cancelled", "the turn was interrupted")
+                    };
+                    return if call.risk == HostToolRisk::Read {
+                        Self::error(kind, format!("{what} before the app answered"))
+                    } else {
+                        Self::error(
+                            "outcome_unknown",
+                            format!(
+                                "{what} while the app was working on this call, so it is \
+                                 unknown whether it did this. Do not retry this call: check \
+                                 the result with a read tool or ask the person."
+                            ),
+                        )
+                    };
+                }
             }
         }
         // Take the call out of the pending set FIRST (under the same lock
@@ -1492,7 +1869,7 @@ impl HostToolRouter for TurnHostToolRouter {
     fn record(&self, audit: HostToolAudit) {
         let row = json!({
             "ts": chrono::Utc::now().to_rfc3339(),
-            "peer": self.slug,
+            "peer": self.host.peer(),
             "context_id": self.context_id,
             "session_id": self.session_id,
             "turn_id": self.turn_id,
@@ -1507,7 +1884,7 @@ impl HostToolRouter for TurnHostToolRouter {
             "args_bytes": audit.args_bytes,
             "result_bytes": audit.result_bytes,
         });
-        append_audit(&self.peers_root, &self.slug, &row);
+        self.host.audit(&self.peers_root, &row);
     }
 
     fn call_timeout(&self) -> Duration {
@@ -1653,7 +2030,7 @@ mod tests {
             );
             let router = TurnHostToolRouter {
                 peers_root: tmp.path().to_path_buf(),
-                slug: slug.clone(),
+                host: ToolHost::Peer(slug.clone()),
                 context_id: None,
                 session_id: SessionKey(format!("octos:api:host#peer-{slug}")),
                 turn_id: "t".into(),
@@ -1685,7 +2062,7 @@ mod tests {
             };
             let accepted = complete_host_call(
                 tmp.path(),
-                &slug,
+                &ToolHost::Peer(slug.clone()),
                 &call_id,
                 7_000 + round,
                 HostReply::Final(HostToolCallOutcome::Ok(json!({"n": round}))),
@@ -1744,7 +2121,7 @@ mod tests {
         test_hooks::delay_delivery_for(&slug, Duration::from_millis(400));
         let router = TurnHostToolRouter {
             peers_root: tmp.path().to_path_buf(),
-            slug: slug.clone(),
+            host: ToolHost::Peer(slug.clone()),
             context_id: None,
             session_id: SessionKey("octos:api:host#peer-gap".into()),
             turn_id: "t".into(),
@@ -1778,7 +2155,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));
             complete_host_call(
                 &peers_root,
-                "gap",
+                &ToolHost::Peer("gap".into()),
                 &call_id,
                 9_001,
                 HostReply::Final(HostToolCallOutcome::Ok(json!({"done": true}))),
