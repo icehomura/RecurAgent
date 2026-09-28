@@ -68,7 +68,8 @@ raw, fails with `permission_denied`, `data.kind: "external_method_denied"`.
 Moreover:
 
 - a call whose parameters name a host-owned app-peer session (`peer-…` or
-  `peerctx-…` topic) in any key containing `session` fails with
+  `peerctx-…` topic) under any key containing `session`, at any depth, fails
+  with
   `host_owned_peer_session_denied`; for `approval/respond` and
   `user_question/respond` the kind is `host_owned_peer_answer_denied`:
 
@@ -79,11 +80,15 @@ Moreover:
 
   Nothing is decided and the prompt stays pending for the host;
 - `approval/respond` and `user_question/respond` are accepted only for a
-  session the same connection opened (`external_session_not_opened`);
-- a turn started by such a connection has no tool that runs code or
-  commands, administers the server, profiles or skills, delegates, or
-  reaches peers (`peer_*`), so the model cannot drive the host-owned peers
-  or read the host's processes through it.
+  session the same connection opened successfully
+  (`external_session_not_opened`);
+- a call naming a profile other than `_main` (a `profile_id` at any depth,
+  or another profile's session key) fails with `external_profile_denied`;
+- a turn started by such a connection gets a fixed allowlist of built-in
+  workspace, web, question and memory tools (default-deny: no command or
+  code execution, delegation, administration, peers, MCP or plugin tools),
+  so the model cannot drive the host-owned peers or read the host's
+  processes through it.
 
 This extends UPCR-2026-034's "Approvals belong to the person" from the owning
 system agent to external clients, and keeps the apps' memory and workspaces
@@ -128,7 +133,10 @@ never enables. The host stops the server by closing its stdin.
   dispatch table)
 - `should_refuse_external_calls_on_host_owned_peer_sessions`
 - `should_gate_external_clients_over_the_real_socket`
-- `should_give_external_turns_no_code_admin_or_peer_tools`
+- `should_give_external_turns_no_code_admin_or_peer_tools` (includes MCP and
+  plugin names)
+- `should_confine_external_calls_to_the_main_profile_at_any_depth`
+- `should_keep_pairing_off_when_the_enable_cannot_be_audited`
 - `a_rate_limited_code_refills_its_budget_instead_of_burning`
 - `should_audit_the_pairing_ceremony_without_the_code`
 - `tests/serve_host_managed.rs`: tokens on stdin (never in

@@ -7126,11 +7126,6 @@ async fn ui_protocol_connection(
                 let _ = send_rpc_error(&ws, Some(id), error);
                 continue;
             }
-            if request.method == octos_core::ui_protocol::methods::SESSION_OPEN {
-                if let Some(session) = request.params.get("session_id").and_then(Value::as_str) {
-                    external_opened_sessions.insert(session.to_owned());
-                }
-            }
         }
         if handle_raw_appui_rpc(
             &ws,
@@ -7196,6 +7191,7 @@ async fn ui_protocol_connection(
                     .profile_id
                     .clone()
                     .or_else(|| params.session_id.profile_id().map(ToOwned::to_owned));
+                let opened_session = params.session_id.0.clone();
                 let opened = handle_session_open(
                     &ws,
                     &state,
@@ -7213,6 +7209,11 @@ async fn ui_protocol_connection(
                     session_ingress_scope.is_some(),
                 )
                 .await;
+                if opened && connection_is_external {
+                    // Only a successful open lets an external client answer
+                    // this session's prompts.
+                    external_opened_sessions.insert(opened_session);
+                }
                 if opened {
                     // codex P2 (re-review): a successful open always resolves to
                     // a concrete runtime — a profile-less default open resolves

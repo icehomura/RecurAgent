@@ -60,18 +60,23 @@ An external identity:
   action, no snapshot restore, no session fork or delete, no peer method and
   no `server/shutdown`;
 - cannot name a host-owned app-peer session (`peer-…` or `peerctx-…`
-  topic) in any `*session*` parameter: `host_owned_peer_session_denied`, or
+  topic) under any key containing `session`, at any depth: `host_owned_peer_session_denied`, or
   `host_owned_peer_answer_denied` for an answer. Those sessions carry the
   apps' memory and workspaces, and their prompts are answered by the person
   in the app (UPCR-2026-034);
-- answers approvals and questions only on sessions it opened on the same
-  connection (`external_session_not_opened` otherwise);
-- starts turns without any tool that runs code or commands (`shell`, `bash`,
-  `exec_command`, `write_stdin`, `spawn*`, `delegate*`, `browser`, `git`),
-  administers profiles, skills or the server (`admin_*`, `manage_skills`,
-  `configure_tool`, `source_import`, `goal_*`), or reaches peers (`peer_*`).
-  The model cannot reach the apps' assistants or the host's processes
-  through such a turn.
+- answers approvals and questions only on sessions it opened successfully on
+  the same connection (`external_session_not_opened` otherwise);
+- names no profile but `_main`: any `profile_id` (at any depth) or session
+  key of another profile is refused (`external_profile_denied`);
+- starts turns with a fixed set of built-in tools only (default-deny):
+  `read_file`, `write_file`, `edit_file`, `diff_edit`, `apply_patch`, `glob`,
+  `grep`, `list_dir`, `code_structure`, `workspace_diff`, `workspace_log`,
+  `workspace_show`, `check_workspace_contract`, `web_search`, `web_fetch`,
+  `ask_user_question`, `recall`, `recall_memory`, `memory_search`,
+  `memory_load`, `view_image`, `view_video` and `tool_search`. No command or
+  code execution, delegation, administration, peers, MCP server or plugin
+  tool, whatever its name. The model cannot reach the apps' assistants or
+  the host's processes through such a turn.
 
 No file tool opens `/proc/<pid>/environ` or `/proc/<pid>/cmdline` in any
 filesystem scope, and the shell policy refuses commands that name them, for

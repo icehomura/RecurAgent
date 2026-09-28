@@ -67,6 +67,9 @@ pub const EXTERNAL_METHOD_DENIED: &str = "external_method_denied";
 /// session (`peer-…`, `peerctx-…`).
 pub const HOST_OWNED_PEER_SESSION_DENIED: &str = "host_owned_peer_session_denied";
 
+/// `data.kind` of an external call naming a profile other than `_main`.
+pub const EXTERNAL_PROFILE_DENIED: &str = "external_profile_denied";
+
 /// `data.kind` of an external answer on a session it did not open.
 pub const EXTERNAL_SESSION_NOT_OPENED: &str = "external_session_not_opened";
 
@@ -96,16 +99,57 @@ pub const EXTERNAL_ALLOWED_METHODS: &[&str] = &[
 /// connection opened.
 const EXTERNAL_ANSWER_METHODS: &[&str] = &["approval/respond", "user_question/respond"];
 
+/// Every string under a key containing `session`, at any depth.
+fn session_ids(value: &serde_json::Value, under_session_key: bool, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(text) if under_session_key => out.push(text.clone()),
+        serde_json::Value::Array(items) => {
+            for item in items {
+                session_ids(item, under_session_key, out);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                session_ids(item, key.contains("session"), out);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn names_peer_session(params: &serde_json::Value) -> bool {
-    let Some(object) = params.as_object() else {
-        return false;
-    };
-    object.iter().any(|(key, value)| {
-        key.contains("session")
-            && value
-                .as_str()
-                .is_some_and(|id| is_peer_session(&SessionKey(id.to_owned())))
-    })
+    let mut ids = Vec::new();
+    session_ids(params, false, &mut ids);
+    ids.iter()
+        .any(|id| is_peer_session(&SessionKey(id.clone())))
+}
+
+/// A `profile_id` (at any depth) or a session's profile other than `_main`:
+/// the external identity is the `_main` profile and nothing else.
+fn names_other_profile(params: &serde_json::Value) -> bool {
+    fn profiles(value: &serde_json::Value, out: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Array(items) => items.iter().for_each(|item| profiles(item, out)),
+            serde_json::Value::Object(map) => {
+                for (key, item) in map {
+                    match item.as_str() {
+                        Some(profile) if key.contains("profile") => out.push(profile.to_owned()),
+                        _ => profiles(item, out),
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut named = Vec::new();
+    profiles(params, &mut named);
+    let mut ids = Vec::new();
+    session_ids(params, false, &mut ids);
+    named.extend(
+        ids.iter()
+            .filter_map(|id| SessionKey(id.clone()).profile_id().map(ToOwned::to_owned)),
+    );
+    named.iter().any(|profile| profile != MAIN_PROFILE_ID)
 }
 
 /// Decide an external connection's call: the allowlist, no host-owned peer
@@ -122,6 +166,12 @@ pub fn external_gate(
             "{method} is not available to external clients of a host-managed server"
         ))
         .with_data(serde_json::json!({ "kind": EXTERNAL_METHOD_DENIED })));
+    }
+    if names_other_profile(params) {
+        return Err(RpcError::permission_denied(format!(
+            "{method}: external clients reach the {MAIN_PROFILE_ID} profile only"
+        ))
+        .with_data(serde_json::json!({ "kind": EXTERNAL_PROFILE_DENIED })));
     }
     if names_peer_session(params) {
         if EXTERNAL_ANSWER_METHODS.contains(&method) {
@@ -148,32 +198,40 @@ pub fn external_gate(
     Ok(())
 }
 
-/// Tools a turn started by an external client keeps. None that executes
-/// code or commands, administers profiles, skills or the server, delegates
-/// to other agents, or reaches peers (whose host-owned members are the
-/// host's): an external turn can reach neither the host's secrets nor the
-/// apps' assistants through the model.
+/// Tools a turn started by an external client keeps: a fixed set of
+/// built-in tools that read and edit the session workspace, search and fetch
+/// the web, ask the person, and recall memory. Default-deny: code and
+/// command execution, delegation, administration, peers, MCP server and
+/// plugin tools (whatever their names) are all absent.
+pub const EXTERNAL_TURN_TOOLS: &[&str] = &[
+    "read_file",
+    "write_file",
+    "edit_file",
+    "diff_edit",
+    "apply_patch",
+    "glob",
+    "grep",
+    "list_dir",
+    "code_structure",
+    "workspace_diff",
+    "workspace_log",
+    "workspace_show",
+    "check_workspace_contract",
+    "web_search",
+    "web_fetch",
+    "ask_user_question",
+    "recall",
+    "recall_memory",
+    "memory_search",
+    "memory_load",
+    "view_image",
+    "view_video",
+    "tool_search",
+];
+
+/// Whether an external turn keeps the tool `name` ([`EXTERNAL_TURN_TOOLS`]).
 pub fn external_turn_tool_allowed(name: &str) -> bool {
-    const DENIED: &[&str] = &[
-        "shell",
-        "bash",
-        "exec_command",
-        "write_stdin",
-        "spawn",
-        "spawn_agent",
-        "delegate",
-        "delegate_task",
-        "manage_skills",
-        "configure_tool",
-        "source_import",
-        "browser",
-        "git",
-    ];
-    const DENIED_PREFIXES: &[&str] = &["peer_", "admin_", "goal_"];
-    !DENIED.contains(&name)
-        && !DENIED_PREFIXES
-            .iter()
-            .any(|prefix| name.starts_with(prefix))
+    EXTERNAL_TURN_TOOLS.contains(&name)
 }
 
 /// Host-managed authentication and lifecycle state (`AppState::host_managed`).
@@ -369,6 +427,24 @@ pub(crate) async fn enable_pairing(
     let Some(host_managed) = &state.host_managed else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    enable_pairing_audited(host_managed, |_| {
+        super::admin_audit::record_admin_action(
+            &state,
+            identity.as_ref().map(|identity| &identity.0),
+            "host.pairing.enable",
+            "external",
+            None,
+            Some(serde_json::json!({ "expires_in_secs": super::pairing::PAIR_CODE_TTL.as_secs() })),
+        )
+    })
+}
+
+/// Mint a code, audit it, and answer; an unauditable code is turned off
+/// again before anyone can see it (fail closed).
+fn enable_pairing_audited(
+    host_managed: &HostManaged,
+    audit: impl FnOnce(&PairingState) -> eyre::Result<()>,
+) -> Response {
     let Some(pairing) = host_managed.enable_pairing() else {
         return (
             StatusCode::CONFLICT,
@@ -377,14 +453,7 @@ pub(crate) async fn enable_pairing(
             .into_response();
     };
     // Audited without the code: who enabled pairing, and for how long.
-    if let Err(error) = super::admin_audit::record_admin_action(
-        &state,
-        identity.as_ref().map(|identity| &identity.0),
-        "host.pairing.enable",
-        "external",
-        None,
-        Some(serde_json::json!({ "expires_in_secs": super::pairing::PAIR_CODE_TTL.as_secs() })),
-    ) {
+    if let Err(error) = audit(&pairing) {
         host_managed.disable_pairing();
         tracing::error!(%error, "could not audit the pairing; pairing stays off");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();

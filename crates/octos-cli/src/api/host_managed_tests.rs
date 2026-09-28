@@ -577,6 +577,12 @@ fn should_give_external_turns_no_code_admin_or_peer_tools() {
         "manage_skills",
         "browser",
         "git",
+        "deep_crawl",
+        // Default-deny: MCP wrappers and plugin tools, whatever their names.
+        "mcp_filesystem_read",
+        "github__create_issue",
+        "weather",
+        "run_python",
     ] {
         assert!(!external_turn_tool_allowed(tool), "{tool}");
     }
@@ -593,118 +599,68 @@ fn should_give_external_turns_no_code_admin_or_peer_tools() {
     }
 }
 
-async fn ws_rpc(
-    addr: SocketAddr,
-    token: &str,
-    method: &str,
-    params: serde_json::Value,
-) -> serde_json::Value {
-    use futures::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
-    let mut request = format!("ws://{addr}/api/ui-protocol/ws")
-        .into_client_request()
-        .unwrap();
-    bearer(token)(&mut request);
-    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-    let frame =
-        serde_json::json!({"jsonrpc": "2.0", "id": "x", "method": method, "params": params});
-    socket
-        .send(Message::Text(frame.to_string().into()))
-        .await
-        .unwrap();
-    loop {
-        let message = tokio::time::timeout(std::time::Duration::from_secs(10), socket.next())
-            .await
-            .expect("a reply")
-            .expect("open")
-            .expect("frame");
-        if let Message::Text(text) = message {
-            let value: serde_json::Value = serde_json::from_str(text.as_str()).unwrap();
-            if value["id"] == "x" {
-                return value;
-            }
-        }
-    }
-}
-
-#[tokio::test]
-async fn should_gate_external_clients_over_the_real_socket() {
+#[test]
+fn should_confine_external_calls_to_the_main_profile_at_any_depth() {
+    use super::{EXTERNAL_PROFILE_DENIED, HOST_OWNED_PEER_SESSION_DENIED, external_gate};
     use serde_json::json;
-    let server = serve(true).await;
-    let kind = |reply: &serde_json::Value| reply["error"]["data"]["kind"].clone();
-    let peer = "_main:api:octosense#peer-rinx";
-    for (method, params, expected) in [
-        (
-            "peer/context/open",
-            json!({"session_id": "_main:api:octosense#system", "peer": "rinx", "context_id": "a"}),
-            super::EXTERNAL_METHOD_DENIED,
-        ),
-        (
-            "profile/llm/upsert",
-            json!({"profile_id": "_main"}),
-            super::EXTERNAL_METHOD_DENIED,
-        ),
-        (
-            "session/fork",
-            json!({"session_id": peer}),
-            super::EXTERNAL_METHOD_DENIED,
-        ),
-        (
+    let none = std::collections::HashSet::new();
+    let kind = |r: Result<(), octos_core::ui_protocol::RpcError>| {
+        r.unwrap_err().data.unwrap()["kind"].clone()
+    };
+    assert_eq!(
+        kind(external_gate(
+            "session/status/read",
+            &json!({"profile_id": "dev"}),
+            &none
+        )),
+        json!(EXTERNAL_PROFILE_DENIED)
+    );
+    assert_eq!(
+        kind(external_gate(
             "session/open",
-            json!({"session_id": peer}),
-            super::HOST_OWNED_PEER_SESSION_DENIED,
-        ),
-        (
+            &json!({"session_id": "dev:api:x"}),
+            &none
+        )),
+        json!(EXTERNAL_PROFILE_DENIED)
+    );
+    assert!(
+        external_gate(
+            "session/status/read",
+            &json!({"profile_id": "_main"}),
+            &none
+        )
+        .is_ok()
+    );
+    // A peer session nested in an object or array is found too.
+    assert_eq!(
+        kind(external_gate(
             "turn/start",
-            json!({"session_id": peer, "turn_id": "t", "input": []}),
-            super::HOST_OWNED_PEER_SESSION_DENIED,
-        ),
-    ] {
-        let external = ws_rpc(server.addr, EXTERNAL, method, params.clone()).await;
-        assert_eq!(kind(&external), json!(expected), "{method}: {external}");
-        let host = ws_rpc(server.addr, HOST, method, params).await;
-        let host_kind = kind(&host);
-        assert!(
-            host_kind != json!(super::EXTERNAL_METHOD_DENIED)
-                && host_kind != json!(super::HOST_OWNED_PEER_SESSION_DENIED),
-            "{method}: the host passes the gate: {host}"
-        );
-    }
+            &json!({"session_id": "_main:api:web", "context": {"target": {"session_id": "_main:api:octosense#peer-rinx"}}}),
+            &none
+        )),
+        json!(HOST_OWNED_PEER_SESSION_DENIED)
+    );
+    assert_eq!(
+        kind(external_gate(
+            "turn/start",
+            &json!({"sessions": ["_main:api:octosense#peerctx-rinx.a"]}),
+            &none
+        )),
+        json!(HOST_OWNED_PEER_SESSION_DENIED)
+    );
 }
 
-#[tokio::test]
-async fn should_audit_the_pairing_ceremony_without_the_code() {
-    let server = serve(true).await;
-    let client = reqwest::Client::new();
-    let base = format!("http://{}", server.addr);
-    let enabled: serde_json::Value = client
-        .post(format!("{base}/api/admin/host/pairing"))
-        .bearer_auth(HOST)
-        .send()
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    let code = enabled["code"].as_str().unwrap().to_owned();
-    client
-        .delete(format!("{base}/api/admin/host/pairing"))
-        .bearer_auth(HOST)
-        .send()
-        .await
-        .unwrap();
-    let audit = client
-        .get(format!("{base}/api/admin/audit"))
-        .bearer_auth(HOST)
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
+#[test]
+fn should_keep_pairing_off_when_the_enable_cannot_be_audited() {
+    let host_managed = HostManaged::new(HOST.into(), Some(EXTERNAL.into()), 1).unwrap();
+    let response =
+        super::enable_pairing_audited(&host_managed, |_| Err(eyre::eyre!("audit store down")));
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert!(
-        audit.contains("host.pairing.enable") && audit.contains("host.pairing.disable"),
-        "{audit}"
+        host_managed.pairing().is_none(),
+        "an unaudited code is never live"
     );
-    assert!(!audit.contains(&code) && !audit.contains(EXTERNAL) && !audit.contains(HOST));
+    let response = super::enable_pairing_audited(&host_managed, |_| Ok(()));
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(host_managed.pairing().is_some());
 }

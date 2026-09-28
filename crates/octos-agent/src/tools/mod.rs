@@ -1059,7 +1059,7 @@ pub fn resolve_path_with_scope(
     } else {
         resolve_path(base_dir, user_path)?
     };
-    if is_process_secret_path(&resolved) {
+    if is_process_secret_path(&resolved) || is_process_secret_path(Path::new(user_path)) {
         eyre::bail!("process environments and command lines are off limits: {user_path}");
     }
     Ok(resolved)
@@ -1069,10 +1069,13 @@ pub fn resolve_path_with_scope(
 /// `task/<tid>/`): another process's secrets. No file tool opens them, in any
 /// filesystem scope.
 pub fn is_process_secret_path(path: &Path) -> bool {
-    path.starts_with("/proc")
-        && path
-            .file_name()
-            .is_some_and(|name| name == "environ" || name == "cmdline")
+    let secret_leaf = path
+        .file_name()
+        .is_some_and(|name| name == "environ" || name == "cmdline");
+    // Also judge the raw spelling: lexical normalization drops a leading
+    // `/..`, and `/../../proc/1/environ` must not slip past the anchor.
+    let raw = path.to_string_lossy();
+    secret_leaf && (path.starts_with("/proc") || raw.contains("/proc/"))
 }
 
 /// Resolve and classify a user-supplied path against a [`SessionScope`]
@@ -1119,7 +1122,9 @@ fn resolve_for_scope(
     user_path: &str,
     for_write: bool,
 ) -> Result<PathBuf, &'static str> {
-    if is_process_secret_path(&normalize_lexical(Path::new(user_path))) {
+    if is_process_secret_path(Path::new(user_path))
+        || is_process_secret_path(&normalize_lexical(Path::new(user_path)))
+    {
         return Err("process environments and command lines are off limits");
     }
     // Upload handles (`up/<base64>/<name>`) are opaque references to a file in
