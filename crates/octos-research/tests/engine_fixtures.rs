@@ -13,7 +13,8 @@ use octos_research::metasearch::{
 use serde_json::Value;
 
 struct Replay {
-    body: String,
+    /// Request URL -> recorded body; `None` = any URL (single-request fixtures).
+    bodies: Vec<(Option<String>, String)>,
     seen: Mutex<Vec<HttpRequest>>,
 }
 
@@ -27,11 +28,17 @@ impl Fetch for Replay {
                     ..Default::default()
                 });
             }
+            let body = self
+                .bodies
+                .iter()
+                .find(|(u, _)| u.as_deref().is_none_or(|u| u == req.url))
+                .map(|(_, b)| b.clone())
+                .ok_or_else(|| format!("no recorded response for {}", req.url))?;
             self.seen.lock().unwrap().push(req);
             Ok(HttpResponse {
                 status: 200,
                 headers: Vec::new(),
-                body: self.body.clone(),
+                body,
             })
         })
     }
@@ -52,10 +59,21 @@ fn cases(engine: &str) -> Vec<PathBuf> {
 
 async fn replay(engine: &str, case: &Path) {
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(case).unwrap()).unwrap();
-    let body =
-        std::fs::read_to_string(case.with_file_name(doc["body_file"].as_str().unwrap())).unwrap();
+    let read = |f: &str| std::fs::read_to_string(case.with_file_name(f)).unwrap();
+    let bodies = match doc["exchanges"].as_array() {
+        Some(ex) => ex
+            .iter()
+            .map(|e| {
+                (
+                    Some(e["url"].as_str().unwrap().to_string()),
+                    read(e["body_file"].as_str().unwrap()),
+                )
+            })
+            .collect(),
+        None => vec![(None, read(doc["body_file"].as_str().unwrap()))],
+    };
     let fetch = Arc::new(Replay {
-        body,
+        bodies,
         seen: Mutex::new(Vec::new()),
     });
     let mut registry = Registry::default();
@@ -97,7 +115,16 @@ async fn replay(engine: &str, case: &Path) {
 
     // build_request
     let seen = fetch.seen.lock().unwrap();
-    let sent = &seen[0];
+    if let Some(ex) = doc["exchanges"].as_array() {
+        let mut want: Vec<&str> = ex.iter().map(|e| e["url"].as_str().unwrap()).collect();
+        let mut got: Vec<&str> = seen.iter().map(|r| r.url.as_str()).collect();
+        want.sort();
+        got.sort();
+        assert_eq!(got, want, "{name}: request URLs");
+    }
+    let mut sorted: Vec<&HttpRequest> = seen.iter().collect();
+    sorted.sort_by(|a, b| a.url.cmp(&b.url));
+    let sent = sorted[0];
     assert_eq!(
         sent.method,
         doc["http"]["method"].as_str().unwrap(),
@@ -169,6 +196,7 @@ fixture_tests! {
     gdelt_build_and_parse => "gdelt",
     github_build_and_parse => "github",
     google_news_build_and_parse => "google_news",
+    publisher_feeds_build_and_parse => "publisher_feeds",
     hackernews_build_and_parse => "hackernews",
     mastodon_build_and_parse => "mastodon",
     openalex_build_and_parse => "openalex",

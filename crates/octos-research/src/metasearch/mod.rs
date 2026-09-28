@@ -622,7 +622,14 @@ impl Metasearch {
             "compact": req.now.format("%Y%m%d%H%M%S").to_string(),
             "unix": req.now.timestamp(),
         });
+        let query = req.query_for(
+            call.langs
+                .first()
+                .map(String::as_str)
+                .filter(|_| call.langs.len() == 1),
+        );
         json!({
+            "query": query,
             "now": now,
             "langs": langs,
             "lang": langs.first().cloned(),
@@ -736,12 +743,90 @@ impl Metasearch {
                 .map(String::as_str)
                 .filter(|_| call.langs.len() == 1),
         );
-        let sreq = sandbox::build_request(&sb, query, &opts)
+        let requests = sandbox::build_request(&sb, query, &opts)
             .map_err(|err| CallError::Failed(err, None))?;
+        if requests.is_empty() {
+            return Ok((Vec::new(), false));
+        }
+        if requests.len() > m.max_requests {
+            return Err(CallError::Failed(
+                format!(
+                    "{}: built {} requests, manifest allows {}",
+                    m.id,
+                    requests.len(),
+                    m.max_requests
+                ),
+                None,
+            ));
+        }
+
+        // One request per feed/page; each keeps its own host's spacing.
+        let results = futures::future::join_all(
+            requests
+                .iter()
+                .map(|sreq| self.fetch_and_parse(&sb, m, sreq, &opts, req, started)),
+        )
+        .await;
+        let single = results.len() == 1;
+        let mut lists = Vec::new();
+        let mut all_cached = true;
+        let mut first_err = None;
+        for (sreq, r) in requests.iter().zip(results) {
+            match r {
+                Ok((items, cached)) => {
+                    all_cached &= cached;
+                    lists.push(items);
+                }
+                Err(err) => {
+                    if !single {
+                        tracing::warn!(engine = %m.id, url = %sreq.url, "metasearch request failed");
+                    }
+                    first_err.get_or_insert(err);
+                }
+            }
+        }
+        if lists.is_empty() {
+            return Err(first_err.unwrap_or(CallError::Failed("no response".into(), None)));
+        }
+        // Interleave so no single feed/page takes every top position.
+        let mut items = Vec::new();
+        let longest = lists.iter().map(Vec::len).max().unwrap_or(0);
+        for k in 0..longest {
+            for list in &lists {
+                if let Some(v) = list.get(k) {
+                    items.push(v.clone());
+                }
+            }
+        }
+        let default_lang = (call.langs.len() == 1).then(|| call.langs[0].clone());
+        let hits = items
+            .iter()
+            .filter_map(|v| normalize_item(v, &m.id, default_lang.as_deref()))
+            .take(req.count.max(1))
+            .map(|hit| RankedHit {
+                engine: m.id.clone(),
+                position: 0,
+                weight: m.weight,
+                hit,
+            })
+            .collect();
+        Ok((hits, all_cached))
+    }
+
+    /// Perform one request an engine built (robots when enabled, cache,
+    /// host spacing, key, status handling) and run `parse_response` on it.
+    async fn fetch_and_parse(
+        &self,
+        sb: &SandboxEngine<'_>,
+        m: &EngineManifest,
+        sreq: &sandbox::ScriptRequest,
+        opts: &Value,
+        req: &SearchRequest,
+        started: Instant,
+    ) -> Result<(Vec<Value>, bool), CallError> {
         let url =
             url::Url::parse(&sreq.url).map_err(|err| CallError::Failed(err.to_string(), None))?;
         let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
-
         // robots.txt: only when the operator turned checks on.
         let mut interval = m.min_interval();
         if m.robots && self.inner.config.respect_robots {
@@ -860,8 +945,9 @@ impl Metasearch {
             ));
         }
         let parsed = sandbox::parse_response(
-            &sb,
-            &opts,
+            sb,
+            opts,
+            &sreq.url,
             response.status,
             &response.headers,
             &response.body,
@@ -879,20 +965,7 @@ impl Metasearch {
                 .cache
                 .store(&cache_key, &response, Duration::from_secs(m.cache_ttl_secs));
         }
-        let default_lang = (call.langs.len() == 1).then(|| call.langs[0].clone());
-        let hits = parsed
-            .items
-            .iter()
-            .filter_map(|v| normalize_item(v, &m.id, default_lang.as_deref()))
-            .take(req.count.max(1))
-            .map(|hit| RankedHit {
-                engine: m.id.clone(),
-                position: 0,
-                weight: m.weight,
-                hit,
-            })
-            .collect();
-        Ok((hits, cached))
+        Ok((parsed.items, cached))
     }
 
     fn attach_key(&self, m: &EngineManifest, http: &mut HttpRequest) -> Result<(), CallError> {

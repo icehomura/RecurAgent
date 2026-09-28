@@ -593,7 +593,6 @@ async fn metasearch_round(
         hits: resp.hits(),
         answer: String::new(),
         notes: resp.note.into_iter().collect(),
-        ..Default::default()
     })
 }
 

@@ -50,6 +50,9 @@ pub struct EngineManifest {
     /// Seconds a successful response may be reused without asking again.
     #[serde(default = "default_cache_ttl")]
     pub cache_ttl_secs: u64,
+    /// Requests one `build_request` may return (e.g. one per feed); 1..=16.
+    #[serde(default = "one_request")]
+    pub max_requests: usize,
     /// Per-request timeout in seconds.
     #[serde(default = "default_timeout")]
     pub timeout_secs: u64,
@@ -113,6 +116,9 @@ fn one() -> f64 {
 fn default_cache_ttl() -> u64 {
     300
 }
+fn one_request() -> usize {
+    1
+}
 fn default_timeout() -> u64 {
     10
 }
@@ -165,6 +171,9 @@ impl EngineManifest {
         }
         if !(self.weight.is_finite() && self.weight > 0.0 && self.weight <= 10.0) {
             return Err(format!("{}: weight must be in (0, 10]", self.id));
+        }
+        if self.max_requests == 0 || self.max_requests > super::sandbox::MAX_REQUESTS {
+            return Err(format!("{}: max_requests must be 1..=16", self.id));
         }
         if self.timeout_secs == 0 || self.timeout_secs > 60 {
             return Err(format!("{}: timeout_secs must be 1..=60", self.id));

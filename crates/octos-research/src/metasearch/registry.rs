@@ -80,6 +80,7 @@ pub const BUILTIN: &[(&str, &str, &str)] = builtin![
     "github",
     "stackexchange",
     "mastodon",
+    "publisher_feeds",
     "brave",
 ];
 
