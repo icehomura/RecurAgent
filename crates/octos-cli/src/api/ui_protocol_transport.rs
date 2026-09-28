@@ -15532,16 +15532,39 @@ fn raw_peer_context_open(
             })?
         }
     };
-    if requested_cwd == peer_root
-        || !crate::peers::app_binding::path_is_within(&peer_root, &requested_cwd)
-    {
-        return Err(host_peer_error(
+    // A context's workspace is its OWN folder `<peer>/contexts/<name>`: not
+    // the peer's folder, not `contexts/` itself (every context's), not a
+    // sibling of `contexts/`, and no other context's (open or closed).
+    let contexts_root = {
+        let raw = peer_root.join("contexts");
+        std::fs::create_dir_all(&raw).map_err(|err| {
+            RpcError::internal_error(format!(
+                "failed to create the contexts folder {}: {err}",
+                raw.display()
+            ))
+        })?;
+        dunce::canonicalize(&raw)
+            .map_err(|err| RpcError::internal_error(format!("contexts folder: {err}")))?
+    };
+    let escape = || {
+        host_peer_error(
             "peer_context_workspace_escape",
             format!(
-                "a request context's workspace must be inside the peer's workspace {}",
-                peer_root.display()
+                "a request context's workspace must be its own folder {}/<name>",
+                contexts_root.display()
             ),
-        ));
+        )
+    };
+    if requested_cwd.parent() != Some(contexts_root.as_path())
+        || !crate::peers::app_binding::path_is_within(&peer_root, &requested_cwd)
+    {
+        return Err(escape());
+    }
+    let taken = crate::peers::app_binding::context_bindings(&peers_root, &slug)
+        .into_iter()
+        .any(|(other_id, other)| other_id != context_id && other.cwd == requested_cwd);
+    if taken {
+        return Err(escape());
     }
     validate_session_workspace_path_safety(&requested_cwd)?;
     let created = match read_context_binding(&peers_root, &slug, &context_id) {

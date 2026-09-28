@@ -685,10 +685,11 @@ pub(crate) fn host_route_for_session(peers_root: &Path, session: &SessionKey) ->
 
 /// Add the host SESSION tool set of `session_id` (if any) to one turn.
 ///
-/// Only a turn driven by the registering connection gets it: the host's own
-/// turns on its session, e.g. the system agent's conversation. Every other
-/// turn on the session (an external web client, a kernel continuation) is
-/// left exactly as it was: no host tool, nothing taken away. `peer-` and
+/// Only a turn driven by the registering connection gets its app tools: the
+/// host's own turns on its session, e.g. the system agent's conversation.
+/// Every other turn on the session (an external web client, a kernel
+/// continuation) gets no app tool. The set's `generic_tools`, when given,
+/// narrows every turn on the session (a host-only tool list for it). `peer-` and
 /// `peerctx-` sessions are the peer path's ([`apply_session_host_tools`]).
 pub(crate) fn apply_session_owned_host_tools(
     registry: &mut ToolRegistry,
@@ -711,15 +712,18 @@ pub(crate) fn apply_session_owned_host_tools(
     else {
         return;
     };
+    let set = registered.set;
+    // The host's kernel tool list for the session narrows EVERY turn on it
+    // while the set is registered (the host's, other clients', kernel
+    // wake-ups); it never widens the profile policy.
+    if let Some(allowed) = &set.generic_tools {
+        registry.retain(|name| allowed.iter().any(|a| a == name));
+    }
     if turn_connection.is_none()
         || turn_connection != Some(registered.connection)
         || route_connection_by_key(&key) != turn_connection
     {
         return;
-    }
-    let set = registered.set;
-    if let Some(allowed) = &set.generic_tools {
-        registry.retain(|name| allowed.iter().any(|a| a == name));
     }
     let router: Arc<dyn HostToolRouter> = Arc::new(TurnHostToolRouter {
         peers_root: peers_root.to_path_buf(),

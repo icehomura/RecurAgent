@@ -731,3 +731,55 @@ async fn should_refuse_a_binding_that_shares_state_with_another_app_peer() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn should_accept_only_a_contexts_own_folder_as_its_workspace() {
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let peer_root = fx.apps.join("rinx");
+    let open = |context_id: &str, cwd: Option<PathBuf>| {
+        let mut params = json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"),
+                                 "peer": "Rinx", "context_id": context_id });
+        if let Some(cwd) = cwd {
+            std::fs::create_dir_all(&cwd).unwrap();
+            params["cwd"] = json!(cwd.to_string_lossy());
+        }
+        raw_peer_context_open(
+            &fx.state,
+            &rpc(APPUI_METHOD_PEER_CONTEXT_OPEN, params),
+            None,
+        )
+    };
+    let kind = |result: Result<Value, RpcError>| {
+        result.unwrap_err().data.unwrap()["kind"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    // The default folder, and a fresh `contexts/<name>`.
+    let a = open("ctx-a", None).unwrap();
+    assert!(a["cwd"].as_str().unwrap().ends_with("contexts/ctx-a"));
+    open("ctx-b", Some(peer_root.join("contexts").join("named-b"))).unwrap();
+    // Refused: `contexts/` itself, another context's folder, a sibling of
+    // `contexts/`, a nested folder, and `..` tricks.
+    for (id, cwd) in [
+        ("ctx-c", peer_root.join("contexts")),
+        ("ctx-d", peer_root.join("contexts").join("ctx-a")),
+        ("ctx-e", peer_root.join("contexts").join("named-b")),
+        ("ctx-f", peer_root.join("notes")),
+        ("ctx-g", peer_root.join("contexts").join("x").join("deep")),
+        (
+            "ctx-h",
+            peer_root.join("contexts").join("..").join("notes2"),
+        ),
+    ] {
+        assert_eq!(
+            kind(open(id, Some(cwd.clone()))),
+            "peer_context_workspace_escape",
+            "{}",
+            cwd.display()
+        );
+    }
+}

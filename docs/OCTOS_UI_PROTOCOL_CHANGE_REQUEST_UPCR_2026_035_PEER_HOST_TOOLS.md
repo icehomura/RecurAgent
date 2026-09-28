@@ -90,8 +90,13 @@ as is an external connection of `serve --host-managed`. The result carries
   again after every reconnect, as for a peer; `if_version` works the same);
 - is ADDED to the turns the registering connection drives on that session,
   and only to those: every other turn on the session (an external web client,
-  a kernel continuation) keeps exactly its usual tools and gets no app tool,
-  and the session's other clients are not locked out of it;
+  a kernel continuation) gets no app tool, and the session's other clients
+  are not locked out of it;
+- when `generic_tools` is given, is a host-only kernel tool list for that
+  session: it narrows EVERY turn on the session while the set is registered
+  (the host's, other clients', kernel wake-ups; never widening the profile
+  policy), and no other session of the profile. A list that survives the
+  host connection (durable, set on `session/open`) is a follow-up (#2605);
 - routes its calls to that connection with `caller.kind: "system"` and
   `peer: null`; they are answered with `peer/tool/result` without `peer`
   (same credential); its approvals are host-routed like a peer's; its audit
@@ -545,6 +550,9 @@ never declares its tools a second way.
 
 ## Non-goals and follow-ups
 
+- **Read access to the peer's folder for request contexts** (a
+  `read_parent` flag on `peer/context/open`) and **`peer/purge`** (erase a
+  host-owned peer and free its binding) are follow-ups: #2603, #2604.
 - **Transcript reads by foreign clients (#2556-1).** A foreign connection
   of the profile can still `session/open`, `session/hydrate` and page the
   messages of a host peer's session (the write side is closed above). Under

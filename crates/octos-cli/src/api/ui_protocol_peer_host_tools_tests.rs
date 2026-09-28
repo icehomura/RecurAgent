@@ -3553,6 +3553,60 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
         assert_eq!(sorted_names(&foreign), usual);
     }
 
+    // The host's kernel tool list for the session narrows every turn on it:
+    // the host's, other clients', kernel wake-ups; another session of the
+    // profile is unaffected.
+    let (list_ws, _list_rx) = ws_connection_for_test(8);
+    register_on_session(
+        &fx,
+        &list_ws,
+        Some(&token),
+        &fx.system,
+        json!({ "tools": [calendar_today()], "generic_tools": ["read_file", "ask_user_question"] }),
+    )
+    .unwrap();
+    for connection in [
+        Some(list_ws.connection_id.0),
+        Some(other_ws.connection_id.0),
+        None,
+    ] {
+        let mut narrowed = runtime.tools.snapshot_excluding(&[]);
+        crate::peers::host_tools::apply_session_owned_host_tools(
+            &mut narrowed,
+            &peers_root(&fx),
+            &fx.system,
+            "turn-n",
+            connection,
+        );
+        let names = sorted_names(&narrowed);
+        let expected: Vec<&str> = if connection == Some(list_ws.connection_id.0) {
+            vec!["ask_user_question", "calendar_today", "read_file"]
+        } else {
+            vec!["ask_user_question", "read_file"]
+        };
+        assert_eq!(names, expected, "{connection:?}");
+    }
+    let chat = SessionKey::with_profile_topic("dev", "api", "host", "chat");
+    let mut elsewhere = runtime.tools.snapshot_excluding(&[]);
+    crate::peers::host_tools::apply_session_owned_host_tools(
+        &mut elsewhere,
+        &peers_root(&fx),
+        &chat,
+        "turn-e",
+        Some(list_ws.connection_id.0),
+    );
+    assert_eq!(sorted_names(&elsewhere), usual);
+    crate::peers::host_tools::drop_routes_for_connection(list_ws.connection_id.0);
+    // Registered again by the first host connection (as it was).
+    register_on_session(
+        &fx,
+        &ws,
+        Some(&token),
+        &fx.system,
+        json!({ "tools": [calendar_today()] }),
+    )
+    .unwrap();
+
     // A call reaches the host with the caller marked as the system agent.
     let state = fx.state.clone();
     let system = fx.system.clone();
@@ -3571,6 +3625,19 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
             None,
         )
         .expect("the host answers a session call");
+        // A second answer to the same call is refused: once only.
+        let again = raw_peer_tool_result(
+            connection,
+            &state,
+            &rpc(
+                APPUI_METHOD_PEER_TOOL_RESULT,
+                json!({"session_id": system, "host_token": host_token,
+                       "call_id": call["call_id"], "ok": true, "data": {}}),
+            ),
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(again.data.unwrap()["kind"], "peer_tool_call_not_found");
         call
     });
     let result = host_turn
@@ -3597,4 +3664,33 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
         Some(ws.connection_id.0),
     );
     assert!(after.get("calendar_today").is_none());
+}
+
+#[tokio::test]
+async fn should_offer_ask_user_question_on_a_peer_input_turn_when_the_host_lists_it() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (ws, mut rx) = ws_connection_for_test(32);
+    register(
+        &fx,
+        &ws,
+        &token,
+        json!({ "tools": [news_list()], "generic_tools": ["ask_user_question", "read_file"] }),
+    )
+    .unwrap();
+    deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("ask me something", "call_1"),
+    )
+    .unwrap();
+    let input = next_frame(&mut rx, "peer/input").await;
+    let registry = turn_registry(&fx, &key, input["turn_id"].as_str().unwrap()).await;
+    assert_eq!(
+        sorted_names(&registry),
+        ["ask_user_question", "news_list", "read_file"]
+    );
 }
