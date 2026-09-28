@@ -45994,16 +45994,28 @@ async fn external_approval_respond_as(
             turns.insert(turn_id.0.to_string());
         }
     }
-    let decision_rx = contracts
-        .approvals
-        .request_runtime(ApprovalRequestedEvent::generic(
+    // An own turn runs on this connection, so its approvals are raised here;
+    // the host's turns run on another connection.
+    let raised_on = if own_turn {
+        ws.connection_id.0
+    } else {
+        ws.connection_id.0 + 1
+    };
+    let decision_rx = contracts.approvals.request_runtime_owned(
+        ApprovalRequestedEvent::generic(
             session_id.clone(),
             approval_id.clone(),
             turn_id,
             "shell",
             "Run command",
             "cargo test",
-        ));
+        ),
+        false,
+        Some(crate::contracts::approvals::ApprovalOwner {
+            connection: raised_on,
+            host_route: None,
+        }),
+    );
     let mut respond =
         ApprovalRespondParams::new(session_id.clone(), approval_id, ApprovalDecision::Approve);
     respond.approval_scope = Some("approve_for_session".into());
