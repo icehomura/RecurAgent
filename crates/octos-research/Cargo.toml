@@ -1,0 +1,35 @@
+[package]
+name = "octos-research"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Research building blocks for octos search tools: free news/search providers, structured items, lang/since/domain filters, robots.txt, main-text extraction"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+url = { workspace = true }
+regex = { workspace = true }
+quick-xml = { workspace = true }
+tokio = { version = "1", features = ["sync", "time", "net"] }
+# SSRF-safe HTTP for the shared reader (`fetch` feature).
+reqwest = { workspace = true, optional = true }
+# Readability-style main-text + metadata extraction (MIT, a port of Mozilla
+# readability.js). Optional so `deep-crawl` can use the robots.txt and URL
+# helpers without pulling in an HTML parser it does not need.
+dom_smoothie = { version = "0.18", optional = true }
+
+[features]
+default = ["extract", "fetch"]
+extract = ["dep:dom_smoothie"]
+# SSRF checks + DNS-pinned GET (`net`), and with `extract` the polite
+# `reader`. deep-crawl uses `fetch` without `extract`.
+fetch = ["dep:reqwest"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+
+[lints]
+workspace = true
