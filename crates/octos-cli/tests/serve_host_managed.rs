@@ -253,6 +253,7 @@ mod serve_host_managed {
         assert!(String::from_utf8_lossy(&output.stderr).contains("reads its tokens from stdin"));
     }
 
+    #[cfg(feature = "api")]
     /// A scripted OpenAI-compatible model: records the tool names of every
     /// request and answers "ok" (streamed or not).
     fn mock_model() -> (u16, std::sync::Arc<Mutex<Vec<Vec<String>>>>) {
@@ -329,6 +330,7 @@ mod serve_host_managed {
         (port, seen)
     }
 
+    #[cfg(feature = "api")]
     /// Open the system conversation and start one turn over the real socket
     /// with `token`; return the tool names the model received for it.
     fn tools_for_a_turn(
