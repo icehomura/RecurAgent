@@ -1162,6 +1162,7 @@ async fn should_keep_a_host_tool_approval_and_turn_controls_on_the_host_connecti
         &ledger,
         &contracts,
         None,
+        None,
         "r1".into(),
         respond(approval_id.clone()),
     )
@@ -1199,6 +1200,7 @@ async fn should_keep_a_host_tool_approval_and_turn_controls_on_the_host_connecti
         &fx.state,
         &ledger,
         &contracts,
+        None,
         None,
         "r2".into(),
         respond(approval_id),

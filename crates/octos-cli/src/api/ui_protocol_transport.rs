@@ -643,6 +643,11 @@ pub(crate) struct WsConnection {
     /// [`update_live_features`]). Reads are far more frequent than
     /// writes, so `RwLock` is the right fit.
     live_features: Arc<std::sync::RwLock<ConnectionUiFeatures>>,
+    /// `octos serve --host-managed`: this connection is an external client
+    /// (anything but the host token). Turns it starts get no tool that
+    /// executes code, administers the server or reaches peers
+    /// (`host_managed::external_turn_tool_allowed`).
+    external: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl WsConnection {
@@ -655,7 +660,19 @@ impl WsConnection {
             failed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             failed_notify: Arc::new(tokio::sync::Notify::new()),
             live_features: Arc::new(std::sync::RwLock::new(ConnectionUiFeatures::default())),
+            external: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Mark (or clear) this connection as an external client.
+    pub(crate) fn set_external(&self, external: bool) {
+        self.external.store(external, Ordering::Release);
+    }
+
+    /// Whether this connection is an external client of a host-managed
+    /// server.
+    pub(crate) fn is_external(&self) -> bool {
+        self.external.load(Ordering::Acquire)
     }
 
     fn new_stdio(writer: std::sync::mpsc::SyncSender<WsMessage>) -> Self {
@@ -670,6 +687,7 @@ impl WsConnection {
             live_features: Arc::new(std::sync::RwLock::new(
                 ConnectionUiFeatures::stdio_defaults(),
             )),
+            external: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -6654,11 +6672,59 @@ fn decide_ws_origin_gate(
     }
 }
 
+/// `octos serve --host-managed`: the WS upgrade Origin gate.
+///
+/// Only the host's configured origins are trusted (no legacy, development or
+/// per-tenant entries). A browser always sends `Origin` on a WebSocket
+/// handshake, so an upgrade carrying the browser-only `Sec-Fetch-*` headers
+/// WITHOUT `Origin` is refused; a non-browser client (the host itself, a
+/// terminal UI) sends neither and is admitted to the token check.
+///
+/// Origin is only a guard against other web pages driving a browser that
+/// holds a token. It is not authentication: any local process can send any
+/// Origin. The token is the control.
+fn decide_host_managed_ws_origin_gate(headers: &HeaderMap, state: &AppState) -> WsOriginDecision {
+    let origin = headers
+        .get(axum::http::header::ORIGIN)
+        .map(|value| value.to_str().map(str::trim));
+    match origin {
+        Some(Err(_)) => WsOriginDecision::RejectMalformed,
+        Some(Ok(origin)) if !origin.is_empty() => {
+            if state
+                .appui_allowed_origins
+                .iter()
+                .any(|allowed| allowed == origin)
+            {
+                WsOriginDecision::Allow
+            } else {
+                WsOriginDecision::RejectDisallowed {
+                    origin: origin.to_owned(),
+                }
+            }
+        }
+        _ => {
+            let browser = ["sec-fetch-mode", "sec-fetch-site", "sec-fetch-dest"]
+                .iter()
+                .any(|name| headers.contains_key(*name));
+            if browser {
+                WsOriginDecision::RejectDisallowed {
+                    origin: String::new(),
+                }
+            } else {
+                WsOriginDecision::Allow
+            }
+        }
+    }
+}
+
 fn decide_ui_ws_origin_gate(
     headers: &HeaderMap,
     state: &AppState,
     is_authenticated: bool,
 ) -> WsOriginDecision {
+    if state.host_managed.is_some() {
+        return decide_host_managed_ws_origin_gate(headers, state);
+    }
     decide_ws_origin_gate(
         headers,
         state.base_domain.as_deref(),
@@ -6673,6 +6739,9 @@ fn decide_session_ingress_ws_origin_gate(
 ) -> WsOriginDecision {
     // The work secret authenticates and scopes the session independently.
     // It does not replace the browser Origin gate.
+    if state.host_managed.is_some() {
+        return decide_host_managed_ws_origin_gate(headers, state);
+    }
     decide_ws_origin_gate(
         headers,
         state.base_domain.as_deref(),
@@ -6747,6 +6816,10 @@ pub async fn ws_handler(
         Ok(ws) => ws,
         Err(rejection) => return rejection.into_response(),
     };
+    // A browser that sent its bearer as `octos.bearer.<token>` also offered
+    // `octos-ui`; select that so the handshake succeeds without echoing the
+    // token entry. Clients that offer no subprotocol are unaffected.
+    let ws = ws.protocols([super::router::UI_WS_SUBPROTOCOL]);
     let features = ConnectionUiFeatures::from_headers_and_query(&headers, uri.query());
     // M12 Phase D-1: auxiliary REST→WS dispatchers reuse the same REST
     // handlers in `handlers.rs` for business logic, which means they
@@ -6860,6 +6933,15 @@ async fn ui_protocol_connection(
     // Protocol connection. Later client_hello renegotiation does not create a
     // second connection and therefore must not increment this counter again.
     record_ui_protocol_connection_mode(features, "ws");
+    // `octos serve --host-managed`: anything but the host token (including a
+    // work-secret session-ingress connection) is an external client.
+    let connection_is_external =
+        super::host_managed::is_external(&state, connection_identity.as_ref());
+    // Sessions this external connection opened; it answers prompts only there.
+    let mut external_opened_sessions: HashSet<String> = HashSet::new();
+    // Turns this external connection started (and got accepted); it steers,
+    // interrupts and answers prompts of those only.
+    let mut external_turns: HashSet<String> = HashSet::new();
     let (ws_sink, mut ws_rx) = socket.split();
     // Decouple the network sink from request handlers via a bounded channel
     // and a dedicated drainer task. No handler ever holds a lock across an
@@ -6867,6 +6949,10 @@ async fn ui_protocol_connection(
     let (writer_tx, writer_rx) = mpsc::channel::<WsMessage>(WS_WRITER_CHANNEL_CAPACITY);
     let writer_handle = tokio::spawn(WsConnection::writer_loop(ws_sink, writer_rx));
     let ws = WsConnection::new(writer_tx);
+    ws.set_external(connection_is_external);
+    if connection_is_external {
+        features.session_workspace_cwd = false;
+    }
     // Codex #1336 round-2 BLOCKER 1: seed the per-connection feature
     // snapshot from the negotiated `features` so direct-sends apply
     // the same capability filter the broadcast forwarder uses BEFORE
@@ -6958,18 +7044,25 @@ async fn ui_protocol_connection(
                 ) {
                     appui_keep_open_sessions_alive(&state, &open_sessions).await;
                 }
-                drain_appui_due_master_continuations(
-                    &ws,
-                    &state,
-                    &ledger,
-                    &contracts,
-                    &active_turns,
-                    &connection_turns,
-                    profile_filter,
-                    &open_sessions,
-                    false,
-                    features,
-                ).await;
+                // `octos serve --host-managed`: an external connection never
+                // runs background continuations (the system agent's wakes,
+                // loops, goals); they would run with its restricted tools and
+                // stream to it. The host's connection or the global drain
+                // runs them.
+                if !connection_is_external {
+                    drain_appui_due_master_continuations(
+                        &ws,
+                        &state,
+                        &ledger,
+                        &contracts,
+                        &active_turns,
+                        &connection_turns,
+                        profile_filter,
+                        &open_sessions,
+                        false,
+                        features,
+                    ).await;
+                }
                 emit_session_orchestration_updates(
                     &ws,
                     &ledger,
@@ -7074,6 +7167,20 @@ async fn ui_protocol_connection(
             );
             continue;
         }
+        // `octos serve --host-managed`: an external client may call only an
+        // allowlist of methods, never on a host-owned app peer's session,
+        // and answers prompts only on sessions it opened (UPCR-2026-036).
+        if connection_is_external {
+            if let Err(error) = super::host_managed::external_gate(
+                &request.method,
+                &request.params,
+                &external_opened_sessions,
+                &external_turns,
+            ) {
+                let _ = send_rpc_error(&ws, Some(id), error);
+                continue;
+            }
+        }
         if handle_raw_appui_rpc(
             &ws,
             &state,
@@ -7138,6 +7245,7 @@ async fn ui_protocol_connection(
                     .profile_id
                     .clone()
                     .or_else(|| params.session_id.profile_id().map(ToOwned::to_owned));
+                let opened_session = params.session_id.0.clone();
                 let opened = handle_session_open(
                     &ws,
                     &state,
@@ -7155,6 +7263,11 @@ async fn ui_protocol_connection(
                     session_ingress_scope.is_some(),
                 )
                 .await;
+                if opened && connection_is_external {
+                    // Only a successful open lets an external client answer
+                    // this session's prompts.
+                    external_opened_sessions.insert(opened_session);
+                }
                 if opened {
                     // codex P2 (re-review): a successful open always resolves to
                     // a concrete runtime — a profile-less default open resolves
@@ -7169,7 +7282,8 @@ async fn ui_protocol_connection(
                 }
             }
             UiCommand::TurnStart(params) => {
-                handle_turn_start(
+                let turn_id = params.turn_id.0.to_string();
+                let accepted = handle_turn_start(
                     &ws,
                     &state,
                     &ledger,
@@ -7185,6 +7299,9 @@ async fn ui_protocol_connection(
                     params,
                 )
                 .await;
+                if accepted && connection_is_external {
+                    external_turns.insert(turn_id);
+                }
             }
             UiCommand::TurnInterrupt(params) => {
                 handle_turn_interrupt(&ws, &ledger, &active_turns, &contracts, id, params).await;
@@ -7196,6 +7313,7 @@ async fn ui_protocol_connection(
                     &ledger,
                     &contracts,
                     connection_profile_id,
+                    connection_is_external.then_some(&external_turns),
                     id,
                     params,
                 )
@@ -7212,8 +7330,15 @@ async fn ui_protocol_connection(
                 .await;
             }
             UiCommand::UserQuestionRespond(params) => {
-                handle_user_question_respond(&ws, &contracts, connection_profile_id, id, params)
-                    .await;
+                handle_user_question_respond(
+                    &ws,
+                    &contracts,
+                    connection_profile_id,
+                    connection_is_external.then_some(&external_turns),
+                    id,
+                    params,
+                )
+                .await;
             }
             UiCommand::DiffPreviewGet(params) => {
                 let store = diff_preview_store(&state, contracts.as_ref()).await;
@@ -8091,12 +8216,14 @@ where
                         .await;
                 }
                 UiCommand::ApprovalRespond(params) => {
+                    // The stdio peer is the process owner, never external.
                     handle_approval_respond(
                         &ws,
                         &state,
                         &ledger,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
+                        None,
                         id,
                         params,
                     )
@@ -8117,6 +8244,7 @@ where
                         &ws,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
+                        None,
                         id,
                         params,
                     )
@@ -19893,6 +20021,11 @@ fn handle_client_hello_rpc(
     // broadcast forwarder uses — without this sync a connection that
     // negotiated `projection.envelope.v1` mid-session would still
     // receive legacy frames on direct sends.
+    // `octos serve --host-managed`: an external client never chooses a
+    // workspace; its sessions stay in the workspace octos bound them to.
+    if ws.is_external() {
+        features.session_workspace_cwd = false;
+    }
     ws.update_live_features(*features);
     let transport = if features.stdio_transport {
         "stdio"
@@ -20249,7 +20382,7 @@ fn validate_session_ingress_command_scope(
     }
 }
 
-fn ui_protocol_server_supported_methods() -> Vec<&'static str> {
+pub(crate) fn ui_protocol_server_supported_methods() -> Vec<&'static str> {
     let mut methods = octos_core::ui_protocol::UI_PROTOCOL_FIRST_SERVER_METHODS.to_vec();
     methods.extend(APPUI_EXTRA_METHODS.iter().copied());
     methods
@@ -23847,8 +23980,8 @@ async fn handle_turn_start(
     features: ConnectionUiFeatures,
     id: String,
     params: TurnStartParams,
-) {
-    let _ = handle_turn_start_with_accept(
+) -> bool {
+    handle_turn_start_with_accept(
         ws,
         state,
         ledger,
@@ -23863,7 +23996,7 @@ async fn handle_turn_start(
         json!({ "accepted": true }),
         None,
     )
-    .await;
+    .await
 }
 
 fn voice_media_paths(media: &[FileRef]) -> Vec<String> {
@@ -26268,18 +26401,51 @@ fn refuse_foreign_host_turn_control(
     (controller != Some(ws.connection_id.0)).then(|| host_connection_only_error(method))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_approval_respond(
     ws: &WsConnection,
     state: &Arc<AppState>,
     ledger: &Arc<UiProtocolLedger>,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
+    external_turns: Option<&HashSet<String>>,
     id: String,
-    params: octos_core::ui_protocol::ApprovalRespondParams,
+    mut params: octos_core::ui_protocol::ApprovalRespondParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
         return;
+    }
+    // `octos serve --host-managed`: a host-owned app peer's approvals belong
+    // to the person, in the app (UPCR-2026-034). An external client (web or
+    // terminal UI on the external token) never answers them; the approval
+    // stays parked. UPCR-2026-036.
+    if let Some(turns) = external_turns {
+        if super::host_managed::is_peer_session(&params.session_id) {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::peer_answer_denied("approval"),
+            );
+            return;
+        }
+        // Only an approval of a turn this external connection started, and
+        // once: an external answer never records a session-wide scope.
+        let own = contracts
+            .approvals
+            .pending_for_session(&params.session_id)
+            .into_iter()
+            .find(|pending| pending.approval_id == params.approval_id)
+            .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+        if !own {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::external_turn_denied("approval"),
+            );
+            return;
+        }
+        params.approval_scope = None;
     }
     // UPCR-2026-035: a host-routed call's approval is answered only on the
     // peer's host connection.
@@ -26362,12 +26528,39 @@ async fn handle_user_question_respond(
     ws: &WsConnection,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
+    external_turns: Option<&HashSet<String>>,
     id: String,
     params: UserQuestionRespondParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
         return;
+    }
+    // Same rule as `handle_approval_respond` for a host-owned peer's
+    // questions (UPCR-2026-036).
+    if let Some(turns) = external_turns {
+        if super::host_managed::is_peer_session(&params.session_id) {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::peer_answer_denied("question"),
+            );
+            return;
+        }
+        let own = contracts
+            .user_questions
+            .pending_for_session(&params.session_id)
+            .into_iter()
+            .find(|pending| pending.question_id == params.question_id)
+            .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+        if !own {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::external_turn_denied("question"),
+            );
+            return;
+        }
     }
 
     let outcome = match contracts.user_questions.respond_with_context(&params) {
@@ -37757,6 +37950,13 @@ async fn run_standalone_turn(
             // host drives the peer's runs itself.
             (!internal_master_continuation).then_some(ws.connection_id.0),
         );
+    }
+    // `octos serve --host-managed`: an external client's turn keeps only the
+    // external tool allowlist, applied to the FINISHED registry so nothing
+    // registered above (spawn, peer_*, send_file, task tools, MCP, plugins)
+    // survives (UPCR-2026-036).
+    if ws.is_external() {
+        tool_registry.retain(super::host_managed::external_turn_tool_allowed);
     }
     let tool_registry = Arc::new(tool_registry);
 

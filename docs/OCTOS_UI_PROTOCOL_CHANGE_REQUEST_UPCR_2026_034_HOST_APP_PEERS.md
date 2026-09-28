@@ -152,6 +152,11 @@ binding file is unreadable, so a torn binding cannot re-open the path.
 Ordinary sessions and agent-staged peers are unchanged: their originator
 still answers their approvals.
 
+On `octos serve --host-managed`, an external client (anything but the host
+token) cannot answer them either: `approval/respond` and
+`user_question/respond` on a `peer-…` or `peerctx-…` session are refused with
+`host_owned_peer_answer_denied` (UPCR-2026-036).
+
 ## Non-goals and conservative defaults
 
 - **Permission prompts.** Approvals keep their existing policy: an app
