@@ -23761,6 +23761,7 @@ async fn approval_respond_ledgers_decided_before_unblocked_turn_completion() {
             &handler_ledger,
             &handler_contracts,
             None,
+            false,
             "approval-respond".into(),
             ApprovalRespondParams::new(
                 handler_session,
@@ -45933,4 +45934,179 @@ async fn should_store_a_download_copy_of_a_delivered_file_and_keep_its_original_
         reread.messages.last().map(|m| m.media.clone()),
         Some(vec![raw])
     );
+}
+
+// ── UPCR-2026-036: `octos serve --host-managed` ─────────────────────────────
+
+fn host_managed_peer_session(topic: &str) -> SessionKey {
+    SessionKey::with_profile_topic(MAIN_PROFILE_ID, "api", "octosense", topic)
+}
+
+async fn external_approval_respond(
+    external: bool,
+    session_id: SessionKey,
+) -> (Value, tokio::sync::oneshot::Receiver<ApprovalDecision>) {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let state = state_with_sessions(temp.path());
+    let (ws, mut rx) = ws_connection_for_test(32);
+    let ledger = Arc::new(UiProtocolLedger::new(32));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let approval_id = ApprovalId::new();
+    let decision_rx = contracts
+        .approvals
+        .request_runtime(ApprovalRequestedEvent::generic(
+            session_id.clone(),
+            approval_id.clone(),
+            TurnId::new(),
+            "shell",
+            "Run command",
+            "cargo test",
+        ));
+    handle_approval_respond(
+        &ws,
+        &state,
+        &ledger,
+        &contracts,
+        Some(MAIN_PROFILE_ID),
+        external,
+        "respond".into(),
+        ApprovalRespondParams::new(session_id, approval_id, ApprovalDecision::Approve),
+    )
+    .await;
+    (recv_rpc_json(&mut rx).await, decision_rx)
+}
+
+#[tokio::test]
+async fn should_refuse_an_external_answer_to_a_host_owned_peer_approval() {
+    for topic in ["peer-rinx", "peerctx-rinx.app-a"] {
+        let (reply, mut decision) =
+            external_approval_respond(true, host_managed_peer_session(topic)).await;
+        assert_eq!(
+            reply["error"]["data"]["kind"],
+            json!(super::super::host_managed::HOST_OWNED_PEER_ANSWER_DENIED),
+            "{topic}: {reply}"
+        );
+        assert!(
+            decision.try_recv().is_err(),
+            "{topic}: the approval stays parked for the person"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_let_the_host_answer_a_host_owned_peer_approval() {
+    let (reply, decision) =
+        external_approval_respond(false, host_managed_peer_session("peer-rinx")).await;
+    assert!(reply.get("error").is_none(), "{reply}");
+    assert_eq!(decision.await.unwrap(), ApprovalDecision::Approve);
+}
+
+#[tokio::test]
+async fn should_let_an_external_client_answer_its_own_session_approval() {
+    let (reply, decision) =
+        external_approval_respond(true, host_managed_peer_session("system")).await;
+    assert!(reply.get("error").is_none(), "{reply}");
+    assert_eq!(decision.await.unwrap(), ApprovalDecision::Approve);
+}
+
+#[tokio::test]
+async fn should_refuse_an_external_answer_to_a_host_owned_peer_question() {
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let session_id = host_managed_peer_session("peerctx-rinx.app-a");
+    let question_id = QuestionId::new();
+    let mut waiter = contracts
+        .user_questions
+        .request_runtime(sample_pending_question(
+            session_id.clone(),
+            question_id.clone(),
+            TurnId::new(),
+        ));
+    let answer = || {
+        vec![UserQuestionAnswer {
+            selected_labels: vec!["axum".into()],
+            free_text: None,
+        }]
+    };
+    let (ws, mut rx) = ws_connection_for_test(32);
+    handle_user_question_respond(
+        &ws,
+        &contracts,
+        Some(MAIN_PROFILE_ID),
+        true,
+        "q".into(),
+        UserQuestionRespondParams::new(session_id.clone(), question_id.clone(), answer()),
+    )
+    .await;
+    let reply = recv_rpc_json(&mut rx).await;
+    assert_eq!(
+        reply["error"]["data"]["kind"],
+        json!(super::super::host_managed::HOST_OWNED_PEER_ANSWER_DENIED),
+        "{reply}"
+    );
+    assert!(waiter.try_recv().is_err(), "the question stays pending");
+    // The host still answers it.
+    handle_user_question_respond(
+        &ws,
+        &contracts,
+        Some(MAIN_PROFILE_ID),
+        false,
+        "q2".into(),
+        UserQuestionRespondParams::new(session_id, question_id, answer()),
+    )
+    .await;
+    let reply = recv_rpc_json(&mut rx).await;
+    assert!(reply.get("error").is_none(), "{reply}");
+}
+
+#[test]
+fn should_admit_only_configured_origins_on_a_host_managed_ws_upgrade() {
+    let state = AppState {
+        appui_allowed_origins: vec!["https://web.example".into()],
+        host_managed: Some(Arc::new(
+            super::super::host_managed::HostManaged::new("h".repeat(40), None, 4000).unwrap(),
+        )),
+        ..AppState::empty_for_tests()
+    };
+    let headers = |pairs: &[(&'static str, &str)]| {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.insert(*name, value.parse().unwrap());
+        }
+        map
+    };
+    assert_eq!(
+        decide_ui_ws_origin_gate(&headers(&[("origin", "https://web.example")]), &state, true),
+        WsOriginDecision::Allow
+    );
+    // The built-in development and legacy origins are not trusted here.
+    for origin in [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://app.ominix.io",
+    ] {
+        assert!(matches!(
+            decide_ui_ws_origin_gate(&headers(&[("origin", origin)]), &state, true),
+            WsOriginDecision::RejectDisallowed { .. }
+        ));
+    }
+    // A browser-style upgrade must carry Origin; a native client sends none.
+    assert!(matches!(
+        decide_ui_ws_origin_gate(&headers(&[("sec-fetch-mode", "websocket")]), &state, true),
+        WsOriginDecision::RejectDisallowed { .. }
+    ));
+    assert_eq!(
+        decide_ui_ws_origin_gate(&HeaderMap::new(), &state, true),
+        WsOriginDecision::Allow
+    );
+}
+
+#[test]
+fn stdio_default_feature_list_matches_the_stdio_defaults() {
+    // Hosts moving a native client from stdio to the host-managed WebSocket
+    // request exactly `UI_PROTOCOL_STDIO_DEFAULT_FEATURES` (UPCR-2026-036).
+    let requested = ConnectionUiFeatures::from_requested_feature_tokens(
+        octos_core::ui_protocol::UI_PROTOCOL_STDIO_DEFAULT_FEATURES,
+        true,
+    );
+    assert_eq!(requested, ConnectionUiFeatures::stdio_defaults());
 }

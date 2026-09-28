@@ -6614,11 +6614,59 @@ fn decide_ws_origin_gate(
     }
 }
 
+/// `octos serve --host-managed`: the WS upgrade Origin gate.
+///
+/// Only the host's configured origins are trusted (no legacy, development or
+/// per-tenant entries). A browser always sends `Origin` on a WebSocket
+/// handshake, so an upgrade carrying the browser-only `Sec-Fetch-*` headers
+/// WITHOUT `Origin` is refused; a non-browser client (the host itself, a
+/// terminal UI) sends neither and is admitted to the token check.
+///
+/// Origin is only a guard against other web pages driving a browser that
+/// holds a token. It is not authentication: any local process can send any
+/// Origin. The token is the control.
+fn decide_host_managed_ws_origin_gate(headers: &HeaderMap, state: &AppState) -> WsOriginDecision {
+    let origin = headers
+        .get(axum::http::header::ORIGIN)
+        .map(|value| value.to_str().map(str::trim));
+    match origin {
+        Some(Err(_)) => WsOriginDecision::RejectMalformed,
+        Some(Ok(origin)) if !origin.is_empty() => {
+            if state
+                .appui_allowed_origins
+                .iter()
+                .any(|allowed| allowed == origin)
+            {
+                WsOriginDecision::Allow
+            } else {
+                WsOriginDecision::RejectDisallowed {
+                    origin: origin.to_owned(),
+                }
+            }
+        }
+        _ => {
+            let browser = ["sec-fetch-mode", "sec-fetch-site", "sec-fetch-dest"]
+                .iter()
+                .any(|name| headers.contains_key(*name));
+            if browser {
+                WsOriginDecision::RejectDisallowed {
+                    origin: String::new(),
+                }
+            } else {
+                WsOriginDecision::Allow
+            }
+        }
+    }
+}
+
 fn decide_ui_ws_origin_gate(
     headers: &HeaderMap,
     state: &AppState,
     is_authenticated: bool,
 ) -> WsOriginDecision {
+    if state.host_managed.is_some() {
+        return decide_host_managed_ws_origin_gate(headers, state);
+    }
     decide_ws_origin_gate(
         headers,
         state.base_domain.as_deref(),
@@ -6633,6 +6681,9 @@ fn decide_session_ingress_ws_origin_gate(
 ) -> WsOriginDecision {
     // The work secret authenticates and scopes the session independently.
     // It does not replace the browser Origin gate.
+    if state.host_managed.is_some() {
+        return decide_host_managed_ws_origin_gate(headers, state);
+    }
     decide_ws_origin_gate(
         headers,
         state.base_domain.as_deref(),
@@ -6707,6 +6758,10 @@ pub async fn ws_handler(
         Ok(ws) => ws,
         Err(rejection) => return rejection.into_response(),
     };
+    // A browser that sent its bearer as `octos.bearer.<token>` also offered
+    // `octos-ui`; select that so the handshake succeeds without echoing the
+    // token entry. Clients that offer no subprotocol are unaffected.
+    let ws = ws.protocols([super::router::UI_WS_SUBPROTOCOL]);
     let features = ConnectionUiFeatures::from_headers_and_query(&headers, uri.query());
     // M12 Phase D-1: auxiliary REST→WS dispatchers reuse the same REST
     // handlers in `handlers.rs` for business logic, which means they
@@ -6820,6 +6875,10 @@ async fn ui_protocol_connection(
     // Protocol connection. Later client_hello renegotiation does not create a
     // second connection and therefore must not increment this counter again.
     record_ui_protocol_connection_mode(features, "ws");
+    // `octos serve --host-managed`: anything but the host token (including a
+    // work-secret session-ingress connection) is an external client.
+    let connection_is_external =
+        super::host_managed::is_external(&state, connection_identity.as_ref());
     let (ws_sink, mut ws_rx) = socket.split();
     // Decouple the network sink from request handlers via a bounded channel
     // and a dedicated drainer task. No handler ever holds a lock across an
@@ -7156,6 +7215,7 @@ async fn ui_protocol_connection(
                     &ledger,
                     &contracts,
                     connection_profile_id,
+                    connection_is_external,
                     id,
                     params,
                 )
@@ -7172,8 +7232,15 @@ async fn ui_protocol_connection(
                 .await;
             }
             UiCommand::UserQuestionRespond(params) => {
-                handle_user_question_respond(&ws, &contracts, connection_profile_id, id, params)
-                    .await;
+                handle_user_question_respond(
+                    &ws,
+                    &contracts,
+                    connection_profile_id,
+                    connection_is_external,
+                    id,
+                    params,
+                )
+                .await;
             }
             UiCommand::DiffPreviewGet(params) => {
                 let store = diff_preview_store(&state, contracts.as_ref()).await;
@@ -8049,12 +8116,14 @@ where
                         .await;
                 }
                 UiCommand::ApprovalRespond(params) => {
+                    // The stdio peer is the process owner, never external.
                     handle_approval_respond(
                         &ws,
                         &state,
                         &ledger,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
+                        false,
                         id,
                         params,
                     )
@@ -8075,6 +8144,7 @@ where
                         &ws,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
+                        false,
                         id,
                         params,
                     )
@@ -25840,17 +25910,31 @@ fn audit_approval_decided(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_approval_respond(
     ws: &WsConnection,
     state: &Arc<AppState>,
     ledger: &Arc<UiProtocolLedger>,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
+    external: bool,
     id: String,
     params: octos_core::ui_protocol::ApprovalRespondParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
+        return;
+    }
+    // `octos serve --host-managed`: a host-owned app peer's approvals belong
+    // to the person, in the app (UPCR-2026-034). An external client (web or
+    // terminal UI on the external token) never answers them; the approval
+    // stays parked. UPCR-2026-036.
+    if external && super::host_managed::is_peer_session(&params.session_id) {
+        let _ = send_rpc_error(
+            ws,
+            Some(id),
+            super::host_managed::peer_answer_denied("approval"),
+        );
         return;
     }
 
@@ -25928,11 +26012,22 @@ async fn handle_user_question_respond(
     ws: &WsConnection,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
+    external: bool,
     id: String,
     params: UserQuestionRespondParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
+        return;
+    }
+    // Same rule as `handle_approval_respond` for a host-owned peer's
+    // questions (UPCR-2026-036).
+    if external && super::host_managed::is_peer_session(&params.session_id) {
+        let _ = send_rpc_error(
+            ws,
+            Some(id),
+            super::host_managed::peer_answer_denied("question"),
+        );
         return;
     }
 

@@ -333,15 +333,22 @@ fn is_loopback_peer(remote_ip: Option<IpAddr>, headers: &HeaderMap) -> bool {
 /// 404 (not 403) for a non-loopback peer, and 404 when this deployment has no
 /// pairing state at all — a client reads that as "pairing not supported" and
 /// falls back to the manual origin+token form.
-fn resolve<'a>(
-    state: &'a AppState,
+///
+/// A host-managed server (`octos serve --host-managed`) mints no code at
+/// startup; its host enables one on demand, and the code exchanges for the
+/// EXTERNAL token, never the host's.
+fn resolve(
+    state: &AppState,
     peer: PeerAddr,
     headers: &HeaderMap,
-) -> Result<&'a Arc<PairingState>, StatusCode> {
+) -> Result<Arc<PairingState>, StatusCode> {
     if !is_loopback_peer(peer.0.map(|addr| addr.ip()), headers) {
         return Err(StatusCode::NOT_FOUND);
     }
-    state.pairing.as_ref().ok_or(StatusCode::NOT_FOUND)
+    if let Some(host_managed) = &state.host_managed {
+        return host_managed.pairing().ok_or(StatusCode::NOT_FOUND);
+    }
+    state.pairing.clone().ok_or(StatusCode::NOT_FOUND)
 }
 
 fn error_response(err: PairError) -> Response {
