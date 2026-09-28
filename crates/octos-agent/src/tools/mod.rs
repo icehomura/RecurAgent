@@ -1065,17 +1065,45 @@ pub fn resolve_path_with_scope(
     Ok(resolved)
 }
 
-/// `/proc/<pid>/environ` or `/proc/<pid>/cmdline` (also under
-/// `task/<tid>/`): another process's secrets. No file tool opens them, in any
-/// filesystem scope.
+/// A process's private view: anything under `/proc/self`, `/proc/thread-self`
+/// or `/proc/<pid>` (environment, command line, `fd/`, `root/`, `cwd`,
+/// `mem`, …) and `/dev/fd`, `/dev/std*`. No file tool opens these in any
+/// filesystem scope, however the path is spelled: the raw spelling, its
+/// lexical normalization and (when it exists) its canonical target are all
+/// judged, so `..`, a leading `/../..` or a workspace symlink cannot slip
+/// past. System-wide `/proc` files such as `/proc/cpuinfo` stay readable.
 pub fn is_process_secret_path(path: &Path) -> bool {
-    let secret_leaf = path
-        .file_name()
-        .is_some_and(|name| name == "environ" || name == "cmdline");
-    // Also judge the raw spelling: lexical normalization drops a leading
-    // `/..`, and `/../../proc/1/environ` must not slip past the anchor.
-    let raw = path.to_string_lossy();
-    secret_leaf && (path.starts_with("/proc") || raw.contains("/proc/"))
+    fn private_view(path: &Path) -> bool {
+        let text = path.to_string_lossy();
+        let text = text.trim_end_matches('/');
+        let mut parts = text
+            .split('/')
+            .filter(|part| !part.is_empty() && *part != ".");
+        let found = |parts: &mut dyn Iterator<Item = &str>| -> bool {
+            let mut previous = "";
+            for part in parts {
+                if previous == "proc"
+                    && (part == "self"
+                        || part == "thread-self"
+                        || part.chars().all(|c| c.is_ascii_digit()))
+                {
+                    return true;
+                }
+                if previous == "dev" && (part == "fd" || part.starts_with("std")) {
+                    return true;
+                }
+                if part == "environ" || part == "cmdline" {
+                    return text.contains("/proc/");
+                }
+                previous = part;
+            }
+            false
+        };
+        found(&mut parts)
+    }
+    private_view(path)
+        || private_view(&normalize_lexical(path))
+        || std::fs::canonicalize(path).is_ok_and(|real| private_view(&real))
 }
 
 /// Resolve and classify a user-supplied path against a [`SessionScope`]

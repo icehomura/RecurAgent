@@ -488,6 +488,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn should_block_a_host_managed_servers_own_port_and_loopback_spellings() {
+        // `octos serve --host-managed` (UPCR-2026-036) keeps web_fetch in an
+        // external client's turns: it must never reach the server itself or
+        // anything else on loopback, link-local or metadata addresses.
+        for url in [
+            "http://127.0.0.1:50080/api/admin/overview",
+            "http://127.0.0.1:50080/pair/info",
+            "http://localhost:50080/",
+            "http://[::1]:50080/",
+            "http://2130706433/",
+            "http://0x7f.0.0.1/",
+            "http://[::ffff:127.0.0.1]/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://0.0.0.0:50080/",
+        ] {
+            assert!(ssrf_safe_fetch(url, None).await.is_err(), "{url}");
+        }
+    }
+
+    #[tokio::test]
     async fn test_ssrf_metadata_endpoint_blocked() {
         let result = ssrf_safe_fetch("http://169.254.169.254/latest/meta-data/", None).await;
         assert!(result.is_err());

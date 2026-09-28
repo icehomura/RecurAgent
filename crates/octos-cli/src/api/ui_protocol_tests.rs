@@ -23761,7 +23761,7 @@ async fn approval_respond_ledgers_decided_before_unblocked_turn_completion() {
             &handler_ledger,
             &handler_contracts,
             None,
-            false,
+            None,
             "approval-respond".into(),
             ApprovalRespondParams::new(
                 handler_session,
@@ -45946,33 +45946,59 @@ async fn external_approval_respond(
     external: bool,
     session_id: SessionKey,
 ) -> (Value, tokio::sync::oneshot::Receiver<ApprovalDecision>) {
+    external_approval_respond_as(external.then(HashSet::new), session_id, true).await
+}
+
+/// `own_turn`: whether the pending approval belongs to a turn the external
+/// connection started (its id is in the connection's set).
+async fn external_approval_respond_as(
+    external_turns: Option<HashSet<String>>,
+    session_id: SessionKey,
+    own_turn: bool,
+) -> (Value, tokio::sync::oneshot::Receiver<ApprovalDecision>) {
     let temp = tempfile::tempdir().expect("tempdir");
     let state = state_with_sessions(temp.path());
     let (ws, mut rx) = ws_connection_for_test(32);
     let ledger = Arc::new(UiProtocolLedger::new(32));
     let contracts = Arc::new(UiProtocolContractStores::default());
     let approval_id = ApprovalId::new();
+    let turn_id = TurnId::new();
+    let mut external_turns = external_turns;
+    if own_turn {
+        if let Some(turns) = external_turns.as_mut() {
+            turns.insert(turn_id.0.to_string());
+        }
+    }
     let decision_rx = contracts
         .approvals
         .request_runtime(ApprovalRequestedEvent::generic(
             session_id.clone(),
             approval_id.clone(),
-            TurnId::new(),
+            turn_id,
             "shell",
             "Run command",
             "cargo test",
         ));
+    let mut respond =
+        ApprovalRespondParams::new(session_id.clone(), approval_id, ApprovalDecision::Approve);
+    respond.approval_scope = Some("approve_for_session".into());
     handle_approval_respond(
         &ws,
         &state,
         &ledger,
         &contracts,
         Some(MAIN_PROFILE_ID),
-        external,
+        external_turns.as_ref(),
         "respond".into(),
-        ApprovalRespondParams::new(session_id, approval_id, ApprovalDecision::Approve),
+        respond,
     )
     .await;
+    if external_turns.is_some() {
+        assert!(
+            contracts.scopes.list_for_session(&session_id).is_empty(),
+            "an external answer never records a session-wide scope"
+        );
+    }
     (recv_rpc_json(&mut rx).await, decision_rx)
 }
 
@@ -46002,9 +46028,22 @@ async fn should_let_the_host_answer_a_host_owned_peer_approval() {
 }
 
 #[tokio::test]
-async fn should_let_an_external_client_answer_its_own_session_approval() {
-    let (reply, decision) =
-        external_approval_respond(true, host_managed_peer_session("system")).await;
+async fn should_let_an_external_client_answer_only_its_own_turns_approvals_once() {
+    let session = host_managed_peer_session("system");
+    // A host turn's approval on the shared system conversation: refused.
+    let (reply, mut decision) =
+        external_approval_respond_as(Some(HashSet::new()), session.clone(), false).await;
+    assert_eq!(
+        reply["error"]["data"]["kind"],
+        json!(super::super::host_managed::EXTERNAL_TURN_DENIED),
+        "{reply}"
+    );
+    assert!(
+        decision.try_recv().is_err(),
+        "the host's approval stays pending"
+    );
+    // Its own turn's approval: answered, once (no scope recorded).
+    let (reply, decision) = external_approval_respond_as(Some(HashSet::new()), session, true).await;
     assert!(reply.get("error").is_none(), "{reply}");
     assert_eq!(decision.await.unwrap(), ApprovalDecision::Approve);
 }
@@ -46028,11 +46067,12 @@ async fn should_refuse_an_external_answer_to_a_host_owned_peer_question() {
         }]
     };
     let (ws, mut rx) = ws_connection_for_test(32);
+    let empty = HashSet::new();
     handle_user_question_respond(
         &ws,
         &contracts,
         Some(MAIN_PROFILE_ID),
-        true,
+        Some(&empty),
         "q".into(),
         UserQuestionRespondParams::new(session_id.clone(), question_id.clone(), answer()),
     )
@@ -46049,7 +46089,7 @@ async fn should_refuse_an_external_answer_to_a_host_owned_peer_question() {
         &ws,
         &contracts,
         Some(MAIN_PROFILE_ID),
-        false,
+        None,
         "q2".into(),
         UserQuestionRespondParams::new(session_id, question_id, answer()),
     )

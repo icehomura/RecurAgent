@@ -6899,6 +6899,9 @@ async fn ui_protocol_connection(
         super::host_managed::is_external(&state, connection_identity.as_ref());
     // Sessions this external connection opened; it answers prompts only there.
     let mut external_opened_sessions: HashSet<String> = HashSet::new();
+    // Turns this external connection started (and got accepted); it steers,
+    // interrupts and answers prompts of those only.
+    let mut external_turns: HashSet<String> = HashSet::new();
     let (ws_sink, mut ws_rx) = socket.split();
     // Decouple the network sink from request handlers via a bounded channel
     // and a dedicated drainer task. No handler ever holds a lock across an
@@ -6907,6 +6910,9 @@ async fn ui_protocol_connection(
     let writer_handle = tokio::spawn(WsConnection::writer_loop(ws_sink, writer_rx));
     let ws = WsConnection::new(writer_tx);
     ws.set_external(connection_is_external);
+    if connection_is_external {
+        features.session_workspace_cwd = false;
+    }
     // Codex #1336 round-2 BLOCKER 1: seed the per-connection feature
     // snapshot from the negotiated `features` so direct-sends apply
     // the same capability filter the broadcast forwarder uses BEFORE
@@ -6998,18 +7004,25 @@ async fn ui_protocol_connection(
                 ) {
                     appui_keep_open_sessions_alive(&state, &open_sessions).await;
                 }
-                drain_appui_due_master_continuations(
-                    &ws,
-                    &state,
-                    &ledger,
-                    &contracts,
-                    &active_turns,
-                    &connection_turns,
-                    profile_filter,
-                    &open_sessions,
-                    false,
-                    features,
-                ).await;
+                // `octos serve --host-managed`: an external connection never
+                // runs background continuations (the system agent's wakes,
+                // loops, goals); they would run with its restricted tools and
+                // stream to it. The host's connection or the global drain
+                // runs them.
+                if !connection_is_external {
+                    drain_appui_due_master_continuations(
+                        &ws,
+                        &state,
+                        &ledger,
+                        &contracts,
+                        &active_turns,
+                        &connection_turns,
+                        profile_filter,
+                        &open_sessions,
+                        false,
+                        features,
+                    ).await;
+                }
                 emit_session_orchestration_updates(
                     &ws,
                     &ledger,
@@ -7122,6 +7135,7 @@ async fn ui_protocol_connection(
                 &request.method,
                 &request.params,
                 &external_opened_sessions,
+                &external_turns,
             ) {
                 let _ = send_rpc_error(&ws, Some(id), error);
                 continue;
@@ -7228,7 +7242,8 @@ async fn ui_protocol_connection(
                 }
             }
             UiCommand::TurnStart(params) => {
-                handle_turn_start(
+                let turn_id = params.turn_id.0.to_string();
+                let accepted = handle_turn_start(
                     &ws,
                     &state,
                     &ledger,
@@ -7244,6 +7259,9 @@ async fn ui_protocol_connection(
                     params,
                 )
                 .await;
+                if accepted && connection_is_external {
+                    external_turns.insert(turn_id);
+                }
             }
             UiCommand::TurnInterrupt(params) => {
                 handle_turn_interrupt(&ws, &ledger, &active_turns, &contracts, id, params).await;
@@ -7255,7 +7273,7 @@ async fn ui_protocol_connection(
                     &ledger,
                     &contracts,
                     connection_profile_id,
-                    connection_is_external,
+                    connection_is_external.then_some(&external_turns),
                     id,
                     params,
                 )
@@ -7276,7 +7294,7 @@ async fn ui_protocol_connection(
                     &ws,
                     &contracts,
                     connection_profile_id,
-                    connection_is_external,
+                    connection_is_external.then_some(&external_turns),
                     id,
                     params,
                 )
@@ -8163,7 +8181,7 @@ where
                         &ledger,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
-                        false,
+                        None,
                         id,
                         params,
                     )
@@ -8184,7 +8202,7 @@ where
                         &ws,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
-                        false,
+                        None,
                         id,
                         params,
                     )
@@ -19690,6 +19708,11 @@ fn handle_client_hello_rpc(
     // broadcast forwarder uses — without this sync a connection that
     // negotiated `projection.envelope.v1` mid-session would still
     // receive legacy frames on direct sends.
+    // `octos serve --host-managed`: an external client never chooses a
+    // workspace; its sessions stay in the workspace octos bound them to.
+    if ws.is_external() {
+        features.session_workspace_cwd = false;
+    }
     ws.update_live_features(*features);
     let transport = if features.stdio_transport {
         "stdio"
@@ -23597,8 +23620,8 @@ async fn handle_turn_start(
     features: ConnectionUiFeatures,
     id: String,
     params: TurnStartParams,
-) {
-    let _ = handle_turn_start_with_accept(
+) -> bool {
+    handle_turn_start_with_accept(
         ws,
         state,
         ledger,
@@ -23613,7 +23636,7 @@ async fn handle_turn_start(
         json!({ "accepted": true }),
         None,
     )
-    .await;
+    .await
 }
 
 fn voice_media_paths(media: &[FileRef]) -> Vec<String> {
@@ -25957,9 +25980,9 @@ async fn handle_approval_respond(
     ledger: &Arc<UiProtocolLedger>,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
-    external: bool,
+    external_turns: Option<&HashSet<String>>,
     id: String,
-    params: octos_core::ui_protocol::ApprovalRespondParams,
+    mut params: octos_core::ui_protocol::ApprovalRespondParams,
 ) {
     if let Err(error) = validate_session_scope(&params.session_id, None, connection_profile_id) {
         send_scope_error(ws, id, error);
@@ -25969,13 +25992,32 @@ async fn handle_approval_respond(
     // to the person, in the app (UPCR-2026-034). An external client (web or
     // terminal UI on the external token) never answers them; the approval
     // stays parked. UPCR-2026-036.
-    if external && super::host_managed::is_peer_session(&params.session_id) {
-        let _ = send_rpc_error(
-            ws,
-            Some(id),
-            super::host_managed::peer_answer_denied("approval"),
-        );
-        return;
+    if let Some(turns) = external_turns {
+        if super::host_managed::is_peer_session(&params.session_id) {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::peer_answer_denied("approval"),
+            );
+            return;
+        }
+        // Only an approval of a turn this external connection started, and
+        // once: an external answer never records a session-wide scope.
+        let own = contracts
+            .approvals
+            .pending_for_session(&params.session_id)
+            .into_iter()
+            .find(|pending| pending.approval_id == params.approval_id)
+            .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+        if !own {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::external_turn_denied("approval"),
+            );
+            return;
+        }
+        params.approval_scope = None;
     }
 
     let session_id = params.session_id.clone();
@@ -26052,7 +26094,7 @@ async fn handle_user_question_respond(
     ws: &WsConnection,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
-    external: bool,
+    external_turns: Option<&HashSet<String>>,
     id: String,
     params: UserQuestionRespondParams,
 ) {
@@ -26062,13 +26104,29 @@ async fn handle_user_question_respond(
     }
     // Same rule as `handle_approval_respond` for a host-owned peer's
     // questions (UPCR-2026-036).
-    if external && super::host_managed::is_peer_session(&params.session_id) {
-        let _ = send_rpc_error(
-            ws,
-            Some(id),
-            super::host_managed::peer_answer_denied("question"),
-        );
-        return;
+    if let Some(turns) = external_turns {
+        if super::host_managed::is_peer_session(&params.session_id) {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::peer_answer_denied("question"),
+            );
+            return;
+        }
+        let own = contracts
+            .user_questions
+            .pending_for_session(&params.session_id)
+            .into_iter()
+            .find(|pending| pending.question_id == params.question_id)
+            .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+        if !own {
+            let _ = send_rpc_error(
+                ws,
+                Some(id),
+                super::host_managed::external_turn_denied("question"),
+            );
+            return;
+        }
     }
 
     let outcome = match contracts.user_questions.respond_with_context(&params) {
@@ -35790,12 +35848,6 @@ async fn run_standalone_turn(
         .iter()
         .any(|file_ref| octos_bus::media::is_audio(&file_ref.path));
     let mut tool_registry = session_runtime.tools.snapshot_excluding(&[]);
-    // `octos serve --host-managed`: a turn an external client started gets
-    // no tool that runs code, administers the server or reaches the
-    // host-owned app peers (UPCR-2026-036).
-    if ws.is_external() {
-        tool_registry.retain(super::host_managed::external_turn_tool_allowed);
-    }
     tool_registry.set_active_context(normalize_tool_context(params.tool_context.as_deref()));
     // Stamp the per-turn snapshot with this session's key so
     // `spawn::register_with_lineage` writes `session_key:
@@ -37349,6 +37401,13 @@ async fn run_standalone_turn(
     session_runtime
         .profile
         .apply_tool_envelope(&mut tool_registry);
+    // `octos serve --host-managed`: an external client's turn keeps only the
+    // external tool allowlist, applied to the FINISHED registry so nothing
+    // registered above (spawn, peer_*, send_file, task tools, MCP, plugins)
+    // survives (UPCR-2026-036).
+    if ws.is_external() {
+        tool_registry.retain(super::host_managed::external_turn_tool_allowed);
+    }
     let tool_registry = Arc::new(tool_registry);
 
     // C1 fix: `progress_tx` / `progress_dropped` are now created earlier

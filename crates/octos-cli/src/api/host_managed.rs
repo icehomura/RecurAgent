@@ -70,6 +70,22 @@ pub const HOST_OWNED_PEER_SESSION_DENIED: &str = "host_owned_peer_session_denied
 /// `data.kind` of an external call naming a profile other than `_main`.
 pub const EXTERNAL_PROFILE_DENIED: &str = "external_profile_denied";
 
+/// `data.kind` of an external call carrying a parameter it may not set
+/// (sandbox overrides, non-upload media).
+pub const EXTERNAL_PARAMETER_DENIED: &str = "external_parameter_denied";
+
+/// `data.kind` of an external steer, interrupt or answer for a turn the
+/// connection did not start.
+pub const EXTERNAL_TURN_DENIED: &str = "external_turn_denied";
+
+/// The refusal for an external answer or turn control on a host turn.
+pub fn external_turn_denied(what: &str) -> octos_core::ui_protocol::RpcError {
+    octos_core::ui_protocol::RpcError::permission_denied(format!(
+        "an external client may answer or steer only its own turns ({what})"
+    ))
+    .with_data(serde_json::json!({ "kind": EXTERNAL_TURN_DENIED }))
+}
+
 /// `data.kind` of an external answer on a session it did not open.
 pub const EXTERNAL_SESSION_NOT_OPENED: &str = "external_session_not_opened";
 
@@ -110,18 +126,89 @@ fn session_ids(value: &serde_json::Value, under_session_key: bool, out: &mut Vec
         }
         serde_json::Value::Object(map) => {
             for (key, item) in map {
-                session_ids(item, key.contains("session"), out);
+                // Once under a `*session*` key, every nested string counts
+                // (an object- or array-shaped key cannot reset the scan).
+                session_ids(
+                    item,
+                    under_session_key || key.to_ascii_lowercase().contains("session"),
+                    out,
+                );
             }
         }
         _ => {}
     }
 }
 
+/// Every string under a key containing `topic`, at any depth.
+fn topics(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Array(items) => items.iter().for_each(|item| topics(item, out)),
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                match item.as_str() {
+                    Some(topic) if key.to_ascii_lowercase().contains("topic") => {
+                        out.push(topic.to_owned())
+                    }
+                    _ => topics(item, out),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_peer_topic(topic: &str) -> bool {
+    let topic = topic.trim().to_ascii_lowercase();
+    topic.starts_with("peer-")
+        || topic.starts_with(crate::peers::app_binding::PEER_CONTEXT_TOPIC_PREFIX)
+}
+
+/// A host-owned app-peer session named anywhere: a `*session*` value whose
+/// topic (or any `#`-suffix, in any case) is a peer's, or a `*topic*` value
+/// (`session/open` and `turn/start` take the topic separately).
 fn names_peer_session(params: &serde_json::Value) -> bool {
     let mut ids = Vec::new();
     session_ids(params, false, &mut ids);
-    ids.iter()
-        .any(|id| is_peer_session(&SessionKey(id.clone())))
+    let mut named_topics = Vec::new();
+    topics(params, &mut named_topics);
+    ids.iter().any(|id| {
+        is_peer_session(&SessionKey(id.clone())) || id.split('#').skip(1).any(is_peer_topic)
+    }) || named_topics.iter().any(|topic| is_peer_topic(topic))
+}
+
+/// Parameters an external client may not set: sandbox overrides (they widen
+/// read access or turn the sandbox off) and turn media that are not upload
+/// handles (a raw path would pass through to the model).
+fn sets_forbidden_parameter(params: &serde_json::Value) -> bool {
+    fn bad_media(item: &serde_json::Value) -> bool {
+        item.as_array().is_some_and(|media| {
+            media.iter().any(|entry| {
+                let path = entry
+                    .get("path")
+                    .and_then(serde_json::Value::as_str)
+                    .or(entry.as_str())
+                    .unwrap_or("");
+                !path.starts_with("up/") || path.contains("..")
+            })
+        })
+    }
+    fn walk(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Array(items) => items.iter().any(walk),
+            serde_json::Value::Object(map) => map.iter().any(|(key, item)| {
+                let key = key.to_ascii_lowercase();
+                // No sandbox override, no chosen workspace (`cwd`), and no
+                // separate `topic`: the topic is folded into the session key
+                // by the handlers, so it could name an app peer's session.
+                ((key.contains("sandbox") || key == "cwd" || key.contains("topic"))
+                    && !item.is_null())
+                    || (key == "media" && bad_media(item))
+                    || walk(item)
+            }),
+            _ => false,
+        }
+    }
+    walk(params)
 }
 
 /// A `profile_id` (at any depth) or a session's profile other than `_main`:
@@ -159,6 +246,7 @@ pub fn external_gate(
     method: &str,
     params: &serde_json::Value,
     opened_sessions: &std::collections::HashSet<String>,
+    own_turns: &std::collections::HashSet<String>,
 ) -> Result<(), octos_core::ui_protocol::RpcError> {
     use octos_core::ui_protocol::RpcError;
     if !EXTERNAL_ALLOWED_METHODS.contains(&method) {
@@ -166,6 +254,12 @@ pub fn external_gate(
             "{method} is not available to external clients of a host-managed server"
         ))
         .with_data(serde_json::json!({ "kind": EXTERNAL_METHOD_DENIED })));
+    }
+    if sets_forbidden_parameter(params) {
+        return Err(RpcError::permission_denied(format!(
+            "{method}: external clients may not set a sandbox, cwd or topic, or attach local files"
+        ))
+        .with_data(serde_json::json!({ "kind": EXTERNAL_PARAMETER_DENIED })));
     }
     if names_other_profile(params) {
         return Err(RpcError::permission_denied(format!(
@@ -185,6 +279,19 @@ pub fn external_gate(
             "{method}: host-owned app peer sessions belong to the host"
         ))
         .with_data(serde_json::json!({ "kind": HOST_OWNED_PEER_SESSION_DENIED })));
+    }
+    // Turn control only for this connection's own turns: the shared system
+    // conversation also runs the host's turns.
+    let turn_param = match method {
+        "turn/interrupt" => Some("turn_id"),
+        "turn/steer" => Some("expected_turn_id"),
+        _ => None,
+    };
+    if let Some(key) = turn_param {
+        let turn = params.get(key).and_then(serde_json::Value::as_str);
+        if !turn.is_some_and(|turn| own_turns.contains(turn)) {
+            return Err(external_turn_denied(method));
+        }
     }
     if EXTERNAL_ANSWER_METHODS.contains(&method) {
         let session = params.get("session_id").and_then(serde_json::Value::as_str);
@@ -213,9 +320,6 @@ pub const EXTERNAL_TURN_TOOLS: &[&str] = &[
     "grep",
     "list_dir",
     "code_structure",
-    "workspace_diff",
-    "workspace_log",
-    "workspace_show",
     "check_workspace_contract",
     "web_search",
     "web_fetch",

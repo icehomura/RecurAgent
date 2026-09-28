@@ -252,4 +252,211 @@ mod serve_host_managed {
         assert!(!output.status.success());
         assert!(String::from_utf8_lossy(&output.stderr).contains("reads its tokens from stdin"));
     }
+
+    /// A scripted OpenAI-compatible model: records the tool names of every
+    /// request and answers "ok" (streamed or not).
+    fn mock_model() -> (u16, std::sync::Arc<Mutex<Vec<Vec<String>>>>) {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let record = seen.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let record = record.clone();
+                std::thread::spawn(move || {
+                    let mut stream = stream;
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut length = 0usize;
+                    let mut first = String::new();
+                    if reader.read_line(&mut first).is_err() {
+                        return;
+                    }
+                    loop {
+                        let mut line = String::new();
+                        if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                            break;
+                        }
+                        if let Some(value) =
+                            line.to_ascii_lowercase().strip_prefix("content-length:")
+                        {
+                            length = value.trim().parse().unwrap_or(0);
+                        }
+                    }
+                    let mut body = vec![0u8; length];
+                    let _ = reader.read_exact(&mut body);
+                    if first.starts_with("GET") {
+                        let data =
+                            r#"{"object":"list","data":[{"id":"mock-model","object":"model"}]}"#;
+                        let _ = write!(
+                            stream,
+                            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{data}",
+                            data.len()
+                        );
+                        return;
+                    }
+                    let request: serde_json::Value =
+                        serde_json::from_slice(&body).unwrap_or_default();
+                    let tools: Vec<String> = request["tools"]
+                        .as_array()
+                        .map(|tools| {
+                            tools
+                                .iter()
+                                .filter_map(|tool| {
+                                    tool["function"]["name"].as_str().map(str::to_owned)
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    record.lock().unwrap().push(tools);
+                    if request["stream"] == true {
+                        let chunk = r#"{"id":"c1","object":"chat.completion.chunk","model":"mock-model","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}"#;
+                        let done = r#"{"id":"c1","object":"chat.completion.chunk","model":"mock-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+                        let _ = write!(
+                            stream,
+                            "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\ndata: {chunk}\n\ndata: {done}\n\ndata: [DONE]\n\n"
+                        );
+                    } else {
+                        let data = r#"{"id":"c1","object":"chat.completion","model":"mock-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+                        let _ = write!(
+                            stream,
+                            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{data}",
+                            data.len()
+                        );
+                    }
+                });
+            }
+        });
+        (port, seen)
+    }
+
+    /// Open the system conversation and start one turn over the real socket
+    /// with `token`; return the tool names the model received for it.
+    fn tools_for_a_turn(
+        port: u16,
+        token: &str,
+        seen: &std::sync::Arc<Mutex<Vec<Vec<String>>>>,
+    ) -> Vec<String> {
+        use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
+        let before = seen.lock().unwrap().len();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let mut request = format!("ws://127.0.0.1:{port}/api/ui-protocol/ws").into_client_request().unwrap();
+            request.headers_mut().insert("authorization", format!("Bearer {token}").parse().unwrap());
+            let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+            let session = "_main:api:octosense#system";
+            for (id, method, params) in [
+                ("open", "session/open", serde_json::json!({"session_id": session, "profile_id": "_main"})),
+                ("turn", "turn/start", serde_json::json!({"session_id": session, "turn_id": uuid::Uuid::now_v7().to_string(), "input": [{"kind": "text", "text": "hello"}]})),
+            ] {
+                let frame = serde_json::json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
+                socket.send(Message::Text(frame.to_string().into())).await.unwrap();
+                loop {
+                    let message = tokio::time::timeout(Duration::from_secs(60), socket.next()).await.unwrap().unwrap().unwrap();
+                    if let Message::Text(text) = message {
+                        let value: serde_json::Value = serde_json::from_str(text.as_str()).unwrap();
+                        if value["id"] == id {
+                            assert!(value.get("error").is_none(), "{method}: {value}");
+                            break;
+                        }
+                    }
+                }
+            }
+            let deadline = Instant::now() + Duration::from_secs(60);
+            while seen.lock().unwrap().len() == before {
+                assert!(Instant::now() < deadline, "the model was never called");
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        });
+        seen.lock().unwrap()[before].clone()
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn serve_host_managed_gives_an_external_turn_only_the_allowlisted_tools() {
+        let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let (model_port, seen) = mock_model();
+        std::fs::create_dir_all(dir.path().join("profiles")).unwrap();
+        std::fs::write(
+            dir.path().join("profiles/_main.json"),
+            serde_json::json!({
+                "id": "_main", "name": "Main", "enabled": true,
+                "created_at": "2026-09-28T00:00:00Z", "updated_at": "2026-09-28T00:00:00Z",
+                "config": {"llm": {"primary": {"family_id": "local", "model_id": "mock-model",
+                    "route": {"base_url": format!("http://127.0.0.1:{model_port}/v1"), "api_type": "openai"}}}}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut child = command(dir.path(), &["--port", "0"]).spawn().unwrap();
+        send_tokens(&mut child);
+        let (port, _lines) = announced_port(&mut child);
+        let external = tools_for_a_turn(port, EXTERNAL, &seen);
+        let host = tools_for_a_turn(port, HOST, &seen);
+        eprintln!(
+            "external turn tools: {external:?}\nhost turn tools: {} tools",
+            host.len()
+        );
+        drop(child.stdin.take());
+        let _ = exits_within(&mut child, Duration::from_secs(30));
+        // Exactly the allowlist the server offers (those it has registered),
+        // nothing else: no shell, spawn, peer_*, send_file, task, MCP or
+        // plugin tool.
+        let allowlist = [
+            "read_file",
+            "write_file",
+            "edit_file",
+            "diff_edit",
+            "apply_patch",
+            "glob",
+            "grep",
+            "list_dir",
+            "code_structure",
+            "check_workspace_contract",
+            "web_search",
+            "web_fetch",
+            "ask_user_question",
+            "recall",
+            "recall_memory",
+            "memory_search",
+            "memory_load",
+            "view_image",
+            "view_video",
+            "tool_search",
+        ];
+        assert!(
+            !external.is_empty(),
+            "the external turn has its read/write tools"
+        );
+        for tool in &external {
+            assert!(
+                allowlist.contains(&tool.as_str()),
+                "external turn got {tool}: {external:?}"
+            );
+        }
+        let expected: Vec<&str> = allowlist
+            .iter()
+            .copied()
+            .filter(|t| host.iter().any(|h| h == t))
+            .collect();
+        let mut got: Vec<&str> = external.iter().map(String::as_str).collect();
+        got.sort_unstable();
+        let mut expected_sorted = expected.clone();
+        expected_sorted.sort_unstable();
+        assert_eq!(
+            got, expected_sorted,
+            "the external turn gets every allowlisted tool the host has"
+        );
+        // The host's own turn keeps its full surface (the filter is per connection).
+        assert!(host.len() > external.len(), "host: {host:?}");
+        assert!(
+            host.iter()
+                .any(|t| t == "spawn" || t == "shell" || t.starts_with("peer_")),
+            "host: {host:?}"
+        );
+    }
 }

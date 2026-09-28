@@ -82,11 +82,20 @@ Moreover:
 - `approval/respond` and `user_question/respond` are accepted only for a
   session the same connection opened successfully
   (`external_session_not_opened`);
+- a `sandbox` override, a `cwd`, any key containing `topic`, or turn `media`
+  that are not upload handles fail with `external_parameter_denied`;
+  `session.workspace_cwd.v1` is never negotiated for such a connection;
+- `turn/interrupt` (`turn_id`), `turn/steer` (`expected_turn_id`),
+  `approval/respond` and `user_question/respond` are accepted only for turns
+  this connection started (`external_turn_denied`), and an external
+  approval never records an approval scope;
+- an external connection drains no background continuations;
 - a call naming a profile other than `_main` (a `profile_id` at any depth,
   or another profile's session key) fails with `external_profile_denied`;
 - a turn started by such a connection gets a fixed allowlist of built-in
-  workspace, web, question and memory tools (default-deny: no command or
-  code execution, delegation, administration, peers, MCP or plugin tools),
+  workspace, web, question and memory tools, applied to the finished
+  per-turn registry (default-deny: no command or code execution, git,
+  delegation, administration, peers, `send_file`, task, MCP or plugin tools),
   so the model cannot drive the host-owned peers or read the host's
   processes through it.
 
@@ -137,6 +146,16 @@ never enables. The host stops the server by closing its stdin.
   plugin names)
 - `should_confine_external_calls_to_the_main_profile_at_any_depth`
 - `should_keep_pairing_off_when_the_enable_cannot_be_audited`
+- `should_catch_peer_topics_sandbox_overrides_and_local_media`
+- `should_refuse_an_external_session_open_in_a_foreign_workspace`
+- `should_let_an_external_client_answer_only_its_own_turns_approvals_once`
+- `tests/serve_host_managed.rs`
+  `serve_host_managed_gives_an_external_turn_only_the_allowlisted_tools`:
+  a real WS turn on `#system` with a scripted model; the model receives
+  exactly the allowlisted tools, while the host's own turn keeps its full
+  set
+- octos-agent: `should_refuse_process_environments_in_every_scope`,
+  `should_refuse_a_workspace_symlink_into_a_process_view`
 - `a_rate_limited_code_refills_its_budget_instead_of_burning`
 - `should_audit_the_pairing_ceremony_without_the_code`
 - `tests/serve_host_managed.rs`: tokens on stdin (never in

@@ -1588,7 +1588,16 @@ impl ServeCommand {
             crate::process_manager::ProcessManager::new(profile_store.clone())
                 .with_solo_in_process(solo_in_process)
                 .with_bridge_js(bridge_js_path)
-                .with_serve_config(effective_serve_port, auth_token.clone())
+                // Host-managed: gateways never start, and the host token
+                // stays out of every child's reach.
+                .with_serve_config(
+                    effective_serve_port,
+                    if self.host_managed {
+                        None
+                    } else {
+                        auth_token.clone()
+                    },
+                )
                 // Section B (codex review round-5 P1.2): every spawned
                 // gateway inherits the host's strict-signing policy via
                 // an env var. `Config::from_file` OR-merges it onto the
