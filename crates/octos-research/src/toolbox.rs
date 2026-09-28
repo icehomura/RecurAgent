@@ -460,7 +460,7 @@ impl Toolbox {
         scope.check_domain(url)?;
         let page = self.reader.read(url).await?;
         let canonical = page.canonical_url();
-        scope.check_domain(&canonical)?;
+        check_read_location(scope, &page.final_url, &canonical)?;
         let domain = urls::domain_of(&canonical).unwrap_or_default();
         let summary = crate::item::extractive_summary(&page.text, 600);
         let item = ResearchItem {
@@ -491,7 +491,11 @@ impl Toolbox {
         doc.items = vec![item];
         let dir = app_dir.join("research");
         let _ = std::fs::create_dir_all(&dir);
-        let text_file = dir.join(format!("{}-{}.md", slug(url), now.format("%Y%m%dT%H%M%S")));
+        let text_file = unique_path(
+            &dir,
+            &format!("{}-{}", slug(url), now.format("%Y%m%dT%H%M%S")),
+            "md",
+        );
         std::fs::write(&text_file, &page.text).map_err(|e| format!("write page text: {e}"))?;
         doc.items[0].file = text_file
             .strip_prefix(app_dir)
@@ -499,6 +503,28 @@ impl Toolbox {
             .map(|p| p.display().to_string());
         write_items(doc, app_dir, "read", now)
     }
+}
+
+/// A page that was read must be inside the grant both where it was actually
+/// fetched from (after redirects) and under the URL it is filed as. The
+/// canonical alone is not enough: a page may name its parent domain, so an
+/// allowed URL redirecting into a denied subdomain would otherwise pass.
+fn check_read_location(scope: &Scope, final_url: &str, canonical: &str) -> Result<(), String> {
+    scope.check_domain(final_url)?;
+    scope.check_domain(canonical)
+}
+
+/// `dir/<stem>.<ext>`, or `dir/<stem>-2.<ext>`, … if that name is taken, so
+/// two calls in the same second never overwrite each other.
+fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    let first = dir.join(format!("{stem}.{ext}"));
+    if !first.exists() {
+        return first;
+    }
+    (2..)
+        .map(|n| dir.join(format!("{stem}-{n}.{ext}")))
+        .find(|p| !p.exists())
+        .unwrap_or(first)
 }
 
 fn slug(s: &str) -> String {
@@ -528,11 +554,15 @@ fn write_items(
 ) -> Result<ToolboxResult, String> {
     let dir = app_dir.join("research");
     std::fs::create_dir_all(&dir).map_err(|e| format!("app folder: {e}"))?;
-    let file = dir.join(format!(
-        "{kind}-{}-{}.items.json",
-        slug(&doc.query),
-        now.format("%Y%m%dT%H%M%S")
-    ));
+    let file = unique_path(
+        &dir,
+        &format!(
+            "{kind}-{}-{}",
+            slug(&doc.query),
+            now.format("%Y%m%dT%H%M%S")
+        ),
+        "items.json",
+    );
     for (i, item) in doc.items.iter_mut().enumerate() {
         item.citation = Some(i + 1);
     }

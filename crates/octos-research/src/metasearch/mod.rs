@@ -695,14 +695,14 @@ impl Metasearch {
             );
         }
         match self.call_engine(call, req, started).await {
-            Ok((hits, cached)) => {
+            Ok((hits, cached, partial)) => {
                 let status = if hits.is_empty() {
                     EngineStatus::Empty
                 } else {
                     EngineStatus::Ok
                 };
                 self.record(&m.id, status, None);
-                (report(status, hits.len(), None, cached), hits)
+                (report(status, hits.len(), partial, cached), hits)
             }
             Err(CallError::Timeout) => {
                 self.record(&m.id, EngineStatus::Timeout, None);
@@ -726,7 +726,7 @@ impl Metasearch {
         call: &Call<'_>,
         req: &SearchRequest,
         started: Instant,
-    ) -> Result<(Vec<RankedHit>, bool), CallError> {
+    ) -> Result<(Vec<RankedHit>, bool, Option<String>), CallError> {
         let e = call.engine;
         let m = &e.manifest;
         let hosts = self.allowed_hosts(m);
@@ -746,7 +746,7 @@ impl Metasearch {
         let requests = sandbox::build_request(&sb, query, &opts)
             .map_err(|err| CallError::Failed(err, None))?;
         if requests.is_empty() {
-            return Ok((Vec::new(), false));
+            return Ok((Vec::new(), false, None));
         }
         if requests.len() > m.max_requests {
             return Err(CallError::Failed(
@@ -771,6 +771,7 @@ impl Metasearch {
         let mut lists = Vec::new();
         let mut all_cached = true;
         let mut first_err = None;
+        let mut failed = 0usize;
         for (sreq, r) in requests.iter().zip(results) {
             match r {
                 Ok((items, cached)) => {
@@ -778,6 +779,7 @@ impl Metasearch {
                     lists.push(items);
                 }
                 Err(err) => {
+                    failed += 1;
                     if !single {
                         tracing::warn!(engine = %m.id, url = %sreq.url, "metasearch request failed");
                     }
@@ -788,6 +790,17 @@ impl Metasearch {
         if lists.is_empty() {
             return Err(first_err.unwrap_or(CallError::Failed("no response".into(), None)));
         }
+        // Some requests of a multi-request engine failed: say so in the
+        // report instead of only in the log.
+        let partial = (failed > 0).then(|| {
+            let why = match &first_err {
+                Some(CallError::Failed(msg, _)) => msg.clone(),
+                Some(CallError::Timeout) => "timed out".to_string(),
+                Some(CallError::Skip(_, msg)) => msg.clone(),
+                None => String::new(),
+            };
+            format!("{failed} of {} requests failed: {why}", requests.len())
+        });
         // Interleave so no single feed/page takes every top position.
         let mut items = Vec::new();
         let longest = lists.iter().map(Vec::len).max().unwrap_or(0);
@@ -810,7 +823,7 @@ impl Metasearch {
                 hit,
             })
             .collect();
-        Ok((hits, all_cached))
+        Ok((hits, all_cached, partial))
     }
 
     /// Perform one request an engine built (robots when enabled, cache,

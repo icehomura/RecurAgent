@@ -221,6 +221,41 @@ async fn should_refuse_to_read_pages_outside_the_domain_grant() {
 }
 
 #[test]
+fn should_check_the_fetched_location_not_only_the_canonical() {
+    let scope = Scope::from_grant(&json!({
+        "domains_allow": ["example.com"],
+        "domains_deny": ["blog.example.com"]
+    }))
+    .unwrap();
+    // Redirected into the denied subdomain; the page names its parent
+    // domain as canonical (same host family, so the reader accepts it).
+    let err = check_read_location(
+        &scope,
+        "https://blog.example.com/post",
+        "https://example.com/post",
+    )
+    .unwrap_err();
+    assert!(err.contains("outside this app's research grant"), "{err}");
+    assert!(check_read_location(&scope, "https://example.com/a", "https://example.com/a").is_ok());
+}
+
+#[test]
+fn should_not_overwrite_results_written_in_the_same_second() {
+    let dir = std::env::temp_dir().join(format!("octos-toolbox-unique-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let a = unique_path(&dir, "search-q-20260927T120000", "items.json");
+    std::fs::write(&a, "a").unwrap();
+    let b = unique_path(&dir, "search-q-20260927T120000", "items.json");
+    assert_ne!(a, b);
+    assert!(
+        b.ends_with("search-q-20260927T120000-2.items.json"),
+        "{b:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn should_describe_the_four_toolbox_tools() {
     let specs = tool_specs();
     let names: Vec<&str> = specs.iter().map(|s| s["name"].as_str().unwrap()).collect();
