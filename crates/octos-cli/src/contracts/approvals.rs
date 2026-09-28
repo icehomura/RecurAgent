@@ -18,6 +18,21 @@ struct ApprovalEntry {
     /// Covers exactly one call: no remembered scope may be recorded from it
     /// (UPCR-2026-035 host-routed app tools).
     once_only: bool,
+    /// The connection whose turn raised it, and for a host-routed call the
+    /// peer's route. Kept on the entry itself so the answer check can never
+    /// fail open (the turn id alone is client-chosen and not unique).
+    owner: Option<ApprovalOwner>,
+}
+
+/// Who raised a runtime approval (UPCR-2026-035 / UPCR-2026-036).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ApprovalOwner {
+    /// The connection whose turn raised the approval.
+    pub(crate) connection: u64,
+    /// For a host-routed app tool's call: the peer's route key
+    /// (`crate::peers::host_tools::route_key`). Only the connection that
+    /// raised it or the peer's current host connection may answer it.
+    pub(crate) host_route: Option<String>,
 }
 
 #[derive(Debug)]
@@ -235,6 +250,7 @@ impl PendingApprovalStore {
                 runtime_resumable: false,
                 response_tx: None,
                 once_only: false,
+                owner: None,
             },
         );
     }
@@ -250,6 +266,7 @@ impl PendingApprovalStore {
                 runtime_resumable: false,
                 response_tx: None,
                 once_only: false,
+                owner: None,
             },
         );
         event
@@ -269,6 +286,17 @@ impl PendingApprovalStore {
         event: ApprovalRequestedEvent,
         once_only: bool,
     ) -> tokio::sync::oneshot::Receiver<ApprovalDecision> {
+        self.request_runtime_owned(event, once_only, None)
+    }
+
+    /// [`Self::request_runtime_with`] that also records who raised the
+    /// approval ([`ApprovalOwner`]).
+    pub(crate) fn request_runtime_owned(
+        &self,
+        event: ApprovalRequestedEvent,
+        once_only: bool,
+        owner: Option<ApprovalOwner>,
+    ) -> tokio::sync::oneshot::Receiver<ApprovalDecision> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let mut entries = self.entries.write().unwrap_or_else(|p| p.into_inner());
         entries.insert(
@@ -280,9 +308,18 @@ impl PendingApprovalStore {
                 runtime_resumable: true,
                 response_tx: Some(tx),
                 once_only,
+                owner,
             },
         );
         rx
+    }
+
+    /// Who raised approval `approval_id`, if it was recorded.
+    pub(crate) fn owner(&self, approval_id: &ApprovalId) -> Option<ApprovalOwner> {
+        let entries = self.entries.read().unwrap_or_else(|p| p.into_inner());
+        entries
+            .get(approval_id)
+            .and_then(|entry| entry.owner.clone())
     }
 
     pub(crate) fn pending_for_session(

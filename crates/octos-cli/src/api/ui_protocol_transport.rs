@@ -6053,21 +6053,29 @@ impl octos_agent::ToolApprovalRequester for UiProtocolApprovalRequester {
             return ToolApprovalDecision::Deny;
         }
 
-        let response_rx = self
-            .contracts
-            .approvals
-            .request_runtime_with(event.clone(), once_only);
         // UPCR-2026-035: a host-routed call's approval belongs to the peer's
         // host connection only: other connections neither see it (live or on
         // replay) nor answer it. Registered before the ledger append below.
-        if once_only {
-            if let Some(slug) = crate::peers::host_tools::host_peer_slug_of(&self.session_id) {
-                crate::peers::host_tools::register_host_approval(
-                    &approval_id.0.to_string(),
-                    &self.peers_root,
-                    slug,
-                );
-            }
+        // The entry records who raised it, so `approval/respond` checks the
+        // connection, never just the (client-chosen) turn id.
+        let host_slug = once_only
+            .then(|| crate::peers::host_tools::host_peer_slug_of(&self.session_id))
+            .flatten();
+        let owner = crate::contracts::approvals::ApprovalOwner {
+            connection: self.ws.connection_id.0,
+            host_route: host_slug
+                .map(|slug| crate::peers::host_tools::route_key(&self.peers_root, slug)),
+        };
+        let response_rx =
+            self.contracts
+                .approvals
+                .request_runtime_owned(event.clone(), once_only, Some(owner));
+        if let Some(slug) = host_slug {
+            crate::peers::host_tools::register_host_approval(
+                &approval_id.0.to_string(),
+                &self.peers_root,
+                slug,
+            );
         }
 
         // #1449 drop-guard: arm a guard keyed to THIS pending approval the
@@ -15495,6 +15503,24 @@ struct RawPeerToolsRegisterParams {
 
 /// UPCR-2026-035 `peer/tools/register` — declare (replace) a host-owned app
 /// peer's tool set and route its app tool calls to THIS connection.
+/// The connection a turn counts as driven by for a host peer's tools
+/// (UPCR-2026-035). A kernel-internal continuation (a peer_send_input
+/// injection, a background result) is nobody's turn: it never gets a host
+/// peer's tools, whichever connection it happens to run on; the host drives
+/// the peer's runs itself. An external client of a host-managed server is
+/// never a peer's host either (UPCR-2026-036).
+fn host_tools_turn_connection(ws: &WsConnection, internal_continuation: bool) -> Option<u64> {
+    (!internal_continuation && !ws.is_external()).then_some(ws.connection_id.0)
+}
+
+/// An external client's `peer/tools/register` or `peer/tool/result`.
+fn external_host_tools_denied(method: &str) -> RpcError {
+    RpcError::permission_denied(format!(
+        "{method} is not available to external clients of a host-managed server"
+    ))
+    .with_data(json!({ "kind": super::host_managed::EXTERNAL_METHOD_DENIED }))
+}
+
 fn raw_peer_tools_register(
     ws: &WsConnection,
     state: &Arc<AppState>,
@@ -19754,6 +19780,11 @@ async fn handle_raw_appui_rpc(
         }
         APPUI_METHOD_PEER_CONTEXT_CLOSE => {
             raw_peer_context_close(state, request, connection_profile_id).await
+        }
+        // Defence in depth behind `external_gate`: an external client of a
+        // host-managed server never registers or answers host tools.
+        APPUI_METHOD_PEER_TOOLS_REGISTER | APPUI_METHOD_PEER_TOOL_RESULT if ws.is_external() => {
+            Err(external_host_tools_denied(&request.method))
         }
         APPUI_METHOD_PEER_TOOLS_REGISTER => {
             raw_peer_tools_register(ws, state, request, connection_profile_id)
@@ -26430,13 +26461,20 @@ async fn handle_approval_respond(
             return;
         }
         // Only an approval of a turn this external connection started, and
-        // once: an external answer never records a session-wide scope.
-        let own = contracts
+        // once: an external answer never records a session-wide scope. Turn
+        // ids are client-chosen and not unique, so the approval must also
+        // have been raised on this very connection.
+        let raised_here = contracts
             .approvals
-            .pending_for_session(&params.session_id)
-            .into_iter()
-            .find(|pending| pending.approval_id == params.approval_id)
-            .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
+            .owner(&params.approval_id)
+            .is_some_and(|owner| owner.connection == ws.connection_id.0);
+        let own = raised_here
+            && contracts
+                .approvals
+                .pending_for_session(&params.session_id)
+                .into_iter()
+                .find(|pending| pending.approval_id == params.approval_id)
+                .is_some_and(|pending| turns.contains(&pending.turn_id.0.to_string()));
         if !own {
             let _ = send_rpc_error(
                 ws,
@@ -26448,11 +26486,24 @@ async fn handle_approval_respond(
         params.approval_scope = None;
     }
     // UPCR-2026-035: a host-routed call's approval is answered only on the
-    // peer's host connection.
-    if !crate::peers::host_tools::host_approval_visible(
-        &params.approval_id.0.to_string(),
-        ws.connection_id.0,
-    ) {
+    // connection that raised it or the peer's current host connection.
+    let host_owner_ok = contracts
+        .approvals
+        .owner(&params.approval_id)
+        .and_then(|owner| owner.host_route.map(|route| (route, owner.connection)))
+        .is_none_or(|(route, raised_on)| {
+            crate::peers::host_tools::host_approval_answerable(
+                &route,
+                raised_on,
+                ws.connection_id.0,
+            )
+        });
+    if !host_owner_ok
+        || !crate::peers::host_tools::host_approval_visible(
+            &params.approval_id.0.to_string(),
+            ws.connection_id.0,
+        )
+    {
         let _ = send_rpc_error(ws, Some(id), host_connection_only_error("approval/respond"));
         return;
     }
@@ -36513,7 +36564,7 @@ async fn run_standalone_turn(
     let app_context_allowed = crate::peers::host_tools::app_context_allowed(
         &session_runtime.profile.data_dir.join("peers"),
         &session_id,
-        (!internal_master_continuation).then_some(ws.connection_id.0),
+        host_tools_turn_connection(&ws, internal_master_continuation),
     );
     session_runtime
         .agent
@@ -37944,11 +37995,7 @@ async fn run_standalone_turn(
             &peers_root,
             &session_id,
             &turn_id.0.to_string(),
-            // A kernel-internal continuation (a peer_send_input injection,
-            // a background result) is nobody's turn: it never gets a host
-            // peer's tools, whichever connection it happens to run on. The
-            // host drives the peer's runs itself.
-            (!internal_master_continuation).then_some(ws.connection_id.0),
+            host_tools_turn_connection(&ws, internal_master_continuation),
         );
     }
     // `octos serve --host-managed`: an external client's turn keeps only the
@@ -37956,7 +38003,7 @@ async fn run_standalone_turn(
     // registered above (spawn, peer_*, send_file, task tools, MCP, plugins)
     // survives (UPCR-2026-036).
     if ws.is_external() {
-        tool_registry.retain(super::host_managed::external_turn_tool_allowed);
+        tool_registry.retain_with_origin(super::host_managed::external_turn_tool_kept);
     }
     let tool_registry = Arc::new(tool_registry);
 

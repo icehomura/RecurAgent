@@ -338,6 +338,13 @@ pub fn external_turn_tool_allowed(name: &str) -> bool {
     EXTERNAL_TURN_TOOLS.contains(&name)
 }
 
+/// Whether an external turn keeps the registered tool `name` of `origin`:
+/// only a built-in tool on [`EXTERNAL_TURN_TOOLS`]. A host-routed app tool
+/// (UPCR-2026-035) is dropped whatever its name.
+pub fn external_turn_tool_kept(name: &str, origin: octos_agent::ToolOrigin) -> bool {
+    origin == octos_agent::ToolOrigin::Builtin && external_turn_tool_allowed(name)
+}
+
 /// Host-managed authentication and lifecycle state (`AppState::host_managed`).
 pub struct HostManaged {
     host_token: String,

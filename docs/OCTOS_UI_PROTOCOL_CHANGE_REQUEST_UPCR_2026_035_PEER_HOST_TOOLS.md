@@ -73,7 +73,7 @@ never silently weakens a tool:
 
 | Field | Meaning |
 | --- | --- |
-| `name` | `<app>.<tool>`: 2–4 `.`-separated segments of `[a-z][a-z0-9_]{0,31}`. The model sees it with `.` replaced by `_` (`news.list` → `news_list`; providers refuse `.` in tool names). A registration whose model names collide with each other or with an allowed generic tool is refused. |
+| `name` | `<app>.<tool>`: 2–4 `.`-separated segments of `[a-z][a-z0-9_]{0,31}`. The model sees it with `.` replaced by `_` (`news.list` → `news_list`; providers refuse `.` in tool names). A registration whose model names collide with each other or with any peer-safe generic tool (allowed or not, e.g. `read.file` → `read_file`) is refused. |
 | `input_schema` | JSON Schema object (`"type": "object"`). ≤ 16 KiB. Checked structurally against the meta-schema's shapes: `type` names JSON Schema types, `properties` is an object of schemas, `required` is an array of strings, `items`, `additionalProperties`, `enum` and `anyOf`/`oneOf`/`allOf` are well formed (boolean subschemas allowed), nesting ≤ 10. |
 | `output_schema` | Optional, same rules. Stored and echoed; not enforced by the kernel. |
 | `risk` | `read`, `act` or `destructive`. |
@@ -365,6 +365,34 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   themselves are not logged. The file is capped at 16 MiB: at the cap one
   `audit_full` marker is written and later rows are dropped; the host owns
   rotation.
+
+### Host-managed serve (UPCR-2026-036)
+
+Under `octos serve --host-managed`, an external client (the external token)
+is never a peer's host:
+
+- `peer/tools/register` and `peer/tool/result` are refused to it
+  (`permission_denied`, `data.kind: "external_method_denied"`), both by the
+  external method allowlist and again in the handlers, even with a valid
+  peer `host_token`. Only a host-token connection can register, so only it
+  becomes a tool host.
+- It cannot name a `peer-`/`peerctx-` session at all
+  (`host_owned_peer_session_denied`), and a turn it drives never counts as
+  the host's: it gets no host tools and no app context.
+- Every host-routed tool is registered with the tool origin
+  `ToolOrigin::HostRouted` (`octos_agent::ToolOrigin`, recorded by
+  `ToolRegistry` from `Tool::origin`). An external turn keeps only
+  `ToolOrigin::Builtin` tools on its allowlist, so a host-routed tool is
+  excluded by construction whatever its name.
+
+Answering approvals: every runtime approval records the connection whose
+turn raised it, and a host-routed call's approval also records the peer's
+route. `approval/respond` for a host-routed call is accepted only from the
+connection that raised it or the peer's current host connection
+(`peer_host_connection_only`); this is read from the approval itself, so it
+never fails open. An external client answers only approvals raised on its
+own connection by its own turns: a turn id alone is not enough, since turn
+ids are client-chosen.
 
 ## One declaration source: `tools.json`
 

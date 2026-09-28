@@ -46,7 +46,7 @@ use serde_json::{Value, json};
 
 use super::{
     ConcurrencyClass, TOOL_APPROVAL_CTX, Tool, ToolApprovalDecision, ToolApprovalRequest,
-    ToolContext, ToolResult,
+    ToolContext, ToolOrigin, ToolResult,
 };
 
 /// Maximum serialized size of one call's arguments.
@@ -322,6 +322,10 @@ impl Tool for HostRoutedTool {
 
     fn blocks_on_human_input(&self) -> bool {
         self.decl.gated()
+    }
+
+    fn origin(&self) -> ToolOrigin {
+        ToolOrigin::HostRouted
     }
 
     async fn execute(&self, args: &Value) -> Result<ToolResult> {
@@ -1021,5 +1025,33 @@ mod tests {
         background.background = true;
         let tool = in_peer(background, &router, TTL);
         assert!(run(&tool, None, "c5", json!({"id": 1})).await.success);
+    }
+
+    #[test]
+    fn should_mark_a_host_routed_tool_by_origin_whatever_its_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = crate::tools::ToolRegistry::with_builtins(dir.path());
+        assert_eq!(registry.origin("read_file"), Some(ToolOrigin::Builtin));
+        let router = Arc::new(FakeRouter::default());
+        registry.register(in_app(decl("news.list", HostToolRisk::Read), &router, TTL));
+        // Even a host tool that took a built-in tool's name.
+        let mut masquerade = decl("search.grep", HostToolRisk::Read);
+        masquerade.model_name = "grep".into();
+        registry.register(in_app(masquerade, &router, TTL));
+        assert_eq!(registry.origin("news_list"), Some(ToolOrigin::HostRouted));
+        assert_eq!(registry.origin("grep"), Some(ToolOrigin::HostRouted));
+        assert_eq!(registry.origin("missing"), None);
+
+        // Snapshots carry the origin.
+        let snapshot = registry.snapshot_excluding(&["news_list"]);
+        assert_eq!(snapshot.origin("grep"), Some(ToolOrigin::HostRouted));
+        assert_eq!(snapshot.origin("news_list"), None);
+
+        // Selecting by origin drops every host tool, keeps the built-ins.
+        registry.retain_with_origin(|_, origin| origin == ToolOrigin::Builtin);
+        let names = registry.tool_names();
+        assert!(!names.iter().any(|n| n == "news_list" || n == "grep"));
+        assert!(names.iter().any(|n| n == "read_file"));
+        assert_eq!(registry.origin("grep"), None);
     }
 }

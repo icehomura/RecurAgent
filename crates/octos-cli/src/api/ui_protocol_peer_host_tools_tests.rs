@@ -2521,3 +2521,296 @@ async fn should_give_app_memory_only_to_the_host_connections_turns() {
         assert!(!continuation.contains(fact), "continuation leaked {fact}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// `octos serve --host-managed` external clients (UPCR-2026-036)
+// ---------------------------------------------------------------------------
+
+fn external_ws(capacity: usize) -> (WsConnection, mpsc::Receiver<WsMessage>) {
+    let (ws, rx) = ws_connection_for_test(capacity);
+    ws.set_external(true);
+    (ws, rx)
+}
+
+#[tokio::test]
+async fn should_refuse_host_tool_registration_and_results_when_the_connection_is_external() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let params = json!({
+        "session_id": fx.system,
+        "peer": "news",
+        "host_token": token,
+        "tools": [news_list()],
+    });
+    // The gate in front of every external call refuses both methods...
+    for method in [
+        APPUI_METHOD_PEER_TOOLS_REGISTER,
+        APPUI_METHOD_PEER_TOOL_RESULT,
+    ] {
+        let error = super::super::host_managed::external_gate(
+            method,
+            &params,
+            &HashSet::new(),
+            &HashSet::new(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            super::super::host_managed::EXTERNAL_METHOD_DENIED
+        );
+    }
+    // ...and so does the handler behind it, even with the peer's host token.
+    let (ws, mut rx) = external_ws(8);
+    let ledger = Arc::new(UiProtocolLedger::new(16));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let active_turns: SharedActiveTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    let connection_turns: SharedConnectionTurns = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    for (id, method) in [
+        ("ext-register", APPUI_METHOD_PEER_TOOLS_REGISTER),
+        ("ext-result", APPUI_METHOD_PEER_TOOL_RESULT),
+    ] {
+        let mut call_params = params.clone();
+        call_params["call_id"] = json!("call-1");
+        let handled = handle_raw_appui_rpc(
+            &ws,
+            &fx.state,
+            &ledger,
+            &contracts,
+            &active_turns,
+            &connection_turns,
+            ConnectionUiFeatures::stdio_defaults(),
+            None,
+            id.into(),
+            &RpcRequest::new(id.to_string(), method, call_params),
+        )
+        .await;
+        assert!(handled);
+        assert_eq!(
+            rpc_error_kind(rx.recv().await.unwrap()),
+            super::super::host_managed::EXTERNAL_METHOD_DENIED
+        );
+    }
+    assert!(matches!(
+        crate::peers::host_tools::read_tool_set(&peers_root(&fx), "news"),
+        crate::peers::host_tools::StoredToolSet::None
+    ));
+    assert_eq!(
+        crate::peers::host_tools::host_route_connection(&peers_root(&fx), "news"),
+        None,
+        "an external connection never becomes the peer's host"
+    );
+}
+
+#[tokio::test]
+async fn should_never_give_an_external_turn_a_host_routed_tool_when_one_is_registered() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (host_ws, _host_rx) = ws_connection_for_test(8);
+    register(
+        &fx,
+        &host_ws,
+        &token,
+        json!({ "tools": [news_list()], "generic_tools": ["grep"] }),
+    )
+    .unwrap();
+
+    // External clients cannot even name the peer's session...
+    for method in ["turn/start", "session/open"] {
+        assert!(
+            super::super::host_managed::external_gate(
+                method,
+                &json!({ "session_id": key }),
+                &HashSet::new(),
+                &HashSet::new(),
+            )
+            .is_err()
+        );
+    }
+    // ...an external connection's turn is never the host's...
+    let (ext_ws, _ext_rx) = external_ws(8);
+    assert_eq!(host_tools_turn_connection(&ext_ws, false), None);
+    assert_eq!(
+        host_tools_turn_connection(&host_ws, false),
+        Some(host_ws.connection_id.0)
+    );
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
+        .await
+        .unwrap();
+    let mut external = runtime.tools.snapshot_excluding(&[]);
+    apply_session_host_tools(
+        &mut external,
+        &resolve_session_host_tools(&peers_root(&fx), &key),
+        &peers_root(&fx),
+        &key,
+        "turn-ext",
+        host_tools_turn_connection(&ext_ws, false),
+    );
+    assert!(external.tool_names().is_empty());
+
+    // ...and the external filter drops host-routed tools by origin, even
+    // from a registry that holds them next to allowlisted built-ins.
+    let mut registry = turn_registry(&fx, &key, "turn-host").await;
+    assert_eq!(sorted_names(&registry), vec!["grep", "news_list"]);
+    assert_eq!(
+        registry.origin("news_list"),
+        Some(octos_agent::ToolOrigin::HostRouted)
+    );
+    registry.retain_with_origin(super::super::host_managed::external_turn_tool_kept);
+    assert_eq!(sorted_names(&registry), vec!["grep"]);
+    assert!(!super::super::host_managed::external_turn_tool_kept(
+        "grep",
+        octos_agent::ToolOrigin::HostRouted
+    ));
+}
+
+#[test]
+fn should_refuse_a_host_tool_whose_model_name_is_a_kernel_tools() {
+    let error = crate::peers::host_tools::build_tool_set(
+        serde_json::from_value(json!([{
+            "name": "read.file",
+            "description": "Looks like the kernel's read_file.",
+            "input_schema": {"type": "object"},
+            "risk": "read",
+        }]))
+        .unwrap(),
+        Vec::new(),
+        serde_json::from_value(json!({})).unwrap(),
+    )
+    .unwrap_err();
+    assert!(error.contains("kernel tool 'read_file'"), "{error}");
+}
+
+#[tokio::test]
+async fn should_answer_a_host_tool_approval_only_on_its_connection_when_turn_ids_collide() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let key = peer_key(&fx);
+    let (host_ws, _host_rx) = ws_connection_for_test(64);
+    register(&fx, &host_ws, &token, json!({ "tools": [mail_send()] })).unwrap();
+    let ledger = Arc::new(UiProtocolLedger::new(64));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let respond = |session: &SessionKey, approval_id: &ApprovalId| {
+        ApprovalRespondParams::new(
+            session.clone(),
+            approval_id.clone(),
+            ApprovalDecision::Approve,
+        )
+    };
+    // A client-chosen turn id another connection also claims.
+    let turn = TurnId::new();
+    let claimed: HashSet<String> = std::iter::once(turn.0.to_string()).collect();
+
+    // A host-routed approval whose side-table entry is gone (evicted): the
+    // ownership recorded on the approval itself still decides.
+    let approval_id = ApprovalId::new();
+    let _rx = contracts.approvals.request_runtime_owned(
+        ApprovalRequestedEvent::generic(
+            key.clone(),
+            approval_id.clone(),
+            turn.clone(),
+            "mail_send",
+            "Send mail",
+            "draft d",
+        ),
+        true,
+        Some(crate::contracts::approvals::ApprovalOwner {
+            connection: host_ws.connection_id.0,
+            host_route: Some(crate::peers::host_tools::route_key(
+                &peers_root(&fx),
+                "news",
+            )),
+        }),
+    );
+    assert!(crate::peers::host_tools::host_approval_visible(
+        &approval_id.0.to_string(),
+        u64::MAX
+    ));
+
+    // An external client that "owns" the same turn id: refused.
+    let (ext_ws, mut ext_rx) = external_ws(8);
+    handle_approval_respond(
+        &ext_ws,
+        &fx.state,
+        &ledger,
+        &contracts,
+        None,
+        Some(&claimed),
+        "e1".into(),
+        respond(&key, &approval_id),
+    )
+    .await;
+    assert_eq!(
+        rpc_error_kind(ext_rx.recv().await.unwrap()),
+        super::super::host_managed::HOST_OWNED_PEER_ANSWER_DENIED
+    );
+    // Another ordinary connection: refused.
+    let (other_ws, mut other_rx) = ws_connection_for_test(8);
+    handle_approval_respond(
+        &other_ws,
+        &fx.state,
+        &ledger,
+        &contracts,
+        None,
+        None,
+        "o1".into(),
+        respond(&key, &approval_id),
+    )
+    .await;
+    assert_eq!(
+        rpc_error_kind(other_rx.recv().await.unwrap()),
+        "peer_host_connection_only"
+    );
+    assert_eq!(contracts.approvals.pending_for_session(&key).len(), 1);
+
+    // An ordinary approval on a shared session, raised by the host's turn
+    // with the same turn id: an external client claiming that turn id cannot
+    // answer it either, because it was raised on another connection.
+    let shared = SessionKey("dev:api:host#shared".into());
+    let shared_id = ApprovalId::new();
+    let _shared_rx = contracts.approvals.request_runtime_owned(
+        ApprovalRequestedEvent::generic(
+            shared.clone(),
+            shared_id.clone(),
+            turn.clone(),
+            "shell",
+            "Run",
+            "ls",
+        ),
+        false,
+        Some(crate::contracts::approvals::ApprovalOwner {
+            connection: host_ws.connection_id.0,
+            host_route: None,
+        }),
+    );
+    handle_approval_respond(
+        &ext_ws,
+        &fx.state,
+        &ledger,
+        &contracts,
+        None,
+        Some(&claimed),
+        "e2".into(),
+        respond(&shared, &shared_id),
+    )
+    .await;
+    assert_eq!(
+        rpc_error_kind(ext_rx.recv().await.unwrap()),
+        super::super::host_managed::EXTERNAL_TURN_DENIED
+    );
+    assert_eq!(contracts.approvals.pending_for_session(&shared).len(), 1);
+
+    // The host connection answers the host-routed one.
+    handle_approval_respond(
+        &host_ws,
+        &fx.state,
+        &ledger,
+        &contracts,
+        None,
+        None,
+        "h1".into(),
+        respond(&key, &approval_id),
+    )
+    .await;
+    assert!(contracts.approvals.pending_for_session(&key).is_empty());
+}

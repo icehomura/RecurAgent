@@ -19,10 +19,10 @@ use super::{
     ApplyPatchTool, AskUserQuestionTool, BrowserTool, CheckWorkspaceContractTool, CloseAgentTool,
     ConfigureToolTool, DiffEditTool, EditFileTool, ExecCommandTool, GlobTool, GrepTool,
     ImageGenerationTool, ListDirTool, ReadFileTool, RequestUserInputTool, ResumeAgentTool,
-    SendInputTool, ShellTool, SpawnAgentTool, Tool, ToolCatalogEntry, ToolConfigStore, ToolResult,
-    ToolSearchTool, ToolSuggestTool, UpdatePlanTool, ViewImageTool, WaitAgentTool, WebFetchTool,
-    WebSearchTool, WorkspaceDiffTool, WorkspaceLogTool, WorkspaceShowTool, WriteFileTool,
-    WriteStdinTool,
+    SendInputTool, ShellTool, SpawnAgentTool, Tool, ToolCatalogEntry, ToolConfigStore, ToolOrigin,
+    ToolResult, ToolSearchTool, ToolSuggestTool, UpdatePlanTool, ViewImageTool, WaitAgentTool,
+    WebFetchTool, WebSearchTool, WorkspaceDiffTool, WorkspaceLogTool, WorkspaceShowTool,
+    WriteFileTool, WriteStdinTool,
 };
 use crate::sandbox::{NoSandbox, Sandbox};
 
@@ -211,6 +211,10 @@ pub struct ToolRegistry {
     /// (`mofa_slides`, `mofa_cards`, ...): the dispatcher is the ONLY
     /// supported LLM entry-point.
     internal_hidden: HashSet<String>,
+    /// [`ToolOrigin`] of every registered tool that is not
+    /// [`ToolOrigin::Builtin`], recorded from [`Tool::origin`] at
+    /// registration and pruned with the tool.
+    origins: HashMap<String, ToolOrigin>,
     /// #1607: the session sandbox handed to the shell/exec/bash tools at
     /// construction. Stored (not just handed off and dropped) so the
     /// Agent-internal project-root validator path
@@ -260,6 +264,7 @@ impl ToolRegistry {
             output_dir_hint: None,
             tool_timeout_secs: DEFAULT_REGISTRY_TOOL_TIMEOUT_SECS,
             internal_hidden: HashSet::new(),
+            origins: HashMap::new(),
             filesystem_scope: FilesystemScope::Workspace,
             // #1607: default to a no-op sandbox. Constructors that receive a
             // real sandbox (`with_builtins_and_permissions`,
@@ -551,6 +556,7 @@ impl ToolRegistry {
     pub fn register(&mut self, tool: impl Tool + 'static) {
         let name = tool.name().to_string();
         let tool: Arc<dyn Tool> = Arc::new(tool);
+        self.record_origin(&name, tool.origin());
         self.tools.insert(name.clone(), tool.clone());
         if name == "spawn" {
             let spawn_agent: Arc<dyn Tool> = Arc::new(SpawnAgentTool::with_delegate(tool));
@@ -572,6 +578,7 @@ impl ToolRegistry {
     /// Register a tool from an existing Arc (for keeping a separate reference).
     pub fn register_arc(&mut self, tool: Arc<dyn Tool>) {
         let name = tool.name().to_string();
+        self.record_origin(&name, tool.origin());
         self.tools.insert(name.clone(), tool.clone());
         if name == "spawn" {
             let spawn_agent: Arc<dyn Tool> = Arc::new(SpawnAgentTool::with_delegate(tool));
@@ -585,6 +592,36 @@ impl ToolRegistry {
             );
         }
         self.invalidate_cache();
+    }
+
+    fn record_origin(&mut self, name: &str, origin: ToolOrigin) {
+        if origin == ToolOrigin::Builtin {
+            self.origins.remove(name);
+        } else {
+            self.origins.insert(name.to_string(), origin);
+        }
+    }
+
+    /// The [`ToolOrigin`] of the registered tool `name` (`None` when no such
+    /// tool is registered).
+    pub fn origin(&self, name: &str) -> Option<ToolOrigin> {
+        self.tools.contains_key(name).then(|| {
+            self.origins
+                .get(name)
+                .copied()
+                .unwrap_or(ToolOrigin::Builtin)
+        })
+    }
+
+    /// [`Self::retain`] with each tool's [`ToolOrigin`] as well as its name.
+    pub fn retain_with_origin(&mut self, f: impl Fn(&str, ToolOrigin) -> bool) {
+        let origins = self.origins.clone();
+        self.retain(|name| {
+            f(
+                name,
+                origins.get(name).copied().unwrap_or(ToolOrigin::Builtin),
+            )
+        });
     }
 
     /// Return the names of every registered tool.
@@ -819,6 +856,7 @@ impl ToolRegistry {
         // RFC-1 fixup: prune stale internal-hidden markers symmetrically.
         self.internal_hidden
             .retain(|name| self.tools.contains_key(name));
+        self.origins.retain(|name, _| self.tools.contains_key(name));
         // RFC-1 fixup (codex round 4 P2 + round 5 P1/P2): prune
         // dispatcher catalogs when their forwarding targets are
         // evicted. The slides-session
@@ -1062,6 +1100,12 @@ impl ToolRegistry {
             // the same invariants as the parent (mofa_make targets stay
             // hidden from `specs()`).
             internal_hidden: self.internal_hidden.clone(),
+            origins: self
+                .origins
+                .iter()
+                .filter(|(name, _)| !exclude.contains(&name.as_str()))
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
             // #1607: carry the parent's sandbox onto the snapshot so a
             // snapshot-derived registry (used by `rebind_cwd_with_permissions`)
             // keeps a real sandbox by default. `rebind_cwd_with_permissions`

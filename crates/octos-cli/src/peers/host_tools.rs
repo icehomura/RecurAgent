@@ -311,6 +311,14 @@ pub(crate) fn build_tool_set(
         if model_name.len() > MAX_MODEL_NAME_BYTES {
             return Err(format!("tool name '{}' is too long", tool.name));
         }
+        // A host tool never takes a kernel tool's name: the model, the audit
+        // and every name-based filter must be able to tell them apart.
+        if is_peer_safe_generic_tool(&model_name) {
+            return Err(format!(
+                "tool '{}' would be seen by the model as the kernel tool '{model_name}'",
+                tool.name
+            ));
+        }
         if seen_model_names.contains(&model_name) {
             return Err(format!(
                 "tool '{}' collides with another tool the model would see as '{model_name}'",
@@ -844,6 +852,14 @@ pub(crate) fn host_approval_visible(approval_id: &str, connection: u64) -> bool 
         return true;
     };
     route_connection_by_key(&key) == Some(connection)
+}
+
+/// Whether `connection` may answer a host-routed call's approval that the
+/// connection `raised_on` raised for the peer route `route_key`: only that
+/// connection or the peer's current host connection. Read from the approval
+/// entry itself, so it never fails open.
+pub(crate) fn host_approval_answerable(route_key: &str, raised_on: u64, connection: u64) -> bool {
+    connection == raised_on || route_connection_by_key(route_key) == Some(connection)
 }
 
 fn route_connection_by_key(key: &str) -> Option<u64> {
