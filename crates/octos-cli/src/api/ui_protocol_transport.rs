@@ -636,6 +636,11 @@ pub(crate) struct WsConnection {
     /// [`update_live_features`]). Reads are far more frequent than
     /// writes, so `RwLock` is the right fit.
     live_features: Arc<std::sync::RwLock<ConnectionUiFeatures>>,
+    /// `octos serve --host-managed`: this connection is an external client
+    /// (anything but the host token). Turns it starts get no tool that
+    /// executes code, administers the server or reaches peers
+    /// (`host_managed::external_turn_tool_allowed`).
+    external: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl WsConnection {
@@ -648,7 +653,19 @@ impl WsConnection {
             failed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             failed_notify: Arc::new(tokio::sync::Notify::new()),
             live_features: Arc::new(std::sync::RwLock::new(ConnectionUiFeatures::default())),
+            external: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Mark (or clear) this connection as an external client.
+    pub(crate) fn set_external(&self, external: bool) {
+        self.external.store(external, Ordering::Release);
+    }
+
+    /// Whether this connection is an external client of a host-managed
+    /// server.
+    pub(crate) fn is_external(&self) -> bool {
+        self.external.load(Ordering::Acquire)
     }
 
     fn new_stdio(writer: std::sync::mpsc::SyncSender<WsMessage>) -> Self {
@@ -663,6 +680,7 @@ impl WsConnection {
             live_features: Arc::new(std::sync::RwLock::new(
                 ConnectionUiFeatures::stdio_defaults(),
             )),
+            external: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -6879,6 +6897,8 @@ async fn ui_protocol_connection(
     // work-secret session-ingress connection) is an external client.
     let connection_is_external =
         super::host_managed::is_external(&state, connection_identity.as_ref());
+    // Sessions this external connection opened; it answers prompts only there.
+    let mut external_opened_sessions: HashSet<String> = HashSet::new();
     let (ws_sink, mut ws_rx) = socket.split();
     // Decouple the network sink from request handlers via a bounded channel
     // and a dedicated drainer task. No handler ever holds a lock across an
@@ -6886,6 +6906,7 @@ async fn ui_protocol_connection(
     let (writer_tx, writer_rx) = mpsc::channel::<WsMessage>(WS_WRITER_CHANNEL_CAPACITY);
     let writer_handle = tokio::spawn(WsConnection::writer_loop(ws_sink, writer_rx));
     let ws = WsConnection::new(writer_tx);
+    ws.set_external(connection_is_external);
     // Codex #1336 round-2 BLOCKER 1: seed the per-connection feature
     // snapshot from the negotiated `features` so direct-sends apply
     // the same capability filter the broadcast forwarder uses BEFORE
@@ -7093,17 +7114,23 @@ async fn ui_protocol_connection(
             );
             continue;
         }
-        // `octos serve --host-managed`: host-owned app peers' control plane
-        // is the host's, never an external client's (UPCR-2026-036).
-        if connection_is_external
-            && !super::host_managed::external_may_call(&request.method, Some(&request.params))
-        {
-            let _ = send_rpc_error(
-                &ws,
-                Some(id),
-                super::host_managed::peer_control_denied(&request.method),
-            );
-            continue;
+        // `octos serve --host-managed`: an external client may call only an
+        // allowlist of methods, never on a host-owned app peer's session,
+        // and answers prompts only on sessions it opened (UPCR-2026-036).
+        if connection_is_external {
+            if let Err(error) = super::host_managed::external_gate(
+                &request.method,
+                &request.params,
+                &external_opened_sessions,
+            ) {
+                let _ = send_rpc_error(&ws, Some(id), error);
+                continue;
+            }
+            if request.method == octos_core::ui_protocol::methods::SESSION_OPEN {
+                if let Some(session) = request.params.get("session_id").and_then(Value::as_str) {
+                    external_opened_sessions.insert(session.to_owned());
+                }
+            }
         }
         if handle_raw_appui_rpc(
             &ws,
@@ -20016,7 +20043,7 @@ fn validate_session_ingress_command_scope(
     }
 }
 
-fn ui_protocol_server_supported_methods() -> Vec<&'static str> {
+pub(crate) fn ui_protocol_server_supported_methods() -> Vec<&'static str> {
     let mut methods = octos_core::ui_protocol::UI_PROTOCOL_FIRST_SERVER_METHODS.to_vec();
     methods.extend(APPUI_EXTRA_METHODS.iter().copied());
     methods
@@ -35762,6 +35789,12 @@ async fn run_standalone_turn(
         .iter()
         .any(|file_ref| octos_bus::media::is_audio(&file_ref.path));
     let mut tool_registry = session_runtime.tools.snapshot_excluding(&[]);
+    // `octos serve --host-managed`: a turn an external client started gets
+    // no tool that runs code, administers the server or reaches the
+    // host-owned app peers (UPCR-2026-036).
+    if ws.is_external() {
+        tool_registry.retain(super::host_managed::external_turn_tool_allowed);
+    }
     tool_registry.set_active_context(normalize_tool_context(params.tool_context.as_deref()));
     // Stamp the per-turn snapshot with this session's key so
     // `spawn::register_with_lineage` writes `session_key:

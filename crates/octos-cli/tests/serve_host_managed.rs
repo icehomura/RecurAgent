@@ -55,14 +55,21 @@ mod serve_host_managed {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .env("OCTOS_AUTH_TOKEN", HOST)
-        .env("OCTOS_HOST_EXTERNAL_TOKEN", EXTERNAL)
         .env("NO_COLOR", "1")
+        .env_remove("OCTOS_AUTH_TOKEN")
+        .env_remove("OCTOS_HOST_EXTERNAL_TOKEN")
         .env_remove("OCTOS_INSTANCE_DATA_DIR")
         .env_remove("OCTOS_HOME")
         .env_remove("OCTOS_DATA_DIR")
         .env_remove("OCTOS_SOLO_LOGIN");
         cmd
+    }
+
+    /// The host's first two stdin lines: the host token, the external token.
+    fn send_tokens(child: &mut Child) {
+        let stdin = child.stdin.as_mut().unwrap();
+        writeln!(stdin, "{HOST}\n{EXTERNAL}").unwrap();
+        stdin.flush().unwrap();
     }
 
     /// Read stdout until the listener announcement; collect every line.
@@ -120,7 +127,15 @@ mod serve_host_managed {
         let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
         let dir = tempfile::tempdir().unwrap();
         let mut child = command(dir.path(), &["--port", "0"]).spawn().unwrap();
+        send_tokens(&mut child);
         let (port, lines) = announced_port(&mut child);
+        // The tokens never reach the environment (/proc/<pid>/environ).
+        #[cfg(target_os = "linux")]
+        {
+            let environ = std::fs::read(format!("/proc/{}/environ", child.id())).unwrap();
+            let environ = String::from_utf8_lossy(&environ);
+            assert!(!environ.contains(HOST) && !environ.contains(EXTERNAL));
+        }
         assert!(health(port).contains(" 200 "));
         // Other bytes on stdin are ignored; only EOF stops the server.
         child
@@ -152,8 +167,11 @@ mod serve_host_managed {
     fn serve_host_managed_stops_when_its_host_is_sigkilled() {
         let _serial = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
         let dir = tempfile::tempdir().unwrap();
-        let mut host = Command::new("sleep")
-            .arg("600")
+        let mut host = Command::new("sh")
+            .args([
+                "-c",
+                &format!("printf '%s\\n%s\\n' {HOST} {EXTERNAL}; exec sleep 600"),
+            ])
             .stdout(Stdio::piped())
             .spawn()
             .unwrap();
@@ -198,6 +216,7 @@ mod serve_host_managed {
             });
         }
         let mut child = cmd.spawn().unwrap();
+        send_tokens(&mut child);
         let (announced, _lines) = announced_port(&mut child);
         assert_eq!(announced, port, "the server announces the inherited port");
         assert!(health(port).contains(" 200 "));
@@ -211,5 +230,26 @@ mod serve_host_managed {
         assert!(std::net::TcpStream::connect(("127.0.0.1", port)).is_ok());
         assert!(std::net::TcpListener::bind(("127.0.0.1", port)).is_err());
         drop(listener);
+    }
+
+    #[test]
+    fn serve_host_managed_refuses_tokens_in_the_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let output = Command::new(octos_binary())
+            .args(["serve", "--host-managed", "--port", "0", "--data-dir"])
+            .arg(dir.path())
+            .arg("--instance-data-dir")
+            .arg(dir.path())
+            .env(
+                "OCTOS_AUTH_TOKEN",
+                "host-managed-e2e-host-token-0123456789abcdef",
+            )
+            .env_remove("OCTOS_INSTANCE_DATA_DIR")
+            .env_remove("OCTOS_HOME")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("reads its tokens from stdin"));
     }
 }

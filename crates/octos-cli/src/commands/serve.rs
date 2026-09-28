@@ -351,9 +351,10 @@ pub struct ServeCommand {
     pub stdio: bool,
 
     /// Run as the loopback server of an embedding host (an app shell), which
-    /// owns this process: the host token comes from `OCTOS_AUTH_TOKEN` only,
-    /// an optional external-client token from `OCTOS_HOST_EXTERNAL_TOKEN`
-    /// (UI Protocol WebSocket only), requests must name the loopback
+    /// owns this process: the host writes the host token and an optional
+    /// external-client token (an allowlist of UI Protocol methods only) as
+    /// the first two lines of stdin, never the environment; requests must
+    /// name the loopback
     /// listener in `Host`, only configured browser origins are trusted,
     /// pairing is off until the host enables it, profiles run in this
     /// process, and the server stops when stdin reaches EOF. Requires
@@ -1085,11 +1086,27 @@ impl ServeCommand {
         let host_managed_tokens = if self.host_managed {
             // Linux/Android: SIGTERM when the host dies (a no-op elsewhere).
             crate::api::host_managed::bind_to_parent()?;
+            // The tokens arrive on stdin, never in the environment, which any
+            // process of this user (on Android: this app's own tools) can
+            // read from /proc/<pid>/environ.
+            for name in [
+                crate::api::host_managed::HOST_TOKEN_ENV,
+                crate::api::host_managed::EXTERNAL_TOKEN_ENV,
+            ] {
+                eyre::ensure!(
+                    std::env::var_os(name).is_none(),
+                    "--host-managed reads its tokens from stdin; unset {name}"
+                );
+            }
+            let (host_token, external_token) = crate::api::host_managed::read_tokens_from_stdin(
+                std::io::stdin(),
+                std::time::Duration::from_secs(60),
+            )?;
             Some(host_managed_preflight(
                 &self.host,
                 &config.mode,
-                std::env::var(crate::api::host_managed::HOST_TOKEN_ENV).ok(),
-                std::env::var(crate::api::host_managed::EXTERNAL_TOKEN_ENV).ok(),
+                host_token,
+                external_token,
             )?)
         } else {
             None
@@ -2475,7 +2492,7 @@ mod tests {
     }
 
     #[test]
-    fn should_require_loopback_local_mode_and_an_env_host_token_when_host_managed() {
+    fn should_require_loopback_local_mode_and_a_host_token_when_host_managed() {
         use crate::config::DeploymentMode;
         let host = "h".repeat(40);
         let external = "e".repeat(40);

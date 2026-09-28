@@ -9,14 +9,12 @@
 //!
 //! | Credential | Source | Identity | Reaches |
 //! | --- | --- | --- | --- |
-//! | host token | `OCTOS_AUTH_TOKEN` (env only) | [`AuthIdentity::Admin`] | every route, as a normal admin token |
-//! | external token | `OCTOS_HOST_EXTERNAL_TOKEN` (env, optional) | `User { _main, role: User }` | `/api/ui-protocol/ws` only |
+//! | host token | stdin, first line | [`AuthIdentity::Admin`] | every route, as a normal admin token |
+//! | external token | stdin, second line (empty: none) | `User { _main, role: User }` | `/api/ui-protocol/ws`, an allowlist of methods |
 //!
 //! Neither token is written anywhere, returned by any route (except the
 //! external token, once, to a successful pairing claim the host enabled), or
-//! logged. Both env names look secret to
-//! [`octos_core::env_hygiene::is_secret_env_name`], so tool, hook and MCP
-//! subprocesses never inherit them.
+//! logged. They never enter the environment (see [`HOST_TOKEN_ENV`]).
 //!
 //! What else the mode changes (see `docs/HOST_MANAGED_SERVE.md`):
 //!
@@ -44,12 +42,13 @@ use super::pairing::PairingState;
 use super::router::{AuthIdentity, constant_time_eq};
 use crate::user_store::UserRole;
 
-/// The env var that carries the host token. `--auth-token` and the config
-/// file's `auth_token` are refused in this mode: argv is visible to every
-/// local process, and a file outlives the host.
+/// The host token's usual env var, REFUSED in this mode: the host writes its
+/// tokens on stdin ([`read_tokens_from_stdin`]). The environment is readable
+/// by every process of this user through `/proc/<pid>/environ`, argv by
+/// every local process, and a config file outlives the host.
 pub const HOST_TOKEN_ENV: &str = "OCTOS_AUTH_TOKEN";
 
-/// The env var that carries the optional external-client token.
+/// Also refused in this mode, for the same reason.
 pub const EXTERNAL_TOKEN_ENV: &str = "OCTOS_HOST_EXTERNAL_TOKEN";
 
 /// Tokens shorter than this are refused (128 bits of hex).
@@ -61,36 +60,120 @@ pub const EXTERNAL_ROUTE: &str = "/api/ui-protocol/ws";
 /// `data.kind` of a refused external answer to a host-owned peer.
 pub const HOST_OWNED_PEER_ANSWER_DENIED: &str = "host_owned_peer_answer_denied";
 
-/// `data.kind` of a refused external call to the host-owned app-peer control
-/// plane.
-pub const HOST_OWNED_PEER_CONTROL_DENIED: &str = "host_owned_peer_control_denied";
+/// `data.kind` of an external call outside [`EXTERNAL_ALLOWED_METHODS`].
+pub const EXTERNAL_METHOD_DENIED: &str = "external_method_denied";
 
-/// Whether an external connection may make this raw call. Host-owned app
-/// peers (UPCR-2026-034) are the host's: an external client may neither
-/// create, resume nor bind one (`peer/prepare` with `memory_namespace`,
-/// `resume` or `host_token`), nor change its lane or open or close its
-/// request contexts. Their originator check trusts a self-reported
-/// `session_id`, and a namespace may nest with a legitimate app's (the
-/// #2556 residuals), so this mode keeps the whole control plane host-only.
-/// Ordinary peers stay available.
-pub fn external_may_call(method: &str, params: Option<&serde_json::Value>) -> bool {
-    match method {
-        "peer/model/set" | "peer/context/open" | "peer/context/close" => false,
-        "peer/prepare" => !params.is_some_and(|params| {
-            ["memory_namespace", "resume", "host_token"]
-                .iter()
-                .any(|field| params.get(field).is_some_and(|value| !value.is_null()))
-        }),
-        _ => true,
-    }
+/// `data.kind` of an external call that names a host-owned app peer's
+/// session (`peer-…`, `peerctx-…`).
+pub const HOST_OWNED_PEER_SESSION_DENIED: &str = "host_owned_peer_session_denied";
+
+/// `data.kind` of an external answer on a session it did not open.
+pub const EXTERNAL_SESSION_NOT_OPENED: &str = "external_session_not_opened";
+
+/// The only methods an external connection may call (UPCR-2026-036); every
+/// other method, typed or raw, is refused. Sessions and turns of non-peer
+/// sessions, message paging, answers to prompts on sessions this connection
+/// opened, and read-only capability and status queries.
+pub const EXTERNAL_ALLOWED_METHODS: &[&str] = &[
+    "config/capabilities/list",
+    "session/status/read",
+    "system/status.get",
+    "session/open",
+    "session/hydrate",
+    "session/messages_page",
+    "session/status.get",
+    "turn/start",
+    "turn/interrupt",
+    "turn/steer",
+    "turn/state/get",
+    "approval/respond",
+    "approval/scopes/list",
+    "user_question/respond",
+    "diff/preview/get",
+];
+
+/// Methods that answer a prompt: allowed only on a session this external
+/// connection opened.
+const EXTERNAL_ANSWER_METHODS: &[&str] = &["approval/respond", "user_question/respond"];
+
+fn names_peer_session(params: &serde_json::Value) -> bool {
+    let Some(object) = params.as_object() else {
+        return false;
+    };
+    object.iter().any(|(key, value)| {
+        key.contains("session")
+            && value
+                .as_str()
+                .is_some_and(|id| is_peer_session(&SessionKey(id.to_owned())))
+    })
 }
 
-/// The refusal for [`external_may_call`].
-pub fn peer_control_denied(method: &str) -> octos_core::ui_protocol::RpcError {
-    octos_core::ui_protocol::RpcError::permission_denied(format!(
-        "{method}: host-owned app peers are managed by the host, not external clients"
-    ))
-    .with_data(serde_json::json!({ "kind": HOST_OWNED_PEER_CONTROL_DENIED }))
+/// Decide an external connection's call: the allowlist, no host-owned peer
+/// session in any `*session*` parameter, and answers only on sessions the
+/// connection opened.
+pub fn external_gate(
+    method: &str,
+    params: &serde_json::Value,
+    opened_sessions: &std::collections::HashSet<String>,
+) -> Result<(), octos_core::ui_protocol::RpcError> {
+    use octos_core::ui_protocol::RpcError;
+    if !EXTERNAL_ALLOWED_METHODS.contains(&method) {
+        return Err(RpcError::permission_denied(format!(
+            "{method} is not available to external clients of a host-managed server"
+        ))
+        .with_data(serde_json::json!({ "kind": EXTERNAL_METHOD_DENIED })));
+    }
+    if names_peer_session(params) {
+        if EXTERNAL_ANSWER_METHODS.contains(&method) {
+            return Err(peer_answer_denied(if method == "approval/respond" {
+                "approval"
+            } else {
+                "question"
+            }));
+        }
+        return Err(RpcError::permission_denied(format!(
+            "{method}: host-owned app peer sessions belong to the host"
+        ))
+        .with_data(serde_json::json!({ "kind": HOST_OWNED_PEER_SESSION_DENIED })));
+    }
+    if EXTERNAL_ANSWER_METHODS.contains(&method) {
+        let session = params.get("session_id").and_then(serde_json::Value::as_str);
+        if !session.is_some_and(|session| opened_sessions.contains(session)) {
+            return Err(RpcError::permission_denied(format!(
+                "{method}: open the session on this connection first"
+            ))
+            .with_data(serde_json::json!({ "kind": EXTERNAL_SESSION_NOT_OPENED })));
+        }
+    }
+    Ok(())
+}
+
+/// Tools a turn started by an external client keeps. None that executes
+/// code or commands, administers profiles, skills or the server, delegates
+/// to other agents, or reaches peers (whose host-owned members are the
+/// host's): an external turn can reach neither the host's secrets nor the
+/// apps' assistants through the model.
+pub fn external_turn_tool_allowed(name: &str) -> bool {
+    const DENIED: &[&str] = &[
+        "shell",
+        "bash",
+        "exec_command",
+        "write_stdin",
+        "spawn",
+        "spawn_agent",
+        "delegate",
+        "delegate_task",
+        "manage_skills",
+        "configure_tool",
+        "source_import",
+        "browser",
+        "git",
+    ];
+    const DENIED_PREFIXES: &[&str] = &["peer_", "admin_", "goal_"];
+    !DENIED.contains(&name)
+        && !DENIED_PREFIXES
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
 }
 
 /// Host-managed authentication and lifecycle state (`AppState::host_managed`).
@@ -200,7 +283,14 @@ impl HostManaged {
     /// previous code is replaced. `None` when external access is disabled.
     pub fn enable_pairing(&self) -> Option<Arc<PairingState>> {
         let token = self.external_token.clone()?;
-        let pairing = Arc::new(PairingState::mint(self.server_origin.clone(), Some(token)));
+        // Rate-limited, not burned: a local process guessing cannot lock out
+        // the person's code (10 failures a minute; 32^8 codes).
+        let pairing = Arc::new(PairingState::mint_rate_limited(
+            self.server_origin.clone(),
+            Some(token),
+            super::pairing::PAIR_CODE_TTL,
+            std::time::Duration::from_secs(60),
+        ));
         *self
             .pairing
             .lock()
@@ -328,6 +418,41 @@ pub(crate) async fn disable_pairing(
         tracing::error!(%error, "could not audit turning pairing off");
     }
     StatusCode::NO_CONTENT.into_response()
+}
+
+/// Read the two token lines the host writes first on stdin: the host token,
+/// then the external token (an empty line: no external clients). The rest of
+/// stdin is the lifeline ([`spawn_stdin_eof_watcher`]). Fails after
+/// `timeout` or at EOF before the first line.
+pub(crate) fn read_tokens_from_stdin(
+    stdin: std::io::Stdin,
+    timeout: std::time::Duration,
+) -> eyre::Result<(Option<String>, Option<String>)> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("octos-host-tokens".into())
+        .spawn(move || {
+            let _ = tx.send(read_token_lines(&mut stdin.lock()));
+        })?;
+    rx.recv_timeout(timeout)
+        .map_err(|_| eyre::eyre!("--host-managed: the host sent no tokens on stdin"))?
+}
+
+fn read_token_lines(
+    input: &mut impl std::io::BufRead,
+) -> eyre::Result<(Option<String>, Option<String>)> {
+    let mut line = || -> eyre::Result<Option<String>> {
+        let mut text = String::new();
+        let read = input.read_line(&mut text)?;
+        let token = text.trim_end_matches(['\r', '\n']).to_owned();
+        Ok((read > 0 && !token.is_empty()).then_some(token))
+    };
+    let host = line()?;
+    eyre::ensure!(
+        host.is_some(),
+        "--host-managed: the host token line is missing"
+    );
+    Ok((host, line()?))
 }
 
 /// Stop the server when stdin reaches EOF: the host exited or closed its end.

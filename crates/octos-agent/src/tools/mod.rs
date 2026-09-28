@@ -1049,14 +1049,30 @@ pub fn resolve_path_with_scope(
     user_path: &str,
     filesystem_scope: FilesystemScope,
 ) -> Result<PathBuf> {
-    if filesystem_scope.is_host() {
+    let resolved = if filesystem_scope.is_host() {
         let candidate = PathBuf::from(user_path);
         if candidate.is_absolute() {
-            return Ok(normalize_lexical(&candidate));
+            normalize_lexical(&candidate)
+        } else {
+            normalize_lexical(&base_dir.join(user_path))
         }
-        return Ok(normalize_lexical(&base_dir.join(user_path)));
+    } else {
+        resolve_path(base_dir, user_path)?
+    };
+    if is_process_secret_path(&resolved) {
+        eyre::bail!("process environments and command lines are off limits: {user_path}");
     }
-    resolve_path(base_dir, user_path)
+    Ok(resolved)
+}
+
+/// `/proc/<pid>/environ` or `/proc/<pid>/cmdline` (also under
+/// `task/<tid>/`): another process's secrets. No file tool opens them, in any
+/// filesystem scope.
+pub fn is_process_secret_path(path: &Path) -> bool {
+    path.starts_with("/proc")
+        && path
+            .file_name()
+            .is_some_and(|name| name == "environ" || name == "cmdline")
 }
 
 /// Resolve and classify a user-supplied path against a [`SessionScope`]
@@ -1103,6 +1119,9 @@ fn resolve_for_scope(
     user_path: &str,
     for_write: bool,
 ) -> Result<PathBuf, &'static str> {
+    if is_process_secret_path(&normalize_lexical(Path::new(user_path))) {
+        return Err("process environments and command lines are off limits");
+    }
     // Upload handles (`up/<base64>/<name>`) are opaque references to a file in
     // the authenticated upload tmpdir — NOT workspace-relative paths. Without
     // this short-circuit the join+classify logic below treats them as
@@ -2737,5 +2756,29 @@ mod tool_context_tests {
         let permissions = ToolPermissions::default();
         assert!(permissions.is_tool_allowed("anything"));
         assert!(permissions.is_tool_allowed("shell"));
+    }
+}
+
+#[cfg(test)]
+mod process_secret_path_tests {
+    use super::*;
+
+    #[test]
+    fn should_refuse_process_environments_in_every_scope() {
+        for path in [
+            "/proc/1/environ",
+            "/proc/self/cmdline",
+            "/proc/9/task/9/environ",
+            "/proc/1/../1/environ",
+        ] {
+            assert!(
+                resolve_path_with_scope(Path::new("/tmp"), path, FilesystemScope::Host).is_err(),
+                "{path}"
+            );
+        }
+        assert!(
+            resolve_path_with_scope(Path::new("/tmp"), "/proc/cpuinfo", FilesystemScope::Host)
+                .is_ok()
+        );
     }
 }

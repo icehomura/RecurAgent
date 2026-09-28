@@ -48,46 +48,46 @@ subprotocol are unaffected.
 
 ### Host-managed identities
 
-On a host-managed server exactly two tokens authenticate: the host token
-(admin) and, when the host configured one, the external token, which resolves
-to the user identity `_main` (role user). The external identity may upgrade
-`/api/ui-protocol/ws` and use no other route: 403 on REST routes, 401 on
-`/api/admin/*`.
+On a host-managed server exactly two tokens authenticate, both delivered on
+the server's stdin: the host token (admin) and, when the host configured one,
+the external token, which resolves to the user identity `_main` (role user).
+The external identity may upgrade `/api/ui-protocol/ws` and use no other
+route: 403 on REST routes, 401 on `/api/admin/*`.
 
-### Native clients keep the stdio feature set
+### External clients call an allowlist
 
-`octos_core::ui_protocol::UI_PROTOCOL_STDIO_DEFAULT_FEATURES` lists the
-features a `--stdio` connection has without negotiating. A host that moves a
-native client from the stdio pipe to the host-managed WebSocket sends exactly
-these in `X-Octos-Ui-Features`. This adds no feature: the list names existing
-ones, and a test keeps it equal to the stdio defaults.
+On the socket, a connection that is not authenticated with the host token
+(including a session-ingress connection) may call only
+`config/capabilities/list`, `session/status/read`, `system/status.get`,
+`session/open`, `session/hydrate`, `session/messages_page`,
+`session/status.get`, `turn/start`, `turn/interrupt`, `turn/steer`,
+`turn/state/get`, `approval/respond`, `approval/scopes/list`,
+`user_question/respond` and `diff/preview/get`. Every other method, typed or
+raw, fails with `permission_denied`, `data.kind: "external_method_denied"`.
 
-### Host-owned app peers answer to the person
+Moreover:
 
-On a host-managed server, `approval/respond` and `user_question/respond` from
-any connection that is not authenticated with the host token, including a
-session-ingress connection, are refused when `session_id`'s topic starts with
-`peer-` or `peerctx-`:
+- a call whose parameters name a host-owned app-peer session (`peer-…` or
+  `peerctx-…` topic) in any key containing `session` fails with
+  `host_owned_peer_session_denied`; for `approval/respond` and
+  `user_question/respond` the kind is `host_owned_peer_answer_denied`:
 
-```json
-{"code": -32120, "message": "an external client cannot answer a host-owned app peer's approval; answer it in the app",
- "data": {"kind": "host_owned_peer_answer_denied"}}
-```
+  ```json
+  {"code": -32120, "message": "an external client cannot answer a host-owned app peer's approval; answer it in the app",
+   "data": {"kind": "host_owned_peer_answer_denied"}}
+  ```
 
-(`permission_denied`; the message says `question` for `user_question/respond`.)
-Nothing is decided, and the prompt stays pending for the host. The external
-client still answers prompts on every other session of its profile, such as the
-shared system conversation. This extends UPCR-2026-034's "Approvals belong to
-the person" from the owning system agent to external clients.
+  Nothing is decided and the prompt stays pending for the host;
+- `approval/respond` and `user_question/respond` are accepted only for a
+  session the same connection opened (`external_session_not_opened`);
+- a turn started by such a connection has no tool that runs code or
+  commands, administers the server, profiles or skills, delegates, or
+  reaches peers (`peer_*`), so the model cannot drive the host-owned peers
+  or read the host's processes through it.
 
-### Host-owned app peers are the host's to manage
-
-On a host-managed server, a connection that is not authenticated with the
-host token cannot call `peer/model/set`, `peer/context/open` or
-`peer/context/close`, nor `peer/prepare` with `memory_namespace`, `resume`
-or `host_token` (non-null). These calls fail with `permission_denied`,
-`data.kind: "host_owned_peer_control_denied"`. Ordinary `peer/prepare` and the
-other raw methods are unchanged.
+This extends UPCR-2026-034's "Approvals belong to the person" from the owning
+system agent to external clients, and keeps the apps' memory and workspaces
+out of their reach.
 
 ### `server/shutdown`
 
@@ -98,22 +98,17 @@ never enables. The host stops the server by closing its stdin.
 
 ## Risk
 
-- The external token grants the full UI Protocol surface of profile `_main`
-  (turns, sessions, and raw methods of that profile), which is what attaching
-  a client to the person's assistant means. The UPCR-2026-034 session-plane
-  caveat applies: hosts must not give raw protocol access to untrusted apps.
-  The external token is for a client the person chose to attach.
-- **Without the control-plane gate,** an external client could combine
-  the two #2556 residuals. `peer/prepare` trusts a self-reported originator
-  `session_id`, and a new host-owned peer's namespace is checked only against
-  existing peers, not against what the host will later create. An external
-  client could therefore mint a host-owned peer that shares memory stores
-  with a legitimate app's peer. Under host-managed those calls would ride the
-  host's authority context. This UPCR removes that path by keeping the whole
-  host-owned control plane host-only. #2556 remains the general fix for
-  other deployments.
+- The external token drives the person's own sessions of profile `_main`
+  (for example the shared system conversation), which is what attaching a
+  client to the person's assistant means. It cannot configure the profile,
+  install skills, restore snapshots, reach app peers, or run code through a
+  turn. Before this allowlist, `profile/llm/upsert` would have let it point a
+  provider's `base_url` at itself and receive the stored key. The combination
+  of the #2556 residuals (a self-reported originator on `peer/prepare` and a
+  namespace nesting with a legitimate app's) is also closed here. #2556
+  remains the general fix for other deployments.
 - A peer topic prefix is the refusal criterion, so ordinary agent-staged
-  peers' prompts are also host-only for external clients. Their originator
+  peers' sessions are also host-only for external clients. Their originator
   answers them through `peer_respond`, which is unchanged.
 
 ## Tests
@@ -129,8 +124,13 @@ never enables. The host stops the server by closing its stdin.
 - `should_let_an_external_client_answer_its_own_session_approval`
 - `should_admit_only_configured_origins_on_a_host_managed_ws_upgrade`
 - `stdio_default_feature_list_matches_the_stdio_defaults`
-- `should_keep_the_host_owned_peer_control_plane_from_external_clients`
-- `should_refuse_external_calls_to_the_host_owned_peer_control_plane`
+- `should_allow_external_clients_only_the_allowlisted_methods` (walks the
+  dispatch table)
+- `should_refuse_external_calls_on_host_owned_peer_sessions`
+- `should_gate_external_clients_over_the_real_socket`
+- `should_give_external_turns_no_code_admin_or_peer_tools`
+- `a_rate_limited_code_refills_its_budget_instead_of_burning`
 - `should_audit_the_pairing_ceremony_without_the_code`
-- `tests/serve_host_managed.rs`: stdin EOF, host SIGKILL, inherited listener
-  (serial CI step)
+- `tests/serve_host_managed.rs`: tokens on stdin (never in
+  `/proc/<pid>/environ`), refused in the environment, stdin EOF, host SIGKILL,
+  inherited listener (serial CI step)

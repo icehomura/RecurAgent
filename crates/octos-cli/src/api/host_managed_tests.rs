@@ -438,24 +438,159 @@ fn should_adopt_only_a_loopback_tcp_listener_descriptor() {
 }
 
 #[test]
-fn should_keep_the_host_owned_peer_control_plane_from_external_clients() {
-    use super::external_may_call;
+fn should_allow_external_clients_only_the_allowlisted_methods() {
+    use super::{EXTERNAL_ALLOWED_METHODS, EXTERNAL_METHOD_DENIED, external_gate};
     use serde_json::json;
-    for method in ["peer/model/set", "peer/context/open", "peer/context/close"] {
-        assert!(!external_may_call(method, Some(&json!({}))), "{method}");
-    }
-    for field in ["memory_namespace", "resume", "host_token"] {
+    let supported = crate::api::ui_protocol_transport::ui_protocol_server_supported_methods();
+    for method in EXTERNAL_ALLOWED_METHODS {
         assert!(
-            !external_may_call("peer/prepare", Some(&json!({ field: "app/rinx" }))),
-            "peer/prepare with {field}"
+            supported.contains(method),
+            "{method} is not a dispatched method"
         );
     }
-    assert!(external_may_call(
+    let opened: std::collections::HashSet<String> = ["_main:api:web".to_owned()].into();
+    let params = json!({"session_id": "_main:api:web"});
+    // Every dispatched method is refused unless it is on the allowlist.
+    let mut sensitive = supported.clone();
+    sensitive.extend([
+        "session/list",
+        "session/delete",
+        "session/title.set",
+        "memory/ingest",
+        "memory/search",
+        "content/delete",
+        "session/files.list",
+        "session/workspace.get",
+    ]);
+    for method in sensitive {
+        let allowed = external_gate(method, &params, &opened).is_ok();
+        assert_eq!(
+            allowed,
+            EXTERNAL_ALLOWED_METHODS.contains(&method),
+            "{method}"
+        );
+        if !allowed {
+            let error = external_gate(method, &params, &opened).unwrap_err();
+            assert_eq!(
+                error.data.unwrap()["kind"],
+                json!(EXTERNAL_METHOD_DENIED),
+                "{method}"
+            );
+        }
+    }
+    for method in [
+        "profile/llm/upsert",
+        "profile/sub_providers/upsert",
+        "profile/skills/install",
+        "profile/skills/remove",
+        "snapshot/restore",
+        "skill/action/invoke",
+        "session/fork",
         "peer/prepare",
-        Some(&json!({"names": ["a"], "memory_namespace": null}))
-    ));
-    assert!(external_may_call("peer/gather", Some(&json!({}))));
-    assert!(external_may_call("session/open", None));
+        "peer/context/open",
+        "server/shutdown",
+        "profile/local/create",
+    ] {
+        assert!(external_gate(method, &params, &opened).is_err(), "{method}");
+    }
+}
+
+#[test]
+fn should_refuse_external_calls_on_host_owned_peer_sessions() {
+    use super::{
+        EXTERNAL_SESSION_NOT_OPENED, HOST_OWNED_PEER_ANSWER_DENIED, HOST_OWNED_PEER_SESSION_DENIED,
+        external_gate,
+    };
+    use serde_json::json;
+    let peer = "_main:api:octosense#peer-rinx";
+    let ctx = "_main:api:octosense#peerctx-rinx.app-a";
+    let opened: std::collections::HashSet<String> = [peer.to_owned(), ctx.to_owned()].into();
+    let kind = |r: Result<(), octos_core::ui_protocol::RpcError>| {
+        r.unwrap_err().data.unwrap()["kind"].clone()
+    };
+    for session in [peer, ctx] {
+        for method in [
+            "session/open",
+            "turn/start",
+            "turn/steer",
+            "session/messages_page",
+            "session/hydrate",
+        ] {
+            assert_eq!(
+                kind(external_gate(
+                    method,
+                    &json!({"session_id": session}),
+                    &opened
+                )),
+                json!(HOST_OWNED_PEER_SESSION_DENIED),
+                "{method}"
+            );
+        }
+        assert_eq!(
+            kind(external_gate(
+                "approval/respond",
+                &json!({"session_id": session}),
+                &opened
+            )),
+            json!(HOST_OWNED_PEER_ANSWER_DENIED)
+        );
+    }
+    // Answers only on a session this connection opened.
+    assert_eq!(
+        kind(external_gate(
+            "approval/respond",
+            &json!({"session_id": "_main:api:other"}),
+            &opened
+        )),
+        json!(EXTERNAL_SESSION_NOT_OPENED)
+    );
+    let mine: std::collections::HashSet<String> = ["_main:api:octosense#system".to_owned()].into();
+    assert!(
+        external_gate(
+            "approval/respond",
+            &json!({"session_id": "_main:api:octosense#system"}),
+            &mine
+        )
+        .is_ok()
+    );
+    assert!(
+        external_gate(
+            "turn/start",
+            &json!({"session_id": "_main:api:octosense#system"}),
+            &mine
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn should_give_external_turns_no_code_admin_or_peer_tools() {
+    use super::external_turn_tool_allowed;
+    for tool in [
+        "shell",
+        "bash",
+        "exec_command",
+        "spawn",
+        "peer_respond",
+        "peer_send_input",
+        "admin_update_octos",
+        "manage_skills",
+        "browser",
+        "git",
+    ] {
+        assert!(!external_turn_tool_allowed(tool), "{tool}");
+    }
+    for tool in [
+        "read_file",
+        "write_file",
+        "edit_file",
+        "web_search",
+        "web_fetch",
+        "ask_user_question",
+        "recall",
+    ] {
+        assert!(external_turn_tool_allowed(tool), "{tool}");
+    }
 }
 
 async fn ws_rpc(
@@ -493,35 +628,46 @@ async fn ws_rpc(
 }
 
 #[tokio::test]
-async fn should_refuse_external_calls_to_the_host_owned_peer_control_plane() {
+async fn should_gate_external_clients_over_the_real_socket() {
     use serde_json::json;
     let server = serve(true).await;
     let kind = |reply: &serde_json::Value| reply["error"]["data"]["kind"].clone();
-    for (method, params) in [
+    let peer = "_main:api:octosense#peer-rinx";
+    for (method, params, expected) in [
         (
             "peer/context/open",
             json!({"session_id": "_main:api:octosense#system", "peer": "rinx", "context_id": "a"}),
+            super::EXTERNAL_METHOD_DENIED,
         ),
         (
-            "peer/model/set",
-            json!({"session_id": "_main:api:octosense#system", "peer": "rinx", "model": null}),
+            "profile/llm/upsert",
+            json!({"profile_id": "_main"}),
+            super::EXTERNAL_METHOD_DENIED,
         ),
         (
-            "peer/prepare",
-            json!({"session_id": "_main:api:octosense#system", "names": ["rinx"], "memory_namespace": "app/rinx"}),
+            "session/fork",
+            json!({"session_id": peer}),
+            super::EXTERNAL_METHOD_DENIED,
+        ),
+        (
+            "session/open",
+            json!({"session_id": peer}),
+            super::HOST_OWNED_PEER_SESSION_DENIED,
+        ),
+        (
+            "turn/start",
+            json!({"session_id": peer, "turn_id": "t", "input": []}),
+            super::HOST_OWNED_PEER_SESSION_DENIED,
         ),
     ] {
         let external = ws_rpc(server.addr, EXTERNAL, method, params.clone()).await;
-        assert_eq!(
-            kind(&external),
-            json!(super::HOST_OWNED_PEER_CONTROL_DENIED),
-            "{method}: {external}"
-        );
+        assert_eq!(kind(&external), json!(expected), "{method}: {external}");
         let host = ws_rpc(server.addr, HOST, method, params).await;
-        assert_ne!(
-            kind(&host),
-            json!(super::HOST_OWNED_PEER_CONTROL_DENIED),
-            "{method}: the host passes the gate"
+        let host_kind = kind(&host);
+        assert!(
+            host_kind != json!(super::EXTERNAL_METHOD_DENIED)
+                && host_kind != json!(super::HOST_OWNED_PEER_SESSION_DENIED),
+            "{method}: the host passes the gate: {host}"
         );
     }
 }

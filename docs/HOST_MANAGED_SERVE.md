@@ -24,43 +24,58 @@ by itself.
 
 | Credential | Source | Identity | May use |
 | --- | --- | --- | --- |
-| Host token | `OCTOS_AUTH_TOKEN` (environment only) | admin | every route, as an admin token does today |
-| External token | `OCTOS_HOST_EXTERNAL_TOKEN` (optional) | user `_main`, role user | `GET /api/ui-protocol/ws` only |
+| Host token | stdin, first line | admin | every route, as an admin token does today |
+| External token | stdin, second line (empty: none) | user `_main`, role user | `GET /api/ui-protocol/ws`, and there only the allowlist below |
 
 - Only these two tokens authenticate. There is no solo login (not even with
   `OCTOS_SOLO_LOGIN`), no trusted-proxy `X-Profile-Id`, no hashed admin-token
   store, no `OCTOS_TEST_TOKEN` and no OTP session.
-- `--auth-token` and the config file's `auth_token` are refused: argv is
-  visible to every local process and a file outlives the host. Tokens must be
-  at least 32 characters of RFC 7230 `tchar`, and the two must differ.
+- The host writes both tokens as the first two lines of the server's stdin,
+  then keeps stdin open (the lifeline, below). Tokens never go in the
+  environment: any process of the same user can read `/proc/<pid>/environ`,
+  and on Android that includes this app's own tools. `OCTOS_AUTH_TOKEN` and
+  `OCTOS_HOST_EXTERNAL_TOKEN` in the environment, `--auth-token` and the
+  config file's `auth_token` are all refused. Tokens must be at least 32
+  characters of RFC 7230 `tchar`, and the two must differ.
 - Neither token is printed, logged or returned by a route. The only exception
   is a successful pairing claim, which returns the external token (see
-  below). Both variable names match the secret-name heuristic, so tool, hook
-  and MCP subprocesses do not inherit them.
-- Without `OCTOS_HOST_EXTERNAL_TOKEN` external clients are disabled. To
-  revoke or rotate external access, the host restarts the server without the
-  variable or with a new value; open external connections end with the
-  process.
+  below).
+- With an empty second line external clients are disabled. To revoke or
+  rotate external access, the host restarts the server with a new external
+  token; open external connections end with the process.
 
 An external identity:
 
 - gets 403 on every REST route and 401 on every `/api/admin/*` route
   (`stop-all`, `token/rotate` and the rest included);
-- cannot call `server/shutdown`, which a host-managed server never
-  advertises or accepts;
-- cannot answer `approval/respond` or `user_question/respond` for a
-  host-owned app-peer session (`peer-…` or `peerctx-…` topics). The request
-  fails with `data.kind: "host_owned_peer_answer_denied"` and the prompt stays
-  parked for the person, who answers it in the app through the host. This
-  extends UPCR-2026-034's "Approvals belong to the person" to external
-  clients;
-- cannot touch the host-owned app-peer control plane: `peer/model/set`,
-  `peer/context/open`, `peer/context/close`, and `peer/prepare` with
-  `memory_namespace`, `resume` or `host_token` fail with
-  `data.kind: "host_owned_peer_control_denied"`. Otherwise an external client
-  could self-report an originator `session_id` and bind a namespace nesting
-  with a legitimate app's (the #2556 residuals). Ordinary peers stay
-  available.
+- may call only these methods on the socket; everything else, typed or raw,
+  fails with `data.kind: "external_method_denied"`:
+  `config/capabilities/list`, `session/status/read`, `system/status.get`,
+  `session/open`, `session/hydrate`, `session/messages_page`,
+  `session/status.get`, `turn/start`, `turn/interrupt`, `turn/steer`,
+  `turn/state/get`, `approval/respond`, `approval/scopes/list`,
+  `user_question/respond` and `diff/preview/get`. So there is no profile, LLM
+  or sub-provider configuration (a client could otherwise point a provider's
+  `base_url` elsewhere and receive its stored key), no skill install or
+  action, no snapshot restore, no session fork or delete, no peer method and
+  no `server/shutdown`;
+- cannot name a host-owned app-peer session (`peer-…` or `peerctx-…`
+  topic) in any `*session*` parameter: `host_owned_peer_session_denied`, or
+  `host_owned_peer_answer_denied` for an answer. Those sessions carry the
+  apps' memory and workspaces, and their prompts are answered by the person
+  in the app (UPCR-2026-034);
+- answers approvals and questions only on sessions it opened on the same
+  connection (`external_session_not_opened` otherwise);
+- starts turns without any tool that runs code or commands (`shell`, `bash`,
+  `exec_command`, `write_stdin`, `spawn*`, `delegate*`, `browser`, `git`),
+  administers profiles, skills or the server (`admin_*`, `manage_skills`,
+  `configure_tool`, `source_import`, `goal_*`), or reaches peers (`peer_*`).
+  The model cannot reach the apps' assistants or the host's processes
+  through such a turn.
+
+No file tool opens `/proc/<pid>/environ` or `/proc/<pid>/cmdline` in any
+filesystem scope, and the shell policy refuses commands that name them, for
+every session.
 
 ## Network guards
 
@@ -108,9 +123,12 @@ While the host shows its pairing UI, it calls:
 
 `/pair/info` and `/pair/claim` keep their contract (loopback only, 404 when
 pairing is off). A claim returns the external token, never the host token.
-Both host calls are recorded in the admin audit log (`host.pairing.enable`,
-`host.pairing.disable`) without the code; if the enable cannot be audited,
-pairing stays off and the call fails.
+Both host calls and every claim are recorded in the admin audit log
+(`host.pairing.enable`, `host.pairing.disable`, `host.pairing.claim` with its
+outcome), never with the code; if the enable cannot be audited, pairing stays
+off and the call fails. Failed claims are rate-limited (10 per minute) rather
+than burning the code, so another local process cannot lock the person out by
+guessing. A claim that carries an `Origin` must come from a configured origin.
 
 ## Lifecycle
 
@@ -141,8 +159,9 @@ pairing stays off and the call fails.
   should then bind a new port and rotate the external token.
 
 ```sh
-OCTOS_AUTH_TOKEN=<host> OCTOS_HOST_EXTERNAL_TOKEN=<external> NO_COLOR=1 \
+printf '%s\n%s\n' "$HOST_TOKEN" "$EXTERNAL_TOKEN" | NO_COLOR=1 \
   octos serve --host-managed --host 127.0.0.1 --port 0 --data-dir <dir>
+# (a real host keeps the pipe open: its end of stdin is the lifeline)
 ```
 
 The server prints `Listening: http://127.0.0.1:<port>` when it accepts
