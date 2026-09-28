@@ -10,8 +10,10 @@
 //!   query})` builds a percent-encoded URL on a declared host. Neither opens a
 //!   connection: the core performs the request after the script returns.
 //! - `markup`: `markup.feed({lang})` parses the response being handled as
-//!   RSS/Atom (the body stays in the host) and `markup.text({html})` turns an
-//!   HTML fragment into plain text.
+//!   RSS/Atom (the body stays in the host), `markup.text({html})` turns an
+//!   HTML fragment into plain text, and `markup.matches({query, text})` says
+//!   whether a headline is about the query (the phrase, or every
+//!   significant term; see [`super::topic`]).
 //!
 //! Each method has a call budget and bounded JSON input and output. There is
 //! no `mod.tool`, filesystem, process, clock or network module.
@@ -222,6 +224,16 @@ fn text_tool(input: &Value) -> Result<Value, String> {
     Ok(json!({ "text": text }))
 }
 
+/// `{matched}`: whether `text` is about `query` ([`super::topic`]).
+fn matches_tool(input: &Value) -> Result<Value, String> {
+    let query = input
+        .get("query")
+        .and_then(Value::as_str)
+        .ok_or("markup.matches needs a query")?;
+    let text = input.get("text").and_then(Value::as_str).unwrap_or("");
+    Ok(json!({ "matched": super::topic::matches_query(query, text) }))
+}
+
 type Handler = Box<dyn Fn(&Value) -> Result<Value, String>>;
 
 /// Install a frozen host module whose methods take and return one bounded
@@ -327,6 +339,7 @@ fn runtime(engine: &SandboxEngine<'_>, body: Option<&str>) -> Result<Runtime, St
         vec![
             ("feed", 2, Box::new(move |v| feed_tool(v, body.as_deref()))),
             ("text", 4096, Box::new(text_tool)),
+            ("matches", 4096, Box::new(matches_tool)),
         ],
     );
     Ok(rt)
