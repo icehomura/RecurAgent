@@ -924,9 +924,7 @@ impl WebSearchTool {
         }
         if octos_research::respect_robots(|k| std::env::var(k).ok())
             && kept.iter().any(|h| {
-                h.provider
-                    .split('+')
-                    .any(|p| p == "google_news_rss" || p == "google_news")
+                h.provider == "google_news_rss" || h.engines.iter().any(|e| e == "google_news")
             })
         {
             output.push_str(

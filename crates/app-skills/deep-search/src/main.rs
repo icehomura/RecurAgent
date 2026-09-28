@@ -310,6 +310,7 @@ struct SearchLog {
     providers: Vec<String>,
     tried: Vec<String>,
     errors: Vec<String>,
+    notes: Vec<String>,
     dump: String,
     answer: String,
 }
@@ -327,6 +328,11 @@ impl SearchLog {
             }
         }
         self.errors.extend(round.errors);
+        for n in round.notes {
+            if !self.notes.contains(&n) {
+                self.notes.push(n);
+            }
+        }
         for t in round.tried {
             if !self.tried.contains(&t) {
                 self.tried.push(t);
@@ -486,6 +492,8 @@ fn source_item(s: &CitedSource, citation: usize, cited: bool, file: &str) -> Res
         },
         fetched_at: Some(s.page.fetched_at.clone()),
         provider: s.hit.provider.clone(),
+        engines: s.hit.engines.clone(),
+        score: s.hit.score,
         read: true,
         rendered: s.page.rendered,
         citation: (citation > 0).then_some(citation),
@@ -521,6 +529,8 @@ fn unread_item(hit: &SearchHit, citation: Option<usize>, cited: bool) -> Researc
         snippet: hit.snippet.clone(),
         fetched_at: None,
         provider: hit.provider.clone(),
+        engines: hit.engines.clone(),
+        score: hit.score,
         read: false,
         rendered: false,
         citation,
@@ -929,6 +939,9 @@ async fn run_deep_search(
         .unwrap_or_default();
     let items_path = items_path_for(&report_path);
     let mut doc = ItemsDocument::new(query, opts.controls_json());
+    if !log.notes.is_empty() {
+        doc.note = Some(log.notes.join(" "));
+    }
     for (i, s) in st.sources.iter().enumerate() {
         doc.items.push(source_item(
             s,
@@ -1082,6 +1095,9 @@ fn assemble_output(
 /// Empty (successful) result when no allowed provider returned anything.
 fn no_results_output(query: &str, log: &SearchLog, opts: &research::Options) -> Output {
     let mut message = octos_research::no_results_message(query, &log.tried);
+    for n in &log.notes {
+        message.push_str(&format!("\n{n}\n"));
+    }
     if !log.errors.is_empty() {
         message.push_str("\nProvider notes:\n- ");
         message.push_str(&log.errors.join("\n- "));

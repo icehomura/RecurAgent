@@ -139,6 +139,9 @@ pub(crate) struct ProviderOut {
     /// Model-written answer text (Perplexity, Tavily, Serper knowledge
     /// graph), used for the overview fallback and follow-up topics.
     pub answer: String,
+    /// Provider notes worth passing on (e.g. the metasearch saying key-less
+    /// general search is limited).
+    pub notes: Vec<String>,
 }
 
 /// Result of one search round across providers.
@@ -150,6 +153,7 @@ pub(crate) struct RoundOut {
     pub errors: Vec<String>,
     /// Every provider called this round (with or without results).
     pub tried: Vec<String>,
+    pub notes: Vec<String>,
 }
 
 pub(crate) fn api_client() -> &'static reqwest::Client {
@@ -309,6 +313,11 @@ async fn run_parallel(
                     continue;
                 }
                 out.providers.push(p.id().to_string());
+                for n in po.notes {
+                    if !out.notes.contains(&n) {
+                        out.notes.push(n);
+                    }
+                }
                 if !po.answer.trim().is_empty() {
                     if !out.answer.is_empty() {
                         out.answer.push_str("\n\n");
@@ -362,6 +371,7 @@ async fn run_provider(
             ProviderOut {
                 hits: free::parse_gdelt(&body)?,
                 answer: String::new(),
+                ..Default::default()
             }
         }
         Provider::GoogleNewsRss => {
@@ -373,6 +383,7 @@ async fn run_provider(
             ProviderOut {
                 hits,
                 answer: String::new(),
+                ..Default::default()
             }
         }
         Provider::Searxng => {
@@ -384,6 +395,7 @@ async fn run_provider(
             ProviderOut {
                 hits,
                 answer: String::new(),
+                ..Default::default()
             }
         }
         Provider::Serper => {
@@ -491,6 +503,7 @@ async fn run_provider(
             ProviderOut {
                 hits: crate::ddg_search(query, count).await?,
                 answer: String::new(),
+                ..Default::default()
             }
         }
         Provider::BingBrowser => {
@@ -500,6 +513,7 @@ async fn run_provider(
             ProviderOut {
                 hits: crate::bing_cdp_search(query, count).await?,
                 answer: String::new(),
+                ..Default::default()
             }
         }
         Provider::Exa => return Err("not supported by deep-search".to_string()),
@@ -557,6 +571,8 @@ async fn metasearch_round(
     Ok(ProviderOut {
         hits: resp.hits(),
         answer: String::new(),
+        notes: resp.note.into_iter().collect(),
+        ..Default::default()
     })
 }
 
@@ -600,7 +616,11 @@ pub(crate) fn parse_serper(text: &str) -> Result<ProviderOut, String> {
             Some(h)
         })
         .collect();
-    Ok(ProviderOut { hits, answer })
+    Ok(ProviderOut {
+        hits,
+        answer,
+        ..Default::default()
+    })
 }
 
 pub(crate) fn parse_tavily(text: &str) -> Result<ProviderOut, String> {
@@ -619,7 +639,11 @@ pub(crate) fn parse_tavily(text: &str) -> Result<ProviderOut, String> {
             Some(h)
         })
         .collect();
-    Ok(ProviderOut { hits, answer })
+    Ok(ProviderOut {
+        hits,
+        answer,
+        ..Default::default()
+    })
 }
 
 pub(crate) fn parse_brave(text: &str) -> Result<ProviderOut, String> {
@@ -638,6 +662,7 @@ pub(crate) fn parse_brave(text: &str) -> Result<ProviderOut, String> {
     Ok(ProviderOut {
         hits,
         answer: String::new(),
+        ..Default::default()
     })
 }
 
@@ -658,6 +683,7 @@ pub(crate) fn parse_you(text: &str) -> Result<ProviderOut, String> {
     Ok(ProviderOut {
         hits,
         answer: String::new(),
+        ..Default::default()
     })
 }
 
@@ -685,7 +711,11 @@ pub(crate) fn parse_perplexity(text: &str) -> Result<ProviderOut, String> {
             .filter_map(|c| hit(c.as_str()?, "", "", "perplexity"))
             .collect();
     }
-    Ok(ProviderOut { hits, answer })
+    Ok(ProviderOut {
+        hits,
+        answer,
+        ..Default::default()
+    })
 }
 
 // ---------------------------------------------------------------------------

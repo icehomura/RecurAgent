@@ -950,6 +950,7 @@ fn normalize_item(v: &Value, engine: &str, default_lang: Option<&str>) -> Option
         lang,
         published,
         provider: engine.to_string(),
+        ..Default::default()
     })
 }
 

@@ -460,6 +460,8 @@ fn page_item(
         snippet: page.meta.excerpt.clone().unwrap_or_default(),
         fetched_at: Some(page.fetched_at.clone()),
         provider: "web_search".to_string(),
+        engines: Vec::new(),
+        score: None,
         read: true,
         rendered: page.rendered,
         citation: Some(citation),
