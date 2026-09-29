@@ -123,7 +123,7 @@ The results-page engines (`results_page`: DuckDuckGo, Bing, Bing News, Brave web
 | `OCTOS_RESPECT_ROBOTS=1` | Operator opt-in: check robots.txt for engines whose manifest sets `robots` (off by default; octos agents act for one person). |
 | `OCTOS_METASEARCH=0` | Turn the metasearch off; news falls back to direct GDELT and Google News RSS calls. |
 | `OCTOS_ALLOW_SERP_SCRAPE=0` | Turn the results-page engines off (on by default). |
-| `OCTOS_BROWSER` | `off` (default), `auto`, `window` or `headless`: load pages of engines that render (`google_cse`) in the octos browser profile (`octos_research::browser`). |
+| `OCTOS_BROWSER` | `off` (default), `auto`, `window` or `headless`: load pages of engines that render (`google_cse`) in the octos browser profile (`octos_research::browser`). Any other value, `1` and `true` included, means `off`, so a typo never opens windows. |
 | `OCTOS_METASEARCH_ENGINES` | Directory of extra engines. |
 | `OCTOS_METASEARCH_PINS` | Pins file for those engines (`{"id": "sha256:…"}`), kept outside the engine directory. |
 | `OCTOS_METASEARCH_ALLOW_OVERRIDE=1` | Let a pinned directory engine replace a built-in with the same id. |

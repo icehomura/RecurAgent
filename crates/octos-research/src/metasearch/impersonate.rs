@@ -58,8 +58,8 @@ const LEGACY_MOBILE_HEADERS: &[(&str, &str)] = &[
     ("accept-language", "en-US,en;q=0.9"),
 ];
 
-/// Largest body read (matches `ReqwestFetch`).
-const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
+/// Largest body kept: the engine sandbox parses at most 3 MiB.
+const MAX_BODY_BYTES: usize = 3 * 1024 * 1024;
 
 /// A fetcher that presents the `legacy_mobile` client for requests that ask
 /// for it and passes everything else to `inner`.
