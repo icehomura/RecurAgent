@@ -25,6 +25,8 @@
 //! has built the request.
 
 pub mod http;
+#[cfg(all(feature = "impersonate", not(windows)))]
+pub mod impersonate;
 pub mod manifest;
 pub mod merge;
 pub mod registry;
@@ -358,18 +360,24 @@ impl SearchResponse {
     }
 }
 
-/// The fetcher a host should give the metasearch: plain HTTP, and with the
-/// `browser` feature the person's browser for engines that render (unless
-/// [`crate::browser::BROWSER_ENV`] turns it off).
+/// The fetcher a host should give the metasearch: plain HTTP with the
+/// identifiable octos client; with the `impersonate` feature, the client
+/// profiles results-page engines name (Google's page for simple phones);
+/// with the `browser` feature and `OCTOS_BROWSER` set, the person's browser
+/// for engines that render.
 #[cfg(feature = "http")]
 pub fn default_fetch() -> Arc<dyn Fetch> {
     #[cfg(feature = "browser")]
     if let Some(b) = crate::browser::shared() {
-        return Arc::new(crate::browser::PersonBrowserFetch::new(
-            ReqwestFetch::new(),
-            b,
-        ));
+        let f = crate::browser::PersonBrowserFetch::new(ReqwestFetch::new(), b);
+        #[cfg(all(feature = "impersonate", not(windows)))]
+        return Arc::new(impersonate::ImpersonatingFetch::new(f));
+        #[cfg(not(all(feature = "impersonate", not(windows))))]
+        return Arc::new(f);
     }
+    #[cfg(all(feature = "impersonate", not(windows)))]
+    return Arc::new(impersonate::ImpersonatingFetch::new(ReqwestFetch::new()));
+    #[cfg(not(all(feature = "impersonate", not(windows))))]
     Arc::new(ReqwestFetch::new())
 }
 
@@ -505,6 +513,13 @@ impl Metasearch {
         // Needs a browser the host does not have: left out quietly rather
         // than failing (and backing off) on every search.
         if m.renders && !self.inner.fetch.can_render() {
+            return false;
+        }
+        // Needs a client profile the host cannot present: left out too.
+        if m.client
+            .as_deref()
+            .is_some_and(|c| !self.inner.fetch.supports_client(c))
+        {
             return false;
         }
         !m.needs_key || c.keys.contains_key(&m.id)
@@ -1077,6 +1092,7 @@ impl Metasearch {
                             headers: vec![("user-agent".into(), crate::USER_AGENT.into())],
                             body: None,
                             timeout: Duration::from_secs(8),
+                            client: None,
                         })
                         .await;
                     match r {
@@ -1132,6 +1148,7 @@ impl Metasearch {
                     headers: sreq.headers.clone(),
                     body: sreq.body.clone(),
                     timeout: Duration::from_secs(m.timeout_secs),
+                    client: m.client.clone(),
                 };
                 http.headers
                     .push(("user-agent".into(), crate::USER_AGENT.into()));

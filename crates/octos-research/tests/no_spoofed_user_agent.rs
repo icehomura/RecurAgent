@@ -1,10 +1,12 @@
 //! Policy check (OctoSense ADR 0002 §6, review of octos#2568): the research
-//! fetch paths must not pose as a desktop browser. No hard-coded browser
-//! User-Agent (`Mozilla/5.0 (...) ... Chrome/...`, `AppleWebKit`, `Safari/`)
-//! may appear in the research crates or the built-in search tools — including
-//! the results-page providers (on by default since the ADR 0002 amendment;
-//! they identify as octos) — nor in the metasearch engine scripts and
-//! manifests.
+//! fetch paths identify as octos. No hard-coded desktop-browser User-Agent
+//! (`Mozilla/5.0 (...) ... Chrome/...`, `AppleWebKit`, `Safari/`) may appear
+//! in the research crates or the built-in search tools, nor in the
+//! metasearch engine scripts and manifests. The one exception is by design
+//! and outside this check's pattern: `metasearch::impersonate`'s
+//! `legacy_mobile` client, which results-page engines name in their
+//! manifest (`client`) to search the way SearXNG does (the maintainer's
+//! decision).
 
 use std::path::{Path, PathBuf};
 

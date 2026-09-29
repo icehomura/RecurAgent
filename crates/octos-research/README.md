@@ -112,7 +112,9 @@ The detection is deliberately conservative (`access::diagnose`), so an article t
 
 ### Clean-room method
 
-SearXNG (AGPL-3.0) was only the conceptual model: engines as small modules, parallel dispatch, merge and rank. No SearXNG source, engine module or settings file was read, translated or copied. Each engine was written from its provider's public documentation (its manifest's `docs_url`), and its request and response shapes were checked against one recorded live response. The exceptions are Brave (needs a key) and GDELT (it answered HTTP 429 while recording), whose fixtures are synthetic and marked as such in their files. Every engine uses an official API or a published feed; no results page is scraped.
+SearXNG (AGPL-3.0) was the conceptual model: engines as small modules, parallel dispatch, merge and rank. No SearXNG source, engine module or settings file was read, translated or copied. Each API engine was written from its provider's public documentation (its manifest's `docs_url`), and its request and response shapes were checked against one recorded live response. The exceptions are Brave (needs a key) and GDELT (it answered HTTP 429 while recording), whose fixtures are synthetic and marked as such in their files.
+
+The results-page engines (`results_page`: DuckDuckGo, Bing, Bing News, Brave web, Google) read search engines' own pages, as SearXNG does; the maintainer decided that octos searches the way SearXNG does, with no person in the loop. Their parsers were written from the pages as observed, with recorded or reconstructed fixtures. Google answers plain clients with an "unusual traffic" page. How SearXNG still gets results was learned black-box, from outside: its requests through a logging proxy on a test instance (endpoint, parameters, headers and their order) and its installed HTTP client library (curl_cffi, a browser-fingerprint client). Those observed facts are reproduced by the `legacy_mobile` client (`metasearch::impersonate`, feature `impersonate`, built on the `wreq` crate); no SearXNG code was read. A challenge page is never solved: the engine is suspended and the other engines answer.
 
 ### Configuration
 
@@ -120,6 +122,8 @@ SearXNG (AGPL-3.0) was only the conceptual model: engines as small modules, para
 |---|---|
 | `OCTOS_RESPECT_ROBOTS=1` | Operator opt-in: check robots.txt for engines whose manifest sets `robots` (off by default; octos agents act for one person). |
 | `OCTOS_METASEARCH=0` | Turn the metasearch off; news falls back to direct GDELT and Google News RSS calls. |
+| `OCTOS_ALLOW_SERP_SCRAPE=0` | Turn the results-page engines off (on by default). |
+| `OCTOS_BROWSER` | `off` (default), `auto`, `window` or `headless`: load pages of engines that render (`google_cse`) in the octos browser profile (`octos_research::browser`). Any other value, `1` and `true` included, means `off`, so a typo never opens windows. |
 | `OCTOS_METASEARCH_ENGINES` | Directory of extra engines. |
 | `OCTOS_METASEARCH_PINS` | Pins file for those engines (`{"id": "sha256:…"}`), kept outside the engine directory. |
 | `OCTOS_METASEARCH_ALLOW_OVERRIDE=1` | Let a pinned directory engine replace a built-in with the same id. |
