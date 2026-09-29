@@ -23,18 +23,22 @@
 //! rolls back already-written files from the staged originals.
 //! `action: "reject"` discards the proposal with zero writes.
 
+use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
 use crate::model::{ContentBlock, TextContent};
 use crate::tools::{Tool, ToolEffects, ToolOutput, ToolUpdate};
 use ast_grep_core::{AstGrep, Pattern};
 use ast_grep_language::SupportLang;
+use asupersync::time::{sleep, wall_now};
 use async_trait::async_trait;
 use serde::Deserialize;
 use sha2::Digest as _;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 // ============================================================================
 // Limits and caps
@@ -243,12 +247,16 @@ struct ScanOutcome {
 
 /// Collect candidate files under `root` (file or directory), honoring
 /// gitignore rules, the optional glob override, and language detection.
+///
+/// Runs on the blocking pool, so `cancelled` aborts the walk with the same
+/// error the caller would observe from its own checkpoint.
 fn collect_files(
     root: &Path,
     cwd: &Path,
     glob: Option<&str>,
     lang_override: Option<AstLanguage>,
     tool: &str,
+    cancelled: &AtomicBool,
 ) -> Result<ScanOutcome> {
     let glob_override = build_glob_override(cwd, glob, tool)?;
     let mut files = Vec::new();
@@ -279,6 +287,9 @@ fn collect_files(
         .follow_links(false);
 
     for entry in builder.build().flatten() {
+        if cancelled.load(Ordering::Relaxed) {
+            return Err(Error::tool(tool, "Command cancelled"));
+        }
         if files.len() >= MAX_SCAN_FILES {
             truncated = true;
             break;
@@ -367,6 +378,50 @@ fn text_output(text: String, details: serde_json::Value) -> ToolOutput {
     }
 }
 
+/// Run one synchronous walk+parse pass on the blocking pool.
+///
+/// This is this module's copy of the repo-wide cancellable offload pattern
+/// (`grep`'s in-process scanner, `src/tools.rs`): the worker closure owns its
+/// inputs and polls `cancelled` at file boundaries, while this loop checks
+/// `cx.checkpoint()` every 10 ms and flips the flag so a cancelled agent loop
+/// stops the CPU work instead of waiting it out. Either side produces the same
+/// `Error::tool(tool, "Command cancelled")`.
+///
+/// `spawn_blocking_io` forces an `io::Result` payload, so the worker's crate
+/// [`Result`] is nested inside it: only a pool/join failure becomes the outer
+/// error, which keeps `Error::validation` and `Error::tool` distinguishable for
+/// callers.
+async fn offload_ast_work<T, F>(
+    tool: &'static str,
+    cancelled: Arc<AtomicBool>,
+    work: F,
+) -> Result<T>
+where
+    F: FnOnce() -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    let mut scan = Box::pin(asupersync::runtime::spawn_blocking_io(
+        move || -> std::io::Result<Result<T>> { Ok(work()) },
+    ));
+    let tick = Duration::from_millis(10);
+    loop {
+        let agent_cx = AgentCx::for_current_or_request();
+        let cx = agent_cx.cx();
+        if cx.checkpoint().is_err() {
+            cancelled.store(true, Ordering::Relaxed);
+            return Err(Error::tool(tool, "Command cancelled"));
+        }
+        let now = cx.timer_driver().map_or_else(wall_now, |timer| timer.now());
+        let sleeper = Box::pin(sleep(now, tick));
+        match futures::future::select(scan, sleeper).await {
+            futures::future::Either::Left((joined, _)) => {
+                return joined.map_err(|err| Error::tool(tool, err.to_string()))?;
+            }
+            futures::future::Either::Right(((), pending)) => scan = pending,
+        }
+    }
+}
+
 // ============================================================================
 // ast_grep tool
 // ============================================================================
@@ -413,8 +468,12 @@ impl AstGrepTool {
         }
     }
 
+    /// Synchronous scan core, offloaded by [`AstGrepTool::execute`].
+    ///
+    /// Takes `cwd` and `cancelled` by reference because it runs on the blocking
+    /// pool, where `&self` is unavailable.
     #[allow(clippy::too_many_lines)]
-    fn run(&self, input: &AstGrepInput) -> Result<ToolOutput> {
+    fn run(cwd: &Path, input: &AstGrepInput, cancelled: &AtomicBool) -> Result<ToolOutput> {
         if input.pattern.trim().is_empty() {
             return Err(Error::validation("`pattern` must not be empty"));
         }
@@ -439,7 +498,7 @@ impl AstGrepTool {
             })
             .transpose()?;
 
-        let root = resolve_tool_path(input.path.as_deref().unwrap_or("."), &self.cwd);
+        let root = resolve_tool_path(input.path.as_deref().unwrap_or("."), cwd);
         if !root.exists() {
             return Err(Error::validation(format!(
                 "path not found: {}",
@@ -448,10 +507,11 @@ impl AstGrepTool {
         }
         let scan = collect_files(
             &root,
-            &self.cwd,
+            cwd,
             input.glob.as_deref(),
             lang_override,
             "ast_grep",
+            cancelled,
         )?;
 
         // Compile the pattern once per in-scope language.
@@ -480,6 +540,9 @@ impl AstGrepTool {
         let mut truncated = scan.truncated;
         let mut skipped_files = 0_usize;
         'files: for file in &scan.files {
+            if cancelled.load(Ordering::Relaxed) {
+                return Err(Error::tool("ast_grep", "Command cancelled"));
+            }
             let lang = lang_override.unwrap_or_else(|| {
                 AstLanguage::for_path(file).expect("scan only collects language-detectable files")
             });
@@ -513,7 +576,7 @@ impl AstGrepTool {
                     matched.push_str("... [truncated]");
                 }
                 matches.push(AstMatch {
-                    file: display_path(file, &self.cwd),
+                    file: display_path(file, cwd),
                     language: lang.name(),
                     start_line: start.0 + 1,
                     start_column: start.1,
@@ -600,7 +663,13 @@ impl Tool for AstGrepTool {
     ) -> Result<ToolOutput> {
         let input: AstGrepInput =
             serde_json::from_value(input).map_err(|e| Error::validation(e.to_string()))?;
-        self.run(&input)
+        let cwd = self.cwd.clone();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancel_for_scan = Arc::clone(&cancelled);
+        offload_ast_work("ast_grep", cancelled, move || {
+            Self::run(&cwd, &input, &cancel_for_scan)
+        })
+        .await
     }
 }
 
@@ -609,7 +678,7 @@ impl Tool for AstGrepTool {
 // ============================================================================
 
 /// One rewrite operation: replace matches of `pat` with `out`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AstEditOp {
     /// Structural pattern to match (single AST node).
@@ -619,7 +688,7 @@ pub struct AstEditOp {
     pub out: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct AstEditInput {
     action: Option<String>,
@@ -665,6 +734,17 @@ struct StagedProposal {
     files: Vec<StagedFile>,
     total_replacements: usize,
     sequence: u64,
+}
+
+/// Outcome of one offloaded `stage` pass: the proposal (when anything matched)
+/// plus the already-rendered tool output.
+///
+/// The proposal is handed back instead of being stored here because
+/// [`ProposalStore`] lives behind `&self`, which cannot cross into the blocking
+/// pool.
+struct StagedOutcome {
+    staged: Option<(String, StagedProposal)>,
+    output: ToolOutput,
 }
 
 /// Bounded proposal store with oldest-first eviction.
@@ -810,8 +890,13 @@ impl AstEditTool {
         Ok((current, replacements))
     }
 
+    /// Synchronous staging core, offloaded by [`AstEditTool::execute`].
+    ///
+    /// Takes `cwd` and `cancelled` by reference because it runs on the blocking
+    /// pool, where `&self` is unavailable; the caller stores the returned
+    /// proposal.
     #[allow(clippy::too_many_lines)]
-    fn stage(&self, input: &AstEditInput) -> Result<ToolOutput> {
+    fn stage(cwd: &Path, input: &AstEditInput, cancelled: &AtomicBool) -> Result<StagedOutcome> {
         let ops = input
             .ops
             .as_deref()
@@ -837,7 +922,7 @@ impl AstEditTool {
             })
             .transpose()?;
 
-        let root = resolve_tool_path(input.path.as_deref().unwrap_or("."), &self.cwd);
+        let root = resolve_tool_path(input.path.as_deref().unwrap_or("."), cwd);
         if !root.exists() {
             return Err(Error::validation(format!(
                 "path not found: {}",
@@ -846,10 +931,11 @@ impl AstEditTool {
         }
         let scan = collect_files(
             &root,
-            &self.cwd,
+            cwd,
             input.glob.as_deref(),
             lang_override,
             "ast_edit",
+            cancelled,
         )?;
 
         // Compile ops per in-scope language; any parse failure is a hard,
@@ -871,6 +957,9 @@ impl AstEditTool {
         let mut total_replacements = 0_usize;
         let mut skipped_files = 0_usize;
         for file in &scan.files {
+            if cancelled.load(Ordering::Relaxed) {
+                return Err(Error::tool("ast_edit", "Command cancelled"));
+            }
             let lang = lang_override.unwrap_or_else(|| {
                 AstLanguage::for_path(file).expect("scan only collects language-detectable files")
             });
@@ -893,7 +982,7 @@ impl AstEditTool {
                     "[AST_LIMIT_EXCEEDED] rewrite would perform {total_replacements} replacements, exceeding maxReplacements={max_replacements}; narrow the scope or raise the cap"
                 )));
             }
-            let display = display_path(file, &self.cwd);
+            let display = display_path(file, cwd);
             let diff = unified_diff_preview(&display, &original, &new_content);
             staged_files.push(StagedFile {
                 path: file.clone(),
@@ -916,7 +1005,10 @@ impl AstEditTool {
             });
             let text = serde_json::to_string_pretty(&payload)
                 .unwrap_or_else(|_| "{\"error\":\"serialization failed\"}".to_string());
-            return Ok(text_output(text, payload));
+            return Ok(StagedOutcome {
+                staged: None,
+                output: text_output(text, payload),
+            });
         }
 
         let proposal_id = format!("ast-{}", uuid::Uuid::new_v4());
@@ -936,10 +1028,6 @@ impl AstEditTool {
                 })
             })
             .collect();
-        self.proposals
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(proposal_id.clone(), proposal);
 
         let payload = serde_json::json!({
             "staged": true,
@@ -953,10 +1041,18 @@ impl AstEditTool {
         });
         let text = serde_json::to_string_pretty(&payload)
             .unwrap_or_else(|_| "{\"error\":\"serialization failed\"}".to_string());
-        Ok(text_output(text, payload))
+        Ok(StagedOutcome {
+            staged: Some((proposal_id, proposal)),
+            output: text_output(text, payload),
+        })
     }
 
-    fn resolve(&self, input: &AstEditInput) -> Result<ToolOutput> {
+    /// Validate a `resolve` request and take its proposal out of the store.
+    ///
+    /// Only the store lookup happens here; the filesystem half of the apply
+    /// ([`apply_proposal`]) runs on the blocking pool, and the proposal has to
+    /// be taken up front because the store lives behind `&self`.
+    fn take_for_resolve(&self, input: &AstEditInput) -> Result<(String, String, StagedProposal)> {
         let proposal_id = input
             .proposal_id
             .as_deref()
@@ -979,81 +1075,7 @@ impl AstEditTool {
                     "[AST_PROPOSAL_UNKNOWN] unknown proposal id '{proposal_id}' (already resolved, rejected, or evicted)"
                 ))
             })?;
-
-        // Pre-verify every file before writing anything: stale-anchor
-        // rejection (content re-hash) applies to the whole proposal.
-        for file in &proposal.files {
-            let current = std::fs::read_to_string(&file.path).map_err(|error| {
-                Error::tool(
-                    "ast_edit",
-                    format!(
-                        "[AST_PROPOSAL_STALE] cannot re-read '{}': {error}; whole proposal '{proposal_id}' rejected",
-                        file.display
-                    ),
-                )
-            })?;
-            if content_hash(&current) != file.original_hash {
-                return Err(Error::tool(
-                    "ast_edit",
-                    format!(
-                        "[AST_PROPOSAL_STALE] file '{}' changed since staging; whole proposal '{proposal_id}' rejected (re-stage to proceed)",
-                        file.display
-                    ),
-                ));
-            }
-        }
-
-        // Apply: temp-file + rename per file; roll back on mid-failure.
-        let mut written = 0_usize;
-        for file in &proposal.files {
-            if let Err(error) = write_file_atomic(&file.path, &file.new_content) {
-                let mut rollback_errors = Vec::new();
-                for previous in &proposal.files[..written] {
-                    if let Err(rollback_error) =
-                        write_file_atomic(&previous.path, &previous.original_content)
-                    {
-                        rollback_errors.push(format!("{}: {rollback_error}", previous.display));
-                    }
-                }
-                let mut message = format!(
-                    "[AST_APPLY_FAILED] failed to write '{}': {error}; rolled back {written} previously-written file(s)",
-                    file.display
-                );
-                if rollback_errors.is_empty() {
-                    message.push_str("; all prior writes restored");
-                } else {
-                    let _ = write!(
-                        message,
-                        "; ROLLBACK ERRORS (manual repair needed): {}",
-                        rollback_errors.join("; ")
-                    );
-                }
-                return Err(Error::tool("ast_edit", message));
-            }
-            written += 1;
-        }
-
-        let files_json: Vec<serde_json::Value> = proposal
-            .files
-            .iter()
-            .map(|file| {
-                serde_json::json!({
-                    "path": file.display,
-                    "replacements": file.replacements,
-                })
-            })
-            .collect();
-        let payload = serde_json::json!({
-            "applied": true,
-            "proposalId": proposal_id,
-            "reason": reason,
-            "replacements": proposal.total_replacements,
-            "filesWritten": written,
-            "files": files_json,
-        });
-        let text = serde_json::to_string_pretty(&payload)
-            .unwrap_or_else(|_| "{\"error\":\"serialization failed\"}".to_string());
-        Ok(text_output(text, payload))
+        Ok((proposal_id.to_string(), reason.to_string(), proposal))
     }
 
     fn reject(&self, input: &AstEditInput) -> Result<ToolOutput> {
@@ -1080,6 +1102,94 @@ impl AstEditTool {
             .unwrap_or_else(|_| "{\"error\":\"serialization failed\"}".to_string());
         Ok(text_output(text, payload))
     }
+}
+
+/// Apply a staged proposal: re-hash every anchor, then write temp-file + rename
+/// per file, rolling already-written files back on a mid-apply failure.
+///
+/// Blocking filesystem work, run on the blocking pool by
+/// [`AstEditTool::execute`]. It deliberately is **not** wired to the cancel
+/// flag: aborting between two writes would leave a half-applied proposal
+/// without the rollback that only this function can perform.
+fn apply_proposal(
+    proposal_id: &str,
+    reason: &str,
+    proposal: &StagedProposal,
+) -> Result<ToolOutput> {
+    // Pre-verify every file before writing anything: stale-anchor
+    // rejection (content re-hash) applies to the whole proposal.
+    for file in &proposal.files {
+        let current = std::fs::read_to_string(&file.path).map_err(|error| {
+            Error::tool(
+                "ast_edit",
+                format!(
+                    "[AST_PROPOSAL_STALE] cannot re-read '{}': {error}; whole proposal '{proposal_id}' rejected",
+                    file.display
+                ),
+            )
+        })?;
+        if content_hash(&current) != file.original_hash {
+            return Err(Error::tool(
+                "ast_edit",
+                format!(
+                    "[AST_PROPOSAL_STALE] file '{}' changed since staging; whole proposal '{proposal_id}' rejected (re-stage to proceed)",
+                    file.display
+                ),
+            ));
+        }
+    }
+
+    // Apply: temp-file + rename per file; roll back on mid-failure.
+    let mut written = 0_usize;
+    for file in &proposal.files {
+        if let Err(error) = write_file_atomic(&file.path, &file.new_content) {
+            let mut rollback_errors = Vec::new();
+            for previous in &proposal.files[..written] {
+                if let Err(rollback_error) =
+                    write_file_atomic(&previous.path, &previous.original_content)
+                {
+                    rollback_errors.push(format!("{}: {rollback_error}", previous.display));
+                }
+            }
+            let mut message = format!(
+                "[AST_APPLY_FAILED] failed to write '{}': {error}; rolled back {written} previously-written file(s)",
+                file.display
+            );
+            if rollback_errors.is_empty() {
+                message.push_str("; all prior writes restored");
+            } else {
+                let _ = write!(
+                    message,
+                    "; ROLLBACK ERRORS (manual repair needed): {}",
+                    rollback_errors.join("; ")
+                );
+            }
+            return Err(Error::tool("ast_edit", message));
+        }
+        written += 1;
+    }
+
+    let files_json: Vec<serde_json::Value> = proposal
+        .files
+        .iter()
+        .map(|file| {
+            serde_json::json!({
+                "path": file.display,
+                "replacements": file.replacements,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "applied": true,
+        "proposalId": proposal_id,
+        "reason": reason,
+        "replacements": proposal.total_replacements,
+        "filesWritten": written,
+        "files": files_json,
+    });
+    let text = serde_json::to_string_pretty(&payload)
+        .unwrap_or_else(|_| "{\"error\":\"serialization failed\"}".to_string());
+    Ok(text_output(text, payload))
 }
 
 #[async_trait]
@@ -1166,8 +1276,33 @@ impl Tool for AstEditTool {
         let input: AstEditInput =
             serde_json::from_value(input).map_err(|e| Error::validation(e.to_string()))?;
         match input.action.as_deref().unwrap_or("stage") {
-            "stage" => self.stage(&input),
-            "resolve" => self.resolve(&input),
+            "stage" => {
+                // `Self::stage` runs on the blocking pool, so it needs owned
+                // input plus a cancel flag the offload loop can set.
+                let staged_input = input.clone();
+                let cwd = self.cwd.clone();
+                let cancelled = Arc::new(AtomicBool::new(false));
+                let cancel_for_scan = Arc::clone(&cancelled);
+                let outcome = offload_ast_work("ast_edit", cancelled, move || {
+                    Self::stage(&cwd, &staged_input, &cancel_for_scan)
+                })
+                .await?;
+                if let Some((proposal_id, proposal)) = outcome.staged {
+                    self.proposals
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .insert(proposal_id, proposal);
+                }
+                Ok(outcome.output)
+            }
+            "resolve" => {
+                let (proposal_id, reason, proposal) = self.take_for_resolve(&input)?;
+                asupersync::runtime::spawn_blocking_io(move || {
+                    Ok(apply_proposal(&proposal_id, &reason, &proposal))
+                })
+                .await
+                .map_err(|err| Error::tool("ast_edit", err.to_string()))?
+            }
             "reject" => self.reject(&input),
             other => Err(Error::validation(format!(
                 "unknown action '{other}'; expected stage|resolve|reject"
