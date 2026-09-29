@@ -1118,7 +1118,7 @@ fn estimate_context_tokens(messages: &[SessionMessage]) -> ContextUsageEstimate 
         #[allow(clippy::cast_precision_loss)] // diagnostic ratio only
         let ratio = estimated_total as f64 / measured_total as f64;
         tracing::debug!(
-            event = "pi.compaction.token_estimate_delta",
+            event = "ra.compaction.token_estimate_delta",
             estimated_total,
             measured_total,
             delta,

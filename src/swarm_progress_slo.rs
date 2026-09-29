@@ -667,7 +667,7 @@ pub fn measure_progress_slo_stress_profile(
             profile_id: profile.profile_id.clone(),
             scenario: profile.scenario,
             generated_at: profile.progress_input.generated_at.clone(),
-            generated_by: "pi.swarm.progress_slo.synthetic_stress_budget".to_string(),
+            generated_by: "ra.swarm.progress_slo.synthetic_stress_budget".to_string(),
             source_profile_fingerprint: fingerprint,
             synthetic: true,
             host_cpu_cores: profile.host_cpu_cores,

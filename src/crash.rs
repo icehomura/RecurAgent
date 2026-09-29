@@ -355,7 +355,7 @@ fn spawn_signal_watcher(agent_dir: PathBuf, session_path: Option<String>) {
         signal_hook::consts::signal::SIGBUS,
     ];
     let Ok(mut signals) = signal_hook::iterator::Signals::new(watched) else {
-        tracing::warn!(event = "pi.crash.watch", "signal watcher unavailable");
+        tracing::warn!(event = "ra.crash.watch", "signal watcher unavailable");
         return;
     };
     std::thread::Builder::new()
