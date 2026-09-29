@@ -266,6 +266,101 @@ The terminal UI uses rich_rust for all output formatting, providing the same vis
 
 ---
 
+## Integrated Libraries
+
+`recur_agent` is built on a small set of Rust libraries rather than wrapping
+external CLIs. This section lists what is actually linked, why it is used, and
+which parts are opt-in. Everything below is a **compile-time dependency** — none
+of it is reached through a subprocess, and none of it through MCP.
+
+Versions are the requirements declared in `Cargo.toml`; the resolved versions
+are pinned in `Cargo.lock`.
+
+### Search and code intelligence
+
+| Library | Used by | What it does |
+|---|---|---|
+| [`grep-searcher`](https://crates.io/crates/grep-searcher) / [`grep-regex`](https://crates.io/crates/grep-regex) / [`ignore`](https://crates.io/crates/ignore) / [`globset`](https://crates.io/crates/globset) | `grep`, `find` | The ripgrep core, linked as libraries. `grep-searcher` walks and searches, `grep-regex` compiles the matcher, `ignore` supplies gitignore-aware directory walking, `globset` backs the `find` glob patterns. Context lines come from the searcher itself (`before_context`/`after_context`), so a match does not trigger a second read of the file. |
+| [`ast-grep-core`](https://crates.io/crates/ast-grep-core) / [`ast-grep-language`](https://crates.io/crates/ast-grep-language) | `ast_grep`, `ast_edit` | Structural (AST) search and rewrite. `ast-grep-language` supplies the tree-sitter grammars; `ast-grep-core` compiles a pattern and walks the tree. Rewrites are staged and drift-checked before they are applied. |
+
+`ast-grep-language` is configured with grammars for Bash, Python, JavaScript,
+TypeScript, TSX, Ruby, Rust, and Go. Adding a language means enabling another
+grammar feature, not adding a tool.
+
+### Text, JSON, and data
+
+| Library | Used by | What it does |
+|---|---|---|
+| [`jaq-core`](https://crates.io/crates/jaq-core) / [`jaq-json`](https://crates.io/crates/jaq-json) / [`jaq-std`](https://crates.io/crates/jaq-std) | `json_query` | jq-compatible JSON queries, in-process. `jaq-core` is the parser/compiler/interpreter, `jaq-json` the JSON value and reader, `jaq-std` the standard filter library (`map`, `select`, `reduce`, `group_by`, …). Because it is linked, `json_query` does not need a `jq` binary on `PATH` and does not pay a process spawn per call. |
+| [`serde`](https://crates.io/crates/serde) / [`serde_json`](https://crates.io/crates/serde_json) | everywhere | Serialization for provider traffic, session files, tool payloads. `serde_json` is used with the `raw_value` feature so payloads can pass through without being re-parsed. |
+| [`json5`](https://crates.io/crates/json5) | model registry | Parses the relaxed JSON dialect used by model configuration files. |
+| [`regex`](https://crates.io/crates/regex) / [`memchr`](https://crates.io/crates/memchr) | throughout | Pattern matching and fast byte search. |
+| [`similar`](https://crates.io/crates/similar) | `edit`, `ast_edit` previews, TUI | Line and word diffs for edit previews and inline highlighting. |
+| [`encoding_rs`](https://crates.io/crates/encoding_rs) | `read` | Decodes non-UTF-8 files. BOM sniffing plus an explicit `encoding` parameter; without a declared or sniffed encoding the previous lossy behaviour is kept. |
+| [`unicode-width`](https://crates.io/crates/unicode-width) | status line, TUI | Display width, so CJK text is measured in terminal cells rather than `char`s. |
+
+### Language tooling
+
+| Library | Used by | What it does |
+|---|---|---|
+| [`swc_ecma_parser`](https://crates.io/crates/swc_ecma_parser) and the `swc_ecma_*` family | `extensions_js` | Full JS/TS parsing and code generation, used when the extension runtime needs to inspect or rewrite extension source. |
+| [`rquickjs`](https://crates.io/crates/rquickjs) | `extensions_js`, `run_code` | The QuickJS engine. It runs extension scripts and backs the `run_code` tool, which lets one call replace several tool round-trips. |
+| [`wasmtime`](https://crates.io/crates/wasmtime) | WASM extensions | *(opt-in, `wasm-host` feature)* Runs WASM extension modules. Kept optional because it is one of the heaviest dependencies in the tree. |
+
+### Terminal and process control
+
+| Library | Used by | What it does |
+|---|---|---|
+| [`portable-pty`](https://crates.io/crates/portable-pty) | `bash`, `hub` | PTY allocation, so `isatty`-detecting commands behave normally. `hub` keeps long-lived sessions with on-demand stdin writes, a bounded output ring, and process-tree teardown. |
+| [`crossterm`](https://crates.io/crates/crossterm) | interactive front-end | *(opt-in, `tui` feature)* Low-level terminal control. |
+| [`charmed-bubbletea`](https://crates.io/crates/charmed-bubbletea) / `charmed-lipgloss` / `charmed-bubbles` / `charmed-glamour` | interactive front-end | *(opt-in, `tui` feature)* The Elm-architecture TUI stack and markdown renderer. |
+| [`ftui`](https://crates.io/crates/ftui) / `ftui-extras` | interactive front-end | *(opt-in, `ftui` feature)* The FrankenTUI stack the interactive runtime is being ported to. Coexists with the charmed stack during the migration. |
+| [`arboard`](https://crates.io/crates/arboard) | interactive front-end | *(opt-in, `clipboard` feature)* System clipboard. |
+| [`win32job`](https://crates.io/crates/win32job) / [`winapi-util`](https://crates.io/crates/winapi-util) | Windows process handling | Job objects for reliable child-tree kill, and `GetFileInformationByHandle` for file identity. Both are safe wrappers — this crate forbids `unsafe`, so Win32 access always goes through a safe crate. |
+| [`rustix`](https://crates.io/crates/rustix) / [`sysinfo`](https://crates.io/crates/sysinfo) | process inspection | Filesystem and process primitives; process-tree walking for teardown. |
+
+### Storage and configuration
+
+| Library | Used by | What it does |
+|---|---|---|
+| [`fsqlite`](https://crates.io/crates/fsqlite) | session index, memory bank | The SQLite engine, with the `fts5` feature enabled for full-text search over the memory bank. |
+| [`toml`](https://crates.io/crates/toml) | configuration | Parses `Cargo.toml`-style configuration. |
+| [`jsonschema`](https://crates.io/crates/jsonschema) | subagents | Validates child-agent results against per-task output schemas. |
+| [`chrono`](https://crates.io/crates/chrono) | `current_time`, sessions | Date and time handling. |
+
+### Cryptography and hashing
+
+`ring` (TLS), `sha2`, `sha1`, `md-5`, `hmac`, `pbkdf2`, `scrypt`, and
+`getrandom` back credential storage, session integrity, and the `crc32c` /
+`xxhash-rust` checksums used by crash recovery.
+
+### Documents and media
+
+| Library | Used by | What it does |
+|---|---|---|
+| [`htmd`](https://crates.io/crates/htmd) | `read` (URLs) | HTML reader-mode conversion to markdown. |
+| [`pdf-extract`](https://crates.io/crates/pdf-extract) | `read` (URLs) | *(opt-in, `url-pdf` feature)* PDF text extraction. Opt-in because it adds several MiB to the release binary. |
+| [`image`](https://crates.io/crates/image) | `read`, `inspect_image` | *(opt-in, `image-resize` feature)* Decoding and resizing the image formats the `read` tool accepts. |
+| [`tiktoken-rs`](https://crates.io/crates/tiktoken-rs) | token accounting | *(default on, `bpe-tokens` feature)* Real BPE token tables, replacing a `chars/4` estimate. |
+
+### Why some libraries are *not* integrated
+
+A survey of candidates that were evaluated and deliberately rejected — with the
+reasoning, the alternatives, and the measured trade-offs — is kept in
+[`third-party-integration-survey.md`](../third-party-integration-survey.md).
+
+Two rules drove most of those decisions:
+
+- **A cheaper path already exists.** Anything that only queries or reshapes data
+  the agent already holds is covered by `run_code`, which runs a short script
+  with the file tools mounted.
+- **The cost has to land on the agent's budget.** A library that is faster in a
+  microbenchmark but does not reduce tool round-trips or tokens is not worth a
+  dependency; the same logic applies to a subprocess, which is why a capability
+  that is used occasionally is better invoked as a binary than linked.
+
+---
+
 ## Quick Start
 
 ### 1. Install
