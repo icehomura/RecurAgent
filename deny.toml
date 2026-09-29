@@ -1,0 +1,290 @@
+# cargo-deny policy for RecurAgent.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Policy owner decision (2026-09-29): this project retains the field-of-use
+# rider in LICENSE ("MIT License (with OpenAI/Anthropic Rider)"), which
+# excludes named companies from use. That rider imposes a restriction on
+# recipients, so NO copyleft dependency can ever be linked into this tree:
+#
+#   * GPL-2.0 / GPL-3.0  -- GPLv3 sec.7 forbids "additional restrictions" and
+#                           sec.10 forbids further restrictions on recipients;
+#                           the rider is exactly such a restriction.
+#   * AGPL-3.0           -- same conflict as GPLv3, plus sec.13 (Remote Network
+#                           Interaction) extends the obligations to network use,
+#                           so it is stricter than GPL-3.0.
+#   * LGPL-2.1 / LGPL-3.0 -- same sec.7/sec.10 conflict through the GPL that
+#                           each LGPL incorporates.
+#   * MPL-2.0            -- sec.3.2(b) requires that the license for the
+#                           Executable Form "does not attempt to limit or alter
+#                           the recipients' rights in the Source Code Form",
+#                           which the rider does.
+#   * CDDL-1.0           -- sec.3.4 bars offering terms that "alter[] or
+#                           restrict[] ... the recipients rights hereunder":
+#                           materially the same conflict as MPL-2.0. Not named
+#                           in the original decision, but excluded here for
+#                           consistency rather than allowed by oversight.
+#                           Reachable only through the opt-in `profiler`
+#                           feature (inferno), so it does not affect the
+#                           default graph today.
+#
+# HOW COPYLEFT IS ENFORCED
+# ------------------------
+# cargo-deny 0.20 removed the `[licenses] deny` key (EmbarkStudios/cargo-deny
+# #611), along with `unlicensed`, `vulnerability` and `notice`, and removed the
+# `warn` severity for `unmaintained`/`unsound`. The deny list is therefore
+# expressed by EXCLUSION: the `allow` list below is exhaustive, and any license
+# not named in it fails the check. GPL, AGPL, LGPL, MPL, CDDL, SSPL, PolyForm
+# and BUSL are deliberately absent, so they fail. Beware writing a
+# `[licenses] deny` key back in: it parses as plain TOML but is rejected at
+# validation time on this version, which is an easy way to think the gate is
+# on when it is not.
+#
+# Dual-licensed crates that offer a permissive option (e.g. ittapi's
+# "GPL-2.0-only OR BSD-3-Clause", r-efi's "MIT OR Apache-2.0 OR LGPL-2.1-or-later")
+# correctly pass: the check accepts the expression because a permissive branch
+# is allowed, and we exercise that branch. That is intentional, not a hole.
+#
+# GRAPH SCOPE: `[graph] all-features = false`, i.e. the default feature set,
+# which is what an ordinary `cargo build` produces. The opt-in `profiler`,
+# `url-pdf`, `wasm-host` and `image-resize` features are NOT exercised, so
+# licenses reachable only through them (CDDL-1.0 via inferno, NCSA via the
+# separate fuzz crate) are absent from today's results.
+#
+# KNOWN OPEN VIOLATIONS
+# ---------------------
+# `cargo deny check licenses` reports exactly two rejections, both MPL-2.0 and
+# both on the DEFAULT feature path:
+#   colored    3.1.1  <- charmed-lipgloss <- charmed-bubbles/glamour <- recur_agent
+#   option-ext 0.2.0  <- dirs-sys          <- dirs                   <- recur_agent
+# Both are genuine policy violations under the rider and need an upstream
+# license change, a maintained fork, or a feature-gate decision.
+#
+# `cargo deny check advisories` reports one vulnerability (errors are
+# unconditional in 0.20, there is no warn setting left to downgrade it with):
+#   RUSTSEC-2026-0285  rustls 0.23.43   fix: `cargo update -p rustls` (>=0.23.45)
+
+[graph]
+targets = []
+all-features = false
+no-default-features = false
+exclude-dev = false
+
+# ---------------------------------------------------------------------------
+# Licenses
+# ---------------------------------------------------------------------------
+[licenses]
+confidence-threshold = 0.9
+
+# Core permissive allowlist. Every excluded (copyleft) family is absent by
+# construction -- see "HOW COPYLEFT IS ENFORCED" above.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unlicense",
+    "Zlib",
+    "CC0-1.0",
+
+    # --- Extended permissive block -----------------------------------------
+    # Each entry is permissive or public-domain and imposes no field-of-use or
+    # reciprocity obligation, so it cannot conflict with the rider.
+    "0BSD",                # adler2 -- public-domain-equivalent, no attribution
+    "MIT-0",               # borrow-or-share -- MIT minus the attribution notice
+    "BSL-1.0",             # Boost Software License 1.0 (clipboard-win,
+                           # error-code, xxhash-rust, ryu). NOT the Business
+                           # Source License -- that is BUSL-1.1/BSL-1.1, which
+                           # stays excluded.
+    "CDLA-Permissive-2.0", # webpki-roots -- permissive data license
+    "BSD-1-Clause",        # fiat-crypto (OR-branch only)
+    "Unicode-3.0",         # unicode-ident / icu-* / zerovec / yoke -- pulled in
+                           # transitively by serde, proc-macro2 and url/idna
+    "NCSA",                # libfuzzer-sys, reached only when the separate
+                           # `fuzz/` crate is in the graph -- permissive, UIUC
+    "LPPL-1.3c",           # unicodeit -- LaTeX Project Public License
+    "LicenseRef-MIT-OpenAI-Anthropic-Rider",
+                           # The project's OWN license, carried by the sibling
+                           # crates published under the same terms (asupersync,
+                           # ftui*, franken-*). SPDX has no identifier for it,
+                           # so Cargo.toml declares it as a LicenseRef.
+]
+
+# The workspace's own crates are covered by LICENSE (license-file) rather than
+# an SPDX `license` key. NOTE: on 0.20 this does NOT suppress the `unlicensed`
+# error for `recur_agent`, which is why `recur_agent` also appears in the
+# clarify block below.
+[licenses.private]
+ignore = true
+
+# --- Clarified license files -------------------------------------------------
+# These crates ship a LICENSE file through Cargo.toml's `license-file` key but
+# publish NO SPDX `license` field, so cargo-deny cannot resolve an expression
+# for them and reports `error[unlicensed]`. Each one is the same MIT+rider text
+# (askalono hash 0x3e2e0c66 for every one of them, verified 2026-09-29), so
+# each is clarified to the same LicenseRef the allowlist already carries.
+# `clarify` requires EXACT crate names -- globs such as "fsqlite*" are silently
+# ignored on 0.20, and an empty `license-files` list makes the entry a no-op.
+[[licenses.clarify]]
+name = "recur_agent"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-ast"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-btree"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-core"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-error"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-ext-fts5"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-func"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-mvcc"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-observability"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-pager"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-parser"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-planner"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-types"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-vdbe"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-vfs"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+[[licenses.clarify]]
+name = "fsqlite-wal"
+expression = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+license-files = [{ path = "LICENSE", hash = 0x3e2e0c66 }]
+
+# --- Named exceptions -------------------------------------------------------
+# Real-world awkward cases in this tree. Keep this list short and justified.
+
+# walkdir / same-file (via `ignore` and `globset`) declare the non-standard,
+# pre-SPDX spelling "Unlicense/MIT" -- i.e. Unlicense OR MIT written with a
+# slash instead of OR. Both branches are in the core allowlist.
+[[licenses.exceptions]]
+name = "walkdir"
+allow = ["Unlicense", "MIT"]
+
+[[licenses.exceptions]]
+name = "same-file"
+allow = ["Unlicense", "MIT"]
+
+# encoding_rs (via htmd) is the CONJUNCTIVE
+# "(Apache-2.0 OR MIT) AND BSD-3-Clause": both halves are required, unlike the
+# usual disjunctive Rust dual-license. It already satisfies the core allowlist;
+# the exception is spelled out so that a future BSD-3-Clause removal fails
+# loudly here instead of silently dropping the crate out of coverage.
+[[licenses.exceptions]]
+name = "encoding_rs"
+allow = ["Apache-2.0", "MIT", "BSD-3-Clause"]
+
+# csv (BurntSushi) declares the same non-standard "Unlicense/MIT" spelling as
+# walkdir/same-file -- verified on crates.io (csv 1.4.0, 2026-09-29). csv is
+# NOT currently in this dependency graph; the exception is declared so the
+# policy is written down before it is pulled in, and cargo-deny will report it
+# as an unused exception until then.
+[[licenses.exceptions]]
+name = "csv"
+allow = ["Unlicense", "MIT"]
+
+# notify is CC0-1.0 (verified on crates.io, notify 9.0.0-rc.5). No exception is
+# needed -- CC0-1.0 is already in the core allowlist above. Recorded here for
+# the policy record: CC0-1.0 is a PUBLIC-DEDICATION license, not an OSI-approved
+# one, and unlike Apache-2.0 it carries NO express patent grant. notify is also
+# not currently in this dependency graph.
+
+# ---------------------------------------------------------------------------
+# Bans
+# ---------------------------------------------------------------------------
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+# Add targeted bans here as `[[bans.deny]]` entries, e.g.
+# [[bans.deny]]
+# name = "openssl"
+
+# ---------------------------------------------------------------------------
+# Advisories
+# ---------------------------------------------------------------------------
+# cargo-deny 0.20 restructured this table:
+#   * `vulnerability` and `notice` were REMOVED -- every vulnerability
+#     advisory now errors unconditionally. The intended
+#     "vulnerability = deny" is therefore expressed by OMISSION: there is no
+#     key to set and no way to downgrade it to warn.
+#   * `unmaintained` / `unsound` lost the `warn` severity and now take only a
+#     scope (`all` | `workspace` | `transitive` | `none`), where `workspace`
+#     means "fail only if a crate we own is affected".
+#
+# `workspace` is the closest available equivalent of the intended
+# "warn on day one" setting: the tree is reported to be non-fatal on these
+# findings instead of turning CI red immediately. Known findings that this
+# scope deliberately leaves non-fatal today, for escalation once fixed:
+#   * RUSTSEC  unmaintained : proc-macro-error2        (`unmaintained = all` -> fail)
+#   * RUSTSEC-2026-0306     : faster-hex 0.10.0 unsound (`unsound = all` -> fail)
+#   * RUSTSEC-2026-0253     : lru 0.16.4 unsound        (`unsound = all` -> fail)
+# Escalate each to the wider scope when its upstream fix lands.
+[advisories]
+unmaintained = "workspace"
+unsound = "workspace"
+yanked = "warn"
