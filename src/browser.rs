@@ -178,7 +178,8 @@ impl Tool for BrowserTool {
                     "enum": ["start", "status", "stop", "open", "goto", "close", "list_tabs",
                              "snapshot", "ax_tree", "evaluate", "click", "type", "fill", "press",
                              "scroll", "wait_for", "upload", "download", "screenshot", "print_pdf",
-                             "handle_dialog"],
+                             "handle_dialog", "cookies", "storage", "console", "emulate",
+                             "reset_emulation", "drag", "trace", "network"],
                     "description": "Browser action; ordinary actions lazily start the managed browser"
                 },
                 "tab": {"type": "string", "description": "Tab name or target ID; default: active tab"},
@@ -211,7 +212,50 @@ impl Tool for BrowserTool {
                 "delta_x": {"type": "number", "description": "Horizontal scroll delta in CSS pixels"},
                 "delta_y": {"type": "number", "description": "Vertical scroll delta in CSS pixels; default 600"},
                 "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 120_000,
-                               "description": "Whole-operation deadline, including launch, connection and lock wait"}
+                               "description": "Whole-operation deadline, including launch, connection and lock wait"},
+                "operation": {
+                    "type": "string",
+                    "description": "cookies: get|set|clear (default get). trace: start|stop. network: set|clear. drag: omitted."
+                },
+                "cookie": {
+                    "type": "object",
+                    "description": "cookies set: the cookie to store as {name, value, url|domain, path?, secure?, httpOnly?, sameSite?, expires?}. No partition or party flags are accepted."
+                },
+                "area": {"type": "string", "enum": ["local", "session"],
+                         "description": "storage: which web storage area to read (default local)"},
+                "level": {"type": "string",
+                          "description": "console: only return entries at this level, e.g. error or exception"},
+                "clear": {"type": "boolean",
+                          "description": "console: drain the buffer after reading (default false)"},
+                "device": {"type": "string",
+                           "description": "emulate: named device to impersonate, e.g. iphone-14 or desktop-1080p. Mutually exclusive with width/height."},
+                "width": {"type": "number", "description": "emulate: viewport width in CSS pixels"},
+                "height": {"type": "number", "description": "emulate: viewport height in CSS pixels"},
+                "latitude": {"type": "number", "description": "emulate: geolocation latitude; requires longitude"},
+                "longitude": {"type": "number", "description": "emulate: geolocation longitude"},
+                "offline": {"type": "boolean", "description": "emulate: simulate the network being offline"},
+                "user_agent": {"type": "string", "description": "emulate: user-agent string to report, at most 512 characters"},
+                "from": {"type": "string", "description": "drag: source CSS selector or snapshot ref"},
+                "to": {"type": "string", "description": "drag: destination CSS selector or snapshot ref"},
+                "data": {"type": "array",
+                         "description": "drag: transfer items as [{mime, value}]; omit for pages that only care about the drop target. At most 32 items and 64 KiB total.",
+                         "items": {"type": "object", "required": ["mime", "value"],
+                                   "properties": {"mime": {"type": "string"}, "value": {"type": "string"}}}},
+                "routes": {
+                    "type": "array",
+                    "description": "network set: the interception table, replacing any previous one. A request whose URL contains a pattern takes that route's action; every other request is continued unchanged. An empty array clears interception. At most 64 routes.",
+                    "items": {
+                        "type": "object", "required": ["pattern"],
+                        "properties": {
+                            "pattern": {"type": "string", "description": "Substring matched against the request URL, at most 2048 characters"},
+                            "action": {"type": "string", "enum": ["abort", "continue", "fulfill"],
+                                       "description": "abort fails the request; continue lets it through; fulfill answers it locally. Default abort."},
+                            "status": {"type": "integer", "description": "fulfill: response status, 100..=599 (default 200)"},
+                            "body": {"type": "string", "description": "fulfill: response body, at most 1 MiB"},
+                            "content_type": {"type": "string", "description": "fulfill: Content-Type header (default application/json)"}
+                        }
+                    }
+                }
             }
         })
     }
