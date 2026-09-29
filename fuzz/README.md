@@ -1,4 +1,4 @@
-# Fuzzing in pi_agent_rust
+# Fuzzing in recur_agent
 
 This directory contains `cargo-fuzz` harnesses and seed corpora for coverage-guided fuzzing.
 
@@ -42,8 +42,8 @@ Always run heavy fuzz commands through `rch`.
 Set high-capacity temporary paths first:
 
 ```bash
-export CARGO_TARGET_DIR="/data/tmp/pi_agent_rust/${USER:-agent}"
-export TMPDIR="/data/tmp/pi_agent_rust/${USER:-agent}/tmp"
+export CARGO_TARGET_DIR="/data/tmp/recur_agent/${USER:-agent}"
+export TMPDIR="/data/tmp/recur_agent/${USER:-agent}/tmp"
 mkdir -p "$TMPDIR"
 cd fuzz
 ```
@@ -81,7 +81,7 @@ when available, and writes machine-readable report artifacts.
 ```
 
 Generated artifacts (default paths):
-- `fuzz/reports/fuzz_coverage_*.json` (schema: `pi.fuzz.coverage_report.v1`)
+- `fuzz/reports/fuzz_coverage_*.json` (schema: `ra.fuzz.coverage_report.v1`)
 - `fuzz/reports/fuzz_coverage_history.jsonl` append-only trend history
 - `fuzz/reports/fuzz_coverage_*_llvm_summary.json` per-target llvm summary export
 - `fuzz/reports/fuzz_coverage_*.log` run log
@@ -314,17 +314,17 @@ Generate a summary of all crashes (open and resolved):
 # Human-readable
 ./scripts/fuzz_crash_manage.sh report
 
-# Machine-readable JSON (pi.fuzz.crash_report.v1)
+# Machine-readable JSON (ra.fuzz.crash_report.v1)
 ./scripts/fuzz_crash_manage.sh report --format=json
 ```
 
 ### Metadata Sidecar Format
 
-Each stored crash has a `.json` sidecar with schema `pi.fuzz.crash_metadata.v1`:
+Each stored crash has a `.json` sidecar with schema `ra.fuzz.crash_metadata.v1`:
 
 ```json
 {
-  "schema": "pi.fuzz.crash_metadata.v1",
+  "schema": "ra.fuzz.crash_metadata.v1",
   "target": "fuzz_sse_parser",
   "category": "panic-unwrap",
   "original_artifact": "crash-28de6b...",

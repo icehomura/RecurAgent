@@ -4031,7 +4031,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pi_agent_rust"
+name = "recur_agent"
 version = "0.6.1"
 dependencies = [
  "anyhow",
@@ -4103,13 +4103,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "pi_agent_rust-fuzz"
+name = "recur_agent-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
  "futures",
  "libfuzzer-sys",
- "pi_agent_rust",
+ "recur_agent",
  "regex",
  "serde",
  "serde_json",

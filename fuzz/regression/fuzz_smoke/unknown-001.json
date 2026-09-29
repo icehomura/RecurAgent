@@ -1,5 +1,5 @@
 {
-  "schema": "pi.fuzz.crash_metadata.v1",
+  "schema": "ra.fuzz.crash_metadata.v1",
   "target": "fuzz_smoke",
   "category": "unknown",
   "original_artifact": "crash-synthetic-demo",

@@ -376,7 +376,7 @@ fi
 
 cat > "$REPORT_FILE" <<EOFJSON
 {
-  "schema": "pi.fuzz.coverage_report.v1",
+  "schema": "ra.fuzz.coverage_report.v1",
   "timestamp": "$TIMESTAMP_UTC",
   "rch_mode": "$RCH_MODE",
   "runs_per_target": $RUNS,
@@ -394,7 +394,7 @@ EOFJSON
 
 mkdir -p "$(dirname "$HISTORY_FILE")"
 cat >> "$HISTORY_FILE" <<EOFJSONL
-{"schema":"pi.fuzz.coverage_history.v1","timestamp":"$TIMESTAMP_UTC","report_file":"${REPORT_FILE#$PROJECT_ROOT/}","total_targets":$TOTAL_TARGETS,"passed":$PASSED,"failed":$FAILED,"average_line_percent":$AVG_LINE_PERCENT}
+{"schema":"ra.fuzz.coverage_history.v1","timestamp":"$TIMESTAMP_UTC","report_file":"${REPORT_FILE#$PROJECT_ROOT/}","total_targets":$TOTAL_TARGETS,"passed":$PASSED,"failed":$FAILED,"average_line_percent":$AVG_LINE_PERCENT}
 EOFJSONL
 
 echo "=== Coverage Summary ===" | tee -a "$SUITE_LOG"

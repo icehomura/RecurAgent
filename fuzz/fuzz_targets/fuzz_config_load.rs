@@ -6,7 +6,7 @@
 //! possible, `Config::patch_settings_with_roots` for merge/serialization paths.
 
 use libfuzzer_sys::fuzz_target;
-use pi::config::{Config, SettingsScope};
+use ra::config::{Config, SettingsScope};
 
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 
@@ -21,11 +21,11 @@ fuzz_target!(|data: &[u8]| {
 
     let cwd = tmp.path().join("cwd");
     let global = tmp.path().join("global");
-    let project_settings = cwd.join(".pi/settings.json");
+    let project_settings = cwd.join(".ra/settings.json");
     let global_settings = global.join("settings.json");
     let override_path = tmp.path().join("override.json");
 
-    let _ = std::fs::create_dir_all(cwd.join(".pi"));
+    let _ = std::fs::create_dir_all(cwd.join(".ra"));
     let _ = std::fs::create_dir_all(&global);
 
     // Override-only load path.
