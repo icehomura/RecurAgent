@@ -9,8 +9,10 @@
 //!
 //! # Grammar coverage
 //!
-//! Per-file parsing by extension: rust, python, javascript, typescript, tsx,
-//! bash, go, ruby (the exec-mediation set plus rust/tsx/go).
+//! Per-file parsing by extension (17 languages): rust, python, javascript,
+//! typescript, tsx, bash, go, ruby, yaml, c, cpp, java, c-sharp, php, html,
+//! css, lua. Every one is an `ast-grep-language` feature enabled in
+//! `Cargo.toml`; see [`AstLanguage`] for the extension and alias tables.
 //!
 //! # `ast_edit` staging lifecycle
 //!
@@ -69,10 +71,10 @@ const DIFF_PREVIEW_MAX_BYTES: usize = 64 * 1024;
 
 /// Languages supported by the structural tools.
 ///
-/// Coverage is the exec-mediation grammar set (bash, python, javascript,
-/// typescript, ruby) plus rust, tsx, and go. Each file is parsed in its own
-/// language; tree-sitter grammars never match comments or string contents as
-/// code structure.
+/// Every variant here is backed by an `ast-grep-language` grammar feature
+/// enabled in `Cargo.toml`. Each file is parsed in its own language;
+/// tree-sitter grammars never match comments or string contents as code
+/// structure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AstLanguage {
     Rust,
@@ -83,6 +85,15 @@ pub enum AstLanguage {
     Bash,
     Go,
     Ruby,
+    Yaml,
+    C,
+    Cpp,
+    Java,
+    CSharp,
+    Php,
+    Html,
+    Css,
+    Lua,
 }
 
 impl AstLanguage {
@@ -98,6 +109,15 @@ impl AstLanguage {
             Self::Bash => "bash",
             Self::Go => "go",
             Self::Ruby => "ruby",
+            Self::Yaml => "yaml",
+            Self::C => "c",
+            Self::Cpp => "cpp",
+            Self::Java => "java",
+            Self::CSharp => "c-sharp",
+            Self::Php => "php",
+            Self::Html => "html",
+            Self::Css => "css",
+            Self::Lua => "lua",
         }
     }
 
@@ -112,6 +132,15 @@ impl AstLanguage {
             Self::Bash => SupportLang::Bash,
             Self::Go => SupportLang::Go,
             Self::Ruby => SupportLang::Ruby,
+            Self::Yaml => SupportLang::Yaml,
+            Self::C => SupportLang::C,
+            Self::Cpp => SupportLang::Cpp,
+            Self::Java => SupportLang::Java,
+            Self::CSharp => SupportLang::CSharp,
+            Self::Php => SupportLang::Php,
+            Self::Html => SupportLang::Html,
+            Self::Css => SupportLang::Css,
+            Self::Lua => SupportLang::Lua,
         }
     }
 
@@ -127,6 +156,15 @@ impl AstLanguage {
             Self::Bash,
             Self::Go,
             Self::Ruby,
+            Self::Yaml,
+            Self::C,
+            Self::Cpp,
+            Self::Java,
+            Self::CSharp,
+            Self::Php,
+            Self::Html,
+            Self::Css,
+            Self::Lua,
         ]
     }
 
@@ -142,6 +180,15 @@ impl AstLanguage {
             "sh" | "bash" => Some(Self::Bash),
             "go" => Some(Self::Go),
             "rb" => Some(Self::Ruby),
+            "yaml" | "yml" => Some(Self::Yaml),
+            "c" | "h" => Some(Self::C),
+            "cpp" | "cxx" | "cc" | "hpp" | "hxx" | "hh" => Some(Self::Cpp),
+            "java" => Some(Self::Java),
+            "cs" => Some(Self::CSharp),
+            "php" => Some(Self::Php),
+            "html" | "htm" => Some(Self::Html),
+            "css" => Some(Self::Css),
+            "lua" => Some(Self::Lua),
             _ => None,
         }
     }
@@ -157,6 +204,15 @@ impl AstLanguage {
             "bash" | "sh" | "shell" => Some(Self::Bash),
             "go" | "golang" => Some(Self::Go),
             "ruby" | "rb" => Some(Self::Ruby),
+            "yaml" | "yml" => Some(Self::Yaml),
+            "c" => Some(Self::C),
+            "cpp" | "c++" | "cxx" => Some(Self::Cpp),
+            "java" => Some(Self::Java),
+            "c-sharp" | "csharp" | "cs" | "c#" => Some(Self::CSharp),
+            "php" => Some(Self::Php),
+            "html" | "htm" => Some(Self::Html),
+            "css" => Some(Self::Css),
+            "lua" => Some(Self::Lua),
             _ => None,
         }
     }
@@ -640,7 +696,7 @@ impl Tool for AstGrepTool {
                 },
                 "lang": {
                     "type": "string",
-                    "description": "Force one language for all in-scope files: rust|python|javascript|typescript|tsx|bash|go|ruby"
+                    "description": "Force one language for all in-scope files: rust|python|javascript|typescript|tsx|bash|go|ruby|yaml|c|cpp|java|c-sharp|php|html|css|lua"
                 },
                 "limit": {
                     "type": "integer",
@@ -1244,7 +1300,7 @@ impl Tool for AstEditTool {
                 },
                 "lang": {
                     "type": "string",
-                    "description": "Force one language for all in-scope files: rust|python|javascript|typescript|tsx|bash|go|ruby"
+                    "description": "Force one language for all in-scope files: rust|python|javascript|typescript|tsx|bash|go|ruby|yaml|c|cpp|java|c-sharp|php|html|css|lua"
                 },
                 "maxReplacements": {
                     "type": "integer",

@@ -351,6 +351,18 @@ ast-grep-language = { version = "0.40", default-features = false, features = [
     "tree-sitter-ruby",
     "tree-sitter-rust",
     "tree-sitter-go",
+    # Additional grammars, ordered by how often a coding agent meets them.
+    # Each is an existing feature of this crate, so the cost is the compiled
+    # grammar alone (~2.5 MiB for all nine) and no new dependency.
+    "tree-sitter-yaml",
+    "tree-sitter-c",
+    "tree-sitter-cpp",
+    "tree-sitter-java",
+    "tree-sitter-c-sharp",
+    "tree-sitter-php",
+    "tree-sitter-html",
+    "tree-sitter-css",
+    "tree-sitter-lua",
 ] }
 unicode-normalization = "0.1"
 # Legacy text decoding for the `read` tool's `encoding` param (BOM sniffing +
