@@ -7,34 +7,26 @@
 
 use serde::{Deserialize, Serialize};
 
+// Width is measured in terminal cells, never in `char`s: CJK ideographs and
+// emoji occupy two cells, so a chars-based approximation understates the width
+// of Chinese/Japanese/Korean text by a factor of two and produces over-long
+// status lines. `unicode-width` is an unconditional dependency for this reason
+// (it also arrives transitively via `rich_rust`), so there is no degraded
+// non-TUI fallback to keep in sync.
 fn display_width(text: &str) -> usize {
-    #[cfg(feature = "tui")]
-    {
-        unicode_width::UnicodeWidthStr::width(text)
-    }
-    #[cfg(not(feature = "tui"))]
-    {
-        text.chars().count()
-    }
+    unicode_width::UnicodeWidthStr::width(text)
 }
 
 fn truncate_display_width(text: &str, maximum_width: usize) -> String {
-    #[cfg(feature = "tui")]
-    {
-        let mut end = 0;
-        for (index, character) in text.char_indices() {
-            let candidate_end = index + character.len_utf8();
-            if display_width(&text[..candidate_end]) > maximum_width {
-                break;
-            }
-            end = candidate_end;
+    let mut end = 0;
+    for (index, character) in text.char_indices() {
+        let candidate_end = index + character.len_utf8();
+        if display_width(&text[..candidate_end]) > maximum_width {
+            break;
         }
-        text[..end].to_string()
+        end = candidate_end;
     }
-    #[cfg(not(feature = "tui"))]
-    {
-        text.chars().take(maximum_width).collect()
-    }
+    text[..end].to_string()
 }
 
 /// Predefined status line presets.
@@ -364,7 +356,7 @@ mod tests {
             model: "claude-3-7-sonnet",
             thinking_level: Some("high"),
             mode: "plan",
-            cwd: "pi_agent_rust",
+            cwd: "recur_agent",
             git_branch: Some("main"),
             git_dirty: true,
             context_pct: 42,
@@ -427,7 +419,10 @@ mod tests {
         assert_eq!(display_width(&rendered), 8);
     }
 
-    #[cfg(feature = "tui")]
+    // Not gated on `tui`: `unicode-width` is unconditional, so wide-character
+    // clamping must hold on the `--no-default-features` (SDK) build too. This
+    // is the regression guard for the chars-based fallback that used to make
+    // CJK status lines twice as wide as the terminal budget allowed.
     #[test]
     fn test_status_line_clamps_wide_unicode_to_terminal_cells() {
         let ctx = StatusContext {
@@ -440,6 +435,9 @@ mod tests {
         assert!(display_width(&rendered) <= 7, "rendered {rendered:?}");
         assert!(rendered.ends_with("模型"), "rendered {rendered:?}");
         assert!(!rendered.contains('🙂'), "rendered {rendered:?}");
+        // Pin the units directly: `chars().count()` would answer 3, not 6, and
+        // that factor-of-two error is exactly the regression being guarded.
+        assert_eq!(display_width("模型🙂"), 6);
     }
 
     #[test]
