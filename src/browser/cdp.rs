@@ -2,8 +2,8 @@
 //! cancellation drops it instead of reusing a possibly partially written frame.
 
 use super::{
-    BrowserLaunchOptions, BrowserTabInfo, console, dialog, download, exports, interaction, launch,
-    output, policy, required, storage,
+    BrowserLaunchOptions, BrowserTabInfo, console, dialog, download, emulation, exports,
+    interaction, launch, output, policy, required, storage,
 };
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
@@ -228,6 +228,7 @@ fn validate(args: &Value, allowlist: Option<&[String]>) -> Result<u64> {
         "screenshot" | "print_pdf" => exports::validate(args)?,
         "cookies" | "storage" => storage::validate(args)?,
         "console" => console::validate(args)?,
+        "emulate" | "reset_emulation" => emulation::validate(args)?,
         "open" | "goto" => policy::check_navigation(required(args, "url")?, allowlist)?,
         "evaluate" => {
             required(args, "script")?;
@@ -1057,6 +1058,7 @@ impl Session {
             "screenshot" | "print_pdf" => exports::execute(owner, cdp, cwd, &tab, args).await,
             "cookies" | "storage" => storage::execute(owner, cdp, &tab, args).await,
             "console" => console::execute(owner, cdp, &tab, args).await,
+            "emulate" | "reset_emulation" => emulation::execute(owner, cdp, &tab, args).await,
             "evaluate" => {
                 let value = cdp.evaluate(owner, required(args, "script")?).await?;
                 Ok(output(
