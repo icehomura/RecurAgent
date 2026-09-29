@@ -104,6 +104,49 @@ pub(super) async fn execute(
     tab: &str,
     args: &Value,
 ) -> Result<ToolOutput> {
+    // Reset short-circuits: applying settings and then clearing them would be
+    // the same as doing nothing, and reading as if it worked.
+    if required(args, "action")? == "reset_emulation" {
+        // Clear each override explicitly. `Emulation` has no single tear-down,
+        // and leaving one in place is worse than the extra round-trips.
+        cdp.call(
+            owner,
+            "Emulation.clearDeviceMetricsOverride",
+            json!({}),
+            true,
+        )
+        .await?;
+        cdp.call(
+            owner,
+            "Emulation.clearGeolocationOverride",
+            json!({}),
+            true,
+        )
+        .await?;
+        cdp.call(
+            owner,
+            "Network.emulateNetworkConditions",
+            json!({
+                "offline": false,
+                "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1
+            }),
+            true,
+        )
+        .await?;
+        // An empty user agent restores the browser's own.
+        cdp.call(
+            owner,
+            "Network.setUserAgentOverride",
+            json!({"userAgent": ""}),
+            true,
+        )
+        .await?;
+        return Ok(output(
+            format!("Cleared emulation overrides on tab {tab}"),
+            json!({"reset": true, "backend": "cdp"}),
+        ));
+    }
+
     let mut applied: Vec<&str> = Vec::new();
 
     // A device override and explicit width/height are the same CDP call, so
@@ -170,47 +213,6 @@ pub(super) async fn execute(
         )
         .await?;
         applied.push("user_agent");
-    }
-
-    if required(args, "action")? == "reset" {
-        // Clear each override explicitly. `Emulation` has no single tear-down,
-        // and leaving one in place is worse than the extra round-trips.
-        cdp.call(
-            owner,
-            "Emulation.clearDeviceMetricsOverride",
-            json!({}),
-            true,
-        )
-        .await?;
-        cdp.call(
-            owner,
-            "Emulation.clearGeolocationOverride",
-            json!({}),
-            true,
-        )
-        .await?;
-        cdp.call(
-            owner,
-            "Network.emulateNetworkConditions",
-            json!({
-                "offline": false,
-                "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1
-            }),
-            true,
-        )
-        .await?;
-        // An empty user agent restores the browser's own.
-        cdp.call(
-            owner,
-            "Network.setUserAgentOverride",
-            json!({"userAgent": ""}),
-            true,
-        )
-        .await?;
-        return Ok(output(
-            format!("Cleared emulation overrides on tab {tab}"),
-            json!({"reset": true, "backend": "cdp"}),
-        ));
     }
 
     if applied.is_empty() {
