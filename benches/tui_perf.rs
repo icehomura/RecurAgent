@@ -22,16 +22,16 @@ use asupersync::channel::mpsc;
 use bubbles::viewport::Viewport;
 use bubbletea::{Message, Model as BubbleteaModel};
 use futures::stream;
-use pi::agent::{Agent, AgentConfig};
-use pi::config::Config;
-use pi::interactive::{ConversationMessage, MessageRole, PiApp, PiMsg};
-use pi::keybindings::KeyBindings;
-use pi::model::{StreamEvent, Usage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
-use pi::resources::{ResourceCliOptions, ResourceLoader};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::agent::{Agent, AgentConfig};
+use ra::config::Config;
+use ra::interactive::{ConversationMessage, MessageRole, RaApp, RaMsg};
+use ra::keybindings::KeyBindings;
+use ra::model::{StreamEvent, Usage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
+use ra::resources::{ResourceCliOptions, ResourceLoader};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 
 // ---------------------------------------------------------------------------
 // Shared runtime (reused across benchmarks)
@@ -74,8 +74,8 @@ impl Provider for DummyProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         Ok(Box::pin(stream::empty()))
     }
@@ -115,7 +115,7 @@ fn dummy_model_entry() -> ModelEntry {
 // App factory
 // ---------------------------------------------------------------------------
 
-fn create_bench_app() -> PiApp {
+fn create_bench_app() -> RaApp {
     let tmp = tempfile::tempdir().expect("tempdir");
     let cwd = tmp.path().to_path_buf();
     let config = Config::default();
@@ -143,7 +143,7 @@ fn create_bench_app() -> PiApp {
     // Leak the TempDir so the directory persists for the benchmark iteration.
     let _keep = Box::leak(Box::new(tmp));
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -241,7 +241,7 @@ fn generate_conversation(n: usize) -> Vec<ConversationMessage> {
     msgs
 }
 
-fn load_conversation(app: &mut PiApp, messages: Vec<ConversationMessage>) {
+fn load_conversation(app: &mut RaApp, messages: Vec<ConversationMessage>) {
     let session = app.session_handle();
     let session_id = session
         .try_lock()
@@ -251,7 +251,7 @@ fn load_conversation(app: &mut PiApp, messages: Vec<ConversationMessage>) {
         .clone();
     let _ = BubbleteaModel::update(
         app,
-        Message::new(PiMsg::ConversationReset {
+        Message::new(RaMsg::ConversationReset {
             session_id,
             messages,
             usage: Usage::default(),

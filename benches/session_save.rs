@@ -2,8 +2,8 @@
 mod bench_env;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use pi::model::UserContent;
-use pi::session::{Session, SessionMessage};
+use ra::model::UserContent;
+use ra::session::{Session, SessionMessage};
 use std::hint::black_box;
 
 fn build_large_session(message_count: usize) -> Session {

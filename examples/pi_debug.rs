@@ -3,7 +3,7 @@
 // that proving `Send` exceeds the default 128.
 #![recursion_limit = "256"]
 
-//! Debug wrapper for pi that traces each step of the `run()` sequence.
+//! Debug wrapper for ra that traces each step of the `run()` sequence.
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,17 +13,17 @@ use asupersync::runtime::reactor::create_reactor;
 use asupersync::runtime::{RuntimeBuilder, RuntimeHandle};
 use asupersync::sync::Mutex;
 use clap::Parser;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::auth::AuthStorage;
-use pi::cli;
-use pi::compaction::ResolvedCompactionSettings;
-use pi::config::Config;
-use pi::models::{ModelRegistry, default_models_path};
-use pi::package_manager::PackageManager;
-use pi::providers;
-use pi::resources::{ResourceCliOptions, ResourceLoader};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::auth::AuthStorage;
+use ra::cli;
+use ra::compaction::ResolvedCompactionSettings;
+use ra::config::Config;
+use ra::models::{ModelRegistry, default_models_path};
+use ra::package_manager::PackageManager;
+use ra::providers;
+use ra::resources::{ResourceCliOptions, ResourceLoader};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 
 macro_rules! step {
     ($($arg:tt)*) => {
@@ -120,14 +120,14 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
         io::stdin().read_to_string(&mut data)?;
         if data.is_empty() { None } else { Some(data) }
     };
-    pi::app::apply_piped_stdin(&mut cli, stdin_content);
-    pi::app::normalize_cli(&mut cli);
+    ra::app::apply_piped_stdin(&mut cli, stdin_content);
+    ra::app::normalize_cli(&mut cli);
     step!("   CLI normalized");
 
     step!("7. Preparing initial message...");
     let mut messages: Vec<String> = cli.message_args().iter().map(ToString::to_string).collect();
     let file_args: Vec<String> = cli.file_args().iter().map(ToString::to_string).collect();
-    let initial = pi::app::prepare_initial_message(
+    let initial = ra::app::prepare_initial_message(
         &cwd,
         &file_args,
         &mut messages,
@@ -136,7 +136,7 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
             .as_ref()
             .and_then(|i| i.auto_resize)
             .unwrap_or(true),
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )?;
     step!(
         "   Initial message prepared: {:?}",
@@ -152,10 +152,10 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
     let scoped_models: Vec<_> = if scoped_patterns.is_empty() {
         Vec::new()
     } else {
-        pi::app::resolve_model_scope(&scoped_patterns, &model_registry, cli.api_key.is_some())
+        ra::app::resolve_model_scope(&scoped_patterns, &model_registry, cli.api_key.is_some())
     };
 
-    let selection = pi::app::select_model_and_thinking(
+    let selection = ra::app::select_model_and_thinking(
         &cli,
         &config,
         &session,
@@ -179,7 +179,7 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
     };
 
     step!("10. Resolving provider credentials...");
-    let resolved_key = match pi::app::resolve_api_key(&auth, &cli, &selection.model_entry) {
+    let resolved_key = match ra::app::resolve_api_key(&auth, &cli, &selection.model_entry) {
         Ok(key) => {
             if key.is_some() {
                 step!("    Credential resolved");
@@ -196,15 +196,15 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
 
     step!("11. Building agent...");
     let mut session = session;
-    pi::app::update_session_for_selection(&mut session, &selection);
+    ra::app::update_session_for_selection(&mut session, &selection);
     let enabled_tools = cli.enabled_tools();
     let skills_prompt = if enabled_tools.contains(&"read") {
         resources.format_skills_for_prompt()
     } else {
         String::new()
     };
-    let test_mode = std::env::var_os("PI_TEST_MODE").is_some();
-    let system_prompt = pi::app::build_system_prompt(
+    let test_mode = std::env::var_os("RECUR_AGENT_TEST_MODE").is_some();
+    let system_prompt = ra::app::build_system_prompt(
         &cli,
         &cwd,
         &enabled_tools,
@@ -222,7 +222,7 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
     )?;
     let provider =
         providers::create_provider(&selection.model_entry, None).map_err(anyhow::Error::new)?;
-    let stream_options = pi::app::build_stream_options(&config, resolved_key, &selection, &session);
+    let stream_options = ra::app::build_stream_options(&config, resolved_key, &selection, &session);
     let agent_config = AgentConfig {
         system_prompt: Some(system_prompt),
         max_tool_iterations: 50,
@@ -251,7 +251,7 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
 
     step!("12. Loading session history...");
     let history = {
-        let cx = pi::agent_cx::AgentCx::for_request();
+        let cx = ra::agent_cx::AgentCx::for_request();
         step!("    Locking session mutex...");
         let session = agent_session
             .session
@@ -292,7 +292,7 @@ async fn run_debug(mut cli: cli::Cli, runtime_handle: RuntimeHandle) -> Result<(
     }
     let input = parts.join("\n\n");
     if input.is_empty() {
-        bail!("No input provided. Use: pi -p \"your message\" or pipe input via stdin");
+        bail!("No input provided. Use: ra -p \"your message\" or pipe input via stdin");
     }
 
     let result = agent_session

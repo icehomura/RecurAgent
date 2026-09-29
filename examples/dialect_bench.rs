@@ -4,7 +4,7 @@
 //! JSON. `--live` is a documented gate for future provider-backed scoring
 //! (requires real keys; not part of CI).
 
-use pi::dialects::{Dialect, extract_text_tool_calls};
+use ra::dialects::{Dialect, extract_text_tool_calls};
 use serde_json::json;
 use std::fmt::Write as _;
 
@@ -170,7 +170,7 @@ fn main() {
     };
 
     let report = json!({
-        "schema": "pi.dialect_bench.v1",
+        "schema": "ra.dialect_bench.v1",
         "bead": "bd-cv653.7.8",
         "totals": {
             "cases": rows.len(),

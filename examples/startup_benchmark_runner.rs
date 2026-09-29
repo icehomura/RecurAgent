@@ -22,8 +22,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-pub const STARTUP_CONTRACT_SCHEMA: &str = "pi.perf.startup_benchmark.contract.v1";
-pub const STARTUP_ARTIFACT_SCHEMA: &str = "pi.perf.startup_benchmark.v1";
+pub const STARTUP_CONTRACT_SCHEMA: &str = "ra.perf.startup_benchmark.contract.v1";
+pub const STARTUP_ARTIFACT_SCHEMA: &str = "ra.perf.startup_benchmark.v1";
 
 #[derive(Debug, Parser)]
 #[command(name = "startup_benchmark_runner")]
@@ -43,7 +43,7 @@ enum CommandMode {
 
 #[derive(Debug, Args)]
 struct BenchArgs {
-    /// Path to the pi binary to benchmark (defaults to auto-detecting target/release/pi).
+    /// Path to the ra binary to benchmark (defaults to auto-detecting target/release/ra).
     #[arg(long)]
     binary: Option<PathBuf>,
     /// Output path for the startup benchmark report artifact.
@@ -332,7 +332,7 @@ pub fn verify_startup_artifact(
     };
 
     VerificationReport {
-        schema: "pi.perf.startup_benchmark.verification_report.v1".to_string(),
+        schema: "ra.perf.startup_benchmark.verification_report.v1".to_string(),
         status,
         evaluated_commands: artifact.commands.len(),
         binary_size_status: artifact.binary_size.status.clone(),
@@ -345,12 +345,12 @@ fn resolve_binary(explicit: Option<PathBuf>) -> PathBuf {
         return p;
     }
     let candidates = [
-        "release_artifacts/v0.1.0/stage_darwin/pi",
-        "release_artifacts/v0.1.0/stage_linux/pi",
-        "target/release/pi",
-        "/tmp/pi_agent_rust_cargo/rose_carp/target/release/pi",
-        "/tmp/pi_agent_rust_cargo/rose_carp/target/debug/pi",
-        "target/debug/pi",
+        "release_artifacts/v0.1.0/stage_darwin/ra",
+        "release_artifacts/v0.1.0/stage_linux/ra",
+        "target/release/ra",
+        "/tmp/recur_agent_cargo/rose_carp/target/release/ra",
+        "/tmp/recur_agent_cargo/rose_carp/target/debug/ra",
+        "target/debug/ra",
     ];
     for &c in &candidates {
         let p = Path::new(c);
@@ -358,7 +358,7 @@ fn resolve_binary(explicit: Option<PathBuf>) -> PathBuf {
             return p.to_path_buf();
         }
     }
-    PathBuf::from("pi")
+    PathBuf::from("ra")
 }
 
 fn main() -> Result<()> {

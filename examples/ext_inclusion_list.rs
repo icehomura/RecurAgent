@@ -17,14 +17,14 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use pi::extension_inclusion::{
+use ra::extension_inclusion::{
     ExclusionNote, InclusionEntry, InclusionList, InclusionStats, VersionPin, build_rationale,
     classify_registrations,
 };
-use pi::extension_license::ScreeningReport;
-use pi::extension_popularity::{CandidateItem, CandidatePool, CandidateSource};
-use pi::extension_scoring::ScoringReport;
-use pi::extension_validation::{ValidationReport, ValidationStatus};
+use ra::extension_license::ScreeningReport;
+use ra::extension_popularity::{CandidateItem, CandidatePool, CandidateSource};
+use ra::extension_scoring::ScoringReport;
+use ra::extension_validation::{ValidationReport, ValidationStatus};
 
 #[derive(Debug, Parser)]
 #[command(name = "ext_inclusion_list")]
@@ -274,8 +274,8 @@ fn main() -> Result<()> {
     };
 
     let list = InclusionList {
-        schema: "pi.ext.inclusion.v1".to_string(),
-        generated_at: pi::extension_validation::chrono_now_iso(),
+        schema: "ra.ext.inclusion.v1".to_string(),
+        generated_at: ra::extension_validation::chrono_now_iso(),
         task: Some(args.task_id),
         stats: Some(stats),
         tier0,

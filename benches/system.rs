@@ -2,7 +2,7 @@
 //!
 // Allow some clippy lints that are acceptable in benchmarks
 #![allow(clippy::cast_precision_loss)] // u64 -> f64 for size calculations is fine
-#![allow(clippy::cmp_owned)] // PathBuf comparison with "pi" requires owned
+#![allow(clippy::cmp_owned)] // PathBuf comparison with "ra" requires owned
 #![allow(clippy::too_many_lines)]
 //!
 //! Run with:
@@ -59,10 +59,10 @@ fn criterion_config() -> Criterion {
     bench_env::criterion_config_system()
 }
 
-const IDLE_RSS_RAW_PATH_ENV: &str = "PI_IDLE_RSS_RAW_RELATIVE_PATH";
-const IDLE_RSS_SOURCE_COMMIT_ENV: &str = "PI_IDLE_RSS_SOURCE_COMMIT";
-const IDLE_RSS_SOURCE_DIRTY_ENV: &str = "PI_IDLE_RSS_SOURCE_DIRTY";
-const IDLE_RSS_CORRELATION_ID_ENV: &str = "PI_IDLE_RSS_CORRELATION_ID";
+const IDLE_RSS_RAW_PATH_ENV: &str = "RECUR_AGENT_IDLE_RSS_RAW_RELATIVE_PATH";
+const IDLE_RSS_SOURCE_COMMIT_ENV: &str = "RECUR_AGENT_IDLE_RSS_SOURCE_COMMIT";
+const IDLE_RSS_SOURCE_DIRTY_ENV: &str = "RECUR_AGENT_IDLE_RSS_SOURCE_DIRTY";
+const IDLE_RSS_CORRELATION_ID_ENV: &str = "RECUR_AGENT_IDLE_RSS_CORRELATION_ID";
 const IDLE_RSS_SAMPLE_COUNT: usize = 5;
 const IDLE_RSS_SETTLE_MS: u64 = 1_000;
 
@@ -135,19 +135,19 @@ fn sample_interactive_idle_rss(
     let mut command = CommandBuilder::new(binary_path);
     command.cwd(workspace);
     command.env("TERM", "xterm-256color");
-    command.env("PI_NO_MOUSE_CAPTURE", "1");
-    command.env("PI_WORKSPACE_TRUST", "trusted");
-    command.env("PI_CODING_AGENT_DIR", agent_dir);
+    command.env("RECUR_AGENT_NO_MOUSE_CAPTURE", "1");
+    command.env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
+    command.env("RECUR_AGENT_DIR", agent_dir);
     let mut child = pair
         .slave
         .spawn_command(command)
-        .map_err(|error| io::Error::other(format!("spawn interactive pi: {error}")))?;
+        .map_err(|error| io::Error::other(format!("spawn interactive ra: {error}")))?;
     drop(pair.slave);
     let Some(pid) = child.process_id() else {
         let _ = child.kill();
         let _ = child.wait();
         return Err(io::Error::other(
-            "interactive pi did not expose a process id",
+            "interactive ra did not expose a process id",
         ));
     };
     let mut reader = match pair.master.try_clone_reader() {
@@ -168,7 +168,7 @@ fn sample_interactive_idle_rss(
     let sample_result = (|| {
         if let Some(status) = child.try_wait()? {
             return Err(io::Error::other(format!(
-                "interactive pi exited before idle sample: {status:?}"
+                "interactive ra exited before idle sample: {status:?}"
             )));
         }
         let pid = sysinfo::Pid::from_u32(pid);
@@ -182,16 +182,16 @@ fn sample_interactive_idle_rss(
         );
         let process = system
             .process(pid)
-            .ok_or_else(|| io::Error::other("interactive pi vanished before RSS refresh"))?;
+            .ok_or_else(|| io::Error::other("interactive ra vanished before RSS refresh"))?;
         let process_name = process.name().to_string_lossy().into_owned();
-        if process_name != "pi" {
+        if process_name != "ra" {
             return Err(io::Error::other(format!(
-                "idle-RSS sample resolved process name {process_name:?}, expected pi"
+                "idle-RSS sample resolved process name {process_name:?}, expected ra"
             )));
         }
         let rss_bytes = process.memory();
         if rss_bytes == 0 {
-            return Err(io::Error::other("interactive pi reported zero RSS"));
+            return Err(io::Error::other("interactive ra reported zero RSS"));
         }
         Ok(IdleRssSample {
             pid: pid.as_u32(),
@@ -208,17 +208,17 @@ fn sample_interactive_idle_rss(
 }
 
 fn generate_idle_rss_raw_artifact(output_path: &Path) -> io::Result<()> {
-    let binary = resolve_pi_binary();
+    let binary = resolve_ra_binary();
     if binary.kind != BinaryKind::Release {
         return Err(invalid_idle_rss_input(format!(
-            "idle RSS requires target/release/pi, resolved {}",
+            "idle RSS requires target/release/ra, resolved {}",
             binary.path.display()
         )));
     }
     let binary_path = fs::canonicalize(&binary.path)?;
-    if binary_path.file_name().and_then(|name| name.to_str()) != Some("pi") {
+    if binary_path.file_name().and_then(|name| name.to_str()) != Some("ra") {
         return Err(invalid_idle_rss_input(
-            "idle RSS release binary must be named pi",
+            "idle RSS release binary must be named ra",
         ));
     }
     let source_commit = env::var(IDLE_RSS_SOURCE_COMMIT_ENV)
@@ -284,10 +284,10 @@ fn generate_idle_rss_raw_artifact(output_path: &Path) -> io::Result<()> {
         .map_err(|error| io::Error::other(format!("normalize benchmark environment: {error}")))?;
     let bench_env_bytes = serde_json::to_vec(&bench_env_value)
         .map_err(|error| io::Error::other(format!("serialize benchmark environment: {error}")))?;
-    let bench_env_sha256 = pi::package_manager::hex_encode(&Sha256::digest(&bench_env_bytes));
-    let binary_sha256 = pi::perf_build::sha256_file(&binary_path)?;
+    let bench_env_sha256 = ra::package_manager::hex_encode(&Sha256::digest(&bench_env_bytes));
+    let binary_sha256 = ra::perf_build::sha256_file(&binary_path)?;
     let payload = serde_json::json!({
-        "schema": pi::perf_build::IDLE_RSS_MEASUREMENT_SCHEMA,
+        "schema": ra::perf_build::IDLE_RSS_MEASUREMENT_SCHEMA,
         "generated_at": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         "run_id": correlation_id,
         "correlation_id": correlation_id,
@@ -295,13 +295,13 @@ fn generate_idle_rss_raw_artifact(output_path: &Path) -> io::Result<()> {
         "source_dirty": false,
         "pid": representative.pid,
         "process_name": representative.process_name,
-        "allocator": pi::perf_build::compiled_allocator().as_str(),
+        "allocator": ra::perf_build::compiled_allocator().as_str(),
         "binary_path": binary_path,
         "binary_sha256": binary_sha256,
         "rss_bytes": representative.rss_bytes,
         "idle_state": "startup_before_user_input",
         "cargo_profile": "release",
-        "build_command": "cargo build --bin pi --release",
+        "build_command": "cargo build --bin ra --release",
         "sample_count": samples.len(),
         "samples": samples,
         "rss_spread_bytes": representative.rss_bytes.saturating_sub(min_rss_bytes),
@@ -397,11 +397,11 @@ fn target_roots_with(manifest_dir: &Path, cargo_target_dir: Option<&Path>) -> Ve
 const fn binary_file_names() -> &'static [&'static str] {
     #[cfg(windows)]
     {
-        &["pi.exe", "pi"]
+        &["ra.exe", "ra"]
     }
     #[cfg(not(windows))]
     {
-        &["pi"]
+        &["ra"]
     }
 }
 
@@ -422,17 +422,17 @@ fn run_resolution_regression_checks() {
     use std::path::{Path, PathBuf};
 
     // Binary kind inference
-    let path = Path::new("/tmp/target/release/pi");
+    let path = Path::new("/tmp/target/release/ra");
     assert_eq!(infer_binary_kind(path), BinaryKind::Release);
-    let path = Path::new("/tmp/target/debug/pi");
+    let path = Path::new("/tmp/target/debug/ra");
     assert_eq!(infer_binary_kind(path), BinaryKind::Debug);
-    let path = Path::new("/tmp/target/debug/release/pi");
+    let path = Path::new("/tmp/target/debug/release/ra");
     assert_eq!(infer_binary_kind(path), BinaryKind::Release);
-    let path = Path::new("/tmp/pi");
+    let path = Path::new("/tmp/ra");
     assert_eq!(infer_binary_kind(path), BinaryKind::Unknown);
 
     // Relative CARGO_TARGET_DIR is resolved from manifest dir.
-    let manifest_dir = Path::new("/workspace/pi_agent_rust");
+    let manifest_dir = Path::new("/workspace/recur_agent");
     let roots = target_roots_with(manifest_dir, Some(Path::new("target/agents/blackglen")));
     assert_eq!(roots.len(), 2);
     assert_eq!(roots[0], manifest_dir.join("target/agents/blackglen"));
@@ -452,18 +452,18 @@ fn run_resolution_regression_checks() {
     let names = binary_file_names();
     #[cfg(windows)]
     {
-        assert_eq!(names.first().copied(), Some("pi.exe"));
-        assert!(names.contains(&"pi"));
+        assert_eq!(names.first().copied(), Some("ra.exe"));
+        assert!(names.contains(&"ra"));
     }
     #[cfg(not(windows))]
     {
-        assert_eq!(names, &["pi"]);
+        assert_eq!(names, &["ra"]);
     }
 }
 
-fn resolve_pi_binary() -> ResolvedBinary {
+fn resolve_ra_binary() -> ResolvedBinary {
     // Check for explicit override
-    if let Ok(path) = env::var("PI_BENCH_BINARY") {
+    if let Ok(path) = env::var("RECUR_AGENT_BENCH_BINARY") {
         let path = PathBuf::from(path);
         return ResolvedBinary {
             kind: infer_binary_kind(&path),
@@ -496,7 +496,7 @@ fn resolve_pi_binary() -> ResolvedBinary {
 
     // Last resort: hope it's in PATH
     ResolvedBinary {
-        path: PathBuf::from("pi"),
+        path: PathBuf::from("ra"),
         kind: BinaryKind::Unknown,
     }
 }
@@ -509,11 +509,11 @@ fn binary_size_bytes(path: &Path) -> Option<u64> {
 // Startup Time Benchmarks
 // ============================================================================
 
-/// Measure startup time for `pi --version` (minimal startup path)
+/// Measure startup time for `ra --version` (minimal startup path)
 fn bench_startup_version(c: &mut Criterion) {
-    let binary = resolve_pi_binary();
+    let binary = resolve_ra_binary();
     // Pre-flight check: verify the binary is actually runnable (handles
-    // both missing file AND "pi" not in PATH).
+    // both missing file AND "ra" not in PATH).
     if Command::new(&binary.path)
         .arg("--version")
         .stdout(Stdio::null())
@@ -548,9 +548,9 @@ fn bench_startup_version(c: &mut Criterion) {
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
-                    .expect("failed to execute pi");
+                    .expect("failed to execute ra");
                 let elapsed = start.elapsed();
-                assert!(status.success(), "pi --version failed");
+                assert!(status.success(), "ra --version failed");
                 black_box(elapsed)
             });
         });
@@ -568,9 +568,9 @@ fn bench_startup_version(c: &mut Criterion) {
     }
 }
 
-/// Measure startup time for `pi --help` (loads more code paths)
+/// Measure startup time for `ra --help` (loads more code paths)
 fn bench_startup_help(c: &mut Criterion) {
-    let binary = resolve_pi_binary();
+    let binary = resolve_ra_binary();
     if Command::new(&binary.path)
         .arg("--version")
         .stdout(Stdio::null())
@@ -605,9 +605,9 @@ fn bench_startup_help(c: &mut Criterion) {
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
-                    .expect("failed to execute pi");
+                    .expect("failed to execute ra");
                 let elapsed = start.elapsed();
-                assert!(status.success(), "pi --help failed");
+                assert!(status.success(), "ra --help failed");
                 black_box(elapsed)
             });
         });
@@ -616,9 +616,9 @@ fn bench_startup_help(c: &mut Criterion) {
     }
 }
 
-/// Measure startup time for `pi --list-models` (exercises provider listing)
+/// Measure startup time for `ra --list-models` (exercises provider listing)
 fn bench_startup_list_models(c: &mut Criterion) {
-    let binary = resolve_pi_binary();
+    let binary = resolve_ra_binary();
     if Command::new(&binary.path)
         .arg("--version")
         .stdout(Stdio::null())
@@ -653,7 +653,7 @@ fn bench_startup_list_models(c: &mut Criterion) {
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
-                    .expect("failed to execute pi");
+                    .expect("failed to execute ra");
                 let elapsed = start.elapsed();
                 // list-models may fail without API key, just measure time
                 black_box((elapsed, status))
@@ -668,9 +668,9 @@ fn bench_startup_list_models(c: &mut Criterion) {
 // Memory Benchmarks
 // ============================================================================
 
-/// Measure RSS memory for `pi --version` (process exits immediately)
+/// Measure RSS memory for `ra --version` (process exits immediately)
 fn bench_memory_version(c: &mut Criterion) {
-    let binary = resolve_pi_binary();
+    let binary = resolve_ra_binary();
     if Command::new(&binary.path)
         .arg("--version")
         .stdout(Stdio::null())
@@ -695,7 +695,7 @@ fn bench_memory_version(c: &mut Criterion) {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
-                .expect("failed to spawn pi");
+                .expect("failed to spawn ra");
 
             let pid = sysinfo::Pid::from_u32(child.id());
             let mut system = System::new_with_specifics(
@@ -726,7 +726,7 @@ fn bench_memory_version(c: &mut Criterion) {
 /// Report binary size (not a timing benchmark, just records the value)
 fn bench_binary_size(c: &mut Criterion) {
     let mut group = c.benchmark_group("binary");
-    let binary = resolve_pi_binary();
+    let binary = resolve_ra_binary();
 
     if let Some(size) = binary_size_bytes(&binary.path) {
         let size_mb = size as f64 / 1024.0 / 1024.0;

@@ -16,7 +16,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use chrono::{SecondsFormat, Utc};
 use clap::Parser;
-use pi::extension_popularity::CandidatePool;
+use ra::extension_popularity::CandidatePool;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Parser)]
@@ -471,10 +471,16 @@ fn run_commands(project_root: &Path, args: &Args, stages: &mut Vec<StageResult>)
 
     for shard_index in 0..args.shards {
         let env = vec![
-            ("PI_SHARD_INDEX".to_string(), shard_index.to_string()),
-            ("PI_SHARD_TOTAL".to_string(), args.shards.to_string()),
             (
-                "PI_SHARD_PARALLELISM".to_string(),
+                "RECUR_AGENT_SHARD_INDEX".to_string(),
+                shard_index.to_string(),
+            ),
+            (
+                "RECUR_AGENT_SHARD_TOTAL".to_string(),
+                args.shards.to_string(),
+            ),
+            (
+                "RECUR_AGENT_SHARD_PARALLELISM".to_string(),
                 args.shard_parallelism.to_string(),
             ),
         ];
@@ -903,7 +909,7 @@ fn aggregate_report(
     };
 
     Ok(PipelineReport {
-        schema: "pi.ext.full_validation.v1".to_string(),
+        schema: "ra.ext.full_validation.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         run_options: RunOptions {
             aggregate_only: args.aggregate_only,
@@ -975,7 +981,7 @@ struct ClassificationContext<'a> {
 }
 
 fn classify_item(
-    item: &pi::extension_popularity::CandidateItem,
+    item: &ra::extension_popularity::CandidateItem,
     ctx: &ClassificationContext<'_>,
 ) -> ExtensionAssessment {
     let manifest_entry = lookup_by_id_or_alias(ctx.manifest_map, item);
@@ -1076,7 +1082,7 @@ fn classify_item(
 }
 
 fn classify_unvendored(
-    item: &pi::extension_popularity::CandidateItem,
+    item: &ra::extension_popularity::CandidateItem,
     queue: Option<&OnboardingQueueEntry>,
 ) -> Classification {
     let notes_lower = item
@@ -1761,7 +1767,7 @@ fn stage_passed(stages: &[StageResult], name: &str) -> bool {
 
 fn lookup_by_id_or_alias<'a, T>(
     map: &'a HashMap<String, T>,
-    item: &pi::extension_popularity::CandidateItem,
+    item: &ra::extension_popularity::CandidateItem,
 ) -> Option<&'a T> {
     if let Some(value) = map.get(&item.id) {
         return Some(value);
@@ -1780,7 +1786,7 @@ fn lookup_by_id_or_alias<'a, T>(
         .find_map(|candidate| map.get(&candidate))
 }
 
-fn derive_candidate_id_variants(item: &pi::extension_popularity::CandidateItem) -> Vec<String> {
+fn derive_candidate_id_variants(item: &ra::extension_popularity::CandidateItem) -> Vec<String> {
     let mut out = Vec::new();
     push_candidate_id_variants(&item.id, &mut out);
     for alias in &item.aliases {

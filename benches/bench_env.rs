@@ -113,7 +113,7 @@ fn compute_noise_score(governor: &str, turbo: &str, thp: &str, aslr: &str) -> u8
 fn sha256_hex(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 /// Collect the full environment fingerprint.
@@ -235,14 +235,14 @@ pub fn criterion_config_system() -> criterion::Criterion {
 /// matching local target directory.
 #[must_use]
 pub fn criterion_output_directory() -> Option<PathBuf> {
-    let relative = PathBuf::from(std::env::var_os("PI_CRITERION_OUTPUT_SUBDIR")?);
+    let relative = PathBuf::from(std::env::var_os("RECUR_AGENT_CRITERION_OUTPUT_SUBDIR")?);
     assert!(
         !relative.as_os_str().is_empty()
             && !relative.is_absolute()
             && relative
                 .components()
                 .all(|component| matches!(component, Component::Normal(_))),
-        "PI_CRITERION_OUTPUT_SUBDIR must be a non-empty normalized relative path"
+        "RECUR_AGENT_CRITERION_OUTPUT_SUBDIR must be a non-empty normalized relative path"
     );
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let target_dir = std::env::var_os("CARGO_TARGET_DIR").map_or_else(

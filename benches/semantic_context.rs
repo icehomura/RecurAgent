@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
-use pi::semantic_workspace_graph::{
+use ra::semantic_workspace_graph::{
     ContextBundleBudget, ContextBundleRequest, SemanticContextBundle, SemanticContextBundlePlanner,
     SemanticWorkspaceGraph, SemanticWorkspaceGraphBuilder,
 };
@@ -26,7 +26,7 @@ const TEST_COUNT: usize = 60;
 const DOC_COUNT: usize = 24;
 const EVIDENCE_COUNT: usize = 24;
 const LARGE_WORKSPACE_CASE: &str = "large_workspace";
-const PERF_BUDGET_SCHEMA: &str = "pi.semantic_context.performance_budget.v1";
+const PERF_BUDGET_SCHEMA: &str = "ra.semantic_context.performance_budget.v1";
 
 #[derive(Debug, Clone, Copy)]
 enum FixtureOrder {
@@ -305,7 +305,7 @@ fn doc_content(index: usize) -> String {
 fn evidence_content(index: usize) -> String {
     format!(
         r#"{{
-  "schema": "pi.context_intelligence.perf_fixture.v1",
+  "schema": "ra.context_intelligence.perf_fixture.v1",
   "generated_at": "2026-05-13T00:00:00Z",
   "fixture_index": {index},
   "overall_verdict": "CERTIFIED"

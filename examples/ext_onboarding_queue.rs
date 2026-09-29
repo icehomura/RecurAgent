@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use clap::Parser;
-use pi::extension_popularity::{CandidateItem, CandidatePool, CandidateSource};
+use ra::extension_popularity::{CandidateItem, CandidatePool, CandidateSource};
 use serde::Serialize;
 use url::Url;
 
@@ -167,7 +167,7 @@ fn main() -> Result<()> {
     };
 
     let document = QueueDocument {
-        schema: "pi.ext.onboarding_queue.v2".to_string(),
+        schema: "ra.ext.onboarding_queue.v2".to_string(),
         generated_at: now.to_rfc3339(),
         source_pool_path: args.candidate_pool.display().to_string(),
         source_pool_total: pool.items.len(),

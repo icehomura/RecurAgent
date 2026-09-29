@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use chrono::{DateTime, SecondsFormat, Utc};
 use clap::{Parser, ValueEnum};
-use pi::conformance::report::{
+use ra::conformance::report::{
     ConformanceRegression, ConformanceReport, ExtensionConformanceResult, compute_regression,
     generate_report,
 };
@@ -179,7 +179,7 @@ fn build_trend(
         .collect::<Vec<_>>();
 
     ConformanceTrend {
-        schema: "pi.ext.conformance_trend.v1",
+        schema: "ra.ext.conformance_trend.v1",
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         runs,
         latest_regression,

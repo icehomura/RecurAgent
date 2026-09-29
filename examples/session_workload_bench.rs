@@ -8,9 +8,9 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use pi::error::Result;
-use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
-use pi::session::{Session, SessionMessage};
+use ra::error::Result;
+use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
+use ra::session::{Session, SessionMessage};
 use serde::Serialize;
 use serde_json::json;
 
@@ -79,7 +79,7 @@ fn parse_args() -> Result<Args> {
                     "prepare-realistic" => Mode::PrepareRealistic,
                     "workload-realistic" => Mode::WorkloadRealistic,
                     _ => {
-                        return Err(pi::Error::session(
+                        return Err(ra::Error::session(
                             "invalid --mode; use prepare|workload|prepare-realistic|workload-realistic",
                         ));
                     }
@@ -117,20 +117,20 @@ fn parse_args() -> Result<Args> {
 
 fn next_arg_value(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<String> {
     args.next()
-        .ok_or_else(|| pi::Error::session(format!("{flag} requires a value")))
+        .ok_or_else(|| ra::Error::session(format!("{flag} requires a value")))
 }
 
 fn parse_usize_flag(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<usize> {
     let value = next_arg_value(args, flag)?;
     value
         .parse::<usize>()
-        .map_err(|_| pi::Error::session(format!("invalid {flag}")))
+        .map_err(|_| ra::Error::session(format!("invalid {flag}")))
 }
 
 fn ensure_parent_dir(path: &Path) -> Result<()> {
     let parent = path
         .parent()
-        .ok_or_else(|| pi::Error::session("session path has no parent"))?;
+        .ok_or_else(|| ra::Error::session("session path has no parent"))?;
     std::fs::create_dir_all(parent)?;
     Ok(())
 }
@@ -152,7 +152,7 @@ const fn scenario_for_mode(mode: &Mode) -> &'static str {
 }
 
 fn report_to_json(report: &Report) -> Result<String> {
-    serde_json::to_string(report).map_err(|err| pi::Error::Json(Box::new(err)))
+    serde_json::to_string(report).map_err(|err| ra::Error::Json(Box::new(err)))
 }
 
 fn per_entry_token_budget(target_tokens: usize, entries: usize) -> usize {
@@ -219,7 +219,7 @@ fn user_message_entry_ids(session: &Session) -> Vec<String> {
         .entries
         .iter()
         .filter_map(|entry| {
-            if let pi::session::SessionEntry::Message(msg_entry) = entry
+            if let ra::session::SessionEntry::Message(msg_entry) = entry
                 && matches!(msg_entry.message, SessionMessage::User { .. })
             {
                 return msg_entry.base.id.clone();
@@ -396,7 +396,7 @@ fn run() -> Result<()> {
         let save_started = Instant::now();
         let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
             .build()
-            .map_err(|err| pi::Error::session(format!("runtime init failed: {err}")))?;
+            .map_err(|err| ra::Error::session(format!("runtime init failed: {err}")))?;
         runtime.block_on(async { session.save().await })?;
         let save_ms = save_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -426,7 +426,7 @@ fn run() -> Result<()> {
 
     let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
         .build()
-        .map_err(|err| pi::Error::session(format!("runtime init failed: {err}")))?;
+        .map_err(|err| ra::Error::session(format!("runtime init failed: {err}")))?;
 
     let open_started = Instant::now();
     let mut session = runtime

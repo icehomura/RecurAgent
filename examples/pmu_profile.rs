@@ -7,7 +7,7 @@
 
 use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand};
-use pi::pmu_telemetry::{
+use ra::pmu_telemetry::{
     PMU_TELEMETRY_SCHEMA, PmuOpportunityRanker, PmuRegressionBudget, PmuSample,
 };
 

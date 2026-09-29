@@ -11,8 +11,8 @@
 mod bench_env;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use pi::config::Config;
-use pi::tools::ToolRegistry;
+use ra::config::Config;
+use ra::tools::ToolRegistry;
 use std::fmt::Write as _;
 use std::path::Path;
 

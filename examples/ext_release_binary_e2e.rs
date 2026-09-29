@@ -29,18 +29,18 @@ struct Args {
     artifacts_root: PathBuf,
 
     /// Release binary under test.
-    #[arg(long, default_value = "target/release/pi")]
+    #[arg(long, default_value = "target/release/ra")]
     pi_bin: PathBuf,
 
-    /// Provider ID passed to pi.
+    /// Provider ID passed to ra.
     #[arg(long, default_value = "ollama")]
     provider: String,
 
-    /// Model ID passed to pi.
+    /// Model ID passed to ra.
     #[arg(long, default_value = "qwen2.5:0.5b")]
     model: String,
 
-    /// Optional API key passed to pi.
+    /// Optional API key passed to ra.
     ///
     /// If omitted, the harness relies on provider-native auth (for example OAuth).
     /// Ollama still gets a synthetic key automatically for compatibility.
@@ -59,7 +59,7 @@ struct Args {
     #[arg(long, default_value_t = 1)]
     jobs: usize,
 
-    /// Set `PI_EXTENSION_ALLOW_DANGEROUS=1` for each invoked pi process.
+    /// Set `RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS=1` for each invoked ra process.
     #[arg(long, default_value_t = false)]
     allow_dangerous: bool,
 
@@ -200,7 +200,7 @@ fn run() -> Result<()> {
 
     if !pi_bin.exists() {
         bail!(
-            "pi release binary not found at {}. Build first: cargo build --release --bin pi",
+            "ra release binary not found at {}. Build first: cargo build --release --bin ra",
             pi_bin.display()
         );
     }
@@ -590,13 +590,13 @@ fn execute_case_command(
         seed_oauth_home(&args.provider, &home_dir)?;
     }
     command.env("HOME", &home_dir);
-    command.env("PI_CODING_AGENT_DIR", env_root.join("agent"));
-    command.env("PI_CONFIG_PATH", isolated_settings_path(env_root));
-    command.env("PI_SESSIONS_DIR", env_root.join("sessions"));
-    command.env("PI_PACKAGE_DIR", env_root.join("packages"));
-    command.env("PI_TEST_MODE", "1");
+    command.env("RECUR_AGENT_DIR", env_root.join("agent"));
+    command.env("RECUR_AGENT_CONFIG_PATH", isolated_settings_path(env_root));
+    command.env("RECUR_AGENT_SESSIONS_DIR", env_root.join("sessions"));
+    command.env("RECUR_AGENT_PACKAGE_DIR", env_root.join("packages"));
+    command.env("RECUR_AGENT_TEST_MODE", "1");
     if args.allow_dangerous {
-        command.env("PI_EXTENSION_ALLOW_DANGEROUS", "1");
+        command.env("RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS", "1");
     }
 
     let run_output = run_with_timeout(command, Duration::from_secs(args.timeout_secs))?;
@@ -611,7 +611,7 @@ fn execute_case_command(
 
 fn run_with_timeout(mut command: Command, timeout: Duration) -> Result<RunOutput> {
     let started = Instant::now();
-    let mut child = command.spawn().context("spawning pi process")?;
+    let mut child = command.spawn().context("spawning ra process")?;
 
     loop {
         if started.elapsed() >= timeout {
@@ -731,7 +731,7 @@ fn render_markdown(report: &Report) -> String {
     let _ = writeln!(out, "- Parallel jobs: `{}`", report.jobs);
     let _ = writeln!(
         out,
-        "- PI_EXTENSION_ALLOW_DANGEROUS: `{}`",
+        "- RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS: `{}`",
         report.allow_dangerous
     );
     let _ = writeln!(
@@ -976,7 +976,7 @@ mod tests {
             timeout_secs: 30,
             jobs: 1,
             allow_dangerous: false,
-            pi_bin: "target/release/pi".to_string(),
+            pi_bin: "target/release/ra".to_string(),
             manifest: "tests/ext_conformance/VALIDATED_MANIFEST.json".to_string(),
             artifacts_root: "tests/ext_conformance/artifacts".to_string(),
             shard_index: None,

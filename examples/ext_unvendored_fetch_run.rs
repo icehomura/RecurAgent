@@ -9,11 +9,11 @@
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use futures::executor::block_on;
-use pi::extension_popularity::{CandidateItem, CandidatePool, CandidateSource};
-use pi::extension_validation::{ValidationStatus, classify_source_content};
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::{PiJsRuntimeConfig, RepairMode};
-use pi::tools::ToolRegistry;
+use ra::extension_popularity::{CandidateItem, CandidatePool, CandidateSource};
+use ra::extension_validation::{ValidationStatus, classify_source_content};
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::{RaJsRuntimeConfig, RepairMode};
+use ra::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -454,7 +454,7 @@ fn run_all(args: RunAllArgs) -> Result<()> {
     }
 
     let report = RunReport {
-        schema: "pi.ext.unvendored_fetch_probe.v1".to_string(),
+        schema: "ra.ext.unvendored_fetch_probe.v1".to_string(),
         generated_at: chrono::Utc::now().to_rfc3339(),
         candidate_pool: args.candidate_pool.display().to_string(),
         priority_json: args.priority_json.display().to_string(),
@@ -601,7 +601,7 @@ fn probe_entry_with_runtime(entry: &Path, cwd: &Path) -> Result<(usize, usize, u
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], cwd, None));
 
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         repair_mode: RepairMode::AutoStrict,
         ..Default::default()

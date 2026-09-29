@@ -17,9 +17,9 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use pi::extension_license::{ScreeningInput, screen_extensions};
-use pi::extension_popularity::CandidatePool;
-use pi::extension_validation::ValidationReport;
+use ra::extension_license::{ScreeningInput, screen_extensions};
+use ra::extension_popularity::CandidatePool;
+use ra::extension_validation::ValidationReport;
 
 #[derive(Debug, Parser)]
 #[command(name = "ext_license_screen")]
@@ -81,7 +81,7 @@ fn main() -> Result<()> {
     let inputs: Vec<ScreeningInput> = validated
         .candidates
         .iter()
-        .filter(|c| c.status == pi::extension_validation::ValidationStatus::TrueExtension)
+        .filter(|c| c.status == ra::extension_validation::ValidationStatus::TrueExtension)
         .map(|c| {
             // Try to find license: first by canonical_id, then by name.
             let known_license = license_map

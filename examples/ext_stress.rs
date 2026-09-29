@@ -12,11 +12,11 @@ use asupersync::runtime::reactor::create_reactor;
 use asupersync::time::{timeout, wall_now};
 use chrono::{SecondsFormat, Utc};
 use clap::{ArgAction, Parser};
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, HostcallReactorConfig, JsExtensionLoadSpec,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 
 #[derive(Parser, Debug)]
@@ -179,11 +179,11 @@ async fn run(args: Args) -> Result<()> {
         .to_string();
     let tools = Arc::new(ToolRegistry::new(&[], Path::new(&cwd), None));
     let manager = ExtensionManager::new();
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.clone(),
         ..Default::default()
     };
-    let runtime = pi::extensions::JsExtensionRuntimeHandle::start(
+    let runtime = ra::extensions::JsExtensionRuntimeHandle::start(
         js_config,
         Arc::clone(&tools),
         manager.clone(),
@@ -289,7 +289,7 @@ async fn run(args: Args) -> Result<()> {
     let reactor_activity_ok = !args.require_reactor_activity || reactor_activity.ok;
 
     let report = serde_json::json!({
-        "schema": "pi.ext.stress_profile.v1",
+        "schema": "ra.ext.stress_profile.v1",
         "run_id": run_id,
         "correlation_id": correlation_id,
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
@@ -869,7 +869,7 @@ async fn write_events_jsonl(
     let mut lines = Vec::with_capacity(run_result.resource_samples.len() + 1);
     for sample in &run_result.resource_samples {
         lines.push(serde_json::to_string(&serde_json::json!({
-            "schema": "pi.ext.stress_resource_sample.v1",
+            "schema": "ra.ext.stress_resource_sample.v1",
             "run_id": run_id,
             "correlation_id": correlation_id,
             "ts": generated_at,
@@ -881,7 +881,7 @@ async fn write_events_jsonl(
         }))?);
     }
     lines.push(serde_json::to_string(&serde_json::json!({
-        "schema": "pi.ext.stress_summary.v1",
+        "schema": "ra.ext.stress_summary.v1",
         "run_id": run_id,
         "correlation_id": correlation_id,
         "ts": generated_at,

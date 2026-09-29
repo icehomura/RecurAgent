@@ -21,8 +21,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use pi::extension_popularity::CandidatePool;
-use pi::extension_validation::{
+use ra::extension_popularity::CandidatePool;
+use ra::extension_validation::{
     CodeSearchInventory, CuratedListSummary, NpmScanSummary, RepoSearchSummary, ValidationConfig,
     ValidationStatus, run_validation_pipeline,
 };

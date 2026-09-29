@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const RELEASE_EVIDENCE_LEDGER_SCHEMA: &str = "pi.release_evidence.ledger.v1";
+pub const RELEASE_EVIDENCE_LEDGER_SCHEMA: &str = "ra.release_evidence.ledger.v1";
 pub const GENESIS_PREV_HASH: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -291,7 +291,7 @@ pub fn verify_ledger(
     };
 
     VerificationReport {
-        schema: "pi.release_evidence.verification_report.v1".to_string(),
+        schema: "ra.release_evidence.verification_report.v1".to_string(),
         status,
         entry_count: ledger.entries.len(),
         head_hash: ledger.head_hash.clone(),
@@ -346,7 +346,7 @@ pub fn replay_ledger(ledger: &ReleaseEvidenceLedgerArtifact) -> Result<ReplayRep
     let head_hash_matched = final_last_hash == ledger.head_hash;
 
     Ok(ReplayReport {
-        schema: "pi.release_evidence.replay_report.v1".to_string(),
+        schema: "ra.release_evidence.replay_report.v1".to_string(),
         total_steps: trace.len(),
         final_state_hash: expected_prev_hash.to_string(),
         head_hash_matched,

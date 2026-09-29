@@ -17,8 +17,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const SEQUENTIAL_GATE_CONTRACT_SCHEMA: &str = "pi.sequential_gate.contract.v1";
-pub const SEQUENTIAL_GATE_EVALUATION_SCHEMA: &str = "pi.sequential_gate.evaluation.v1";
+pub const SEQUENTIAL_GATE_CONTRACT_SCHEMA: &str = "ra.sequential_gate.contract.v1";
+pub const SEQUENTIAL_GATE_EVALUATION_SCHEMA: &str = "ra.sequential_gate.evaluation.v1";
 pub const DEFAULT_ALPHA: f64 = 0.05;
 pub const DEFAULT_BETA: f64 = 0.01;
 pub const DEFAULT_MAX_STEPS: usize = 50;
@@ -414,7 +414,7 @@ pub fn verify_sequential_artifact(
     };
 
     VerificationReport {
-        schema: "pi.sequential_gate.verification_report.v1".to_string(),
+        schema: "ra.sequential_gate.verification_report.v1".to_string(),
         status,
         evaluated_budgets: artifact.evaluations.len(),
         errors,

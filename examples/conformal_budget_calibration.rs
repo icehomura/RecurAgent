@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const CONFORMAL_CONTRACT_SCHEMA: &str = "pi.conformal_calibration.contract.v1";
-pub const CONFORMAL_ARTIFACT_SCHEMA: &str = "pi.conformal_calibration.v1";
+pub const CONFORMAL_CONTRACT_SCHEMA: &str = "ra.conformal_calibration.contract.v1";
+pub const CONFORMAL_ARTIFACT_SCHEMA: &str = "ra.conformal_calibration.v1";
 
 #[derive(Debug, Parser)]
 #[command(name = "conformal_budget_calibration")]
@@ -358,7 +358,7 @@ pub fn verify_conformal_artifact(
     };
 
     VerificationReport {
-        schema: "pi.conformal_calibration.verification_report.v1".to_string(),
+        schema: "ra.conformal_calibration.verification_report.v1".to_string(),
         status,
         evaluated_budgets: artifact.calibrated_budgets.len(),
         amendment_records: artifact.amendment_dry_runs.len(),

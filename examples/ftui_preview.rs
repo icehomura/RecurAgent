@@ -1,6 +1,6 @@
 //! Interactive preview of the `FrankenTUI` migration stack (`bd-cv653.9.1`).
 //!
-//! Runs [`pi::interactive_ftui::PiFtuiModel`] on the real ftui runtime with a
+//! Runs [`ra::interactive_ftui::RaFtuiModel`] on the real ftui runtime with a
 //! scripted fake agent, so the ported surfaces (layout regions, tail-follow
 //! scroll, `TextArea` editor, submit round-trip, status chrome, sanitize) can
 //! be exercised on an actual terminal before the launch-path integration
@@ -17,14 +17,14 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use pi::interactive::PiMsg;
-use pi::interactive_ftui::{PiFtuiModel, UiCommand};
-use pi::model::StopReason;
+use ra::interactive::RaMsg;
+use ra::interactive_ftui::{RaFtuiModel, UiCommand};
+use ra::model::StopReason;
 
 fn main() -> std::io::Result<()> {
-    // UI → agent (submitted commands) and agent → UI (PiMsg events).
+    // UI → agent (submitted commands) and agent → UI (RaMsg events).
     let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-    let (agent_tx, agent_rx) = mpsc::channel::<PiMsg>();
+    let (agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
 
     // Scripted fake agent: one streamed reply per submitted prompt.
     thread::spawn(move || {
@@ -32,14 +32,14 @@ fn main() -> std::io::Result<()> {
             let prompt = match command {
                 UiCommand::Prompt(prompt) => prompt,
                 UiCommand::SetModel { provider, model } => {
-                    let _ = agent_tx.send(PiMsg::System(format!(
+                    let _ = agent_tx.send(RaMsg::System(format!(
                         "(fake agent) pretending to switch to {provider}/{model}"
                     )));
                     continue;
                 }
                 UiCommand::Bash { command, exclude } => {
                     let note = if exclude { " (display-only)" } else { "" };
-                    let _ = agent_tx.send(PiMsg::System(format!(
+                    let _ = agent_tx.send(RaMsg::System(format!(
                         "(fake agent) would run{note}: {command}"
                     )));
                     continue;
@@ -47,31 +47,31 @@ fn main() -> std::io::Result<()> {
                 UiCommand::ResumeSession { path } => {
                     let mut note = String::from("(fake agent) would resume: "); // ubs:ignore demo loop paced by human input — one allocation per typed command
                     note.push_str(&path);
-                    let _ = agent_tx.send(PiMsg::System(note));
+                    let _ = agent_tx.send(RaMsg::System(note));
                     continue;
                 }
                 UiCommand::Compact => {
-                    let _ = agent_tx.send(PiMsg::System(String::from(
+                    let _ = agent_tx.send(RaMsg::System(String::from(
                         "(fake agent) would compact the conversation",
                     )));
                     continue;
                 }
                 other => {
-                    let _ = agent_tx.send(PiMsg::System(format!(
+                    let _ = agent_tx.send(RaMsg::System(format!(
                         "(fake agent) received command: {other:?}"
                     )));
                     continue;
                 }
             };
-            if agent_tx.send(PiMsg::AgentStart).is_err() {
+            if agent_tx.send(RaMsg::AgentStart).is_err() {
                 return;
             }
-            let _ = agent_tx.send(PiMsg::ToolStart {
+            let _ = agent_tx.send(RaMsg::ToolStart {
                 name: "demo".into(),
                 tool_id: "t1".into(),
             });
             thread::sleep(Duration::from_millis(350));
-            let _ = agent_tx.send(PiMsg::ToolEnd {
+            let _ = agent_tx.send(RaMsg::ToolEnd {
                 name: "demo".into(),
                 tool_id: "t1".into(),
                 is_error: false,
@@ -82,12 +82,12 @@ fn main() -> std::io::Result<()> {
                  AgentEventSubscription bridge to prove the runtime loop."
             );
             for word in reply.split_inclusive(' ') {
-                if agent_tx.send(PiMsg::TextDelta(word.to_string())).is_err() {
+                if agent_tx.send(RaMsg::TextDelta(word.to_string())).is_err() {
                     return;
                 }
                 thread::sleep(Duration::from_millis(40));
             }
-            let _ = agent_tx.send(PiMsg::AgentDone {
+            let _ = agent_tx.send(RaMsg::AgentDone {
                 usage: None,
                 stop_reason: StopReason::Stop,
                 error_message: None,
@@ -95,10 +95,10 @@ fn main() -> std::io::Result<()> {
         }
     });
 
-    let model = PiFtuiModel::new(agent_rx)
+    let model = RaFtuiModel::new(agent_rx)
         .with_submit_channel(submit_tx)
-        .with_palette(pi::interactive_ftui::FtuiPalette::from_theme(
-            &pi::theme::Theme::dark(),
+        .with_palette(ra::interactive_ftui::FtuiPalette::from_theme(
+            &ra::theme::Theme::dark(),
         ));
     ftui::App::fullscreen(model).with_mouse().run()
 }

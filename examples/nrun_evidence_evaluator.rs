@@ -18,8 +18,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const NRUN_EVIDENCE_PROTOCOL_SCHEMA: &str = "pi.nrun.evidence_protocol.contract.v1";
-pub const NRUN_BUDGET_EVALUATION_SCHEMA: &str = "pi.nrun.budget_evaluation.v1";
+pub const NRUN_EVIDENCE_PROTOCOL_SCHEMA: &str = "ra.nrun.evidence_protocol.contract.v1";
+pub const NRUN_BUDGET_EVALUATION_SCHEMA: &str = "ra.nrun.budget_evaluation.v1";
 pub const MIN_REPETITIONS: usize = 10;
 pub const BOOTSTRAP_RESAMPLES: usize = 1000;
 pub const MAX_ALLOWED_NOISE_SCORE: u8 = 15;
@@ -491,7 +491,7 @@ pub fn verify_nrun_artifact(
     };
 
     VerificationReport {
-        schema: "pi.nrun.verification_report.v1".to_string(),
+        schema: "ra.nrun.verification_report.v1".to_string(),
         status,
         evaluated_budgets: artifact.evaluations.len(),
         errors,

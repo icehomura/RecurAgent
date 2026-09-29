@@ -19,17 +19,17 @@
 use chrono::{DateTime, SecondsFormat, Utc};
 use clap::Parser;
 use futures::executor::block_on;
-use pi::error::{Error, Result};
-use pi::extension_scoring::{
+use ra::error::{Error, Result};
+use ra::extension_scoring::{
     InterferenceMatrixCompletenessReport, evaluate_interference_matrix_completeness,
     format_interference_pair_key, parse_interference_pair_key,
 };
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::perf_build;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::perf_build;
+use ra::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -40,13 +40,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const BENCH_SCHEMA: &str = "pi.ext.rust_bench.v1";
+const BENCH_SCHEMA: &str = "ra.ext.rust_bench.v1";
 const EVIDENCE_CLASS_MEASURED: &str = "measured";
 const CONFIDENCE_HIGH: &str = "high";
 const CONFIDENCE_MEDIUM: &str = "medium";
 const MEASUREMENT_BOUNDARY: &str = "production_extension_manager";
 const MEASUREMENT_CONTRACT_VERSION: &str = "production_extension_manager.v1";
-const HOTSPOT_MATRIX_SCHEMA: &str = "pi.ext.hostcall_hotspot_matrix.v1";
+const HOTSPOT_MATRIX_SCHEMA: &str = "ra.ext.hostcall_hotspot_matrix.v1";
 const BUILD_PROVENANCE_FIELDS: &[&str] = &[
     "source_commit",
     "source_dirty",
@@ -65,8 +65,8 @@ const BUILD_PROVENANCE_FIELDS: &[&str] = &[
     "debug_assertions",
     "config_hash",
 ];
-const VOI_SCHEDULER_SCHEMA: &str = "pi.ext.voi_scheduler.v1";
-const TRACE_EVENT_SCHEMA: &str = "pi.ext.hostcall_trace.v1";
+const VOI_SCHEDULER_SCHEMA: &str = "ra.ext.voi_scheduler.v1";
+const TRACE_EVENT_SCHEMA: &str = "ra.ext.hostcall_trace.v1";
 const DEFAULT_MATRIX_FILENAME: &str = "ext_hostcall_hotspot_matrix.json";
 const DEFAULT_TRACE_FILENAME: &str = "ext_hostcall_bridge_trace.jsonl";
 
@@ -270,13 +270,13 @@ impl PmuBudgetSpec {
         }
 
         let mut budget = Self::default();
-        if let Some(value) = parse_env_f64("PI_EXT_PMU_LLC_MISS_BUDGET_PCT") {
+        if let Some(value) = parse_env_f64("RECUR_AGENT_EXT_PMU_LLC_MISS_BUDGET_PCT") {
             budget.llc_miss_budget_pct = value.clamp(0.1, 100.0);
         }
-        if let Some(value) = parse_env_f64("PI_EXT_PMU_BRANCH_MISS_BUDGET_PCT") {
+        if let Some(value) = parse_env_f64("RECUR_AGENT_EXT_PMU_BRANCH_MISS_BUDGET_PCT") {
             budget.branch_miss_budget_pct = value.clamp(0.1, 100.0);
         }
-        if let Some(value) = parse_env_f64("PI_EXT_PMU_STALL_TOTAL_BUDGET_PCT") {
+        if let Some(value) = parse_env_f64("RECUR_AGENT_EXT_PMU_STALL_TOTAL_BUDGET_PCT") {
             budget.stall_total_budget_pct = value.clamp(0.1, 200.0);
         }
         budget
@@ -344,13 +344,13 @@ impl VoiBudgetConfig {
         }
 
         let mut config = Self::default();
-        if let Some(value) = parse_env_f64("PI_EXT_VOI_BUDGET_MS") {
+        if let Some(value) = parse_env_f64("RECUR_AGENT_EXT_VOI_BUDGET_MS") {
             config.max_overhead_ms = value.clamp(5.0, 2_000.0);
         }
-        if let Some(value) = parse_env_usize("PI_EXT_VOI_MAX_EXPERIMENTS") {
+        if let Some(value) = parse_env_usize("RECUR_AGENT_EXT_VOI_MAX_EXPERIMENTS") {
             config.max_experiments = value.clamp(1, 12);
         }
-        if let Some(value) = parse_env_f64("PI_EXT_VOI_STALE_AFTER_HOURS") {
+        if let Some(value) = parse_env_f64("RECUR_AGENT_EXT_VOI_STALE_AFTER_HOURS") {
             config.stale_after_hours = value.clamp(1.0, 168.0);
         }
         config
@@ -661,7 +661,7 @@ fn run() -> Result<()> {
 
     let finished_at = Utc::now();
     let run_metadata = json!({
-        "schema": "pi.ext.run_metadata.v1",
+        "schema": "ra.ext.run_metadata.v1",
         "run_id": format!("ext-hostcall-{}", started_at.timestamp_millis()),
         "started_at": started_at.to_rfc3339_opts(SecondsFormat::Millis, true),
         "finished_at": finished_at.to_rfc3339_opts(SecondsFormat::Millis, true),
@@ -788,7 +788,7 @@ fn default_perf_artifact_path(artifact: PerfArtifact) -> PathBuf {
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(std::env::temp_dir)
-        .join("pi_agent_rust")
+        .join("recur_agent")
         .join("ext_workloads")
         .join(artifact.name())
 }
@@ -1028,68 +1028,12 @@ fn annotate_pmu_payload(
 fn collect_pmu_metadata() -> Value {
     let budget = PmuBudgetSpec::from_env();
 
-    if let Ok(raw) = std::env::var("PI_EXT_PMU_COUNTERS_JSON") {
+    if let Ok(raw) = std::env::var("RECUR_AGENT_EXT_PMU_COUNTERS_JSON") {
         return serde_json::from_str::<Value>(&raw).map_or_else(
             |_| {
                 json!({
                     "status": "invalid",
-                    "source": "env:PI_EXT_PMU_COUNTERS_JSON",
-                    "reason": "failed_to_parse_json",
-                    "budget": budget.as_json(),
-                })
-            },
-            |parsed| annotate_pmu_payload(&parsed, "env:PI_EXT_PMU_COUNTERS_JSON", None, budget),
-        );
-    }
-
-    if let Ok(path) = std::env::var("PI_EXT_PMU_COUNTERS_PATH") {
-        return fs::read_to_string(&path).map_or_else(
-            |_| {
-                json!({
-                    "status": "missing",
-                    "source": "env:PI_EXT_PMU_COUNTERS_PATH",
-                    "path": path,
-                    "budget": budget.as_json(),
-                })
-            },
-            |raw| {
-                serde_json::from_str::<Value>(&raw).map_or_else(
-                    |_| {
-                        json!({
-                            "status": "invalid",
-                            "source": "env:PI_EXT_PMU_COUNTERS_PATH",
-                            "path": path,
-                            "reason": "failed_to_parse_json",
-                            "budget": budget.as_json(),
-                        })
-                    },
-                    |parsed| {
-                        annotate_pmu_payload(
-                            &parsed,
-                            "env:PI_EXT_PMU_COUNTERS_PATH",
-                            Some(&path),
-                            budget,
-                        )
-                    },
-                )
-            },
-        );
-    }
-
-    json!({
-        "status": "not_collected",
-        "reason": "set PI_EXT_PMU_COUNTERS_JSON or PI_EXT_PMU_COUNTERS_PATH to attach PMU counters",
-        "budget": budget.as_json(),
-    })
-}
-
-fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
-    if let Ok(raw) = std::env::var("PI_EXT_PMU_BASELINE_COUNTERS_JSON") {
-        return serde_json::from_str::<Value>(&raw).map_or_else(
-            |_| {
-                json!({
-                    "status": "invalid",
-                    "source": "env:PI_EXT_PMU_BASELINE_COUNTERS_JSON",
+                    "source": "env:RECUR_AGENT_EXT_PMU_COUNTERS_JSON",
                     "reason": "failed_to_parse_json",
                     "budget": budget.as_json(),
                 })
@@ -1097,7 +1041,7 @@ fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
             |parsed| {
                 annotate_pmu_payload(
                     &parsed,
-                    "env:PI_EXT_PMU_BASELINE_COUNTERS_JSON",
+                    "env:RECUR_AGENT_EXT_PMU_COUNTERS_JSON",
                     None,
                     budget,
                 )
@@ -1105,12 +1049,12 @@ fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
         );
     }
 
-    if let Ok(path) = std::env::var("PI_EXT_PMU_BASELINE_COUNTERS_PATH") {
+    if let Ok(path) = std::env::var("RECUR_AGENT_EXT_PMU_COUNTERS_PATH") {
         return fs::read_to_string(&path).map_or_else(
             |_| {
                 json!({
                     "status": "missing",
-                    "source": "env:PI_EXT_PMU_BASELINE_COUNTERS_PATH",
+                    "source": "env:RECUR_AGENT_EXT_PMU_COUNTERS_PATH",
                     "path": path,
                     "budget": budget.as_json(),
                 })
@@ -1120,7 +1064,7 @@ fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
                     |_| {
                         json!({
                             "status": "invalid",
-                            "source": "env:PI_EXT_PMU_BASELINE_COUNTERS_PATH",
+                            "source": "env:RECUR_AGENT_EXT_PMU_COUNTERS_PATH",
                             "path": path,
                             "reason": "failed_to_parse_json",
                             "budget": budget.as_json(),
@@ -1129,7 +1073,7 @@ fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
                     |parsed| {
                         annotate_pmu_payload(
                             &parsed,
-                            "env:PI_EXT_PMU_BASELINE_COUNTERS_PATH",
+                            "env:RECUR_AGENT_EXT_PMU_COUNTERS_PATH",
                             Some(&path),
                             budget,
                         )
@@ -1141,7 +1085,70 @@ fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
 
     json!({
         "status": "not_collected",
-        "reason": "set PI_EXT_PMU_BASELINE_COUNTERS_JSON or PI_EXT_PMU_BASELINE_COUNTERS_PATH for before/after PMU comparison",
+        "reason": "set RECUR_AGENT_EXT_PMU_COUNTERS_JSON or RECUR_AGENT_EXT_PMU_COUNTERS_PATH to attach PMU counters",
+        "budget": budget.as_json(),
+    })
+}
+
+fn collect_pmu_baseline_metadata(budget: PmuBudgetSpec) -> Value {
+    if let Ok(raw) = std::env::var("RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_JSON") {
+        return serde_json::from_str::<Value>(&raw).map_or_else(
+            |_| {
+                json!({
+                    "status": "invalid",
+                    "source": "env:RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_JSON",
+                    "reason": "failed_to_parse_json",
+                    "budget": budget.as_json(),
+                })
+            },
+            |parsed| {
+                annotate_pmu_payload(
+                    &parsed,
+                    "env:RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_JSON",
+                    None,
+                    budget,
+                )
+            },
+        );
+    }
+
+    if let Ok(path) = std::env::var("RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_PATH") {
+        return fs::read_to_string(&path).map_or_else(
+            |_| {
+                json!({
+                    "status": "missing",
+                    "source": "env:RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_PATH",
+                    "path": path,
+                    "budget": budget.as_json(),
+                })
+            },
+            |raw| {
+                serde_json::from_str::<Value>(&raw).map_or_else(
+                    |_| {
+                        json!({
+                            "status": "invalid",
+                            "source": "env:RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_PATH",
+                            "path": path,
+                            "reason": "failed_to_parse_json",
+                            "budget": budget.as_json(),
+                        })
+                    },
+                    |parsed| {
+                        annotate_pmu_payload(
+                            &parsed,
+                            "env:RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_PATH",
+                            Some(&path),
+                            budget,
+                        )
+                    },
+                )
+            },
+        );
+    }
+
+    json!({
+        "status": "not_collected",
+        "reason": "set RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_JSON or RECUR_AGENT_EXT_PMU_BASELINE_COUNTERS_PATH for before/after PMU comparison",
         "budget": budget.as_json(),
     })
 }
@@ -1293,12 +1300,12 @@ fn parse_perf_outcome_snapshot(raw: &Value) -> Option<PerfOutcomeSnapshot> {
 }
 
 fn collect_perf_baseline_metadata() -> Value {
-    if let Ok(raw) = std::env::var("PI_EXT_BASELINE_OUTCOMES_JSON") {
+    if let Ok(raw) = std::env::var("RECUR_AGENT_EXT_BASELINE_OUTCOMES_JSON") {
         return serde_json::from_str::<Value>(&raw).map_or_else(
             |_| {
                 json!({
                     "status": "invalid",
-                    "source": "env:PI_EXT_BASELINE_OUTCOMES_JSON",
+                    "source": "env:RECUR_AGENT_EXT_BASELINE_OUTCOMES_JSON",
                     "reason": "failed_to_parse_json",
                 })
             },
@@ -1306,7 +1313,7 @@ fn collect_perf_baseline_metadata() -> Value {
                 let parsed_snapshot = parse_perf_outcome_snapshot(&parsed);
                 json!({
                     "status": if parsed_snapshot.is_some() { "collected" } else { "invalid" },
-                    "source": "env:PI_EXT_BASELINE_OUTCOMES_JSON",
+                    "source": "env:RECUR_AGENT_EXT_BASELINE_OUTCOMES_JSON",
                     "outcomes": parsed,
                     "normalized": parsed_snapshot,
                 })
@@ -1314,12 +1321,12 @@ fn collect_perf_baseline_metadata() -> Value {
         );
     }
 
-    if let Ok(path) = std::env::var("PI_EXT_BASELINE_OUTCOMES_PATH") {
+    if let Ok(path) = std::env::var("RECUR_AGENT_EXT_BASELINE_OUTCOMES_PATH") {
         return fs::read_to_string(&path).map_or_else(
             |_| {
                 json!({
                     "status": "missing",
-                    "source": "env:PI_EXT_BASELINE_OUTCOMES_PATH",
+                    "source": "env:RECUR_AGENT_EXT_BASELINE_OUTCOMES_PATH",
                     "path": path,
                 })
             },
@@ -1328,7 +1335,7 @@ fn collect_perf_baseline_metadata() -> Value {
                     |_| {
                         json!({
                             "status": "invalid",
-                            "source": "env:PI_EXT_BASELINE_OUTCOMES_PATH",
+                            "source": "env:RECUR_AGENT_EXT_BASELINE_OUTCOMES_PATH",
                             "path": path,
                             "reason": "failed_to_parse_json",
                         })
@@ -1337,7 +1344,7 @@ fn collect_perf_baseline_metadata() -> Value {
                         let parsed_snapshot = parse_perf_outcome_snapshot(&parsed);
                         json!({
                             "status": if parsed_snapshot.is_some() { "collected" } else { "invalid" },
-                            "source": "env:PI_EXT_BASELINE_OUTCOMES_PATH",
+                            "source": "env:RECUR_AGENT_EXT_BASELINE_OUTCOMES_PATH",
                             "path": path,
                             "outcomes": parsed,
                             "normalized": parsed_snapshot,
@@ -1350,7 +1357,7 @@ fn collect_perf_baseline_metadata() -> Value {
 
     json!({
         "status": "not_collected",
-        "reason": "set PI_EXT_BASELINE_OUTCOMES_JSON or PI_EXT_BASELINE_OUTCOMES_PATH for before/after outcome deltas",
+        "reason": "set RECUR_AGENT_EXT_BASELINE_OUTCOMES_JSON or RECUR_AGENT_EXT_BASELINE_OUTCOMES_PATH for before/after outcome deltas",
     })
 }
 
@@ -1436,7 +1443,7 @@ fn compare_perf_outcomes(
 }
 
 fn collect_flame_metadata() -> Value {
-    if let Ok(path) = std::env::var("PI_EXT_FLAMEGRAPH_PATH") {
+    if let Ok(path) = std::env::var("RECUR_AGENT_EXT_FLAMEGRAPH_PATH") {
         let exists = Path::new(&path).exists();
         return json!({
             "status": if exists { "collected" } else { "missing" },
@@ -1447,7 +1454,7 @@ fn collect_flame_metadata() -> Value {
 
     json!({
         "status": "not_collected",
-        "reason": "set PI_EXT_FLAMEGRAPH_PATH to attach flamegraph artifact",
+        "reason": "set RECUR_AGENT_EXT_FLAMEGRAPH_PATH to attach flamegraph artifact",
     })
 }
 
@@ -1506,7 +1513,7 @@ struct BenchRuntime {
 async fn new_runtime(js_cwd: &str) -> Result<BenchRuntime> {
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], Path::new(js_cwd), None));
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         cwd: js_cwd.to_string(),
         disk_cache_dir: None,
         ..Default::default()
@@ -1580,7 +1587,7 @@ async fn scenario_load_init_cold(
 
     Ok(json!({
         "schema": BENCH_SCHEMA,
-        "runtime": "pi_agent_rust",
+        "runtime": "recur_agent",
         "scenario": "ext_load_init/load_init_cold",
         "extension": spec.extension_id,
         "runs": runs,
@@ -1647,7 +1654,7 @@ async fn scenario_tool_call(
 
     Ok(json!({
         "schema": BENCH_SCHEMA,
-        "runtime": "pi_agent_rust",
+        "runtime": "recur_agent",
         "scenario": "ext_tool_call/hello",
         "extension": spec.extension_id,
         "iterations": iterations,
@@ -1716,7 +1723,7 @@ async fn scenario_event_hook(
 
     Ok(json!({
         "schema": BENCH_SCHEMA,
-        "runtime": "pi_agent_rust",
+        "runtime": "recur_agent",
         "scenario": "ext_event_hook/before_agent_start",
         "extension": spec.extension_id,
         "iterations": iterations,
@@ -1794,7 +1801,7 @@ async fn scenario_long_session_real_corpus(
 
     Ok(json!({
         "schema": BENCH_SCHEMA,
-        "runtime": "pi_agent_rust",
+        "runtime": "recur_agent",
         "scenario": "ext_hostcall_bridge/long_session_real_corpus",
         "extension": format!("real_corpus_{}ext", loaded_extension_ids.len()),
         "iterations": iterations,

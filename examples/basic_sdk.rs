@@ -48,10 +48,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use pi::sdk::{AgentEvent, AgentSessionHandle, ContentBlock, SessionOptions, create_agent_session};
+use ra::sdk::{AgentEvent, AgentSessionHandle, ContentBlock, SessionOptions, create_agent_session};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the async runtime (pi uses asupersync, not tokio).
+    // Initialize the async runtime (ra uses asupersync, not tokio).
     let reactor = asupersync::runtime::reactor::create_reactor().expect("failed to create reactor");
     let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
         .with_reactor(reactor)
@@ -99,8 +99,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if invocation != Invocation::Demo {
         // Plan submission and tool approval are separate decisions. Keep file
         // mutation denied until this example's explicit human confirmation.
-        options.approval_state = Some(pi::approval::ApprovalState::new(
-            pi::approval::ApprovalMode::AlwaysAsk,
+        options.approval_state = Some(ra::approval::ApprovalState::new(
+            ra::approval::ApprovalMode::AlwaysAsk,
             false,
             Vec::new(),
         ));
@@ -170,7 +170,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     ..
                 } => {
                     // Print streaming text deltas to stderr as they arrive.
-                    use pi::model::AssistantMessageEvent;
+                    use ra::model::AssistantMessageEvent;
                     if let AssistantMessageEvent::TextDelta { delta, .. } = assistant_message_event
                     {
                         eprint!("{delta}");
@@ -350,7 +350,7 @@ async fn prepare_storage(
             let text_path = path
                 .to_str()
                 .ok_or_else(|| io::Error::other("session path is not UTF-8"))?;
-            let saved = pi::sdk::Session::open(text_path).await?;
+            let saved = ra::sdk::Session::open(text_path).await?;
             check_workspace(&saved.header.cwd, &workspace)?;
             let expected = ResumeIdentity {
                 id: saved.header.id,
@@ -416,8 +416,8 @@ async fn print_session_path(handle: &AgentSessionHandle) -> Result<(), Box<dyn s
     Ok(())
 }
 
-fn check_plan_change(change: &pi::plan::PlanChange) -> Result<(), std::io::Error> {
-    if let pi::plan::PlanPersistence::Unconfirmed { reason } = &change.persistence {
+fn check_plan_change(change: &ra::plan::PlanChange) -> Result<(), std::io::Error> {
+    if let ra::plan::PlanPersistence::Unconfirmed { reason } = &change.persistence {
         return Err(std::io::Error::other(format!(
             "Live plan state is {:?}, but saving was not confirmed: {reason}",
             change.mode,
@@ -431,7 +431,7 @@ async fn run_reviewed_plan(
     invocation: &Invocation,
     expected_resume: Option<&ResumeIdentity>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let owner = pi::agent_cx::AgentCx::for_current_or_request();
+    let owner = ra::agent_cx::AgentCx::for_current_or_request();
     match invocation {
         Invocation::Plan { task, .. } => {
             check_plan_change(&handle.enter_plan_mode(&owner).await?)?;
@@ -454,8 +454,8 @@ async fn run_reviewed_plan(
             check_plan_change(&restored)?;
             print_session_path(handle).await?;
             match restored.mode {
-                pi::plan::PlanMode::PendingApproval => {}
-                pi::plan::PlanMode::Planning => {
+                ra::plan::PlanMode::PendingApproval => {}
+                ra::plan::PlanMode::Planning => {
                     let draft = handle
                         .session()
                         .agent
@@ -468,13 +468,13 @@ async fn run_reviewed_plan(
                          Do not execute the plan.\n\n{draft}"
                     ), |_| {}).await?;
                 }
-                pi::plan::PlanMode::Off => {
+                ra::plan::PlanMode::Off => {
                     println!(
                         "This saved plan was exited. No provider turn or execution was started."
                     );
                     return Ok(());
                 }
-                pi::plan::PlanMode::Approved => {
+                ra::plan::PlanMode::Approved => {
                     return Err(io::Error::other(
                         "recovery unexpectedly granted approval; execution refused",
                     )
@@ -493,8 +493,8 @@ async fn run_reviewed_plan(
     review_and_execute(handle, &owner, &review).await
 }
 
-fn check_checkpoint(persistence: pi::plan::PlanPersistence) -> Result<(), io::Error> {
-    if let pi::plan::PlanPersistence::Unconfirmed { reason } = persistence {
+fn check_checkpoint(persistence: ra::plan::PlanPersistence) -> Result<(), io::Error> {
+    if let ra::plan::PlanPersistence::Unconfirmed { reason } = persistence {
         return Err(io::Error::other(format!(
             "Plan remains live, but checkpoint saving was not confirmed: {reason}"
         )));
@@ -537,8 +537,8 @@ fn read_decision(input: impl io::BufRead) -> Result<ReviewDecision, io::Error> {
 
 async fn review_and_execute(
     handle: &mut AgentSessionHandle,
-    owner: &pi::agent_cx::AgentCx,
-    review: &pi::plan::SessionPlanReview,
+    owner: &ra::agent_cx::AgentCx,
+    review: &ra::plan::SessionPlanReview,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write as _;
     println!("\n--- Exact submitted plan (control characters escaped) ---");
@@ -585,7 +585,7 @@ async fn review_and_execute(
         |_| {},
     ).await?;
     let completed =
-        assistant.stop_reason == pi::sdk::StopReason::Stop && !policy.surface_was_unavailable();
+        assistant.stop_reason == ra::sdk::StopReason::Stop && !policy.surface_was_unavailable();
     for block in assistant.content {
         if let ContentBlock::Text(text) = block {
             for line in text.text.split('\n') {
@@ -755,7 +755,7 @@ mod tests {
 
     #[test]
     fn unconfirmed_save_prevents_execution_while_acknowledging_the_live_decision() {
-        use pi::plan::{PlanChange, PlanMode, PlanPersistence};
+        use ra::plan::{PlanChange, PlanMode, PlanPersistence};
         for persistence in [
             PlanPersistence::Saved,
             PlanPersistence::MemoryOnly,
@@ -803,7 +803,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("saved plan.jsonl");
         let workspace = std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap();
-        let mut saved = pi::sdk::Session::in_memory();
+        let mut saved = ra::sdk::Session::in_memory();
         saved.header.cwd = workspace.to_str().unwrap().to_string();
         std::fs::write(
             &path,

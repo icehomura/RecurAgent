@@ -4,15 +4,15 @@
 
 use clap::{Parser, ValueEnum};
 use futures::executor::block_on;
-use pi::error::{Error, Result};
-use pi::extensions::{
+use ra::error::{Error, Result};
+use ra::extensions::{
     ExtensionManager, ExtensionRuntimeHandle, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
     NativeRustExtensionLoadSpec, NativeRustExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::perf_build;
-use pi::scheduler::HostcallOutcome;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::perf_build;
+use ra::scheduler::HostcallOutcome;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::VecDeque;
 use std::fs::{self, File, OpenOptions};
@@ -26,8 +26,8 @@ const QUICKJS_RUNTIME_TOOL_NAME: &str = "hello";
 const NATIVE_RUNTIME_TOOL_NAME: &str = "bench_tool";
 const REGRESSION_GATE_ITERATIONS: usize = 2_000;
 const REGRESSION_GATE_TOOL_CALLS: [usize; 2] = [1, 10];
-const BENCH_RUN_ID_ENV: &str = "PI_BENCH_RUN_ID";
-const BENCH_CORRELATION_ID_ENV: &str = "PI_BENCH_CORRELATION_ID";
+const BENCH_RUN_ID_ENV: &str = "RECUR_AGENT_BENCH_RUN_ID";
+const BENCH_CORRELATION_ID_ENV: &str = "RECUR_AGENT_BENCH_CORRELATION_ID";
 
 const NATIVE_RUNTIME_DESCRIPTOR: &str = r#"
 {
@@ -346,11 +346,11 @@ fn normalized_criterion_output_subdir(raw: &str) -> Result<PathBuf> {
     let components = relative
         .components()
         .map(|component| match component {
-            Component::Normal(value) => value
-                .to_str()
-                .ok_or_else(|| Error::extension("PI_CRITERION_OUTPUT_SUBDIR must be UTF-8")),
+            Component::Normal(value) => value.to_str().ok_or_else(|| {
+                Error::extension("RECUR_AGENT_CRITERION_OUTPUT_SUBDIR must be UTF-8")
+            }),
             _ => Err(Error::extension(
-                "PI_CRITERION_OUTPUT_SUBDIR must contain only normal relative components",
+                "RECUR_AGENT_CRITERION_OUTPUT_SUBDIR must contain only normal relative components",
             )),
         })
         .collect::<Result<Vec<_>>>()?;
@@ -363,7 +363,7 @@ fn normalized_criterion_output_subdir(raw: &str) -> Result<PathBuf> {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
         return Err(Error::extension(
-            "PI_CRITERION_OUTPUT_SUBDIR must equal pi-perf-runs/<lowercase-sha256>/criterion_pijs",
+            "RECUR_AGENT_CRITERION_OUTPUT_SUBDIR must equal pi-perf-runs/<lowercase-sha256>/criterion_pijs",
         ));
     }
     Ok(relative)
@@ -388,8 +388,8 @@ fn write_regression_gate_pair(records: &[serde_json::Value]) -> Result<()> {
             "CARGO_TARGET_DIR must be an absolute normalized path for RCH artifact return",
         ));
     }
-    let output_relative = nonempty_env("PI_CRITERION_OUTPUT_SUBDIR")
-        .ok_or_else(|| Error::extension("PI_CRITERION_OUTPUT_SUBDIR is required"))?;
+    let output_relative = nonempty_env("RECUR_AGENT_CRITERION_OUTPUT_SUBDIR")
+        .ok_or_else(|| Error::extension("RECUR_AGENT_CRITERION_OUTPUT_SUBDIR is required"))?;
     let output_relative = normalized_criterion_output_subdir(&output_relative)?;
     let output_dir = target_dir.join("criterion").join(output_relative);
     let output_parent = output_dir
@@ -674,7 +674,7 @@ fn run_measurement(args: &Args, tool_calls: NonZeroUsize) -> Result<serde_json::
     }
 
     Ok(json!({
-        "schema": "pi.perf.workload.v1",
+        "schema": "ra.perf.workload.v1",
         "timestamp": timestamp,
         "run_id": run_id,
         "correlation_id": correlation_id,
@@ -737,7 +737,7 @@ fn setup_quickjs_runtime() -> Result<QuickJsBenchRuntime> {
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
     let runtime = block_on(JsExtensionRuntimeHandle::start(
-        PiJsRuntimeConfig {
+        RaJsRuntimeConfig {
             cwd: cwd.display().to_string(),
             disk_cache_dir: None,
             ..Default::default()
@@ -752,7 +752,7 @@ fn setup_quickjs_runtime() -> Result<QuickJsBenchRuntime> {
 
 fn setup_native_runtime_bench_handle() -> Result<ExtensionRuntimeHandle> {
     let descriptor_path = std::env::temp_dir().join(format!(
-        "pi_agent_rust_native_bench_descriptor_{}.native.json",
+        "recur_agent_native_bench_descriptor_{}.native.json",
         std::process::id()
     ));
     fs::write(&descriptor_path, NATIVE_RUNTIME_DESCRIPTOR).map_err(|err| {
@@ -833,7 +833,7 @@ fn run_tool_roundtrip_native_runtime(runtime: &ExtensionRuntimeHandle) -> Result
 #[allow(unused_imports)]
 mod tests {
     use super::*;
-    use pi::perf_build::profile_from_target_path;
+    use ra::perf_build::profile_from_target_path;
     use std::path::Path;
     use std::time::Duration;
 
