@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# pi_agent_rust installer
+# recur_agent installer
 #
 # One-liner install:
-#   curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/main/install.sh?$(date +%s)" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/recur_agent/main/install.sh?$(date +%s)" | bash
 #
 # Highlights:
 # - Installs latest (or requested) GitHub release binary for your platform
 # - Verifies each release artifact via its exact `.sha256` sidecar
-# - Detects existing TypeScript pi and can migrate to Rust canonical `pi`
+# - Detects existing TypeScript pi and can migrate to Rust canonical `ra`
 # - Creates `legacy-pi` alias for the preserved TypeScript CLI when migrated
 # - Writes installer state for idempotent re-runs and clean uninstall
 
@@ -17,7 +17,7 @@ umask 022
 shopt -s lastpipe 2>/dev/null || true
 
 OWNER="${OWNER:-Dicklesworthstone}"
-REPO="${REPO:-pi_agent_rust}"
+REPO="${REPO:-recur_agent}"
 VERSION="${VERSION:-}"
 
 DEST_DEFAULT="$HOME/.local/bin"
@@ -33,10 +33,10 @@ FROM_SOURCE=0
 VERIFY=0
 NO_VERIFY=0
 FORCE_INSTALL=0
-OFFLINE="${PI_INSTALLER_OFFLINE:-0}"
-OFFLINE_TARBALL="${PI_INSTALLER_OFFLINE_TARBALL:-}"
+OFFLINE="${RECUR_AGENT_INSTALLER_OFFLINE:-0}"
+OFFLINE_TARBALL="${RECUR_AGENT_INSTALLER_OFFLINE_TARBALL:-}"
 AGENT_SKILLS_ENABLED="${AGENT_SKILLS_ENABLED:-1}"
-RETAIN_TEMP="${PI_INSTALLER_RETAIN_TEMP:-0}"
+RETAIN_TEMP="${RECUR_AGENT_INSTALLER_RETAIN_TEMP:-0}"
 
 CHECKSUM="${CHECKSUM:-}"
 CHECKSUM_URL="${CHECKSUM_URL:-}"
@@ -45,7 +45,7 @@ SOURCE_DIR="${SOURCE_DIR:-}"
 SIGSTORE_BUNDLE_URL="${SIGSTORE_BUNDLE_URL:-}"
 COSIGN_IDENTITY_RE="${COSIGN_IDENTITY_RE:-}"
 COSIGN_OIDC_ISSUER="${COSIGN_OIDC_ISSUER:-}"
-COSIGN_BIN="${PI_INSTALLER_COSIGN_BIN:-cosign}"
+COSIGN_BIN="${RECUR_AGENT_INSTALLER_COSIGN_BIN:-cosign}"
 COMPLETIONS_MODE="${COMPLETIONS_MODE:-auto}"
 
 PROXY_ARGS=()
@@ -71,7 +71,7 @@ TS_PI_DETECTED=0
 ADOPT_TS=0
 ADOPT_CANONICAL=0
 
-FINAL_BIN_NAME="pi"
+FINAL_BIN_NAME="ra"
 INSTALL_BIN_PATH=""
 
 LEGACY_ALIAS_PATH=""
@@ -88,14 +88,14 @@ AGENT_SKILL_NAME="pi-agent-rust"
 AGENT_SKILL_STATUS="pending"
 AGENT_SKILL_CLAUDE_PATH=""
 AGENT_SKILL_CODEX_PATH=""
-AGENT_SKILL_MARKER="pi_agent_rust installer managed skill"
+AGENT_SKILL_MARKER="recur_agent installer managed skill"
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/pi-agent-rust"
 STATE_FILE="$STATE_DIR/install-state.env"
 STATE_VERSION="1"
 
 TMP=""
-LOCK_DIR="${PI_INSTALLER_LOCK_DIR:-/tmp/pi-agent-rust-install.lock.d}"
+LOCK_DIR="${RECUR_AGENT_INSTALLER_LOCK_DIR:-/tmp/pi-agent-rust-install.lock.d}"
 LOCKED=0
 MIGRATION_MOVED=0
 INSTALL_COMMITTED=0
@@ -164,7 +164,7 @@ run_with_spinner() {
 # BSD mktemp, which is what macOS ships, ignores TMPDIR unless it is handed an
 # explicit template (or -t); GNU mktemp honours TMPDIR on its own. With a bare
 # `mktemp -d` the installer scratch therefore always landed in the system temp
-# directory on macOS, so a caller-supplied TMPDIR — and PI_INSTALLER_RETAIN_TEMP
+# directory on macOS, so a caller-supplied TMPDIR — and RECUR_AGENT_INSTALLER_RETAIN_TEMP
 # with it — was silently ignored there while working on Linux. Always pass a
 # template rooted at TMPDIR so both platforms agree.
 installer_tmp_root() {
@@ -276,7 +276,7 @@ run_command_with_timeout_capture() {
 # This is the only sanctioned way to run an untrusted downloaded artifact in
 # the compatibility probe: no code path may rerun it without a deadline
 # (bd-wmga9).
-PI_INSTALLER_PROBE_TIMEOUT="${PI_INSTALLER_PROBE_TIMEOUT:-20}"
+RECUR_AGENT_INSTALLER_PROBE_TIMEOUT="${RECUR_AGENT_INSTALLER_PROBE_TIMEOUT:-20}"
 run_bounded_stderr_capture() {
   local seconds="$1"
   local err_file="$2"
@@ -377,7 +377,7 @@ release_binary_needs_newer_libc() {
 
   local probe_err="$TMP/libc-probe.err"
   local probe_rc=0
-  local probe_timeout="${PI_INSTALLER_PROBE_TIMEOUT:-20}"
+  local probe_timeout="${RECUR_AGENT_INSTALLER_PROBE_TIMEOUT:-20}"
   local timeout_cmd=""
   timeout_cmd="$(version_timeout_cmd)"
 
@@ -450,7 +450,7 @@ host_libc_description() {
 is_managed_alias() {
   local path="$1"
   [ -f "$path" ] || return 1
-  grep -q "pi_agent_rust installer managed alias" "$path" 2>/dev/null
+  grep -q "recur_agent installer managed alias" "$path" 2>/dev/null
 }
 
 setup_proxy() {
@@ -549,10 +549,10 @@ fetch_url_to_file() {
   local url="$1"
   local output_path="$2"
   local context="${3:-resource}"
-  local connect_timeout="${PI_INSTALLER_CONNECT_TIMEOUT:-10}"
-  local max_time="${PI_INSTALLER_MAX_TIME:-180}"
-  local retries="${PI_INSTALLER_RETRIES:-2}"
-  local retry_delay="${PI_INSTALLER_RETRY_DELAY:-1}"
+  local connect_timeout="${RECUR_AGENT_INSTALLER_CONNECT_TIMEOUT:-10}"
+  local max_time="${RECUR_AGENT_INSTALLER_MAX_TIME:-180}"
+  local retries="${RECUR_AGENT_INSTALLER_RETRIES:-2}"
+  local retry_delay="${RECUR_AGENT_INSTALLER_RETRY_DELAY:-1}"
 
   if ! ensure_network_allowed "$url" "$context"; then
     return 1
@@ -560,19 +560,19 @@ fetch_url_to_file() {
 
   case "$context" in
     "agent skill")
-      connect_timeout="${PI_INSTALLER_AGENT_SKILL_CONNECT_TIMEOUT:-3}"
-      max_time="${PI_INSTALLER_AGENT_SKILL_MAX_TIME:-8}"
-      retries="${PI_INSTALLER_AGENT_SKILL_RETRIES:-0}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_AGENT_SKILL_CONNECT_TIMEOUT:-3}"
+      max_time="${RECUR_AGENT_INSTALLER_AGENT_SKILL_MAX_TIME:-8}"
+      retries="${RECUR_AGENT_INSTALLER_AGENT_SKILL_RETRIES:-0}"
       ;;
     "release artifact")
-      connect_timeout="${PI_INSTALLER_ARTIFACT_CONNECT_TIMEOUT:-10}"
-      max_time="${PI_INSTALLER_ARTIFACT_MAX_TIME:-240}"
-      retries="${PI_INSTALLER_ARTIFACT_RETRIES:-2}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_ARTIFACT_CONNECT_TIMEOUT:-10}"
+      max_time="${RECUR_AGENT_INSTALLER_ARTIFACT_MAX_TIME:-240}"
+      retries="${RECUR_AGENT_INSTALLER_ARTIFACT_RETRIES:-2}"
       ;;
     "release checksum manifest"|"checksum file"|"derived checksum file"|"artifact checksum sidecar"|"sigstore bundle")
-      connect_timeout="${PI_INSTALLER_META_CONNECT_TIMEOUT:-5}"
-      max_time="${PI_INSTALLER_META_MAX_TIME:-20}"
-      retries="${PI_INSTALLER_META_RETRIES:-2}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_META_CONNECT_TIMEOUT:-5}"
+      max_time="${RECUR_AGENT_INSTALLER_META_MAX_TIME:-20}"
+      retries="${RECUR_AGENT_INSTALLER_META_RETRIES:-2}"
       ;;
   esac
 
@@ -604,15 +604,15 @@ fetch_optional_url_to_file() {
   local url="$1"
   local output_path="$2"
   local context="$3"
-  local connect_timeout="${PI_INSTALLER_META_CONNECT_TIMEOUT:-5}"
-  local max_time="${PI_INSTALLER_META_MAX_TIME:-20}"
-  local retries="${PI_INSTALLER_META_RETRIES:-2}"
-  local retry_delay="${PI_INSTALLER_RETRY_DELAY:-1}"
+  local connect_timeout="${RECUR_AGENT_INSTALLER_META_CONNECT_TIMEOUT:-5}"
+  local max_time="${RECUR_AGENT_INSTALLER_META_MAX_TIME:-20}"
+  local retries="${RECUR_AGENT_INSTALLER_META_RETRIES:-2}"
+  local retry_delay="${RECUR_AGENT_INSTALLER_RETRY_DELAY:-1}"
 
   if [ "$context" = "release artifact" ]; then
-    connect_timeout="${PI_INSTALLER_ARTIFACT_CONNECT_TIMEOUT:-10}"
-    max_time="${PI_INSTALLER_ARTIFACT_MAX_TIME:-240}"
-    retries="${PI_INSTALLER_ARTIFACT_RETRIES:-2}"
+    connect_timeout="${RECUR_AGENT_INSTALLER_ARTIFACT_CONNECT_TIMEOUT:-10}"
+    max_time="${RECUR_AGENT_INSTALLER_ARTIFACT_MAX_TIME:-240}"
+    retries="${RECUR_AGENT_INSTALLER_ARTIFACT_RETRIES:-2}"
   fi
 
   if ! ensure_network_allowed "$url" "$context"; then
@@ -651,10 +651,10 @@ fetch_optional_url_to_file() {
 fetch_url_to_stdout() {
   local url="$1"
   local context="${2:-resource}"
-  local connect_timeout="${PI_INSTALLER_CONNECT_TIMEOUT:-10}"
-  local max_time="${PI_INSTALLER_MAX_TIME:-180}"
-  local retries="${PI_INSTALLER_RETRIES:-2}"
-  local retry_delay="${PI_INSTALLER_RETRY_DELAY:-1}"
+  local connect_timeout="${RECUR_AGENT_INSTALLER_CONNECT_TIMEOUT:-10}"
+  local max_time="${RECUR_AGENT_INSTALLER_MAX_TIME:-180}"
+  local retries="${RECUR_AGENT_INSTALLER_RETRIES:-2}"
+  local retry_delay="${RECUR_AGENT_INSTALLER_RETRY_DELAY:-1}"
 
   if ! ensure_network_allowed "$url" "$context"; then
     return 1
@@ -662,14 +662,14 @@ fetch_url_to_stdout() {
 
   case "$context" in
     "agent skill")
-      connect_timeout="${PI_INSTALLER_AGENT_SKILL_CONNECT_TIMEOUT:-3}"
-      max_time="${PI_INSTALLER_AGENT_SKILL_MAX_TIME:-8}"
-      retries="${PI_INSTALLER_AGENT_SKILL_RETRIES:-0}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_AGENT_SKILL_CONNECT_TIMEOUT:-3}"
+      max_time="${RECUR_AGENT_INSTALLER_AGENT_SKILL_MAX_TIME:-8}"
+      retries="${RECUR_AGENT_INSTALLER_AGENT_SKILL_RETRIES:-0}"
       ;;
     "release checksum manifest"|"checksum file"|"derived checksum file"|"sigstore bundle")
-      connect_timeout="${PI_INSTALLER_META_CONNECT_TIMEOUT:-5}"
-      max_time="${PI_INSTALLER_META_MAX_TIME:-20}"
-      retries="${PI_INSTALLER_META_RETRIES:-2}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_META_CONNECT_TIMEOUT:-5}"
+      max_time="${RECUR_AGENT_INSTALLER_META_MAX_TIME:-20}"
+      retries="${RECUR_AGENT_INSTALLER_META_RETRIES:-2}"
       ;;
   esac
 
@@ -696,10 +696,10 @@ fetch_url_to_stdout() {
 fetch_effective_url() {
   local url="$1"
   local context="${2:-resource}"
-  local connect_timeout="${PI_INSTALLER_CONNECT_TIMEOUT:-10}"
-  local max_time="${PI_INSTALLER_MAX_TIME:-180}"
-  local retries="${PI_INSTALLER_RETRIES:-2}"
-  local retry_delay="${PI_INSTALLER_RETRY_DELAY:-1}"
+  local connect_timeout="${RECUR_AGENT_INSTALLER_CONNECT_TIMEOUT:-10}"
+  local max_time="${RECUR_AGENT_INSTALLER_MAX_TIME:-180}"
+  local retries="${RECUR_AGENT_INSTALLER_RETRIES:-2}"
+  local retry_delay="${RECUR_AGENT_INSTALLER_RETRY_DELAY:-1}"
 
   if ! ensure_network_allowed "$url" "$context"; then
     return 1
@@ -707,14 +707,14 @@ fetch_effective_url() {
 
   case "$context" in
     "agent skill")
-      connect_timeout="${PI_INSTALLER_AGENT_SKILL_CONNECT_TIMEOUT:-3}"
-      max_time="${PI_INSTALLER_AGENT_SKILL_MAX_TIME:-8}"
-      retries="${PI_INSTALLER_AGENT_SKILL_RETRIES:-0}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_AGENT_SKILL_CONNECT_TIMEOUT:-3}"
+      max_time="${RECUR_AGENT_INSTALLER_AGENT_SKILL_MAX_TIME:-8}"
+      retries="${RECUR_AGENT_INSTALLER_AGENT_SKILL_RETRIES:-0}"
       ;;
     "release checksum manifest"|"checksum file"|"derived checksum file"|"sigstore bundle")
-      connect_timeout="${PI_INSTALLER_META_CONNECT_TIMEOUT:-5}"
-      max_time="${PI_INSTALLER_META_MAX_TIME:-20}"
-      retries="${PI_INSTALLER_META_RETRIES:-2}"
+      connect_timeout="${RECUR_AGENT_INSTALLER_META_CONNECT_TIMEOUT:-5}"
+      max_time="${RECUR_AGENT_INSTALLER_META_MAX_TIME:-20}"
+      retries="${RECUR_AGENT_INSTALLER_META_RETRIES:-2}"
       ;;
   esac
 
@@ -896,21 +896,21 @@ Options:
   --sigstore-bundle-url URL
                           URL to Sigstore bundle (.sigstore.json)
   --from-source          Build from source instead of downloading release binary
-  --source-dir DIR       Build from a local pi_agent_rust checkout (implies
+  --source-dir DIR       Build from a local recur_agent checkout (implies
                           --from-source). Useful when iterating on a feature
                           branch, the desired commit is not tagged yet, or
                           a platform has no prebuilt binary (e.g. FreeBSD).
                           Compatible with --offline because no network is
                           needed once the source is on disk.
-  --verify               Run `pi --version` after install
+  --verify               Run `ra --version` after install
   --no-verify            Skip checksum + signature verification
   --offline [TARBALL]    Offline mode; optional local artifact path
   --completions SHELL    Install shell completions for auto|off|bash|zsh|fish
   --no-completions       Skip shell completion installation
   --no-agent-skills      Skip installing AI agent skill files for Claude/Codex
   --yes, -y              Non-interactive yes to prompts
-  --adopt                Auto-adopt Rust as canonical `pi` when TS pi is detected
-  --keep-existing-pi     Do not replace existing `pi`; install as `pi-rust`
+  --adopt                Auto-adopt Rust as canonical `ra` when TS pi is detected
+  --keep-existing-pi     Do not replace existing `pi`; install as `ra-rust`
   --legacy-alias NAME    Alias name for migrated TypeScript pi (default: legacy-pi)
   --force                Reinstall even if same version is already installed
   --quiet, -q            Suppress non-error output
@@ -1102,9 +1102,9 @@ show_header() {
       --padding "1 3" \
       --margin "1 0" \
       "$styled_logo" \
-      "$(gum style --foreground 51 --bold "${header_indent}Pi Agent Rust Installer")" \
+      "$(gum style --foreground 51 --bold "${header_indent}Recur Agent Installer")" \
       "$(gum style --foreground 226 --bold "${header_indent}Install target version: ${header_version}")" \
-      "$(gum style --foreground 252 "${header_indent}Based on Pi Agent by Mario Zechner")" \
+      "$(gum style --foreground 252 "${header_indent}Based on Recur Agent by Mario Zechner")" \
       "$(gum style --foreground 252 "${header_indent}Rust version by Jeffrey Emanuel")" \
       "$(gum style --foreground 248 "${header_indent}Fast Rust-native coding agent installer")" \
       "$(gum style --foreground 248 "${header_indent}Checksum verification by default | Optional Sigstore/cosign")" \
@@ -1113,9 +1113,9 @@ show_header() {
     echo ""
     pi_ascii_logo_ansi "$logo"
     echo ""
-    echo -e "\033[1;38;5;51m${header_indent}Pi Agent Rust Installer\033[0m"
+    echo -e "\033[1;38;5;51m${header_indent}Recur Agent Installer\033[0m"
     echo -e "\033[1;38;5;226m${header_indent}Install target version: ${header_version}\033[0m"
-    echo -e "\033[0;38;5;252m${header_indent}Based on Pi Agent by Mario Zechner\033[0m"
+    echo -e "\033[0;38;5;252m${header_indent}Based on Recur Agent by Mario Zechner\033[0m"
     echo -e "\033[0;38;5;252m${header_indent}Rust version by Jeffrey Emanuel\033[0m"
     echo -e "\033[0;38;5;248m${header_indent}Fast Rust-native coding agent installer\033[0m"
     echo -e "\033[0;38;5;248m${header_indent}Checksum verification by default | Optional Sigstore/cosign\033[0m"
@@ -1253,7 +1253,7 @@ detect_platform() {
   EXE_EXT=""
 
   if [ "$OS" = "linux" ]; then
-    if [ "${PI_INSTALLER_TEST_FORCE_WSL:-0}" = "1" ] \
+    if [ "${RECUR_AGENT_INSTALLER_TEST_FORCE_WSL:-0}" = "1" ] \
       || grep -qi microsoft /proc/version 2>/dev/null \
       || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
       WSL_DETECTED=1
@@ -1355,12 +1355,12 @@ check_disk_space() {
 }
 
 check_existing_install() {
-  local existing="$DEST/pi"
+  local existing="$DEST/$FINAL_BIN_NAME"
   if [ -x "$existing" ]; then
     local current
     current="$(capture_version_line "$existing")"
     if [ -n "$current" ]; then
-      info "Existing pi detected at $existing: $current"
+      info "Existing $FINAL_BIN_NAME detected at $existing: $current"
     fi
   fi
 }
@@ -1412,7 +1412,7 @@ validate_options() {
     0|1)
       ;;
     *)
-      err "PI_INSTALLER_RETAIN_TEMP must be 0 or 1"
+      err "RECUR_AGENT_INSTALLER_RETAIN_TEMP must be 0 or 1"
       exit 1
       ;;
   esac
@@ -1421,13 +1421,13 @@ validate_options() {
     /*)
       ;;
     *)
-      err "PI_INSTALLER_LOCK_DIR must be an absolute path"
+      err "RECUR_AGENT_INSTALLER_LOCK_DIR must be an absolute path"
       exit 1
       ;;
   esac
   case "$LOCK_DIR" in
     /|*/|*//*|*/./*|*/.|*/../*|*/..|*$'\t'*|*$'\n'*|*$'\r'*)
-      err "PI_INSTALLER_LOCK_DIR is unsafe"
+      err "RECUR_AGENT_INSTALLER_LOCK_DIR is unsafe"
       exit 1
       ;;
   esac
@@ -1620,7 +1620,9 @@ trap cleanup EXIT
 
 is_rust_pi_output() {
   local out="$1"
-  [[ "$out" =~ ^pi[[:space:]][0-9]+\.[0-9]+\.[0-9]+[[:space:]]\( ]]
+  # `ra` is the current binary/banner name; `pi` is accepted so pre-rename
+  # Rust installs are still recognized as Rust output (vs the legacy TS pi).
+  [[ "$out" =~ ^(pi|ra)[[:space:]][0-9]+\.[0-9]+\.[0-9]+[[:space:]]\( ]]
 }
 
 looks_like_node_script() {
@@ -1676,7 +1678,7 @@ detect_existing_pi() {
 choose_adoption_mode() {
   ADOPT_TS=0
   ADOPT_CANONICAL=0
-  FINAL_BIN_NAME="pi"
+  FINAL_BIN_NAME="ra"
 
   if [ "$TS_PI_DETECTED" -eq 0 ]; then
     return 0
@@ -1696,7 +1698,7 @@ choose_adoption_mode() {
       decision="no"
       ;;
     ask)
-      if prompt_confirm "Install Rust Pi as canonical 'pi' and preserve existing one as '${LEGACY_ALIAS_NAME}'?" 0; then
+      if prompt_confirm "Install Rust as canonical 'ra' and preserve existing one as '${LEGACY_ALIAS_NAME}'?" 0; then
         decision="yes"
       else
         decision="no"
@@ -1713,7 +1715,7 @@ choose_adoption_mode() {
   else
     ADOPT_TS=0
     ADOPT_CANONICAL=0
-    FINAL_BIN_NAME="pi-rust"
+    FINAL_BIN_NAME="ra-rust"
     warn "Keeping existing pi untouched; Rust binary will be installed as ${FINAL_BIN_NAME}"
   fi
 }
@@ -1990,9 +1992,9 @@ extract_release_artifact() {
       return 1
     fi
     local found_bin=""
-    found_bin="$(find "$extract_dir" -type f \( -name "pi${EXE_EXT}" -o -name "pi" -o -name "pi.exe" \) | head -1)"
+    found_bin="$(find "$extract_dir" -type f \( -name "ra${EXE_EXT}" -o -name "ra" -o -name "ra.exe" -o -name "pi${EXE_EXT}" -o -name "pi" -o -name "pi.exe" \) | head -1)"
     if [ -z "$found_bin" ]; then
-      warn "archive '$candidate' did not contain a pi binary"
+      warn "archive '$candidate' did not contain a ra/pi binary"
       return 1
     fi
     chmod +x "$found_bin" 2>/dev/null || true
@@ -2012,9 +2014,9 @@ extract_release_artifact() {
       return 1
     fi
     local found_bin=""
-    found_bin="$(find "$extract_dir" -type f \( -name "pi${EXE_EXT}" -o -name "pi" -o -name "pi.exe" \) | head -1)"
+    found_bin="$(find "$extract_dir" -type f \( -name "ra${EXE_EXT}" -o -name "ra" -o -name "ra.exe" -o -name "pi${EXE_EXT}" -o -name "pi" -o -name "pi.exe" \) | head -1)"
     if [ -z "$found_bin" ]; then
-      warn "archive '$candidate' did not contain a pi binary"
+      warn "archive '$candidate' did not contain a ra/pi binary"
       return 1
     fi
     chmod +x "$found_bin" 2>/dev/null || true
@@ -2034,9 +2036,9 @@ extract_release_artifact() {
       return 1
     fi
     local found_bin=""
-    found_bin="$(find "$extract_dir" -type f \( -name "pi${EXE_EXT}" -o -name "pi" -o -name "pi.exe" \) | head -1)"
+    found_bin="$(find "$extract_dir" -type f \( -name "ra${EXE_EXT}" -o -name "ra" -o -name "ra.exe" -o -name "pi${EXE_EXT}" -o -name "pi" -o -name "pi.exe" \) | head -1)"
     if [ -z "$found_bin" ]; then
-      warn "archive '$candidate' did not contain a pi binary"
+      warn "archive '$candidate' did not contain a ra/pi binary"
       return 1
     fi
     chmod +x "$found_bin" 2>/dev/null || true
@@ -2147,7 +2149,7 @@ build_from_source() {
     # (no prebuilt binaries), feature-branch iteration where the desired
     # commit is not tagged, and air-gapped/offline workflows that already
     # have the source on disk. Validate the directory looks like a real
-    # pi_agent_rust checkout before invoking cargo.
+    # recur_agent checkout before invoking cargo.
     if [ ! -d "$SOURCE_DIR" ]; then
       err "--source-dir path does not exist or is not a directory: $SOURCE_DIR"
       return 1
@@ -2160,8 +2162,8 @@ build_from_source() {
       err "--source-dir does not contain Cargo.toml: $src_dir"
       return 1
     fi
-    if ! grep -q '^name *= *"pi_agent_rust"' "$src_dir/Cargo.toml"; then
-      err "--source-dir Cargo.toml package name is not pi_agent_rust: $src_dir"
+    if ! grep -q '^name *= *"recur_agent"' "$src_dir/Cargo.toml"; then
+      err "--source-dir Cargo.toml package name is not recur_agent: $src_dir"
       return 1
     fi
   else
@@ -2179,7 +2181,7 @@ build_from_source() {
   # Pin the output directory on the command line, which takes precedence over
   # both CARGO_TARGET_DIR and build.target-dir in Cargo configuration. The
   # artifact lookup below must use the very same directory (GH-235).
-  local build_args=(build --release --locked --bin pi --target-dir "$src_dir/target")
+  local build_args=(build --release --locked --bin ra --target-dir "$src_dir/target")
   if [ "$OFFLINE" -eq 1 ]; then
     build_args+=(--offline)
   fi
@@ -2190,7 +2192,7 @@ build_from_source() {
     return 1
   fi
 
-  local built_bin="$src_dir/target/release/pi${EXE_EXT}"
+  local built_bin="$src_dir/target/release/ra${EXE_EXT}"
   if [ ! -x "$built_bin" ]; then
     err "Source build succeeded but binary was not found: $built_bin"
     return 1
@@ -2216,7 +2218,7 @@ create_managed_alias_wrapper() {
 
   {
     printf '#!/usr/bin/env bash\n'
-    printf '# pi_agent_rust installer managed alias\n'
+    printf '# recur_agent installer managed alias\n'
     printf 'set -euo pipefail\n'
     printf 'exec %q "$@"\n' "$target_path"
   } > "$alias_path"
@@ -2231,7 +2233,7 @@ choose_legacy_alias_path() {
     return 0
   fi
 
-  if grep -q "pi_agent_rust installer managed alias" "$candidate" 2>/dev/null; then
+  if grep -q "recur_agent installer managed alias" "$candidate" 2>/dev/null; then
     LEGACY_ALIAS_PATH="$candidate"
     return 0
   fi
@@ -2411,8 +2413,8 @@ install_completions_for_shell() {
   fi
 
   local subcommand=""
-  local probe_timeout="${PI_INSTALLER_COMPLETION_PROBE_TIMEOUT:-3}"
-  local generation_timeout="${PI_INSTALLER_COMPLETION_CMD_TIMEOUT:-10}"
+  local probe_timeout="${RECUR_AGENT_INSTALLER_COMPLETION_PROBE_TIMEOUT:-3}"
+  local generation_timeout="${RECUR_AGENT_INSTALLER_COMPLETION_CMD_TIMEOUT:-10}"
 
   # Prefer static command discovery from top-level --help (safe, fast path).
   # If that fails, fall back to legacy subcommand probes guarded by a timeout.
@@ -2477,7 +2479,7 @@ install_completions_for_shell() {
   fi
 
   if [ -z "$subcommand" ]; then
-    COMPLETIONS_STATUS="skipped (unsupported by this pi build)"
+    COMPLETIONS_STATUS="skipped (unsupported by this ra build)"
     info "Shell completions: skipped (binary has no completion subcommand)"
     return 0
   fi
@@ -2797,17 +2799,17 @@ pi_agent_skill_inline_content() {
 ---
 name: pi-agent-rust
 description: >-
-  Speeds up pi_agent_rust development and verification workflows. Use when editing providers,
+  Speeds up recur_agent development and verification workflows. Use when editing providers,
   tools, sessions, extensions, installer/uninstaller logic, or triaging regressions in this repo.
 ---
 
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 
-# Pi Agent Rust
+# Recur Agent
 
 ## Use This Skill When
 
-- You are working inside `pi_agent_rust` and need the fastest path to safe, verified edits.
+- You are working inside `recur_agent` and need the fastest path to safe, verified edits.
 - You are touching provider/tool/session/extension behavior and need targeted triage.
 - You are changing installer/uninstaller/skill install behavior and need deterministic safety checks.
 - You need symptom-first debugging playbooks instead of ad-hoc command hunting.
@@ -2815,8 +2817,8 @@ description: >-
 ## 60-Second Bootstrap
 
 ```bash
-export CARGO_TARGET_DIR="/data/tmp/pi_agent_rust/${USER:-agent}"
-export TMPDIR="/data/tmp/pi_agent_rust/${USER:-agent}/tmp"
+export CARGO_TARGET_DIR="/data/tmp/recur_agent/${USER:-agent}"
+export TMPDIR="/data/tmp/recur_agent/${USER:-agent}/tmp"
 mkdir -p "$TMPDIR"
 
 rch exec -- cargo check --all-targets
@@ -2979,8 +2981,8 @@ pi_agent_skill_commands_reference_content() {
 ## 1) Session Bootstrap
 
 ```bash
-export CARGO_TARGET_DIR="/data/tmp/pi_agent_rust/${USER:-agent}"
-export TMPDIR="/data/tmp/pi_agent_rust/${USER:-agent}/tmp"
+export CARGO_TARGET_DIR="/data/tmp/recur_agent/${USER:-agent}"
+export TMPDIR="/data/tmp/recur_agent/${USER:-agent}/tmp"
 mkdir -p "$TMPDIR"
 ```
 
@@ -3652,7 +3654,7 @@ load_existing_state() {
 write_state() {
   mkdir -p "$STATE_DIR"
   {
-    printf '# pi_agent_rust installer state\n'
+    printf '# recur_agent installer state\n'
     printf 'PIAR_STATE_VERSION=%q\n' "$STATE_VERSION"
     printf 'PIAR_INSTALL_VERSION=%q\n' "$VERSION"
     printf 'PIAR_INSTALL_SOURCE=%q\n' "$INSTALL_SOURCE"
@@ -3729,20 +3731,20 @@ print_summary() {
 
   if [ "$ADOPT_TS" -eq 1 ]; then
     if [ "$ADOPT_CANONICAL" -eq 1 ]; then
-      lines+=("Mode:      Rust is canonical 'pi'")
+      lines+=("Mode:      Rust is canonical 'ra'")
     else
       lines+=("Mode:      Adoption requested; ensure '$DEST' precedes existing pi in PATH")
     fi
     if [ -n "$LEGACY_ALIAS_PATH" ]; then
       lines+=("Legacy:    $(basename "$LEGACY_ALIAS_PATH") -> $LEGACY_TARGET_PATH")
     fi
-  elif [ "$FINAL_BIN_NAME" = "pi-rust" ]; then
-    lines+=("Mode:      Existing pi kept; Rust installed as pi-rust")
+  elif [ "$FINAL_BIN_NAME" = "ra-rust" ]; then
+    lines+=("Mode:      Existing pi kept; Rust installed as ra-rust")
   fi
 
   if [ "$HAS_GUM" -eq 1 ] && [ "$NO_GUM" -eq 0 ]; then
     {
-      gum style --foreground 42 --bold "pi installed successfully"
+      gum style --foreground 42 --bold "ra installed successfully"
       echo ""
       for line in "${lines[@]}"; do
         gum style --foreground 245 "$line"
@@ -3752,7 +3754,7 @@ print_summary() {
     } | gum style --border normal --border-foreground 42 --padding "1 2"
   else
     echo -e "\033[0;36m+------------------------------------------------------------------+\033[0m"
-    echo -e "\033[1;32m| Pi Rust installed successfully                                   |\033[0m"
+    echo -e "\033[1;32m| ra installed successfully                                        |\033[0m"
     echo -e "\033[0;36m+------------------------------------------------------------------+\033[0m"
     for line in "${lines[@]}"; do
       echo -e "  \033[0;37m$line\033[0m"
@@ -3786,14 +3788,14 @@ main() {
     INSTALL_SOURCE="existing (no reinstall)"
     CHECKSUM_STATUS="not run (already installed)"
     SIGSTORE_STATUS="not run (already installed)"
-    ok "pi ${VERSION} already installed at $INSTALL_BIN_PATH"
+    ok "${FINAL_BIN_NAME} ${VERSION} already installed at $INSTALL_BIN_PATH"
     if [ "$ADOPT_TS" -eq 1 ]; then
       local refresh_legacy=0
       if [ -z "${PIAR_LEGACY_ALIAS_PATH:-}" ]; then
         refresh_legacy=1
       elif [ ! -f "${PIAR_LEGACY_ALIAS_PATH}" ]; then
         refresh_legacy=1
-      elif ! grep -q "pi_agent_rust installer managed alias" "${PIAR_LEGACY_ALIAS_PATH}" 2>/dev/null; then
+      elif ! grep -q "recur_agent installer managed alias" "${PIAR_LEGACY_ALIAS_PATH}" 2>/dev/null; then
         refresh_legacy=1
       fi
 
@@ -3820,7 +3822,7 @@ main() {
     INSTALL_SOURCE="source"
     CHECKSUM_STATUS="not applicable (source build)"
     SIGSTORE_STATUS="not applicable (source build)"
-    run_with_spinner "Building pi from source" build_from_source > "$TMP/source_bin_path"
+    run_with_spinner "Building ra from source" build_from_source > "$TMP/source_bin_path"
     source_bin=$(cat "$TMP/source_bin_path")
   else
     INSTALL_SOURCE="release"
@@ -3832,7 +3834,7 @@ main() {
       if [ "$libc_probe_rc" -eq 2 ]; then
         # Inconclusive probe (hard deadline elapsed): treat the artifact as
         # untrustworthy and never touch an existing executable with it.
-        err "Compatibility probe for the release binary timed out after ${PI_INSTALLER_PROBE_TIMEOUT:-20}s; leaving the current installation untouched"
+        err "Compatibility probe for the release binary timed out after ${RECUR_AGENT_INSTALLER_PROBE_TIMEOUT:-20}s; leaving the current installation untouched"
         exit 1
       elif [ "$libc_probe_rc" -eq 0 ]; then
         case "$LIBC_PROBE_KIND" in
@@ -3852,7 +3854,7 @@ main() {
             warn "The release binary cannot start on this system ($(LIBC_PROBE_KIND)) but this system has: $(host_libc_description)"
             ;;
         esac
-        warn "Installing it would leave a 'pi' that cannot start, so it was not installed"
+        warn "Installing it would leave a 'ra' that cannot start, so it was not installed"
         if [ -n "$ARTIFACT_URL" ] && [ "$VERSION" = "custom-artifact" ]; then
           err "Custom artifact cannot run here; pass --version vX.Y.Z with --artifact-url to allow a source build, or use --from-source"
           exit 1
@@ -3861,13 +3863,13 @@ main() {
           err "Offline mode cannot fall back to a source build; re-run with --from-source --source-dir <checkout>, or install on a system with a newer glibc"
           exit 1
         fi
-        warn "Falling back to building pi from source with the local Rust toolchain"
+        warn "Falling back to building ra from source with the local Rust toolchain"
         FROM_SOURCE=1
         INSTALL_SOURCE="source (release binary needs newer glibc)"
         CHECKSUM_STATUS="not applicable (source fallback)"
         SIGSTORE_STATUS="not applicable (source fallback)"
         check_dependencies
-        run_with_spinner "Building pi from source" build_from_source > "$TMP/source_bin_path"
+        run_with_spinner "Building ra from source" build_from_source > "$TMP/source_bin_path"
         source_bin=$(cat "$TMP/source_bin_path")
       fi
     else
@@ -3903,7 +3905,7 @@ main() {
       CHECKSUM_STATUS="not applicable (source fallback)"
       SIGSTORE_STATUS="not applicable (source fallback)"
       check_dependencies
-      run_with_spinner "Building pi from source" build_from_source > "$TMP/source_bin_path"
+      run_with_spinner "Building ra from source" build_from_source > "$TMP/source_bin_path"
       source_bin=$(cat "$TMP/source_bin_path")
     fi
   fi

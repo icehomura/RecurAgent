@@ -110,10 +110,13 @@ fn emit_benchmark_build_fingerprint() -> Result<(), Box<dyn std::error::Error>> 
     features.sort_unstable();
     features.dedup();
 
-    println!("cargo:rustc-env=PI_BUILD_PROFILE_FAMILY={profile_family}");
-    println!("cargo:rustc-env=PI_BUILD_OPT_LEVEL={opt_level}");
-    println!("cargo:rustc-env=PI_BUILD_DEBUG={debug}");
-    println!("cargo:rustc-env=PI_BUILD_FEATURES={}", features.join(","));
+    println!("cargo:rustc-env=RECUR_AGENT_BUILD_PROFILE_FAMILY={profile_family}");
+    println!("cargo:rustc-env=RECUR_AGENT_BUILD_OPT_LEVEL={opt_level}");
+    println!("cargo:rustc-env=RECUR_AGENT_BUILD_DEBUG={debug}");
+    println!(
+        "cargo:rustc-env=RECUR_AGENT_BUILD_FEATURES={}",
+        features.join(",")
+    );
     Ok(())
 }
 
@@ -131,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // was false, so `eligible_for_regression_gate` was false and `confidence`
     // came out "medium" where the contract demands "high". An abbreviated sha is
     // genuinely ambiguous provenance, so the gate is right and this was wrong.
-    // `pi --version` still shows the short form; it abbreviates for display.
+    // `ra --version` still shows the short form; it abbreviates for display.
     let gix = GixBuilder::default().sha(false).dirty(true).build()?;
     let rustc = RustcBuilder::default().semver(true).build()?;
 

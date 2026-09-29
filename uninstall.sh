@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# pi_agent_rust uninstaller
+# recur_agent uninstaller
 #
 # One-liner uninstall:
-#   curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/main/uninstall.sh" | bash
+#   curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/recur_agent/main/uninstall.sh" | bash
 
 set -euo pipefail
 
@@ -33,7 +33,7 @@ PIAR_AGENT_SKILL_CODEX_PATH=""
 RESTORE_CONFLICT=0
 
 AGENT_SKILL_NAME="pi-agent-rust"
-AGENT_SKILL_MARKER="pi_agent_rust installer managed skill"
+AGENT_SKILL_MARKER="recur_agent installer managed skill"
 
 HAS_GUM=0
 if command -v gum >/dev/null 2>&1 && [ -t 1 ]; then
@@ -133,11 +133,11 @@ show_header() {
       --padding "0 1" \
       --margin "1 0" \
       "$(gum style --foreground 196 --bold 'pi uninstaller')" \
-      "$(gum style --foreground 245 'Removes installer-managed pi_agent_rust artifacts')"
+      "$(gum style --foreground 245 'Removes installer-managed recur_agent artifacts')"
   else
     echo ""
     echo -e "\033[1;31mpi uninstaller\033[0m"
-    echo -e "\033[0;90mRemoves installer-managed pi_agent_rust artifacts\033[0m"
+    echo -e "\033[0;90mRemoves installer-managed recur_agent artifacts\033[0m"
     echo ""
   fi
 }
@@ -230,7 +230,9 @@ capture_version_line() {
 
 is_rust_pi_output() {
   local out="$1"
-  [[ "$out" =~ ^pi[[:space:]][0-9]+\.[0-9]+\.[0-9]+[[:space:]]\( ]]
+  # `ra` is the current binary/banner name; `pi` is accepted so pre-rename
+  # Rust installs are still recognized as Rust output (vs the legacy TS pi).
+  [[ "$out" =~ ^(pi|ra)[[:space:]][0-9]+\.[0-9]+\.[0-9]+[[:space:]]\( ]]
 }
 
 is_rust_pi_binary() {
@@ -245,7 +247,7 @@ is_rust_pi_binary() {
 is_managed_alias() {
   local path="$1"
   [ -f "$path" ] || return 1
-  grep -q "pi_agent_rust installer managed alias" "$path" 2>/dev/null
+  grep -q "recur_agent installer managed alias" "$path" 2>/dev/null
 }
 
 is_expected_legacy_agent_settings_path() {
