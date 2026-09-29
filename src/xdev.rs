@@ -176,7 +176,7 @@ pub fn builtin_one_liner(name: &str) -> Option<&'static str> {
         "current_time" => {
             "Return the host's current wall-clock time: UTC and local ISO-8601 timestamps, UTC offset,…"
         }
-        "json_query" => "Query a JSON document with a jq filter (no `jq` binary needed)",
+        "json_query" => "Query a JSON document with a jq filter expression",
         _ => return None,
     })
 }
