@@ -3,6 +3,18 @@
 //! session-level enforcement of workspace, memory namespace and closure.
 use super::*;
 
+/// The chat id of this test's host sessions. The host-session map is
+/// process-wide and tests run in parallel, so each test (one thread per
+/// `#[tokio::test]`) gets its own id; every key in one test shares it.
+fn host_chat() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    thread_local! {
+        static CHAT: String = format!("host-hp{}", NEXT.fetch_add(1, Ordering::Relaxed));
+    }
+    CHAT.with(Clone::clone)
+}
+
 struct Fixture {
     _tmp: tempfile::TempDir,
     state: Arc<AppState>,
@@ -99,7 +111,7 @@ async fn fixture() -> Fixture {
         runtime,
         data_dir,
         apps,
-        system: SessionKey::with_profile_topic("dev", "api", "host", "system"),
+        system: SessionKey::with_profile_topic("dev", "api", &host_chat(), "system"),
         tokens: Default::default(),
         _tmp: tmp,
     }
@@ -190,7 +202,7 @@ async fn should_stage_and_resume_a_host_owned_app_peer_with_a_persisted_system_o
             json!({
                 "brief": "hijack", "names": ["Rinx"],
                 "cwd": fx.apps.join("rinx").to_string_lossy(),
-                "session_id": SessionKey::with_profile_topic("dev", "api", "host", "other"),
+                "session_id": SessionKey::with_profile_topic("dev", "api", &host_chat(), "other"),
                 "memory_namespace": "app/rinx/acct-1", "resume": true,
             }),
         ),
@@ -321,7 +333,7 @@ async fn should_select_a_configured_model_for_one_peer_without_touching_the_prof
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_MODEL_SET,
-            json!({ "session_id": SessionKey::with_profile_topic("dev", "api", "host", "other"), "peer": "Rinx", "model": null }),
+            json!({ "session_id": SessionKey::with_profile_topic("dev", "api", &host_chat(), "other"), "peer": "Rinx", "model": null }),
         ),
         None,
     )
@@ -409,7 +421,7 @@ async fn should_isolate_app_peer_workspace_and_memory_from_the_system_and_each_o
     // An ordinary session keeps the profile's own memory.
     let plain = crate::runtime::SessionRuntime::bootstrap(
         &fx.runtime,
-        SessionKey::with_profile_topic("dev", "api", "host", "chat"),
+        SessionKey::with_profile_topic("dev", "api", &host_chat(), "chat"),
         None,
     )
     .await
@@ -511,7 +523,7 @@ async fn should_open_isolated_request_contexts_and_refuse_them_after_close() {
         &fx.state,
         &rpc(
             APPUI_METHOD_PEER_CONTEXT_OPEN,
-            json!({ "session_id": SessionKey::with_profile_topic("dev", "api", "host", "other"), "peer": "Rinx", "context_id": "mini-d" }),
+            json!({ "session_id": SessionKey::with_profile_topic("dev", "api", &host_chat(), "other"), "peer": "Rinx", "context_id": "mini-d" }),
         ),
         None,
     )

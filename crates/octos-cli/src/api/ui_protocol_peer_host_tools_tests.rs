@@ -8,6 +8,18 @@ use super::*;
 use crate::peers::host_tools::{apply_session_host_tools, resolve_session_host_tools};
 use octos_core::ui_protocol::{ApprovalRespondParams, QuestionId, UserQuestionAnswer};
 
+/// The chat id of this test's host sessions. The host-session map is
+/// process-wide and tests run in parallel, so each test (one thread per
+/// `#[tokio::test]`) gets its own id; every key in one test shares it.
+fn host_chat() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    thread_local! {
+        static CHAT: String = format!("host-ht{}", NEXT.fetch_add(1, Ordering::Relaxed));
+    }
+    CHAT.with(Clone::clone)
+}
+
 struct Fx {
     _tmp: tempfile::TempDir,
     state: Arc<AppState>,
@@ -69,7 +81,7 @@ async fn fixture() -> Fx {
         runtime,
         data_dir,
         apps,
-        system: SessionKey::with_profile_topic("dev", "api", "host", "system"),
+        system: SessionKey::with_profile_topic("dev", "api", &host_chat(), "system"),
         _tmp: tmp,
     }
 }
@@ -319,7 +331,7 @@ async fn should_refuse_a_registration_without_the_host_token() {
         assert_eq!(err.data.unwrap()["kind"], "peer_host_token_mismatch");
     }
     let mut foreign = json!({
-        "session_id": SessionKey::with_profile_topic("dev", "api", "host", "other"),
+        "session_id": SessionKey::with_profile_topic("dev", "api", &host_chat(), "other"),
         "peer": "news", "host_token": token,
     });
     foreign["tools"] = tools["tools"].clone();
@@ -1058,7 +1070,7 @@ async fn should_clamp_host_filesystem_access_for_a_bound_app_session() {
     // An ordinary session keeps the operator's grant.
     let plain = crate::runtime::SessionRuntime::bootstrap_with_permissions(
         &fx.runtime,
-        SessionKey::with_profile_topic("dev", "api", "host", "plain"),
+        SessionKey::with_profile_topic("dev", "api", &host_chat(), "plain"),
         None,
         octos_agent::EffectivePermissions::danger_full_access(),
     )
@@ -1950,7 +1962,7 @@ async fn e2e_fixture(llm: Arc<dyn octos_llm::LlmProvider>, tools: Value) -> E2e 
     let state = Arc::new(state);
     let apps = tmp.path().join("apps");
     std::fs::create_dir_all(apps.join("news")).unwrap();
-    let system = SessionKey::with_profile_topic("dev", "api", "host", "system");
+    let system = SessionKey::with_profile_topic("dev", "api", &host_chat(), "system");
     let prepared = raw_peer_prepare(
         &state,
         &rpc(
@@ -2239,7 +2251,7 @@ async fn should_refuse_to_fork_an_app_peer_session() {
         None,
         "f2".into(),
         octos_core::ui_protocol::SessionForkParams {
-            session_id: SessionKey::with_profile_topic("dev", "api", "host", "notes"),
+            session_id: SessionKey::with_profile_topic("dev", "api", &host_chat(), "notes"),
             new_chat_id: "copy".into(),
             copy_messages: None,
         },
@@ -3532,7 +3544,7 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
     // The host credential: a host token of an app peer this session prepared.
     let refused = register_on_session(&fx, &ws, None, &fx.system, tools.clone()).unwrap_err();
     assert_eq!(refused.data.unwrap()["kind"], "peer_host_token_mismatch");
-    let other = SessionKey::with_profile_topic("dev", "api", "host", "other");
+    let other = SessionKey::with_profile_topic("dev", "api", &host_chat(), "other");
     let refused = register_on_session(&fx, &ws, Some(&token), &other, tools.clone()).unwrap_err();
     assert_eq!(refused.data.unwrap()["kind"], "peer_host_token_mismatch");
     let refused =
@@ -3611,7 +3623,7 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
         };
         assert_eq!(names, expected, "{connection:?}");
     }
-    let chat = SessionKey::with_profile_topic("dev", "api", "host", "chat");
+    let chat = SessionKey::with_profile_topic("dev", "api", &host_chat(), "chat");
     let mut elsewhere = runtime.tools.snapshot_excluding(&[]);
     crate::peers::host_tools::apply_session_owned_host_tools(
         &mut elsewhere,
