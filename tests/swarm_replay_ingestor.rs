@@ -898,7 +898,7 @@ fn write_no_mock_e2e_outputs(
     write_jsonl_rows(root, "evidence/replay-events.jsonl", &trace.events)?;
 
     let comparison_report = json!({
-        "schema": "pi.swarm.replay_e2e_comparison_report.v1",
+        "schema": "ra.swarm.replay_e2e_comparison_report.v1",
         "trace_id": trace.trace_id,
         "policy_count": policy_report.policy_ids.len(),
         "decision_count": policy_report.decision_count,
@@ -913,7 +913,7 @@ fn write_no_mock_e2e_outputs(
     )?;
 
     let replay_summary = json!({
-        "schema": "pi.swarm.replay_e2e_summary.v1",
+        "schema": "ra.swarm.replay_e2e_summary.v1",
         "trace_id": trace.trace_id,
         "source_count": trace.source_inventory.len(),
         "event_count": trace.events.len(),
@@ -933,7 +933,7 @@ fn write_no_mock_e2e_outputs(
     write_json(root, "evidence/replay-summary.json", &replay_summary)?;
 
     let manifest = json!({
-        "schema": "pi.swarm.replay_e2e_artifact_manifest.v1",
+        "schema": "ra.swarm.replay_e2e_artifact_manifest.v1",
         "generated_at": GENERATED_AT,
         "trace_id": trace.trace_id,
         "entries": [
@@ -945,12 +945,12 @@ fn write_no_mock_e2e_outputs(
             },
             {
                 "path": "evidence/replay-summary.json",
-                "artifact_schema": "pi.swarm.replay_e2e_summary.v1",
+                "artifact_schema": "ra.swarm.replay_e2e_summary.v1",
                 "evidence_kind": "replay_summary"
             },
             {
                 "path": "evidence/policy-comparison-report.json",
-                "artifact_schema": "pi.swarm.replay_e2e_comparison_report.v1",
+                "artifact_schema": "ra.swarm.replay_e2e_comparison_report.v1",
                 "evidence_kind": "comparison_report"
             },
             {
@@ -1173,14 +1173,14 @@ fn duplicate_source_event_ids_are_deduplicated_and_marked() -> TestResult {
             "artifacts": [
                 {
                     "artifact_path": "same.json",
-                    "artifact_schema": "pi.test",
+                    "artifact_schema": "ra.test",
                     "verdict": "pass",
                     "command": "first",
                     "created_at": "2026-05-13T18:11:00Z"
                 },
                 {
                     "artifact_path": "same.json",
-                    "artifact_schema": "pi.test",
+                    "artifact_schema": "ra.test",
                     "verdict": "pass",
                     "command": "second",
                     "created_at": "2026-05-13T18:11:00Z"

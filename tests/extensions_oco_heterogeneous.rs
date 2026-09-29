@@ -423,7 +423,7 @@ fn oco_tuner_heterogeneous_workload_e2e_evidence() {
     }
 
     let report = OcoEvidenceReport {
-        schema: "pi.ext.oco_heterogeneous_e2e.v1".to_string(),
+        schema: "ra.ext.oco_heterogeneous_e2e.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         duration_secs_per_workload: OCO_E2E_DURATION_SECS,
         extensions_loaded,

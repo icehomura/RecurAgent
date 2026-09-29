@@ -2507,17 +2507,17 @@ fn evaluate_phase1_weighted_attribution_contract(
     }
 
     let matrix_schema = payload.get("schema").and_then(Value::as_str);
-    if matrix_schema != Some("pi.perf.phase1_matrix_validation.v1") {
+    if matrix_schema != Some("ra.perf.phase1_matrix_validation.v1") {
         failures.push(DataContractFailure {
             contract_id: "invalid_phase1_matrix_validation_contract".to_string(),
             budget_name: None,
             detail: format!(
-                "phase1 matrix schema must be pi.perf.phase1_matrix_validation.v1 (observed={}) in {}",
+                "phase1 matrix schema must be ra.perf.phase1_matrix_validation.v1 (observed={}) in {}",
                 matrix_schema.unwrap_or("missing_or_non_string"),
                 path.display()
             ),
             remediation:
-                "Set phase1_matrix_validation.schema to pi.perf.phase1_matrix_validation.v1."
+                "Set phase1_matrix_validation.schema to ra.perf.phase1_matrix_validation.v1."
                     .to_string(),
         });
     }
@@ -2823,17 +2823,17 @@ fn evaluate_phase1_weighted_attribution_contract(
     };
 
     let weighted_schema = weighted.get("schema").and_then(Value::as_str);
-    if weighted_schema != Some("pi.perf.phase1_weighted_bottleneck_attribution.v1") {
+    if weighted_schema != Some("ra.perf.phase1_weighted_bottleneck_attribution.v1") {
         failures.push(DataContractFailure {
             contract_id: "invalid_weighted_bottleneck_attribution_contract".to_string(),
             budget_name: None,
             detail: format!(
-                "weighted_bottleneck_attribution.schema must be pi.perf.phase1_weighted_bottleneck_attribution.v1 (observed={}) in {}",
+                "weighted_bottleneck_attribution.schema must be ra.perf.phase1_weighted_bottleneck_attribution.v1 (observed={}) in {}",
                 weighted_schema.unwrap_or("missing_or_non_string"),
                 path.display()
             ),
             remediation:
-                "Set weighted_bottleneck_attribution.schema to pi.perf.phase1_weighted_bottleneck_attribution.v1."
+                "Set weighted_bottleneck_attribution.schema to ra.perf.phase1_weighted_bottleneck_attribution.v1."
                     .to_string(),
         });
     }
@@ -7449,7 +7449,7 @@ fn phase1_matrix_cell_fixture(partition: &str, session_messages: u64, seed: f64)
 
 fn valid_weighted_bottleneck_attribution_fixture() -> Value {
     json!({
-        "schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+        "schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
         "status": "computed",
         "weighting_policy": "session_messages",
         "confidence_method": "weighted_normal_approx_95",
@@ -7517,7 +7517,7 @@ fn write_phase1_matrix_validation_artifact(path: &Path, weighted_bottleneck_attr
         })
         .collect::<Vec<_>>();
     let payload = json!({
-        "schema": "pi.perf.phase1_matrix_validation.v1",
+        "schema": "ra.perf.phase1_matrix_validation.v1",
         "run_id": "20260217T000000Z",
         "correlation_id": "abc123def456",
         "matrix_requirements": {
@@ -8026,7 +8026,7 @@ fn phase1_weighted_contract_fails_when_schema_invalid() {
     std::fs::create_dir_all(&perf_dir).expect("create perf results dir");
     let artifact = perf_dir.join("phase1_matrix_validation.json");
     let mut weighted = valid_weighted_bottleneck_attribution_fixture();
-    weighted["schema"] = json!("pi.perf.phase1_weighted_bottleneck_attribution.v0");
+    weighted["schema"] = json!("ra.perf.phase1_weighted_bottleneck_attribution.v0");
     write_phase1_matrix_validation_artifact(&artifact, &weighted);
 
     let failures = evaluate_phase1_weighted_attribution_contract(tmp.path(), 24.0);
@@ -8035,7 +8035,7 @@ fn phase1_weighted_contract_fails_when_schema_invalid() {
             failure.contract_id == "invalid_weighted_bottleneck_attribution_contract"
                 && failure
                     .detail
-                    .contains("schema must be pi.perf.phase1_weighted_bottleneck_attribution.v1")
+                    .contains("schema must be ra.perf.phase1_weighted_bottleneck_attribution.v1")
         }),
         "expected invalid weighted schema failure, got: {failures:?}",
     );

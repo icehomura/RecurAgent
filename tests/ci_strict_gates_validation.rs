@@ -52,7 +52,7 @@ fn non_mock_rubric_exists_with_valid_schema() {
     assert!(
         rubric["schema"]
             .as_str()
-            .is_some_and(|s| s.starts_with("pi.qa.non_mock_rubric")),
+            .is_some_and(|s| s.starts_with("ra.qa.non_mock_rubric")),
         "non-mock-rubric.json must have a schema field"
     );
 }

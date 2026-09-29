@@ -1094,7 +1094,7 @@ fn classify_ts_file(content: &str, rel_path: &str) -> EntryPointScan {
 
         // pi.events / pi.session
         if !has_pi_events_or_session
-            && (trimmed.contains("pi.events") || trimmed.contains("pi.session"))
+            && (trimmed.contains("ra.events") || trimmed.contains("ra.session"))
         {
             has_pi_events_or_session = true;
             patterns.push("pi_events_or_session".to_string());
@@ -1102,7 +1102,7 @@ fn classify_ts_file(content: &str, rel_path: &str) -> EntryPointScan {
 
         // pi.ui.*
         if !has_pi_ui
-            && (trimmed.contains("pi.ui.")
+            && (trimmed.contains("ra.ui."")
                 || trimmed.contains(".setHeader(")
                 || trimmed.contains(".setFooter("))
         {

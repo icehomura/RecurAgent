@@ -175,7 +175,7 @@ const SCHEMAS: &[(&str, &str)] = &[
         "Layered extension benchmark artifact linking cold-load, per-call, and full E2E evidence with claim-integrity guards",
     ),
     (
-        "pi.perf.phase1_matrix_validation.v1",
+        "ra.perf.phase1_matrix_validation.v1",
         "Phase-1 realistic/matched-state matrix validation with stage attribution and release-gate readiness",
     ),
     (
@@ -318,7 +318,7 @@ const PIJS_GATE_REQUIRED_RECORD_FIELDS: &[&str] = &[
     "per_call_us_f64",
 ];
 const EXT_STRATIFICATION_SCHEMA: &str = "ra.perf.extension_benchmark_stratification.v1";
-const PHASE1_MATRIX_SCHEMA: &str = "pi.perf.phase1_matrix_validation.v1";
+const PHASE1_MATRIX_SCHEMA: &str = "ra.perf.phase1_matrix_validation.v1";
 const RESOURCE_GOVERNOR_ADMISSION_SCHEMA: &str = "ra.resource_governor.admission.v1";
 const REALISTIC_SESSION_SIZES: &[u64] = &[100_000, 200_000, 500_000, 1_000_000, 5_000_000];
 const USER_PERCEIVED_SLI_IDS: &[&str] = &[
@@ -2766,7 +2766,7 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
     );
     write_json(
         &target_dir.join("perf/results/phase1_matrix_validation.json"),
-        r#"{"schema":"pi.perf.phase1_matrix_validation.v1"}"#,
+        r#"{"schema":"ra.perf.phase1_matrix_validation.v1"}"#,
     );
 
     let fixture_root = target_dir
@@ -5511,9 +5511,9 @@ fn validate_phase1_matrix_validation_record(record: &Value) -> Result<(), String
         .get("schema")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    if weighted_schema != "pi.perf.phase1_weighted_bottleneck_attribution.v1" {
+    if weighted_schema != "ra.perf.phase1_weighted_bottleneck_attribution.v1" {
         return Err(format!(
-            "weighted_bottleneck_attribution.schema must be pi.perf.phase1_weighted_bottleneck_attribution.v1, got: {weighted_schema}"
+            "weighted_bottleneck_attribution.schema must be ra.perf.phase1_weighted_bottleneck_attribution.v1, got: {weighted_schema}"
         ));
     }
     let weighted_status = weighted_bottleneck_attribution
@@ -6896,7 +6896,7 @@ fn phase1_matrix_validation_golden_fixture() -> Value {
             "missing_cells": []
         },
         "weighted_bottleneck_attribution": {
-            "schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+            "schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
             "status": "computed",
             "weighting_policy": "session_messages",
             "confidence_method": "weighted_normal_approx_95",
@@ -7070,8 +7070,8 @@ fn schema_registry_is_complete() {
         assert!(!name.is_empty(), "schema name must not be empty");
         assert!(!desc.is_empty(), "schema description must not be empty");
         assert!(
-            name.starts_with("pi."),
-            "schema names should start with 'pi.': {name}"
+            name.starts_with("ra."),
+            "schema names should start with 'ra.': {name}"
         );
     }
     eprintln!("[schema] {} schemas registered", SCHEMAS.len());
@@ -8431,7 +8431,7 @@ fn phase1_matrix_validator_rejects_weighted_mean_outside_ci_bounds() {
 fn phase1_matrix_validator_rejects_wrong_weighted_schema_version() {
     let mut malformed = phase1_matrix_validation_golden_fixture();
     malformed["weighted_bottleneck_attribution"]["schema"] =
-        json!("pi.perf.phase1_weighted_bottleneck_attribution.v2");
+        json!("ra.perf.phase1_weighted_bottleneck_attribution.v2");
 
     let err = validate_phase1_matrix_validation_record(&malformed).expect_err("fixture must fail");
     assert!(
@@ -9658,7 +9658,7 @@ fn orchestrate_script_emits_phase1_matrix_validation_contract() {
         "\"cells_with_complete_swarm_metrics\"",
         "\"missing_swarm_metrics\"",
         "\"weighted_bottleneck_attribution\"",
-        "\"pi.perf.phase1_weighted_bottleneck_attribution.v1\"",
+        "\"ra.perf.phase1_weighted_bottleneck_attribution.v1\"",
         "\"global_ranking\"",
         "\"weighted_contribution_pct\"",
         "\"confidence_method\"",
@@ -11568,7 +11568,7 @@ fn orchestrate_generates_phase1_matrix_validation_artifact() {
         .expect("weighted_bottleneck_attribution object");
     assert_eq!(
         weighted["schema"].as_str(),
-        Some("pi.perf.phase1_weighted_bottleneck_attribution.v1"),
+        Some("ra.perf.phase1_weighted_bottleneck_attribution.v1"),
         "weighted attribution schema must be pinned"
     );
     assert_eq!(
@@ -12359,7 +12359,7 @@ fn orchestrate_weighted_attribution_computes_with_two_pass_cells_and_one_dropped
     );
     assert_eq!(
         computed["schema"].as_str(),
-        Some("pi.perf.phase1_weighted_bottleneck_attribution.v1")
+        Some("ra.perf.phase1_weighted_bottleneck_attribution.v1")
     );
     assert_eq!(
         computed["lineage"]["valid_cell_count"].as_u64(),

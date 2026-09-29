@@ -3082,7 +3082,7 @@ fn check_opportunity_matrix_artifact(root: &Path) -> (String, Option<String>) {
         .get("weighted_bottleneck_schema")
         .and_then(Value::as_str)
         .unwrap_or("");
-    if weighted_schema != "pi.perf.phase1_weighted_bottleneck_attribution.v1" {
+    if weighted_schema != "ra.perf.phase1_weighted_bottleneck_attribution.v1" {
         return (
             "fail".to_string(),
             Some(format!(
@@ -6669,7 +6669,7 @@ fn opportunity_matrix_gate_fails_closed_on_readiness_decision_incoherence() {
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
-            "weighted_bottleneck_schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+            "weighted_bottleneck_schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
             "weighted_bottleneck_status": "computed"
         },
         "readiness": {
@@ -6711,7 +6711,7 @@ fn opportunity_matrix_gate_passes_on_consistent_contract_shape() {
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
-            "weighted_bottleneck_schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+            "weighted_bottleneck_schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
             "weighted_bottleneck_status": "missing"
         },
         "readiness": {

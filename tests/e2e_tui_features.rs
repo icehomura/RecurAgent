@@ -137,7 +137,7 @@ fn new_locked_tui_session(name: &str) -> Option<(TmuxE2eLock, TuiSession)> {
 /// JSONL event logger for structured test diagnostics.
 fn log_test_event(test_name: &str, event: &str, data: &serde_json::Value) {
     let entry = serde_json::json!({
-        "schema": "pi.test.tui_e2e.v1",
+        "schema": "ra.test.tui_e2e.v1",
         "test": test_name,
         "event": event,
         "timestamp_ms": std::time::SystemTime::now()

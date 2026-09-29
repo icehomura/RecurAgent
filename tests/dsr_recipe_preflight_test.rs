@@ -7,7 +7,7 @@
 //! - reports a verdict field
 //! - lists per-contract findings
 //! - has a non-empty findings array
-//! - has the schema identifier `pi.evidence.ri_phase1_recipe_audit_runpack.v1`
+//! - has the schema identifier `ra.evidence.ri_phase1_recipe_audit_runpack.v1`
 //!
 //! Run:
 //! ```bash
@@ -86,7 +86,7 @@ fn preflight_runpack_schema_constant_matches_bead() {
         std::fs::read_to_string(project_root().join("scripts/perf/preflight_dsr_recipe.sh"))
             .expect("preflight script read");
     assert!(
-        script.contains("pi.evidence.ri_phase1_recipe_audit_runpack.v1"),
+        script.contains("ra.evidence.ri_phase1_recipe_audit_runpack.v1"),
         "preflight script must declare the runpack schema constant"
     );
 }
@@ -126,7 +126,7 @@ fn preflight_runpack_artifact_when_present_validates() {
     let json: serde_json::Value = serde_json::from_str(&body).expect("runpack parseable JSON");
     assert_eq!(
         json["schema"].as_str(),
-        Some("pi.evidence.ri_phase1_recipe_audit_runpack.v1"),
+        Some("ra.evidence.ri_phase1_recipe_audit_runpack.v1"),
         "runpack schema mismatch"
     );
     for field in [

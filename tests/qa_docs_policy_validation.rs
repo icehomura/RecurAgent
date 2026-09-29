@@ -1227,7 +1227,7 @@ fn perf_sli_workload_partition_contract_is_versioned_and_complete() {
         .as_str()
         .expect("workload_partition_contract.schema must be present");
     assert!(
-        schema.starts_with("pi.perf.workload_partition_contract."),
+        schema.starts_with("ra.perf.workload_partition_contract.""),
         "workload_partition_contract.schema must be versioned, got: {schema}"
     );
 
@@ -2667,7 +2667,7 @@ fn non_mock_rubric_schema_is_versioned() {
         .as_str()
         .expect("rubric must have schema field");
     assert!(
-        schema.starts_with("pi.qa.non_mock_rubric"),
+        schema.starts_with("ra.qa.non_mock_rubric"),
         "rubric schema must be pi.qa.non_mock_rubric.*, got: {schema}"
     );
 }
@@ -2691,7 +2691,7 @@ fn perf_sli_matrix_schema_is_versioned() {
         .as_str()
         .expect("perf_sli_matrix must have schema field");
     assert!(
-        schema.starts_with("pi.perf.sli_ux_matrix"),
+        schema.starts_with("ra.perf.sli_ux_matrix"),
         "perf_sli_matrix schema must be pi.perf.sli_ux_matrix.*, got: {schema}"
     );
 }
@@ -2703,7 +2703,7 @@ fn test_double_inventory_schema_is_versioned() {
         .as_str()
         .expect("inventory must have schema field");
     assert!(
-        schema.starts_with("pi.qa.test_double_inventory"),
+        schema.starts_with("ra.qa.test_double_inventory"),
         "inventory schema must be pi.qa.test_double_inventory.*, got: {schema}"
     );
 }

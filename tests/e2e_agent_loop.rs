@@ -960,17 +960,17 @@ fn context_intelligence_no_mock_harness() {
         "context_intelligence.planner_decisions.jsonl",
         [
             json!({
-                "schema": "pi.context_intelligence.e2e.planner.v1",
+                "schema": "ra.context_intelligence.e2e.planner.v1",
                 "phase": "selected",
                 "items": &bundle.selected_items,
             }),
             json!({
-                "schema": "pi.context_intelligence.e2e.planner.v1",
+                "schema": "ra.context_intelligence.e2e.planner.v1",
                 "phase": "excluded",
                 "items": &bundle.excluded_items,
             }),
             json!({
-                "schema": "pi.context_intelligence.e2e.planner.v1",
+                "schema": "ra.context_intelligence.e2e.planner.v1",
                 "phase": "validation",
                 "commands": &bundle.suggested_validation_commands,
             }),
@@ -1103,7 +1103,7 @@ fn context_intelligence_no_mock_harness() {
         &harness,
         "context_intelligence.prompt_assembly.jsonl",
         [json!({
-            "schema": "pi.context_intelligence.e2e.prompt.v1",
+            "schema": "ra.context_intelligence.e2e.prompt.v1",
             "provider": "context-capture-provider",
             "message_count": captured_call.messages.len(),
             "custom_type": &custom_message.custom_type,

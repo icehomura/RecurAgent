@@ -73,8 +73,8 @@ fn artifact_contract_has_schema_field() {
     let contract = load_json(&path).expect("parse artifact contract");
     let schema = contract["schema"].as_str().unwrap_or("");
     assert_eq!(
-        schema, "pi.qa.provider_e2e_artifact_contract.v1",
-        "Contract must use schema pi.qa.provider_e2e_artifact_contract.v1"
+        schema, "ra.qa.provider_e2e_artifact_contract.v1",
+        "Contract must use schema ra.qa.provider_e2e_artifact_contract.v1"
     );
 }
 

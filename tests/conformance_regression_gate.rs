@@ -355,7 +355,7 @@ fn summary_schema_is_recognized() {
         .expect("summary must have schema field");
 
     assert!(
-        schema.starts_with("pi.ext.conformance_summary"),
+        schema.starts_with("ra.ext.conformance_summary"),
         "unrecognized schema: {schema}"
     );
 }

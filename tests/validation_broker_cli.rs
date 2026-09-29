@@ -468,7 +468,7 @@ fn record_plan_decision(
     );
     decisions.insert(decision.to_string());
     events.push(json!({
-        "schema": "pi.validation_broker.e2e_event.v1",
+        "schema": "ra.validation_broker.e2e_event.v1",
         "generated_at_utc": PLAN_AT,
         "event": "plan_decision",
         "scenario": scenario,
@@ -715,7 +715,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
     }
 
     let mut events = vec![json!({
-        "schema": "pi.validation_broker.e2e_event.v1",
+        "schema": "ra.validation_broker.e2e_event.v1",
         "generated_at_utc": PLAN_AT,
         "event": "fixtures_loaded",
         "fixture_dir": E2E_FIXTURE_DIR,
@@ -985,7 +985,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
         Some(1)
     );
     events.push(json!({
-        "schema": "pi.validation_broker.e2e_event.v1",
+        "schema": "ra.validation_broker.e2e_event.v1",
         "generated_at_utc": PLAN_AT,
         "event": "status_projection",
         "artifact_path": status_path.display().to_string(),
@@ -1049,7 +1049,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
         "runpack Markdown should include validation broker projection"
     );
     events.push(json!({
-        "schema": "pi.validation_broker.e2e_event.v1",
+        "schema": "ra.validation_broker.e2e_event.v1",
         "generated_at_utc": PLAN_AT,
         "event": "runpack_projection",
         "json_artifact_path": runpack_path.display().to_string(),
@@ -1119,7 +1119,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
         output_debug(&malformed_runpack_output)
     );
     events.push(json!({
-        "schema": "pi.validation_broker.e2e_event.v1",
+        "schema": "ra.validation_broker.e2e_event.v1",
         "generated_at_utc": PLAN_AT,
         "event": "negative_cases",
         "missing_source_failed": true,
@@ -1132,7 +1132,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
     artifact_entries.push(json!({
         "id": "e2e_event_log",
         "path": event_log_path.display().to_string(),
-        "artifact_schema": "pi.validation_broker.e2e_event.v1",
+        "artifact_schema": "ra.validation_broker.e2e_event.v1",
         "evidence_kind": "jsonl_log",
     }));
 
@@ -1152,7 +1152,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
     write_json(
         &manifest_path,
         &json!({
-            "schema": "pi.validation_broker.e2e_artifact_manifest.v1",
+            "schema": "ra.validation_broker.e2e_artifact_manifest.v1",
             "bead_id": "bd-gusp4.8",
             "generated_at_utc": PLAN_AT,
             "fixture_dir": E2E_FIXTURE_DIR,
@@ -1170,7 +1170,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
     let manifest: Value = serde_json::from_str(&fs::read_to_string(&manifest_path)?)?;
     assert_eq!(
         manifest.pointer("/schema").and_then(Value::as_str),
-        Some("pi.validation_broker.e2e_artifact_manifest.v1")
+        Some("ra.validation_broker.e2e_artifact_manifest.v1")
     );
     assert_eq!(
         manifest

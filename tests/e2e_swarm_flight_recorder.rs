@@ -52,7 +52,7 @@ const SWARM_PRESSURE_LAB_SCHEMA: &str = "ra.swarm.pressure_lab.v1";
 const SWARM_PRESSURE_LAB_RUN_ID: &str = "swarm-pressure-lab-deterministic-v1";
 const SWARM_PRESSURE_LAB_BURST_AGENTS: usize = 6;
 const SWARM_PRESSURE_LAB_MODELED_AGENTS: u64 = 64;
-const SWARM_LIFECYCLE_E2E_SCHEMA: &str = "pi.swarm.lifecycle_e2e.event.v1";
+const SWARM_LIFECYCLE_E2E_SCHEMA: &str = "ra.swarm.lifecycle_e2e.event.v1";
 
 // Evidence schema: every JSONL row contains schema, run_id, scenario,
 // agent_count, operation, latency_us, latency_ms, backpressure_count,
@@ -494,7 +494,7 @@ fn run_degraded_coordination_runpack_e2e(
     .expect("parse runpack E2E summary");
     assert_eq!(
         summary["schema"],
-        "pi.swarm.degraded_coordination_runpack_e2e.v1"
+        "ra.swarm.degraded_coordination_runpack_e2e.v1"
     );
     assert_eq!(summary["status"], "pass");
     assert_eq!(summary["guards"]["uses_real_temp_beads"], true);

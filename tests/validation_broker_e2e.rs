@@ -29,8 +29,8 @@ const HEARTBEAT: &str = "2026-05-14T07:05:00Z";
 const PLAN_AT: &str = "2026-05-14T08:30:00Z";
 const RUNPACK_SCHEMA: &str = "ra.swarm.operator_runpack.v1";
 const DOCTOR_VALIDATION_BROKER_SCHEMA: &str = "ra.doctor.validation_broker_posture.v1";
-const E2E_EVENT_SCHEMA: &str = "pi.validation_broker.e2e.event.v1";
-const E2E_MANIFEST_SCHEMA: &str = "pi.validation_broker.e2e.artifact_manifest.v1";
+const E2E_EVENT_SCHEMA: &str = "ra.validation_broker.e2e.event.v1";
+const E2E_MANIFEST_SCHEMA: &str = "ra.validation_broker.e2e.artifact_manifest.v1";
 
 #[derive(Debug, Deserialize)]
 struct FaultCorpus {

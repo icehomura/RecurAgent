@@ -1797,7 +1797,7 @@ fn phase1_matrix_validation_artifact_is_present_and_parseable() {
     let (artifact, matrix) = require_phase1_matrix_validation();
     let schema = matrix.get("schema").and_then(Value::as_str).unwrap_or("");
     assert_eq!(
-        schema, "pi.perf.phase1_matrix_validation.v1",
+        schema, "ra.perf.phase1_matrix_validation.v1",
         "phase1 matrix schema mismatch in {artifact}"
     );
 }
@@ -1989,7 +1989,7 @@ fn assert_orchestrate_weighted_contract_tokens(artifact: &str) {
         .expect("scripts/perf/orchestrate.sh should be readable");
     for token in [
         "\"weighted_bottleneck_attribution\"",
-        "\"pi.perf.phase1_weighted_bottleneck_attribution.v1\"",
+        "\"ra.perf.phase1_weighted_bottleneck_attribution.v1\"",
         "weighted_bottleneck_attribution.global_ranking",
         "weighted_bottleneck_attribution.per_scale",
     ] {
@@ -2057,7 +2057,7 @@ fn assert_weighted_schema_and_status<'a>(
 ) -> &'a str {
     let weighted_schema = weighted.get("schema").and_then(Value::as_str).unwrap_or("");
     assert_eq!(
-        weighted_schema, "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+        weighted_schema, "ra.perf.phase1_weighted_bottleneck_attribution.v1",
         "weighted attribution schema mismatch in {artifact}"
     );
 
@@ -2527,7 +2527,7 @@ fn parameter_sweeps_contract_links_phase1_matrix_and_readiness() {
         .and_then(Value::as_str)
         .unwrap_or("");
     assert_eq!(
-        weighted_schema, "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+        weighted_schema, "ra.perf.phase1_weighted_bottleneck_attribution.v1",
         "parameter_sweeps.source_identity.weighted_bottleneck_schema mismatch in {artifact}"
     );
 

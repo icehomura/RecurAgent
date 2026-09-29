@@ -3131,11 +3131,11 @@ fn validate_opportunity_matrix_artifact(v: &V) -> (Signal, String) {
         .get("weighted_bottleneck_schema")
         .and_then(V::as_str)
         .unwrap_or("unknown");
-    if weighted_schema != "pi.perf.phase1_weighted_bottleneck_attribution.v1" {
+    if weighted_schema != "ra.perf.phase1_weighted_bottleneck_attribution.v1" {
         return (
             Signal::Fail,
             format!(
-                "source_identity.weighted_bottleneck_schema must be pi.perf.phase1_weighted_bottleneck_attribution.v1, found {weighted_schema}"
+                "source_identity.weighted_bottleneck_schema must be ra.perf.phase1_weighted_bottleneck_attribution.v1, found {weighted_schema}"
             ),
         );
     }
@@ -6295,7 +6295,7 @@ fn generate_certification() -> FinalCertification {
             let schema = get_str(v, "/schema");
             let total = get_u64(v, "/summary/total_artifacts");
             let verdict = get_str(v, "/summary/verdict");
-            if schema.starts_with("pi.ci.evidence_bundle") && total > 0 && verdict == "complete" {
+            if schema.starts_with("ra.ci.evidence_bundle") && total > 0 && verdict == "complete" {
                 (
                     Signal::Pass,
                     format!("Evidence bundle: {total} artifacts collected ({verdict})"),
@@ -7974,7 +7974,7 @@ fn opportunity_matrix_contract_accepts_consistent_shape() {
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
-            "weighted_bottleneck_schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+            "weighted_bottleneck_schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
             "weighted_bottleneck_status": "computed"
         },
         "readiness": {
@@ -8003,7 +8003,7 @@ fn opportunity_matrix_contract_rejects_readiness_incoherence() {
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
-            "weighted_bottleneck_schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+            "weighted_bottleneck_schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
             "weighted_bottleneck_status": "computed"
         },
         "readiness": {

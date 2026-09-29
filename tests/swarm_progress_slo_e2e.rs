@@ -18,8 +18,8 @@ use serde_json::{Value, json};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
-const E2E_SUMMARY_SCHEMA: &str = "pi.swarm.progress_slo_e2e.v1";
-const E2E_EVENT_SCHEMA: &str = "pi.swarm.progress_slo_e2e.event.v1";
+const E2E_SUMMARY_SCHEMA: &str = "ra.swarm.progress_slo_e2e.v1";
+const E2E_EVENT_SCHEMA: &str = "ra.swarm.progress_slo_e2e.event.v1";
 const PROGRESS_SCHEMA: &str = "ra.swarm.progress_slo.v1";
 const GENERATED_AT: &str = "2026-05-15T05:00:00Z";
 const WINDOW_START: &str = "2026-05-15T04:00:00Z";
