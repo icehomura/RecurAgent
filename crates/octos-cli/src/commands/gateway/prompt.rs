@@ -10,6 +10,14 @@ pub const SLASH_COMMANDS_SEGMENT_NAME: &str = "slash_commands";
 const SLASH_COMMANDS_HEADER: &str = "## Slash Commands";
 const MAX_CLIENT_COMMANDS: usize = 64;
 const MAX_CLIENT_COMMAND_LEN: usize = 32;
+/// Gateway commands serve intercepts as unavailable (`api::ws_slash`) that act
+/// on gateway per-actor state (adaptive router, queue mode, session reset):
+/// no client can honor them, so declarations of them are rejected.
+pub const SERVER_STATE_COMMANDS: &[&str] = &["adaptive", "router", "queue", "reset"];
+/// Gateway commands serve also intercepts, but that a client can handle
+/// locally without reaching the server (octoscode implements both), so
+/// declarations of them are accepted.
+pub const CLIENT_HANDLED_COMMANDS: &[&str] = &["status", "thinking"];
 
 /// Build the system prompt with bootstrap files, memory context, and skills.
 ///
@@ -66,7 +74,8 @@ pub fn strip_slash_commands(prompt: &str) -> String {
 
 /// Render the slash commands a client declared on `session/open`. Names are
 /// validated (alphanumeric, `-`, `_`), deduplicated and capped, since they
-/// land in the system prompt; nothing valid renders as an empty section.
+/// land in the system prompt; gateway-only commands are dropped. Nothing
+/// valid renders as an empty section.
 pub fn render_client_commands(commands: &[String]) -> String {
     let mut names: Vec<&str> = Vec::new();
     for command in commands {
@@ -75,7 +84,10 @@ pub fn render_client_commands(commands: &[String]) -> String {
             && name.len() <= MAX_CLIENT_COMMAND_LEN
             && name
                 .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            && !SERVER_STATE_COMMANDS
+                .iter()
+                .any(|blocked| name.eq_ignore_ascii_case(blocked));
         if valid && !names.contains(&name) {
             names.push(name);
         }
@@ -240,7 +252,10 @@ mod tests {
     //! match) so the prompt can be edited around the rule without
     //! breaking the test — but the load-bearing phrases must stay.
 
-    use super::{render_client_commands, strip_slash_commands};
+    use super::{
+        CLIENT_HANDLED_COMMANDS, SERVER_STATE_COMMANDS, render_client_commands,
+        strip_slash_commands,
+    };
 
     const PROMPT: &str = include_str!("../../prompts/gateway_default.txt");
 
@@ -720,6 +735,54 @@ mod tests {
         assert_eq!(section.matches("`/model`").count(), 1);
         assert!(!section.contains("ignore"));
         assert!(!section.contains("`x`"));
+    }
+
+    #[test]
+    fn render_client_commands_rejects_gateway_only_commands() {
+        let section = render_client_commands(&[
+            "/router".into(),
+            "/Adaptive".into(),
+            "queue".into(),
+            "/reset".into(),
+            "/status".into(),
+            "/thinking".into(),
+        ]);
+        assert!(!section.contains("router"));
+        assert!(!section.contains("adaptive"));
+        assert!(!section.contains("queue"));
+        assert!(!section.contains("reset"));
+        assert!(section.contains("`/status`"));
+        assert!(section.contains("`/thinking`"));
+        assert!(render_client_commands(&["/router".into()]).is_empty());
+    }
+
+    #[test]
+    fn intercepted_command_classes_are_disjoint() {
+        for name in SERVER_STATE_COMMANDS {
+            assert!(
+                !CLIENT_HANDLED_COMMANDS.contains(name),
+                "/{name} is in both classes"
+            );
+        }
+    }
+
+    #[test]
+    fn render_client_commands_accepts_names_up_to_the_length_cap() {
+        let at_cap = "a".repeat(32);
+        let over_cap = "b".repeat(33);
+        let section = render_client_commands(&[format!("/{at_cap}"), format!("/{over_cap}")]);
+        assert!(section.contains(&format!("`/{at_cap}`")));
+        assert!(!section.contains(&over_cap));
+    }
+
+    #[test]
+    fn render_client_commands_caps_the_list_at_64_valid_names() {
+        let mut commands: Vec<String> = vec!["/bad name".into(), "/c0".into(), "/c0".into()];
+        commands.extend((0..70).map(|i| format!("/c{i}")));
+        let section = render_client_commands(&commands);
+        assert_eq!(section.matches("`/c").count(), 64);
+        assert!(section.contains("`/c63`"));
+        assert!(!section.contains("`/c64`"));
     }
 
     #[test]

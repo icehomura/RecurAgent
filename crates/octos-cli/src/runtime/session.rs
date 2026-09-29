@@ -158,6 +158,9 @@ pub struct SessionRuntime {
     /// ([`Self::app_binding_is_current`]).
     pub(crate) app_binding: crate::peers::app_binding::SessionAppBinding,
     pub(crate) binding_peers_root: PathBuf,
+    /// The connection whose `client_commands` declaration is currently in
+    /// the prompt, so only that connection's close releases it.
+    client_commands_owner: std::sync::Mutex<Option<u64>>,
 }
 
 impl SessionRuntime {
@@ -246,14 +249,32 @@ impl SessionRuntime {
         .await
     }
 
-    /// Tell the agent which slash commands the attached client declared on
-    /// `session/open` (octoscode#664); an empty list clears them. Per-turn
-    /// agents inherit it via the snapshot.
-    pub fn apply_client_commands(&self, commands: &[String]) {
-        self.agent.set_prompt_segment(
-            SLASH_COMMANDS_SEGMENT_NAME,
-            render_client_commands(commands),
-        );
+    /// Tell the agent which slash commands the client on connection `owner`
+    /// declared on `session/open` (octoscode#664); an empty list clears them.
+    /// Per-turn agents inherit it via the snapshot.
+    pub fn apply_client_commands(&self, owner: u64, commands: &[String]) {
+        let mut current = self
+            .client_commands_owner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let rendered = render_client_commands(commands);
+        *current = (!rendered.is_empty()).then_some(owner);
+        self.agent
+            .set_prompt_segment(SLASH_COMMANDS_SEGMENT_NAME, rendered);
+    }
+
+    /// Clear the declared commands when connection `owner` closes, unless a
+    /// later `session/open` from another connection has replaced them.
+    pub fn release_client_commands(&self, owner: u64) {
+        let mut current = self
+            .client_commands_owner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if *current == Some(owner) {
+            *current = None;
+            self.agent
+                .set_prompt_segment(SLASH_COMMANDS_SEGMENT_NAME, String::new());
+        }
     }
 
     /// [`Self::bootstrap`] with an explicit `sessions_in_cwd` flag. The
@@ -863,6 +884,7 @@ impl SessionRuntime {
             memory,
             app_binding: bootstrapped_binding,
             binding_peers_root,
+            client_commands_owner: std::sync::Mutex::new(None),
         }))
     }
 }
@@ -1626,17 +1648,44 @@ tools = ["read_file"]
         assert!(!before.contains("## Slash Commands"));
         assert!(before.contains("be kind"));
 
-        rt.apply_client_commands(&["/model".into(), "/add-model".into()]);
+        rt.apply_client_commands(1, &["/model".into(), "/add-model".into()]);
         let after = rt.agent.system_prompt_snapshot();
         assert!(!after.contains("`/router`"));
         assert!(after.contains("`/model`"));
         assert!(after.contains("`/add-model`"));
         assert!(after.contains("be kind"));
 
-        rt.apply_client_commands(&[]);
+        rt.apply_client_commands(1, &[]);
         let none = rt.agent.system_prompt_snapshot();
         assert!(!none.contains("`/router`"));
         assert!(!none.contains("`/model`"));
+    }
+
+    #[tokio::test]
+    async fn client_commands_are_released_only_by_the_declaring_connection() {
+        let dir = tempfile::tempdir().unwrap();
+        let profile = make_profile(dir.path().to_path_buf()).await;
+        let rt = SessionRuntime::bootstrap(&profile, SessionKey::new("appui", "owner"), None)
+            .await
+            .expect("bootstrap");
+
+        rt.apply_client_commands(1, &["/model".into()]);
+        rt.release_client_commands(2);
+        assert!(
+            rt.agent.system_prompt_snapshot().contains("`/model`"),
+            "another connection closing must not clear this declaration"
+        );
+
+        rt.release_client_commands(1);
+        assert!(!rt.agent.system_prompt_snapshot().contains("`/model`"));
+
+        rt.apply_client_commands(1, &["/model".into()]);
+        rt.apply_client_commands(2, &["/add-model".into()]);
+        rt.release_client_commands(1);
+        assert!(
+            rt.agent.system_prompt_snapshot().contains("`/add-model`"),
+            "a superseded declarer closing must not clear the newer declaration"
+        );
     }
 
     #[tokio::test]
