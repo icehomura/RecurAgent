@@ -212,6 +212,59 @@ impl Default for ApprovalState {
     }
 }
 
+/// The command text a process-spawning tool will actually run.
+///
+/// `bash` carries a shell string in `command`/`cmd`; `hub` — and any future
+/// argv-shaped process tool — carries `application` plus `args` instead. Both
+/// must reach `bash_mediation::assess` and the dual-confirmation classifier as
+/// the same text: `hub start` with `application: "sudo"` used to reach spawn
+/// with no command string at all, so it cleared every gate a shell clears.
+/// Arguments are rendered with POSIX quoting so one argument cannot impersonate
+/// two commands.
+///
+/// Callers that re-derive the dual-confirmation token (see `agent.rs`, which
+/// grants it after an interactive approval) MUST use this same function, or the
+/// token they record will not match the one [`ApprovalState::evaluate`] looks
+/// up.
+pub(crate) fn mediated_command(tool_args: &Value) -> Option<String> {
+    if let Some(cmd) = tool_args
+        .get("command")
+        .or_else(|| tool_args.get("cmd"))
+        .and_then(Value::as_str)
+        .filter(|cmd| !cmd.is_empty())
+    {
+        return Some(cmd.to_string());
+    }
+    let application = tool_args
+        .get("application")
+        .and_then(Value::as_str)
+        .filter(|app| !app.is_empty())?;
+    let mut command = application.to_string();
+    if let Some(args) = tool_args.get("args").and_then(Value::as_array) {
+        for arg in args.iter().filter_map(Value::as_str) {
+            command.push(' ');
+            command.push_str(&shell_quote(arg));
+        }
+    }
+    Some(command)
+}
+
+/// Single-quote `arg` unless every byte is one a shell would read literally.
+fn shell_quote(arg: &str) -> String {
+    let literal = !arg.is_empty()
+        && arg.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'-' | b'_' | b'.' | b'/' | b'=' | b':' | b'+' | b',' | b'@'
+                )
+        });
+    if literal {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', r"'\''"))
+}
+
 impl ApprovalState {
     /// Create a new approval state.
     #[must_use]
@@ -324,73 +377,64 @@ impl ApprovalState {
 
         // 1. Hard policy gates (e.g. bash mediation block-critical / block-high).
         // Hard policy gates apply regardless of YOLO or auto-approve overrides!
-        if tool_name == "bash" {
-            let cmd = tool_args
-                .get("command")
-                .or_else(|| tool_args.get("cmd"))
-                .and_then(Value::as_str)
-                .unwrap_or("");
-
-            if !cmd.is_empty()
-                && let Some(s) = bash_settings
-            {
-                let mode =
-                    crate::bash_mediation::MediationMode::from_setting(s.mediation.as_deref());
-                if mode != crate::bash_mediation::MediationMode::Off {
-                    let cwd =
-                        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-                    let verdict = crate::bash_mediation::assess(cmd, s, mode, &cwd);
-                    if !verdict.allows() {
-                        let hits = match verdict {
-                            crate::bash_mediation::MediationVerdict::Block { hits } => hits,
-                            _ => Vec::new(),
-                        };
-                        let reasons: Vec<String> = hits.into_iter().map(|h| h.reason).collect();
-                        let reason_str = if reasons.is_empty() {
-                            "Refused by bash mediation policy".to_string()
-                        } else {
-                            reasons.join("; ")
-                        };
-                        return ApprovalEvaluation::HardBlocked {
-                            reason: format!("Hard policy gate: {reason_str}"),
-                        };
-                    }
+        // Every process-spawning tool is gated, not just `bash`: `hub` starts
+        // children through `application` + `args`, which reach the same
+        // classifier through `mediated_command`.
+        if (tool_name == "bash" || effects.processes())
+            && let Some(cmd) = mediated_command(tool_args)
+            && let Some(s) = bash_settings
+        {
+            let mode = crate::bash_mediation::MediationMode::from_setting(s.mediation.as_deref());
+            if mode != crate::bash_mediation::MediationMode::Off {
+                let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                let verdict = crate::bash_mediation::assess(&cmd, s, mode, &cwd);
+                if !verdict.allows() {
+                    let hits = match verdict {
+                        crate::bash_mediation::MediationVerdict::Block { hits } => hits,
+                        _ => Vec::new(),
+                    };
+                    let reasons: Vec<String> = hits.into_iter().map(|h| h.reason).collect();
+                    let reason_str = if reasons.is_empty() {
+                        "Refused by bash mediation policy".to_string()
+                    } else {
+                        reasons.join("; ")
+                    };
+                    return ApprovalEvaluation::HardBlocked {
+                        reason: format!("Hard policy gate: {reason_str}"),
+                    };
                 }
             }
         }
 
         // 2. Check for SLB dual-confirmation dangerous command classes.
         // If the command matches any configured dual-confirm class, it ALWAYS requires
-        // typed confirmation, even under YOLO mode.
+        // typed confirmation, even under YOLO mode. The same reconstructed command
+        // the mediation gate saw is what gets classified here — reading only
+        // `command`/`cmd` classified the empty string for argv-shaped tools.
         let dual_classes = self.dual_confirm_classes();
-        if !dual_classes.is_empty() && (tool_name == "bash" || effects.processes()) {
-            let cmd = tool_args
-                .get("command")
-                .or_else(|| tool_args.get("cmd"))
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            if !cmd.is_empty() {
-                let classified = crate::extensions::classify_dangerous_command(cmd, &[]);
-                let matching: Vec<DangerousCommandClass> = classified
-                    .into_iter()
-                    .filter(|c| dual_classes.contains(c))
-                    .collect();
+        if !dual_classes.is_empty()
+            && (tool_name == "bash" || effects.processes())
+            && let Some(cmd) = mediated_command(tool_args)
+        {
+            let classified = crate::extensions::classify_dangerous_command(&cmd, &[]);
+            let matching: Vec<DangerousCommandClass> = classified
+                .into_iter()
+                .filter(|c| dual_classes.contains(c))
+                .collect();
 
-                if !matching.is_empty() {
-                    let token = format!("{tool_name}:{cmd}");
-                    if !self.is_confirmed(&token) {
-                        let labels: Vec<&'static str> =
-                            matching.iter().map(|c| c.label()).collect();
-                        return ApprovalEvaluation::RequiresApproval {
-                            mode,
-                            reason: format!(
-                                "Dual confirmation required for danger classes: {}",
-                                labels.join(", ")
-                            ),
-                            is_dual_confirm: true,
-                            danger_classes: matching,
-                        };
-                    }
+            if !matching.is_empty() {
+                let token = format!("{tool_name}:{cmd}");
+                if !self.is_confirmed(&token) {
+                    let labels: Vec<&'static str> = matching.iter().map(|c| c.label()).collect();
+                    return ApprovalEvaluation::RequiresApproval {
+                        mode,
+                        reason: format!(
+                            "Dual confirmation required for danger classes: {}",
+                            labels.join(", ")
+                        ),
+                        is_dual_confirm: true,
+                        danger_classes: matching,
+                    };
                 }
             }
         }
@@ -468,7 +512,7 @@ impl ApprovalState {
     ) -> Value {
         match evaluation {
             ApprovalEvaluation::AutoApproved { mode, reason } => json!({
-                "schema": "pi.tool_approval.audit.v1",
+                "schema": "ra.tool_approval.audit.v1",
                 "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "verdict": "auto_approved",
@@ -483,7 +527,7 @@ impl ApprovalState {
             } => {
                 let classes: Vec<&'static str> = danger_classes.iter().map(|c| c.label()).collect();
                 json!({
-                    "schema": "pi.tool_approval.audit.v1",
+                    "schema": "ra.tool_approval.audit.v1",
                     "tool_call_id": tool_call_id,
                     "tool_name": tool_name,
                     "verdict": "prompt_required",
@@ -494,7 +538,7 @@ impl ApprovalState {
                 })
             }
             ApprovalEvaluation::HardBlocked { reason } => json!({
-                "schema": "pi.tool_approval.audit.v1",
+                "schema": "ra.tool_approval.audit.v1",
                 "tool_call_id": tool_call_id,
                 "tool_name": tool_name,
                 "verdict": "hard_blocked",
@@ -678,6 +722,95 @@ mod tests {
             None,
         );
         assert!(eval_confirmed.is_auto_approved());
+    }
+
+    /// `hub` spawns through `application` + `args`, so it has no `command`
+    /// string at all: mediation must classify the reconstructed argv, or
+    /// `hub start` reaches spawn with every gate a shell would clear (bd-9jgrt
+    /// item 2).
+    #[test]
+    fn hub_start_is_mediated_on_reconstructed_argv() {
+        let state = ApprovalState::new(ApprovalMode::Yolo, false, Vec::new());
+        let bash_settings = BashSettings {
+            mediation: Some("block-critical".to_string()),
+            ..Default::default()
+        };
+
+        let eval_blocked = state.evaluate(
+            "hub",
+            &json!({"op": "start", "name": "svc", "application": "rm", "args": ["-rf", "/"]}),
+            ToolEffects::process(),
+            None,
+            Some(&bash_settings),
+        );
+        assert!(
+            eval_blocked.is_hard_blocked(),
+            "hub start must clear the same mediation gate as bash"
+        );
+
+        // Ops that carry no argv stay untouched by the gate.
+        let eval_ps = state.evaluate(
+            "hub",
+            &json!({"op": "ps"}),
+            ToolEffects::process(),
+            None,
+            Some(&bash_settings),
+        );
+        assert!(eval_ps.is_auto_approved());
+    }
+
+    #[test]
+    fn hub_start_hits_dual_confirmation_classes() {
+        let state = ApprovalState::new(
+            ApprovalMode::Yolo,
+            false,
+            vec![DangerousCommandClass::RecursiveDelete],
+        );
+        let args = json!({"op": "start", "name": "svc", "application": "sudo", "args": ["rm", "-rf", "/"]});
+
+        let eval_dc = state.evaluate("hub", &args, ToolEffects::process(), None, None);
+        assert!(matches!(
+            eval_dc,
+            ApprovalEvaluation::RequiresApproval {
+                is_dual_confirm: true,
+                ..
+            }
+        ));
+
+        // The confirmation token is keyed on the same reconstructed command.
+        state.record_confirmation("hub:sudo rm -rf /");
+        let eval_confirmed = state.evaluate("hub", &args, ToolEffects::process(), None, None);
+        assert!(eval_confirmed.is_auto_approved());
+    }
+
+    #[test]
+    fn mediated_command_reconstructs_and_quotes_argv() {
+        assert_eq!(
+            mediated_command(&json!({"command": "ls"})).as_deref(),
+            Some("ls")
+        );
+        assert_eq!(
+            mediated_command(&json!({"cmd": "ls -l"})).as_deref(),
+            Some("ls -l")
+        );
+        assert_eq!(
+            mediated_command(&json!({"application": "curl", "args": ["-s", "http://x/y"]}))
+                .as_deref(),
+            Some("curl -s http://x/y")
+        );
+        // An argument carrying shell syntax cannot impersonate a second command.
+        assert_eq!(
+            mediated_command(&json!({"application": "echo", "args": ["a; rm -rf /"]})).as_deref(),
+            Some("echo 'a; rm -rf /'")
+        );
+        assert_eq!(
+            mediated_command(&json!({"application": "sh", "args": ["-c", "rm -rf / #"]}))
+                .as_deref(),
+            Some("sh -c 'rm -rf / #'")
+        );
+        // No argv at all (hub ps/logs, jobs list) is not a command.
+        assert_eq!(mediated_command(&json!({"op": "ps"})), None);
+        assert_eq!(mediated_command(&json!({"application": "   "})), None);
     }
 
     #[test]

@@ -27,7 +27,7 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 
 /// Tool-result schema tag for service descriptors (stable audit contract).
-pub const SERVICE_SCHEMA: &str = "pi.hub.service.v1";
+pub const SERVICE_SCHEMA: &str = "ra.hub.service.v1";
 
 /// Default readiness budget when the caller passes none.
 const DEFAULT_READY_TIMEOUT_SECS: u64 = 30;
@@ -43,6 +43,16 @@ const TRUNCATED_LINE_PREFIX: &str = "[...truncated...] ";
 
 /// Grace window between TERM and KILL on stop, mirroring the bash tool.
 const TERMINATE_GRACE: Duration = Duration::from_secs(3);
+
+/// Poll interval for `expect`. The ring retains its output until the line or
+/// byte cap, so a longer interval delays a match but never loses one.
+const EXPECT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+/// Upper bound on one `expect` budget, matching `logs`' `wait_ms` bound.
+const MAX_EXPECT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Tool-result schema tag for `expect` observations (stable audit contract).
+pub const EXPECT_SCHEMA: &str = "ra.hub.expect.v1";
 
 /// Keep service identifiers portable and bounded before deriving artifact
 /// names from them.
@@ -246,6 +256,10 @@ struct ServiceEntry {
     /// portable-pty's `UnixMasterWriter::drop` sends `\n`+VEOF, so caching
     /// the writer is what keeps the child's stdin open across sends.
     writer: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
+    /// PTY owner, reachable for `resize`. The exit monitor holds a clone for
+    /// the child's whole lifetime; `settle` clears it so a finished service
+    /// releases the master instead of holding it until its name is reused.
+    master: Arc<Mutex<Option<Box<dyn portable_pty::MasterPty + Send>>>>,
 }
 
 /// Serializable service descriptor.
@@ -316,7 +330,7 @@ impl ServiceRegistry {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NAME_TAKEN: a live service named '{}' already exists (pid {:?})",
+                    "RECUR_AGENT_HUB_NAME_TAKEN: a live service named '{}' already exists (pid {:?})",
                     spec.name, existing.pid
                 ),
             ));
@@ -332,6 +346,7 @@ impl ServiceRegistry {
                 log_path: log_path.to_path_buf(),
                 ring: Arc::clone(ring),
                 writer: Arc::new(Mutex::new(None)),
+                master: Arc::new(Mutex::new(None)),
             },
         );
         Ok(())
@@ -357,7 +372,7 @@ impl ServiceRegistry {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NOT_READY: service '{name}' is {} before readiness was observed",
+                    "RECUR_AGENT_HUB_NOT_READY: service '{name}' is {} before readiness was observed",
                     entry.status.as_str()
                 ),
             ));
@@ -379,6 +394,11 @@ impl ServiceRegistry {
         }
         entry.exit_code = Some(code);
         entry.pid = None;
+        // The PTY does not outlive the process it drives; release the master
+        // with the child rather than at name reuse.
+        if let Ok(mut master) = entry.master.lock() {
+            *master = None;
+        }
         true
     }
 
@@ -396,7 +416,7 @@ impl ServiceRegistry {
 fn stale_service(name: &str) -> Error {
     Error::tool(
         "hub",
-        format!("PI_HUB_STALE_SERVICE: service '{name}' was replaced during startup"),
+        format!("RECUR_AGENT_HUB_STALE_SERVICE: service '{name}' was replaced during startup"),
     )
 }
 
@@ -442,6 +462,12 @@ impl Drop for PendingService {
 struct ServiceChild {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     reaped: bool,
+    /// Kill-on-close Job covering the child's whole tree (Windows). Held for
+    /// the child's lifetime and dropped with it, so no pid lookup — and no
+    /// pid recycling — can leave a descendant unswept (bd-9jgrt item 2).
+    /// `None` off Windows, for detached services, and when the job could not
+    /// be attached; the walk-based discipline stands in those cases.
+    job: Option<PtyJobGuard>,
 }
 
 impl ServiceChild {
@@ -462,7 +488,12 @@ impl ServiceChild {
 impl Drop for ServiceChild {
     fn drop(&mut self) {
         if !self.reaped {
-            crate::tools::kill_process_group_tree(self.child.process_id());
+            // Closing the job terminates every member in one shot, including
+            // grandchildren spawned after a walk would have taken its
+            // snapshot; the walk is only the fallback when no job exists.
+            if self.job.take().is_none() {
+                crate::tools::kill_process_group_tree(self.child.process_id());
+            }
             let _ = self.child.kill();
             loop {
                 match self.child.wait() {
@@ -471,6 +502,81 @@ impl Drop for ServiceChild {
                 }
             }
         }
+        // A retained job is dropped here either way, sweeping descendants that
+        // outlived a root which exited on its own.
+    }
+}
+
+/// Kill-on-close Job handle covering a PTY child's descendant tree.
+///
+/// Only Windows allocates one; the Unix arm is an uninhabited placeholder so
+/// [`ServiceChild`] keeps a single shape on every target.
+#[cfg(windows)]
+type PtyJobGuard = pty_job::Guard;
+#[cfg(not(windows))]
+type PtyJobGuard = std::convert::Infallible;
+
+/// Attach a freshly spawned PTY child to a kill-on-close Job object,
+/// mirroring `tools::attach_child_job_discipline`.
+///
+/// Windows has no process groups, so [`ServiceChild::drop`]'s
+/// `kill_process_group_tree` snapshot walk can miss descendants spawned
+/// between the snapshot and the kill. A job closes that race: descendants
+/// cannot break away (`JOB_OBJECT_LIMIT_BREAKAWAY_OK` is never set), and the
+/// job handle is owned by the child guard itself, so a kill can never target a
+/// recycled pid.
+///
+/// `detached` services are deliberately excluded: `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
+/// would turn the documented "survives session exit" into "dies with the agent",
+/// and those trees are killed through the walk as before.
+///
+/// portable-pty calls `CreateProcessW` without `CREATE_SUSPENDED`, so there is
+/// no way to spawn-into-the-job atomically; the caller must invoke this with
+/// nothing blocking in between spawn and assign.
+fn attach_pty_job_discipline(
+    detached: bool,
+    child: &(dyn portable_pty::Child + Send + Sync),
+) -> Option<PtyJobGuard> {
+    #[cfg(windows)]
+    return if detached {
+        None
+    } else {
+        pty_job::attach(child)
+    };
+    #[cfg(not(windows))]
+    {
+        let _ = (detached, child);
+        None
+    }
+}
+
+#[cfg(windows)]
+mod pty_job {
+    //! Kill-on-close Job objects for hub PTY children (bd-9jgrt item 2).
+    //!
+    //! Same shape as [`crate::tools::win_job`], minus the pid registry: the
+    //! guard is owned by `ServiceChild`, so its lifetime is exactly the
+    //! child's and no pid is ever looked up again.
+
+    use win32job::{ExtendedLimitInfo, Job};
+
+    /// Owned job handle. Dropping it closes the handle, and
+    /// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` does the actual termination.
+    // The handle is only ever used by its destructor, never read.
+    #[allow(dead_code)]
+    pub struct Guard(Job);
+
+    /// Assign `child` to a fresh kill-on-close job. `None` means no coverage,
+    /// so the caller keeps the walk-based fallback.
+    pub fn attach(child: &(dyn portable_pty::Child + Send + Sync)) -> Option<Guard> {
+        let mut info = ExtendedLimitInfo::new();
+        info.limit_kill_on_job_close();
+        let job = Job::create_with_limit_info(&info).ok()?;
+        // RawHandle is *mut c_void; win32job takes the isize numeric handle.
+        // `as_raw_handle` also returns None for a child the platform did not
+        // spawn into a pty.
+        job.assign_process(child.as_raw_handle()? as isize).ok()?;
+        Some(Guard(job))
     }
 }
 
@@ -484,7 +590,7 @@ struct SpawnedService {
 fn readiness_deadline(now: Instant, budget: Duration) -> Result<Instant> {
     now.checked_add(budget).ok_or_else(|| {
         Error::validation(
-            "PI_HUB_INVALID_READY_TIMEOUT: readiness timeout is too large".to_string(),
+            "RECUR_AGENT_HUB_INVALID_READY_TIMEOUT: readiness timeout is too large".to_string(),
         )
     })
 }
@@ -535,7 +641,7 @@ fn validated_service_name(name: &str) -> Result<&str> {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'));
     if !is_portable {
         return Err(Error::validation(format!(
-            "PI_HUB_INVALID_NAME: service names must be 1-{MAX_SERVICE_NAME_BYTES} ASCII bytes containing only letters, digits, '.', '-', or '_'"
+            "RECUR_AGENT_HUB_INVALID_NAME: service names must be 1-{MAX_SERVICE_NAME_BYTES} ASCII bytes containing only letters, digits, '.', '-', or '_'"
         )));
     }
     Ok(name)
@@ -581,7 +687,7 @@ fn persist_detached_state(reg: &ServiceRegistry) {
 /// acknowledged without resurrecting a later exit.
 ///
 /// # Errors
-/// `PI_HUB_NAME_TAKEN` for a duplicate live name; `PI_HUB_NOT_READY` when
+/// `RECUR_AGENT_HUB_NAME_TAKEN` for a duplicate live name; `RECUR_AGENT_HUB_NOT_READY` when
 /// the gates do not pass in time (the process is killed — no half-started
 /// surprise daemons); tool errors for spawn failures.
 #[allow(clippy::too_many_lines)]
@@ -626,6 +732,7 @@ pub fn start(spec: &LaunchSpec) -> Result<ServiceSnapshot> {
         reader,
         writer,
     } = spawn_pty(spec)?;
+    let master = Arc::new(Mutex::new(Some(master)));
     let initial_snapshot = {
         let mut reg = registry().lock().map_err(|_| registry_err())?;
         let entry = reg
@@ -634,12 +741,13 @@ pub fn start(spec: &LaunchSpec) -> Result<ServiceSnapshot> {
         if !entry.status.live() {
             return Err(Error::tool(
                 "hub",
-                format!("PI_HUB_NOT_READY: service '{name}' was stopped during startup"),
+                format!("RECUR_AGENT_HUB_NOT_READY: service '{name}' was stopped during startup"),
             ));
         }
         entry.pid = child.child.process_id();
         entry.started_ms = now_ms();
         entry.writer = Arc::new(Mutex::new(Some(writer)));
+        entry.master = Arc::clone(&master);
         if !has_gates {
             entry.status = ServiceStatus::Running;
         }
@@ -665,7 +773,8 @@ pub fn start(spec: &LaunchSpec) -> Result<ServiceSnapshot> {
         .name(format!("hub-monitor-{name}"))
         .spawn(move || {
             // Keep the PTY owner alive for the whole child lifetime, not just
-            // the readiness call. Reader/writer handles need not own it.
+            // the readiness call. Reader/writer handles need not own it; the
+            // registry holds the same master so `resize` can reach it.
             let _master = master;
             let code = child.wait();
             if let Ok(mut reg) = registry().lock()
@@ -700,7 +809,7 @@ pub fn start(spec: &LaunchSpec) -> Result<ServiceSnapshot> {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NOT_READY: service '{name}' became {} before readiness was observed.\n\
+                    "RECUR_AGENT_HUB_NOT_READY: service '{name}' became {} before readiness was observed.\n\
                      Log tail:\n{tail}",
                     status.as_str()
                 ),
@@ -737,7 +846,7 @@ pub fn start(spec: &LaunchSpec) -> Result<ServiceSnapshot> {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NOT_READY: service '{name}' failed readiness within {}s \
+                    "RECUR_AGENT_HUB_NOT_READY: service '{name}' failed readiness within {}s \
                      (log gate passed: {log_passed}, port gate passed: {port_passed}). \
                      Startup was stopped.\nLog tail:\n{tail}",
                     budget.as_secs()
@@ -782,11 +891,16 @@ fn spawn_pty(spec: &LaunchSpec) -> Result<SpawnedService> {
         .slave
         .spawn_command(cmd)
         .map_err(|e| Error::tool("hub", format!("Failed to spawn service: {e}")))?;
+    // Assign the job first, with nothing blocking between spawn and assign:
+    // portable-pty has no `CREATE_SUSPENDED`, so this window is the
+    // irreducible part of the race (bd-9jgrt item 2).
+    let job = attach_pty_job_discipline(spec.detached, child.as_ref());
     drop(pair.slave);
     Ok(SpawnedService {
         child: ServiceChild {
             child,
             reaped: false,
+            job,
         },
         master: pair.master,
         reader,
@@ -883,7 +997,7 @@ pub fn ps() -> Result<Vec<ServiceSnapshot>> {
 /// retains the original bytes. Eviction never rewinds the source-line cursor.
 ///
 /// # Errors
-/// `PI_HUB_UNKNOWN_SERVICE` for unknown names.
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` for unknown names.
 #[allow(clippy::significant_drop_tightening)]
 pub fn logs(
     name: &str,
@@ -899,7 +1013,7 @@ pub fn logs(
             let Some(entry) = reg.services.get(name) else {
                 return Err(Error::tool(
                     "hub",
-                    format!("PI_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+                    format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
                 ));
             };
             let ring = entry.ring.lock().map_err(|_| registry_err())?;
@@ -918,7 +1032,7 @@ pub fn logs(
             let seeking = since.is_some() || grep.is_some();
             if !lines.is_empty() || !seeking || Instant::now() >= deadline {
                 return Ok(LogPage {
-                    schema: "pi.hub.logs.v1".to_string(), // ubs:ignore loop returns immediately after
+                    schema: "ra.hub.logs.v1".to_string(), // ubs:ignore loop returns immediately after
                     name: name.to_string(), // ubs:ignore loop returns immediately after
                     lines,
                     cursor,
@@ -930,10 +1044,198 @@ pub fn logs(
     }
 }
 
+/// Resize a running service's PTY (`master.resize`), so a TUI, REPL, or
+/// debugger session sees the geometry its caller actually has instead of the
+/// 40x120 the PTY is allocated with.
+///
+/// # Errors
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` for unknown names;
+/// `RECUR_AGENT_HUB_NOT_RUNNING` for settled services;
+/// `RECUR_AGENT_HUB_INVALID_SIZE` for a zero dimension; a tool error when the
+/// PTY rejects the request.
+#[allow(clippy::significant_drop_tightening)]
+pub fn resize(name: &str, rows: u16, cols: u16) -> Result<()> {
+    if rows == 0 || cols == 0 {
+        return Err(Error::validation(format!(
+            "RECUR_AGENT_HUB_INVALID_SIZE: rows and cols must both be greater than zero (got {rows}x{cols})"
+        )));
+    }
+    let master = {
+        let reg = registry().lock().map_err(|_| registry_err())?;
+        let Some(entry) = reg.services.get(name) else {
+            return Err(Error::tool(
+                "hub",
+                format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+            ));
+        };
+        if !entry.status.live() {
+            return Err(Error::tool(
+                "hub",
+                format!(
+                    "RECUR_AGENT_HUB_NOT_RUNNING: service '{name}' is {}",
+                    entry.status.as_str()
+                ),
+            ));
+        }
+        Arc::clone(&entry.master)
+    };
+    let guard = master.lock().map_err(|_| registry_err())?;
+    let Some(master) = guard.as_ref() else {
+        return Err(Error::tool(
+            "hub",
+            format!("RECUR_AGENT_HUB_NO_PTY: service '{name}' has no PTY master"),
+        ));
+    };
+    master
+        .resize(portable_pty::PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| Error::tool("hub", format!("Failed to resize service PTY: {e}")))
+}
+
+/// One `expect` observation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpectResult {
+    pub schema: String,
+    pub name: String,
+    /// Whether the pattern was observed before the budget expired.
+    pub matched: bool,
+    /// The line that matched (empty when `matched` is false).
+    pub line: String,
+    /// Capture groups of the match; `[]` for a pattern with no groups.
+    pub captures: Vec<String>,
+    /// Cursor to pass as `since` on the next call. It resumes *after* the
+    /// matched line, so output that arrived in the same burst is not skipped.
+    pub cursor: u64,
+    /// Service status at the last poll, so a caller can tell an expired
+    /// budget on a live service from one on a service that already exited.
+    pub status: String,
+}
+
+/// Scan `ring` from `since` for `pattern`.
+///
+/// Returns the head cursor and, when the pattern matched, the resume cursor
+/// (index after the matched line), its captures, and the matched line. Kept
+/// separate from the polling loop so the matching semantics are testable
+/// without a live service.
+fn scan_for_match(ring: &Ring, pattern: &regex::Regex, since: u64) -> (u64, Option<ExpectMatch>) {
+    let (lines, head) = ring.since(since);
+    // `since` is truncated by eviction, so the first retained line's index is
+    // the head minus what is still retained.
+    let first_index = head.saturating_sub(lines.len() as u64);
+    for (offset, line) in lines.iter().enumerate() {
+        let Some(captures) = pattern.captures(line) else {
+            continue;
+        };
+        let groups = captures
+            .iter()
+            .map(|group| group.map_or_else(String::new, |g| g.as_str().to_string()))
+            .collect();
+        let cursor = first_index.saturating_add(offset as u64).saturating_add(1);
+        return (
+            head,
+            Some(ExpectMatch {
+                cursor: cursor.min(head),
+                captures: groups,
+                line: line.clone(),
+            }),
+        );
+    }
+    (head, None)
+}
+
+/// A matched `expect` observation.
+struct ExpectMatch {
+    cursor: u64,
+    captures: Vec<String>,
+    line: String,
+}
+
+/// Wait for service output matching `pattern`.
+///
+/// Unlike `start`'s `ready.log` — a latch over the whole retained buffer,
+/// evaluated once at spawn — `expect` waits for output that arrives *after*
+/// the cursor and returns the capture groups, which is what driving a REPL,
+/// debugger, or install prompt needs: read the cursor, `send`, `expect`.
+///
+/// `since` is the cursor from a previous `logs`/`expect` call (`None` scans
+/// everything retained). The loop re-reads the ring every
+/// [`EXPECT_POLL_INTERVAL`] until the pattern matches or `timeout` expires;
+/// the ring only evicts at its bounds, so a match cannot slip between polls.
+/// An expired budget is reported as `matched: false`, not an error — "not
+/// yet" is a normal answer for a waiting primitive.
+///
+/// # Errors
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` for unknown names; a validation error for
+/// an invalid regex.
+#[allow(clippy::significant_drop_tightening)]
+pub fn expect(
+    name: &str,
+    pattern: &str,
+    timeout: Duration,
+    since: Option<u64>,
+) -> Result<ExpectResult> {
+    let pattern = regex::Regex::new(pattern)
+        .map_err(|e| Error::validation(format!("Invalid expect regex '{pattern}': {e}")))?;
+    let deadline = Instant::now() + timeout.min(MAX_EXPECT_TIMEOUT);
+    let since = since.unwrap_or(0);
+    loop {
+        let (head, matched, status) = {
+            let reg = registry().lock().map_err(|_| registry_err())?;
+            let Some(entry) = reg.services.get(name) else {
+                return Err(Error::tool(
+                    "hub",
+                    format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+                ));
+            };
+            let ring = entry.ring.lock().map_err(|_| registry_err())?;
+            let (head, matched) = scan_for_match(&ring, &pattern, since);
+            (head, matched, entry.status)
+        };
+        let result = |matched: bool, matched_line: ExpectMatch| ExpectResult {
+            schema: EXPECT_SCHEMA.to_string(),
+            name: name.to_string(),
+            matched,
+            line: if matched {
+                matched_line.line
+            } else {
+                String::new()
+            },
+            captures: if matched {
+                matched_line.captures
+            } else {
+                Vec::new()
+            },
+            cursor: if matched { matched_line.cursor } else { head },
+            status: status.as_str().to_string(),
+        };
+        if let Some(found) = matched {
+            return Ok(result(true, found));
+        }
+        if Instant::now() >= deadline {
+            return Ok(result(
+                false,
+                ExpectMatch {
+                    cursor: head,
+                    captures: Vec::new(),
+                    line: String::new(),
+                },
+            ));
+        }
+        std::thread::sleep(
+            EXPECT_POLL_INTERVAL.min(deadline.saturating_duration_since(Instant::now())),
+        );
+    }
+}
+
 /// Send text to a running service's PTY stdin (`enter` appends CR).
 ///
 /// # Errors
-/// `PI_HUB_UNKNOWN_SERVICE` / `PI_HUB_NOT_RUNNING` for invalid targets.
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` / `RECUR_AGENT_HUB_NOT_RUNNING` for invalid targets.
 #[allow(clippy::significant_drop_tightening)]
 pub fn send_text(name: &str, text: &str, enter: bool) -> Result<()> {
     write_to_master(name, |writer| {
@@ -993,14 +1295,14 @@ fn write_to_master(
         let Some(entry) = reg.services.get(name) else {
             return Err(Error::tool(
                 "hub",
-                format!("PI_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+                format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
             ));
         };
         if !entry.status.live() {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NOT_RUNNING: service '{name}' is {} — stdin is closed",
+                    "RECUR_AGENT_HUB_NOT_RUNNING: service '{name}' is {} — stdin is closed",
                     entry.status.as_str()
                 ),
             ));
@@ -1011,7 +1313,7 @@ fn write_to_master(
     let Some(writer) = guard.as_mut() else {
         return Err(Error::tool(
             "hub",
-            format!("PI_HUB_NO_INPUT: service '{name}' has no writable PTY master"),
+            format!("RECUR_AGENT_HUB_NO_INPUT: service '{name}' has no writable PTY master"),
         ));
     };
     write(writer.as_mut())
@@ -1021,7 +1323,7 @@ fn write_to_master(
 /// Send a signal to the service's process tree.
 ///
 /// # Errors
-/// `PI_HUB_UNKNOWN_SERVICE` / `PI_HUB_NOT_RUNNING`.
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` / `RECUR_AGENT_HUB_NOT_RUNNING`.
 #[allow(clippy::significant_drop_tightening)]
 pub fn send_signal(name: &str, signal: sysinfo::Signal) -> Result<()> {
     let pid = {
@@ -1029,14 +1331,14 @@ pub fn send_signal(name: &str, signal: sysinfo::Signal) -> Result<()> {
         let Some(entry) = reg.services.get(name) else {
             return Err(Error::tool(
                 "hub",
-                format!("PI_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+                format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
             ));
         };
         if !entry.status.live() {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NOT_RUNNING: service '{name}' is {}",
+                    "RECUR_AGENT_HUB_NOT_RUNNING: service '{name}' is {}",
                     entry.status.as_str()
                 ),
             ));
@@ -1046,7 +1348,7 @@ pub fn send_signal(name: &str, signal: sysinfo::Signal) -> Result<()> {
     let Some(pid) = pid else {
         return Err(Error::tool(
             "hub",
-            format!("PI_HUB_NOT_RUNNING: service '{name}' has no live pid"),
+            format!("RECUR_AGENT_HUB_NOT_RUNNING: service '{name}' has no live pid"),
         ));
     };
     signal_pid_tree(pid, signal);
@@ -1082,7 +1384,7 @@ fn signal_pid_tree(pid: u32, signal: sysinfo::Signal) {
 /// (same discipline as the bash tool).
 ///
 /// # Errors
-/// `PI_HUB_UNKNOWN_SERVICE` / `PI_HUB_NOT_RUNNING`.
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` / `RECUR_AGENT_HUB_NOT_RUNNING`.
 #[allow(clippy::significant_drop_tightening)]
 pub fn stop(name: &str) -> Result<ServiceSnapshot> {
     let pid = {
@@ -1090,14 +1392,14 @@ pub fn stop(name: &str) -> Result<ServiceSnapshot> {
         let Some(entry) = reg.services.get_mut(name) else {
             return Err(Error::tool(
                 "hub",
-                format!("PI_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+                format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
             ));
         };
         if !entry.status.live() {
             return Err(Error::tool(
                 "hub",
                 format!(
-                    "PI_HUB_NOT_RUNNING: service '{name}' already settled ({})",
+                    "RECUR_AGENT_HUB_NOT_RUNNING: service '{name}' already settled ({})",
                     entry.status.as_str()
                 ),
             ));
@@ -1121,7 +1423,7 @@ pub fn stop(name: &str) -> Result<ServiceSnapshot> {
 /// first; completed names re-spawn directly.
 ///
 /// # Errors
-/// `PI_HUB_UNKNOWN_SERVICE` for unknown names; start errors otherwise.
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` for unknown names; start errors otherwise.
 #[allow(clippy::significant_drop_tightening)]
 pub fn restart(name: &str) -> Result<ServiceSnapshot> {
     let (spec, was_live) = {
@@ -1129,7 +1431,7 @@ pub fn restart(name: &str) -> Result<ServiceSnapshot> {
         let Some(entry) = reg.services.get(name) else {
             return Err(Error::tool(
                 "hub",
-                format!("PI_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+                format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
             ));
         };
         (entry.spec.clone(), entry.status.live())
@@ -1143,14 +1445,14 @@ pub fn restart(name: &str) -> Result<ServiceSnapshot> {
 /// Full descriptor for one service.
 ///
 /// # Errors
-/// `PI_HUB_UNKNOWN_SERVICE` for unknown names.
+/// `RECUR_AGENT_HUB_UNKNOWN_SERVICE` for unknown names.
 #[allow(clippy::significant_drop_tightening)]
 pub fn describe(name: &str) -> Result<ServiceSnapshot> {
     let reg = registry().lock().map_err(|_| registry_err())?;
     let Some(entry) = reg.services.get(name) else {
         return Err(Error::tool(
             "hub",
-            format!("PI_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
+            format!("RECUR_AGENT_HUB_UNKNOWN_SERVICE: no service named '{name}'"), // ubs:ignore cold error path
         ));
     };
     Ok(ServiceSnapshot::from_entry(entry))
@@ -1396,7 +1698,7 @@ mod tests {
         let error = reg
             .reserve(&launch, &second, &PathBuf::from("second.log"))
             .expect_err("pending launch owns the name");
-        assert!(error.to_string().contains("PI_HUB_NAME_TAKEN"));
+        assert!(error.to_string().contains("RECUR_AGENT_HUB_NAME_TAKEN"));
         assert!(
             reg.current(&launch.name, &first)
                 .expect("first")
@@ -1424,7 +1726,7 @@ mod tests {
             reg.mark_ready(&launch.name, &old)
                 .unwrap_err()
                 .to_string()
-                .contains("PI_HUB_STALE_SERVICE")
+                .contains("RECUR_AGENT_HUB_STALE_SERVICE")
         );
         assert_eq!(reg.time_out(&launch.name, &old), None);
         let current = reg.current(&launch.name, &new).expect("replacement");
@@ -1545,7 +1847,11 @@ mod tests {
             }),
         ))
         .expect_err("timeout must be validated before program resolution");
-        assert!(error.to_string().contains("PI_HUB_INVALID_READY_TIMEOUT"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_HUB_INVALID_READY_TIMEOUT")
+        );
         assert!(describe("hub-timeout-overflow").is_err());
         let now = Instant::now();
         assert_eq!(
@@ -1639,6 +1945,7 @@ mod tests {
                 steps: steps.iter().cloned().collect(),
             }),
             reaped: false,
+            job: None,
         };
         (child, events)
     }
@@ -1681,7 +1988,7 @@ mod tests {
         ))
         .expect_err("path-like service name must fail before spawn");
         assert!(
-            err.to_string().contains("PI_HUB_INVALID_NAME"),
+            err.to_string().contains("RECUR_AGENT_HUB_INVALID_NAME"),
             "name validation must win before program resolution: {err}"
         );
     }
@@ -1723,7 +2030,7 @@ mod tests {
         ));
         let err = result.unwrap_err();
         assert!(
-            err.to_string().contains("PI_HUB_NOT_READY"),
+            err.to_string().contains("RECUR_AGENT_HUB_NOT_READY"),
             "expected not-ready error, got: {err}"
         );
     }
@@ -1738,7 +2045,7 @@ mod tests {
         let second = start(&spec(name, "sleep", &["30"], None));
         let err = second.unwrap_err();
         assert!(
-            err.to_string().contains("PI_HUB_NAME_TAKEN"),
+            err.to_string().contains("RECUR_AGENT_HUB_NAME_TAKEN"),
             "expected name-taken error, got: {err}"
         );
         let _ = stop(name);
@@ -1856,6 +2163,143 @@ mod tests {
             state.is_none() || state == Some('Z'),
             "process {pid} survived stop (state {state:?})"
         );
+    }
+
+    #[test]
+    fn scan_for_match_resumes_after_the_matched_line() {
+        let mut ring = Ring::new(8);
+        ring.push_chunk("boot\nlistening on :3000\nidle\n");
+        let pattern = regex::Regex::new(r"listening on :(?<port>\d+)").expect("regex");
+
+        let (head, found) = scan_for_match(&ring, &pattern, 0);
+        let found = found.expect("pattern must match");
+        assert_eq!(head, 3);
+        assert_eq!(found.line, "listening on :3000");
+        assert_eq!(found.captures, vec!["listening on :3000", "3000"]);
+        // The resume cursor sits after the matched line, so a rescan of the
+        // untouched ring reports nothing new.
+        assert_eq!(found.cursor, 2);
+        assert!(scan_for_match(&ring, &pattern, found.cursor).1.is_none());
+
+        // A later line is found from the resume cursor.
+        ring.push_chunk("listening on :3001\n");
+        let (_, next) = scan_for_match(&ring, &pattern, found.cursor);
+        assert_eq!(next.expect("second match").captures[1], "3001");
+
+        // No match at all still reports the head, so the caller can keep it.
+        let missing = regex::Regex::new("never").expect("regex");
+        let (head, none) = scan_for_match(&ring, &missing, 0);
+        assert_eq!(head, 4);
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn scan_for_match_clamps_a_resume_cursor_onto_evicted_lines() {
+        let mut ring = Ring::new(2);
+        ring.push_chunk("first\nsecond\nthird\n");
+        let pattern = regex::Regex::new(r"^second$").expect("regex");
+        // `first` was evicted, so a cursor pointing at it must still not
+        // re-report `second`, and must never return a cursor past the head.
+        let (head, found) = scan_for_match(&ring, &pattern, 1);
+        assert_eq!(head, 3);
+        assert_eq!(found.expect("second is retained").cursor, 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resize_reaches_the_live_pty_and_rejects_settled_services() {
+        let _guard = crate::hub::test_lock();
+        let name = "hub-test-resize";
+        let _ = start(&spec(name, "sleep", &["30"], None)).expect("start");
+        resize(name, 24, 80).expect("live service must accept a resize");
+        let _ = stop(name);
+        std::thread::sleep(Duration::from_millis(300));
+        let err = resize(name, 24, 80).expect_err("settled service must refuse a resize");
+        assert!(
+            err.to_string().contains("RECUR_AGENT_HUB_NOT_RUNNING"),
+            "unexpected resize error: {err}"
+        );
+    }
+
+    #[test]
+    fn resize_rejects_zero_dimensions_and_unknown_names() {
+        let _guard = crate::hub::test_lock();
+        let err = resize("hub-test-absent", 0, 80).expect_err("zero rows must fail validation");
+        assert!(
+            err.to_string().contains("RECUR_AGENT_HUB_INVALID_SIZE"),
+            "unexpected error: {err}"
+        );
+        let err = resize("hub-test-absent", 24, 0).expect_err("zero cols must fail validation");
+        assert!(
+            err.to_string().contains("RECUR_AGENT_HUB_INVALID_SIZE"),
+            "unexpected error: {err}"
+        );
+        let err = resize("hub-test-absent", 24, 80).expect_err("unknown name must fail");
+        assert!(
+            err.to_string().contains("RECUR_AGENT_HUB_UNKNOWN_SERVICE"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn expect_rejects_an_invalid_pattern_before_touching_the_registry() {
+        let _guard = crate::hub::test_lock();
+        let err = expect("hub-test-absent", "[", Duration::from_millis(1), None)
+            .expect_err("invalid regex must fail");
+        assert!(
+            err.to_string().contains("Invalid expect regex"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn expect_waits_for_new_output_and_returns_captures() {
+        let _guard = crate::hub::test_lock();
+        let name = "hub-test-expect";
+        let _ = start(&spec(
+            name,
+            "sh",
+            &["-c", "echo boot; sleep 300"],
+            Some(ReadySpec {
+                log: Some("boot".to_string()),
+                port: None,
+                timeout_secs: Some(10),
+            }),
+        ))
+        .expect("start");
+        // Readiness latches on `text()`, which includes the *partial* line, so
+        // the cursor can be 0 for a beat after `start` returns. Wait for the
+        // readiness line to be committed before drawing a cursor below it.
+        let mut cursor = 0;
+        for _ in 0..250 {
+            cursor = logs(name, None, None, None, 0).expect("page").cursor;
+            if cursor > 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            cursor > 0,
+            "the readiness line must become cursor-addressable"
+        );
+
+        // A pattern that already scrolled past the cursor is not "new output",
+        // so the budget expires without a match rather than latching on.
+        let stale = expect(name, "boot", Duration::from_millis(120), Some(cursor)).expect("expect");
+        assert!(!stale.matched, "latched output must not re-match");
+        assert_eq!(
+            stale.cursor, cursor,
+            "an unmatched budget must not move the cursor"
+        );
+
+        send_text(name, "echo value=42", true).expect("send");
+        let found = expect(name, r"value=(\d+)", Duration::from_secs(10), Some(cursor))
+            .expect("expect must observe new output");
+        assert!(found.matched, "new output must match: {found:?}");
+        assert_eq!(found.captures, vec!["value=42", "42"]);
+        assert!(found.cursor > cursor);
+        let _ = stop(name);
     }
 
     #[cfg(unix)]
