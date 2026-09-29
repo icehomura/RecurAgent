@@ -312,3 +312,12 @@ tests/ext_conformance/artifacts/doom-overlay/doom-debug.log
 .DS_Store
 README.md:*
 root@*
+
+# Local tool scratch: alternate cargo target dirs and agent tool state
+/.yan-t/
+/.yan-vt/
+/.yan-verify/
+/.yan-verify2/
+/.omc/
+/.workbuddy-ai/
+/pi_test_out.txt
