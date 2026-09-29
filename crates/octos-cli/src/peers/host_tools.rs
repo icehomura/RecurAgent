@@ -784,11 +784,12 @@ struct CallMeta {
     args_digest: String,
 }
 
-/// Process-wide key of an unknown-outcome marker: the calling session, the
-/// tool and the argument digest (not the turn: a later turn must not resend
-/// it either).
-fn unknown_key(route_key: &str, session: &SessionKey, tool: &str, args_digest: &str) -> String {
-    format!("{route_key}\u{0}{}/{tool}/{args_digest}", session.0)
+/// Process-wide key of an unknown-outcome marker: the tool set's route (the
+/// peer, or the host session), the tool and the argument digest. Neither the
+/// turn nor the calling session is part of it (#2572): a later turn, or
+/// another request context of the same peer, must not resend it either.
+fn unknown_key(route_key: &str, tool: &str, args_digest: &str) -> String {
+    format!("{route_key}\u{0}{tool}/{args_digest}")
 }
 
 /// How long an unknown outcome blocks the same call.
@@ -948,7 +949,7 @@ struct HostToolHub {
     pending: Mutex<HashMap<String, PendingCall>>,
     finished: Mutex<HashMap<String, (CallMeta, Instant)>>,
     occurrences: Mutex<BoundedClaims>,
-    /// `(session, turn, tool, args digest)` whose outcome is unknown.
+    /// `(route, tool, args digest)` whose outcome is unknown.
     unknown: Mutex<BoundedClaims>,
 }
 
@@ -1571,7 +1572,6 @@ impl Drop for PendingGuard {
             HUB.unknown.lock().unwrap_or_else(|p| p.into_inner()).mark(
                 unknown_key(
                     &call.meta.route_key,
-                    &call.meta.session_id,
                     &call.meta.tool,
                     &call.meta.args_digest,
                 ),
@@ -1616,12 +1616,7 @@ pub(crate) struct TurnHostToolRouter {
 
 impl TurnHostToolRouter {
     fn unknown_key(&self, tool: &str, args_digest: &str) -> String {
-        unknown_key(
-            &self.host.route_key(&self.peers_root),
-            &self.session_id,
-            tool,
-            args_digest,
-        )
+        unknown_key(&self.host.route_key(&self.peers_root), tool, args_digest)
     }
 
     fn error(kind: &str, message: impl Into<String>) -> HostToolCallOutcome {

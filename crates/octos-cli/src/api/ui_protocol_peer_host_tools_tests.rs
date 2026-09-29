@@ -940,6 +940,31 @@ async fn should_report_an_unanswered_act_call_as_unknown_and_never_resend_it() {
     );
     assert!(rx.try_recv().is_err(), "no second peer/tool/call");
 
+    // Nor does another request context of the same peer (#2572): the mark is
+    // keyed on the peer, not on the calling session.
+    let _ = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({"session_id": fx.system, "peer": "news", "context_id": "ui-1",
+                   "host_token": token}),
+        ),
+        None,
+    )
+    .unwrap();
+    let ctx_key = SessionKey(format!("{}#peerctx-news.ui-1", fx.system.base_key()));
+    let other = turn_registry(&fx, &ctx_key, "turn-3").await;
+    let again = other
+        .execute_with_context(&call_ctx("c3"), "news_topics_set", &args)
+        .await
+        .unwrap();
+    assert!(
+        !again.success && again.output.contains("not sent again"),
+        "{}",
+        again.output
+    );
+    assert!(rx.try_recv().is_err(), "no peer/tool/call from the context");
+
     let rows = audit_rows(&fx);
     assert_eq!(rows[0]["outcome"], "unknown");
     assert_eq!(rows[1]["decision"], "duplicate");

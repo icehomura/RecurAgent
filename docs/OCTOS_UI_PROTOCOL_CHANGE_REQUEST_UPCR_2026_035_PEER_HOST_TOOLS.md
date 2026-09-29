@@ -444,8 +444,10 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   a claim.
 - **No retry after an unknown outcome.** A non-`read` call whose outcome is
   unknown — it timed out, or its turn was interrupted while the host was
-  working on it — marks `(session, tool, argument digest)` for 24 h. The same
-  call in that session, in any later turn and under any tool-call id, is not
+  working on it — marks `(tool set, tool, argument digest)` for 24 h, where
+  the tool set is the peer (or, for a set registered on a host session, that
+  session). The same call from any session of that peer (its own session or
+  any request context), in any later turn and under any tool-call id, is not
   sent unless the person approves it through an approval whose text says the
   earlier outcome is unknown (`approved_after_unknown`, which clears the
   mark); without an approval channel it is refused (`outcome_unknown_before`).
