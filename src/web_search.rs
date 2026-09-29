@@ -101,7 +101,7 @@ fn env_key(keys: &[&str]) -> Option<String> {
     })
 }
 
-/// Base-URL override per rung (bd-cv653.2.1): `PI_WEBSEARCH_BASE_<NAME>`
+/// Base-URL override per rung (bd-cv653.2.1): `RECUR_AGENT_WEBSEARCH_BASE_<NAME>`
 /// redirects a provider's endpoint — used by the e2e harness to point rungs
 /// at a loopback mock, and by operators routing through a proxy. In-process
 /// callers (SDK, tests) use the override map, which wins over the env var.
@@ -113,7 +113,7 @@ fn base_url_for(name: &str, default: &str) -> String {
     {
         return override_url;
     }
-    let var = format!("PI_WEBSEARCH_BASE_{}", name.to_ascii_uppercase());
+    let var = format!("RECUR_AGENT_WEBSEARCH_BASE_{}", name.to_ascii_uppercase());
     std::env::var(var)
         .ok()
         .map(|v| v.trim().trim_end_matches('/').to_string())
@@ -572,7 +572,7 @@ fn duckduckgo_run<'a>(
     Box::pin(async move {
         let response = client
             .get(&url)
-            .header("User-Agent", "Mozilla/5.0 (compatible; pi-agent)")
+            .header("User-Agent", "Mozilla/5.0 (compatible; ra-agent)")
             .send()
             .await
             .map_err(|e| rung_http_error(&e))?;
@@ -636,7 +636,7 @@ fn startpage_run<'a>(
     Box::pin(async move {
         let response = client
             .get(&url)
-            .header("User-Agent", "Mozilla/5.0 (compatible; pi-agent)")
+            .header("User-Agent", "Mozilla/5.0 (compatible; ra-agent)")
             .send()
             .await
             .map_err(|e| rung_http_error(&e))?;
@@ -698,7 +698,7 @@ fn mojeek_run<'a>(
     Box::pin(async move {
         let response = client
             .get(&url)
-            .header("User-Agent", "Mozilla/5.0 (compatible; pi-agent)")
+            .header("User-Agent", "Mozilla/5.0 (compatible; ra-agent)")
             .send()
             .await
             .map_err(|e| rung_http_error(&e))?;

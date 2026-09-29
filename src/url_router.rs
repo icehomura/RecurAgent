@@ -14,7 +14,7 @@
 //!
 //! `ssh://` workspace surface (bd-cv653.6.5): reads are open to any
 //! reachable host; writes/edits require the host in `~/.ssh/config` or
-//! `PI_SSH_ALLOWED_HOSTS`; auth is BatchMode-only (never interactive);
+//! `RECUR_AGENT_SSH_ALLOWED_HOSTS`; auth is BatchMode-only (never interactive);
 //! host keys use accept-new-then-strict with hard failure + remediation on
 //! change; writes stage atomically (mktemp + rename, permissions preserved
 //! via `cp -p`); transfers resume from existing target prefixes and verify
@@ -33,7 +33,7 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 
 /// Tool-result schema tag for scheme resolutions.
-pub const URL_ROUTER_SCHEMA: &str = "pi.url_router.v1";
+pub const URL_ROUTER_SCHEMA: &str = "ra.url_router.v1";
 
 /// ssh cat cap (a remote read should never be unbounded).
 const SSH_MAX_BYTES: usize = 1024 * 1024;
@@ -102,7 +102,7 @@ pub fn resolve_with(path: &str, cwd: &Path, options: &ResolveOptions) -> Result<
     let Some((scheme, rest)) = split_scheme(path) else {
         return Err(Error::tool(
             "read",
-            format!("PI_URL_NO_SCHEME: '{path}' is not a scheme URL"),
+            format!("RECUR_AGENT_URL_NO_SCHEME: '{path}' is not a scheme URL"),
         ));
     };
     match scheme {
@@ -115,7 +115,7 @@ pub fn resolve_with(path: &str, cwd: &Path, options: &ResolveOptions) -> Result<
         other => Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNKNOWN_SCHEME: unknown scheme '{other}://'. Registered schemes: {}",
+                "RECUR_AGENT_URL_UNKNOWN_SCHEME: unknown scheme '{other}://'. Registered schemes: {}",
                 SCHEMES
                     .iter()
                     .map(|s| format!("{s}://"))
@@ -177,7 +177,7 @@ fn resource_diagnostic_error(
     Error::tool(
         "read",
         format!(
-            "PI_URL_RESOURCE_INVALID: {resource_kind} '{name}' could not be loaded from '{}': {}",
+            "RECUR_AGENT_URL_RESOURCE_INVALID: {resource_kind} '{name}' could not be loaded from '{}': {}",
             diagnostic.path.display(),
             diagnostic.message
         ),
@@ -209,7 +209,7 @@ fn resolve_skill(name: &str, cwd: &Path) -> Result<ResolvedDoc> {
         return Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNRESOLVABLE: no skill named '{name}'. Available: {}",
+                "RECUR_AGENT_URL_UNRESOLVABLE: no skill named '{name}'. Available: {}",
                 if known.is_empty() {
                     "(none)".to_string()
                 } else {
@@ -226,7 +226,7 @@ fn resolve_skill_document(name: &str, skill: &crate::resources::Skill) -> Result
         |error| {
             Error::tool(
                 "read",
-                format!("PI_URL_RESOURCE_INVALID: failed to read skill '{name}': {error}"),
+                format!("RECUR_AGENT_URL_RESOURCE_INVALID: failed to read skill '{name}': {error}"),
             )
         },
     )?;
@@ -282,7 +282,7 @@ fn resolve_prompt(name: &str, cwd: &Path) -> Result<ResolvedDoc> {
         return Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNRESOLVABLE: no prompt template named '{name}'. Available: {}",
+                "RECUR_AGENT_URL_UNRESOLVABLE: no prompt template named '{name}'. Available: {}",
                 if known.is_empty() {
                     "(none)".to_string()
                 } else {
@@ -323,7 +323,7 @@ fn resolve_local(name: &str) -> Result<ResolvedDoc> {
         return Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNRESOLVABLE: no local scratch document '{name}'. Present: {}",
+                "RECUR_AGENT_URL_UNRESOLVABLE: no local scratch document '{name}'. Present: {}",
                 if known.is_empty() {
                     "(none)".to_string()
                 } else {
@@ -479,7 +479,7 @@ fn resolve_conflict(rest: &str, cwd: &Path) -> Result<ResolvedDoc> {
     if regions.is_empty() {
         return Err(Error::tool(
             "read",
-            "PI_URL_UNRESOLVABLE: no merge conflicts in this repo".to_string(),
+            "RECUR_AGENT_URL_UNRESOLVABLE: no merge conflicts in this repo".to_string(),
         ));
     }
     let (index_part, selector) = rest.split_once(' ').map_or((rest, "full"), |(idx, sel)| {
@@ -513,7 +513,7 @@ fn resolve_conflict(rest: &str, cwd: &Path) -> Result<ResolvedDoc> {
         return Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNRESOLVABLE: no conflict region {index} (have {})",
+                "RECUR_AGENT_URL_UNRESOLVABLE: no conflict region {index} (have {})",
                 regions.len()
             ),
         ));
@@ -552,14 +552,14 @@ fn resolve_conflict(rest: &str, cwd: &Path) -> Result<ResolvedDoc> {
 /// Resolve a conflict by writing one side into the file.
 ///
 /// # Errors
-/// `PI_URL_UNRESOLVABLE` for unknown regions; IO failures.
+/// `RECUR_AGENT_URL_UNRESOLVABLE` for unknown regions; IO failures.
 pub fn write_conflict_resolution(cwd: &Path, index: usize, side: &str) -> Result<ConflictRegion> {
     let regions = conflict_regions(cwd)?;
     let Some(region) = regions.iter().find(|region| region.index == index) else {
         return Err(Error::tool(
             "write",
             format!(
-                "PI_URL_UNRESOLVABLE: no conflict region {index} (have {})",
+                "RECUR_AGENT_URL_UNRESOLVABLE: no conflict region {index} (have {})",
                 regions.len()
             ),
         ));
@@ -669,7 +669,7 @@ fn resolve_github(
         .map_err(|e| {
             Error::tool(
                 "read",
-                format!("PI_URL_BACKEND: failed to run gh (install gh CLI): {e}"),
+                format!("RECUR_AGENT_URL_BACKEND: failed to run gh (install gh CLI): {e}"),
             )
         })?;
     if !output.status.success() {
@@ -677,7 +677,7 @@ fn resolve_github(
         return Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNRESOLVABLE: gh {} failed: {}",
+                "RECUR_AGENT_URL_UNRESOLVABLE: gh {} failed: {}",
                 arg_refs.join(" "),
                 stderr.trim()
             ),
@@ -712,24 +712,24 @@ pub struct SshTarget {
 fn parse_ssh_reference(rest: &str) -> Result<SshTarget> {
     let (host, tail) = rest.split_once('/').ok_or_else(|| {
         Error::validation(format!(
-            "PI_SSH_TARGET: ssh:// reference must be host/path, got '{rest}'"
+            "RECUR_AGENT_SSH_TARGET: ssh:// reference must be host/path, got '{rest}'"
         ))
     })?;
     if host.is_empty() || tail.is_empty() {
         return Err(Error::validation(format!(
-            "PI_SSH_TARGET: ssh:// reference must be host/path, got '{rest}'"
+            "RECUR_AGENT_SSH_TARGET: ssh:// reference must be host/path, got '{rest}'"
         )));
     }
     if host.starts_with('-') || host.chars().any(|ch| ch.is_whitespace() || ch.is_control()) {
         return Err(Error::validation(format!(
-            "PI_SSH_HOST_INVALID: ssh host must not begin with '-' or contain whitespace/control characters: {host:?}"
+            "RECUR_AGENT_SSH_HOST_INVALID: ssh host must not begin with '-' or contain whitespace/control characters: {host:?}"
         )));
     }
 
     let remote_path = format!("/{tail}");
     if remote_path.split('/').any(|segment| segment == "..") {
         return Err(Error::validation(format!(
-            "PI_SSH_TRAVERSAL: ssh:// paths must not contain '..' segments: '{rest}'"
+            "RECUR_AGENT_SSH_TRAVERSAL: ssh:// paths must not contain '..' segments: '{rest}'"
         )));
     }
     Ok(SshTarget {
@@ -747,13 +747,18 @@ fn resolve_ssh(rest: &str) -> Result<ResolvedDoc> {
         .arg(&target.host)
         .arg(ssh_capped_read_script(&target.path))
         .output()
-        .map_err(|e| Error::tool("read", format!("PI_URL_BACKEND: failed to run ssh: {e}")))?;
+        .map_err(|e| {
+            Error::tool(
+                "read",
+                format!("RECUR_AGENT_URL_BACKEND: failed to run ssh: {e}"),
+            )
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(Error::tool(
             "read",
             format!(
-                "PI_URL_UNRESOLVABLE: ssh {} cat '{}' failed: {}",
+                "RECUR_AGENT_URL_UNRESOLVABLE: ssh {} cat '{}' failed: {}",
                 target.host,
                 target.path,
                 stderr.trim()
@@ -786,11 +791,11 @@ fn resolve_ssh(rest: &str) -> Result<ResolvedDoc> {
 /// never escape the intended directory or reinterpret a host as an ssh option.
 ///
 /// # Errors
-/// Named `PI_SSH_*` validation errors.
+/// Named `RECUR_AGENT_SSH_*` validation errors.
 pub fn parse_ssh_target(url: &str) -> Result<SshTarget> {
     let Some(("ssh", rest)) = split_scheme(url) else {
         return Err(Error::validation(format!(
-            "PI_SSH_TARGET: '{url}' is not an ssh://host/path URL"
+            "RECUR_AGENT_SSH_TARGET: '{url}' is not an ssh://host/path URL"
         )));
     };
     parse_ssh_reference(rest)
@@ -822,7 +827,7 @@ fn ssh_config_literal_hosts(config_text: &str) -> Vec<String> {
 }
 
 /// Confinement decision given config text and an explicit allowlist string
-/// (`PI_SSH_ALLOWED_HOSTS`, comma-separated). Pure so tests stay offline.
+/// (`RECUR_AGENT_SSH_ALLOWED_HOSTS`, comma-separated). Pure so tests stay offline.
 fn ssh_host_allowed_with(
     host: &str,
     config_text: Option<&str>,
@@ -851,7 +856,7 @@ pub fn ssh_write_allowed_hosts() -> Vec<String> {
         |home| PathBuf::from(home).join(".ssh").join("config"),
     );
     let config = std::fs::read_to_string(config_path).ok();
-    let env = std::env::var("PI_SSH_ALLOWED_HOSTS").ok();
+    let env = std::env::var("RECUR_AGENT_SSH_ALLOWED_HOSTS").ok();
     ssh_write_allowed_hosts_with(config.as_deref(), env.as_deref())
 }
 
@@ -877,14 +882,14 @@ fn ssh_write_allowed_hosts_with(
 }
 
 /// Reads are open (any reachable host); **writes** require the host to be
-/// listed literally in `~/.ssh/config` or in `PI_SSH_ALLOWED_HOSTS`.
+/// listed literally in `~/.ssh/config` or in `RECUR_AGENT_SSH_ALLOWED_HOSTS`.
 pub fn ssh_host_allowed(host: &str) -> bool {
     let config_path = std::env::var_os("HOME").map_or_else(
         || PathBuf::from(".ssh").join("config"),
         |home| PathBuf::from(home).join(".ssh").join("config"),
     );
     let config = std::fs::read_to_string(config_path).ok();
-    let env = std::env::var("PI_SSH_ALLOWED_HOSTS").ok();
+    let env = std::env::var("RECUR_AGENT_SSH_ALLOWED_HOSTS").ok();
     ssh_host_allowed_with(host, config.as_deref(), env.as_deref())
 }
 
@@ -894,7 +899,7 @@ pub fn ssh_host_allowed(host: &str) -> bool {
 /// accept-new-then-strict host keys — a *changed* key still hard-fails and is
 /// classified by [`classify_ssh_failure`].
 ///
-/// `PI_SSH_CLIENT_CONFIG_FILE` (optional) appends `-F <path>` so fixture
+/// `RECUR_AGENT_SSH_CLIENT_CONFIG_FILE` (optional) appends `-F <path>` so fixture
 /// and live lanes can pin port/user/identity/known_hosts without touching
 /// production behavior (unset by default).
 #[must_use]
@@ -910,7 +915,7 @@ pub fn ssh_command_flags() -> Vec<String> {
     .iter()
     .map(ToString::to_string)
     .collect();
-    if let Ok(config) = std::env::var("PI_SSH_CLIENT_CONFIG_FILE")
+    if let Ok(config) = std::env::var("RECUR_AGENT_SSH_CLIENT_CONFIG_FILE")
         && !config.is_empty()
     {
         flags.push("-F".to_string());
@@ -987,17 +992,17 @@ pub fn remote_atomic_write_script(remote_path: &str) -> String {
 /// mktemp staging file → rename over the target.
 ///
 /// # Errors
-/// `PI_SSH_HOST_NOT_ALLOWED` (confinement), `PI_SSH_HOSTKEY_CHANGED`
-/// (with [`SSH_HOSTKEY_REMEDIATION`]), `PI_SSH_AUTH_FAILED`,
-/// `PI_SSH_TIMEOUT`, `PI_SSH_WRITE_FAILED`.
+/// `RECUR_AGENT_SSH_HOST_NOT_ALLOWED` (confinement), `RECUR_AGENT_SSH_HOSTKEY_CHANGED`
+/// (with [`SSH_HOSTKEY_REMEDIATION`]), `RECUR_AGENT_SSH_AUTH_FAILED`,
+/// `RECUR_AGENT_SSH_TIMEOUT`, `RECUR_AGENT_SSH_WRITE_FAILED`.
 pub fn ssh_write_document(url: &str, content: &str) -> Result<serde_json::Value> {
     let target = parse_ssh_target(url)?;
     if !ssh_host_allowed(&target.host) {
         return Err(Error::tool(
             "write",
             format!(
-                "PI_SSH_HOST_NOT_ALLOWED: host '{}' is not authorized for writes. \
-                 Add it literally to ~/.ssh/config (Host block) or PI_SSH_ALLOWED_HOSTS.",
+                "RECUR_AGENT_SSH_HOST_NOT_ALLOWED: host '{}' is not authorized for writes. \
+                 Add it literally to ~/.ssh/config (Host block) or RECUR_AGENT_SSH_ALLOWED_HOSTS.",
                 target.host
             ),
         ));
@@ -1011,34 +1016,47 @@ pub fn ssh_write_document(url: &str, content: &str) -> Result<serde_json::Value>
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| Error::tool("write", format!("PI_SSH_BACKEND: failed to run ssh: {e}")))?;
+        .map_err(|e| {
+            Error::tool(
+                "write",
+                format!("RECUR_AGENT_SSH_BACKEND: failed to run ssh: {e}"),
+            )
+        })?;
     {
         let mut stdin = child
             .stdin
             .take()
-            .ok_or_else(|| Error::tool("write", "PI_SSH_BACKEND: missing ssh stdin"))?;
+            .ok_or_else(|| Error::tool("write", "RECUR_AGENT_SSH_BACKEND: missing ssh stdin"))?;
         stdin
             .write_all(content.as_bytes())
             .and_then(|()| stdin.flush())
-            .map_err(|e| Error::tool("write", format!("PI_SSH_BACKEND: streaming payload: {e}")))?;
+            .map_err(|e| {
+                Error::tool(
+                    "write",
+                    format!("RECUR_AGENT_SSH_BACKEND: streaming payload: {e}"),
+                )
+            })?;
     }
-    let output = child
-        .wait_with_output()
-        .map_err(|e| Error::tool("write", format!("PI_SSH_BACKEND: waiting on ssh: {e}")))?;
+    let output = child.wait_with_output().map_err(|e| {
+        Error::tool(
+            "write",
+            format!("RECUR_AGENT_SSH_BACKEND: waiting on ssh: {e}"),
+        )
+    })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         return Err(match classify_ssh_failure(&stderr) {
             SshFailureKind::HostKeyChanged => Error::tool(
                 "write",
                 format!(
-                    "PI_SSH_HOSTKEY_CHANGED: {SSH_HOSTKEY_REMEDIATION} (ssh stderr: {})",
+                    "RECUR_AGENT_SSH_HOSTKEY_CHANGED: {SSH_HOSTKEY_REMEDIATION} (ssh stderr: {})",
                     stderr.trim()
                 ),
             ),
             SshFailureKind::AuthFailed => Error::tool(
                 "write",
                 format!(
-                    "PI_SSH_AUTH_FAILED: batch-mode authentication rejected for '{}' (no interactive prompts over ssh://). ssh stderr: {}",
+                    "RECUR_AGENT_SSH_AUTH_FAILED: batch-mode authentication rejected for '{}' (no interactive prompts over ssh://). ssh stderr: {}",
                     target.host,
                     stderr.trim()
                 ),
@@ -1046,7 +1064,7 @@ pub fn ssh_write_document(url: &str, content: &str) -> Result<serde_json::Value>
             SshFailureKind::ConnectTimeout => Error::tool(
                 "write",
                 format!(
-                    "PI_SSH_TIMEOUT: connection to '{}' timed out. ssh stderr: {}",
+                    "RECUR_AGENT_SSH_TIMEOUT: connection to '{}' timed out. ssh stderr: {}",
                     target.host,
                     stderr.trim()
                 ),
@@ -1054,7 +1072,7 @@ pub fn ssh_write_document(url: &str, content: &str) -> Result<serde_json::Value>
             SshFailureKind::Other => Error::tool(
                 "write",
                 format!(
-                    "PI_SSH_WRITE_FAILED: ssh {host} write '{path}' failed: {stderr}",
+                    "RECUR_AGENT_SSH_WRITE_FAILED: ssh {host} write '{path}' failed: {stderr}",
                     host = target.host,
                     path = target.path,
                     stderr = stderr.trim()
@@ -1079,9 +1097,9 @@ pub fn ssh_write_document(url: &str, content: &str) -> Result<serde_json::Value>
 /// `max_bytes` is enforced after transfer with a named error instead.
 ///
 /// # Errors
-/// `PI_SSH_TARGET`/`PI_SSH_TRAVERSAL` (parse), `PI_SSH_HOSTKEY_CHANGED`,
-/// `PI_SSH_AUTH_FAILED`, `PI_SSH_TIMEOUT`, `PI_SSH_READ_FAILED`,
-/// `PI_SSH_TOO_LARGE`.
+/// `RECUR_AGENT_SSH_TARGET`/`RECUR_AGENT_SSH_TRAVERSAL` (parse), `RECUR_AGENT_SSH_HOSTKEY_CHANGED`,
+/// `RECUR_AGENT_SSH_AUTH_FAILED`, `RECUR_AGENT_SSH_TIMEOUT`, `RECUR_AGENT_SSH_READ_FAILED`,
+/// `RECUR_AGENT_SSH_TOO_LARGE`.
 pub fn ssh_fetch_document(url: &str, max_bytes: u64) -> Result<Vec<u8>> {
     let target = parse_ssh_target(url)?;
     let output = std::process::Command::new("ssh")
@@ -1089,21 +1107,26 @@ pub fn ssh_fetch_document(url: &str, max_bytes: u64) -> Result<Vec<u8>> {
         .arg(&target.host)
         .arg(format!("cat -- {}", sh_quote(&target.path)))
         .output()
-        .map_err(|e| Error::tool("edit", format!("PI_SSH_BACKEND: failed to run ssh: {e}")))?;
+        .map_err(|e| {
+            Error::tool(
+                "edit",
+                format!("RECUR_AGENT_SSH_BACKEND: failed to run ssh: {e}"),
+            )
+        })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         return Err(match classify_ssh_failure(&stderr) {
             SshFailureKind::HostKeyChanged => Error::tool(
                 "edit",
                 format!(
-                    "PI_SSH_HOSTKEY_CHANGED: {SSH_HOSTKEY_REMEDIATION} (ssh stderr: {})",
+                    "RECUR_AGENT_SSH_HOSTKEY_CHANGED: {SSH_HOSTKEY_REMEDIATION} (ssh stderr: {})",
                     stderr.trim()
                 ),
             ),
             SshFailureKind::AuthFailed => Error::tool(
                 "edit",
                 format!(
-                    "PI_SSH_AUTH_FAILED: batch-mode authentication rejected for '{}'. ssh stderr: {}",
+                    "RECUR_AGENT_SSH_AUTH_FAILED: batch-mode authentication rejected for '{}'. ssh stderr: {}",
                     target.host,
                     stderr.trim()
                 ),
@@ -1111,7 +1134,7 @@ pub fn ssh_fetch_document(url: &str, max_bytes: u64) -> Result<Vec<u8>> {
             SshFailureKind::ConnectTimeout => Error::tool(
                 "edit",
                 format!(
-                    "PI_SSH_TIMEOUT: connection to '{}' timed out. ssh stderr: {}",
+                    "RECUR_AGENT_SSH_TIMEOUT: connection to '{}' timed out. ssh stderr: {}",
                     target.host,
                     stderr.trim()
                 ),
@@ -1119,7 +1142,7 @@ pub fn ssh_fetch_document(url: &str, max_bytes: u64) -> Result<Vec<u8>> {
             SshFailureKind::Other => Error::tool(
                 "edit",
                 format!(
-                    "PI_SSH_READ_FAILED: ssh {host} cat '{path}' failed: {stderr}",
+                    "RECUR_AGENT_SSH_READ_FAILED: ssh {host} cat '{path}' failed: {stderr}",
                     host = target.host,
                     path = target.path,
                     stderr = stderr.trim()
@@ -1130,7 +1153,9 @@ pub fn ssh_fetch_document(url: &str, max_bytes: u64) -> Result<Vec<u8>> {
     if output.stdout.len() as u64 > max_bytes {
         return Err(Error::tool(
             "edit",
-            format!("PI_SSH_TOO_LARGE: remote file exceeds the {max_bytes}-byte edit limit."),
+            format!(
+                "RECUR_AGENT_SSH_TOO_LARGE: remote file exceeds the {max_bytes}-byte edit limit."
+            ),
         ));
     }
     Ok(output.stdout)
@@ -1155,7 +1180,7 @@ pub fn parse_transfer_endpoint(spec: &str) -> Result<TransferEndpoint> {
     match split_scheme(spec) {
         Some(("ssh", _)) => Ok(TransferEndpoint::Remote(parse_ssh_target(spec)?)),
         Some((scheme, _)) => Err(Error::validation(format!(
-            "PI_SSH_TRANSFER_SCHEME: unsupported scheme '{scheme}://' for transfer (use a local path or ssh://host/path)"
+            "RECUR_AGENT_SSH_TRANSFER_SCHEME: unsupported scheme '{scheme}://' for transfer (use a local path or ssh://host/path)"
         ))),
         None => Ok(TransferEndpoint::Local(PathBuf::from(spec))),
     }
@@ -1168,14 +1193,14 @@ pub fn parse_transfer_endpoint(spec: &str) -> Result<TransferEndpoint> {
 /// (nothing to resume).
 ///
 /// # Errors
-/// `PI_SSH_TRANSFER_SIZE_CONFLICT`.
+/// `RECUR_AGENT_SSH_TRANSFER_SIZE_CONFLICT`.
 pub fn resume_offset(partial: u64, total: u64) -> Result<u64> {
     match partial.cmp(&total) {
         std::cmp::Ordering::Greater => Err(Error::validation(format!(
-            "PI_SSH_TRANSFER_SIZE_CONFLICT: partial target ({partial} bytes) is larger than source ({total} bytes); refusing to truncate silently"
+            "RECUR_AGENT_SSH_TRANSFER_SIZE_CONFLICT: partial target ({partial} bytes) is larger than source ({total} bytes); refusing to truncate silently"
         ))),
         std::cmp::Ordering::Equal => Err(Error::validation(
-            "PI_SSH_TRANSFER_SIZE_CONFLICT: target already matches source size; nothing to transfer",
+            "RECUR_AGENT_SSH_TRANSFER_SIZE_CONFLICT: target already matches source size; nothing to transfer",
         )),
         std::cmp::Ordering::Less => Ok(partial),
     }
@@ -1202,14 +1227,14 @@ fn remote_size(target: &SshTarget) -> Result<u64> {
         .map_err(|e| {
             Error::tool(
                 "transfer",
-                format!("PI_SSH_BACKEND: failed to run ssh: {e}"),
+                format!("RECUR_AGENT_SSH_BACKEND: failed to run ssh: {e}"),
             )
         })?;
     if !output.status.success() {
         return Err(Error::tool(
             "transfer",
             format!(
-                "PI_SSH_READ_FAILED: size probe for {host}:{path} failed: {stderr}",
+                "RECUR_AGENT_SSH_READ_FAILED: size probe for {host}:{path} failed: {stderr}",
                 host = target.host,
                 path = target.path,
                 stderr = String::from_utf8_lossy(&output.stderr).trim()
@@ -1220,7 +1245,7 @@ fn remote_size(target: &SshTarget) -> Result<u64> {
     text.trim().parse::<u64>().map_err(|_| {
         Error::tool(
             "transfer",
-            format!("PI_SSH_READ_FAILED: unparsable size probe output '{text}'"),
+            format!("RECUR_AGENT_SSH_READ_FAILED: unparsable size probe output '{text}'"),
         )
     })
 }
@@ -1232,7 +1257,7 @@ fn remote_size(target: &SshTarget) -> Result<u64> {
 /// by comparing final sizes on both sides.
 ///
 /// # Errors
-/// `PI_SSH_TRANSFER_*` taxonomy plus the shared ssh failure kinds.
+/// `RECUR_AGENT_SSH_TRANSFER_*` taxonomy plus the shared ssh failure kinds.
 pub fn ssh_transfer(source: &str, dest: &str) -> Result<serde_json::Value> {
     let src = parse_transfer_endpoint(source)?;
     let dst = parse_transfer_endpoint(dest)?;
@@ -1244,10 +1269,10 @@ pub fn ssh_transfer(source: &str, dest: &str) -> Result<serde_json::Value> {
             transfer_pull(&remote, &local)
         }
         (TransferEndpoint::Local(_), TransferEndpoint::Local(_)) => Err(Error::validation(
-            "PI_SSH_TRANSFER_SCHEME: both endpoints are local; copy locally",
+            "RECUR_AGENT_SSH_TRANSFER_SCHEME: both endpoints are local; copy locally",
         )),
         (TransferEndpoint::Remote(_), TransferEndpoint::Remote(_)) => Err(Error::validation(
-            "PI_SSH_TRANSFER_SCHEME: remote-to-remote relay is not supported in v1",
+            "RECUR_AGENT_SSH_TRANSFER_SCHEME: remote-to-remote relay is not supported in v1",
         )),
     }
 }
@@ -1269,7 +1294,7 @@ fn transfer_push(local: &Path, remote: &SshTarget) -> Result<serde_json::Value> 
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| Error::tool("transfer", format!("PI_SSH_BACKEND: spawn: {e}")))?;
+            .map_err(|e| Error::tool("transfer", format!("RECUR_AGENT_SSH_BACKEND: spawn: {e}")))?;
         {
             let mut stdin = child
                 .stdin
@@ -1288,7 +1313,7 @@ fn transfer_push(local: &Path, remote: &SshTarget) -> Result<serde_json::Value> 
         return Err(Error::tool(
             "transfer",
             format!(
-                "PI_SSH_VERIFY_FAILED: post-transfer size mismatch (remote {final_size}, source {total})"
+                "RECUR_AGENT_SSH_VERIFY_FAILED: post-transfer size mismatch (remote {final_size}, source {total})"
             ),
         ));
     }
@@ -1322,7 +1347,7 @@ fn transfer_pull(remote: &SshTarget, local: &Path) -> Result<serde_json::Value> 
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| Error::tool("transfer", format!("PI_SSH_BACKEND: spawn: {e}")))?;
+            .map_err(|e| Error::tool("transfer", format!("RECUR_AGENT_SSH_BACKEND: spawn: {e}")))?;
         {
             let mut stdout = child
                 .stdout
@@ -1346,7 +1371,7 @@ fn transfer_pull(remote: &SshTarget, local: &Path) -> Result<serde_json::Value> 
         return Err(Error::tool(
             "transfer",
             format!(
-                "PI_SSH_VERIFY_FAILED: post-transfer size mismatch (local {final_size}, source {total})"
+                "RECUR_AGENT_SSH_VERIFY_FAILED: post-transfer size mismatch (local {final_size}, source {total})"
             ),
         ));
     }
@@ -1363,20 +1388,20 @@ fn transfer_pull(remote: &SshTarget, local: &Path) -> Result<serde_json::Value> 
 fn wait_transfer_child(child: std::process::Child, what: &str) -> Result<()> {
     let output = child
         .wait_with_output()
-        .map_err(|e| Error::tool("transfer", format!("PI_SSH_BACKEND: wait: {e}")))?;
+        .map_err(|e| Error::tool("transfer", format!("RECUR_AGENT_SSH_BACKEND: wait: {e}")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         return Err(match classify_ssh_failure(&stderr) {
             SshFailureKind::HostKeyChanged => Error::tool(
                 "transfer",
-                format!("PI_SSH_HOSTKEY_CHANGED: {SSH_HOSTKEY_REMEDIATION}"),
+                format!("RECUR_AGENT_SSH_HOSTKEY_CHANGED: {SSH_HOSTKEY_REMEDIATION}"),
             ),
             SshFailureKind::AuthFailed => {
-                Error::tool("transfer", format!("PI_SSH_AUTH_FAILED: {stderr}"))
+                Error::tool("transfer", format!("RECUR_AGENT_SSH_AUTH_FAILED: {stderr}"))
             }
             _ => Error::tool(
                 "transfer",
-                format!("PI_SSH_WRITE_FAILED: transfer to {what} failed: {stderr}"),
+                format!("RECUR_AGENT_SSH_WRITE_FAILED: transfer to {what} failed: {stderr}"),
             ),
         });
     }
@@ -1427,7 +1452,7 @@ mod tests {
     fn unknown_scheme_lists_registered() {
         let err = resolve("foo://bar", Path::new(".")).unwrap_err();
         let text = err.to_string();
-        assert!(text.contains("PI_URL_UNKNOWN_SCHEME"), "{text}");
+        assert!(text.contains("RECUR_AGENT_URL_UNKNOWN_SCHEME"), "{text}");
         assert!(text.contains("skill://"), "{text}");
     }
 
@@ -1483,7 +1508,10 @@ mod tests {
         ] {
             let error = resolve(url, root.path()).expect_err("invalid resource must fail");
             let message = error.to_string();
-            assert!(message.contains("PI_URL_RESOURCE_INVALID"), "{message}");
+            assert!(
+                message.contains("RECUR_AGENT_URL_RESOURCE_INVALID"),
+                "{message}"
+            );
             assert!(message.contains("not valid UTF-8"), "{message}");
             assert!(
                 message.contains(&offending_path.display().to_string()),
@@ -1557,7 +1585,7 @@ mod tests {
         let doc = resolve("local://note", Path::new(".")).expect("read");
         assert_eq!(doc.content, "scratch payload");
         let err = resolve("local://missing", Path::new(".")).unwrap_err();
-        assert!(err.to_string().contains("PI_URL_UNRESOLVABLE"));
+        assert!(err.to_string().contains("RECUR_AGENT_URL_UNRESOLVABLE"));
     }
 
     #[test]
@@ -1591,7 +1619,7 @@ mod tests {
         ] {
             let error = parse_ssh_target(invalid).expect_err("unsafe host token must fail closed");
             assert!(
-                error.to_string().contains("PI_SSH_HOST_INVALID"),
+                error.to_string().contains("RECUR_AGENT_SSH_HOST_INVALID"),
                 "unexpected error for {invalid:?}: {error}"
             );
             let rest = invalid
@@ -1599,7 +1627,9 @@ mod tests {
                 .expect("test target has ssh scheme");
             let read_error = resolve_ssh(rest).expect_err("unsafe read host must fail before ssh");
             assert!(
-                read_error.to_string().contains("PI_SSH_HOST_INVALID"),
+                read_error
+                    .to_string()
+                    .contains("RECUR_AGENT_SSH_HOST_INVALID"),
                 "unexpected read error for {invalid:?}: {read_error}"
             );
         }

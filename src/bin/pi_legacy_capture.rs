@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use clap::{Parser, ValueEnum};
-use pi::extensions::{LogComponent, LogCorrelation, LogLevel, LogPayload, LogSource};
+use ra::extensions::{LogComponent, LogCorrelation, LogLevel, LogPayload, LogSource};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -66,7 +66,7 @@ struct LegacyFixtureOutputs {
 #[command(name = "pi_legacy_capture")]
 #[command(about = "Run legacy pi-mono RPC scenarios and record raw outputs", long_about = None)]
 struct Args {
-    /// View a `pi.ext.log.v1` JSONL file and render a human-readable trace (use "-" for stdin).
+    /// View a `ra.ext.log.v1` JSONL file and render a human-readable trace (use "-" for stdin).
     #[arg(long, value_name = "PATH")]
     view_log: Option<PathBuf>,
 
@@ -522,7 +522,7 @@ fn capture_ids() -> CaptureRunIds {
 
 fn log_payload(ids: &CaptureRunIds, extension_id: &str, scenario_id: &str) -> LogPayload {
     LogPayload {
-        schema: "pi.ext.log.v1".to_string(),
+        schema: "ra.ext.log.v1".to_string(),
         ts: now_rfc3339_millis_z(),
         level: LogLevel::Info,
         event: "capture".to_string(),
@@ -980,7 +980,7 @@ fn spawn_pi_mono_print_json(config: &PiMonoSpawnConfig<'_>, messages: &[String])
     if let Some(path) = reorder_path_for_system_node() {
         cmd.env("PATH", path);
     }
-    cmd.env("PI_CODING_AGENT_DIR", agent_dir);
+    cmd.env("RECUR_AGENT_DIR", agent_dir);
     if let Some(preload) = config.node_preload {
         let preload = preload
             .canonicalize()
@@ -1088,7 +1088,7 @@ fn spawn_pi_mono_rpc(config: &PiMonoSpawnConfig<'_>) -> Result<Child> {
     if let Some(path) = reorder_path_for_system_node() {
         cmd.env("PATH", path);
     }
-    cmd.env("PI_CODING_AGENT_DIR", agent_dir);
+    cmd.env("RECUR_AGENT_DIR", agent_dir);
     if let Some(preload) = config.node_preload {
         let preload = preload
             .canonicalize()
@@ -1625,7 +1625,7 @@ fn normalize_string(value: &str, ctx: &NormalizationContext) -> String {
 
     // Replace the pinned legacy root first (it includes the project_root prefix).
     if !ctx.pi_mono_root.is_empty() {
-        out = out.replace(&ctx.pi_mono_root, "<PI_MONO_ROOT>");
+        out = out.replace(&ctx.pi_mono_root, "<RECUR_AGENT_MONO_ROOT>");
     }
     if !ctx.project_root.is_empty() {
         out = out.replace(&ctx.project_root, "<PROJECT_ROOT>");
@@ -1658,7 +1658,7 @@ fn normalize_json_value(value: &mut Value, key: Option<&str>, ctx: &Normalizatio
             ) {
                 *s = "<TIMESTAMP>".to_string();
             } else if matches!(key, Some("cwd")) {
-                *s = "<PI_MONO_ROOT>".to_string();
+                *s = "<RECUR_AGENT_MONO_ROOT>".to_string();
             } else {
                 *s = normalize_string(s, ctx);
             }
@@ -2499,7 +2499,7 @@ fn main() -> Result<()> {
 
         let finished_at = now_rfc3339_millis_z();
         let meta_value = json!({
-            "schema": "pi.legacy_capture.v1",
+            "schema": "ra.legacy_capture.v1",
             "run_id": ids.run_id.clone(),
             "extension_id": item.id.clone(),
             "scenario_id": scenario.id.clone(),
@@ -2595,7 +2595,7 @@ fn main() -> Result<()> {
     for (extension_id, (item, mut scenarios)) in fixture_builders {
         scenarios.sort_by(|a, b| a.scenario.id.cmp(&b.scenario.id));
         let fixture = LegacyFixtureFile {
-            schema: "pi.ext.legacy_fixtures.v1".to_string(),
+            schema: "ra.ext.legacy_fixtures.v1".to_string(),
             extension: item,
             legacy: LegacyFixtureLegacy {
                 pi_mono_head: legacy_head.clone(),
@@ -2634,7 +2634,7 @@ mod tests {
         let out = normalize_string(input, &ctx);
         assert!(out.contains("<RUN_ID>"), "{out}");
         assert!(out.contains("http://127.0.0.1:<PORT>/v1"), "{out}");
-        assert!(out.contains("<PI_MONO_ROOT>"), "{out}");
+        assert!(out.contains("<RECUR_AGENT_MONO_ROOT>"), "{out}");
     }
 
     #[test]
@@ -2657,7 +2657,7 @@ mod tests {
                 "type": "session",
                 "id": "<UUID>",
                 "timestamp": "<TIMESTAMP>",
-                "cwd": "<PI_MONO_ROOT>"
+                "cwd": "<RECUR_AGENT_MONO_ROOT>"
             })
         );
     }

@@ -143,10 +143,10 @@ fn approval_without_display_id_and_trailing_arguments_are_rejected() {
 
 #[test]
 fn default_ftui_routes_plan_and_preserves_extension_prefixes() {
-    use super::super::{PiFtuiModel, UiCommand};
+    use super::super::{RaFtuiModel, UiCommand};
     let (_agent_tx, agent_rx) = std::sync::mpsc::channel();
     let (submit_tx, submit_rx) = std::sync::mpsc::channel();
-    let mut model = PiFtuiModel::new(agent_rx).with_submit_channel(submit_tx);
+    let mut model = RaFtuiModel::new(agent_rx).with_submit_channel(submit_tx);
     assert!(model.route_slash_command("/PlAn review"));
     assert_eq!(
         submit_rx.try_recv().unwrap(),
@@ -394,7 +394,7 @@ fn driver_reports_invalid_commands_without_changing_live_state() {
     let (mut handle, mut controller, _) = pending();
     let (send, receive) = std::sync::mpsc::channel();
     run(controller.run(&mut handle, "approve", &send));
-    assert!(matches!(receive.try_recv().unwrap(), PiMsg::AgentError(_)));
+    assert!(matches!(receive.try_recv().unwrap(), RaMsg::AgentError(_)));
     assert_eq!(
         handle.session().agent.plan_state().mode(),
         PlanMode::PendingApproval

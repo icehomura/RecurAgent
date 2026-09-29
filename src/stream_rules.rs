@@ -370,7 +370,7 @@ impl TtsrCoordinator {
     }
 }
 
-/// Rule file format for serialization in `.pi/stream-rules.json`.
+/// Rule file format for serialization in `.ra/stream-rules.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamRulesConfigFile {
@@ -390,9 +390,9 @@ pub struct StreamRuleStore {
 impl StreamRuleStore {
     /// Load stream rules for the given project directory and user home directory.
     pub fn load_for_project(project_root: &Path) -> Self {
-        let project_path = project_root.join(".pi").join("stream-rules.json");
+        let project_path = project_root.join(".ra").join("stream-rules.json");
         let global_path =
-            dirs::home_dir().map(|h| h.join(".pi").join("agent").join("stream-rules.json"));
+            dirs::home_dir().map(|h| h.join(".ra").join("agent").join("stream-rules.json"));
 
         let mut store = Self {
             project_rules: Vec::new(),
@@ -625,7 +625,7 @@ pub struct Grievance {
     pub resolved: bool,
 }
 
-/// Per-project grievances ledger manager (`.pi/grievances.jsonl`).
+/// Per-project grievances ledger manager (`.ra/grievances.jsonl`).
 #[derive(Debug)]
 pub struct GrievancesLedger;
 
@@ -633,7 +633,7 @@ impl GrievancesLedger {
     /// File path for the grievances ledger.
     #[must_use]
     pub fn ledger_path(project_root: &Path) -> PathBuf {
-        project_root.join(".pi").join("grievances.jsonl")
+        project_root.join(".ra").join("grievances.jsonl")
     }
 
     /// Record a user complaint in the project grievances ledger.

@@ -1200,7 +1200,7 @@ mod tests {
         eprintln!(
             "{}",
             json!({
-                "schema":"pi.mcp.live_catalog.test.v1", "case":case,
+                "schema":"ra.mcp.live_catalog.test.v1", "case":case,
                 "requests":requests, "outcome":code, "rawSecretBytesEmitted":0
             })
         );

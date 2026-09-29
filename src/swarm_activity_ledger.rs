@@ -10,13 +10,13 @@ use std::fmt::Write as _;
 use serde::{Deserialize, Serialize};
 
 /// Schema emitted by every swarm activity ledger entry.
-pub const SWARM_ACTIVITY_LEDGER_SCHEMA: &str = "pi.swarm.activity_ledger.v1";
+pub const SWARM_ACTIVITY_LEDGER_SCHEMA: &str = "ra.swarm.activity_ledger.v1";
 
 /// Schema emitted by bounded swarm activity summaries.
-pub const SWARM_ACTIVITY_SUMMARY_SCHEMA: &str = "pi.swarm.activity_summary.v1";
+pub const SWARM_ACTIVITY_SUMMARY_SCHEMA: &str = "ra.swarm.activity_summary.v1";
 
 /// Schema emitted by bounded swarm transcript digests.
-pub const SWARM_ACTIVITY_DIGEST_SCHEMA: &str = "pi.swarm.activity_digest.v1";
+pub const SWARM_ACTIVITY_DIGEST_SCHEMA: &str = "ra.swarm.activity_digest.v1";
 
 /// Default number of hot spots retained per summary dimension.
 pub const DEFAULT_SWARM_ACTIVITY_HOTSPOT_CAPACITY: usize = 64;
@@ -3174,13 +3174,13 @@ mod tests {
             1_000,
             SwarmActivityKind::Verification,
             SwarmActivityIds::new("verify-a").with_agent_name("MagentaOak"),
-            "cargo check failed for pid 12345 in /data/tmp/pi_agent_rust_cargo/agent_a/target after 1200ms",
+            "cargo check failed for pid 12345 in /data/tmp/recur_agent_cargo/agent_a/target after 1200ms",
             [
                 (
                     "command",
-                    "cargo check --all-targets --target-dir /data/tmp/pi_agent_rust_cargo/agent_a/target",
+                    "cargo check --all-targets --target-dir /data/tmp/recur_agent_cargo/agent_a/target",
                 ),
-                ("stderr", "error[E0308]: mismatched types at /data/projects/pi_agent_rust/src/lib.rs:123:45"),
+                ("stderr", "error[E0308]: mismatched types at /data/projects/recur_agent/src/lib.rs:123:45"),
                 ("status", "failed"),
             ],
         );
@@ -3188,13 +3188,13 @@ mod tests {
             2_000,
             SwarmActivityKind::Verification,
             SwarmActivityIds::new("verify-b").with_agent_name("CopperOx"),
-            "cargo check failed for pid 98765 in /data/tmp/pi_agent_rust_cargo/agent_b/target after 980ms",
+            "cargo check failed for pid 98765 in /data/tmp/recur_agent_cargo/agent_b/target after 980ms",
             [
                 (
                     "command",
-                    "cargo check --all-targets --target-dir /data/tmp/pi_agent_rust_cargo/agent_b/target",
+                    "cargo check --all-targets --target-dir /data/tmp/recur_agent_cargo/agent_b/target",
                 ),
-                ("stderr", "error[E0308]: mismatched types at /data/projects/pi_agent_rust/src/lib.rs:777:8"),
+                ("stderr", "error[E0308]: mismatched types at /data/projects/recur_agent/src/lib.rs:777:8"),
                 ("status", "failure"),
             ],
         );
@@ -3234,7 +3234,7 @@ mod tests {
             blocker
                 .sample
                 .as_deref()
-                .is_some_and(|sample| sample.contains("/data/tmp/pi_agent_rust_cargo/agent_a"))
+                .is_some_and(|sample| sample.contains("/data/tmp/recur_agent_cargo/agent_a"))
         );
         assert!(
             digest

@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema identifier for versioned PMU sample logs.
-pub const PMU_TELEMETRY_SCHEMA: &str = "pi.pmu.telemetry.v1";
+pub const PMU_TELEMETRY_SCHEMA: &str = "ra.pmu.telemetry.v1";
 
 /// Hardware PMU counter measurements for an execution interval.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]

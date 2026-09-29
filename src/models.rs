@@ -551,7 +551,7 @@ where
     deserializer.deserialize_map(ProvidersVisitor)
 }
 
-pub(crate) const FETCHED_MODELS_SCHEMA: &str = "pi.models.fetched.v2";
+pub(crate) const FETCHED_MODELS_SCHEMA: &str = "ra.models.fetched.v2";
 pub(crate) const MAX_FETCHED_CATALOG_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) const MAX_FETCHED_PROVIDERS: usize = 128;
 pub(crate) const MAX_FETCHED_PROVIDER_ID_BYTES: usize = 256;
@@ -1335,7 +1335,7 @@ fn merge_provider_model_ids(
 /// Path to the user's optional model-override file.
 ///
 /// Resolution order:
-/// 1. `PI_MODELS_OVERRIDE` env var (absolute path) — primarily for tests and
+/// 1. `RECUR_AGENT_MODELS_OVERRIDE` env var (absolute path) — primarily for tests and
 ///    advanced users who want to keep the override outside the standard config
 ///    directory.
 /// 2. `<config_dir>/pi/models-override.json` — `<config_dir>` is whatever
@@ -1345,7 +1345,7 @@ fn merge_provider_model_ids(
 /// Returns `None` when no config directory can be resolved and no env override
 /// is set; callers treat that as "no override available".
 fn user_model_overrides_path() -> Option<PathBuf> {
-    if let Ok(env_path) = std::env::var("PI_MODELS_OVERRIDE") {
+    if let Ok(env_path) = std::env::var("RECUR_AGENT_MODELS_OVERRIDE") {
         let trimmed = env_path.trim();
         if !trimmed.is_empty() {
             return Some(PathBuf::from(trimmed));
@@ -2664,7 +2664,7 @@ fn built_in_models(
     // upstream catalog snapshot, so without explicit seeds they are missing
     // from listing, lookup, and autocomplete. Costs and the 1.05M context
     // window follow the current OpenAI model catalog; Codex entries keep the
-    // existing zero cache-write convention. See pi_agent_rust#135.
+    // existing zero cache-write convention. See recur_agent#135.
     for (id, name, input, output, cache_read, cache_write, include_codex) in [
         ("gpt-5.6", "GPT-5.6", 5.0, 30.0, 0.5, 6.25, false),
         ("gpt-5.6-sol", "GPT-5.6 Sol", 5.0, 30.0, 0.5, 6.25, true),
@@ -3886,7 +3886,7 @@ where
 
     // pi parity (issues #64, #152): values that look like an env var name
     // (e.g. `DASHSCOPE_API_KEY`, `HF_TOKEN`, `MY_TOKEN`, `CUSTOM_KEY`) are
-    // treated as a reference to that env var, matching the original `pi`
+    // treated as a reference to that env var, matching the original `ra`
     // behavior of trying `process.env[value]` first for any bare string and
     // falling back to the literal. Real provider API keys never match an
     // uppercase-identifier-with-underscore pattern (they contain lowercase
@@ -3926,7 +3926,7 @@ where
 }
 
 /// Whether `value` should be treated as the *name* of an environment variable
-/// holding the real credential (matching the original `pi` convention, where
+/// holding the real credential (matching the original `ra` convention, where
 /// `resolveConfigValue` tries `process.env[value]` first for any bare string).
 ///
 /// Accepted pattern: an uppercase ASCII identifier — first char `A-Z`, rest
@@ -3937,9 +3937,9 @@ where
 /// underscore. Realistic literal API keys (`sk-ant-...`, `AIza...`, anything
 /// with lowercase, dashes, or colons) can never match.
 ///
-/// Deliberate divergence from original `pi`: a single uppercase word with no
+/// Deliberate divergence from original `ra`: a single uppercase word with no
 /// underscore (e.g. `PROBE`) is NOT treated as an env-var reference, even
-/// though original `pi` would attempt an env lookup on it. Requiring one
+/// though original `ra` would attempt an env lookup on it. Requiring one
 /// underscore avoids false positives on plain uppercase words used as literal
 /// values; since unset env vars fall back to the literal in both
 /// implementations, this only diverges when such a bare word happens to also
@@ -7390,27 +7390,27 @@ mod tests {
         for (label, contents, expected) in [
             (
                 "duplicate top-level schema",
-                r#"{"schema":"pi.models.fetched.v2","schema":"pi.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"model"}]}}}"#,
+                r#"{"schema":"ra.models.fetched.v2","schema":"ra.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"model"}]}}}"#,
                 "duplicate field",
             ),
             (
                 "duplicate model id",
-                r#"{"schema":"pi.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"first","id":"second"}]}}}"#,
+                r#"{"schema":"ra.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"first","id":"second"}]}}}"#,
                 "duplicate field",
             ),
             (
                 "canonical provider aliases",
-                r#"{"schema":"pi.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"first"}]},"OpenAI":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"second"}]}}}"#,
+                r#"{"schema":"ra.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"first"}]},"OpenAI":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"second"}]}}}"#,
                 "duplicate aliases",
             ),
             (
                 "escaped exact provider key",
-                r#"{"schema":"pi.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"first"}]},"\u006fpenai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"second"}]}}}"#,
+                r#"{"schema":"ra.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"first"}]},"\u006fpenai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"second"}]}}}"#,
                 "duplicate JSON object key",
             ),
             (
                 "trailing JSON value",
-                r#"{"schema":"pi.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"model"}]}}} {}"#,
+                r#"{"schema":"ra.models.fetched.v2","providers":{"openai":{"routeFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000","fetchedAtUnixMs":1,"models":[{"id":"model"}]}}} {}"#,
                 "trailing characters",
             ),
         ] {
@@ -7898,7 +7898,7 @@ mod tests {
         std::fs::write(
             &fetched_path,
             serde_json::to_vec_pretty(&serde_json::json!({
-                "schema": "pi.models.fetched.v999",
+                "schema": "ra.models.fetched.v999",
                 "providers": {
                     "openrouter": {
                         "routeFingerprint": format!("sha256:{}", "0".repeat(64)),
@@ -9589,8 +9589,8 @@ mod tests {
 
     #[test]
     fn default_models_path_joins_correctly() {
-        let path = default_models_path(Path::new("/home/user/.pi"));
-        assert_eq!(path, PathBuf::from("/home/user/.pi/models.json"));
+        let path = default_models_path(Path::new("/home/user/.ra"));
+        assert_eq!(path, PathBuf::from("/home/user/.ra/models.json"));
     }
 
     #[test]

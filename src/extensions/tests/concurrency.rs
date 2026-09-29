@@ -318,7 +318,7 @@ mod lifecycle {
             ));
 
             let runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: "/tmp".to_string(),
                     ..Default::default()
                 },
@@ -377,7 +377,7 @@ mod lifecycle {
             ));
 
             let runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: "/tmp".to_string(),
                     ..Default::default()
                 },
@@ -418,7 +418,7 @@ mod lifecycle {
             ));
 
             let runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: "/tmp".to_string(),
                     ..Default::default()
                 },
@@ -458,7 +458,7 @@ mod lifecycle {
             ));
 
             let runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: "/tmp".to_string(),
                     ..Default::default()
                 },
@@ -498,7 +498,7 @@ mod lifecycle {
             ));
 
             let runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: "/tmp".to_string(),
                     ..Default::default()
                 },
@@ -611,7 +611,7 @@ mod budget_tests {
             ));
 
             let runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: "/tmp".to_string(),
                     ..Default::default()
                 },

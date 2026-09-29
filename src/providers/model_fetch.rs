@@ -20,7 +20,7 @@
 //! expire after [`MODEL_CACHE_TTL`] (5 minutes). It benefits repeated calls in
 //! one long-lived process; separate CLI invocations never share it. Hits within
 //! the TTL window do **not** issue a network call. Setting
-//! `PI_DISABLE_MODEL_CACHE=1` (or `true`/`yes`/`on`) bypasses both the read
+//! `RECUR_AGENT_DISABLE_MODEL_CACHE=1` (or `true`/`yes`/`on`) bypasses both the read
 //! and write paths for debugging. [`refresh_provider_models`] forces a strict
 //! live refetch regardless of cache state and returns an error rather than a
 //! static fallback when that refresh fails.
@@ -86,7 +86,7 @@ const MODEL_CACHE_MAX_MODEL_ID_BYTES: usize = 8 * 1024 * 1024;
 /// Environment variable that disables the cache entirely.  Useful for
 /// debugging and for ad-hoc verification of provider catalog changes without
 /// restarting the process.
-pub const DISABLE_CACHE_ENV: &str = "PI_DISABLE_MODEL_CACHE";
+pub const DISABLE_CACHE_ENV: &str = "RECUR_AGENT_DISABLE_MODEL_CACHE";
 
 #[derive(Debug, Clone)]
 struct CacheEntry {
@@ -844,11 +844,11 @@ fn parse_persisted_catalog_contents(
     }
 
     if serde_json::from_str::<CatalogSchemaProbe>(contents)
-        .is_ok_and(|probe| probe.schema == "pi.models.fetched.v1")
+        .is_ok_and(|probe| probe.schema == "ra.models.fetched.v1")
     {
         let backup_path = path.with_extension("v1.backup.json");
         return Err(Error::config(format!(
-            "Refusing to overwrite legacy generated model catalog {}: schema pi.models.fetched.v1 has no endpoint/transport provenance. Move it aside to {} as a backup, then rerun the verified live --fetch-models ... --refresh-models --persist-models command",
+            "Refusing to overwrite legacy generated model catalog {}: schema ra.models.fetched.v1 has no endpoint/transport provenance. Move it aside to {} as a backup, then rerun the verified live --fetch-models ... --refresh-models --persist-models command",
             path.display(),
             backup_path.display()
         )));
@@ -3736,7 +3736,7 @@ mod tests {
         let models_path = directory.path().join("models.json");
         let fetched_path = fetched_models_path(&models_path);
         let original = br#"{
-  "schema": "pi.models.fetched.v1",
+  "schema": "ra.models.fetched.v1",
   "providers": {"openai": {"models": [{"id": "legacy-model"}]}}
 }
 "#;
@@ -3746,7 +3746,7 @@ mod tests {
         let error = persist_provider_model_catalog(&models_path, &catalog)
             .expect_err("legacy provenance-free catalog must not be silently overwritten");
         let message = error.to_string();
-        assert!(message.contains("pi.models.fetched.v1"), "{message}");
+        assert!(message.contains("ra.models.fetched.v1"), "{message}");
         assert!(message.contains("Move it aside to"), "{message}");
         assert!(
             message.contains("models.fetched.v1.backup.json"),
@@ -3765,7 +3765,7 @@ mod tests {
         let models_path = directory.path().join("models.json");
         let fetched_path = fetched_models_path(&models_path);
         let original = br#"{
-  "schema": "pi.models.fetched.v2",
+  "schema": "ra.models.fetched.v2",
   "providers": {
     "openai": {"routeFingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "fetchedAtUnixMs": 1, "models": [{"id": "first"}]},
     "openai": {"routeFingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "fetchedAtUnixMs": 1, "models": [{"id": "second"}]}
@@ -3792,7 +3792,7 @@ mod tests {
         std::fs::write(
             &fetched_path,
             br#"{
-  "schema": "pi.models.fetched.v2",
+  "schema": "ra.models.fetched.v2",
   "providers": {"OpenAI": {"routeFingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000", "fetchedAtUnixMs": 1, "models": [{"id": "old-model"}]}}
 }
 "#,

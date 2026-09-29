@@ -1,11 +1,11 @@
-//! Local usage statistics over session files (`pi stats`, bd-cv653.7.7).
+//! Local usage statistics over session files (`ra stats`, bd-cv653.7.7).
 //!
 //! Aggregates tokens/cost/tool-call/compaction counts by streaming session
 //! JSONL line-by-line — bounded memory regardless of history size. All data
 //! stays local: this module performs no network I/O (enforced by
 //! [`tests::no_network_surface`]).
 //!
-//! JSON output conforms to `pi.stats.v1`.
+//! JSON output conforms to `ra.stats.v1`.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 /// Schema tag for the JSON renderer.
-pub const STATS_SCHEMA: &str = "pi.stats.v1";
+pub const STATS_SCHEMA: &str = "ra.stats.v1";
 
 /// Filters applied while aggregating.
 ///

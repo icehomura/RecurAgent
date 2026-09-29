@@ -6,7 +6,7 @@ use asupersync::sync::{Mutex, OwnedMutexGuard};
 use serde_json::{Value, json};
 
 use super::{
-    AgentState, Cmd, ConversationMessage, EXTENSION_EVENT_TIMEOUT_MS, PiApp, PiMsg,
+    AgentState, Cmd, ConversationMessage, EXTENSION_EVENT_TIMEOUT_MS, RaApp, RaMsg,
     conversation_from_session,
 };
 use crate::checkpoint::RetryPlan;
@@ -16,9 +16,9 @@ use crate::model::{Message, Usage};
 use crate::session::{CompactionEntry, Session, SessionEntry};
 
 async fn deliver_compaction_terminal_event(
-    event_tx: &asupersync::channel::mpsc::Sender<PiMsg>,
+    event_tx: &asupersync::channel::mpsc::Sender<RaMsg>,
     cx: &Cx,
-    message: PiMsg,
+    message: RaMsg,
 ) -> bool {
     let delivered = crate::interactive::enqueue_pi_event(event_tx, cx, message).await;
     if !delivered {
@@ -29,8 +29,8 @@ async fn deliver_compaction_terminal_event(
 
 fn spawn_compaction_terminal_event(
     runtime_handle: &asupersync::runtime::RuntimeHandle,
-    event_tx: asupersync::channel::mpsc::Sender<PiMsg>,
-    message: PiMsg,
+    event_tx: asupersync::channel::mpsc::Sender<RaMsg>,
+    message: RaMsg,
 ) {
     if let Err(err) = runtime_handle.try_spawn_with_cx(move |completion_cx| async move {
         deliver_compaction_terminal_event(&event_tx, &completion_cx, message).await;
@@ -277,7 +277,7 @@ pub(super) fn micros_as_u64(micros: u128) -> u64 {
 /// take `&mut self` (the `bubbletea::Model` trait requires `&self` for `view`).
 /// This is safe because the TUI event loop is single-threaded.
 ///
-/// Gated behind `PI_PERF_TELEMETRY=1` environment variable.  When disabled,
+/// Gated behind `RECUR_AGENT_PERF_TELEMETRY=1` environment variable.  When disabled,
 /// no `Instant::now()` calls are made — zero runtime overhead.
 pub struct FrameTimingStats {
     pub(super) frame_times_us: std::cell::RefCell<VecDeque<u64>>,
@@ -295,7 +295,7 @@ pub(super) const FRAME_BUDGET_US: u64 = 16_667;
 impl FrameTimingStats {
     pub(super) fn new() -> Self {
         let enabled =
-            std::env::var_os("PI_PERF_TELEMETRY").is_some_and(|v| v == "1" || v == "true");
+            std::env::var_os("RECUR_AGENT_PERF_TELEMETRY").is_some_and(|v| v == "1" || v == "true");
         Self {
             frame_times_us: std::cell::RefCell::new(VecDeque::with_capacity(FRAME_TIMING_WINDOW)),
             content_build_times_us: std::cell::RefCell::new(VecDeque::with_capacity(
@@ -428,7 +428,7 @@ impl FrameTimingStats {
         };
 
         json!({
-            "schema": "pi.tui.frame_budget.v1",
+            "schema": "ra.tui.frame_budget.v1",
             "surface": surface,
             "enabled": self.enabled,
             "budget_us": FRAME_BUDGET_US,
@@ -490,7 +490,7 @@ impl FrameTimingStats {
             .count();
         let fixture = json!({
             "name": "rolling_frame_window",
-            "source": "PI_PERF_TELEMETRY",
+            "source": "RECUR_AGENT_PERF_TELEMETRY",
             "sample_window": FRAME_TIMING_WINDOW,
         });
         let snapshot = self.snapshot_json("interactive_tui", &fixture);
@@ -518,7 +518,9 @@ impl FrameTimingStats {
     #[allow(clippy::cast_precision_loss)]
     pub(super) fn summary(&self) -> String {
         if !self.enabled {
-            return String::from("Frame telemetry disabled (set PI_PERF_TELEMETRY=1 to enable)");
+            return String::from(
+                "Frame telemetry disabled (set RECUR_AGENT_PERF_TELEMETRY=1 to enable)",
+            );
         }
         let frame = Self::percentiles(&self.frame_times_us.borrow());
         let content = Self::percentiles(&self.content_build_times_us.borrow());
@@ -840,7 +842,7 @@ impl MemoryMonitor {
     }
 }
 
-impl PiApp {
+impl RaApp {
     /// `/checkpoint [name] [note...]` (bd-cv653.3.7): cheap restore-point
     /// marker on the current leaf.
     #[allow(clippy::too_many_lines)]
@@ -865,7 +867,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &cx,
-                    PiMsg::AgentError("Failed to lock session".to_string()),
+                    RaMsg::AgentError("Failed to lock session".to_string()),
                 )
                 .await;
                 return;
@@ -883,7 +885,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &cx,
-                PiMsg::System(format!(
+                RaMsg::System(format!(
                     "Checkpoint '{}' marked ({} messages, ~{} tokens). Rewind with /rewind{}.",
                     checkpoint.name,
                     checkpoint.message_count,
@@ -936,7 +938,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError("Failed to lock session".to_string()),
+                        RaMsg::AgentError("Failed to lock session".to_string()),
                     )
                     .await;
                     return;
@@ -954,7 +956,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &cx,
-                    PiMsg::System(if name.is_empty() {
+                    RaMsg::System(if name.is_empty() {
                         "No checkpoints yet — mark one with /checkpoint".to_string()
                     } else {
                         format!("No checkpoint named '{name}'")
@@ -969,7 +971,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError("Failed to lock agent".to_string()),
+                        RaMsg::AgentError("Failed to lock agent".to_string()),
                     )
                     .await;
                     return;
@@ -982,7 +984,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &cx,
-                    PiMsg::System(format!(
+                    RaMsg::System(format!(
                         "Nothing to rewind — the active context is already at '{}'.",
                         checkpoint.name
                     )),
@@ -1009,7 +1011,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError("Failed to lock agent".to_string()),
+                        RaMsg::AgentError("Failed to lock agent".to_string()),
                     )
                     .await;
                     return;
@@ -1021,7 +1023,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError("Failed to lock session".to_string()),
+                        RaMsg::AgentError("Failed to lock session".to_string()),
                     )
                     .await;
                     return;
@@ -1034,7 +1036,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &cx,
-                PiMsg::System(format!(
+                RaMsg::System(format!(
                     "Rewound to '{}': {} messages collapsed into a report (~{} tokens). The tree kept everything.",
                     outcome.checkpoint, outcome.collapsed_messages, outcome.summary_tokens_estimate
                 )),
@@ -1112,7 +1114,7 @@ impl PiApp {
                 guard.append_custom_entry("undo".to_string(), Some(record));
             }
             let _ =
-                crate::interactive::enqueue_pi_event(&event_tx, &cx, PiMsg::System(message)).await;
+                crate::interactive::enqueue_pi_event(&event_tx, &cx, RaMsg::System(message)).await;
         });
         None
     }
@@ -1132,7 +1134,7 @@ impl PiApp {
                 Err(err) => format!("Failed to load credentials: {err}"),
             };
             let _ =
-                crate::interactive::enqueue_pi_event(&event_tx, &cx, PiMsg::System(message)).await;
+                crate::interactive::enqueue_pi_event(&event_tx, &cx, RaMsg::System(message)).await;
         });
         None
     }
@@ -1169,7 +1171,7 @@ impl PiApp {
                 guard.append_custom_entry(
                     "fresh".to_string(),
                     Some(serde_json::json!({
-                        "schema": "pi.fresh.v1",
+                        "schema": "ra.fresh.v1",
                         "newSessionId": new_id,
                         "reason": "operator /fresh: provider cache + stream bookkeeping reset",
                     })),
@@ -1178,7 +1180,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &cx,
-                PiMsg::System(format!(
+                RaMsg::System(format!(
                     "Fresh stream state (session id {new_id}); transcript untouched ({messages_len} messages)."
                 )),
             )
@@ -1246,7 +1248,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::System("Retry cancelled by extension".to_string()),
+                        RaMsg::System("Retry cancelled by extension".to_string()),
                     )
                     .await;
                     return;
@@ -1259,7 +1261,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                        RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                     )
                     .await;
                     return;
@@ -1280,7 +1282,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError(format!("Retry could not be confirmed: {err}")),
+                        RaMsg::AgentError(format!("Retry could not be confirmed: {err}")),
                     )
                     .await;
                     return;
@@ -1300,7 +1302,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &cx,
-                PiMsg::RetryCommitted {
+                RaMsg::RetryCommitted {
                     session_id,
                     messages: commit.messages_for_ui,
                     usage: commit.usage,
@@ -1384,7 +1386,7 @@ impl PiApp {
                         spawn_compaction_terminal_event(
                             &completion_runtime_handle,
                             event_tx.clone(),
-                            PiMsg::AgentError(format!("Failed to lock session: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock session: {err}")),
                         );
                         return;
                     }
@@ -1412,7 +1414,7 @@ impl PiApp {
                 spawn_compaction_terminal_event(
                     &completion_runtime_handle,
                     event_tx.clone(),
-                    PiMsg::System(
+                    RaMsg::System(
                         "Nothing to compact (already compacted or too little history)".to_string(),
                     ),
                 );
@@ -1451,7 +1453,7 @@ impl PiApp {
                 spawn_compaction_terminal_event(
                     &completion_runtime_handle,
                     event_tx.clone(),
-                    PiMsg::System("Compaction cancelled by extension".to_string()),
+                    RaMsg::System("Compaction cancelled by extension".to_string()),
                 );
                 return;
             }
@@ -1484,7 +1486,7 @@ impl PiApp {
                             spawn_compaction_terminal_event(
                                 &completion_runtime_handle,
                                 event_tx.clone(),
-                                PiMsg::AgentError(format!("Compaction failed: {err}")),
+                                RaMsg::AgentError(format!("Compaction failed: {err}")),
                             );
                             return;
                         }
@@ -1527,7 +1529,7 @@ impl PiApp {
                             deliver_compaction_terminal_event(
                                 &event_tx,
                                 &completion_cx,
-                                PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                                RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                             )
                             .await;
                             return;
@@ -1556,7 +1558,7 @@ impl PiApp {
                             deliver_compaction_terminal_event(
                                 &event_tx,
                                 &completion_cx,
-                                PiMsg::AgentError(format!(
+                                RaMsg::AgentError(format!(
                                     "Compaction could not be confirmed: {err}"
                                 )),
                             )
@@ -1595,7 +1597,7 @@ impl PiApp {
                     let delivered = deliver_compaction_terminal_event(
                         &event_tx,
                         &completion_cx,
-                        PiMsg::ConversationReset {
+                        RaMsg::ConversationReset {
                             session_id: expected_session_id.clone(),
                             messages,
                             usage,
@@ -1629,7 +1631,7 @@ impl PiApp {
                 deliver_compaction_terminal_event(
                     &fallback_event_tx,
                     &cx,
-                    PiMsg::AgentError(
+                    RaMsg::AgentError(
                         "Compaction completion could not be admitted by the runtime".to_string(),
                     ),
                 )
@@ -1950,25 +1952,25 @@ mod tests {
     fn compaction_terminal_event_waits_for_capacity_instead_of_being_dropped() {
         let (event_tx, mut event_rx) = asupersync::channel::mpsc::channel(1);
         event_tx
-            .try_send(PiMsg::System("occupy channel".to_string()))
+            .try_send(RaMsg::System("occupy channel".to_string()))
             .expect("fill event channel");
         let runtime_handle = runtime().handle();
         spawn_compaction_terminal_event(
             &runtime_handle,
             event_tx,
-            PiMsg::System("terminal compaction result".to_string()),
+            RaMsg::System("terminal compaction result".to_string()),
         );
 
         std::thread::sleep(std::time::Duration::from_millis(50));
         assert!(matches!(
             event_rx.try_recv(),
-            Ok(PiMsg::System(message)) if message == "occupy channel"
+            Ok(RaMsg::System(message)) if message == "occupy channel"
         ));
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         loop {
             match event_rx.try_recv() {
-                Ok(PiMsg::System(message)) if message == "terminal compaction result" => break,
+                Ok(RaMsg::System(message)) if message == "terminal compaction result" => break,
                 Ok(other) => {
                     panic!("unexpected event while awaiting compaction result: {other:?}")
                 }
@@ -2555,7 +2557,7 @@ mod tests {
         });
         let snapshot = stats.snapshot_json("large_conversation", &fixture);
 
-        assert_eq!(snapshot["schema"], "pi.tui.frame_budget.v1");
+        assert_eq!(snapshot["schema"], "ra.tui.frame_budget.v1");
         assert_eq!(snapshot["surface"], "large_conversation");
         assert_eq!(snapshot["enabled"], true);
         assert_eq!(snapshot["samples"]["frame"]["count"], 2);

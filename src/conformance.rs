@@ -1463,9 +1463,9 @@ pub mod snapshot {
     /// Query git for tracked files under `subpath` relative to `repo_root`, and verify that
     /// all tracked files exist on disk.
     ///
-    /// Supports `PI_TEST_ARTIFACTS_ROOT` environment override when verifying test copies:
+    /// Supports `RECUR_AGENT_TEST_ARTIFACTS_ROOT` environment override when verifying test copies:
     /// if `subpath == "tests/ext_conformance/artifacts"` (or matches `ARTIFACT_ROOT`), and
-    /// `PI_TEST_ARTIFACTS_ROOT` is set, tracked files are checked within the overridden directory.
+    /// `RECUR_AGENT_TEST_ARTIFACTS_ROOT` is set, tracked files are checked within the overridden directory.
     ///
     /// If git is unavailable or fails, returns `CompletenessError::GitCommand`.
     /// If any tracked files are missing, returns `CompletenessError::IncompleteTree`.
@@ -1496,9 +1496,9 @@ pub mod snapshot {
     /// Query git for tracked files under `subpath` relative to `repo_root`, and verify that
     /// all tracked files exist on disk.
     ///
-    /// Supports `PI_TEST_ARTIFACTS_ROOT` environment override when verifying test copies:
+    /// Supports `RECUR_AGENT_TEST_ARTIFACTS_ROOT` environment override when verifying test copies:
     /// if `subpath == "tests/ext_conformance/artifacts"` (or matches `ARTIFACT_ROOT`), and
-    /// `PI_TEST_ARTIFACTS_ROOT` is set, tracked files are checked within the overridden directory.
+    /// `RECUR_AGENT_TEST_ARTIFACTS_ROOT` is set, tracked files are checked within the overridden directory.
     ///
     /// If git is unavailable or fails, returns `CompletenessError::GitCommand`.
     /// If any tracked files are missing, returns `CompletenessError::IncompleteTree`.
@@ -1507,7 +1507,7 @@ pub mod snapshot {
         subpath: &str,
     ) -> Result<TreeCompletenessReport, CompletenessError> {
         let tracked_lines: Vec<String> = if let Ok(override_list) =
-            std::env::var("PI_CONFORMANCE_TRACKED_FILES_OVERRIDE")
+            std::env::var("RECUR_AGENT_CONFORMANCE_TRACKED_FILES_OVERRIDE")
         {
             override_list
                 .split(',')
@@ -1553,12 +1553,13 @@ pub mod snapshot {
             }
         };
 
-        // Determine target directory on disk. Check for PI_TEST_ARTIFACTS_ROOT override.
+        // Determine target directory on disk. Check for RECUR_AGENT_TEST_ARTIFACTS_ROOT override.
         let (target_dir, rel_prefix) = if (subpath == ARTIFACT_ROOT
             || subpath.ends_with(ARTIFACT_ROOT))
-            && std::env::var_os("PI_TEST_ARTIFACTS_ROOT").is_some()
+            && std::env::var_os("RECUR_AGENT_TEST_ARTIFACTS_ROOT").is_some()
         {
-            let env_dir = PathBuf::from(std::env::var_os("PI_TEST_ARTIFACTS_ROOT").unwrap());
+            let env_dir =
+                PathBuf::from(std::env::var_os("RECUR_AGENT_TEST_ARTIFACTS_ROOT").unwrap());
             (env_dir, Some(subpath))
         } else {
             (repo_root.join(subpath), None)
@@ -1632,7 +1633,7 @@ pub mod snapshot {
 /// # Usage
 ///
 /// ```rust,ignore
-/// use pi::conformance::normalization::*;
+/// use ra::conformance::normalization::*;
 ///
 /// let contract = NormalizationContract::default();
 /// let ctx = NormalizationContext::from_cwd(std::path::Path::new("/tmp"));
@@ -1666,7 +1667,7 @@ pub mod normalization {
     pub const PLACEHOLDER_TRACE_ID: &str = "<TRACE_ID>";
     pub const PLACEHOLDER_SPAN_ID: &str = "<SPAN_ID>";
     pub const PLACEHOLDER_UUID: &str = "<UUID>";
-    pub const PLACEHOLDER_PI_MONO_ROOT: &str = "<PI_MONO_ROOT>";
+    pub const PLACEHOLDER_PI_MONO_ROOT: &str = "<RECUR_AGENT_MONO_ROOT>";
     pub const PLACEHOLDER_PROJECT_ROOT: &str = "<PROJECT_ROOT>";
     pub const PLACEHOLDER_PORT: &str = "<PORT>";
     pub const PLACEHOLDER_PID: &str = "<PID>";
@@ -1735,7 +1736,7 @@ pub mod normalization {
     /// implementation.
     #[derive(Debug, Clone)]
     pub struct NormalizationContext {
-        /// Absolute path to the pi_agent_rust repository root.
+        /// Absolute path to the recur_agent repository root.
         pub project_root: String,
         /// Absolute path to `legacy_pi_mono_code/pi-mono`.
         pub pi_mono_root: String,
@@ -2683,7 +2684,7 @@ pub mod normalization {
         fn normalize_preserves_all_semantic_fields() {
             let ctx = NormalizationContext::new(String::new(), String::new(), String::new());
             let mut val = json!({
-                "schema": "pi.ext.log.v1",
+                "schema": "ra.ext.log.v1",
                 "level": "info",
                 "event": "tool_call.start",
                 "extension_id": "ext.demo",

@@ -209,8 +209,8 @@ mod tests {
 
     #[test]
     fn test_terminal_title_formatting() {
-        let seq = format_terminal_title("Pi Agent - Session Alpha");
-        assert!(seq.starts_with("\x1b]0;Pi Agent - Session Alpha\x07"));
+        let seq = format_terminal_title("Recur Agent - Session Alpha");
+        assert!(seq.starts_with("\x1b]0;Recur Agent - Session Alpha\x07"));
     }
 
     #[test]

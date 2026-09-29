@@ -3,7 +3,7 @@
 //! By default, Pi launches an installed browser with an isolated temporary
 //! profile. An explicit CDP endpoint attaches without taking process ownership.
 //! Production never falls back to simulated results. Deterministic fixtures
-//! must select `with_mock(true)` or `PI_BROWSER_MOCK=1` explicitly.
+//! must select `with_mock(true)` or `RECUR_AGENT_BROWSER_MOCK=1` explicitly.
 
 use crate::error::{Error, Result};
 use crate::model::{ContentBlock, TextContent};
@@ -122,7 +122,7 @@ impl BrowserTool {
 
     fn is_mock(&self) -> bool {
         self.mock_mode
-            .unwrap_or_else(|| std::env::var("PI_BROWSER_MOCK").is_ok_and(|v| v == "1"))
+            .unwrap_or_else(|| std::env::var("RECUR_AGENT_BROWSER_MOCK").is_ok_and(|v| v == "1"))
     }
 }
 
@@ -156,7 +156,7 @@ impl Tool for BrowserTool {
 
     fn description(&self) -> &str {
         "Chromium automation with an owned isolated browser, or explicit loopback attachment \
-         through PI_BROWSER_CDP_URL. Supports tabs, navigation, JavaScript, snapshots, input, \
+         through RECUR_AGENT_BROWSER_CDP_URL. Supports tabs, navigation, JavaScript, snapshots, input, \
          workspace file uploads, JavaScript dialogs, screenshots and PDF export. start launches or attaches; \
          status never launches; stop only stops a Pi-owned browser. Failures are errors, \
          never simulated successes. Selecting upload files exposes them to page scripts."

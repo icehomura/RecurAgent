@@ -322,7 +322,7 @@ fn format_persistence_footer_segment(
     }
 }
 
-impl PiApp {
+impl RaApp {
     fn header_binding_hint(&self, action: AppAction, fallback: &str) -> String {
         self.keybindings
             .get_bindings(action)

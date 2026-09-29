@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 use crate::http::client::Client;
 
 /// Schema tag for usage rows in JSON output and RPC events.
-pub const USAGE_SCHEMA: &str = "pi.usage.v1";
+pub const USAGE_SCHEMA: &str = "ra.usage.v1";
 
 /// How long a fetched row stays fresh before `/usage` re-reads the endpoint.
 pub const USAGE_CACHE_TTL: Duration = Duration::from_secs(60);
@@ -217,7 +217,7 @@ impl CopilotUsageReader {
     #[must_use]
     pub fn new(github_token: String) -> Self {
         // Same resolution as the Copilot provider's token exchange:
-        // api.github.com unless `PI_COPILOT_GITHUB_API_BASE` moves it
+        // api.github.com unless `RECUR_AGENT_COPILOT_GITHUB_API_BASE` moves it
         // (GHE / data residency, gh #191).
         Self::with_base_url(github_token, crate::providers::copilot::github_api_base())
     }
@@ -467,7 +467,7 @@ pub fn render_usage_text(rows: &[UsageStatus]) -> String {
     lines.join("\n")
 }
 
-/// Render rows as JSON (`pi usage --format json`).
+/// Render rows as JSON (`ra usage --format json`).
 #[must_use]
 pub fn render_usage_json(rows: &[UsageStatus]) -> String {
     serde_json::to_string_pretty(&serde_json::json!({

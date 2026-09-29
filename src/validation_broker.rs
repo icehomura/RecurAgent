@@ -17,27 +17,27 @@ use sha2::{Digest as _, Sha256};
 
 use crate::error::{Error, Result};
 
-pub const VALIDATION_BROKER_SLOT_SCHEMA: &str = "pi.validation_broker.slot.v1";
-pub const VALIDATION_BROKER_SLOT_STORE_SCHEMA: &str = "pi.validation_broker.slot_store.v1";
-pub const VALIDATION_BROKER_SLOT_RECORD_SCHEMA: &str = "pi.validation_broker.slot_store.record.v1";
-pub const VALIDATION_BROKER_REQUEST_SCHEMA: &str = "pi.validation_broker.request.v1";
-pub const VALIDATION_BROKER_DECISION_SCHEMA: &str = "pi.validation_broker.decision.v1";
-pub const VALIDATION_BROKER_INPUT_SCHEMA: &str = "pi.validation_broker.input_snapshot.v1";
+pub const VALIDATION_BROKER_SLOT_SCHEMA: &str = "ra.validation_broker.slot.v1";
+pub const VALIDATION_BROKER_SLOT_STORE_SCHEMA: &str = "ra.validation_broker.slot_store.v1";
+pub const VALIDATION_BROKER_SLOT_RECORD_SCHEMA: &str = "ra.validation_broker.slot_store.record.v1";
+pub const VALIDATION_BROKER_REQUEST_SCHEMA: &str = "ra.validation_broker.request.v1";
+pub const VALIDATION_BROKER_DECISION_SCHEMA: &str = "ra.validation_broker.decision.v1";
+pub const VALIDATION_BROKER_INPUT_SCHEMA: &str = "ra.validation_broker.input_snapshot.v1";
 pub const VALIDATION_BROKER_SOURCE_PROVENANCE_SCHEMA: &str =
-    "pi.validation_broker.source_provenance.v1";
-pub const VALIDATION_BROKER_RCH_INPUT_SCHEMA: &str = "pi.validation_broker.rch_input.v1";
-pub const VALIDATION_BROKER_HEADROOM_INPUT_SCHEMA: &str = "pi.validation_broker.headroom_input.v1";
-pub const VALIDATION_BROKER_DOCTOR_INPUT_SCHEMA: &str = "pi.validation_broker.doctor_input.v1";
-pub const VALIDATION_BROKER_GIT_INPUT_SCHEMA: &str = "pi.validation_broker.git_input.v1";
-pub const VALIDATION_BROKER_BEADS_INPUT_SCHEMA: &str = "pi.validation_broker.beads_input.v1";
-pub const VALIDATION_BROKER_CLI_STATUS_SCHEMA: &str = "pi.validation_broker.cli_status.v1";
-pub const VALIDATION_BROKER_CLI_PLAN_SCHEMA: &str = "pi.validation_broker.cli_plan.v1";
+    "ra.validation_broker.source_provenance.v1";
+pub const VALIDATION_BROKER_RCH_INPUT_SCHEMA: &str = "ra.validation_broker.rch_input.v1";
+pub const VALIDATION_BROKER_HEADROOM_INPUT_SCHEMA: &str = "ra.validation_broker.headroom_input.v1";
+pub const VALIDATION_BROKER_DOCTOR_INPUT_SCHEMA: &str = "ra.validation_broker.doctor_input.v1";
+pub const VALIDATION_BROKER_GIT_INPUT_SCHEMA: &str = "ra.validation_broker.git_input.v1";
+pub const VALIDATION_BROKER_BEADS_INPUT_SCHEMA: &str = "ra.validation_broker.beads_input.v1";
+pub const VALIDATION_BROKER_CLI_STATUS_SCHEMA: &str = "ra.validation_broker.cli_status.v1";
+pub const VALIDATION_BROKER_CLI_PLAN_SCHEMA: &str = "ra.validation_broker.cli_plan.v1";
 pub const VALIDATION_BROKER_CLI_LEASE_MUTATION_SCHEMA: &str =
-    "pi.validation_broker.cli_lease_mutation.v1";
+    "ra.validation_broker.cli_lease_mutation.v1";
 pub const VALIDATION_BROKER_STRESS_BUDGET_REPORT_SCHEMA: &str =
-    "pi.validation_broker.stress_budget_report.v1";
+    "ra.validation_broker.stress_budget_report.v1";
 pub const VALIDATION_BROKER_STRESS_EVIDENCE_SCHEMA: &str =
-    "pi.validation_broker.stress_evidence.v1";
+    "ra.validation_broker.stress_evidence.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

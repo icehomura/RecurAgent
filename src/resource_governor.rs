@@ -286,28 +286,28 @@ pub enum ResourceDimension {
 }
 
 /// Stable schema for tail-latency regime telemetry.
-pub const TAIL_LATENCY_REGIME_SCHEMA: &str = "pi.resource_governor.tail_latency_regime.v1";
+pub const TAIL_LATENCY_REGIME_SCHEMA: &str = "ra.resource_governor.tail_latency_regime.v1";
 
 /// Stable schema for swarm capacity recommendations.
-pub const SWARM_CAPACITY_PLAN_SCHEMA: &str = "pi.resource_governor.capacity_plan.v1";
+pub const SWARM_CAPACITY_PLAN_SCHEMA: &str = "ra.resource_governor.capacity_plan.v1";
 
 /// Stable schema for generated operator budget profile bundles.
 pub const SWARM_OPERATOR_BUDGET_PROFILES_SCHEMA: &str =
-    "pi.resource_governor.operator_budget_profiles.v1";
+    "ra.resource_governor.operator_budget_profiles.v1";
 
 /// Stable schema for live swarm admission-controller decisions.
 pub const SWARM_ADMISSION_CONTROLLER_SCHEMA: &str =
-    "pi.resource_governor.swarm_admission_controller.v1";
+    "ra.resource_governor.swarm_admission_controller.v1";
 
 /// Stable schema for deterministic admission replay reports.
-pub const SWARM_ADMISSION_REPLAY_SCHEMA: &str = "pi.resource_governor.swarm_admission_replay.v1";
+pub const SWARM_ADMISSION_REPLAY_SCHEMA: &str = "ra.resource_governor.swarm_admission_replay.v1";
 
 /// Stable schema for digest-to-admission replay alignment assertions.
 pub const SWARM_ADMISSION_REPLAY_DIGEST_ALIGNMENT_SCHEMA: &str =
-    "pi.resource_governor.swarm_admission_replay_digest_alignment.v1";
+    "ra.resource_governor.swarm_admission_replay_digest_alignment.v1";
 
 /// Stable schema for deterministic memory-pressure replay reports.
-pub const SWARM_MEMORY_PRESSURE_REPLAY_SCHEMA: &str = "pi.swarm.memory_pressure_replay.v1";
+pub const SWARM_MEMORY_PRESSURE_REPLAY_SCHEMA: &str = "ra.swarm.memory_pressure_replay.v1";
 
 /// Current tail-latency regime selected by the guard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1888,7 +1888,7 @@ impl AdmissionDecision {
     #[must_use]
     pub fn telemetry(&self, request: &ResourceRequest) -> Value {
         json!({
-            "schema": "pi.resource_governor.admission.v1",
+            "schema": "ra.resource_governor.admission.v1",
             "request": request,
             "decision": self,
         })
@@ -3411,7 +3411,7 @@ mod tests {
     use serde_json::{Value, json};
 
     const RESOURCE_GOVERNOR_SURFACE_CONTRACT_SCHEMA: &str =
-        "pi.resource_governor.surface_contract.v1";
+        "ra.resource_governor.surface_contract.v1";
 
     fn budgets() -> HostResourceBudgets {
         HostResourceBudgets::fixed(10.0, 1_000, 100, 100, 1_000)
@@ -3435,9 +3435,9 @@ mod tests {
     }
 
     fn capacity_fixture_jsonl() -> &'static str {
-        r#"{"schema":"pi.perf.session_workload_matrix_cell.v1","swarm_metrics":{"latency_quantiles_ms":{"p50":80.0,"p95":105.0,"p99":120.0,"p999":600.0},"queue_depth":{"p50":32,"p95":96,"p99":160,"p999":224,"max":256},"resource_usage":{"rss_mb":384,"cpu_pct":41.0},"component_breakdown_ms":{"tool":4.0,"provider":12.0,"extension":8.0,"session":56.0},"stage_breakdown_ms":{"open":8.0,"append":16.0,"save":20.0,"index":12.0},"host_capacity":{"target_cpu_cores":64,"observed_cpu_cores":64,"mem_total_mb":262144}}}
-	{"schema":"pi.perf.session_workload_matrix_cell.v1","swarm_metrics":{"latency_quantiles_ms":{"p50":95.0,"p95":130.0,"p99":180.0,"p999":800.0},"queue_depth":{"p50":48,"p95":112,"p99":192,"p999":256,"max":256},"resource_usage":{"rss_mb":512,"cpu_pct":55.0},"component_breakdown_ms":{"tool":6.0,"provider":14.0,"extension":10.0,"session":65.0},"stage_breakdown_ms":{"open":10.0,"append":18.0,"save":24.0,"index":13.0},"host_capacity":{"target_cpu_cores":64,"observed_cpu_cores":64,"mem_total_mb":262144}}}
-	{"schema":"pi.perf.session_workload_matrix_cell.v1","swarm_metrics":{"latency_quantiles_ms":{"p50":90.0,"p95":125.0,"p99":150.0,"p999":700.0},"queue_depth":{"p50":40,"p95":100,"p99":180,"p999":240,"max":256},"resource_usage":{"rss_mb":448,"cpu_pct":49.0},"component_breakdown_ms":{"tool":5.0,"provider":13.0,"extension":9.0,"session":63.0},"stage_breakdown_ms":{"open":9.0,"append":17.0,"save":23.0,"index":14.0},"host_capacity":{"target_cpu_cores":64,"observed_cpu_cores":64,"mem_total_mb":262144}}}"#
+        r#"{"schema":"ra.perf.session_workload_matrix_cell.v1","swarm_metrics":{"latency_quantiles_ms":{"p50":80.0,"p95":105.0,"p99":120.0,"p999":600.0},"queue_depth":{"p50":32,"p95":96,"p99":160,"p999":224,"max":256},"resource_usage":{"rss_mb":384,"cpu_pct":41.0},"component_breakdown_ms":{"tool":4.0,"provider":12.0,"extension":8.0,"session":56.0},"stage_breakdown_ms":{"open":8.0,"append":16.0,"save":20.0,"index":12.0},"host_capacity":{"target_cpu_cores":64,"observed_cpu_cores":64,"mem_total_mb":262144}}}
+	{"schema":"ra.perf.session_workload_matrix_cell.v1","swarm_metrics":{"latency_quantiles_ms":{"p50":95.0,"p95":130.0,"p99":180.0,"p999":800.0},"queue_depth":{"p50":48,"p95":112,"p99":192,"p999":256,"max":256},"resource_usage":{"rss_mb":512,"cpu_pct":55.0},"component_breakdown_ms":{"tool":6.0,"provider":14.0,"extension":10.0,"session":65.0},"stage_breakdown_ms":{"open":10.0,"append":18.0,"save":24.0,"index":13.0},"host_capacity":{"target_cpu_cores":64,"observed_cpu_cores":64,"mem_total_mb":262144}}}
+	{"schema":"ra.perf.session_workload_matrix_cell.v1","swarm_metrics":{"latency_quantiles_ms":{"p50":90.0,"p95":125.0,"p99":150.0,"p999":700.0},"queue_depth":{"p50":40,"p95":100,"p99":180,"p999":240,"max":256},"resource_usage":{"rss_mb":448,"cpu_pct":49.0},"component_breakdown_ms":{"tool":5.0,"provider":13.0,"extension":9.0,"session":63.0},"stage_breakdown_ms":{"open":9.0,"append":17.0,"save":23.0,"index":14.0},"host_capacity":{"target_cpu_cores":64,"observed_cpu_cores":64,"mem_total_mb":262144}}}"#
     }
 
     fn live_controller_sample() -> HostResourceSample {
@@ -3537,10 +3537,10 @@ mod tests {
     }
 
     fn write_resource_contract_evidence(entry: &Value) {
-        let path = std::env::var_os("PI_RESOURCE_GOVERNOR_CONTRACT_EVIDENCE")
+        let path = std::env::var_os("RECUR_AGENT_RESOURCE_GOVERNOR_CONTRACT_EVIDENCE")
             .map(std::path::PathBuf::from)
             .or_else(|| {
-                std::env::var_os("PI_EVIDENCE_DIR").map(|base| {
+                std::env::var_os("RECUR_AGENT_EVIDENCE_DIR").map(|base| {
                     std::path::PathBuf::from(base)
                         .join("perf")
                         .join("resource_governor_surface_contract.jsonl")
@@ -3753,7 +3753,7 @@ mod tests {
 
         assert_eq!(
             telemetry.get("schema").and_then(serde_json::Value::as_str),
-            Some("pi.resource_governor.admission.v1")
+            Some("ra.resource_governor.admission.v1")
         );
         assert_eq!(
             telemetry
@@ -3989,7 +3989,7 @@ mod tests {
     #[test]
     fn capacity_plan_fails_closed_without_swarm_metrics() {
         let err = plan_swarm_capacity_from_jsonl(
-            "{\"schema\":\"pi.perf.session_workload_matrix_cell.v1\"}\n",
+            "{\"schema\":\"ra.perf.session_workload_matrix_cell.v1\"}\n",
             capacity_inventory(),
         )
         .unwrap_err();

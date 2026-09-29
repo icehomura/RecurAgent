@@ -967,7 +967,7 @@ const fn is_provider_call_error(error: &crate::error::Error) -> bool {
 /// Local errors and terminal markers are refused before classification.
 /// For provider/transport errors, [`crate::error::Error::is_transient`] walks
 /// the typed source chain without depending on flattened message text, then
-/// prose-only failures use text matching (pi_agent_rust#118).
+/// prose-only failures use text matching (recur_agent#118).
 #[must_use]
 pub fn call_error_is_retryable(error: &crate::error::Error) -> bool {
     if !is_provider_call_error(error) {
@@ -1017,7 +1017,7 @@ pub enum TurnDecision {
     /// Re-issue against the same provider as attempt `attempt`, after
     /// `delay_ms`. Resume the turn rather than replaying it: only the failed
     /// request's incomplete output is stripped, so completed tool cycles are
-    /// neither re-run nor re-billed (pi_agent_rust#125).
+    /// neither re-run nor re-billed (recur_agent#125).
     Retry {
         /// 1-based attempt number, for the surface's retry events.
         attempt: u32,

@@ -70,7 +70,7 @@ fn create_only_and_revision_checks_reject_stale_writes_including_aba() {
             .write("plan", "must not replace", Some("absent"))
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_CONFLICT")
+            .contains("RECUR_AGENT_SHARED_MEMORY_CONFLICT")
     );
     let second = shared
         .write("plan", "changed", Some(&first.revision))
@@ -84,7 +84,7 @@ fn create_only_and_revision_checks_reject_stale_writes_including_aba() {
             .write("plan", "stale", Some(&first.revision))
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_CONFLICT")
+            .contains("RECUR_AGENT_SHARED_MEMORY_CONFLICT")
     );
     let fourth = shared
         .write("plan", "original", Some(&third.revision))
@@ -129,7 +129,9 @@ fn competing_agents_cannot_both_replace_the_same_revision() {
         .find_map(|result| result.as_ref().err())
         .unwrap();
     assert!(
-        error.to_string().contains("PI_SHARED_MEMORY_CONFLICT"),
+        error
+            .to_string()
+            .contains("RECUR_AGENT_SHARED_MEMORY_CONFLICT"),
         "{error}"
     );
     let current = shared.read("plan").unwrap().unwrap();
@@ -160,7 +162,7 @@ fn key_validation_precedes_storage_and_never_echoes_the_key() {
             .write(key, "sensitive value", None)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("PI_SHARED_MEMORY_INVALID_KEY"));
+        assert!(error.contains("RECUR_AGENT_SHARED_MEMORY_INVALID_KEY"));
         assert!(!error.contains("sensitive value"));
         if key.len() > 2 {
             assert!(!error.contains(key));
@@ -201,14 +203,14 @@ fn oversize_values_and_invalid_revisions_do_not_replace_existing_data() {
             .write("plan", &"x".repeat(MAX_VALUE_BYTES + 1), None)
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_VALUE_LIMIT")
+            .contains("RECUR_AGENT_SHARED_MEMORY_VALUE_LIMIT")
     );
     assert!(
         shared
             .write("plan", "lost", Some("invalid-revision"))
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_INVALID_REVISION")
+            .contains("RECUR_AGENT_SHARED_MEMORY_INVALID_REVISION")
     );
     assert_eq!(
         shared.read("plan").unwrap().unwrap().version.revision,
@@ -232,7 +234,7 @@ fn byte_quota_is_per_session_and_replacement_reclaims_its_previous_size() {
             .write("overflow", "x", None)
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_CAPACITY")
+            .contains("RECUR_AGENT_SHARED_MEMORY_CAPACITY")
     );
     assert!(shared.read("overflow").unwrap().is_none());
     shared.write("part-0", "", None).unwrap();
@@ -278,7 +280,11 @@ fn bound_tools_follow_switches_and_reject_model_supplied_session_authority() {
             .execute("c", json!({"scope":"session","key":"plan"}), None)
             .await
             .unwrap_err();
-        assert!(missing.to_string().contains("PI_SHARED_MEMORY_NOT_FOUND"));
+        assert!(
+            missing
+                .to_string()
+                .contains("RECUR_AGENT_SHARED_MEMORY_NOT_FOUND")
+        );
         retain
             .execute(
                 "d",
@@ -298,7 +304,7 @@ fn bound_tools_follow_switches_and_reject_model_supplied_session_authority() {
         assert!(
             injected
                 .to_string()
-                .contains("PI_SHARED_MEMORY_INVALID_INPUT")
+                .contains("RECUR_AGENT_SHARED_MEMORY_INVALID_INPUT")
         );
         *active.lock().unwrap() = "session-a".to_string();
         let read = recall
@@ -322,7 +328,7 @@ fn bound_tools_follow_switches_and_reject_model_supplied_session_authority() {
         assert!(
             unavailable
                 .to_string()
-                .contains("PI_SHARED_MEMORY_SESSION_UNAVAILABLE")
+                .contains("RECUR_AGENT_SHARED_MEMORY_SESSION_UNAVAILABLE")
         );
     });
     assert!(project.list(10).unwrap().is_empty());
@@ -423,7 +429,7 @@ fn unbound_shared_tools_fail_closed_but_project_memory_still_works() {
         assert!(
             error
                 .to_string()
-                .contains("PI_SHARED_MEMORY_SESSION_UNAVAILABLE")
+                .contains("RECUR_AGENT_SHARED_MEMORY_SESSION_UNAVAILABLE")
         );
         assert!(!dir.path().join("bank.sqlite").exists());
         let output = retain
@@ -485,7 +491,7 @@ fn shared_values_survive_a_compaction_entry_and_bank_reopen() {
         run(reader.execute("r2", json!({"key":"handoff"}), None))
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_NOT_FOUND")
+            .contains("RECUR_AGENT_SHARED_MEMORY_NOT_FOUND")
     );
 }
 
@@ -508,7 +514,7 @@ fn registry_installs_all_aliases_and_rebinds_older_snapshots_without_manual_tool
     assert!(
         error
             .to_string()
-            .contains("PI_SHARED_MEMORY_TOOL_COLLISION")
+            .contains("RECUR_AGENT_SHARED_MEMORY_TOOL_COLLISION")
     );
     assert_eq!(
         registry.tools().len(),
@@ -552,7 +558,11 @@ fn registry_installs_all_aliases_and_rebinds_older_snapshots_without_manual_tool
             .execute("b1", json!({"key":"handoff"}), None)
             .await
             .unwrap_err();
-        assert!(missing.to_string().contains("PI_SHARED_MEMORY_NOT_FOUND"));
+        assert!(
+            missing
+                .to_string()
+                .contains("RECUR_AGENT_SHARED_MEMORY_NOT_FOUND")
+        );
         snapshot
             .get("retain")
             .unwrap()
@@ -608,7 +618,11 @@ fn explicit_null_arguments_never_weaken_write_preconditions_or_turn_reads_into_l
             )
             .await
             .unwrap_err();
-        assert!(error.to_string().contains("PI_SHARED_MEMORY_INVALID_INPUT"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_SHARED_MEMORY_INVALID_INPUT")
+        );
         assert!(!error.to_string().contains("must not overwrite"));
         assert!(
             reader
@@ -641,7 +655,7 @@ fn host_cleanup_requires_current_revision_and_cannot_remove_another_sessions_key
         a.remove("plan", &first.revision)
             .unwrap_err()
             .to_string()
-            .contains("PI_SHARED_MEMORY_CONFLICT")
+            .contains("RECUR_AGENT_SHARED_MEMORY_CONFLICT")
     );
     assert!(!b.remove("plan", &current.revision).unwrap());
     assert_eq!(a.read("plan").unwrap().unwrap().content, "new");

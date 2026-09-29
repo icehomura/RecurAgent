@@ -1,7 +1,7 @@
 use super::commands::model_entry_matches;
 use super::*;
 
-impl PiApp {
+impl RaApp {
     pub(super) fn handle_custom_extension_key(&mut self, key: &KeyMsg) -> bool {
         if !self.custom_overlay_input_is_available() {
             return false;
@@ -527,7 +527,7 @@ impl PiApp {
 
         // Drop the async → bubbletea bridge sender so bubbletea can shut down cleanly.
         // Without this, bubbletea's external forwarder thread can block on `recv()` during quit.
-        let (tx, _rx) = mpsc::channel::<PiMsg>(1);
+        let (tx, _rx) = mpsc::channel::<RaMsg>(1);
         drop(std::mem::replace(&mut self.event_tx, tx));
         quit()
     }
@@ -917,7 +917,7 @@ impl PiApp {
             }
 
             // Editor-native and picker-specific actions fall through to the
-            // focused component when PiApp does not need to intercept them.
+            // focused component when RaApp does not need to intercept them.
             _ => None,
         }
     }
@@ -1179,7 +1179,7 @@ mod tests {
     fn build_test_app_with_event_rx(
         current: ModelEntry,
         available: Vec<ModelEntry>,
-    ) -> (PiApp, mpsc::Receiver<PiMsg>) {
+    ) -> (RaApp, mpsc::Receiver<RaMsg>) {
         let provider: Arc<dyn Provider> = Arc::new(DummyProvider);
         let agent = Agent::new(
             provider,
@@ -1204,7 +1204,7 @@ mod tests {
             ..Config::default()
         };
         (
-            PiApp::new(
+            RaApp::new(
                 agent,
                 session,
                 config,
@@ -1230,7 +1230,7 @@ mod tests {
         )
     }
 
-    fn build_test_app(current: ModelEntry, available: Vec<ModelEntry>) -> PiApp {
+    fn build_test_app(current: ModelEntry, available: Vec<ModelEntry>) -> RaApp {
         let (app, _event_rx) = build_test_app_with_event_rx(current, available);
         app
     }
@@ -1241,7 +1241,7 @@ mod tests {
     #[test]
     fn powershell_paste_script_quotes_the_target_path() {
         let script = super::powershell_save_clipboard_png(
-            r"\\wsl.localhost\Ubuntu\home\o'neil\.pi\agent\pastes\p.png",
+            r"\\wsl.localhost\Ubuntu\home\o'neil\.ra\agent\pastes\p.png",
         );
         assert!(script.contains(r"$img.Save('\\wsl.localhost\Ubuntu\home\o''neil\"));
         assert!(script.contains("[System.Drawing.Imaging.ImageFormat]::Png"));
@@ -1720,7 +1720,7 @@ mod tests {
         manager.set_ui_sender(ui_tx);
         app.extensions = Some(manager.clone());
 
-        let mut run_action = |app: &mut PiApp, persistent: bool| {
+        let mut run_action = |app: &mut RaApp, persistent: bool| {
             let request_id = if persistent {
                 "scope-always"
             } else {
@@ -1742,7 +1742,7 @@ mod tests {
                 let cx = Cx::for_request();
                 ui_rx.recv(&cx).await.expect("capability prompt reaches UI")
             });
-            let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(delivered));
+            let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(delivered));
             if persistent {
                 let _ = app.handle_capability_prompt_key(&KeyMsg::from_type(KeyType::Right));
             }
@@ -1799,15 +1799,15 @@ mod tests {
             ask_rx.recv(&cx).await.expect("ask request reaches UI")
         });
         app.ask_tool = Some(ask_tool.clone());
-        let _ = app.handle_pi_message(PiMsg::AskUiRequest(ask_request));
+        let _ = app.handle_pi_message(RaMsg::AskUiRequest(ask_request));
         assert!(app.active_ask_ui.is_some());
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(ExtensionUiRequest::new(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(ExtensionUiRequest::new(
             "quit-generic-card",
             "confirm",
             serde_json::json!({"title": "Generic"}),
         )));
         let capability_wake = app
-            .handle_pi_message(PiMsg::ExtensionUiRequest(
+            .handle_pi_message(RaMsg::ExtensionUiRequest(
                 ExtensionUiRequest::new_capability_prompt(
                     "quit-capability-card",
                     "fixture",
@@ -1824,7 +1824,7 @@ mod tests {
         assert_eq!(app.extension_ui_queue.len(), 1);
         assert!(app.capability_prompt.is_some());
         app.event_tx
-            .try_send(PiMsg::System("busy".to_string()))
+            .try_send(RaMsg::System("busy".to_string()))
             .expect("fill bounded event channel");
 
         let _ = app.quit_cmd();
@@ -1836,8 +1836,8 @@ mod tests {
             (first, second)
         });
 
-        assert!(matches!(first, PiMsg::System(text) if text == "busy"));
-        assert!(matches!(second, PiMsg::UiShutdown));
+        assert!(matches!(first, RaMsg::System(text) if text == "busy"));
+        assert!(matches!(second, RaMsg::UiShutdown));
         assert!(app.active_ask_ui.is_none());
         assert!(app.ask_ui_queue.is_empty());
         assert!(app.active_extension_ui.is_none());

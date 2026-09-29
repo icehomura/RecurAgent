@@ -173,7 +173,7 @@ impl LspClient {
         let mut params = serde_json::json!({
             "processId":std::process::id(),"rootUri":root_uri,
             "workspaceFolders":[{"uri":root_uri,"name":"workspace"}],
-            "clientInfo":{"name":"pi_agent_rust","version":crate::platform::VERSION},
+            "clientInfo":{"name":"recur_agent","version":crate::platform::VERSION},
             "capabilities":{
                 "general":{"positionEncodings":["utf-16"]},
                 "textDocument":{

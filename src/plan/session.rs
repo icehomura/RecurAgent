@@ -444,7 +444,7 @@ async fn persist(session: &mut Session, owner: &AgentCx, enabled: bool) -> PlanP
 }
 
 const PLAN_CHECKPOINT_TYPE: &str = "plan_checkpoint";
-const PLAN_CHECKPOINT_SCHEMA: &str = "pi.plan.checkpoint.v1";
+const PLAN_CHECKPOINT_SCHEMA: &str = "ra.plan.checkpoint.v1";
 const MAX_CHECKPOINT_ANCESTORS: usize = 100_000;
 
 // Durable content, NOT durable authority. In particular, no PlanReview, prompt
@@ -1088,7 +1088,7 @@ mod checkpoint_tests {
                 "plan",
                 json!("é".repeat(super::super::MAX_PLAN_BYTES / 2 + 1)),
             ),
-            ("schema", json!("pi.plan.checkpoint.v2")),
+            ("schema", json!("ra.plan.checkpoint.v2")),
             ("extra", json!(true)),
         ] {
             let mut invalid = valid.clone();

@@ -173,11 +173,12 @@ fn vcr_client_if_enabled(base_url: &str) -> Result<Option<Client>> {
         return Ok(None);
     }
 
-    if base_url_targets_loopback(base_url) && env::var("PI_VCR_ALLOW_LOOPBACK").is_err() {
+    if base_url_targets_loopback(base_url) && env::var("RECUR_AGENT_VCR_ALLOW_LOOPBACK").is_err() {
         return Ok(None);
     }
 
-    let test_name = env::var("PI_VCR_TEST_NAME").unwrap_or_else(|_| "pi_runtime".to_string());
+    let test_name =
+        env::var("RECUR_AGENT_VCR_TEST_NAME").unwrap_or_else(|_| "pi_runtime".to_string());
     let recorder = VcrRecorder::new(&test_name)?;
     Ok(Some(Client::new().with_vcr(recorder)))
 }
@@ -1253,7 +1254,7 @@ fn create_transport_provider(
                 // host. Routing it into `with_github_api_base` sent the
                 // OAuth `copilot_internal/v2/token` exchange to the chat
                 // endpoint (gh #191). GHE / data-residency deployments move
-                // the exchange host via `PI_COPILOT_GITHUB_API_BASE`.
+                // the exchange host via `RECUR_AGENT_COPILOT_GITHUB_API_BASE`.
                 provider = provider.with_chat_completions_endpoint(&entry.model.base_url);
             }
             Ok(Arc::new(provider))
@@ -1506,7 +1507,7 @@ pub fn normalize_cursor_base(base_url: &str) -> String {
 mod tests {
     use super::*;
     use crate::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-    use crate::extensions_js::PiJsRuntimeConfig;
+    use crate::extensions_js::RaJsRuntimeConfig;
     use crate::model::{ContentBlock, Message, UserContent, UserMessage};
     use crate::models::{ModelRegistry, extension_provider_bindings};
     use crate::tools::ToolRegistry;
@@ -1785,7 +1786,7 @@ export default function init(pi) {
         };
 
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },

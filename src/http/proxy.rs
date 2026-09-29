@@ -13,7 +13,7 @@
 //!    `no_proxy`) wins over everything — the request goes direct.
 //! 2. `http.httpsProxy` / `http.httpProxy` from settings.json (scheme-specific).
 //! 3. `http.proxy` from settings.json (both schemes).
-//! 4. `PI_HTTPS_PROXY` / `PI_HTTP_PROXY` — the pi-prefixed, unambiguous
+//! 4. `RECUR_AGENT_HTTPS_PROXY` / `RECUR_AGENT_HTTP_PROXY` — the pi-prefixed, unambiguous
 //!    environment override.
 //! 5. The standard `HTTPS_PROXY` / `https_proxy` (for `https://` targets),
 //!    `HTTP_PROXY` / `http_proxy` (for `http://` targets), then `ALL_PROXY` /
@@ -22,7 +22,7 @@
 //! Step 5 is what every other developer tool does, so Pi honors it by default.
 //! Environments where those variables are set for an unrelated tool (a capture
 //! proxy, a stale VPN helper) can switch the inheritance off with
-//! `"http": { "ignoreEnvProxy": true }` or `PI_HTTP_PROXY=off`, which leaves
+//! `"http": { "ignoreEnvProxy": true }` or `RECUR_AGENT_HTTP_PROXY=off`, which leaves
 //! only the explicit settings above in play.
 //!
 //! Lowercase variants are accepted for every standard name. `ALL_PROXY` is
@@ -104,7 +104,7 @@ pub struct HttpSettings {
     #[serde(alias = "noProxy")]
     pub no_proxy: Option<Vec<String>>,
     /// Ignore the ambient `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` /
-    /// `NO_PROXY` variables; only the settings above (and `PI_*_PROXY`) apply.
+    /// `NO_PROXY` variables; only the settings above (and `RECUR_AGENT_*_PROXY`) apply.
     #[serde(alias = "ignoreEnvProxy")]
     pub ignore_env_proxy: Option<bool>,
 }
@@ -131,8 +131,9 @@ impl fmt::Debug for HttpSettings {
 
 /// Environment variable names read for proxy configuration, most specific
 /// first within each group.
-const PI_HTTPS_PROXY_VARS: [&str; 2] = ["PI_HTTPS_PROXY", "PI_HTTP_PROXY"];
-const PI_HTTP_PROXY_VARS: [&str; 1] = ["PI_HTTP_PROXY"];
+const RECUR_AGENT_HTTPS_PROXY_VARS: [&str; 2] =
+    ["RECUR_AGENT_HTTPS_PROXY", "RECUR_AGENT_HTTP_PROXY"];
+const RECUR_AGENT_HTTP_PROXY_VARS: [&str; 1] = ["RECUR_AGENT_HTTP_PROXY"];
 const STD_HTTPS_PROXY_VARS: [&str; 2] = ["HTTPS_PROXY", "https_proxy"];
 const STD_HTTP_PROXY_VARS: [&str; 2] = ["HTTP_PROXY", "http_proxy"];
 const STD_ALL_PROXY_VARS: [&str; 2] = ["ALL_PROXY", "all_proxy"];
@@ -362,9 +363,9 @@ impl ProxyConfig {
         let mut warnings = Vec::new();
         let settings = settings.cloned().unwrap_or_default();
 
-        // A `PI_HTTP_PROXY` set to a disable value is an explicit opt-out of
+        // A `RECUR_AGENT_HTTP_PROXY` set to a disable value is an explicit opt-out of
         // ambient proxy inheritance, matching `ignoreEnvProxy`.
-        let pi_disable = PI_HTTPS_PROXY_VARS
+        let pi_disable = RECUR_AGENT_HTTPS_PROXY_VARS
             .iter()
             .filter_map(|name| env(name))
             .any(|value| is_disable_value(&value));
@@ -372,7 +373,7 @@ impl ProxyConfig {
 
         let https = pick_proxy_endpoint(
             &[settings.https_proxy.as_deref(), settings.proxy.as_deref()],
-            &PI_HTTPS_PROXY_VARS,
+            &RECUR_AGENT_HTTPS_PROXY_VARS,
             &STD_HTTPS_PROXY_VARS,
             ignore_env,
             env,
@@ -380,7 +381,7 @@ impl ProxyConfig {
         );
         let http = pick_proxy_endpoint(
             &[settings.http_proxy.as_deref(), settings.proxy.as_deref()],
-            &PI_HTTP_PROXY_VARS,
+            &RECUR_AGENT_HTTP_PROXY_VARS,
             &STD_HTTP_PROXY_VARS,
             ignore_env,
             env,
@@ -912,7 +913,7 @@ mod tests {
             Some(&settings),
             &[
                 ("HTTPS_PROXY", "http://env:2222"),
-                ("PI_HTTP_PROXY", "http://pi:3333"),
+                ("RECUR_AGENT_HTTP_PROXY", "http://pi:3333"),
             ],
         );
         assert_eq!(
@@ -946,11 +947,11 @@ mod tests {
     }
 
     #[test]
-    fn pi_prefixed_env_beats_standard_env() {
+    fn ra_prefixed_env_beats_standard_env() {
         let config = resolve(
             None,
             &[
-                ("PI_HTTP_PROXY", "http://pi:3333"),
+                ("RECUR_AGENT_HTTP_PROXY", "http://pi:3333"),
                 ("HTTPS_PROXY", "http://std:4444"),
             ],
         );
@@ -1023,10 +1024,13 @@ mod tests {
     }
 
     #[test]
-    fn pi_http_proxy_off_disables_env_inheritance() {
+    fn ra_http_proxy_off_disables_env_inheritance() {
         let config = resolve(
             None,
-            &[("PI_HTTP_PROXY", "off"), ("HTTPS_PROXY", "http://env:2222")],
+            &[
+                ("RECUR_AGENT_HTTP_PROXY", "off"),
+                ("HTTPS_PROXY", "http://env:2222"),
+            ],
         );
         assert!(config.is_empty());
     }

@@ -19,7 +19,10 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 
 /// Tool-result schema tag for managed-skill operations.
-pub const SKILL_SCHEMA: &str = "pi.managed_skill.v1";
+pub const SKILL_SCHEMA: &str = "ra.managed_skill.v1";
+
+/// Schema tag for skill revision-history records.
+pub const SKILL_REVISION_SCHEMA: &str = "ra.skill_revision.v1";
 
 /// Directory the managed tier loads from (dead-last precedence).
 #[must_use]
@@ -55,6 +58,84 @@ fn skill_dir(name: &str) -> PathBuf {
 
 fn skill_file(name: &str) -> PathBuf {
     skill_dir(name).join("SKILL.md")
+}
+
+/// Append-only revision log living beside the skill's `SKILL.md`.
+fn revisions_file(name: &str) -> PathBuf {
+    skill_dir(name).join(".revisions.jsonl")
+}
+
+/// SHA-256 hex digest of skill file content.
+fn content_hash(content: &str) -> String {
+    use sha2::Digest as _;
+    crate::package_manager::hex_encode(&sha2::Sha256::digest(content.as_bytes()))
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+}
+
+/// One managed-skill revision: the content hash before and after a write.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SkillRevision {
+    pub schema: String,
+    pub skill_name: String,
+    pub old_content_hash: String,
+    pub new_content_hash: String,
+    pub timestamp_ms: i64,
+}
+
+/// Append one revision record to `.revisions.jsonl` (append-only — prior
+/// records are never rewritten).
+///
+/// # Errors
+/// IO or encode failures writing the revision log.
+fn append_revision(revision: &SkillRevision) -> Result<()> {
+    use std::io::Write as _;
+    let mut payload = serde_json::to_vec(revision)
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to encode revision: {e}")))?;
+    payload.push(b'\n');
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(revisions_file(&revision.skill_name))
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to open revision log: {e}")))?;
+    file.write_all(&payload)
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to append revision: {e}")))?;
+    Ok(())
+}
+
+/// Read a skill's revision history, oldest first.
+///
+/// # Errors
+/// IO errors reading the log, or a malformed JSONL record.
+pub fn revision_history(name: &str) -> Result<Vec<SkillRevision>> {
+    let file = revisions_file(name);
+    if !file.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = std::fs::read_to_string(&file)
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to read revision log: {e}")))?;
+    let mut out = Vec::new();
+    for (idx, line) in raw.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let revision: SkillRevision = serde_json::from_str(line).map_err(|e| {
+            Error::tool(
+                "manage_skill",
+                format!(
+                    "Malformed revision record at {}:{}: {e}",
+                    file.display(),
+                    idx + 1
+                ),
+            )
+        })?;
+        out.push(revision);
+    }
+    Ok(out)
 }
 
 /// Render a SKILL.md with the managed marker.
@@ -121,15 +202,15 @@ fn audit(op: &str, name: &str, rationale: Option<&str>, session_id: Option<&str>
 /// refused with the violations listed (the caller keeps the lesson).
 ///
 /// # Errors
-/// Named `PI_SKILL_EXISTS` when a live skill already has the name;
-/// `PI_SKILL_INVALID` with the lint violations.
+/// Named `RECUR_AGENT_SKILL_EXISTS` when a live skill already has the name;
+/// `RECUR_AGENT_SKILL_INVALID` with the lint violations.
 pub fn create(name: &str, description: &str, body: &str) -> Result<ManagedSkillInfo> {
     let violations = lint_skill_draft(name, description, &["name", "description", "managed"]);
     if !violations.is_empty() {
         return Err(Error::tool(
             "manage_skill",
             format!(
-                "PI_SKILL_INVALID: skill draft failed the lint gate: {}",
+                "RECUR_AGENT_SKILL_INVALID: skill draft failed the lint gate: {}",
                 violations.join("; ")
             ),
         ));
@@ -140,15 +221,25 @@ pub fn create(name: &str, description: &str, body: &str) -> Result<ManagedSkillI
         return Err(Error::tool(
             "manage_skill",
             format!(
-                "PI_SKILL_EXISTS: a skill named '{name}' already exists at {}",
+                "RECUR_AGENT_SKILL_EXISTS: a skill named '{name}' already exists at {}",
                 file.display()
             ),
         ));
     }
     std::fs::create_dir_all(&dir)
         .map_err(|e| Error::tool("manage_skill", format!("Failed to create skill dir: {e}")))?;
-    std::fs::write(&file, render_skill_md(name, description, body))
+    let rendered = render_skill_md(name, description, body);
+    std::fs::write(&file, &rendered)
         .map_err(|e| Error::tool("manage_skill", format!("Failed to write skill: {e}")))?;
+    // Baseline revision: creation has no prior content, so the old hash is
+    // the digest of the empty string.
+    append_revision(&SkillRevision {
+        schema: SKILL_REVISION_SCHEMA.to_string(),
+        skill_name: name.to_string(),
+        old_content_hash: content_hash(""),
+        new_content_hash: content_hash(&rendered),
+        timestamp_ms: now_ms(),
+    })?;
     audit("create", name, None, None);
     Ok(ManagedSkillInfo {
         schema: SKILL_SCHEMA.to_string(),
@@ -162,21 +253,21 @@ pub fn create(name: &str, description: &str, body: &str) -> Result<ManagedSkillI
 /// Update a managed skill's body (description kept unless provided).
 ///
 /// # Errors
-/// `PI_SKILL_UNKNOWN` when absent; `PI_SKILL_NOT_MANAGED` when the marker
+/// `RECUR_AGENT_SKILL_UNKNOWN` when absent; `RECUR_AGENT_SKILL_NOT_MANAGED` when the marker
 /// is missing (user-authored content — never touched).
 pub fn update(name: &str, description: Option<&str>, body: &str) -> Result<ManagedSkillInfo> {
     let file = skill_file(name);
     if !file.exists() {
         return Err(Error::tool(
             "manage_skill",
-            format!("PI_SKILL_UNKNOWN: no managed skill named '{name}'"),
+            format!("RECUR_AGENT_SKILL_UNKNOWN: no managed skill named '{name}'"),
         ));
     }
     if !is_managed(&file) {
         return Err(Error::tool(
             "manage_skill",
             format!(
-                "PI_SKILL_NOT_MANAGED: '{}' lacks the managed marker — refusing to mutate \
+                "RECUR_AGENT_SKILL_NOT_MANAGED: '{}' lacks the managed marker — refusing to mutate \
                  user-authored content",
                 file.display()
             ),
@@ -187,47 +278,171 @@ pub fn update(name: &str, description: Option<&str>, body: &str) -> Result<Manag
         .map(str::to_string)
         .or_else(|| existing.get("description").cloned())
         .unwrap_or_default();
-    let violations = lint_skill_draft(name, &description, &["name", "description", "managed"]);
+    let old_raw = std::fs::read_to_string(&file)
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to read skill: {e}")))?;
+    write_revision(name, &old_raw, &description, body, "update")
+}
+
+/// Read a managed skill's current description and body (frontmatter stripped).
+///
+/// # Errors
+/// `RECUR_AGENT_SKILL_UNKNOWN` when absent.
+fn read_current(name: &str) -> Result<(String, String)> {
+    let file = skill_file(name);
+    if !file.exists() {
+        return Err(Error::tool(
+            "manage_skill",
+            format!("RECUR_AGENT_SKILL_UNKNOWN: no managed skill named '{name}'"),
+        ));
+    }
+    let raw = std::fs::read_to_string(&file)
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to read skill: {e}")))?;
+    let description = frontmatter_of(&file)
+        .and_then(|fields| fields.get("description").cloned())
+        .unwrap_or_default();
+    Ok((description, strip_frontmatter_body(&raw)))
+}
+
+/// Strip the leading `---` frontmatter fence, returning the body only.
+fn strip_frontmatter_body(raw: &str) -> String {
+    let mut it = raw.lines();
+    if it.next().map(str::trim) != Some("---") {
+        return raw.to_string();
+    }
+    let mut body = Vec::new();
+    let mut closed = false;
+    for line in it {
+        if !closed && line.trim() == "---" {
+            closed = true;
+            continue;
+        }
+        if closed {
+            body.push(line);
+        }
+    }
+    if !closed {
+        return raw.to_string();
+    }
+    // Trim the single leading blank line render_skill_md inserts.
+    body.join("\n").trim_start_matches('\n').to_string()
+}
+
+/// Shared write path for `update`/`patch`: lint, snapshot, write, log revision.
+fn write_revision(
+    name: &str,
+    old_raw: &str,
+    description: &str,
+    body: &str,
+    op: &str,
+) -> Result<ManagedSkillInfo> {
+    let violations = lint_skill_draft(name, description, &["name", "description", "managed"]);
     if !violations.is_empty() {
         return Err(Error::tool(
             "manage_skill",
             format!(
-                "PI_SKILL_INVALID: updated draft failed the lint gate: {}",
+                "RECUR_AGENT_SKILL_INVALID: {op} draft failed the lint gate: {}",
                 violations.join("; ")
             ),
         ));
     }
-    std::fs::write(&file, render_skill_md(name, &description, body))
+    let file = skill_file(name);
+    let new_raw = render_skill_md(name, description, body);
+    std::fs::write(&file, &new_raw)
         .map_err(|e| Error::tool("manage_skill", format!("Failed to write skill: {e}")))?;
-    audit("update", name, None, None);
+    append_revision(&SkillRevision {
+        schema: SKILL_REVISION_SCHEMA.to_string(),
+        skill_name: name.to_string(),
+        old_content_hash: content_hash(old_raw),
+        new_content_hash: content_hash(&new_raw),
+        timestamp_ms: now_ms(),
+    })?;
+    audit(op, name, None, None);
     Ok(ManagedSkillInfo {
         schema: SKILL_SCHEMA.to_string(),
         name: name.to_string(),
-        description,
+        description: description.to_string(),
         path: file.display().to_string(),
         managed: true,
     })
 }
 
-/// Delete a managed skill directory. Refuses anything lacking the managed
-/// marker (user-authored content is untouchable).
+/// Patch a managed skill in place: replace the first exact occurrence of
+/// `old_text` with `new_text`, leaving the rest — and the description —
+/// untouched.
+///
+/// This is the token-cheap revision path (Hermes' preferred `patch`): the
+/// caller sends only the diff, not the whole body. The prior revision is
+/// snapshotted in `.revisions.jsonl`, so an erroneous patch is rollback-able.
 ///
 /// # Errors
-/// `PI_SKILL_UNKNOWN` / `PI_SKILL_NOT_MANAGED`.
-pub fn delete(name: &str) -> Result<()> {
-    let dir = skill_dir(name);
+/// `RECUR_AGENT_SKILL_UNKNOWN` / `RECUR_AGENT_SKILL_NOT_MANAGED`; `RECUR_AGENT_SKILL_PATCH_NO_MATCH`
+/// when `old_text` is absent or not unique; `RECUR_AGENT_SKILL_INVALID` on lint.
+pub fn patch(name: &str, old_text: &str, new_text: &str) -> Result<ManagedSkillInfo> {
     let file = skill_file(name);
     if !file.exists() {
         return Err(Error::tool(
             "manage_skill",
-            format!("PI_SKILL_UNKNOWN: no managed skill named '{name}'"),
+            format!("RECUR_AGENT_SKILL_UNKNOWN: no managed skill named '{name}'"),
         ));
     }
     if !is_managed(&file) {
         return Err(Error::tool(
             "manage_skill",
             format!(
-                "PI_SKILL_NOT_MANAGED: '{}' lacks the managed marker — refusing to delete \
+                "RECUR_AGENT_SKILL_NOT_MANAGED: '{}' lacks the managed marker — refusing to mutate \
+                 user-authored content",
+                file.display()
+            ),
+        ));
+    }
+    if old_text.is_empty() {
+        return Err(Error::tool(
+            "manage_skill",
+            "RECUR_AGENT_SKILL_PATCH_NO_MATCH: oldText must not be empty".to_string(),
+        ));
+    }
+    let (description, body) = read_current(name)?;
+    let occurrences = body.matches(old_text).count();
+    if occurrences == 0 {
+        return Err(Error::tool(
+            "manage_skill",
+            format!("RECUR_AGENT_SKILL_PATCH_NO_MATCH: oldText not found in '{name}'"),
+        ));
+    }
+    if occurrences > 1 {
+        return Err(Error::tool(
+            "manage_skill",
+            format!(
+                "RECUR_AGENT_SKILL_PATCH_NO_MATCH: oldText appears {occurrences} times in '{name}' — \
+                 provide a larger, unique context"
+            ),
+        ));
+    }
+    let patched = body.replacen(old_text, new_text, 1);
+    let old_raw = std::fs::read_to_string(&file)
+        .map_err(|e| Error::tool("manage_skill", format!("Failed to read skill: {e}")))?;
+    write_revision(name, &old_raw, &description, &patched, "patch")
+}
+
+/// Delete a managed skill directory. Refuses anything lacking the managed
+/// marker (user-authored content is untouchable).
+///
+/// # Errors
+/// `RECUR_AGENT_SKILL_UNKNOWN` / `RECUR_AGENT_SKILL_NOT_MANAGED`.
+pub fn delete(name: &str) -> Result<()> {
+    let dir = skill_dir(name);
+    let file = skill_file(name);
+    if !file.exists() {
+        return Err(Error::tool(
+            "manage_skill",
+            format!("RECUR_AGENT_SKILL_UNKNOWN: no managed skill named '{name}'"),
+        ));
+    }
+    if !is_managed(&file) {
+        return Err(Error::tool(
+            "manage_skill",
+            format!(
+                "RECUR_AGENT_SKILL_NOT_MANAGED: '{}' lacks the managed marker — refusing to delete \
                  user-authored content",
                 file.display()
             ),
@@ -330,12 +545,12 @@ mod tests {
         .expect("write");
         let err = delete(&name).unwrap_err();
         assert!(
-            err.to_string().contains("PI_SKILL_NOT_MANAGED"),
+            err.to_string().contains("RECUR_AGENT_SKILL_NOT_MANAGED"),
             "expected refusal: {err}"
         );
         let err = update(&name, None, "hijack").unwrap_err();
         assert!(
-            err.to_string().contains("PI_SKILL_NOT_MANAGED"),
+            err.to_string().contains("RECUR_AGENT_SKILL_NOT_MANAGED"),
             "expected refusal: {err}"
         );
         std::fs::remove_dir_all(&dir).expect("cleanup");
@@ -345,8 +560,99 @@ mod tests {
     fn create_refuses_invalid_drafts() {
         let err = create("Bad Name", "desc", "body").unwrap_err();
         assert!(
-            err.to_string().contains("PI_SKILL_INVALID"),
+            err.to_string().contains("RECUR_AGENT_SKILL_INVALID"),
             "expected lint refusal: {err}"
         );
+    }
+
+    #[test]
+    fn create_then_update_appends_two_revisions() {
+        let name = unique_name("revision");
+        create(&name, "revision skill", "body one").expect("create");
+        update(&name, None, "body two").expect("update");
+
+        let history = revision_history(&name).expect("revision history");
+        assert_eq!(history.len(), 2, "expected baseline + update revisions");
+        assert!(
+            history
+                .iter()
+                .all(|rev| rev.schema == SKILL_REVISION_SCHEMA)
+        );
+        assert!(history.iter().all(|rev| rev.skill_name == name));
+        // The update's old hash chains onto the creation's new hash.
+        assert_eq!(history[1].old_content_hash, history[0].new_content_hash);
+        assert_ne!(history[0].old_content_hash, history[0].new_content_hash);
+        assert_ne!(history[1].old_content_hash, history[1].new_content_hash);
+        assert!(history.iter().all(|rev| rev.timestamp_ms > 0));
+    }
+
+    #[test]
+    fn patch_replaces_only_the_named_snippet() {
+        let name = unique_name("patch");
+        create(&name, "patch skill", "alpha beta gamma").expect("create");
+        patch(&name, "beta", "BETA").expect("patch");
+
+        let raw = std::fs::read_to_string(skill_file(&name)).expect("read");
+        assert!(
+            raw.contains("alpha BETA gamma"),
+            "patch should be surgical: {raw}"
+        );
+        // Description survives the patch untouched.
+        assert!(raw.contains("description: patch skill"));
+
+        // The patch is recorded, chaining onto the create revision.
+        let history = revision_history(&name).expect("history");
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[1].old_content_hash, history[0].new_content_hash);
+        assert_ne!(history[1].old_content_hash, history[1].new_content_hash);
+
+        delete(&name).expect("delete");
+    }
+
+    #[test]
+    fn patch_refuses_missing_or_ambiguous_text() {
+        let name = unique_name("patch-miss");
+        create(&name, "patch skill", "one two two three").expect("create");
+
+        let err = patch(&name, "absent", "x").unwrap_err();
+        assert!(err.to_string().contains("RECUR_AGENT_SKILL_PATCH_NO_MATCH"));
+        let err = patch(&name, "two", "2").unwrap_err();
+        assert!(err.to_string().contains("appears 2 times"), "got {err}");
+        let err = patch(&name, "", "x").unwrap_err();
+        assert!(err.to_string().contains("RECUR_AGENT_SKILL_PATCH_NO_MATCH"));
+        let err = patch(&name, "  ", "x").unwrap_err();
+        assert!(err.to_string().contains("RECUR_AGENT_SKILL_PATCH_NO_MATCH"));
+
+        delete(&name).expect("delete");
+    }
+
+    #[test]
+    fn patch_refuses_unmanaged_and_unknown() {
+        let name = unique_name("patch-unmanaged");
+        let dir = skill_dir(&name);
+        std::fs::create_dir_all(&dir).expect("dir");
+        std::fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: user skill\n---\n\nbody\n"),
+        )
+        .expect("write");
+        let err = patch(&name, "body", "hijack").unwrap_err();
+        assert!(err.to_string().contains("RECUR_AGENT_SKILL_NOT_MANAGED"));
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+
+        let err = patch("pi-test-nonexistent", "a", "b").unwrap_err();
+        assert!(err.to_string().contains("RECUR_AGENT_SKILL_UNKNOWN"));
+    }
+
+    #[test]
+    fn read_current_strips_frontmatter() {
+        let name = unique_name("read-current");
+        create(&name, "read skill", "body line one\nbody line two").expect("create");
+        let (description, body) = read_current(&name).expect("read");
+        assert_eq!(description, "read skill");
+        assert_eq!(body, "body line one\nbody line two");
+        assert!(!body.contains("---"));
+        assert!(!body.contains("managed"));
+        delete(&name).expect("delete");
     }
 }

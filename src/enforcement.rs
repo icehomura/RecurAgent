@@ -492,7 +492,7 @@ fn enforcement_machine_custom_config() {
 
 #[test]
 fn apply_env_capability_denied_policy_leaves_config_untouched() {
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
     assert!(config.deny_env, "default config must deny env");
     // The shipped default policy denies the env capability.
     let policy = ExtensionPolicy::default();
@@ -507,7 +507,7 @@ fn apply_env_capability_denied_policy_leaves_config_untouched() {
 
 #[test]
 fn apply_env_capability_permitting_policy_snapshots_process_env() {
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
     let policy = ExtensionPolicy {
         deny_caps: Vec::new(),
         ..ExtensionPolicy::default()
@@ -530,10 +530,11 @@ fn apply_env_capability_permitting_policy_snapshots_process_env() {
 
 #[test]
 fn apply_env_capability_preserves_caller_supplied_snapshot() {
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
-    config
-        .env
-        .insert("PI_TEST_CALLER_ENV".to_string(), "kept".to_string());
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
+    config.env.insert(
+        "RECUR_AGENT_TEST_CALLER_ENV".to_string(),
+        "kept".to_string(),
+    );
     let policy = ExtensionPolicy {
         deny_caps: Vec::new(),
         ..ExtensionPolicy::default()
@@ -546,7 +547,10 @@ fn apply_env_capability_preserves_caller_supplied_snapshot() {
         "an explicit caller-provided env map must never be widened"
     );
     assert_eq!(
-        config.env.get("PI_TEST_CALLER_ENV").map(String::as_str),
+        config
+            .env
+            .get("RECUR_AGENT_TEST_CALLER_ENV")
+            .map(String::as_str),
         Some("kept")
     );
 }

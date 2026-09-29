@@ -1,6 +1,6 @@
 //! Authentication storage and API key resolution.
 //!
-//! Auth file: ~/.pi/agent/auth.json
+//! Auth file: ~/.ra/agent/auth.json
 
 use crate::config::Config;
 use crate::error::{Error, Result};
@@ -151,101 +151,113 @@ fn oauth_param(env_key: &str, default: &str) -> String {
 // hatch is always active.
 
 fn anthropic_oauth_client_id() -> String {
-    oauth_param("PI_ANTHROPIC_OAUTH_CLIENT_ID", ANTHROPIC_OAUTH_CLIENT_ID)
+    oauth_param(
+        "RECUR_AGENT_ANTHROPIC_OAUTH_CLIENT_ID",
+        ANTHROPIC_OAUTH_CLIENT_ID,
+    )
 }
 fn anthropic_oauth_authorize_url() -> String {
     oauth_param(
-        "PI_ANTHROPIC_OAUTH_AUTHORIZE_URL",
+        "RECUR_AGENT_ANTHROPIC_OAUTH_AUTHORIZE_URL",
         ANTHROPIC_OAUTH_AUTHORIZE_URL,
     )
 }
 fn anthropic_oauth_token_url() -> String {
-    oauth_param("PI_ANTHROPIC_OAUTH_TOKEN_URL", ANTHROPIC_OAUTH_TOKEN_URL)
+    oauth_param(
+        "RECUR_AGENT_ANTHROPIC_OAUTH_TOKEN_URL",
+        ANTHROPIC_OAUTH_TOKEN_URL,
+    )
 }
 fn anthropic_oauth_redirect_uri() -> String {
     oauth_param(
-        "PI_ANTHROPIC_OAUTH_REDIRECT_URI",
+        "RECUR_AGENT_ANTHROPIC_OAUTH_REDIRECT_URI",
         ANTHROPIC_OAUTH_REDIRECT_URI,
     )
 }
 fn anthropic_oauth_scopes() -> String {
-    oauth_param("PI_ANTHROPIC_OAUTH_SCOPES", ANTHROPIC_OAUTH_SCOPES)
+    oauth_param("RECUR_AGENT_ANTHROPIC_OAUTH_SCOPES", ANTHROPIC_OAUTH_SCOPES)
 }
 
 fn openai_codex_oauth_client_id() -> String {
     oauth_param(
-        "PI_OPENAI_CODEX_OAUTH_CLIENT_ID",
+        "RECUR_AGENT_OPENAI_CODEX_OAUTH_CLIENT_ID",
         OPENAI_CODEX_OAUTH_CLIENT_ID,
     )
 }
 fn openai_codex_oauth_authorize_url() -> String {
     oauth_param(
-        "PI_OPENAI_CODEX_OAUTH_AUTHORIZE_URL",
+        "RECUR_AGENT_OPENAI_CODEX_OAUTH_AUTHORIZE_URL",
         OPENAI_CODEX_OAUTH_AUTHORIZE_URL,
     )
 }
 fn openai_codex_oauth_token_url() -> String {
     oauth_param(
-        "PI_OPENAI_CODEX_OAUTH_TOKEN_URL",
+        "RECUR_AGENT_OPENAI_CODEX_OAUTH_TOKEN_URL",
         OPENAI_CODEX_OAUTH_TOKEN_URL,
     )
 }
 fn openai_codex_oauth_redirect_uri() -> String {
     oauth_param(
-        "PI_OPENAI_CODEX_OAUTH_REDIRECT_URI",
+        "RECUR_AGENT_OPENAI_CODEX_OAUTH_REDIRECT_URI",
         OPENAI_CODEX_OAUTH_REDIRECT_URI,
     )
 }
 fn openai_codex_oauth_scopes() -> String {
-    oauth_param("PI_OPENAI_CODEX_OAUTH_SCOPES", OPENAI_CODEX_OAUTH_SCOPES)
+    oauth_param(
+        "RECUR_AGENT_OPENAI_CODEX_OAUTH_SCOPES",
+        OPENAI_CODEX_OAUTH_SCOPES,
+    )
 }
 
 fn google_gemini_cli_oauth_client_id() -> String {
     oauth_param(
-        "PI_GOOGLE_GEMINI_CLI_OAUTH_CLIENT_ID",
+        "RECUR_AGENT_GOOGLE_GEMINI_CLI_OAUTH_CLIENT_ID",
         GOOGLE_GEMINI_CLI_OAUTH_CLIENT_ID,
     )
 }
 fn google_gemini_cli_oauth_client_secret() -> String {
     oauth_param(
-        "PI_GOOGLE_GEMINI_CLI_OAUTH_CLIENT_SECRET",
+        "RECUR_AGENT_GOOGLE_GEMINI_CLI_OAUTH_CLIENT_SECRET",
         GOOGLE_GEMINI_CLI_OAUTH_CLIENT_SECRET,
     )
 }
 fn google_gemini_cli_oauth_redirect_uri() -> String {
     oauth_param(
-        "PI_GOOGLE_GEMINI_CLI_OAUTH_REDIRECT_URI",
+        "RECUR_AGENT_GOOGLE_GEMINI_CLI_OAUTH_REDIRECT_URI",
         GOOGLE_GEMINI_CLI_OAUTH_REDIRECT_URI,
     )
 }
 
 fn google_antigravity_oauth_client_id() -> String {
     oauth_param(
-        "PI_GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_ID",
+        "RECUR_AGENT_GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_ID",
         GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_ID,
     )
 }
 fn google_antigravity_oauth_client_secret() -> String {
     oauth_param(
-        "PI_GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_SECRET",
+        "RECUR_AGENT_GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_SECRET",
         GOOGLE_ANTIGRAVITY_OAUTH_CLIENT_SECRET,
     )
 }
 fn google_antigravity_oauth_redirect_uri() -> String {
     oauth_param(
-        "PI_GOOGLE_ANTIGRAVITY_OAUTH_REDIRECT_URI",
+        "RECUR_AGENT_GOOGLE_ANTIGRAVITY_OAUTH_REDIRECT_URI",
         GOOGLE_ANTIGRAVITY_OAUTH_REDIRECT_URI,
     )
 }
 fn google_antigravity_default_project_id() -> String {
     oauth_param(
-        "PI_GOOGLE_ANTIGRAVITY_PROJECT_ID",
+        "RECUR_AGENT_GOOGLE_ANTIGRAVITY_PROJECT_ID",
         GOOGLE_ANTIGRAVITY_DEFAULT_PROJECT_ID,
     )
 }
 
 fn kimi_code_oauth_client_id() -> String {
-    oauth_param("PI_KIMI_CODE_OAUTH_CLIENT_ID", KIMI_CODE_OAUTH_CLIENT_ID)
+    oauth_param(
+        "RECUR_AGENT_KIMI_CODE_OAUTH_CLIENT_ID",
+        KIMI_CODE_OAUTH_CLIENT_ID,
+    )
 }
 
 /// Credentials stored in auth.json.
@@ -257,11 +269,11 @@ pub enum AuthCredential {
     },
     /// OAuth credential, serialized in the shape upstream TS pi
     /// (`@earendil-works/pi-coding-agent`) reads and writes to the shared
-    /// `~/.pi/agent/auth.json`: `{"type":"oauth","access":..,"refresh":..,"expires":..}`
+    /// `~/.ra/agent/auth.json`: `{"type":"oauth","access":..,"refresh":..,"expires":..}`
     /// (see `pi-ai` `dist/auth/types.d.ts` `OAuthCredential`). The variant tag and
-    /// field names carry `alias`es for the historical pi_agent_rust shape
+    /// field names carry `alias`es for the historical recur_agent shape
     /// (`o_auth` / `access_token` / `refresh_token`) so previously-written
-    /// credentials keep loading. `token_url`/`client_id` are pi_agent_rust-only
+    /// credentials keep loading. `token_url`/`client_id` are recur_agent-only
     /// extras for self-contained refresh; upstream tolerates them via its
     /// `[key: string]: unknown` credential type, and `extra` captures any extra
     /// upstream keys so a rust round-trip is lossless.
@@ -416,7 +428,7 @@ where
                 .map(str::to_string)
         };
         drop(map);
-        if std::env::var_os("PI_DEBUG_ROTATION").is_some() {
+        if std::env::var_os("RECUR_AGENT_DEBUG_ROTATION").is_some() {
             eprintln!(
                 "[rotation] resolve provider={provider} -> {:?}",
                 value.as_deref()
@@ -429,7 +441,7 @@ where
 /// Report a 429/rate-limit against a credential (bd-cv653.3.2). The key backs
 /// off exponentially; the next `resolve_api_key` rotates to a healthy sibling.
 pub fn report_provider_rate_limit(provider: &str, key: &str) {
-    if std::env::var_os("PI_DEBUG_ROTATION").is_some() {
+    if std::env::var_os("RECUR_AGENT_DEBUG_ROTATION").is_some() {
         eprintln!(
             "[rotation] report provider={provider} key_len={}",
             key.len()
@@ -450,7 +462,7 @@ pub fn report_provider_rate_limit(provider: &str, key: &str) {
             std::time::Duration::from_secs(15),
             std::time::Duration::from_secs(300),
         );
-        if std::env::var_os("PI_DEBUG_ROTATION").is_some() {
+        if std::env::var_os("RECUR_AGENT_DEBUG_ROTATION").is_some() {
             eprintln!(
                 "[rotation] reported; ring keys={:?} cooling_now={}",
                 ring.key_fingerprints(),
@@ -458,7 +470,7 @@ pub fn report_provider_rate_limit(provider: &str, key: &str) {
             );
             let _ = expiry;
         }
-    } else if std::env::var_os("PI_DEBUG_ROTATION").is_some() {
+    } else if std::env::var_os("RECUR_AGENT_DEBUG_ROTATION").is_some() {
         eprintln!("[rotation] report but NO RING found for {provider}");
     }
 }
@@ -1007,7 +1019,7 @@ fn classify_auth_lock_error(error: std::io::Error) -> AuthStorageLoadFailure {
 
 /// True when the read lock could not be created because the credential
 /// directory is not writable (`EACCES`/`EPERM`/`EROFS`): a read-only
-/// `~/.pi/agent`, typical of sandboxed or jailed deployments (gh #217).
+/// `~/.ra/agent`, typical of sandboxed or jailed deployments (gh #217).
 fn lock_denied_by_read_only_store(error: &std::io::Error) -> bool {
     matches!(
         error.kind(),
@@ -1387,7 +1399,7 @@ fn oauth_refresh_provider_id(provider: &str) -> &str {
 impl AuthStorage {
     fn allow_external_provider_lookup(&self) -> bool {
         // External credential auto-detection is intended for Pi's global auth
-        // file (typically `~/.pi/agent/auth.json`). Scoping it this way keeps
+        // file (typically `~/.ra/agent/auth.json`). Scoping it this way keeps
         // tests and custom auth sandboxes deterministic.
         self.path.eq(&Config::auth_path())
     }
@@ -3490,9 +3502,9 @@ where
 {
     // AWS SDKs honor AWS_SDK_LOAD_NONDEFAULT_CONFIG and similar tweaks for
     // the cache dir, but the only path the official tooling actually uses
-    // is `<HOME>/.aws/sso/cache`. We additionally allow PI_AWS_SSO_CACHE_DIR
+    // is `<HOME>/.aws/sso/cache`. We additionally allow RECUR_AGENT_AWS_SSO_CACHE_DIR
     // for tests + advanced users.
-    if let Some(custom) = env("PI_AWS_SSO_CACHE_DIR")
+    if let Some(custom) = env("RECUR_AGENT_AWS_SSO_CACHE_DIR")
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
     {
@@ -3626,7 +3638,7 @@ struct SsoRoleCredentials {
 
 /// Test-only override for the SSO Portal base URL.
 ///
-/// We use an interior-mutable static rather than reading `PI_AWS_SSO_PORTAL_URL`
+/// We use an interior-mutable static rather than reading `RECUR_AGENT_AWS_SSO_PORTAL_URL`
 /// directly because Rust 2024 made `std::env::set_var`/`remove_var` `unsafe`,
 /// and the crate forbids `unsafe_code`. Tests set the override via
 /// `set_sso_portal_base_url_override`; production code paths always see `None`
@@ -4605,10 +4617,10 @@ pub fn start_oauth_callback_server(redirect_uri: &str) -> Result<OAuthCallbackSe
 
         // Send a friendly response so the browser shows a success page.
         let html = r#"<!DOCTYPE html>
-<html><head><title>Pi Agent — OAuth Complete</title></head>
+<html><head><title>Recur Agent — OAuth Complete</title></head>
 <body style="font-family:system-ui,sans-serif;text-align:center;padding:60px 20px;background:#f8f9fa">
 <h1 style="color:#2d7d46">&#10003; Authorization successful</h1>
-<p>You can close this browser tab and return to Pi Agent.</p>
+<p>You can close this browser tab and return to Recur Agent.</p>
 </body></html>"#;
 
         let response = format!(
@@ -4717,10 +4729,10 @@ pub fn start_oauth_callback_server_random_port() -> Result<(OAuthCallbackServer,
             .unwrap_or_default();
 
         let html = r#"<!DOCTYPE html>
-<html><head><title>Pi Agent — OAuth Complete</title></head>
+<html><head><title>Recur Agent — OAuth Complete</title></head>
 <body style="font-family:system-ui,sans-serif;text-align:center;padding:60px 20px;background:#f8f9fa">
 <h1 style="color:#2d7d46">&#10003; Authorization successful</h1>
-<p>You can close this browser tab and return to Pi Agent.</p>
+<p>You can close this browser tab and return to Recur Agent.</p>
 </body></html>"#;
 
         let response = format!(
@@ -5010,7 +5022,7 @@ fn kimi_device_id_paths() -> Option<(PathBuf, PathBuf)> {
     let primary = kimi_share_dir()?.join("device_id");
     let legacy = home_dir().map_or_else(
         || primary.clone(),
-        |home| home.join(".pi").join("agent").join("kimi-device-id"),
+        |home| home.join(".ra").join("agent").join("kimi-device-id"),
     );
     Some((primary, legacy))
 }
@@ -6823,7 +6835,7 @@ mod tests {
             .expect("clock should be after epoch")
             .as_millis();
         let entry = serde_json::json!({
-            "schema": "pi.test.auth_event.v1",
+            "schema": "ra.test.auth_event.v1",
             "test": test_name,
             "event": event,
             "timestamp_ms": timestamp_ms,
@@ -11437,7 +11449,7 @@ sso_region = us-east-1
         let mut env = |var: &str| match var {
             "AWS_PROFILE" => Some("dev".to_string()),
             "AWS_CONFIG_FILE" => Some(config_path.to_string_lossy().to_string()),
-            "PI_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
+            "RECUR_AGENT_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
             "HOME" => Some(dir.path().to_string_lossy().to_string()),
             _ => None,
         };
@@ -11474,7 +11486,7 @@ region = eu-west-1
         let mut env = |var: &str| match var {
             "AWS_PROFILE" => Some("legacy".to_string()),
             "AWS_CONFIG_FILE" => Some(config_path.to_string_lossy().to_string()),
-            "PI_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
+            "RECUR_AGENT_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
             _ => None,
         };
         let detected = detect_aws_sso_profile_with_env("legacy", None, "us-east-1", &mut env)
@@ -11533,7 +11545,7 @@ sso_region = us-east-1
         let mut env = |var: &str| match var {
             "AWS_PROFILE" => Some("dev".to_string()),
             "AWS_CONFIG_FILE" => Some(config_path.to_string_lossy().to_string()),
-            "PI_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
+            "RECUR_AGENT_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
             _ => None,
         };
         let err = detect_aws_sso_profile_with_env("dev", None, "us-east-1", &mut env)
@@ -11576,7 +11588,7 @@ sso_region = us-east-1
         let mut env = |var: &str| match var {
             "AWS_PROFILE" => Some("dev".to_string()),
             "AWS_CONFIG_FILE" => Some(config_path.to_string_lossy().to_string()),
-            "PI_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
+            "RECUR_AGENT_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
             _ => None,
         };
         let err = detect_aws_sso_profile_with_env("dev", None, "us-east-1", &mut env)
@@ -11615,7 +11627,7 @@ sso_region = us-east-1
 
         let mut env = |name: &str| match name {
             "AWS_CONFIG_FILE" => Some(config_path.to_string_lossy().to_string()),
-            "PI_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
+            "RECUR_AGENT_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
             _ => None,
         };
         let error = detect_aws_sso_profile_with_env("dev", None, "us-east-1", &mut env)
@@ -11740,7 +11752,7 @@ sso_region = us-east-1
                 config_path.to_string_lossy().to_string(),
             );
             env_map.insert(
-                "PI_AWS_SSO_CACHE_DIR",
+                "RECUR_AGENT_AWS_SSO_CACHE_DIR",
                 cache_dir.to_string_lossy().to_string(),
             );
 
@@ -11820,7 +11832,7 @@ sso_region = us-east-1
             env_map.insert("AWS_PROFILE", "dev".to_string());
             env_map.insert("AWS_CONFIG_FILE", config_path.to_string_lossy().to_string());
             env_map.insert(
-                "PI_AWS_SSO_CACHE_DIR",
+                "RECUR_AGENT_AWS_SSO_CACHE_DIR",
                 cache_dir.to_string_lossy().to_string(),
             );
 
@@ -11881,7 +11893,7 @@ sso_start_url = https://example.awsapps.com/start
             env_map.insert("AWS_PROFILE", "dev".to_string());
             env_map.insert("AWS_CONFIG_FILE", config_path.to_string_lossy().to_string());
             env_map.insert(
-                "PI_AWS_SSO_CACHE_DIR",
+                "RECUR_AGENT_AWS_SSO_CACHE_DIR",
                 cache_dir.to_string_lossy().to_string(),
             );
 
@@ -11987,7 +11999,7 @@ sso_region = us-east-1
         let mut env = |var: &str| match var {
             "AWS_PROFILE" => Some("dev".to_string()),
             "AWS_CONFIG_FILE" => Some(config_path.to_string_lossy().to_string()),
-            "PI_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
+            "RECUR_AGENT_AWS_SSO_CACHE_DIR" => Some(cache_dir.to_string_lossy().to_string()),
             _ => None,
         };
         let detected =
@@ -13240,7 +13252,7 @@ sso_region = us-east-1
         auth.set(
             "openai",
             AuthCredential::ApiKey {
-                key: "$ENV:PI_TEST_OPENAI_KEY_INTEG".to_string(),
+                key: "$ENV:RECUR_AGENT_TEST_OPENAI_KEY_INTEG".to_string(),
             },
         );
 

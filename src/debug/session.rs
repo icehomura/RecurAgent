@@ -92,13 +92,19 @@ pub struct DapSession {
 
 impl DapSession {
     pub async fn begin(transport: DapTransport) -> Result<Self> {
-        let capabilities = transport.request("initialize", json!({
-            "clientID": "pi_agent_rust", "clientName": "pi_agent_rust", "adapterID": "pi-dap",
-            "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path",
-            "supportsVariableType": true, "supportsVariablePaging": true,
-            "supportsInvalidatedEvent": true,
-            "supportsRunInTerminalRequest": false, "supportsStartDebuggingRequest": false
-        }), DEFAULT_DAP_TIMEOUT).await?;
+        let capabilities = transport
+            .request(
+                "initialize",
+                json!({
+                    "clientID": "recur_agent", "clientName": "recur_agent", "adapterID": "pi-dap",
+                    "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path",
+                    "supportsVariableType": true, "supportsVariablePaging": true,
+                    "supportsInvalidatedEvent": true,
+                    "supportsRunInTerminalRequest": false, "supportsStartDebuggingRequest": false
+                }),
+                DEFAULT_DAP_TIMEOUT,
+            )
+            .await?;
         if !capabilities.is_object() {
             return Err(tool_err(
                 "DAP_PROTOCOL",

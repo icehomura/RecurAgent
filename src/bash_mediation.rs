@@ -203,7 +203,7 @@ impl MediationVerdict {
             Self::Block { hits } => ("block", hits),
         };
         json!({
-            "schema": "pi.bash.mediation.v1",
+            "schema": "ra.bash.mediation.v1",
             "verdict": verdict,
             "mode": mode.as_str(),
             "command": command,
@@ -537,7 +537,7 @@ mod tests {
             payload["hits"][0]["ruleId"],
             "core.filesystem:rm-rf-root-home"
         );
-        assert_eq!(payload["schema"], "pi.bash.mediation.v1");
+        assert_eq!(payload["schema"], "ra.bash.mediation.v1");
     }
 
     #[test]

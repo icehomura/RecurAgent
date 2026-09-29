@@ -16,7 +16,7 @@ wasmtime::component::bindgen!({
     exports: { default: async },
 });
 
-use self::pi::extension::host;
+use self::ra::extension::host;
 
 pub(super) struct HostState {
     policy: ExtensionPolicy,
@@ -1211,7 +1211,7 @@ mod tests {
             api_version: PROTOCOL_VERSION.to_string(),
             capabilities: Vec::new(),
             capability_manifest: Some(CapabilityManifest {
-                schema: "pi.ext.cap.v1".to_string(),
+                schema: "ra.ext.cap.v1".to_string(),
                 capabilities: vec![
                     CapabilityRequirement {
                         capability: "env".to_string(),
@@ -1221,7 +1221,7 @@ mod tests {
                         hostcall_classes: Vec::new(),
                         risk_tier: None,
                         scope: Some(CapabilityScope {
-                            env: Some(vec!["PI_TEST_ENV".to_string()]),
+                            env: Some(vec!["RECUR_AGENT_TEST_ENV".to_string()]),
                             paths: None,
                             hosts: None,
                             allowed_tools: None,
@@ -1258,7 +1258,7 @@ mod tests {
         let CapabilityManifest { capabilities, .. } = payload
             .capability_manifest
             .get_or_insert_with(|| CapabilityManifest {
-                schema: "pi.ext.cap.v1".to_string(),
+                schema: "ra.ext.cap.v1".to_string(),
                 capabilities: Vec::new(),
             });
         capabilities.push(CapabilityRequirement {
@@ -1573,7 +1573,7 @@ mod tests {
             call_id: "call-component-env".to_string(),
             capability: "env".to_string(),
             method: "env".to_string(),
-            params: json!({ "name": "PI_TEST_ENV" }),
+            params: json!({ "name": "RECUR_AGENT_TEST_ENV" }),
             timeout_ms: None,
             cancel_token: None,
             context: None,
@@ -1586,7 +1586,7 @@ mod tests {
             tool_output
                 .get("values")
                 .and_then(Value::as_object)
-                .is_some_and(|values| values.contains_key("PI_TEST_ENV")),
+                .is_some_and(|values| values.contains_key("RECUR_AGENT_TEST_ENV")),
             "unexpected env hostcall output: {tool_output}"
         );
 
@@ -1834,7 +1834,7 @@ mod tests {
             call_id: "call-env-1".to_string(),
             capability: "env".to_string(),
             method: "env".to_string(),
-            params: json!({ "name": "PI_TEST_ENV" }),
+            params: json!({ "name": "RECUR_AGENT_TEST_ENV" }),
             timeout_ms: None,
             cancel_token: None,
             context: None,
@@ -1851,7 +1851,7 @@ mod tests {
             .get("values")
             .and_then(Value::as_object)
             .expect("values object");
-        assert!(values.get("PI_TEST_ENV").is_some());
+        assert!(values.get("RECUR_AGENT_TEST_ENV").is_some());
 
         let denied_call = HostCallPayload {
             call_id: "call-env-2".to_string(),
@@ -1885,7 +1885,7 @@ mod tests {
             call_id: "call-env-policy-deny".to_string(),
             capability: "env".to_string(),
             method: "env".to_string(),
-            params: json!({ "name": "PI_TEST_ENV" }),
+            params: json!({ "name": "RECUR_AGENT_TEST_ENV" }),
             timeout_ms: None,
             cancel_token: None,
             context: None,

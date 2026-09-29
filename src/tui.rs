@@ -99,12 +99,12 @@ impl Write for TuiAwareLogWriter {
 }
 
 /// Pi's console wrapper providing styled terminal output.
-pub struct PiConsole {
+pub struct RaConsole {
     console: Console,
     is_tty: bool,
 }
 
-impl PiConsole {
+impl RaConsole {
     /// Create a new Pi console with auto-detected terminal capabilities.
     pub fn new() -> Self {
         Self::new_with_theme(None)
@@ -422,14 +422,14 @@ impl PiConsole {
     }
 }
 
-impl Default for PiConsole {
+impl Default for RaConsole {
     fn default() -> Self {
         Self::new()
     }
 }
 
 // Thread-safe console for use across async tasks
-impl Clone for PiConsole {
+impl Clone for RaConsole {
     fn clone(&self) -> Self {
         Self {
             console: Console::builder()
@@ -860,7 +860,7 @@ mod tests {
         markdown: &str,
         code_block_indent: Option<usize>,
     ) -> Vec<Segment<'static>> {
-        let console = PiConsole::with_color();
+        let console = RaConsole::with_color();
         console.console.begin_capture();
         console.render_markdown_with_indent(markdown, code_block_indent);
         console.console.end_capture()
@@ -929,7 +929,7 @@ mod tests {
             .file(Box::new(writer))
             .build();
 
-        let pi_console = PiConsole {
+        let pi_console = RaConsole {
             console,
             is_tty: true,
         };
@@ -964,13 +964,13 @@ mod tests {
 
     #[test]
     fn test_console_creation() {
-        let console = PiConsole::with_color();
+        let console = RaConsole::with_color();
         assert!(console.width() > 0);
     }
 
     #[test]
     fn render_markdown_produces_styled_segments() {
-        let console = PiConsole::with_color();
+        let console = RaConsole::with_color();
 
         console.console.begin_capture();
         console.render_markdown("# Title\n\nThis is **bold**.\n\n- Item 1\n- Item 2");
@@ -985,7 +985,7 @@ mod tests {
     #[test]
     #[cfg(feature = "syntax-highlighting")]
     fn render_markdown_code_fence_uses_syntax_highlighting_when_language_present() {
-        let console = PiConsole::with_color();
+        let console = RaConsole::with_color();
 
         console.console.begin_capture();
         console.render_markdown("```rust\nfn main() {\n    println!(\"hi\");\n}\n```");

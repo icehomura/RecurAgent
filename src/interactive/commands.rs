@@ -114,9 +114,9 @@ async fn persist_excluded_bash_execution_bounded(
 }
 
 async fn deliver_bash_result(
-    event_tx: &asupersync::channel::mpsc::Sender<PiMsg>,
+    event_tx: &asupersync::channel::mpsc::Sender<RaMsg>,
     cx: &Cx,
-    message: PiMsg,
+    message: RaMsg,
 ) {
     if !crate::interactive::enqueue_pi_event(event_tx, cx, message).await {
         tracing::error!("terminal bash result was not delivered before runtime shutdown");
@@ -125,7 +125,7 @@ async fn deliver_bash_result(
 
 fn spawn_bash_completion(
     runtime_handle: &asupersync::runtime::RuntimeHandle,
-    event_tx: asupersync::channel::mpsc::Sender<PiMsg>,
+    event_tx: asupersync::channel::mpsc::Sender<RaMsg>,
     persistence: Option<(Arc<Mutex<Session>>, SessionMessage, bool)>,
     mut display: String,
     content_for_agent: Option<Vec<ContentBlock>>,
@@ -147,7 +147,7 @@ fn spawn_bash_completion(
         deliver_bash_result(
             &event_tx,
             &completion_cx,
-            PiMsg::BashResult {
+            RaMsg::BashResult {
                 display,
                 content_for_agent,
             },
@@ -515,7 +515,7 @@ fn provider_has_dedicated_login_flow(provider: &str) -> bool {
 /// Choose the GitHub Copilot device flow over the browser flow when the
 /// current process cannot rely on a localhost OAuth redirect — i.e. the
 /// session is running headless / over SSH and the user's browser cannot reach
-/// the callback server bound on this host. `PI_COPILOT_FORCE_DEVICE_FLOW=1`
+/// the callback server bound on this host. `RECUR_AGENT_COPILOT_FORCE_DEVICE_FLOW=1`
 /// opts in unconditionally.
 ///
 /// When `GITHUB_COPILOT_CLIENT_ID` is unset we fall back to the well-known
@@ -524,7 +524,7 @@ fn provider_has_dedicated_login_flow(provider: &str) -> bool {
 /// no client id is explicitly configured, since that path is the most robust on
 /// headless/SSH sessions where a localhost OAuth redirect can't be reached.
 pub(super) fn should_use_copilot_device_flow() -> bool {
-    if std::env::var("PI_COPILOT_FORCE_DEVICE_FLOW")
+    if std::env::var("RECUR_AGENT_COPILOT_FORCE_DEVICE_FLOW")
         .is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "yes"))
     {
         return true;
@@ -896,7 +896,7 @@ pub fn strip_thinking_level_suffix(pattern: &str) -> &str {
 /// Put `text` on the system clipboard, falling back to a private temp file,
 /// and return the sentence describing what happened.
 ///
-/// Free rather than a `PiApp` method because the ftui stack runs the same
+/// Free rather than a `RaApp` method because the ftui stack runs the same
 /// `/copy` (bd-cv653): the feature gating, the 0600 fallback file and the
 /// exact wording of each outcome must not exist twice. The wording is the
 /// charmed stack's, unchanged, so the two stacks report a copy identically.
@@ -1316,7 +1316,7 @@ fn expand_home_path(raw: &str) -> std::path::PathBuf {
     )
 }
 
-impl PiApp {
+impl RaApp {
     /// Thinking level for a session started with `/new`: the configured
     /// default clamped to the current model, exactly as launch resolution
     /// does (issue #197 — this used to be hard-coded to `Off`, so a
@@ -1727,7 +1727,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::AgentError(e.to_string()),
+                        RaMsg::AgentError(e.to_string()),
                     )
                     .await;
                     return;
@@ -1740,7 +1740,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &task_cx,
-                    PiMsg::AgentError(e.to_string()),
+                    RaMsg::AgentError(e.to_string()),
                 )
                 .await;
                 return;
@@ -1748,7 +1748,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &task_cx,
-                PiMsg::CredentialUpdated {
+                RaMsg::CredentialUpdated {
                     provider: provider.clone(),
                 },
             )
@@ -1756,7 +1756,7 @@ impl PiApp {
 
             let status = super::login_flow::success_status(&provider, pending.kind);
             let _ =
-                crate::interactive::enqueue_pi_event(&event_tx, &task_cx, PiMsg::System(status))
+                crate::interactive::enqueue_pi_event(&event_tx, &task_cx, RaMsg::System(status))
                     .await;
         });
 
@@ -2327,7 +2327,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::System("Session switch cancelled by extension".to_string()),
+                            RaMsg::System("Session switch cancelled by extension".to_string()),
                         )
                         .await;
                         return;
@@ -2351,7 +2351,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::AgentError(err.to_string()),
+                            RaMsg::AgentError(err.to_string()),
                         )
                         .await;
                         return;
@@ -2360,7 +2360,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::ConversationReset {
+                        RaMsg::ConversationReset {
                             session_id: new_session_id.clone(),
                             messages: Vec::new(),
                             usage: Usage::default(),
@@ -2484,7 +2484,7 @@ impl PiApp {
                                     let _ = crate::interactive::enqueue_pi_event(
                                         &event_tx,
                                         &task_cx,
-                                        PiMsg::SessionSystemNote {
+                                        RaMsg::SessionSystemNote {
                                             owner_session_id: owner_session_id.clone(),
                                             message: format!("Failed to lock session: {err}"),
                                         },
@@ -2535,7 +2535,7 @@ impl PiApp {
                             let _ = crate::interactive::enqueue_pi_event(
                                 &event_tx,
                                 &task_cx,
-                                PiMsg::SessionSystemNote {
+                                RaMsg::SessionSystemNote {
                                     owner_session_id,
                                     message: "Session tree cancelled by extension".to_string(),
                                 },
@@ -2547,7 +2547,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::OpenTree {
+                            RaMsg::OpenTree {
                                 owner_session_id,
                                 initial_selected_id,
                                 label,
@@ -2670,7 +2670,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::OAuthDeviceFlowStarted {
+                            RaMsg::OAuthDeviceFlowStarted {
                                 provider: provider_clone,
                                 device_code: device.device_code,
                                 user_code: device.user_code,
@@ -2686,7 +2686,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::AgentError(format!("OAuth login failed: {err}")),
+                            RaMsg::AgentError(format!("OAuth login failed: {err}")),
                         )
                         .await;
                     }
@@ -2715,7 +2715,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::OAuthDeviceFlowStarted {
+                            RaMsg::OAuthDeviceFlowStarted {
                                 provider: provider_clone,
                                 device_code: device.device_code,
                                 user_code: device.user_code,
@@ -2731,7 +2731,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::AgentError(format!("OAuth login failed: {err}")),
+                            RaMsg::AgentError(format!("OAuth login failed: {err}")),
                         )
                         .await;
                     }
@@ -2865,7 +2865,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                         if let Ok(path) = server.rx.recv() {
                             let full_url = format!("http://localhost{path}");
                             let mut send_result =
-                                event_tx.try_send(PiMsg::OAuthCallbackReceived(full_url));
+                                event_tx.try_send(RaMsg::OAuthCallbackReceived(full_url));
                             while let Err(asupersync::channel::mpsc::SendError::Full(unsent)) =
                                 send_result
                             {
@@ -3414,7 +3414,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
             BtwPrepared::AgentBusy,
             |mut agent| {
                 let snapshot = agent.messages().to_vec();
-                let summary = pi::btw::build_context_summary(&snapshot);
+                let summary = ra::btw::build_context_summary(&snapshot);
                 let transformed =
                     agent
                         .secrets_transform_outbound_text(&summary)
@@ -3470,14 +3470,14 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
             let result = client.ask(&context, &question).await;
             // Display-only delivery via the UI event channel; the session
             // writer never sees this message.
-            // SessionSystemNote is display-only. PiMsg::System/AgentError
+            // SessionSystemNote is display-only. RaMsg::System/AgentError
             // reset live agent state (Idle + dropped abort handle), while an
             // answer landing after a session switch must be discarded.
             let message = match result {
                 Ok(answer) => format!("(/btw) {answer}"),
                 Err(err) => format!("(/btw) failed: {err}"),
             };
-            let msg = PiMsg::SessionSystemNote {
+            let msg = RaMsg::SessionSystemNote {
                 owner_session_id,
                 message,
             };
@@ -3489,14 +3489,14 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
 
     fn completed_tan_event(
         owner_session_id: String,
-        completion: &pi::subagents::TanCompletion,
-    ) -> PiMsg {
-        let card = pi::jobs::push_completion_notice(&owner_session_id, completion.follow_up_text())
+        completion: &ra::subagents::TanCompletion,
+    ) -> RaMsg {
+        let card = ra::jobs::push_completion_notice(&owner_session_id, completion.follow_up_text())
             .map_or_else(
                 |err| format!("(/tan failed to queue follow-up)\n{err}"),
                 |()| completion.card_text(),
             );
-        PiMsg::SessionSystemNote {
+        RaMsg::SessionSystemNote {
             owner_session_id,
             message: card,
         }
@@ -3556,8 +3556,8 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
             return None;
         }
 
-        let tool = pi::subagents::SubagentTool::new(&self.cwd)
-            .with_role_model_spec(pi::app::subagent_role_spec(&self.config));
+        let tool = ra::subagents::SubagentTool::new(&self.cwd)
+            .with_role_model_spec(ra::app::subagent_role_spec(&self.config));
         let runtime = self.runtime_handle.clone();
         let event_tx = self.event_tx.clone();
         let task_cx = Cx::current().unwrap_or_else(Cx::for_request);
@@ -3565,7 +3565,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
         runtime.spawn(async move {
             let event = match tool.run_background_tan(&work).await {
                 Ok(completion) => Self::completed_tan_event(owner_session_id, &completion),
-                Err(err) => PiMsg::SessionSystemNote {
+                Err(err) => RaMsg::SessionSystemNote {
                     owner_session_id,
                     message: format!("(/tan failed)\n{err}"),
                 },
@@ -3588,7 +3588,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
         let agent_dir = crate::config::Config::global_dir();
         match args.trim() {
             "" => {
-                let bundles = pi::crash::list_bundles(&agent_dir);
+                let bundles = ra::crash::list_bundles(&agent_dir);
                 let message = if bundles.is_empty() {
                     "No crash bundles recorded.".to_string()
                 } else {
@@ -3615,7 +3615,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                 self.scroll_to_bottom();
             }
             "show" => {
-                let report = pi::crash::show_latest(&agent_dir)
+                let report = ra::crash::show_latest(&agent_dir)
                     .unwrap_or_else(|| "No crash bundles recorded.".into());
                 self.messages.push(ConversationMessage {
                     role: MessageRole::System,
@@ -3626,7 +3626,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                 self.scroll_to_bottom();
             }
             "delete" => {
-                let removed = pi::crash::delete_all(&agent_dir);
+                let removed = ra::crash::delete_all(&agent_dir);
                 self.status_message = Some(format!("Deleted {removed} crash bundle(s)"));
                 self.scroll_to_bottom();
             }
@@ -3974,7 +3974,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::ResourcesReloaded {
+                        RaMsg::ResourcesReloaded {
                             resources,
                             status,
                             diagnostics,
@@ -3986,7 +3986,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::AgentError(format!("Failed to reload resources: {err}")),
+                        RaMsg::AgentError(format!("Failed to reload resources: {err}")),
                     )
                     .await;
                 }
@@ -4001,7 +4001,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
     /// test, trust lifecycle (bd-cv653.6.1).
     ///
     /// One client registry unifies three config sources: native files
-    /// (`.pi/mcp.json`, `.agents/mcp.json`, `~/.pi/agent/mcp.json`,
+    /// (`.ra/mcp.json`, `.agents/mcp.json`, `~/.ra/agent/mcp.json`,
     /// `--mcp-config`), foreign files (`.claude/`, `.cursor/`, ...), and
     /// extension-registered specs. Server processes are capability-equivalent
     /// to `exec`: they never spawn until acknowledged via `/mcp trust`.
@@ -4041,7 +4041,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                 "\n  No MCP servers configured. Add one with:\n\
                  \x20   /mcp add <name> <command> [args...]     (stdio server)\n\
                  \x20   /mcp add <name> --url <https://...>     (HTTP server)\n\
-                 or create .pi/mcp.json. Foreign configs (.claude/mcp.json,\n\
+                 or create .ra/mcp.json. Foreign configs (.claude/mcp.json,\n\
                  .cursor/mcp.json, ...) are discovered automatically.\n",
             );
         } else {
@@ -4099,7 +4099,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                 }
             }
         };
-        let path = self.cwd.join(".pi/mcp.json");
+        let path = self.cwd.join(".ra/mcp.json");
         let result = crate::mcp::config::read_project_config(&path).and_then(|mut value| {
             value["mcpServers"][&name] = entry_value;
             crate::mcp::config::write_project_config(&path, &value)
@@ -4130,7 +4130,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
             return None;
         };
         let name = (*name).to_string();
-        let path = self.cwd.join(".pi/mcp.json");
+        let path = self.cwd.join(".ra/mcp.json");
         let result = crate::mcp::config::read_project_config(&path).and_then(|mut value| {
             if let Some(servers) = value["mcpServers"].as_object_mut()
                 && servers.remove(&name).is_none()
@@ -4223,7 +4223,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                 }
                 Err(err) => format!("MCP {name:?}: {err}"),
             };
-            let _ = enqueue_pi_event(&event_tx, &task_cx, PiMsg::System(message)).await;
+            let _ = enqueue_pi_event(&event_tx, &task_cx, RaMsg::System(message)).await;
         });
         self.status_message = Some(format!("MCP {status_verb} {status_label:?} started…"));
         None
@@ -4361,9 +4361,9 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentState, PendingInput, PendingLoginKind, PiApp, SlashCommand};
+    use super::{AgentState, PendingInput, PendingLoginKind, RaApp, SlashCommand};
     use super::{
-        ExcludedBashPersistenceOutcome, PiMsg, parse_bash_command, parse_extension_command,
+        ExcludedBashPersistenceOutcome, RaMsg, parse_bash_command, parse_extension_command,
         persist_excluded_bash_execution, should_show_startup_oauth_hint, spawn_bash_completion,
     };
     use crate::agent::{Agent, AgentConfig, QueuedAgentMessage};
@@ -4639,7 +4639,7 @@ mod tests {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let result = loop {
             match event_rx.try_recv() {
-                Ok(message @ PiMsg::BashResult { .. }) => break message,
+                Ok(message @ RaMsg::BashResult { .. }) => break message,
                 Ok(_) | Err(_) if std::time::Instant::now() < deadline => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -4647,7 +4647,7 @@ mod tests {
                 Err(err) => panic!("bash completion was not delivered before deadline: {err}"),
             }
         };
-        let PiMsg::BashResult {
+        let RaMsg::BashResult {
             display,
             content_for_agent,
         } = result
@@ -4679,7 +4679,7 @@ mod tests {
     fn bash_completion_waits_for_event_capacity_instead_of_dropping_terminal_result() {
         let (event_tx, mut event_rx) = asupersync::channel::mpsc::channel(1);
         event_tx
-            .try_send(PiMsg::System("occupy channel".to_string()))
+            .try_send(RaMsg::System("occupy channel".to_string()))
             .expect("fill event channel");
         let runtime_handle = runtime().handle();
         spawn_bash_completion(
@@ -4693,13 +4693,13 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(50));
         assert!(matches!(
             event_rx.try_recv(),
-            Ok(PiMsg::System(message)) if message == "occupy channel"
+            Ok(RaMsg::System(message)) if message == "occupy channel"
         ));
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         loop {
             match event_rx.try_recv() {
-                Ok(PiMsg::BashResult {
+                Ok(RaMsg::BashResult {
                     display,
                     content_for_agent,
                 }) => {
@@ -4719,7 +4719,7 @@ mod tests {
     fn build_bash_test_app(
         session: Arc<Mutex<Session>>,
         cwd: &Path,
-    ) -> (PiApp, asupersync::channel::mpsc::Receiver<PiMsg>) {
+    ) -> (RaApp, asupersync::channel::mpsc::Receiver<RaMsg>) {
         let current = test_model_entry("dummy", "dummy-model");
         let agent = Agent::new(
             Arc::new(DummyProvider),
@@ -4742,7 +4742,7 @@ mod tests {
             last_changelog_version: Some(crate::platform::VERSION.to_string()),
             ..Config::default()
         };
-        let app = PiApp::new(
+        let app = RaApp::new(
             agent,
             session,
             config,
@@ -4771,7 +4771,7 @@ mod tests {
     fn reload_reuses_startup_package_trust_and_keeps_explicit_resources() {
         let temp = TempDir::new().expect("tempdir");
         let cwd = temp.path();
-        let project_skill = cwd.join(".pi/skills/project-only/SKILL.md");
+        let project_skill = cwd.join(".ra/skills/project-only/SKILL.md");
         let explicit_skill = cwd.join("explicit/explicit-only/SKILL.md");
         std::fs::create_dir_all(project_skill.parent().expect("project skill parent"))
             .expect("create project skill directory");
@@ -4782,7 +4782,7 @@ mod tests {
             "---\nname: project-only\ndescription: Project trust sentinel\n---\nProject body.\n",
         )
         .expect("write project skill");
-        std::fs::write(cwd.join(".pi/settings.json"), "{}\n")
+        std::fs::write(cwd.join(".ra/settings.json"), "{}\n")
             .expect("write project trust sentinel");
         std::fs::write(
             &explicit_skill,
@@ -4809,7 +4809,7 @@ mod tests {
             .expect("untrusted reload event before timeout")
             .expect("untrusted reload event")
         });
-        let PiMsg::ResourcesReloaded { resources, .. } = untrusted else {
+        let RaMsg::ResourcesReloaded { resources, .. } = untrusted else {
             panic!("unexpected untrusted reload event: {untrusted:?}");
         };
         assert!(
@@ -4842,7 +4842,7 @@ mod tests {
             .expect("trusted reload event before timeout")
             .expect("trusted reload event")
         });
-        let PiMsg::ResourcesReloaded { resources, .. } = trusted else {
+        let RaMsg::ResourcesReloaded { resources, .. } = trusted else {
             panic!("unexpected trusted reload event: {trusted:?}");
         };
         for expected in ["explicit-only", "project-only"] {
@@ -4856,7 +4856,7 @@ mod tests {
         }
     }
 
-    fn stage_private_follow_up(app: &PiApp) {
+    fn stage_private_follow_up(app: &RaApp) {
         let mut agent = app.agent.try_lock().expect("test agent lock");
         agent.queue_follow_up(ModelMessage::User(UserMessage {
             content: UserContent::Text("old-session follow-up".to_string()),
@@ -4864,7 +4864,7 @@ mod tests {
         }));
     }
 
-    fn current_session_id(app: &PiApp) -> String {
+    fn current_session_id(app: &RaApp) -> String {
         app.session
             .try_lock()
             .expect("test session lock")
@@ -4881,7 +4881,7 @@ mod tests {
         let origin_session_id = current_session_id(&app);
         let task_marker = "origin-only-tan-task";
         let output_marker = "origin-only-tan-output";
-        let completion = pi::subagents::TanCompletion {
+        let completion = ra::subagents::TanCompletion {
             schema: "pi.background-tan.result.v1",
             hub_id: Some("tan-origin-proof".to_string()),
             task: task_marker.to_string(),
@@ -4892,10 +4892,10 @@ mod tests {
         };
         let expected_card = completion.card_text();
         let expected_follow_up = completion.follow_up_text();
-        let event = PiApp::completed_tan_event(origin_session_id.clone(), &completion);
+        let event = RaApp::completed_tan_event(origin_session_id.clone(), &completion);
         assert!(matches!(
             &event,
-            PiMsg::SessionSystemNote {
+            RaMsg::SessionSystemNote {
                 owner_session_id,
                 message,
             } if owner_session_id == &origin_session_id
@@ -4933,7 +4933,7 @@ mod tests {
             !message.content.contains(task_marker) && !message.content.contains(output_marker)
         }));
 
-        let origin_notices = pi::jobs::take_completion_notices(&origin_session_id);
+        let origin_notices = ra::jobs::take_completion_notices(&origin_session_id);
         assert_eq!(
             origin_notices.len(),
             1,
@@ -4948,12 +4948,12 @@ mod tests {
         };
         assert_eq!(follow_up, &expected_follow_up);
         assert!(
-            pi::jobs::take_completion_notices(&replacement_session_id).is_empty(),
+            ra::jobs::take_completion_notices(&replacement_session_id).is_empty(),
             "the replacement session must not inherit the origin model follow-up"
         );
     }
 
-    fn assert_staged_transition_rejected(app: &PiApp, original_session_id: &str) {
+    fn assert_staged_transition_rejected(app: &RaApp, original_session_id: &str) {
         assert!(matches!(app.agent_state, AgentState::Idle));
         assert_eq!(current_session_id(app), original_session_id);
         assert!(
@@ -5108,7 +5108,7 @@ mod tests {
             timestamp: 0,
         });
 
-        let result = runtime().block_on(PiApp::try_install_session(
+        let result = runtime().block_on(RaApp::try_install_session(
             &session,
             &app.agent,
             &app.session_action_admission,
@@ -5148,7 +5148,7 @@ mod tests {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let terminal = loop {
             match event_rx.try_recv() {
-                Ok(message @ PiMsg::AgentError(_)) => break message,
+                Ok(message @ RaMsg::AgentError(_)) => break message,
                 Ok(other) => panic!("unexpected resume event: {other:?}"),
                 Err(_) if std::time::Instant::now() < deadline => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
@@ -5191,7 +5191,7 @@ mod tests {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let result_message = loop {
             match event_rx.try_recv() {
-                Ok(message @ PiMsg::BashResult { .. }) => break message,
+                Ok(message @ RaMsg::BashResult { .. }) => break message,
                 Ok(_) | Err(_) if std::time::Instant::now() < deadline => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -5200,7 +5200,7 @@ mod tests {
             }
         };
 
-        let PiMsg::BashResult {
+        let RaMsg::BashResult {
             display,
             content_for_agent,
         } = &result_message

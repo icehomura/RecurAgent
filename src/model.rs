@@ -1259,7 +1259,7 @@ mod tests {
     /// Anthropic emits `{"type":"redacted_thinking","data":"<opaque>"}` when
     /// the safety pipeline hides upstream reasoning; OpenRouter relays it
     /// verbatim. The deserializer must accept the variant or the agent loop
-    /// terminates on every redaction (issue tracked in pi_agent_rust#80).
+    /// terminates on every redaction (issue tracked in recur_agent#80).
     #[test]
     fn content_block_redacted_thinking_wire_form_is_accepted() {
         let wire = serde_json::json!({

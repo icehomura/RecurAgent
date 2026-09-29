@@ -39,16 +39,19 @@ impl Transport {
             std::env::var(name).ok()
         })?;
         let (default_url, env_name) = match provider {
-            "openai" => ("https://api.openai.com/v1/", "PI_MEDIA_OPENAI_BASE_URL"),
+            "openai" => (
+                "https://api.openai.com/v1/",
+                "RECUR_AGENT_MEDIA_OPENAI_BASE_URL",
+            ),
             "anthropic" => (
                 "https://api.anthropic.com/v1/",
-                "PI_MEDIA_ANTHROPIC_BASE_URL",
+                "RECUR_AGENT_MEDIA_ANTHROPIC_BASE_URL",
             ),
             "gemini" => (
                 "https://generativelanguage.googleapis.com/v1beta/",
-                "PI_MEDIA_GEMINI_BASE_URL",
+                "RECUR_AGENT_MEDIA_GEMINI_BASE_URL",
             ),
-            "xai" => ("https://api.x.ai/v1/", "PI_MEDIA_XAI_BASE_URL"),
+            "xai" => ("https://api.x.ai/v1/", "RECUR_AGENT_MEDIA_XAI_BASE_URL"),
             _ => return Err(Error::tool(tool, "unsupported media provider")),
         };
         let env_url = std::env::var(env_name).ok();

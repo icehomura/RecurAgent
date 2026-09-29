@@ -31,7 +31,7 @@ fn fixture(root: &Path, mode: &str) -> Option<LspTool> {
     });
     let Some(python) = python else {
         assert!(
-            std::env::var_os("PI_LSP_REQUIRE_PROTOCOL").is_none(),
+            std::env::var_os("RECUR_AGENT_LSP_REQUIRE_PROTOCOL").is_none(),
             "completion protocol peer requires Python"
         );
         eprintln!("SKIP completion protocol fixture: Python unavailable");

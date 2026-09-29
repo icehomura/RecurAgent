@@ -246,7 +246,7 @@ impl Error {
     /// consults. For a transient connection drop (reset/abort/EOF/broken
     /// pipe/timeout) a canonical `transient connection drop` marker is appended
     /// so the drop is re-driven regardless of the dependency's (rustls/hyper)
-    /// prose, which changes phrasing between versions (pi_agent_rust#118).
+    /// prose, which changes phrasing between versions (recur_agent#118).
     pub fn sse(err: &std::io::Error) -> Self {
         let base = format!("SSE error: {err}");
         if io_kind_is_transient(err.kind()) {
@@ -349,7 +349,7 @@ impl Error {
             Self::SessionNotFound { path } => build_hints(
                 "Session file not found.",
                 vec![
-                    "Use `pi --continue` to open the most recent session.".to_string(),
+                    "Use `ra --continue` to open the most recent session.".to_string(),
                     "Verify the path or move the session back into the sessions directory."
                         .to_string(),
                 ],
@@ -602,7 +602,7 @@ fn config_hints(message: &str) -> ErrorHints {
             "Configuration file is not valid JSON.",
             vec![
                 "Fix JSON formatting in the active settings file.".to_string(),
-                "Run `pi config` to see which settings file is in use.".to_string(),
+                "Run `ra config` to see which settings file is in use.".to_string(),
             ],
             vec![("details", message.to_string())],
         );
@@ -611,8 +611,8 @@ fn config_hints(message: &str) -> ErrorHints {
         return build_hints(
             "Configuration file is missing.",
             vec![
-                "Create `~/.pi/agent/settings.json` or set `PI_CONFIG_PATH`.".to_string(),
-                "Run `pi config` to confirm the resolved path.".to_string(),
+                "Create `~/.ra/agent/settings.json` or set `RECUR_AGENT_CONFIG_PATH`.".to_string(),
+                "Run `ra config` to confirm the resolved path.".to_string(),
             ],
             vec![("details", message.to_string())],
         );
@@ -621,7 +621,7 @@ fn config_hints(message: &str) -> ErrorHints {
         "Configuration error.",
         vec![
             "Review your settings file for incorrect values.".to_string(),
-            "Run `pi config` to verify settings precedence.".to_string(),
+            "Run `ra config` to verify settings precedence.".to_string(),
         ],
         vec![("details", message.to_string())],
     )
@@ -633,7 +633,7 @@ fn session_hints(message: &str) -> ErrorHints {
         return build_hints(
             "Session file is empty or corrupted.",
             vec![
-                "Start a new session with `pi --no-session`.".to_string(),
+                "Start a new session with `ra --no-session`.".to_string(),
                 "Inspect the session file for truncation.".to_string(),
             ],
             vec![("details", message.to_string())],
@@ -644,7 +644,7 @@ fn session_hints(message: &str) -> ErrorHints {
             "Failed to read session data.",
             vec![
                 "Check file permissions for the sessions directory.".to_string(),
-                "Verify `PI_SESSIONS_DIR` if you set it.".to_string(),
+                "Verify `RECUR_AGENT_SESSIONS_DIR` if you set it.".to_string(),
             ],
             vec![("details", message.to_string())],
         );
@@ -652,7 +652,7 @@ fn session_hints(message: &str) -> ErrorHints {
     build_hints(
         "Session error.",
         vec![
-            "Try `pi --continue` or specify `--session <path>`.".to_string(),
+            "Try `ra --continue` or specify `--session <path>`.".to_string(),
             "Check session file integrity in the sessions directory.".to_string(),
         ],
         vec![("details", message.to_string())],
@@ -872,7 +872,8 @@ fn io_hints(err: &std::io::Error) -> ErrorHints {
             "Required file or directory not found.",
             vec![
                 "Verify the path exists and is spelled correctly.".to_string(),
-                "Check `PI_CONFIG_PATH` or `PI_SESSIONS_DIR` overrides.".to_string(),
+                "Check `RECUR_AGENT_CONFIG_PATH` or `RECUR_AGENT_SESSIONS_DIR` overrides."
+                    .to_string(),
             ],
             vec![
                 ("error_kind", format!("{:?}", err.kind())),
@@ -1119,7 +1120,7 @@ fn io_error_chain_is_transient(err: &std::io::Error) -> bool {
 ///
 /// This is the **fallback** classifier for errors that only exist as
 /// prose (dependency messages with no typed cause); typed errors should be
-/// classified with [`Error::is_transient`] first — see pi_agent_rust#118.
+/// classified with [`Error::is_transient`] first — see recur_agent#118.
 /// Matches pi-mono's `_isRetryableError()` logic:
 ///
 /// 1. Error message must be non-empty.
@@ -1510,11 +1511,11 @@ mod tests {
     #[test]
     fn error_session_not_found_display() {
         let err = Error::SessionNotFound {
-            path: "/home/user/.pi/sessions/abc.jsonl".to_string(),
+            path: "/home/user/.ra/sessions/abc.jsonl".to_string(),
         };
         let msg = err.to_string();
         assert!(msg.contains("Session not found"));
-        assert!(msg.contains("/home/user/.pi/sessions/abc.jsonl"));
+        assert!(msg.contains("/home/user/.ra/sessions/abc.jsonl"));
     }
 
     #[test]
@@ -1618,7 +1619,7 @@ mod tests {
 
     #[test]
     fn hints_config_missing_file() {
-        let err = Error::config("config file not found: ~/.pi/settings");
+        let err = Error::config("config file not found: ~/.ra/settings");
         let h = err.hints();
         assert!(h.summary.contains("missing"));
     }
@@ -2873,7 +2874,7 @@ mod tests {
         assert!(is_retryable_error("Service Unavailable", None, None));
     }
 
-    // ─── pi_agent_rust#118: typed transient classification ──────────────
+    // ─── recur_agent#118: typed transient classification ──────────────
 
     #[test]
     fn transient_io_kinds_classified_from_type() {
@@ -2959,7 +2960,7 @@ mod tests {
         assert!(!is_retryable_error(&fatal.to_string(), None, None));
     }
 
-    /// The two exact strings reported in pi_agent_rust#118 are now retryable,
+    /// The two exact strings reported in recur_agent#118 are now retryable,
     /// both with the source-stamped canonical marker and as raw prose (the
     /// documented text fallback for dependency messages).
     #[test]

@@ -1436,7 +1436,7 @@ fn resolve_extension_load_spec_detects_js_runtime_manifest() {
     std::fs::write(
         dir.path().join("extension.json"),
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.manifest.v1",
+            "schema": "ra.ext.manifest.v1",
             "extension_id": "test-js-ext",
             "name": "Test JS Extension",
             "version": "0.1.0",
@@ -1469,7 +1469,7 @@ fn warm_runtime_pool_fingerprint_changes_when_extension_entry_changes() {
     let entry = dir.path().join("index.ts");
     std::fs::write(&entry, "export const value = 1;\n").expect("write entry");
     let spec = JsExtensionLoadSpec::from_entry_path(&entry).expect("load spec");
-    let config = PiJsRuntimeConfig::default();
+    let config = RaJsRuntimeConfig::default();
     let policy = ExtensionPolicy::default();
 
     let before = warm_runtime_pool_fingerprint(&config, &policy, std::slice::from_ref(&spec));
@@ -1493,13 +1493,13 @@ fn warm_runtime_pool_fingerprint_changes_when_config_or_policy_changes() {
     let entry = dir.path().join("index.ts");
     std::fs::write(&entry, "export default function init() {}\n").expect("write entry");
     let spec = JsExtensionLoadSpec::from_entry_path(&entry).expect("load spec");
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         cwd: dir.path().display().to_string(),
-        limits: crate::extensions_js::PiJsRuntimeLimits {
+        limits: crate::extensions_js::RaJsRuntimeLimits {
             memory_limit_bytes: Some(16 * 1024 * 1024),
-            ..crate::extensions_js::PiJsRuntimeLimits::default()
+            ..crate::extensions_js::RaJsRuntimeLimits::default()
         },
-        ..PiJsRuntimeConfig::default()
+        ..RaJsRuntimeConfig::default()
     };
     let policy = ExtensionPolicy::default();
 
@@ -1583,7 +1583,7 @@ fn js_runtime_pump_once_exec_streaming_large_output_completes_without_deadlock()
             interceptor: None,
         };
 
-        let runtime = PiJsRuntime::new().await.expect("runtime");
+        let runtime = RaJsRuntime::new().await.expect("runtime");
         runtime
                 .eval(
                     r#"

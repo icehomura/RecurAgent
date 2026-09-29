@@ -10,7 +10,7 @@ use std::sync::mpsc::Sender;
 use serde_json::Value;
 
 use crate::autocomplete::{AutocompleteCatalog, NamedEntry};
-use crate::interactive::PiMsg;
+use crate::interactive::RaMsg;
 use crate::sdk::AgentSessionHandle;
 
 /// Which info command the user ran.
@@ -116,7 +116,7 @@ pub fn format_ssh(write_hosts: &[String]) -> String {
     if write_hosts.is_empty() {
         out.push_str(
             "\n  writes: no host allowed yet — add a `Host <name>` entry to ~/.ssh/config \
-             or list it in PI_SSH_ALLOWED_HOSTS",
+             or list it in RECUR_AGENT_SSH_ALLOWED_HOSTS",
         );
     } else {
         let _ = write!(
@@ -241,7 +241,7 @@ pub async fn run(
     handle: &AgentSessionHandle,
     catalog: &AutocompleteCatalog,
     cwd: &Path,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let message = match command {
         InfoCommand::Tools => describe_tools(handle),
@@ -252,12 +252,12 @@ pub async fn run(
         InfoCommand::Skills => format_named(
             "Skills",
             &catalog.skills,
-            "No skills available (add SKILL.md files under .pi/skills or ~/.pi/agent/skills).",
+            "No skills available (add SKILL.md files under .ra/skills or ~/.ra/agent/skills).",
         ),
         InfoCommand::Templates => format_named(
             "Prompt templates (run one as /<name> [args])",
             &catalog.prompt_templates,
-            "No prompt templates (add .md files under .pi/prompts or ~/.pi/agent/prompts).",
+            "No prompt templates (add .md files under .ra/prompts or ~/.ra/agent/prompts).",
         ),
         InfoCommand::Ssh => format_ssh(&crate::url_router::ssh_write_allowed_hosts()),
         InfoCommand::Dirs => {
@@ -329,7 +329,7 @@ pub async fn run(
             crate::stats::render_text(&report)
         }
     };
-    let _ = agent_tx.send(PiMsg::System(message));
+    let _ = agent_tx.send(RaMsg::System(message));
 }
 
 #[cfg(test)]

@@ -3,9 +3,9 @@
 //! Sources in precedence order (highest first, bd-cv653.6.1):
 //!
 //! 1. `--mcp-config <path>` (CLI, repeatable)
-//! 2. `.pi/mcp.json` (project native)
+//! 2. `.ra/mcp.json` (project native)
 //! 3. `.agents/mcp.json` (project cross-agent convention)
-//! 4. `~/.pi/agent/mcp.json` (global native)
+//! 4. `~/.ra/agent/mcp.json` (global native)
 //! 5. Foreign files (`.claude/mcp.json`, `.cursor/mcp.json`,
 //!    `.windsurf/mcp.json`, `.gemini/settings.json`, `.codex/config.toml`
 //!    under the project) — marked `provenance=foreign`.
@@ -25,7 +25,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-const TRUST_FINGERPRINT_DOMAIN: &[u8] = b"pi_agent_rust:mcp-trust-surface:v2";
+const TRUST_FINGERPRINT_DOMAIN: &[u8] = b"recur_agent:mcp-trust-surface:v2";
 const MAX_MCP_CONFIG_BYTES: usize = 1024 * 1024;
 
 /// `HttpTransport` always installs Content-Type + Accept and may add an MCP
@@ -109,11 +109,11 @@ pub(super) fn validate_env_value(value: &str) -> std::result::Result<(), String>
 pub enum Provenance {
     /// `--mcp-config` CLI file.
     Cli,
-    /// `.pi/mcp.json` in the project.
+    /// `.ra/mcp.json` in the project.
     ProjectPi,
     /// `.agents/mcp.json` in the project.
     ProjectAgents,
-    /// `~/.pi/agent/mcp.json`.
+    /// `~/.ra/agent/mcp.json`.
     GlobalPi,
     /// A foreign tool's config file (`.claude/`, `.cursor/`, ...).
     Foreign,
@@ -127,7 +127,7 @@ impl Provenance {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Cli => "cli",
-            Self::ProjectPi => ".pi",
+            Self::ProjectPi => ".ra",
             Self::ProjectAgents => ".agents",
             Self::GlobalPi => "global",
             Self::Foreign => "foreign",
@@ -894,7 +894,7 @@ pub struct McpDiscovery {
 /// workspace-trust decision.
 ///
 /// `cli_paths`: `--mcp-config` files (repeatable, highest precedence).
-/// `global_dir`: the pi global agent dir (`~/.pi/agent`).
+/// `global_dir`: the pi global agent dir (`~/.ra/agent`).
 ///
 /// When `project_trusted` is false, project-native and foreign project files
 /// are skipped without being opened. Explicit `--mcp-config` paths and the
@@ -932,7 +932,7 @@ pub fn discover(
     }
     if !lower_layers_blocked && project_trusted {
         lower_layers_blocked = load_file(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             Provenance::ProjectPi,
             &mut layered,
             &mut warnings,
@@ -1028,7 +1028,7 @@ pub fn discover(
 }
 
 /// Write-side view of a project-native config file (for `/mcp add|remove`):
-/// read-modify-write `.pi/mcp.json` preserving unrelated content.
+/// read-modify-write `.ra/mcp.json` preserving unrelated content.
 ///
 /// # Errors
 ///
@@ -1107,7 +1107,7 @@ mod tests {
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers": {"shared": {"command": "project-cmd"}, "only_project": {"command": "p2"}}}"#,
         );
         write(
@@ -1147,7 +1147,7 @@ mod tests {
         let global = temp.path().join("global");
         let cli = temp.path().join("cli.json");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers": {"s": {"command": "project"}}}"#,
         );
         write(&cli, r#"{"mcpServers": {"s": {"command": "cli"}}}"#);
@@ -1163,7 +1163,7 @@ mod tests {
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers": {"good": {"command": "ok"}, "bad": 42}}"#,
         );
         let discovery = discover(&cwd, &global, &[], true);
@@ -1178,7 +1178,7 @@ mod tests {
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers":{
                 "bad-shape":{"command":7},
                 "bad-header":{"url":"https://project.invalid","headers":{"Bad Header":"x"}},
@@ -1207,7 +1207,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
-        write(&cwd.join(".pi/mcp.json"), r#"{"shared":42}"#);
+        write(&cwd.join(".ra/mcp.json"), r#"{"shared":42}"#);
         write(
             &global.join("mcp.json"),
             r#"{"mcpServers":{"shared":{"command":"global"}}}"#,
@@ -1227,7 +1227,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers":{
                 "both":{"command":"server","url":"https://example.invalid"},
                 "url-stdio":{"url":"https://example.invalid","type":"stdio"},
@@ -1248,7 +1248,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers":[],"unrelated":{"command":"must-not-run"}}"#,
         );
 
@@ -1263,7 +1263,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
-        write(&cwd.join(".pi/mcp.json"), "{not json");
+        write(&cwd.join(".ra/mcp.json"), "{not json");
         write(
             &global.join("mcp.json"),
             r#"{"mcpServers": {"g": {"command": "ok"}}}"#,
@@ -1278,7 +1278,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
-        std::fs::create_dir_all(cwd.join(".pi/mcp.json")).expect("non-regular config fixture");
+        std::fs::create_dir_all(cwd.join(".ra/mcp.json")).expect("non-regular config fixture");
         write(
             &global.join("mcp.json"),
             r#"{"mcpServers":{"fallback":{"command":"ok"}}}"#,
@@ -1287,7 +1287,7 @@ mod tests {
         let discovery = discover(&cwd, &global, &[], true);
         assert!(discovery.servers.is_empty());
         assert_eq!(discovery.warnings.len(), 1);
-        assert_eq!(discovery.warnings[0].source_file, cwd.join(".pi/mcp.json"));
+        assert_eq!(discovery.warnings[0].source_file, cwd.join(".ra/mcp.json"));
         assert!(
             discovery.warnings[0]
                 .reason
@@ -1300,7 +1300,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         let global = temp.path().join("global");
-        let project_config = cwd.join(".pi/mcp.json");
+        let project_config = cwd.join(".ra/mcp.json");
         std::fs::create_dir_all(project_config.parent().expect("config parent"))
             .expect("project config directory");
         std::fs::write(&project_config, vec![b' '; MAX_MCP_CONFIG_BYTES + 1])
@@ -1347,7 +1347,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"myserver": {"command": "bare-form"}}"#,
         );
         let discovery = discover(&cwd, &temp.path().join("g"), &[], true);
@@ -1377,7 +1377,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers": {"remote": {"url": "https://mcp.example.com/sse", "headers": {"Authorization": "$ENV:MCP_TOKEN"}}}}"#,
         );
         let discovery = discover(&cwd, &temp.path().join("g"), &[], true);
@@ -1390,7 +1390,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers":{"remote":{"url":"https://mcp.example.test","headers":{"Authorization":"first","authorization":"second"}}}}"#,
         );
 
@@ -1405,7 +1405,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let cwd = temp.path().join("proj");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             &serde_json::json!({
                 "mcpServers": {
                     "hostile\u{202e}name": {"command": "server"}
@@ -1422,7 +1422,7 @@ mod tests {
     #[test]
     fn config_warning_display_escapes_terminal_and_bidi_controls() {
         let warning = ConfigWarning {
-            source_file: PathBuf::from("/p/.pi/mcp.json"),
+            source_file: PathBuf::from("/p/.ra/mcp.json"),
             entry: "evil\u{1b}[2J\u{202e}name".to_string(),
             reason: "line\nbreak".to_string(),
         };
@@ -1454,7 +1454,7 @@ mod tests {
             .map(|index| (format!("X-MCP-{index}"), Value::String("value".to_string())))
             .collect();
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             &serde_json::json!({
                 "mcpServers": {
                     "remote": {
@@ -1512,7 +1512,7 @@ mod tests {
         let cwd = temp.path().join("proj");
         std::fs::create_dir_all(&cwd).expect("cwd");
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers": {"s": {"command": "a", "args": ["one"], "env": {"B": "$ENV:TOKEN", "A": "literal"}}}}"#,
         );
         let server = discover(&cwd, &temp.path().join("g"), &[], true)
@@ -1548,7 +1548,7 @@ mod tests {
         assert_ne!(fingerprint, changed_args.fingerprint(&cwd));
 
         write(
-            &cwd.join(".pi/mcp.json"),
+            &cwd.join(".ra/mcp.json"),
             r#"{"mcpServers": {"s": {"url": "https://mcp.example.test", "headers": {"X-Token": "$CMD:token-helper", "X-Accept-Mode": "application/json"}}}}"#,
         );
         let http_server = discover(&cwd, &temp.path().join("g"), &[], true)
@@ -1807,7 +1807,7 @@ mod tests {
     #[test]
     fn write_then_read_project_config_roundtrip() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join(".pi/mcp.json");
+        let path = temp.path().join(".ra/mcp.json");
         let mut value = read_project_config(&path).expect("read absent");
         value["mcpServers"]["added"] = serde_json::json!({"command": "new-cmd"});
         write_project_config(&path, &value).expect("write");
@@ -1821,7 +1821,7 @@ mod tests {
     #[test]
     fn project_config_read_rejects_oversized_file() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join(".pi/mcp.json");
+        let path = temp.path().join(".ra/mcp.json");
         std::fs::create_dir_all(path.parent().expect("config parent")).expect("config directory");
         std::fs::write(&path, vec![b' '; MAX_MCP_CONFIG_BYTES + 1])
             .expect("oversized config fixture");
@@ -1837,7 +1837,7 @@ mod tests {
     #[test]
     fn project_config_write_rejects_output_above_read_limit() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join(".pi/mcp.json");
+        let path = temp.path().join(".ra/mcp.json");
         let value = serde_json::json!({
             "mcpServers": {
                 "oversized": {"command": "x".repeat(MAX_MCP_CONFIG_BYTES)}

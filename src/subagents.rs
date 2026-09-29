@@ -1,8 +1,8 @@
 //! Native child-agent orchestration.
 //!
 //! This module deliberately uses the Pi executable that is already running
-//! (or the explicit `PI_SUBAGENT_PI_BINARY` override) instead of resolving a
-//! `pi` binary through `PATH`.  That makes a Rust Pi parent reliably launch
+//! (or the explicit `RECUR_AGENT_SUBAGENT_PI_BINARY` override) instead of resolving a
+//! `ra` binary through `PATH`.  That makes a Rust Pi parent reliably launch
 //! Rust Pi children even on hosts that also have the TypeScript implementation
 //! installed.
 
@@ -40,8 +40,8 @@ const MAX_CHILD_OUTPUT_BYTES: usize = 256 * 1024;
 /// v2 (bd-cv653.5.1) extends v1 additively with `data`, `schemaValid`,
 /// `validationErrors`, and `schemaRetries` on schema-bearing results; every
 /// v1 field is unchanged, so v1 consumers keep working.
-const SUBAGENT_RESULT_SCHEMA: &str = "pi.subagent.result.v2";
-const SUBAGENT_PROGRESS_SCHEMA: &str = "pi.subagent.progress.v1";
+const SUBAGENT_RESULT_SCHEMA: &str = "ra.subagent.result.v2";
+const SUBAGENT_PROGRESS_SCHEMA: &str = "ra.subagent.progress.v1";
 /// Per-field byte budget for `output`/`error` in the opt-in structured block.
 const STRUCTURED_FIELD_LIMIT_BYTES: usize = 2 * 1024;
 /// Byte budget for the JSON payload of the opt-in structured block.
@@ -127,7 +127,7 @@ pub struct SubagentTool {
 impl SubagentTool {
     #[must_use]
     pub fn new(cwd: &Path) -> Self {
-        let child_binary = std::env::var_os("PI_SUBAGENT_PI_BINARY")
+        let child_binary = std::env::var_os("RECUR_AGENT_SUBAGENT_PI_BINARY")
             .filter(|path| !path.is_empty())
             .map(PathBuf::from)
             .or_else(|| std::env::current_exe().ok())
@@ -151,7 +151,7 @@ impl SubagentTool {
     }
 
     /// Set the host's request-wide execution ceiling (1 ms through 24 hours).
-    /// Without this override, `PI_SUBAGENT_TIMEOUT_SECS` supplies the ceiling,
+    /// Without this override, `RECUR_AGENT_SUBAGENT_TIMEOUT_SECS` supplies the ceiling,
     /// defaulting to 900 seconds. A model's `timeoutSeconds` can only shorten it.
     /// Invalid limits are rejected before launch. Inherited parent deadlines
     /// remain an upper bound even when this explicit SDK policy is supplied.
@@ -165,7 +165,7 @@ impl SubagentTool {
     /// `<subagent-structured-result>` JSON block to the tool result text.
     ///
     /// Off by default; when disabled the tool output is byte-identical to
-    /// previous releases. See pi_agent_rust#163.
+    /// previous releases. See recur_agent#163.
     #[must_use]
     pub const fn with_structured_results(mut self, enabled: bool) -> Self {
         self.structured_results = enabled;
@@ -341,7 +341,7 @@ impl Tool for SubagentTool {
     }
 
     fn description(&self) -> &'static str {
-        "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {previous}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $PI_CODING_AGENT_DIR/agents/*.md or .pi/agents/*.md. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {worktree_path, diff_stat, patch} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>)."
+        "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {previous}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {worktree_path, diff_stat, patch} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>)."
     }
 
     fn parameters(&self) -> Value {
@@ -366,7 +366,7 @@ impl Tool for SubagentTool {
                         "agent": {"type": "string"},
                         "task": {"type": "string"},
                         "cwd": {"type": "string"},
-                        "isolation": {"type": "string", "enum": ["none", "worktree"], "default": "none", "description": "worktree runs the child in a git worktree with the parent's uncommitted state; non-git dirs refuse with PI_ISO_NOT_GIT."},
+                        "isolation": {"type": "string", "enum": ["none", "worktree"], "default": "none", "description": "worktree runs the child in a git worktree with the parent's uncommitted state; non-git dirs refuse with RECUR_AGENT_ISO_NOT_GIT."},
                         "isoApply": {"type": "string", "enum": ["keep", "apply", "drop"], "default": "apply", "description": "What to do with the isolated worktree after completion."},
                         "outputSchema": {"type": "object", "description": "JSON Schema this task's final output must match."},
                         "schemaMode": {"type": "string", "enum": ["permissive", "strict"], "default": "permissive"}
@@ -399,7 +399,7 @@ impl Tool for SubagentTool {
         {
             return Err(Error::tool(
                 "subagent",
-                "PI_SUBAGENT_INVALID_TIMEOUT: timeoutSeconds must be an integer from 1 to 86400",
+                "RECUR_AGENT_SUBAGENT_INVALID_TIMEOUT: timeoutSeconds must be an integer from 1 to 86400",
             ));
         }
         let request: SubagentRequest = serde_json::from_value(input)
@@ -680,7 +680,7 @@ fn discover_agents_with_roots(
 fn nearest_project_agents_dir(cwd: &Path) -> Option<PathBuf> {
     let mut current = cwd.to_path_buf();
     loop {
-        let candidate = current.join(".pi").join("agents");
+        let candidate = current.join(".ra").join("agents");
         if candidate.is_dir() {
             return Some(candidate);
         }
@@ -997,7 +997,7 @@ fn child_depth() -> usize {
 }
 
 fn current_subagent_depth() -> usize {
-    std::env::var("PI_SUBAGENT_DEPTH")
+    std::env::var("RECUR_AGENT_SUBAGENT_DEPTH")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .unwrap_or_default()
@@ -1205,7 +1205,7 @@ fn truncated_field(value: &str, limit: usize) -> String {
 
 /// Compact per-child entry for the opt-in structured block.
 ///
-/// Field names deliberately match the `pi.subagent.result.v1` details schema
+/// Field names deliberately match the `ra.subagent.result.v1` details schema
 /// (`agent`, `step`, `status`, `exitCode`, `output`, `error`).
 fn structured_result_entry(result: &SubagentResult) -> Value {
     json!({
@@ -1317,7 +1317,7 @@ mod tests {
             "---\nname: scout\ndescription: user\nmodel: provider/user\nreasoning: low\ntools: read,grep\nskills: one.md,two.md\n---\nuser prompt",
         );
         write_agent(
-            &cwd.parent().expect("parent").join(".pi/agents"),
+            &cwd.parent().expect("parent").join(".ra/agents"),
             "scout",
             "---\nname: scout\ndescription: project\nmodel: provider/project\nthinking: high\ntools: read,find\n---\nproject prompt",
         );
@@ -1786,7 +1786,7 @@ mod tests {
             &child,
             r#"#!/bin/sh
 printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"streamed:"}}\n'
-printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"%s"}}\n' "$PI_CODING_AGENT_DIR"
+printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"%s"}}\n' "$RECUR_AGENT_DIR"
 printf '{"type":"agent_end","messages":[{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"final child result"}]}]}\n'
 "#,
         )

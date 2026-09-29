@@ -13,7 +13,7 @@ fn fixture(root: &Path, startup: &str) -> Option<LspTool> {
     });
     let Some(python) = python else {
         assert!(
-            std::env::var_os("PI_LSP_REQUIRE_PROTOCOL").is_none(),
+            std::env::var_os("RECUR_AGENT_LSP_REQUIRE_PROTOCOL").is_none(),
             "Python required for reviewed formatting tests"
         );
         eprintln!("SKIP reviewed formatting: Python unavailable; no protocol assertion executed");

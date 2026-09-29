@@ -301,7 +301,7 @@ pub fn score_candidates(
     let summary = build_summary(&scored, top_n);
 
     ScoringReport {
-        schema: "pi.ext.scoring.v1".to_string(),
+        schema: "ra.ext.scoring.v1".to_string(),
         generated_at: generated_at.to_rfc3339(),
         as_of: as_of.to_rfc3339(),
         summary,
@@ -2975,7 +2975,7 @@ mod tests {
         let low = minimal_candidate("low");
 
         let report = score_candidates(&[high, low], as_of, generated_at, 5);
-        assert_eq!(report.schema, "pi.ext.scoring.v1");
+        assert_eq!(report.schema, "ra.ext.scoring.v1");
         assert_eq!(report.items.len(), 2);
         assert_eq!(report.items[0].rank, 1);
         assert_eq!(report.items[1].rank, 2);

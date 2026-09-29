@@ -24,8 +24,8 @@ impl Fixture {
         });
         let Some(python) = python else {
             assert!(
-                std::env::var_os("PI_LSP_REQUIRE_PROTOCOL").is_none(),
-                "PI_LSP_REQUIRE_PROTOCOL requires Python for the refactor approval peer"
+                std::env::var_os("RECUR_AGENT_LSP_REQUIRE_PROTOCOL").is_none(),
+                "RECUR_AGENT_LSP_REQUIRE_PROTOCOL requires Python for the refactor approval peer"
             );
             eprintln!("SKIP refactor approval protocol fixture: Python unavailable");
             return None;

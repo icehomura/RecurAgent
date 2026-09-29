@@ -58,7 +58,7 @@ impl PyKernel {
                     "eval",
                     format!(
                         "EVAL_PY_MISSING: `{python_path}` not found. Install Python 3 \
-                         or set PI_EVAL_PYTHON."
+                         or set RECUR_AGENT_EVAL_PYTHON."
                     ),
                 )
             } else {
@@ -166,7 +166,7 @@ pub struct EvalTool {
 impl EvalTool {
     pub fn new(cwd: &Path) -> Self {
         let python_path =
-            std::env::var("PI_EVAL_PYTHON").unwrap_or_else(|_| String::from("python3"));
+            std::env::var("RECUR_AGENT_EVAL_PYTHON").unwrap_or_else(|_| String::from("python3"));
         Self {
             cwd: cwd.to_path_buf(),
             python_path,

@@ -1,7 +1,7 @@
 //! Read-only ingestor for offline swarm replay traces.
 //!
 //! The ingestor consumes already-captured repository artifacts and normalizes
-//! them into `pi.swarm.replay_trace.v1`. It never claims beads, sends mail,
+//! them into `ra.swarm.replay_trace.v1`. It never claims beads, sends mail,
 //! reserves files, starts builds, or performs network I/O.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,7 +15,7 @@ use sha2::{Digest as _, Sha256};
 use crate::error::{Error, Result};
 
 /// Schema emitted by normalized replay traces.
-pub const SWARM_REPLAY_TRACE_SCHEMA: &str = "pi.swarm.replay_trace.v1";
+pub const SWARM_REPLAY_TRACE_SCHEMA: &str = "ra.swarm.replay_trace.v1";
 
 /// Contract version implemented by this ingestor.
 pub const SWARM_REPLAY_TRACE_CONTRACT_VERSION: &str = "1.0.0";
@@ -298,7 +298,7 @@ pub struct SwarmReplayTrace {
 }
 
 /// Schema emitted by the deterministic replay engine.
-pub const SWARM_REPLAY_REPORT_SCHEMA: &str = "pi.swarm.replay_report.v1";
+pub const SWARM_REPLAY_REPORT_SCHEMA: &str = "ra.swarm.replay_report.v1";
 
 /// Deterministic report emitted after replaying a normalized trace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -517,7 +517,7 @@ pub struct SwarmReplayCoordinationState {
 }
 
 /// Schema emitted by the replay policy evaluator.
-pub const SWARM_REPLAY_POLICY_REPORT_SCHEMA: &str = "pi.swarm.policy_report.v1";
+pub const SWARM_REPLAY_POLICY_REPORT_SCHEMA: &str = "ra.swarm.policy_report.v1";
 
 /// Offline report comparing replay policy decisions over one replay output.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -619,7 +619,7 @@ pub struct SwarmReplayPolicyResourceMetrics {
 
 /// Schema emitted by replay performance-budget evidence.
 pub const SWARM_REPLAY_PERFORMANCE_EVIDENCE_SCHEMA: &str =
-    "pi.swarm.replay_performance_evidence.v1";
+    "ra.swarm.replay_performance_evidence.v1";
 
 /// CI-friendly performance budget for replay and policy-report generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3742,7 +3742,7 @@ fn flight_recorder_event(
     let event_kind = string_field(value, &["event_kind", "eventKind"], "flight-recorder");
     let payload = json!({
         "artifact_path": row.path,
-        "artifact_schema": string_field(value, &["schema"], "pi.swarm.flight_recorder.event.v1"),
+        "artifact_schema": string_field(value, &["schema"], "ra.swarm.flight_recorder.event.v1"),
         "verdict": "observed",
         "command": event_kind
     });
@@ -3772,7 +3772,7 @@ fn activity_ledger_event(
     }
     let payload = json!({
         "artifact_path": row.path,
-        "artifact_schema": string_field(value, &["schema"], "pi.swarm.activity_ledger.v1"),
+        "artifact_schema": string_field(value, &["schema"], "ra.swarm.activity_ledger.v1"),
         "verdict": "observed",
         "command": event_kind
     });

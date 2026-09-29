@@ -1523,7 +1523,7 @@ fn explanation_level_escalation_with_triggers() {
 fn explanation_schema_version_correct() {
     assert_eq!(
         RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION,
-        "pi.ext.runtime_risk_explanation.v1"
+        "ra.ext.runtime_risk_explanation.v1"
     );
 }
 

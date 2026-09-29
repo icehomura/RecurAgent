@@ -1,12 +1,12 @@
 //! Stable SDK-facing API surface for embedding Pi as a library.
 //!
 //! This module is the supported entry point for external library consumers.
-//! Prefer importing from `pi::sdk` instead of deep internal modules.
+//! Prefer importing from `ra::sdk` instead of deep internal modules.
 //!
 //! # Examples
 //!
 //! ```rust
-//! use pi::sdk::{AgentEvent, Message, ToolDefinition};
+//! use ra::sdk::{AgentEvent, Message, ToolDefinition};
 //!
 //! let _events: Vec<AgentEvent> = Vec::new();
 //! let _messages: Vec<Message> = Vec::new();
@@ -16,7 +16,7 @@
 //! Internal implementation types are intentionally not part of this surface.
 //!
 //! ```compile_fail
-//! use pi::sdk::RpcSharedState;
+//! use ra::sdk::RpcSharedState;
 //! ```
 
 mod extension_bootstrap;
@@ -370,7 +370,7 @@ pub struct SessionOptions {
     pub no_session: bool,
     pub session_path: Option<PathBuf>,
     pub session_dir: Option<PathBuf>,
-    /// Optional override for the package directory (`PI_PACKAGE_DIR`
+    /// Optional override for the package directory (`RECUR_AGENT_PACKAGE_DIR`
     /// equivalent) used for prompt documentation discovery. Relative values
     /// are resolved against the session's working directory so advertised
     /// paths stay readable through the same roots the tools use (bd-jtehj).
@@ -431,7 +431,7 @@ pub struct SessionOptions {
     ///
     /// Omitting it while extensions are loaded makes
     /// [`create_agent_session`] build a runtime for the session and say so at
-    /// debug on `pi::sdk`, so observation events still arrive (bd-8rvry). That
+    /// debug on `ra::sdk`, so observation events still arrive (bd-8rvry). That
     /// runtime lives on the returned handle and is shut down with it. Supply
     /// one whenever the host already has a runtime: sharing it is cheaper than
     /// the four worker threads the fallback starts, and it keeps extension
@@ -495,7 +495,7 @@ pub struct SessionOptions {
     pub extension_ui_handler: Option<Arc<dyn ExtensionUiHandler>>,
 
     /// Whether extension capability prompt decisions are persisted to the
-    /// on-disk permission store (`~/.pi/extension-permissions.json`).
+    /// on-disk permission store (`~/.ra/extension-permissions.json`).
     ///
     /// `true` (the default) matches the CLI/TUI behavior. `false` scopes all
     /// prompt decisions for this session to the in-memory cache, unless an
@@ -887,7 +887,7 @@ impl Default for RpcTransportOptions {
     }
 }
 
-/// Subprocess-backed SDK transport for `pi --mode rpc`.
+/// Subprocess-backed SDK transport for `ra --mode rpc`.
 const RPC_MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 const RPC_MAX_PRE_ACK_EVENTS: usize = 256;
 const RPC_MAX_PRE_ACK_BYTES: usize = 4 * 1024 * 1024;
@@ -2494,7 +2494,7 @@ impl AgentSessionHandle {
             // repeating it costs nothing and makes it findable from any point
             // in a session transcript.
             tracing::debug!(
-                target: "pi::sdk",
+                target: "ra::sdk",
                 "extensions are loaded but this session has no runtime handle; \
                  message and tool-execution events will not reach them"
             );
@@ -2665,9 +2665,9 @@ fn build_stream_options_with_optional_key(
     // Match the CLI path (`app::build_stream_options`): prompt caching
     // defaults to short retention, so SDK embedders get the same
     // Anthropic cache breakpoints instead of silently paying full input
-    // price. `PI_CACHE_RETENTION` overrides ("long"/"none").
+    // price. `RECUR_AGENT_CACHE_RETENTION` overrides ("long"/"none").
     let cache_retention =
-        app::cache_retention_from_env(std::env::var("PI_CACHE_RETENTION").ok().as_deref());
+        app::cache_retention_from_env(std::env::var("RECUR_AGENT_CACHE_RETENTION").ok().as_deref());
     let mut options = StreamOptions {
         api_key,
         headers: selection.model_entry.headers.clone(),
@@ -2677,7 +2677,9 @@ fn build_stream_options_with_optional_key(
         // Session-scoped cache affinity for OpenAI-shaped requests (gh #188),
         // matching the CLI path.
         prompt_cache_key: app::resolve_prompt_cache_key(
-            std::env::var("PI_PROMPT_CACHE_KEY").ok().as_deref(),
+            std::env::var("RECUR_AGENT_PROMPT_CACHE_KEY")
+                .ok()
+                .as_deref(),
             cache_retention,
             Some(session.header.id.as_str()),
         ),
@@ -2854,7 +2856,7 @@ pub(crate) async fn create_agent_session_deferred_mcp(
         .map(String::as_str)
         .collect::<Vec<_>>();
 
-    let sdk_test_mode = std::env::var_os("PI_TEST_MODE").is_some();
+    let sdk_test_mode = std::env::var_os("RECUR_AGENT_TEST_MODE").is_some();
     // Foreign-format workspace rules (bd-cv653.6.2), shared with the agent's
     // scoped-rule activation below.
     let foreign_rules = if config.foreign_rules_enabled() && !sdk_test_mode && !cli.no_context_files
@@ -2983,6 +2985,14 @@ pub(crate) async fn create_agent_session_deferred_mcp(
             Box::new(crate::todo::TodoTool::new(todo_session)) as Box<dyn crate::tools::Tool>
         ]);
     }
+    // Host-coupled dag tool: node execution rides the live registry; Weak
+    // handle avoids an Arc cycle once it is published into that registry.
+    if enabled_tools.contains(&"dag") {
+        let dag_registry = agent_session.agent.shared_tools();
+        agent_session.agent.extend_tools(vec![
+            Box::new(crate::dag_tool::DagTool::new(&dag_registry)) as Box<dyn crate::tools::Tool>
+        ]);
+    }
     // The host picker always exists. Enabling "ask" grants the model the
     // structured-question tool by exposing this same shared handle in the
     // schema; disabling it does not remove the host's authorization surface.
@@ -3064,7 +3074,7 @@ pub(crate) async fn create_agent_session_deferred_mcp(
             Ok(runtime) => {
                 agent_session = agent_session.with_runtime_handle(runtime.handle());
                 tracing::debug!(
-                    target: "pi::sdk",
+                    target: "ra::sdk",
                     "extensions are loaded and no runtime handle was supplied; built one so \
                      message and tool-execution events reach them"
                 );
@@ -3077,7 +3087,7 @@ pub(crate) async fn create_agent_session_deferred_mcp(
                 // but it is a warning, not a debug line, because the events
                 // really are being dropped.
                 tracing::warn!(
-                    target: "pi::sdk",
+                    target: "ra::sdk",
                     error = %err,
                     "extensions are loaded but no runtime could be built for them; message and \
                      tool-execution events will not reach extensions on this session"
@@ -4068,7 +4078,7 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let cwd = tmp.path().join("workspace");
         let global_dir = tmp.path().join("global");
-        std::fs::create_dir_all(cwd.join(".pi")).expect("create project config dir");
+        std::fs::create_dir_all(cwd.join(".ra")).expect("create project config dir");
         std::fs::create_dir_all(&global_dir).expect("create global config dir");
         std::fs::write(
             global_dir.join("settings.json"),
@@ -4076,7 +4086,7 @@ mod tests {
         )
         .expect("write global settings");
         std::fs::write(
-            cwd.join(".pi/settings.json"),
+            cwd.join(".ra/settings.json"),
             r#"{"defaultThinkingLevel":"high"}"#,
         )
         .expect("write project settings");
@@ -4637,13 +4647,15 @@ mod tests {
 
         // SDK embedders must get the same prompt-caching default as the CLI
         // path (`app::build_stream_options`); the assertion tracks the pure
-        // env resolver so it stays correct if PI_CACHE_RETENTION is set in
+        // env resolver so it stays correct if RECUR_AGENT_CACHE_RETENTION is set in
         // the environment running the tests.
         assert_eq!(
             options.cache_retention,
-            app::cache_retention_from_env(std::env::var("PI_CACHE_RETENTION").ok().as_deref())
+            app::cache_retention_from_env(
+                std::env::var("RECUR_AGENT_CACHE_RETENTION").ok().as_deref()
+            )
         );
-        if std::env::var("PI_CACHE_RETENTION").is_err() {
+        if std::env::var("RECUR_AGENT_CACHE_RETENTION").is_err() {
             assert_eq!(
                 options.cache_retention,
                 crate::provider::CacheRetention::Short

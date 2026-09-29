@@ -1,12 +1,12 @@
 //! Keybindings and action catalog for interactive mode.
 //!
 //! This module defines all available actions and their default key bindings,
-//! matching the legacy Pi Agent behavior from keybindings.md.
+//! matching the legacy Recur Agent behavior from keybindings.md.
 //!
 //! ## Usage
 //!
 //! ```ignore
-//! use pi::keybindings::{AppAction, KeyBindings};
+//! use ra::keybindings::{AppAction, KeyBindings};
 //!
 //! let bindings = KeyBindings::default();
 //! let action = bindings.lookup(&key_event);
@@ -1259,7 +1259,7 @@ impl KeyBindings {
         Ok(Self { bindings, reverse })
     }
 
-    /// Get the default user keybindings path: `~/.pi/agent/keybindings.json`
+    /// Get the default user keybindings path: `~/.ra/agent/keybindings.json`
     #[must_use]
     pub fn user_config_path() -> std::path::PathBuf {
         crate::config::Config::global_dir().join("keybindings.json")
@@ -1504,7 +1504,7 @@ impl KeyBindings {
         reverse
     }
 
-    /// Default key bindings matching legacy Pi Agent.
+    /// Default key bindings matching legacy Recur Agent.
     #[allow(clippy::too_many_lines)]
     fn default_bindings() -> HashMap<AppAction, Vec<KeyBinding>> {
         let mut m = HashMap::new();

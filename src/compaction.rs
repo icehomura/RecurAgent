@@ -201,7 +201,7 @@ pub struct CompactionPreparation {
     pub settings: ResolvedCompactionSettings,
 }
 
-pub const SEMANTIC_COMPACTION_QUALITY_SCHEMA: &str = "pi.session.semantic_compaction_quality.v1";
+pub const SEMANTIC_COMPACTION_QUALITY_SCHEMA: &str = "ra.session.semantic_compaction_quality.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -2404,7 +2404,7 @@ pub mod semantic_marker_scan_quality {
 
     /// Schema emitted by the deterministic semantic compaction quality harness.
     pub const SEMANTIC_COMPACTION_QUALITY_SCHEMA_V1: &str =
-        "pi.session.semantic_compaction_quality.v1";
+        "ra.session.semantic_compaction_quality.v1";
 
     const SEMANTIC_QUALITY_MARKER_PREFIX: &str = "[[SCQ:";
     const SEMANTIC_QUALITY_MARKER_SUFFIX: &str = "]]";

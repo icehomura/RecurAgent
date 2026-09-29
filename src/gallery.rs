@@ -105,7 +105,7 @@ impl GalleryMatrix {
         ];
 
         Self {
-            schema: "pi.gallery.matrix.v1".to_string(),
+            schema: "ra.gallery.matrix.v1".to_string(),
             items,
         }
     }
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn test_gallery_matrix_construction() {
         let matrix = GalleryMatrix::new();
-        assert_eq!(matrix.schema, "pi.gallery.matrix.v1");
+        assert_eq!(matrix.schema, "ra.gallery.matrix.v1");
         assert!(!matrix.items.is_empty());
 
         let json = matrix.render_report_json();

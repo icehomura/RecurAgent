@@ -139,7 +139,7 @@ fn url_host(url: &str) -> Option<String> {
 ///
 /// Reader mode converts supported documents to
 /// markdown; raw mode returns the downloaded body without conversion. Honors
-/// the global request-timeout override (`PI_HTTP_REQUEST_TIMEOUT_SECS`) via the
+/// the global request-timeout override (`RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS`) via the
 /// shared HTTP client.
 pub async fn fetch(
     url: &str,
@@ -175,7 +175,7 @@ fn fetch_with_redirects<'a>(
         let client = crate::http::client::Client::new();
         let response = client
             .get(url)
-            .header("User-Agent", "pi_agent_rust/0.2 (url read)")
+            .header("User-Agent", "recur_agent/0.2 (url read)")
             .header(
                 "Accept",
                 "text/html,application/pdf,text/plain,application/json,*/*",

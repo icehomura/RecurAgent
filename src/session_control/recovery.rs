@@ -39,7 +39,7 @@ impl SessionControlHandle {
     /// turn and history before choosing prompt versus continue_turn.
     ///
     /// ```no_run
-    /// use pi::session_control::{ControllableSession, SessionControlHandle};
+    /// use ra::session_control::{ControllableSession, SessionControlHandle};
     ///
     /// # async fn recover(session: &mut ControllableSession, old: &SessionControlHandle)
     /// #     -> Result<(), Box<dyn std::error::Error>> {

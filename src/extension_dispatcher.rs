@@ -30,7 +30,7 @@ use crate::extensions::{
     evaluate_exec_mediation, hash_canonical_json, required_capability_for_host_call_static,
     ui_response_value_for_op, validate_host_call,
 };
-use crate::extensions_js::{HostcallKind, HostcallRequest, PiJsRuntime, js_to_json, json_to_js};
+use crate::extensions_js::{HostcallKind, HostcallRequest, RaJsRuntime, js_to_json, json_to_js};
 use crate::hostcall_amac::{AmacBatchExecutor, AmacBatchExecutorConfig};
 use crate::hostcall_io_uring_lane::{
     HostcallCapabilityClass, HostcallDispatchLane, HostcallIoHint, IoUringFallbackReason,
@@ -474,12 +474,12 @@ fn decode_extension_event_task_state(state_json: Value) -> Result<ExtensionEvent
 
 /// Runtime bridge trait so dispatcher logic is not hardwired to a concrete runtime type.
 pub trait ExtensionDispatcherRuntime<C: SchedulerClock>: 'static {
-    fn as_js_runtime(&self) -> &PiJsRuntime<C>;
+    fn as_js_runtime(&self) -> &RaJsRuntime<C>;
 }
 
-impl<C: SchedulerClock + 'static> ExtensionDispatcherRuntime<C> for PiJsRuntime<C> {
+impl<C: SchedulerClock + 'static> ExtensionDispatcherRuntime<C> for RaJsRuntime<C> {
     #[allow(clippy::use_self)]
-    fn as_js_runtime(&self) -> &PiJsRuntime<C> {
+    fn as_js_runtime(&self) -> &RaJsRuntime<C> {
         self
     }
 }
@@ -760,36 +760,37 @@ impl Default for DualExecOracleConfig {
 
 impl DualExecOracleConfig {
     fn from_env() -> Self {
-        let sample_ppm = std::env::var("PI_EXT_DUAL_EXEC_SAMPLE_PPM")
+        let sample_ppm = std::env::var("RECUR_AGENT_EXT_DUAL_EXEC_SAMPLE_PPM")
             .ok()
             .and_then(|raw| raw.trim().parse::<u32>().ok())
             .unwrap_or(DUAL_EXEC_DEFAULT_SAMPLE_PPM)
             .min(DUAL_EXEC_SAMPLE_MODULUS_PPM);
-        let divergence_window = std::env::var("PI_EXT_DUAL_EXEC_DIVERGENCE_WINDOW")
+        let divergence_window = std::env::var("RECUR_AGENT_EXT_DUAL_EXEC_DIVERGENCE_WINDOW")
             .ok()
             .and_then(|raw| raw.trim().parse::<usize>().ok())
             .unwrap_or(DUAL_EXEC_DEFAULT_DIVERGENCE_WINDOW)
             .max(1);
-        let divergence_budget = std::env::var("PI_EXT_DUAL_EXEC_DIVERGENCE_BUDGET")
+        let divergence_budget = std::env::var("RECUR_AGENT_EXT_DUAL_EXEC_DIVERGENCE_BUDGET")
             .ok()
             .and_then(|raw| raw.trim().parse::<usize>().ok())
             .unwrap_or(DUAL_EXEC_DEFAULT_DIVERGENCE_BUDGET)
             .max(1);
-        let rollback_requests = std::env::var("PI_EXT_DUAL_EXEC_ROLLBACK_REQUESTS")
+        let rollback_requests = std::env::var("RECUR_AGENT_EXT_DUAL_EXEC_ROLLBACK_REQUESTS")
             .ok()
             .and_then(|raw| raw.trim().parse::<usize>().ok())
             .unwrap_or(DUAL_EXEC_DEFAULT_ROLLBACK_REQUESTS)
             .max(1);
-        let overhead_budget_us = std::env::var("PI_EXT_DUAL_EXEC_OVERHEAD_BUDGET_US")
+        let overhead_budget_us = std::env::var("RECUR_AGENT_EXT_DUAL_EXEC_OVERHEAD_BUDGET_US")
             .ok()
             .and_then(|raw| raw.trim().parse::<u64>().ok())
             .unwrap_or(DUAL_EXEC_DEFAULT_OVERHEAD_BUDGET_US)
             .max(1);
-        let overhead_backoff_requests = std::env::var("PI_EXT_DUAL_EXEC_OVERHEAD_BACKOFF_REQUESTS")
-            .ok()
-            .and_then(|raw| raw.trim().parse::<usize>().ok())
-            .unwrap_or(DUAL_EXEC_DEFAULT_OVERHEAD_BACKOFF_REQUESTS)
-            .max(1);
+        let overhead_backoff_requests =
+            std::env::var("RECUR_AGENT_EXT_DUAL_EXEC_OVERHEAD_BACKOFF_REQUESTS")
+                .ok()
+                .and_then(|raw| raw.trim().parse::<usize>().ok())
+                .unwrap_or(DUAL_EXEC_DEFAULT_OVERHEAD_BACKOFF_REQUESTS)
+                .max(1);
 
         Self {
             sample_ppm,
@@ -1187,26 +1188,32 @@ fn parse_env_bool(name: &str, default: bool) -> bool {
 
 fn io_uring_lane_policy_from_env() -> IoUringLanePolicyConfig {
     let default = IoUringLanePolicyConfig::conservative();
-    let max_queue_depth = std::env::var("PI_EXT_IO_URING_MAX_QUEUE_DEPTH")
+    let max_queue_depth = std::env::var("RECUR_AGENT_EXT_IO_URING_MAX_QUEUE_DEPTH")
         .ok()
         .and_then(|raw| raw.trim().parse::<usize>().ok())
         .unwrap_or(default.max_queue_depth)
         .max(1);
 
     IoUringLanePolicyConfig {
-        enabled: parse_env_bool("PI_EXT_IO_URING_ENABLED", default.enabled),
-        ring_available: parse_env_bool("PI_EXT_IO_URING_RING_AVAILABLE", default.ring_available),
+        enabled: parse_env_bool("RECUR_AGENT_EXT_IO_URING_ENABLED", default.enabled),
+        ring_available: parse_env_bool(
+            "RECUR_AGENT_EXT_IO_URING_RING_AVAILABLE",
+            default.ring_available,
+        ),
         max_queue_depth,
         allow_filesystem: parse_env_bool(
-            "PI_EXT_IO_URING_ALLOW_FILESYSTEM",
+            "RECUR_AGENT_EXT_IO_URING_ALLOW_FILESYSTEM",
             default.allow_filesystem,
         ),
-        allow_network: parse_env_bool("PI_EXT_IO_URING_ALLOW_NETWORK", default.allow_network),
+        allow_network: parse_env_bool(
+            "RECUR_AGENT_EXT_IO_URING_ALLOW_NETWORK",
+            default.allow_network,
+        ),
     }
 }
 
 fn io_uring_force_compat_from_env() -> bool {
-    parse_env_bool("PI_EXT_IO_URING_FORCE_COMPAT", false)
+    parse_env_bool("RECUR_AGENT_EXT_IO_URING_FORCE_COMPAT", false)
 }
 
 fn hostcall_io_hint(kind: &HostcallKind) -> HostcallIoHint {
@@ -2105,7 +2112,7 @@ fn hostcall_opcode_entropy(kind: &HostcallKind, payload: &Value) -> f64 {
 }
 
 impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
-    fn js_runtime(&self) -> &PiJsRuntime<C> {
+    fn js_runtime(&self) -> &RaJsRuntime<C> {
         self.runtime.as_js_runtime()
     }
 
@@ -4444,7 +4451,7 @@ mod tests {
     }
 
     fn build_dispatcher(
-        runtime: Rc<PiJsRuntime<DeterministicClock>>,
+        runtime: Rc<RaJsRuntime<DeterministicClock>>,
     ) -> ExtensionDispatcher<DeterministicClock> {
         build_dispatcher_with_policy(
             runtime,
@@ -4453,7 +4460,7 @@ mod tests {
     }
 
     fn privileged_test_script<C: SchedulerClock + 'static>(
-        runtime: &PiJsRuntime<C>,
+        runtime: &RaJsRuntime<C>,
         source: &str,
     ) -> String {
         let bridge_secret = serde_json::to_string(runtime.bridge_secret())
@@ -4462,7 +4469,7 @@ mod tests {
     }
 
     fn build_dispatcher_with_policy(
-        runtime: Rc<PiJsRuntime<DeterministicClock>>,
+        runtime: Rc<RaJsRuntime<DeterministicClock>>,
         policy: ExtensionPolicy,
     ) -> ExtensionDispatcher<DeterministicClock> {
         ExtensionDispatcher::new_with_policy(
@@ -4477,7 +4484,7 @@ mod tests {
     }
 
     fn build_dispatcher_with_policy_and_oracle(
-        runtime: Rc<PiJsRuntime<DeterministicClock>>,
+        runtime: Rc<RaJsRuntime<DeterministicClock>>,
         policy: ExtensionPolicy,
         oracle_config: DualExecOracleConfig,
     ) -> ExtensionDispatcher<DeterministicClock> {
@@ -4515,7 +4522,7 @@ mod tests {
     fn dispatcher_constructs() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4532,7 +4539,7 @@ mod tests {
     fn dispatcher_drains_empty_queue() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4546,7 +4553,7 @@ mod tests {
     fn dispatcher_drains_runtime_requests() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4568,7 +4575,7 @@ mod tests {
             std::fs::write(temp_dir.path().join("test.txt"), "hello world").expect("write file");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4619,7 +4626,7 @@ mod tests {
     fn dispatcher_tool_hostcall_unknown_tool_rejects_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4664,7 +4671,7 @@ mod tests {
     fn dispatcher_session_hostcall_resolves_state_and_set_name() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4759,7 +4766,7 @@ mod tests {
     fn dispatcher_session_hostcall_get_messages_entries_branch() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4860,7 +4867,7 @@ mod tests {
     fn dispatcher_session_hostcall_append_message_and_entry() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -4976,7 +4983,7 @@ mod tests {
     fn dispatcher_session_hostcall_unknown_op_rejects_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5021,7 +5028,7 @@ mod tests {
     fn dispatcher_session_hostcall_append_message_invalid_rejects_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5068,7 +5075,7 @@ mod tests {
     fn dispatcher_exec_hostcall_executes_and_resolves_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5119,7 +5126,7 @@ mod tests {
     fn dispatcher_exec_hostcall_command_not_found_rejects_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5295,7 +5302,7 @@ mod tests {
     fn dispatcher_exec_hostcall_streaming_callback_delivers_chunks_and_final_result() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5368,7 +5375,7 @@ mod tests {
     fn dispatcher_exec_hostcall_streaming_async_iterator_delivers_chunks_in_order() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5434,7 +5441,7 @@ mod tests {
     fn dispatcher_exec_hostcall_handles_invalid_utf8() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5494,7 +5501,7 @@ mod tests {
     fn dispatcher_exec_stream_cancel_enqueues_final_sentinel_without_wall_clock() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5559,7 +5566,7 @@ mod tests {
     fn dispatcher_exec_hostcall_streaming_timeout_marks_final_chunk_killed() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5633,7 +5640,7 @@ mod tests {
             let url = format!("http://{addr}/test");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5690,7 +5697,7 @@ mod tests {
     fn dispatcher_http_hostcall_invalid_method_rejects_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5746,7 +5753,7 @@ mod tests {
     fn dispatcher_ui_hostcall_executes_and_resolves_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5807,7 +5814,7 @@ mod tests {
     fn dispatcher_extension_ui_set_status_includes_text_field() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5870,7 +5877,7 @@ mod tests {
     fn dispatcher_extension_ui_set_widget_includes_widget_lines_and_content() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5933,7 +5940,7 @@ mod tests {
     fn dispatcher_events_hostcall_rejects_promise() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -5977,7 +5984,7 @@ mod tests {
     fn dispatcher_events_list_returns_registered_hooks() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6026,7 +6033,7 @@ mod tests {
     fn dispatcher_session_set_model_resolves_and_persists() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6104,7 +6111,7 @@ mod tests {
     fn dispatcher_session_get_model_resolves_provider_and_model_id() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6175,7 +6182,7 @@ mod tests {
     fn dispatcher_session_set_model_missing_fields_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6233,7 +6240,7 @@ mod tests {
     fn dispatcher_session_set_then_get_model_round_trip() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6326,7 +6333,7 @@ mod tests {
     fn dispatcher_session_set_thinking_level_resolves() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6401,7 +6408,7 @@ mod tests {
     fn dispatcher_session_get_thinking_level_resolves() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6467,7 +6474,7 @@ mod tests {
     fn dispatcher_session_get_thinking_level_null_when_unset() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6512,7 +6519,7 @@ mod tests {
     fn dispatcher_session_set_thinking_level_missing_level_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6558,7 +6565,7 @@ mod tests {
     fn dispatcher_session_set_then_get_thinking_level_round_trip() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6647,7 +6654,7 @@ mod tests {
     fn dispatcher_session_model_ops_accept_camel_case_aliases() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6718,7 +6725,7 @@ mod tests {
     fn dispatcher_session_set_model_accepts_model_id_snake_case() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6790,7 +6797,7 @@ mod tests {
     fn dispatcher_session_set_thinking_level_accepts_alt_keys() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6868,7 +6875,7 @@ mod tests {
     fn dispatcher_session_get_model_null_when_unset() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6920,7 +6927,7 @@ mod tests {
     fn dispatcher_session_set_label_resolves_and_persists() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -6983,7 +6990,7 @@ mod tests {
     fn dispatcher_session_set_label_remove_label_with_null() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7046,7 +7053,7 @@ mod tests {
     fn dispatcher_session_set_label_missing_target_id_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7096,7 +7103,7 @@ mod tests {
     fn dispatcher_session_set_label_accepts_snake_case_target_id() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7158,7 +7165,7 @@ mod tests {
     fn dispatcher_session_set_label_camel_case_op_alias() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7225,7 +7232,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().expect("tempdir");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7277,7 +7284,7 @@ mod tests {
             std::fs::write(temp_dir.path().join("beta.txt"), "b").expect("write");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7340,7 +7347,7 @@ mod tests {
             .expect("write");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7398,7 +7405,7 @@ mod tests {
             std::fs::write(temp_dir.path().join("target.txt"), "old text here").expect("write");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7452,7 +7459,7 @@ mod tests {
             std::fs::write(temp_dir.path().join("data.json"), "{}").expect("write");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7514,7 +7521,7 @@ mod tests {
             std::fs::write(temp_dir.path().join("file.txt"), "hello").expect("write");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7573,7 +7580,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().expect("tempdir");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7657,7 +7664,7 @@ mod tests {
             let url = format!("http://{addr}/data");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7714,7 +7721,7 @@ mod tests {
     fn dispatcher_http_missing_url_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7776,7 +7783,7 @@ mod tests {
             let url = format!("http://{addr}/headers");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7836,7 +7843,7 @@ mod tests {
     fn dispatcher_http_connection_refused_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7898,7 +7905,7 @@ mod tests {
     fn dispatcher_ui_spinner_method() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -7955,7 +7962,7 @@ mod tests {
     fn dispatcher_ui_progress_method() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8013,7 +8020,7 @@ mod tests {
     fn dispatcher_ui_notification_method() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8071,7 +8078,7 @@ mod tests {
     fn dispatcher_ui_null_handler_returns_null() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8119,7 +8126,7 @@ mod tests {
     fn dispatcher_ui_multiple_calls_captured() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8186,7 +8193,7 @@ mod tests {
     fn dispatcher_exec_with_custom_cwd() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8234,7 +8241,7 @@ mod tests {
     fn dispatcher_exec_empty_command_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8287,7 +8294,7 @@ mod tests {
     fn dispatcher_events_emit_missing_event_name_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8335,7 +8342,7 @@ mod tests {
     fn dispatcher_events_list_empty_when_no_hooks() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8395,7 +8402,7 @@ mod tests {
     fn dispatcher_session_get_file_isolated() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8415,7 +8422,7 @@ mod tests {
             assert_eq!(requests.len(), 1);
 
             let state = Arc::new(Mutex::new(serde_json::json!({
-                "sessionFile": "/home/user/.pi/sessions/abc.json"
+                "sessionFile": "/home/user/.ra/sessions/abc.json"
             })));
             let session = Arc::new(TestSession {
                 state,
@@ -8449,7 +8456,7 @@ mod tests {
                 .eval(
                     r#"
                     if (globalThis.file === "__unset__") throw new Error("get_file not resolved");
-                    if (globalThis.file !== "/home/user/.pi/sessions/abc.json") {
+                    if (globalThis.file !== "/home/user/.ra/sessions/abc.json") {
                         throw new Error("Expected session file path, got: " + JSON.stringify(globalThis.file));
                     }
                 "#,
@@ -8463,7 +8470,7 @@ mod tests {
     fn dispatcher_session_get_name_isolated() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8531,7 +8538,7 @@ mod tests {
     fn dispatcher_session_append_entry_custom_type_edge_cases() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8598,7 +8605,7 @@ mod tests {
     fn dispatcher_events_emit_dispatches_custom_event() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8667,7 +8674,7 @@ mod tests {
     fn dispatcher_exec_with_args_array() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8721,7 +8728,7 @@ mod tests {
     fn dispatcher_exec_null_args_defaults_to_empty() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8771,7 +8778,7 @@ mod tests {
     fn dispatcher_exec_non_array_args_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8822,7 +8829,7 @@ mod tests {
     fn dispatcher_exec_captures_stdout_and_stderr() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8876,7 +8883,7 @@ mod tests {
     fn dispatcher_exec_nonzero_exit_code() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8926,7 +8933,7 @@ mod tests {
     fn dispatcher_exec_signal_termination_reports_nonzero_code() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -8975,7 +8982,7 @@ mod tests {
     fn dispatcher_exec_command_not_found_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9027,7 +9034,7 @@ mod tests {
     fn dispatcher_http_tls_required_rejects_http_url() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9079,7 +9086,7 @@ mod tests {
     fn dispatcher_http_invalid_url_format_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9141,7 +9148,7 @@ mod tests {
     fn dispatcher_http_get_with_body_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9195,7 +9202,7 @@ mod tests {
             let url = format!("http://{addr}/body-test");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9261,7 +9268,7 @@ mod tests {
             let url = format!("http://{addr}/missing");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9320,7 +9327,7 @@ mod tests {
     fn dispatcher_http_unsupported_scheme_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9385,7 +9392,7 @@ mod tests {
     fn dispatcher_ui_arbitrary_method_passthrough() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9442,7 +9449,7 @@ mod tests {
     fn dispatcher_ui_payload_passthrough_complex() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9508,7 +9515,7 @@ mod tests {
     fn dispatcher_ui_handler_returns_value() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9572,7 +9579,7 @@ mod tests {
     fn dispatcher_ui_set_status_empty_text() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9629,7 +9636,7 @@ mod tests {
     fn dispatcher_ui_empty_payload() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9685,7 +9692,7 @@ mod tests {
     fn dispatcher_ui_concurrent_different_methods() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9748,7 +9755,7 @@ mod tests {
     fn dispatcher_ui_notification_with_severity() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9806,7 +9813,7 @@ mod tests {
     fn dispatcher_ui_widget_with_lines_array() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9872,7 +9879,7 @@ mod tests {
     fn dispatcher_ui_progress_with_percentage() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9933,7 +9940,7 @@ mod tests {
     fn dispatcher_events_emit_name_field_alias() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -9994,7 +10001,7 @@ mod tests {
     fn dispatcher_events_unsupported_op_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10044,7 +10051,7 @@ mod tests {
     fn dispatcher_events_emit_empty_event_name_rejects() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10094,7 +10101,7 @@ mod tests {
     fn dispatcher_events_emit_handler_count_in_response() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10158,7 +10165,7 @@ mod tests {
     fn dispatcher_events_list_returns_registered_event_names() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10226,7 +10233,7 @@ mod tests {
     fn dispatcher_events_emit_no_handlers_still_resolves() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10289,7 +10296,7 @@ mod tests {
             std::fs::write(&file_path, "file content here").expect("write test file");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10350,7 +10357,7 @@ mod tests {
     fn session_dispatch_taxonomy_unknown_op_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10376,7 +10383,7 @@ mod tests {
     fn session_dispatch_taxonomy_set_model_missing_provider_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10405,7 +10412,7 @@ mod tests {
     fn session_dispatch_taxonomy_set_model_missing_model_id_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10435,7 +10442,7 @@ mod tests {
     fn session_dispatch_taxonomy_set_thinking_level_empty_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10461,7 +10468,7 @@ mod tests {
     fn session_dispatch_taxonomy_set_label_empty_target_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10487,7 +10494,7 @@ mod tests {
     fn session_dispatch_taxonomy_append_message_invalid_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10521,7 +10528,7 @@ mod tests {
     fn session_dispatch_taxonomy_io_error_from_session_trait() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10660,7 +10667,7 @@ mod tests {
     fn session_dispatch_taxonomy_read_ops_succeed_with_null_session() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10701,7 +10708,7 @@ mod tests {
     fn session_dispatch_taxonomy_case_insensitive_aliases() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10743,7 +10750,7 @@ mod tests {
     fn ui_dispatch_taxonomy_missing_op_is_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10773,7 +10780,7 @@ mod tests {
             }
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10809,7 +10816,7 @@ mod tests {
             }
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10833,7 +10840,7 @@ mod tests {
     fn protocol_adapter_host_call_to_host_result_success() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10876,7 +10883,7 @@ mod tests {
     fn protocol_adapter_missing_op_returns_invalid_request_taxonomy() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -10944,7 +10951,7 @@ mod tests {
     fn protocol_adapter_unknown_method_includes_fallback_trace() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11003,7 +11010,7 @@ mod tests {
     fn dispatch_events_list_unknown_extension_returns_empty_events() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11036,7 +11043,7 @@ mod tests {
     fn protocol_adapter_rejects_non_host_call_messages() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11071,7 +11078,7 @@ mod tests {
     fn dispatch_denied_capability_returns_error() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11118,7 +11125,7 @@ mod tests {
     fn dispatch_denied_capability_still_denied_when_advanced_path_disabled() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11174,7 +11181,7 @@ mod tests {
     fn dispatch_allowed_capability_proceeds() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11216,7 +11223,7 @@ mod tests {
     fn dispatch_allowed_capability_still_resolves_when_advanced_path_disabled() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11269,7 +11276,7 @@ mod tests {
     fn advanced_dispatch_enabled_when_dual_exec_sampling_non_zero() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11290,7 +11297,7 @@ mod tests {
     fn advanced_dispatch_enabled_when_io_uring_is_enabled() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11318,7 +11325,7 @@ mod tests {
     fn advanced_dispatch_enabled_when_io_uring_force_compat_is_set() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11341,7 +11348,7 @@ mod tests {
     fn dispatch_strict_mode_denies_unknown_capability() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11394,7 +11401,7 @@ mod tests {
     fn protocol_dispatch_denied_returns_error() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11441,7 +11448,7 @@ mod tests {
     fn dispatch_deny_caps_blocks_http() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11493,7 +11500,7 @@ mod tests {
     fn per_extension_deny_blocks_specific_extension() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -11560,7 +11567,7 @@ mod tests {
     fn prompt_decision_treated_as_deny_in_dispatcher() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12407,7 +12414,7 @@ mod tests {
                 .expect("write");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12454,7 +12461,7 @@ mod tests {
     fn protocol_dispatch_tool_missing_name_returns_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12499,7 +12506,7 @@ mod tests {
     fn protocol_dispatch_tool_empty_name_returns_invalid_request() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12541,7 +12548,7 @@ mod tests {
             let addr = spawn_http_server("protocol http ok");
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12594,7 +12601,7 @@ mod tests {
     fn protocol_dispatch_ui_success() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12640,7 +12647,7 @@ mod tests {
     fn protocol_dispatch_ui_missing_op_returns_error() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12685,7 +12692,7 @@ mod tests {
     fn protocol_dispatch_events_missing_op_returns_error() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -12730,7 +12737,7 @@ mod tests {
     fn protocol_dispatch_log_returns_success() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -13454,7 +13461,7 @@ mod tests {
             }
 
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -13513,7 +13520,7 @@ mod tests {
     fn dual_exec_rollback_forces_dispatch_batch_amac_to_skip_planning() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -13606,7 +13613,7 @@ mod tests {
     fn rollout_mode_controls_amac_planner_activation() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -13740,7 +13747,7 @@ mod tests {
     fn io_uring_bridge_reports_cancellation_when_request_not_pending() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );
@@ -13781,7 +13788,7 @@ mod tests {
     fn io_uring_bridge_fails_closed_when_executor_is_not_wired() {
         futures::executor::block_on(async {
             let runtime = Rc::new(
-                PiJsRuntime::with_clock(DeterministicClock::new(0))
+                RaJsRuntime::with_clock(DeterministicClock::new(0))
                     .await
                     .expect("runtime"),
             );

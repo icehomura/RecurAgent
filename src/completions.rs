@@ -1,6 +1,6 @@
 //! Shell completions (bd-cv653.7.2).
 //!
-//! `pi completions <bash|zsh|fish>` prints the clap_complete script from
+//! `ra completions <bash|zsh|fish>` prints the clap_complete script from
 //! the live derive graph (always in sync by construction) plus a dynamic
 //! wrapper wiring `--model`/`--session` to the `__complete` protocol.
 //! `pi __complete <flag> [prefix]` answers dynamic candidates from the live

@@ -2,7 +2,7 @@
 //! subagent children with transcript persistence, steering delivery, kill,
 //! revive, and a minimal peer-messaging bus.
 //!
-//! Children are separate `pi` processes (`--mode json --print --no-session`),
+//! Children are separate `ra` processes (`--mode json --print --no-session`),
 //! so cross-process steering is delivered through an append-only queue file
 //! per child (`<id>.steer`); the child's print-mode loop drains that file
 //! through a steering [`crate::agent::MessageFetcher`] between turns. The
@@ -1270,7 +1270,7 @@ mod tests {
     fn registry_fsm_running_to_done() {
         let mut reg = fresh_registry();
         // dir() requires a writable global dir; point it at a temp dir.
-        let temp = std::env::temp_dir().join(format!("pi-agent-hub-test-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("ra-agent-hub-test-{}", std::process::id()));
         reg.dir = Some(temp.clone());
         let entry = reg.register("scout", "inspect the code").expect("register");
         assert_eq!(entry.status, ChildStatus::Starting);
@@ -1302,7 +1302,7 @@ mod tests {
     #[test]
     fn steer_refuses_settled_child() {
         let mut reg = fresh_registry();
-        let temp = std::env::temp_dir().join(format!("pi-agent-hub-test2-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("ra-agent-hub-test2-{}", std::process::id()));
         reg.dir = Some(temp.clone());
         let entry = reg.register("scout", "task").expect("register");
         reg.settle(&entry.id, ChildStatus::Failed);
@@ -1314,7 +1314,7 @@ mod tests {
     #[test]
     fn bus_preserves_delivery_order() {
         let mut reg = fresh_registry();
-        let temp = std::env::temp_dir().join(format!("pi-agent-hub-test3-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("ra-agent-hub-test3-{}", std::process::id()));
         reg.dir = Some(temp.clone());
         let entry = reg.register("worker", "task").expect("register");
         reg.mark_running(&entry.id, 1);
@@ -1342,7 +1342,7 @@ mod tests {
     #[test]
     fn transcript_page_redacts_secret_shapes() {
         let mut reg = fresh_registry();
-        let temp = std::env::temp_dir().join(format!("pi-agent-hub-test4-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("ra-agent-hub-test4-{}", std::process::id()));
         reg.dir = Some(temp.clone());
         let entry = reg.register("scout", "task").expect("register");
         reg.append_transcript(&entry.id, "{\"note\":\"key is sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}");
@@ -1358,7 +1358,7 @@ mod tests {
     #[test]
     fn revive_carries_transcript_context() {
         let mut reg = fresh_registry();
-        let temp = std::env::temp_dir().join(format!("pi-agent-hub-test5-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("ra-agent-hub-test5-{}", std::process::id()));
         reg.dir = Some(temp.clone());
         let entry = reg.register("scout", "original task").expect("register");
         reg.append_transcript(
@@ -1377,7 +1377,7 @@ mod tests {
     #[test]
     fn revive_refuses_running_child() {
         let mut reg = fresh_registry();
-        let temp = std::env::temp_dir().join(format!("pi-agent-hub-test6-{}", std::process::id()));
+        let temp = std::env::temp_dir().join(format!("ra-agent-hub-test6-{}", std::process::id()));
         reg.dir = Some(temp.clone());
         let entry = reg.register("scout", "task").expect("register");
         reg.mark_running(&entry.id, 9);

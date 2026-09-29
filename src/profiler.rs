@@ -1,4 +1,4 @@
-//! Sampling profiler front-end (`--profile` / `PI_PROFILE=1`, bd-cv653.7.12.1).
+//! Sampling profiler front-end (`--profile` / `RECUR_AGENT_PROFILE=1`, bd-cv653.7.12.1).
 //!
 //! Wraps the `pprof` crate behind the opt-in `profiler` feature. Samples at
 //! 99 Hz while the session runs, periodically snapshots **folded** stacks

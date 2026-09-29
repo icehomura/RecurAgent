@@ -20,9 +20,9 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tempfile::NamedTempFile;
 
-pub const EXTENSION_INDEX_SCHEMA: &str = "pi.ext.index.v1";
+pub const EXTENSION_INDEX_SCHEMA: &str = "ra.ext.index.v1";
 pub const EXTENSION_INDEX_VERSION: u32 = 1;
-pub const EXTENSION_SAFETY_PROVENANCE_SCHEMA: &str = "pi.ext.safety_provenance.v1";
+pub const EXTENSION_SAFETY_PROVENANCE_SCHEMA: &str = "ra.ext.safety_provenance.v1";
 pub const DEFAULT_INDEX_MAX_AGE: Duration = Duration::new(86_400, 0);
 const DEFAULT_NPM_QUERY: &str = "keywords:pi-extension";
 const DEFAULT_GITHUB_QUERY: &str = "topic:pi-extension";
@@ -88,7 +88,7 @@ impl ExtensionIndex {
 
     /// Resolve a unique `installSource` for an id/name, if present.
     ///
-    /// This is used to support ergonomic forms like `pi install checkpoint-pi` without requiring
+    /// This is used to support ergonomic forms like `ra install checkpoint-pi` without requiring
     /// users to spell out `npm:` / `git:` prefixes. If resolution is ambiguous, returns `None`.
     #[must_use]
     pub fn resolve_install_source(&self, query: &str) -> Option<String> {

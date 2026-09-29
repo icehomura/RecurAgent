@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::model::StopReason;
 
 /// Schema/marker tag carried in nudge messages and logs.
-pub const TURN_RECOVERY_SCHEMA: &str = "pi.turn_recovery.v1";
+pub const TURN_RECOVERY_SCHEMA: &str = "ra.turn_recovery.v1";
 
 /// Maximum auto-continuations per agent run — then the user decides.
 pub const MAX_AUTO_CONTINUATIONS: u8 = 2;

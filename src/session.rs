@@ -18,7 +18,7 @@ use crate::session_index::{
     enqueue_session_index_snapshot_update, is_session_file_path, session_file_stats,
 };
 use crate::session_store_v2::{self, SessionStoreV2};
-use crate::tui::PiConsole;
+use crate::tui::RaConsole;
 use asupersync::channel::oneshot;
 use asupersync::sync::Mutex;
 use async_trait::async_trait;
@@ -1337,13 +1337,13 @@ pub(crate) fn persistence_test_failpoint(
     point: &str,
     mutation_witness: Option<&str>,
 ) -> Result<()> {
-    if std::env::var("PI_SESSION_PERSISTENCE_TEST_FAILPOINT")
+    if std::env::var("RECUR_AGENT_SESSION_PERSISTENCE_TEST_FAILPOINT")
         .is_ok_and(|configured| configured == point)
     {
-        if std::env::var("PI_SESSION_PERSISTENCE_TEST_FAILPOINT_ACTION")
+        if std::env::var("RECUR_AGENT_SESSION_PERSISTENCE_TEST_FAILPOINT_ACTION")
             .is_ok_and(|action| action == "hard_exit")
         {
-            let marker_path = std::env::var_os("PI_SESSION_PERSISTENCE_TEST_MARKER_PATH")
+            let marker_path = std::env::var_os("RECUR_AGENT_SESSION_PERSISTENCE_TEST_MARKER_PATH")
                 .ok_or_else(|| {
                     Error::session(
                         "hard-exit persistence failpoint requires a checkpoint marker path",
@@ -1578,7 +1578,7 @@ fn append_jsonl_entries_blocking(
     let (disk_session, _) = open_jsonl_blocking(path)?;
     if disk_session.source_integrity_failed {
         return Err(Error::session(format!(
-            "PI_SESSION_SOURCE_INTEGRITY_FAILED: refusing to append to recovered session {}",
+            "RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED: refusing to append to recovered session {}",
             path.display()
         )));
     }
@@ -1826,27 +1826,28 @@ fn prepare_jsonl_full_rewrite(
     header_dirty: bool,
 ) -> Result<(SessionHeader, Vec<SessionEntry>)> {
     let mut header_to_write = header.clone();
-    let mut merged_entries =
-        if session_path_try_exists(path).map_err(|e| crate::Error::Io(Box::new(e)))? {
-            let (disk_session, _) = open_jsonl_blocking(path)?;
-            if disk_session.source_integrity_failed {
-                return Err(Error::session(format!(
-                    "PI_SESSION_SOURCE_INTEGRITY_FAILED: refusing to rewrite recovered session {}",
-                    path.display()
-                )));
-            }
-            if disk_session.header.id != header.id {
-                return Err(Error::session(
-                    "persisted session header ID does not match the in-memory session ID",
-                ));
-            }
-            if !header_dirty {
-                header_to_write = disk_session.header;
-            }
-            disk_session.entries
-        } else {
-            Vec::new()
-        };
+    let mut merged_entries = if session_path_try_exists(path)
+        .map_err(|e| crate::Error::Io(Box::new(e)))?
+    {
+        let (disk_session, _) = open_jsonl_blocking(path)?;
+        if disk_session.source_integrity_failed {
+            return Err(Error::session(format!(
+                "RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED: refusing to rewrite recovered session {}",
+                path.display()
+            )));
+        }
+        if disk_session.header.id != header.id {
+            return Err(Error::session(
+                "persisted session header ID does not match the in-memory session ID",
+            ));
+        }
+        if !header_dirty {
+            header_to_write = disk_session.header;
+        }
+        disk_session.entries
+    } else {
+        Vec::new()
+    };
 
     let mut merged_positions = HashMap::with_capacity(merged_entries.len() + entries.len());
     for (index, entry) in merged_entries.iter().enumerate() {
@@ -2421,13 +2422,13 @@ fn build_share_viewer_url(base_url: Option<&str>, gist_id: &str) -> String {
 
 /// Get the share viewer URL for a gist ID.
 ///
-/// Matches legacy Pi Agent semantics:
-/// - Use `PI_SHARE_VIEWER_URL` env var when set and non-empty
+/// Matches legacy Recur Agent semantics:
+/// - Use `RECUR_AGENT_SHARE_VIEWER_URL` env var when set and non-empty
 /// - Otherwise fall back to `DEFAULT_SHARE_VIEWER_URL`
 /// - Final URL is `{base}#{gist_id}` (no trailing-slash normalization)
 #[must_use]
 pub fn get_share_viewer_url(gist_id: &str) -> String {
-    let base_url = std::env::var("PI_SHARE_VIEWER_URL").ok();
+    let base_url = std::env::var("RECUR_AGENT_SHARE_VIEWER_URL").ok();
     build_share_viewer_url(base_url.as_deref(), gist_id)
 }
 
@@ -2503,7 +2504,7 @@ impl SessionStoreKind {
 const DEFAULT_AUTOSAVE_MAX_PENDING_MUTATIONS: usize = 256;
 
 fn autosave_max_pending_mutations() -> usize {
-    std::env::var("PI_SESSION_AUTOSAVE_MAX_PENDING")
+    std::env::var("RECUR_AGENT_SESSION_AUTOSAVE_MAX_PENDING")
         .ok()
         .and_then(|raw| raw.parse::<usize>().ok())
         .filter(|value| *value > 0)
@@ -2514,7 +2515,7 @@ fn autosave_max_pending_mutations() -> usize {
 const DEFAULT_COMPACTION_CHECKPOINT_INTERVAL: u64 = 50;
 
 fn compaction_checkpoint_interval() -> u64 {
-    std::env::var("PI_SESSION_COMPACTION_INTERVAL")
+    std::env::var("RECUR_AGENT_SESSION_COMPACTION_INTERVAL")
         .ok()
         .and_then(|raw| raw.parse::<u64>().ok())
         .filter(|value| *value > 0)
@@ -2540,7 +2541,7 @@ impl AutosaveDurabilityMode {
     }
 
     fn from_env() -> Self {
-        std::env::var("PI_SESSION_DURABILITY_MODE")
+        std::env::var("RECUR_AGENT_SESSION_DURABILITY_MODE")
             .ok()
             .as_deref()
             .and_then(Self::parse)
@@ -2885,9 +2886,9 @@ pub struct SessionOpenOrphanedParentLink {
 }
 
 /// Stable schema identifier for session cold-start trace bundles.
-pub const SESSION_COLD_START_TRACE_SCHEMA: &str = "pi.session.cold_start_trace.v1";
+pub const SESSION_COLD_START_TRACE_SCHEMA: &str = "ra.session.cold_start_trace.v1";
 pub const SESSION_REPLAY_MINIMIZATION_TRACE_SCHEMA: &str =
-    "pi.session.replay_minimization_trace.v1";
+    "ra.session.replay_minimization_trace.v1";
 
 /// Bounded, redacted trace bundle for diagnosing large-session startup latency.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -3268,7 +3269,9 @@ impl Session {
         let durability_mode = resolve_autosave_durability_mode(
             cli.session_durability.as_deref(),
             config.session_durability.as_deref(),
-            std::env::var("PI_SESSION_DURABILITY_MODE").ok().as_deref(),
+            std::env::var("RECUR_AGENT_SESSION_DURABILITY_MODE")
+                .ok()
+                .as_deref(),
         );
         if cli.no_session {
             let mut session = Self::in_memory();
@@ -3420,7 +3423,7 @@ impl Session {
         let max_entries = 20usize.min(entries.len());
         let mut entries = entries.into_iter().take(max_entries).collect::<Vec<_>>();
 
-        let console = PiConsole::new();
+        let console = RaConsole::new();
         console.render_info("Select a session to resume:");
 
         let headers = ["#", "Timestamp", "Messages", "Name", "Path"];
@@ -4578,7 +4581,7 @@ impl Session {
     async fn save_inner(&mut self) -> Result<()> {
         if self.source_integrity_failed {
             return Err(Error::session(
-                "PI_SESSION_SOURCE_INTEGRITY_FAILED: refusing to persist a session opened with skipped rows or missing parents",
+                "RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED: refusing to persist a session opened with skipped rows or missing parents",
             ));
         }
         self.ensure_entry_ids();
@@ -5697,7 +5700,7 @@ impl Session {
     /// or a successful `Assistant`). This is the precondition for *resuming* a
     /// turn (`run_continue`) after a transient failure instead of *replaying* it
     /// from the user message, which would re-execute already-completed tool
-    /// calls and re-bill prior work (pi_agent_rust#125).
+    /// calls and re-bill prior work (recur_agent#125).
     ///
     /// Returns whether any entry was reverted.
     pub fn revert_incomplete_response(&mut self) -> bool {
@@ -7890,16 +7893,16 @@ fn open_from_v2_store_blocking(jsonl_path: &Path) -> Result<(Session, SessionOpe
     let v2_root = session_store_v2::v2_sidecar_path(&jsonl_path);
 
     // 3. Choose an explicit hydration strategy for resume:
-    // - env override (PI_SESSION_V2_OPEN_MODE)
+    // - env override (RECUR_AGENT_SESSION_V2_OPEN_MODE)
     // - auto lazy mode for large sessions
-    let mode_override_raw = std::env::var("PI_SESSION_V2_OPEN_MODE").ok();
-    let threshold_override_raw = std::env::var("PI_SESSION_V2_LAZY_THRESHOLD").ok();
+    let mode_override_raw = std::env::var("RECUR_AGENT_SESSION_V2_OPEN_MODE").ok();
+    let threshold_override_raw = std::env::var("RECUR_AGENT_SESSION_V2_LAZY_THRESHOLD").ok();
     if let Some(raw) = mode_override_raw.as_deref()
         && parse_v2_open_mode(raw).is_none()
     {
         tracing::warn!(
             value = %raw,
-            "invalid PI_SESSION_V2_OPEN_MODE; using automatic hydration mode selection"
+            "invalid RECUR_AGENT_SESSION_V2_OPEN_MODE; using automatic hydration mode selection"
         );
     }
     if let Some(raw) = threshold_override_raw.as_deref()
@@ -7907,7 +7910,7 @@ fn open_from_v2_store_blocking(jsonl_path: &Path) -> Result<(Session, SessionOpe
     {
         tracing::warn!(
             value = %raw,
-            "invalid PI_SESSION_V2_LAZY_THRESHOLD; using default lazy hydration threshold"
+            "invalid RECUR_AGENT_SESSION_V2_LAZY_THRESHOLD; using default lazy hydration threshold"
         );
     }
 
@@ -8906,7 +8909,8 @@ fn parse_env_bool(value: &str) -> bool {
 fn session_entry_id_cache_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| {
-        std::env::var("PI_SESSION_ENTRY_ID_CACHE").map_or(true, |value| parse_env_bool(&value))
+        std::env::var("RECUR_AGENT_SESSION_ENTRY_ID_CACHE")
+            .map_or(true, |value| parse_env_bool(&value))
     })
 }
 
@@ -10774,7 +10778,7 @@ mod tests {
             build_share_viewer_url(Some("https://example.com/session"), "gist-123"),
             "https://example.com/session#gist-123"
         );
-        // Legacy JS uses `process.env.PI_SHARE_VIEWER_URL || DEFAULT`, so empty-string should
+        // Legacy JS uses `process.env.RECUR_AGENT_SHARE_VIEWER_URL || DEFAULT`, so empty-string should
         // fall back to default.
         assert_eq!(
             build_share_viewer_url(Some(""), "gist-123"),
@@ -11032,7 +11036,7 @@ mod tests {
         (session, selected_tip)
     }
 
-    const LARGE_REPLAY_CORRECTNESS_EVIDENCE_SCHEMA: &str = "pi.session.large_replay_correctness.v1";
+    const LARGE_REPLAY_CORRECTNESS_EVIDENCE_SCHEMA: &str = "ra.session.large_replay_correctness.v1";
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct LargeReplayCorrectnessEvidence {
@@ -11887,7 +11891,7 @@ mod tests {
             content: vec![ContentBlock::Text(TextContent::new(preview))],
             details: Some(serde_json::json!({
                 "artifact": {
-                    "schema": "pi.tool_output_artifact.v1",
+                    "schema": "ra.tool_output_artifact.v1",
                     "id": "tool-artifact-abc",
                     "toolName": "ls",
                     "sourceKind": "directoryEntries",
@@ -11907,7 +11911,7 @@ mod tests {
         run_async(async { session.save().await }).unwrap();
         let path = session.path.clone().unwrap();
         let jsonl = std::fs::read_to_string(&path).unwrap();
-        assert!(jsonl.contains("\"schema\":\"pi.tool_output_artifact.v1\""));
+        assert!(jsonl.contains("\"schema\":\"ra.tool_output_artifact.v1\""));
         assert!(!jsonl.contains(&omitted_payload));
 
         let loaded =
@@ -11929,7 +11933,7 @@ mod tests {
                 .as_ref()
                 .and_then(|details| details.pointer("/artifact/schema"))
                 .and_then(Value::as_str),
-            Some("pi.tool_output_artifact.v1")
+            Some("ra.tool_output_artifact.v1")
         );
         assert!(tool_result.content.iter().all(|block| match block {
             ContentBlock::Text(text) => !text.text.contains(&omitted_payload),
@@ -14604,7 +14608,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
     }
@@ -16415,7 +16419,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(
             std::fs::read(&path).expect("reread torn JSONL"),
@@ -16816,7 +16820,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
             "unexpected checkpoint rejection: {error}"
         );
         assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
@@ -16892,7 +16896,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
     }
@@ -16922,7 +16926,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(std::fs::read(&path).unwrap(), corrupt_bytes);
     }
@@ -16960,7 +16964,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(std::fs::read(&path).unwrap(), orphan_bytes);
     }
@@ -16995,7 +16999,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
@@ -17023,7 +17027,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED")
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED")
         );
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }

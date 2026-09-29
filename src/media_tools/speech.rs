@@ -129,7 +129,7 @@ impl Tool for TtsTool {
                 format!("text length {char_count} exceeds max allowed {MAX_TTS_TEXT_CHARS} chars"),
             ));
         }
-        let env_provider = std::env::var("PI_TTS_PROVIDER").ok();
+        let env_provider = std::env::var("RECUR_AGENT_TTS_PROVIDER").ok();
         let provider = transport::provider(
             NAME,
             transport::optional(&args, NAME, "provider")?
@@ -142,8 +142,8 @@ impl Tool for TtsTool {
         }
         let is_mock = self
             .mock_mode
-            .unwrap_or_else(|| std::env::var("PI_MEDIA_MOCK").unwrap_or_default() == "1");
-        let env_voice = std::env::var("PI_TTS_VOICE").ok();
+            .unwrap_or_else(|| std::env::var("RECUR_AGENT_MEDIA_MOCK").unwrap_or_default() == "1");
+        let env_voice = std::env::var("RECUR_AGENT_TTS_VOICE").ok();
         let voice = transport::optional(&args, NAME, "voice")?
             .or(self.default_voice.as_deref())
             .or(env_voice.as_deref())

@@ -191,7 +191,7 @@ fn requesting_isolation_from_a_subdirectory_still_captures_the_whole_repo() {
 #[test]
 fn isolation_control_filenames_are_ordinary_user_files() {
     let repo = repository();
-    let names = [".pi-iso-parent.patch", ".pi-iso-outgoing.patch"];
+    let names = [".ra-iso-parent.patch", ".ra-iso-outgoing.patch"];
     for name in names {
         fs::write(repo.path().join(name), "user-owned contents\n").unwrap();
     }
@@ -205,7 +205,7 @@ fn isolation_control_filenames_are_ordinary_user_files() {
     }
     fs::write(handle.path.join("child.txt"), "child\n").unwrap();
     let (patch, _) = collect_diff(&handle).unwrap();
-    assert!(!patch.contains(".pi-iso-"));
+    assert!(!patch.contains(".ra-iso-"));
     apply_to_parent(&handle, &patch).unwrap();
     for name in names {
         assert_eq!(
@@ -277,7 +277,9 @@ fn unsupported_submodules_and_sparse_checkouts_fail_before_creating_worktrees() 
     let index = index_bytes(repo.path());
     let error = isolate(repo.path(), "gitlink").unwrap_err();
     assert!(
-        error.to_string().contains("PI_ISO_SUBMODULE_UNSUPPORTED"),
+        error
+            .to_string()
+            .contains("RECUR_AGENT_ISO_SUBMODULE_UNSUPPORTED"),
         "{error}"
     );
     assert_eq!(
@@ -291,7 +293,9 @@ fn unsupported_submodules_and_sparse_checkouts_fail_before_creating_worktrees() 
     let before = git_ok(sparse.path(), &["worktree", "list", "--porcelain"]).unwrap();
     let error = isolate(sparse.path(), "sparse").unwrap_err();
     assert!(
-        error.to_string().contains("PI_ISO_SPARSE_UNSUPPORTED"),
+        error
+            .to_string()
+            .contains("RECUR_AGENT_ISO_SPARSE_UNSUPPORTED"),
         "{error}"
     );
     assert_eq!(
@@ -347,7 +351,7 @@ fn non_utf8_text_diffs_fail_instead_of_replacing_bytes_lossily() {
     fs::write(handle.path.join("base.txt"), [b'a', 255, b'\n']).unwrap();
     let error = collect_diff(&handle).unwrap_err();
     assert!(
-        error.to_string().contains("PI_ISO_TEXT_ENCODING"),
+        error.to_string().contains("RECUR_AGENT_ISO_TEXT_ENCODING"),
         "{error}"
     );
     assert_eq!(
@@ -365,7 +369,7 @@ fn non_utf8_text_diffs_fail_instead_of_replacing_bytes_lossily() {
 fn foreign_branch_in_a_prefix_named_directory_is_not_reaped() {
     let repo = repository();
     let outer = tempfile::tempdir().unwrap();
-    let foreign = outer.path().join("pi-iso-user-owned");
+    let foreign = outer.path().join("ra-iso-user-owned");
     git_ok(
         repo.path(),
         &[

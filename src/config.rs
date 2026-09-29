@@ -28,13 +28,13 @@ use tempfile::NamedTempFile;
 /// share this constant. A filter directive that matches no target is not an
 /// error — it simply never fires — so a written-out string on either side can
 /// take the diagnostics away in silence, which is how the first version of
-/// this went wrong: `pi_agent_rust::config` looks right and matches nothing,
-/// because the library is `[lib] name = "pi"`.
+/// this went wrong: `recur_agent::config` looks right and matches nothing,
+/// because the library is `[lib] name = "ra"`.
 ///
 /// This deliberately does not follow the module path. These messages come from
 /// `config`, `session` and the interactive stacks, and what they have in
 /// common is their audience, not their origin.
-pub const USER_DIAGNOSTIC_TARGET: &str = "pi::settings";
+pub const USER_DIAGNOSTIC_TARGET: &str = "ra::settings";
 
 /// Main configuration structure.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -56,9 +56,9 @@ pub struct Config {
     /// Motivated by Windows users (CMD.exe + Windows Terminal) where mouse
     /// capture blocks copy/paste — particularly the OAuth flow's ~600-char
     /// authorization URL, which becomes effectively impossible to copy out
-    /// when the TUI captures every mouse event. See pi_agent_rust#78.
+    /// when the TUI captures every mouse event. See recur_agent#78.
     ///
-    /// Env override: `PI_NO_MOUSE_CAPTURE=1`.
+    /// Env override: `RECUR_AGENT_NO_MOUSE_CAPTURE=1`.
     #[serde(alias = "disableMouseCapture", alias = "noMouseCapture")]
     pub disable_mouse_capture: Option<bool>,
 
@@ -127,8 +127,8 @@ pub struct Config {
     /// When unset, the default is provider-aware: 60s for cloud providers and
     /// 600s for local providers (Ollama, LM Studio) where the first request can
     /// block while the model loads into memory. Overridden by the
-    /// `--request-timeout` CLI flag / `PI_HTTP_REQUEST_TIMEOUT_SECS` env var.
-    /// See pi_agent_rust#90.
+    /// `--request-timeout` CLI flag / `RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS` env var.
+    /// See recur_agent#90.
     #[serde(alias = "requestTimeoutSecs", alias = "requestTimeoutSeconds")]
     pub request_timeout_secs: Option<u64>,
 
@@ -203,12 +203,12 @@ pub struct Config {
 
     // Subagent tool
     /// Append a machine-readable `<subagent-structured-result>` JSON block to
-    /// the `subagent` tool's result text. See pi_agent_rust#163.
+    /// the `subagent` tool's result text. See recur_agent#163.
     ///
     /// Providers only serialize a tool result's text content, so the
-    /// structured `details` payload (`pi.subagent.result.v1`) never reaches
+    /// structured `details` payload (`ra.subagent.result.v1`) never reaches
     /// the parent model. When `true`, the subagent tool appends a compact
-    /// JSON array (field names match the `pi.subagent.result.v1` schema)
+    /// JSON array (field names match the `ra.subagent.result.v1` schema)
     /// wrapped in `<subagent-structured-result>...</subagent-structured-result>`
     /// so parents can parse per-child results. `output`/`error` fields are
     /// truncated to 2 KiB each and the whole block is capped at 16 KiB.
@@ -719,10 +719,10 @@ impl Config {
         }
     }
 
-    /// Resolve the `PI_CONFIG_PATH` override relative to the supplied cwd.
+    /// Resolve the `RECUR_AGENT_CONFIG_PATH` override relative to the supplied cwd.
     #[must_use]
     pub fn config_path_override_from_env(cwd: &Path) -> Option<PathBuf> {
-        std::env::var_os("PI_CONFIG_PATH")
+        std::env::var_os("RECUR_AGENT_CONFIG_PATH")
             .map(PathBuf::from)
             .map(|path| Self::resolve_config_override_path(&path, cwd))
     }
@@ -734,7 +734,7 @@ impl Config {
 
     /// Get the project configuration directory.
     pub fn project_dir() -> PathBuf {
-        PathBuf::from(".pi")
+        PathBuf::from(".ra")
     }
 
     /// Get the sessions directory.
@@ -807,7 +807,7 @@ impl Config {
     }
 
     /// [`Self::load_with_roots`], but skipping the project settings merge when
-    /// the workspace is untrusted (GH #151). An explicit `PI_CONFIG_PATH`
+    /// the workspace is untrusted (GH #151). An explicit `RECUR_AGENT_CONFIG_PATH`
     /// override is user-provided and always honored.
     pub fn load_with_roots_and_project_trust(
         config_path: Option<&std::path::Path>,
@@ -832,8 +832,8 @@ impl Config {
         Ok(merged)
     }
 
-    /// Load only the global settings (plus any `PI_CONFIG_PATH` override),
-    /// ignoring project-local `.pi/settings.json`. Used for untrusted
+    /// Load only the global settings (plus any `RECUR_AGENT_CONFIG_PATH` override),
+    /// ignoring project-local `.ra/settings.json`. Used for untrusted
     /// workspaces and for pre-trust reads of global-only knobs such as
     /// `trustAllWorkspaces`.
     pub fn load_global_only() -> Result<Self> {
@@ -1177,7 +1177,7 @@ impl Config {
 
     /// Whether to check for version updates on startup (default: true).
     ///
-    /// The check reaches the network, so `PI_SKIP_VERSION_CHECK` can turn it
+    /// The check reaches the network, so `RECUR_AGENT_SKIP_VERSION_CHECK` can turn it
     /// off but never on: an environment that wants silence gets silence
     /// whatever `checkForUpdates` says. That is also pi-mono's order — its
     /// `checkForNewVersion` returns on the variable before it reads any
@@ -1192,9 +1192,9 @@ impl Config {
         F: Fn(&str) -> Option<String>,
     {
         // pi-mono tests the variable for JavaScript truthiness, and
-        // `PI_SKIP_VERSION_CHECK=` is the empty string, which is falsy. An
+        // `RECUR_AGENT_SKIP_VERSION_CHECK=` is the empty string, which is falsy. An
         // empty value therefore does not skip the check, here either.
-        if get_env("PI_SKIP_VERSION_CHECK").is_some_and(|value| !value.is_empty()) {
+        if get_env("RECUR_AGENT_SKIP_VERSION_CHECK").is_some_and(|value| !value.is_empty()) {
             return false;
         }
         self.check_for_updates.unwrap_or(true)
@@ -1225,7 +1225,7 @@ impl Config {
         if let Some(value) = self.terminal.as_ref().and_then(|t| t.clear_on_shrink) {
             return value;
         }
-        get_env("PI_CLEAR_ON_SHRINK").is_some_and(|value| value == "1")
+        get_env("RECUR_AGENT_CLEAR_ON_SHRINK").is_some_and(|value| value == "1")
     }
 
     pub fn thinking_budget(&self, level: &str) -> u32 {
@@ -1268,7 +1268,7 @@ impl Config {
     }
 
     pub fn fail_closed_hooks(&self) -> bool {
-        if let Some(value) = parse_env_bool("PI_EXTENSION_HOOKS_FAIL_CLOSED") {
+        if let Some(value) = parse_env_bool("RECUR_AGENT_EXTENSION_HOOKS_FAIL_CLOSED") {
             return value;
         }
         self.fail_closed_hooks.unwrap_or(false)
@@ -1278,7 +1278,7 @@ impl Config {
     ///
     /// Resolution order (highest precedence first):
     /// 1. `cli_override` (from `--extension-policy` flag)
-    /// 2. `PI_EXTENSION_POLICY` environment variable
+    /// 2. `RECUR_AGENT_EXTENSION_POLICY` environment variable
     /// 3. `extension_policy.profile` from settings.json
     /// 4. `extension_policy.default_permissive` from settings.json
     /// 5. Default: "permissive"
@@ -1294,7 +1294,7 @@ impl Config {
         // Determine profile name with source: CLI > env > config > default
         let (requested_profile, profile_source) = cli_override.map_or_else(
             || {
-                std::env::var("PI_EXTENSION_POLICY").map_or_else(
+                std::env::var("RECUR_AGENT_EXTENSION_POLICY").map_or_else(
                     |_| {
                         self.extension_policy
                             .as_ref()
@@ -1349,13 +1349,13 @@ impl Config {
 
         let mut policy = profile.to_policy();
 
-        // Check allow_dangerous: config setting or PI_EXTENSION_ALLOW_DANGEROUS env
+        // Check allow_dangerous: config setting or RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS env
         let config_allows = self
             .extension_policy
             .as_ref()
             .and_then(|p| p.allow_dangerous)
             .unwrap_or(false);
-        let env_allows = std::env::var("PI_EXTENSION_ALLOW_DANGEROUS")
+        let env_allows = std::env::var("RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS")
             .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
         let allow_dangerous = config_allows || env_allows;
 
@@ -1413,7 +1413,7 @@ impl Config {
     ///
     /// Resolution order (highest precedence first):
     /// 1. `cli_override` (from `--repair-policy` flag)
-    /// 2. `PI_REPAIR_POLICY` environment variable
+    /// 2. `RECUR_AGENT_REPAIR_POLICY` environment variable
     /// 3. `repair_policy.mode` from settings.json
     /// 4. Default: "suggest"
     pub fn resolve_repair_policy_with_metadata(
@@ -1425,7 +1425,7 @@ impl Config {
         // Determine mode string with source: CLI > env > config > default
         let (requested_mode, source) = cli_override.map_or_else(
             || {
-                std::env::var("PI_REPAIR_POLICY").map_or_else(
+                std::env::var("RECUR_AGENT_REPAIR_POLICY").map_or_else(
                     |_| {
                         self.repair_policy
                             .as_ref()
@@ -1466,7 +1466,7 @@ impl Config {
     /// Resolve runtime risk controller settings from config and environment.
     ///
     /// Resolution order (highest precedence first):
-    /// 1. `PI_EXTENSION_RISK_*` env vars
+    /// 1. `RECUR_AGENT_EXTENSION_RISK_*` env vars
     /// 2. `extensionRisk` config
     /// 3. deterministic defaults
     pub fn resolve_extension_risk_with_metadata(&self) -> ResolvedExtensionRisk {
@@ -1524,31 +1524,33 @@ impl Config {
             }
         }
 
-        if let Some(enabled) = parse_env_bool("PI_EXTENSION_RISK_ENABLED") {
+        if let Some(enabled) = parse_env_bool("RECUR_AGENT_EXTENSION_RISK_ENABLED") {
             settings.enabled = enabled;
             source = "env";
         }
-        if let Some(alpha) = parse_env_f64("PI_EXTENSION_RISK_ALPHA").and_then(sanitize_alpha) {
+        if let Some(alpha) =
+            parse_env_f64("RECUR_AGENT_EXTENSION_RISK_ALPHA").and_then(sanitize_alpha)
+        {
             settings.alpha = alpha;
             source = "env";
         }
-        if let Some(window_size) = parse_env_u32("PI_EXTENSION_RISK_WINDOW") {
+        if let Some(window_size) = parse_env_u32("RECUR_AGENT_EXTENSION_RISK_WINDOW") {
             settings.window_size = window_size.clamp(8, 4096) as usize;
             source = "env";
         }
-        if let Some(ledger_limit) = parse_env_u32("PI_EXTENSION_RISK_LEDGER_LIMIT") {
+        if let Some(ledger_limit) = parse_env_u32("RECUR_AGENT_EXTENSION_RISK_LEDGER_LIMIT") {
             settings.ledger_limit = ledger_limit.clamp(32, 20_000) as usize;
             source = "env";
         }
-        if let Some(timeout_ms) = parse_env_u64("PI_EXTENSION_RISK_DECISION_TIMEOUT_MS") {
+        if let Some(timeout_ms) = parse_env_u64("RECUR_AGENT_EXTENSION_RISK_DECISION_TIMEOUT_MS") {
             settings.decision_timeout_ms = timeout_ms.clamp(1, 2_000);
             source = "env";
         }
-        if let Some(fail_closed) = parse_env_bool("PI_EXTENSION_RISK_FAIL_CLOSED") {
+        if let Some(fail_closed) = parse_env_bool("RECUR_AGENT_EXTENSION_RISK_FAIL_CLOSED") {
             settings.fail_closed = fail_closed;
             source = "env";
         }
-        if let Some(enforce) = parse_env_bool("PI_EXTENSION_RISK_ENFORCE") {
+        if let Some(enforce) = parse_env_bool("RECUR_AGENT_EXTENSION_RISK_ENFORCE") {
             settings.enforce = enforce;
             source = "env";
         }
@@ -1595,11 +1597,11 @@ fn global_dir_from_env<F>(get_env: F) -> PathBuf
 where
     F: Fn(&str) -> Option<String>,
 {
-    get_env("PI_CODING_AGENT_DIR").map_or_else(
+    get_env("RECUR_AGENT_DIR").map_or_else(
         || {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
-                .join(".pi")
+                .join(".ra")
                 .join("agent")
         },
         PathBuf::from,
@@ -1610,21 +1612,21 @@ fn sessions_dir_from_env<F>(get_env: F, global_dir: &Path) -> PathBuf
 where
     F: Fn(&str) -> Option<String>,
 {
-    get_env("PI_SESSIONS_DIR").map_or_else(|| global_dir.join("sessions"), PathBuf::from)
+    get_env("RECUR_AGENT_SESSIONS_DIR").map_or_else(|| global_dir.join("sessions"), PathBuf::from)
 }
 
 fn package_dir_from_env<F>(get_env: F, global_dir: &Path) -> PathBuf
 where
     F: Fn(&str) -> Option<String>,
 {
-    get_env("PI_PACKAGE_DIR").map_or_else(|| global_dir.join("packages"), PathBuf::from)
+    get_env("RECUR_AGENT_PACKAGE_DIR").map_or_else(|| global_dir.join("packages"), PathBuf::from)
 }
 
 fn extension_index_path_from_env<F>(get_env: F, global_dir: &Path) -> PathBuf
 where
     F: Fn(&str) -> Option<String>,
 {
-    get_env("PI_EXTENSION_INDEX_PATH")
+    get_env("RECUR_AGENT_EXTENSION_INDEX_PATH")
         .map_or_else(|| global_dir.join("extension-index.json"), PathBuf::from)
 }
 
@@ -1755,7 +1757,7 @@ fn collect_unrecognised_keys(
 /// Does this build recognise `key` as a top-level settings key, by any spelling?
 ///
 /// The same question asked about one name with no value to hand, which is the
-/// shape `pi doctor` needs.
+/// shape `ra doctor` needs.
 pub(crate) fn recognises_setting_key(key: &str) -> bool {
     let Some(empty) = config_shape_with(&[], empty_object()) else {
         return true;
@@ -2575,7 +2577,7 @@ mod tests {
             r#"{ "theme": "global", "default_provider": "anthropic" }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "theme": "project", "default_provider": "google" }"#,
         );
 
@@ -2601,7 +2603,7 @@ mod tests {
             r#"{ "theme": "global", "trustAllWorkspaces": false }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "theme": "project", "packages": ["npm:evil"] }"#,
         );
 
@@ -2623,7 +2625,7 @@ mod tests {
 
     #[test]
     fn resolve_config_override_path_anchors_relative_paths_to_supplied_cwd() {
-        let cwd = PathBuf::from("/tmp/pi-agent");
+        let cwd = PathBuf::from("/tmp/ra-agent");
         let relative = PathBuf::from("config/override.json");
         let absolute = PathBuf::from("/etc/pi/settings.json");
 
@@ -2673,7 +2675,7 @@ mod tests {
             r#"{ "default_provider": "anthropic", "default_model": "global", "theme": "global" }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "default_model": "project" }"#,
         );
 
@@ -2693,7 +2695,7 @@ mod tests {
             r#"{ "compaction": { "enabled": true, "reserve_tokens": 1234, "keep_recent_tokens": 5678 } }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "compaction": { "enabled": false } }"#,
         );
 
@@ -2720,7 +2722,7 @@ mod tests {
             }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{"keywords":{"ultrathink":false}}"#,
         );
 
@@ -2809,11 +2811,17 @@ mod tests {
     #[test]
     fn directory_helpers_honor_environment_overrides() {
         let env = HashMap::from([
-            ("PI_CODING_AGENT_DIR".to_string(), "env-root".to_string()),
-            ("PI_SESSIONS_DIR".to_string(), "env-sessions".to_string()),
-            ("PI_PACKAGE_DIR".to_string(), "env-packages".to_string()),
+            ("RECUR_AGENT_DIR".to_string(), "env-root".to_string()),
             (
-                "PI_EXTENSION_INDEX_PATH".to_string(),
+                "RECUR_AGENT_SESSIONS_DIR".to_string(),
+                "env-sessions".to_string(),
+            ),
+            (
+                "RECUR_AGENT_PACKAGE_DIR".to_string(),
+                "env-packages".to_string(),
+            ),
+            (
+                "RECUR_AGENT_EXTENSION_INDEX_PATH".to_string(),
                 "env-extension-index.json".to_string(),
             ),
         ]);
@@ -2831,7 +2839,7 @@ mod tests {
 
     #[test]
     fn directory_helpers_fall_back_to_global_subdirs_when_unset() {
-        let env = HashMap::from([("PI_CODING_AGENT_DIR".to_string(), "root-dir".to_string())]);
+        let env = HashMap::from([("RECUR_AGENT_DIR".to_string(), "root-dir".to_string())]);
         let global = global_dir_from_env(|key| env.get(key).cloned());
         let sessions = sessions_dir_from_env(|key| env.get(key).cloned(), &global);
         let package = package_dir_from_env(|key| env.get(key).cloned(), &global);
@@ -3491,7 +3499,7 @@ mod tests {
     fn terminal_clear_on_shrink_uses_env_when_unset() {
         let config = Config::default();
         assert!(config.terminal_clear_on_shrink_with_lookup(|name| {
-            if name == "PI_CLEAR_ON_SHRINK" {
+            if name == "RECUR_AGENT_CLEAR_ON_SHRINK" {
                 Some("1".to_string())
             } else {
                 None
@@ -3510,7 +3518,7 @@ mod tests {
             ..Config::default()
         };
         assert!(!config.terminal_clear_on_shrink_with_lookup(|name| {
-            if name == "PI_CLEAR_ON_SHRINK" {
+            if name == "RECUR_AGENT_CLEAR_ON_SHRINK" {
                 Some("1".to_string())
             } else {
                 None
@@ -3563,7 +3571,7 @@ mod tests {
             r#"{ "thinking_budgets": { "minimal": 100, "low": 200 } }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "thinking_budgets": { "minimal": 999 } }"#,
         );
 
@@ -3591,7 +3599,7 @@ mod tests {
             }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{
                 "extensionRisk": {
                     "alpha": 0.05,
@@ -3629,7 +3637,7 @@ mod tests {
                 }
             }"#,
         );
-        write_file(&cwd.join(".pi/settings.json"), r#"{ "extensionRisk": {} }"#);
+        write_file(&cwd.join(".ra/settings.json"), r#"{ "extensionRisk": {} }"#);
 
         let config = Config::load_with_roots(None, &global_dir, &cwd).expect("load");
         let risk = config.extension_risk.expect("merged extension risk");
@@ -3827,7 +3835,7 @@ mod tests {
             r#"{ "extensionPolicy": { "profile": "safe" } }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "extensionPolicy": { "profile": "permissive" } }"#,
         );
 
@@ -3876,7 +3884,7 @@ mod tests {
         );
         // Project sets allowDangerous=true but not profile
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "extensionPolicy": { "allowDangerous": true } }"#,
         );
 
@@ -4078,7 +4086,7 @@ mod tests {
             r#"{ "repairPolicy": { "mode": "off" } }"#,
         );
         write_file(
-            &cwd.join(".pi/settings.json"),
+            &cwd.join(".ra/settings.json"),
             r#"{ "repairPolicy": { "mode": "auto-safe" } }"#,
         );
 
@@ -4350,12 +4358,12 @@ mod tests {
             };
 
             let resolved = config.resolve_extension_risk_with_metadata();
-            let env_alpha = std::env::var("PI_EXTENSION_RISK_ALPHA")
+            let env_alpha = std::env::var("RECUR_AGENT_EXTENSION_RISK_ALPHA")
                 .ok()
                 .and_then(|raw| raw.trim().parse::<f64>().ok())
                 .and_then(|parsed| parsed.is_finite().then_some(parsed.clamp(1.0e-6, 0.5)));
 
-            // Only PI_EXTENSION_RISK_ALPHA should override config alpha.
+            // Only RECUR_AGENT_EXTENSION_RISK_ALPHA should override config alpha.
             let expected_alpha = env_alpha.unwrap_or_else(|| alpha.clamp(1.0e-6, 0.5));
             prop_assert!((resolved.settings.alpha - expected_alpha).abs() <= f64::EPSILON);
             if env_alpha.is_some() {
@@ -4530,11 +4538,11 @@ mod tests {
     }
 
     #[test]
-    fn pi_skip_version_check_silences_the_startup_network_call() {
+    fn ra_skip_version_check_silences_the_startup_network_call() {
         // The lookup is injected rather than set, because these tests share a
         // process and `std::env::set_var` would reach every other one.
         let skip = |value: &'static str| {
-            move |name: &str| (name == "PI_SKIP_VERSION_CHECK").then(|| value.to_string())
+            move |name: &str| (name == "RECUR_AGENT_SKIP_VERSION_CHECK").then(|| value.to_string())
         };
         let unset = |_: &str| None;
 
@@ -4545,7 +4553,7 @@ mod tests {
         );
         assert!(
             !asked_for_it.should_check_for_updates_with_lookup(skip("1")),
-            "PI_SKIP_VERSION_CHECK must beat checkForUpdates: true"
+            "RECUR_AGENT_SKIP_VERSION_CHECK must beat checkForUpdates: true"
         );
         assert!(
             !asked_for_it.should_check_for_updates_with_lookup(skip("anything at all")),
@@ -4553,7 +4561,7 @@ mod tests {
         );
         assert!(
             asked_for_it.should_check_for_updates_with_lookup(skip("")),
-            "`PI_SKIP_VERSION_CHECK=` is falsy in pi-mono and must not skip here"
+            "`RECUR_AGENT_SKIP_VERSION_CHECK=` is falsy in pi-mono and must not skip here"
         );
 
         // The variable only ever turns the check off.

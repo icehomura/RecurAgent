@@ -20,8 +20,8 @@ use futures::stream::{self, BoxStream};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-const DEFAULT_USER_AGENT: &str = concat!("pi_agent_rust/", env!("CARGO_PKG_VERSION"));
-const ANTIGRAVITY_VERSION_ENV: &str = "PI_AI_ANTIGRAVITY_VERSION";
+const DEFAULT_USER_AGENT: &str = concat!("recur_agent/", env!("CARGO_PKG_VERSION"));
+const ANTIGRAVITY_VERSION_ENV: &str = "RECUR_AGENT_AI_ANTIGRAVITY_VERSION";
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 const READ_CHUNK_BYTES: usize = 16 * 1024;
 const MAX_BUFFERED_BYTES: usize = 256 * 1024;
@@ -43,7 +43,7 @@ const WRITE_ZERO_BACKOFF: std::time::Duration = std::time::Duration::from_millis
 /// Clap binds the `--request-timeout` CLI flag and the `requestTimeoutSecs`
 /// setting to this same env var, so the three configuration surfaces share a
 /// single resolution path.
-pub const REQUEST_TIMEOUT_ENV: &str = "PI_HTTP_REQUEST_TIMEOUT_SECS";
+pub const REQUEST_TIMEOUT_ENV: &str = "RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS";
 
 /// Default request timeout for remote (cloud) providers.
 ///
@@ -58,14 +58,14 @@ const DEFAULT_REMOTE_REQUEST_TIMEOUT_SECS: u64 = 60;
 /// Local inference servers frequently incur a large first-request latency: the
 /// model has to be loaded from disk into RAM/VRAM, which for a multi-GB model
 /// on a cold cache can take well over a minute (sometimes several). The cloud
-/// 60s default was too short for this and caused `pi --provider ollama ...` to
+/// 60s default was too short for this and caused `ra --provider ollama ...` to
 /// fail with "Request timed out" while Ollama was still loading the model
-/// (pi_agent_rust#90).
+/// (recur_agent#90).
 ///
 /// 600s (10 minutes) is long enough to absorb realistic cold-start model loads
 /// while still bounding a truly hung/unreachable server so we never hang
 /// forever. Users who load enormous models on slow disks can raise it (or set
-/// it to `0` for unbounded) via `PI_HTTP_REQUEST_TIMEOUT_SECS` /
+/// it to `0` for unbounded) via `RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS` /
 /// `--request-timeout` / `requestTimeoutSecs`.
 #[cfg(not(test))]
 const DEFAULT_LOCAL_REQUEST_TIMEOUT_SECS: u64 = 600;
@@ -75,11 +75,11 @@ const DEFAULT_LOCAL_REQUEST_TIMEOUT_SECS: u64 = 600;
 enum RequestTimeout {
     /// Resolve a provider-aware default at send time based on the target URL
     /// (longer for local providers like Ollama, shorter for cloud APIs),
-    /// unless overridden by `PI_HTTP_REQUEST_TIMEOUT_SECS`.
+    /// unless overridden by `RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS`.
     Default,
     /// Explicit timeout duration (from `.timeout()` or the global env override).
     Explicit(std::time::Duration),
-    /// Explicitly unbounded (from `.no_timeout()` or `PI_HTTP_REQUEST_TIMEOUT_SECS=0`).
+    /// Explicitly unbounded (from `.no_timeout()` or `RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS=0`).
     Disabled,
 }
 
@@ -98,7 +98,7 @@ static REQUEST_TIMEOUT_OVERRIDE_SECS: std::sync::atomic::AtomicU64 =
 /// `0` disables the timeout entirely (unbounded). Takes precedence over the
 /// provider-aware defaults but is itself lower precedence than a per-request
 /// `.timeout()` / `.no_timeout()` call. Should be called once during startup,
-/// before any HTTP request is issued. See pi_agent_rust#90.
+/// before any HTTP request is issued. See recur_agent#90.
 #[cfg(not(test))]
 pub fn set_request_timeout_override(secs: u64) {
     // Reserve u64::MAX as the "unset" sentinel; clamp the (absurd) edge case so
@@ -116,7 +116,7 @@ pub fn set_request_timeout_override(_secs: u64) {}
 ///
 /// Resolution order: an explicit application override (set via
 /// [`set_request_timeout_override`]) first, then the
-/// `PI_HTTP_REQUEST_TIMEOUT_SECS` environment variable. In both cases `0` =>
+/// `RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS` environment variable. In both cases `0` =>
 /// [`RequestTimeout::Disabled`]; any other value => an explicit duration.
 /// Returns `None` when neither is set so the provider-aware default applies.
 #[cfg(not(test))]
@@ -192,7 +192,7 @@ pub(crate) fn effective_default_request_timeout(url: &str) -> Option<std::time::
 /// Build a self-documenting timeout error message that tells the user the
 /// timeout that fired and how to raise it. Adds Ollama/local-provider-specific
 /// guidance (cold-start model load, model not pulled) when the target is a
-/// loopback inference server. See pi_agent_rust#90.
+/// loopback inference server. See recur_agent#90.
 fn timeout_error_message(url: &str, duration: std::time::Duration) -> String {
     let secs = duration.as_secs();
     let mut msg = format!(
@@ -225,7 +225,7 @@ pub struct Client {
 /// from many hot paths (every provider constructor, the version check, etc.),
 /// so without caching each call rebuilt the trust store from scratch. We now
 /// build the connector once per process and clone it (`TlsConnector` is cheap
-/// to clone) on every subsequent call. See pi_agent_rust#101.
+/// to clone) on every subsequent call. See recur_agent#101.
 ///
 /// The `Err` variant carries the build error as a `String` so a transient or
 /// configuration failure is still observed identically on every call.
@@ -234,7 +234,7 @@ static TLS_CONNECTOR: std::sync::OnceLock<std::result::Result<TlsConnector, Stri
 
 /// Explicit opt-in env var for the OS trust store instead of the bundled
 /// webpki roots (gh #186).
-pub const USE_SYSTEM_CERTS_ENV: &str = "PI_HTTP_USE_SYSTEM_CERTS";
+pub const USE_SYSTEM_CERTS_ENV: &str = "RECUR_AGENT_HTTP_USE_SYSTEM_CERTS";
 
 /// Custom-CA env vars that also imply the system-trust opt-in, matching
 /// curl/requests/OpenSSL semantics: exporting one of these *is* the signal
@@ -251,7 +251,7 @@ const CA_BUNDLE_ENV_VARS: [&str; 4] = [
 /// bundle the standard env vars point at) instead of the bundled webpki
 /// roots (gh #186).
 ///
-/// `PI_HTTP_USE_SYSTEM_CERTS` decides explicitly when set to a non-empty
+/// `RECUR_AGENT_HTTP_USE_SYSTEM_CERTS` decides explicitly when set to a non-empty
 /// value: truthy values opt in, and `0`/`false`/`off`/`no` force webpki roots
 /// even when a custom-CA var is present (the escape hatch back to gh #101's
 /// cheap startup for users with an ambient `SSL_CERT_FILE`). When it is unset
@@ -279,7 +279,7 @@ fn want_system_certs_from_env() -> bool {
 /// Default: the bundled webpki root certificates. Using webpki roots avoids
 /// hitting the OS trust store, which on macOS calls into Security.framework
 /// (`SecTrustSettingsCopyTrustSettings`) and can spend many seconds at high
-/// CPU parsing the system cert trust plist on startup. See pi_agent_rust#101.
+/// CPU parsing the system cert trust plist on startup. See recur_agent#101.
 ///
 /// Opt-in (gh #186): [`want_system_certs`] switches to the OS trust store,
 /// with `enable_env_cert_loading()` so `SSL_CERT_FILE` / `SSL_CERT_DIR` /
@@ -802,7 +802,7 @@ impl Response {
 /// Layered Winsock providers (VPN clients, antivirus, firewall LSPs) can
 /// report an outbound TCP connect as complete — `getpeername` succeeds — while
 /// the base provider socket has not actually finished connecting, so the first
-/// send on the socket fails with 10057 (pi_agent_rust#106, previously #66 /
+/// send on the socket fails with 10057 (recur_agent#106, previously #66 /
 /// asupersync#35). The upstream asupersync peer_addr readiness probe (0.3.2+)
 /// is not sufficient in those environments, so the connect path retries the
 /// whole connect with a fresh socket.
@@ -870,7 +870,7 @@ fn is_retryable_not_connected(err: &std::io::Error) -> bool {
 /// `io::Error` is only reachable via the [`std::error::Error::source`] chain.
 /// We therefore check the direct `Io` variant *and* walk the source chain so
 /// the fresh-socket retry fires regardless of which variant the connector
-/// chose to report (pi_agent_rust#111 / #106).
+/// chose to report (recur_agent#111 / #106).
 fn is_retryable_not_connected_tls(err: &TlsError) -> bool {
     if let TlsError::Io(io_err) = err
         && is_retryable_not_connected(io_err)
@@ -974,7 +974,7 @@ async fn connect_transport(
             error = %failure.error,
             backoff_ms = backoff.as_millis(),
             "connect reported socket-not-connected (WSAENOTCONN 10057); \
-             retrying with a fresh connection (pi_agent_rust#106)"
+             retrying with a fresh connection (recur_agent#106)"
         );
         // The failed transport was dropped (socket closed) when the attempt
         // returned; back off briefly, then redo the full TCP + TLS connect.
@@ -1218,7 +1218,7 @@ async fn read_response_head(
             // A 0-byte read before the header terminator is an unexpected EOF:
             // the peer dropped the connection mid-response. This is transient
             // and safe to retry with a fresh connection, so it is tagged for
-            // the retry classifier (pi_agent_rust#118).
+            // the retry classifier (recur_agent#118).
             return Err(Error::api(
                 "HTTP connection closed before headers (transient connection drop)",
             ));
@@ -1783,7 +1783,7 @@ mod tests {
         // A layered Winsock provider can wrap the originating WSAENOTCONN
         // io::Error inside another io::Error reported as `TlsError::Io`; the
         // raw os error is only reachable via the get_ref/source chain
-        // (pi_agent_rust#111). The classifier must still treat it as
+        // (recur_agent#111). The classifier must still treat it as
         // retryable.
         let inner = std::io::Error::from_raw_os_error(WSAENOTCONN);
         let wrapped = std::io::Error::other(inner);
@@ -2560,7 +2560,7 @@ mod tests {
             std::time::Duration::from_secs(600),
         );
         assert!(local.contains("600s"));
-        assert!(local.contains("PI_HTTP_REQUEST_TIMEOUT_SECS"));
+        assert!(local.contains("RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS"));
         assert!(local.contains("--request-timeout"));
         assert!(local.contains("requestTimeoutSecs"));
         assert!(local.contains("Ollama"));
@@ -2571,7 +2571,7 @@ mod tests {
             std::time::Duration::from_secs(60),
         );
         assert!(remote.contains("60s"));
-        assert!(remote.contains("PI_HTTP_REQUEST_TIMEOUT_SECS"));
+        assert!(remote.contains("RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS"));
         // Cloud providers should not get Ollama-specific guidance.
         assert!(!remote.contains("Ollama"));
     }
@@ -2975,18 +2975,18 @@ mod tests {
         });
     }
 
-    // ── PI_AI_ANTIGRAVITY_VERSION env var ─────────────────────────────
+    // ── RECUR_AGENT_AI_ANTIGRAVITY_VERSION env var ─────────────────────────────
 
     #[test]
     fn antigravity_user_agent_format() {
-        // Verify the format string used when PI_AI_ANTIGRAVITY_VERSION is set.
+        // Verify the format string used when RECUR_AGENT_AI_ANTIGRAVITY_VERSION is set.
         let version = "1.2.3";
         let ua = format!("{DEFAULT_USER_AGENT} Antigravity/{version}");
-        assert!(ua.starts_with("pi_agent_rust/"));
+        assert!(ua.starts_with("recur_agent/"));
         assert!(ua.contains("Antigravity/1.2.3"));
 
         // Verify default user agent contains crate version.
-        assert!(DEFAULT_USER_AGENT.starts_with("pi_agent_rust/"));
+        assert!(DEFAULT_USER_AGENT.starts_with("recur_agent/"));
     }
 
     // ── System-cert opt-in predicate (gh #186) ────────────────────────

@@ -1303,7 +1303,7 @@ mod tests {
 
     #[test]
     fn test_env_override_helpers_set_and_restore_values() {
-        const TEST_VAR: &str = "PI_AGENT_VCR_TEST_ENV_OVERRIDE";
+        const TEST_VAR: &str = "RECUR_AGENT_AGENT_VCR_TEST_ENV_OVERRIDE";
         let _lock = lock_env();
 
         let original = set_test_env_var(TEST_VAR, None);
@@ -1321,7 +1321,7 @@ mod tests {
 
     #[test]
     fn test_env_override_helpers_restore_nested_tombstone_state() {
-        const TEST_VAR: &str = "PI_AGENT_VCR_TEST_ENV_TOMBSTONE";
+        const TEST_VAR: &str = "RECUR_AGENT_AGENT_VCR_TEST_ENV_TOMBSTONE";
         let _lock = lock_env();
 
         let original = set_test_env_var(TEST_VAR, None);
@@ -1357,7 +1357,7 @@ mod tests {
 
     #[test]
     fn test_env_var_with_recovers_poisoned_override_value() {
-        const TEST_VAR: &str = "PI_AGENT_VCR_TEST_POISON_VALUE";
+        const TEST_VAR: &str = "RECUR_AGENT_AGENT_VCR_TEST_POISON_VALUE";
         let overrides = Mutex::new(HashMap::new());
 
         poison_overrides_entry(&overrides, TEST_VAR, Some("override-value"));
@@ -1370,7 +1370,7 @@ mod tests {
 
     #[test]
     fn test_env_var_with_recovers_poisoned_tombstone() {
-        const TEST_VAR: &str = "PI_AGENT_VCR_TEST_POISON_TOMBSTONE";
+        const TEST_VAR: &str = "RECUR_AGENT_AGENT_VCR_TEST_POISON_TOMBSTONE";
         let overrides = Mutex::new(HashMap::new());
 
         poison_overrides_entry(&overrides, TEST_VAR, None);
@@ -1383,7 +1383,7 @@ mod tests {
 
     #[test]
     fn test_env_var_with_drops_lock_before_running_fallback() {
-        const TEST_VAR: &str = "PI_AGENT_VCR_TEST_FALLBACK_LOCK";
+        const TEST_VAR: &str = "RECUR_AGENT_AGENT_VCR_TEST_FALLBACK_LOCK";
         let overrides = Mutex::new(HashMap::new());
 
         assert_eq!(
@@ -2161,7 +2161,7 @@ mod tests {
     #[test]
     fn env_truthy_values() {
         let _lock = lock_env();
-        let key = "PI_VCR_TEST_TRUTHY";
+        let key = "RECUR_AGENT_VCR_TEST_TRUTHY";
 
         for val in ["1", "true", "TRUE", "yes", "YES"] {
             let prev = set_test_env_var(key, Some(val));

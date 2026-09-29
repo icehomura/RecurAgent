@@ -127,7 +127,7 @@ impl Tool for GenerateImageTool {
     ) -> Result<ToolOutput> {
         let prompt = transport::required(&args, NAME, "prompt")?;
         let requested = transport::optional(&args, NAME, "output_path")?;
-        let env_provider = std::env::var("PI_IMAGE_GEN_PROVIDER").ok();
+        let env_provider = std::env::var("RECUR_AGENT_IMAGE_GEN_PROVIDER").ok();
         let provider = transport::provider(
             NAME,
             transport::optional(&args, NAME, "provider")?
@@ -146,7 +146,7 @@ impl Tool for GenerateImageTool {
                 ));
             }
         };
-        let env_model = std::env::var("PI_IMAGE_GEN_MODEL").ok();
+        let env_model = std::env::var("RECUR_AGENT_IMAGE_GEN_MODEL").ok();
         let model = transport::model_id(
             NAME,
             transport::optional(&args, NAME, "model")?
@@ -158,7 +158,7 @@ impl Tool for GenerateImageTool {
         let (mut endpoint, mut payload) = request(provider, model, prompt, &args)?;
         let is_mock = self
             .mock_mode
-            .unwrap_or_else(|| std::env::var("PI_MEDIA_MOCK").unwrap_or_default() == "1");
+            .unwrap_or_else(|| std::env::var("RECUR_AGENT_MEDIA_MOCK").unwrap_or_default() == "1");
         let api = if is_mock {
             None
         } else {

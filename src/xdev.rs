@@ -133,6 +133,7 @@ pub fn default_enabled_tools() -> Vec<&'static str> {
         "jobs",
         "hub",
         "current_time",
+        "run_code",
     ]
 }
 

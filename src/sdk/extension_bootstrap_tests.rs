@@ -198,9 +198,9 @@ fn unresolved_explicit_provider_is_an_error_after_extensions_load() {
 #[test]
 fn configured_model_scope_can_resolve_extension_only_models() {
     let dir = tempfile::tempdir().expect("tempdir");
-    std::fs::create_dir_all(dir.path().join(".pi")).expect("project config dir");
+    std::fs::create_dir_all(dir.path().join(".ra")).expect("project config dir");
     std::fs::write(
-        dir.path().join(".pi/settings.json"),
+        dir.path().join(".ra/settings.json"),
         r#"{"enabledModels":["sdk-extension-fixture/second"]}"#,
     )
     .expect("project settings");

@@ -11,10 +11,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_mins(15);
 pub(super) const MAX_TIMEOUT_SECS: u64 = 86_400;
-const TIMEOUT_ENV: &str = "PI_SUBAGENT_TIMEOUT_SECS";
-const DEADLINE_ENV: &str = "PI_SUBAGENT_DEADLINE_UNIX_MS";
-pub(super) const TIMED_OUT: &str =
-    "PI_SUBAGENT_TIMEOUT: delegation execution budget expired; unfinished work was not accepted";
+const TIMEOUT_ENV: &str = "RECUR_AGENT_SUBAGENT_TIMEOUT_SECS";
+const DEADLINE_ENV: &str = "RECUR_AGENT_SUBAGENT_DEADLINE_UNIX_MS";
+pub(super) const TIMED_OUT: &str = "RECUR_AGENT_SUBAGENT_TIMEOUT: delegation execution budget expired; unfinished work was not accepted";
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Deadline {
@@ -25,14 +24,14 @@ pub(super) struct Deadline {
 fn invalid_timeout() -> Error {
     Error::tool(
         "subagent",
-        "PI_SUBAGENT_INVALID_TIMEOUT: timeoutSeconds and PI_SUBAGENT_TIMEOUT_SECS must be integers from 1 to 86400; an SDK timeout must be between 1 ms and 24 hours",
+        "RECUR_AGENT_SUBAGENT_INVALID_TIMEOUT: timeoutSeconds and RECUR_AGENT_SUBAGENT_TIMEOUT_SECS must be integers from 1 to 86400; an SDK timeout must be between 1 ms and 24 hours",
     )
 }
 
 fn inherited_error() -> Error {
     Error::tool(
         "subagent",
-        "PI_SUBAGENT_INVALID_DEADLINE: inherited deadline must be a positive Unix timestamp in milliseconds",
+        "RECUR_AGENT_SUBAGENT_INVALID_DEADLINE: inherited deadline must be a positive Unix timestamp in milliseconds",
     )
 }
 
@@ -235,7 +234,7 @@ mod tests {
             "credential-secret",
         ] {
             let error = parse_seconds(raw).unwrap_err().to_string();
-            assert!(error.contains("PI_SUBAGENT_INVALID_TIMEOUT"));
+            assert!(error.contains("RECUR_AGENT_SUBAGENT_INVALID_TIMEOUT"));
             assert!(!error.contains("credential-secret"));
         }
         for raw in ["1", "900", "86400"] {

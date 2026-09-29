@@ -11,7 +11,7 @@ use serde_json::json;
 
 use super::conversation::{assistant_content_to_text, user_content_to_text};
 use super::{
-    AgentState, Cmd, ConversationMessage, EXTENSION_EVENT_TIMEOUT_MS, MessageRole, PiApp, PiMsg,
+    AgentState, Cmd, ConversationMessage, EXTENSION_EVENT_TIMEOUT_MS, MessageRole, RaApp, RaMsg,
     conversation_from_session,
 };
 
@@ -318,7 +318,7 @@ pub fn fork_candidates(session: &Session) -> Vec<ForkCandidate> {
     out
 }
 
-impl PiApp {
+impl RaApp {
     #[allow(clippy::too_many_lines)]
     pub(super) fn handle_slash_fork(&mut self, args: &str) -> Option<Cmd> {
         if let Some(reason) = self.session_transition_blocker() {
@@ -394,7 +394,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::System("Fork cancelled by extension".to_string()),
+                        RaMsg::System("Fork cancelled by extension".to_string()),
                     )
                     .await;
                     return;
@@ -408,7 +408,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::AgentError(format!("Failed to lock session: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock session: {err}")),
                         )
                         .await;
                         return;
@@ -420,7 +420,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::AgentError(format!("Failed to build fork: {err}")),
+                            RaMsg::AgentError(format!("Failed to build fork: {err}")),
                         )
                         .await;
                         return;
@@ -448,7 +448,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                    PiMsg::AgentError(format!("Failed to save fork: {err}")),
+                    RaMsg::AgentError(format!("Failed to save fork: {err}")),
                 )
                 .await;
                 return;
@@ -469,7 +469,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &cx,
-                    PiMsg::AgentError(err.to_string()),
+                    RaMsg::AgentError(err.to_string()),
                 )
                 .await;
                 return;
@@ -478,7 +478,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                PiMsg::ConversationReset {
+                RaMsg::ConversationReset {
                     session_id: new_session_id.clone(),
                     messages,
                     usage,
@@ -490,7 +490,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                PiMsg::SetEditorText {
+                RaMsg::SetEditorText {
                     owner_session_id: new_session_id.clone(),
                     text: selected_text,
                 },

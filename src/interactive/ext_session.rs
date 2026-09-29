@@ -6,7 +6,7 @@ use crate::provider_metadata::{canonical_provider_id, provider_ids_match};
 pub(super) struct InteractiveExtensionHostActions {
     pub(super) session: Arc<Mutex<Session>>,
     pub(super) agent: Arc<Mutex<Agent>>,
-    pub(super) event_tx: mpsc::Sender<PiMsg>,
+    pub(super) event_tx: mpsc::Sender<RaMsg>,
     pub(super) extension_streaming: Arc<AtomicBool>,
     pub(super) user_queue: Arc<StdMutex<InteractiveMessageQueue>>,
     pub(super) injected_queue: Arc<StdMutex<InjectedMessageQueue>>,
@@ -108,7 +108,7 @@ impl ExtensionHostActions for InteractiveExtensionHostActions {
                 let _ = enqueue_pi_event(
                     &self.event_tx,
                     &cx,
-                    PiMsg::SessionSystemNote {
+                    RaMsg::SessionSystemNote {
                         owner_session_id,
                         message: custom.content.clone(),
                     },
@@ -127,7 +127,7 @@ impl ExtensionHostActions for InteractiveExtensionHostActions {
             let _ = enqueue_pi_event(
                 &self.event_tx,
                 &cx,
-                PiMsg::SessionSystemNote {
+                RaMsg::SessionSystemNote {
                     owner_session_id: session_id.clone(),
                     message: custom.content.clone(),
                 },
@@ -139,7 +139,7 @@ impl ExtensionHostActions for InteractiveExtensionHostActions {
             let _ = enqueue_pi_event(
                 &self.event_tx,
                 &cx,
-                PiMsg::EnqueuePendingInput {
+                RaMsg::EnqueuePendingInput {
                     session_id,
                     input: PendingInput::Continue,
                 },
@@ -177,7 +177,7 @@ impl ExtensionHostActions for InteractiveExtensionHostActions {
         let _ = enqueue_pi_event(
             &self.event_tx,
             &cx,
-            PiMsg::EnqueuePendingInput {
+            RaMsg::EnqueuePendingInput {
                 session_id,
                 input: PendingInput::GeneratedText(message.text),
             },
@@ -769,7 +769,7 @@ mod tests {
     use crate::agent::{Agent, AgentConfig};
     use crate::config::Config;
     use crate::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-    use crate::extensions_js::PiJsRuntimeConfig;
+    use crate::extensions_js::RaJsRuntimeConfig;
     use crate::model::StreamEvent;
     use crate::models::ModelEntry;
     use crate::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
@@ -788,7 +788,7 @@ mod tests {
         Pin<Box<dyn futures::Stream<Item = crate::error::Result<StreamEvent>> + Send>>;
     type HostActionsHarness = (
         InteractiveExtensionHostActions,
-        mpsc::Receiver<PiMsg>,
+        mpsc::Receiver<RaMsg>,
         Arc<Mutex<Session>>,
         Arc<Mutex<Agent>>,
     );
@@ -1050,7 +1050,7 @@ mod tests {
 
             let queued = event_rx.try_recv().expect("continue should be queued");
             let queued_session_id = match queued {
-                PiMsg::EnqueuePendingInput {
+                RaMsg::EnqueuePendingInput {
                     session_id,
                     input: PendingInput::Continue,
                 } => session_id,
@@ -1128,7 +1128,7 @@ mod tests {
             actions.extension_streaming.store(true, Ordering::SeqCst);
             actions
                 .event_tx
-                .try_send(PiMsg::System("busy".to_string()))
+                .try_send(RaMsg::System("busy".to_string()))
                 .expect("fill bounded event channel");
 
             let send_message = actions.send_message(
@@ -1153,10 +1153,10 @@ mod tests {
             let (result, (first, second)) = futures::join!(send_message, recv_messages);
 
             result.expect("send_message");
-            assert!(matches!(first, PiMsg::System(text) if text == "busy"));
+            assert!(matches!(first, RaMsg::System(text) if text == "busy"));
             assert!(matches!(
                 second,
-                PiMsg::SessionSystemNote {
+                RaMsg::SessionSystemNote {
                     owner_session_id,
                     message,
                 } if !owner_session_id.is_empty() && message == "visible"
@@ -1174,7 +1174,7 @@ mod tests {
             let (actions, mut event_rx, _session, _agent) = build_host_actions_with_capacity(1);
             actions
                 .event_tx
-                .try_send(PiMsg::System("busy".to_string()))
+                .try_send(RaMsg::System("busy".to_string()))
                 .expect("fill bounded event channel");
 
             let send_message = actions.send_message(
@@ -1200,17 +1200,17 @@ mod tests {
             let (result, (first, second, third)) = futures::join!(send_message, recv_messages);
 
             result.expect("send_message");
-            assert!(matches!(first, PiMsg::System(text) if text == "busy"));
+            assert!(matches!(first, RaMsg::System(text) if text == "busy"));
             assert!(matches!(
                 second,
-                PiMsg::SessionSystemNote {
+                RaMsg::SessionSystemNote {
                     owner_session_id,
                     message,
                 } if !owner_session_id.is_empty() && message == "continue-now"
             ));
             assert!(matches!(
                 third,
-                PiMsg::EnqueuePendingInput {
+                RaMsg::EnqueuePendingInput {
                     session_id,
                     input: PendingInput::Continue,
                 } if !session_id.is_empty()
@@ -1228,7 +1228,7 @@ mod tests {
             let (actions, mut event_rx, _session, _agent) = build_host_actions_with_capacity(1);
             actions
                 .event_tx
-                .try_send(PiMsg::System("busy".to_string()))
+                .try_send(RaMsg::System("busy".to_string()))
                 .expect("fill bounded event channel");
 
             let send_message = actions.send_user_message(
@@ -1249,10 +1249,10 @@ mod tests {
             let (result, (first, second)) = futures::join!(send_message, recv_messages);
 
             result.expect("send_user_message");
-            assert!(matches!(first, PiMsg::System(text) if text == "busy"));
+            assert!(matches!(first, RaMsg::System(text) if text == "busy"));
             assert!(matches!(
                 second,
-                PiMsg::EnqueuePendingInput {
+                RaMsg::EnqueuePendingInput {
                     session_id,
                     input: PendingInput::GeneratedText(text),
                 } if !session_id.is_empty() && text == "hello from extension"
@@ -1677,7 +1677,7 @@ mod tests {
         });
     }
 
-    /// Regression guard for pi_agent_rust#138 (asupersync 0.3.9).
+    /// Regression guard for recur_agent#138 (asupersync 0.3.9).
     ///
     /// `asupersync::sync::MutexGuard` became `!Send` in 0.3.9, so any future
     /// that holds one across an `.await` cannot be spawned. Every mutating
@@ -1896,7 +1896,7 @@ mod tests {
             let mut previous = gate.generation();
             for _ in 0..3 {
                 let stale = gate.capture_origin();
-                crate::interactive::PiApp::try_install_session(
+                crate::interactive::RaApp::try_install_session(
                     &session,
                     &agent,
                     &gate,
@@ -1973,7 +1973,7 @@ mod tests {
             let manager = ExtensionManager::new();
             let tools = Arc::new(ToolRegistry::new(&[], temp_dir.path(), None));
             let js_runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: temp_dir.path().display().to_string(),
                     ..Default::default()
                 },

@@ -1,4 +1,4 @@
-//! Dependency-ordered atomic commit splitting engine (`pi commit`) (bd-cv653.3.14).
+//! Dependency-ordered atomic commit splitting engine (`ra commit`) (bd-cv653.3.14).
 //!
 //! Analyzes working tree status and diff hunks, semantically partitions changes into
 //! atomic units by topic and coupling, topologically sorts them by dependency graph,

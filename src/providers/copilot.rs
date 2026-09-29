@@ -29,15 +29,15 @@ use super::openai::OpenAIProvider;
 const GITHUB_API_BASE: &str = "https://api.github.com";
 
 /// Editor version header value (required by Copilot API).
-/// Override via `PI_COPILOT_EDITOR_VERSION`.
+/// Override via `RECUR_AGENT_COPILOT_EDITOR_VERSION`.
 const EDITOR_VERSION: &str = "vscode/1.96.2";
 
 /// User-Agent header value (required by Copilot API).
-/// Override via `PI_COPILOT_USER_AGENT`.
+/// Override via `RECUR_AGENT_COPILOT_USER_AGENT`.
 const COPILOT_USER_AGENT: &str = "GitHubCopilotChat/0.26.7";
 
 /// GitHub API version header.
-/// Override via `PI_GITHUB_API_VERSION`.
+/// Override via `RECUR_AGENT_GITHUB_API_VERSION`.
 const GITHUB_API_VERSION: &str = "2025-04-01";
 
 /// Safety margin: refresh the session token this many seconds before expiry.
@@ -47,21 +47,21 @@ const TOKEN_REFRESH_MARGIN_SECS: i64 = 60;
 const MAX_TOKEN_RESPONSE_BYTES: usize = 64 * 1024;
 
 fn copilot_editor_version() -> String {
-    std::env::var("PI_COPILOT_EDITOR_VERSION")
+    std::env::var("RECUR_AGENT_COPILOT_EDITOR_VERSION")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| EDITOR_VERSION.to_string())
 }
 
 fn copilot_user_agent() -> String {
-    std::env::var("PI_COPILOT_USER_AGENT")
+    std::env::var("RECUR_AGENT_COPILOT_USER_AGENT")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| COPILOT_USER_AGENT.to_string())
 }
 
 fn github_api_version() -> String {
-    std::env::var("PI_GITHUB_API_VERSION")
+    std::env::var("RECUR_AGENT_GITHUB_API_VERSION")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| GITHUB_API_VERSION.to_string())
@@ -71,7 +71,7 @@ fn github_api_version() -> String {
 ///
 /// Defaults to `https://api.github.com`. GitHub Enterprise / data-residency
 /// deployments can point the exchange elsewhere via
-/// `PI_COPILOT_GITHUB_API_BASE` (e.g. `https://github.example.com/api/v3`).
+/// `RECUR_AGENT_COPILOT_GITHUB_API_BASE` (e.g. `https://github.example.com/api/v3`).
 /// This is deliberately separate from the model catalog's `base_url`, which
 /// is a chat-completions endpoint hint and must never steer the token
 /// exchange (gh #191).
@@ -83,9 +83,13 @@ fn github_api_base_from_env(value: Option<&str>) -> String {
 }
 
 /// The effective GitHub REST API base for Copilot OAuth/usage calls
-/// (`PI_COPILOT_GITHUB_API_BASE` or the `api.github.com` default).
+/// (`RECUR_AGENT_COPILOT_GITHUB_API_BASE` or the `api.github.com` default).
 pub(crate) fn github_api_base() -> String {
-    github_api_base_from_env(std::env::var("PI_COPILOT_GITHUB_API_BASE").ok().as_deref())
+    github_api_base_from_env(
+        std::env::var("RECUR_AGENT_COPILOT_GITHUB_API_BASE")
+            .ok()
+            .as_deref(),
+    )
 }
 
 /// Ensure a chat-completions URL ends with `/chat/completions` exactly once.

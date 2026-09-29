@@ -2,20 +2,20 @@
 //! 2026-08-25 cutover (bd-ti0tq).
 //!
 //! This module hosts the ftui-runtime port of the interactive front-end. The
-//! `ftui` feature is on by default, so plain `pi` launches this stack; the
+//! `ftui` feature is on by default, so plain `ra` launches this stack; the
 //! charmed_rust/bubbletea stack in [`crate::interactive`] remains selectable
-//! with `pi --classic` (aliases `--classic-tui`, `--charmed`, `--bubbletea`)
+//! with `ra --classic` (aliases `--classic-tui`, `--charmed`, `--bubbletea`)
 //! until it is deleted. Add `--inline` to keep shell scrollback instead of
 //! the alternate screen, or try the fake-agent demo:
 //! `cargo run --example ftui_preview --features ftui`.
 //!
 //! What is real today:
-//! - [`PiFtuiMsg`]: the typed Elm message wrapping terminal events and the
-//!   existing [`PiMsg`](crate::interactive::PiMsg) agent-event vocabulary.
+//! - [`RaFtuiMsg`]: the typed Elm message wrapping terminal events and the
+//!   existing [`RaMsg`](crate::interactive::RaMsg) agent-event vocabulary.
 //! - [`AgentEventSubscription`]: the async→UI bridge as an ftui
 //!   `Subscription` (stable-id dedup, shared receiver slot, stop-aware
 //!   drain), replacing bubbletea's `with_input_receiver`.
-//! - [`PiFtuiModel`]: layout regions (header / markdown conversation /
+//! - [`RaFtuiModel`]: layout regions (header / markdown conversation /
 //!   status / growing `TextArea` editor / footer), tail-follow scroll,
 //!   spinner ticks, theme-derived [`FtuiPalette`], the shared keybinding
 //!   catalog via `KeyBinding::from_ftui_key`, inline ask cards, a modal
@@ -24,7 +24,7 @@
 //!   stack), and input routing for `/model`, `/help`, and
 //!   display-only `!`/`!!` bash. All agent/tool-originated text passes
 //!   through `ftui::render::sanitize` before it can reach a frame.
-//! - [`run`]: the `pi --ftui` launch path — a driver thread owns an
+//! - [`run`]: the `ra --ftui` launch path — a driver thread owns an
 //!   asupersync runtime plus an SDK session; prompts become real agent turns
 //!   ([`agent_event_to_pi_msgs`] pins the translation), asks pair through
 //!   `respond_ui`, sessions persist per the usual CLI flags.
@@ -57,7 +57,7 @@ use ftui::{Cmd, Event, Frame, KeyCode, Model, Modifiers, MouseEventKind};
 use crate::ask::{AskAnswer, AskResponse, AskUiRequest, QuestionReply};
 use crate::autocomplete::{AutocompleteCatalog, AutocompleteItem, AutocompleteItemKind};
 use crate::extensions::{ExtensionUiRequest, ExtensionUiResponse};
-use crate::interactive::{AutocompleteState, PiMsg, extension_commands_for_catalog};
+use crate::interactive::{AutocompleteState, RaMsg, extension_commands_for_catalog};
 use crate::interactive::{format_extension_ui_prompt, parse_extension_ui_response};
 use crate::keybindings::{AppAction, KeyBinding, KeyBindings};
 use std::collections::VecDeque;
@@ -69,15 +69,15 @@ mod workspace_commands;
 /// Typed message for the ftui model: terminal events plus bridged agent events.
 ///
 /// `Model::Message` must be `From<Event>`, so terminal input arrives through
-/// [`PiFtuiMsg::Term`]; everything async arrives through [`PiFtuiMsg::Agent`]
-/// via [`AgentEventSubscription`]. [`PiFtuiMsg::Resumed`] is produced by the
+/// [`RaFtuiMsg::Term`]; everything async arrives through [`RaFtuiMsg::Agent`]
+/// via [`AgentEventSubscription`]. [`RaFtuiMsg::Resumed`] is produced by the
 /// suspend task after the process returns from a SIGTSTP stop (ctrl+z).
 #[derive(Debug)]
-pub enum PiFtuiMsg {
+pub enum RaFtuiMsg {
     /// A raw terminal event (key, mouse, resize, paste, focus, ...).
     Term(Event),
     /// An agent/system event bridged from the async side.
-    Agent(PiMsg),
+    Agent(RaMsg),
     /// The process came back from a SIGTSTP suspension: the terminal has
     /// been re-acquired and the next frame must repaint everything.
     Resumed,
@@ -90,7 +90,7 @@ pub enum PiFtuiMsg {
     },
 }
 
-impl From<Event> for PiFtuiMsg {
+impl From<Event> for RaFtuiMsg {
     fn from(event: Event) -> Self {
         Self::Term(event)
     }
@@ -103,28 +103,28 @@ impl From<Event> for PiFtuiMsg {
 const AGENT_EVENTS_SUB_ID: SubId = 0x5049_4147; // "PIAG"
 
 /// Bridges the existing async agent-event channel (`std::sync::mpsc` carrying
-/// [`PiMsg`]) into the ftui runtime as a `Subscription`.
+/// [`RaMsg`]) into the ftui runtime as a `Subscription`.
 ///
 /// The runtime calls [`Subscription::run`] once on a background thread it
 /// owns; the receiver is handed over via interior mutability because `run`
 /// takes `&self`. The loop wakes every 50ms to observe `StopSignal`, matching
 /// the runtime's bounded-join teardown.
 ///
-/// The receiver slot is an `Arc` shared with [`PiFtuiModel`]:
+/// The receiver slot is an `Arc` shared with [`RaFtuiModel`]:
 /// `Model::subscriptions()` is called after every update and returns fresh
 /// boxes each cycle, but the runtime deduplicates by [`Subscription::id`] and
 /// only ever starts one instance — the started instance takes the receiver,
 /// and the never-run duplicates see an empty slot.
 pub struct AgentEventSubscription {
-    rx: Arc<Mutex<Option<Receiver<PiMsg>>>>,
+    rx: Arc<Mutex<Option<Receiver<RaMsg>>>>,
 }
 
 impl AgentEventSubscription {
-    pub fn new(rx: Receiver<PiMsg>) -> Self {
+    pub fn new(rx: Receiver<RaMsg>) -> Self {
         Self::from_shared(Arc::new(Mutex::new(Some(rx))))
     }
 
-    const fn from_shared(rx: Arc<Mutex<Option<Receiver<PiMsg>>>>) -> Self {
+    const fn from_shared(rx: Arc<Mutex<Option<Receiver<RaMsg>>>>) -> Self {
         Self { rx }
     }
 }
@@ -201,7 +201,7 @@ struct PhaseCounters {
 /// one per frame. The latch clears as soon as a phase completes inside budget,
 /// so a later stall is reported again.
 ///
-/// Gated behind `PI_PERF_TELEMETRY=1`, matching the bubbletea stack's
+/// Gated behind `RECUR_AGENT_PERF_TELEMETRY=1`, matching the bubbletea stack's
 /// [`crate::interactive::perf`] frame telemetry. When disabled no
 /// `Instant::now()` is called and the probe costs one bool test per callback.
 ///
@@ -230,12 +230,12 @@ impl Default for LoopWatchdog {
 impl LoopWatchdog {
     fn new() -> Self {
         Self::with_enabled(
-            std::env::var_os("PI_PERF_TELEMETRY").is_some_and(|v| v == "1" || v == "true"),
+            std::env::var_os("RECUR_AGENT_PERF_TELEMETRY").is_some_and(|v| v == "1" || v == "true"),
         )
     }
 
     /// Construct with an explicit gate. `new()` reads the environment; tests
-    /// pin the gate so they never depend on the ambient `PI_PERF_TELEMETRY`.
+    /// pin the gate so they never depend on the ambient `RECUR_AGENT_PERF_TELEMETRY`.
     fn with_enabled(enabled: bool) -> Self {
         Self {
             enabled,
@@ -292,7 +292,7 @@ impl LoopWatchdog {
             return;
         }
         tracing::warn!(
-            schema = "pi.tui.loop_watchdog.v1",
+            schema = "ra.tui.loop_watchdog.v1",
             surface = "ftui",
             phase = phase.as_str(),
             lag_us = elapsed_us,
@@ -302,7 +302,7 @@ impl LoopWatchdog {
     }
 
     /// Structured counters for tests and evidence artifacts. Shares the
-    /// redaction posture of `pi.tui.frame_budget.v1`: timings only, never
+    /// redaction posture of `ra.tui.frame_budget.v1`: timings only, never
     /// prompt, tool, or model content.
     fn snapshot(&self) -> serde_json::Value {
         let phases: serde_json::Map<String, serde_json::Value> = LoopPhase::ALL
@@ -328,7 +328,7 @@ impl LoopWatchdog {
             .map(|phase| self.counters(phase).stalls.get())
             .sum();
         serde_json::json!({
-            "schema": "pi.tui.loop_watchdog.v1",
+            "schema": "ra.tui.loop_watchdog.v1",
             "surface": "ftui",
             "enabled": self.enabled,
             "budget_us": u64::try_from(LOOP_STALL_BUDGET.as_micros()).unwrap_or(u64::MAX),
@@ -354,8 +354,8 @@ impl LoopWatchdog {
 /// polled between receives; `StopSignal` has no public constructor, so tests
 /// pass a plain closure and terminate via channel disconnect instead.
 fn drain_agent_events(
-    rx: &Receiver<PiMsg>,
-    sender: &Sender<PiFtuiMsg>,
+    rx: &Receiver<RaMsg>,
+    sender: &Sender<RaFtuiMsg>,
     stopped: impl Fn() -> bool,
 ) {
     loop {
@@ -364,7 +364,7 @@ fn drain_agent_events(
         }
         match rx.recv_timeout(AGENT_EVENT_POLL) {
             Ok(msg) => {
-                if sender.send(PiFtuiMsg::Agent(msg)).is_err() {
+                if sender.send(RaFtuiMsg::Agent(msg)).is_err() {
                     // Runtime dropped its receiver: program is exiting.
                     return;
                 }
@@ -484,20 +484,20 @@ fn external_editor_task(
     draft: String,
     alt_screen: bool,
     mouse: bool,
-) -> impl FnOnce() -> PiFtuiMsg + Send + 'static {
+) -> impl FnOnce() -> RaFtuiMsg + Send + 'static {
     move || {
         if let Err(err) = release_terminal(alt_screen) {
-            return PiFtuiMsg::Agent(PiMsg::AgentError(format!("external editor: {err}")));
+            return RaFtuiMsg::Agent(RaMsg::AgentError(format!("external editor: {err}")));
         }
         let text = run_external_editor(&external_editor_command(), &draft)
             .map_err(|err| format!("external editor: {err}"));
         match reacquire_terminal(alt_screen, mouse) {
-            Ok((width, height)) => PiFtuiMsg::Edited {
+            Ok((width, height)) => RaFtuiMsg::Edited {
                 text,
                 width,
                 height,
             },
-            Err(err) => PiFtuiMsg::Agent(PiMsg::AgentError(format!("external editor: {err}"))),
+            Err(err) => RaFtuiMsg::Agent(RaMsg::AgentError(format!("external editor: {err}"))),
         }
     }
 }
@@ -506,19 +506,19 @@ fn external_editor_task(
 /// stop until continued, then hand back a message that clears the suspend
 /// state and triggers a full repaint.
 #[cfg(unix)]
-fn suspend_task(alt_screen: bool, mouse: bool) -> impl FnOnce() -> PiFtuiMsg + Send + 'static {
+fn suspend_task(alt_screen: bool, mouse: bool) -> impl FnOnce() -> RaFtuiMsg + Send + 'static {
     move || match perform_terminal_suspend(alt_screen, mouse) {
-        Ok((width, height)) => PiFtuiMsg::Term(Event::Resize { width, height }),
-        Err(err) => PiFtuiMsg::Agent(PiMsg::AgentError(format!("suspend/resume: {err}"))),
+        Ok((width, height)) => RaFtuiMsg::Term(Event::Resize { width, height }),
+        Err(err) => RaFtuiMsg::Agent(RaMsg::AgentError(format!("suspend/resume: {err}"))),
     }
 }
 
-impl Subscription<PiFtuiMsg> for AgentEventSubscription {
+impl Subscription<RaFtuiMsg> for AgentEventSubscription {
     fn id(&self) -> SubId {
         AGENT_EVENTS_SUB_ID
     }
 
-    fn run(&self, sender: Sender<PiFtuiMsg>, stop: StopSignal) {
+    fn run(&self, sender: Sender<RaFtuiMsg>, stop: StopSignal) {
         let Some(rx) = self.rx.lock().ok().and_then(|mut slot| slot.take()) else {
             // Already consumed (or poisoned): nothing to drain. The runtime
             // only calls run() once per running subscription, so this is a
@@ -532,7 +532,7 @@ impl Subscription<PiFtuiMsg> for AgentEventSubscription {
 /// Resolved color palette for the ftui stack.
 ///
 /// Converted from pi's [`Theme`](crate::theme::Theme) hex colors so
-/// `pi --ftui` honors the user's configured theme. Colors that fail to parse
+/// `ra --ftui` honors the user's configured theme. Colors that fail to parse
 /// fall back to the built-in palette per-field.
 #[derive(Debug, Clone, Copy)]
 pub struct FtuiPalette {
@@ -1487,7 +1487,7 @@ impl AgentUiState {
     clippy::struct_excessive_bools,
     reason = "quit, terminal capabilities, and suspension are independent state flags"
 )]
-pub struct PiFtuiModel {
+pub struct RaFtuiModel {
     /// What the agent is doing right now (drives header + input routing).
     state: AgentUiState,
     /// Sanitized transcript lines (completed messages / system notes).
@@ -1602,26 +1602,26 @@ pub struct PiFtuiModel {
     /// Shared slot for the agent-event receiver: `subscriptions()` re-declares
     /// the bridge each cycle, and the one instance the runtime actually starts
     /// takes the receiver out of this slot (see [`AgentEventSubscription`]).
-    agent_rx: Arc<Mutex<Option<Receiver<PiMsg>>>>,
+    agent_rx: Arc<Mutex<Option<Receiver<RaMsg>>>>,
     /// Whether the program owns the alternate screen (fullscreen launch).
     /// The suspend path mirrors only the features actually enabled.
     alt_screen: bool,
     /// Whether mouse capture is on. Off when the user asked for native
     /// terminal selection, and then the suspend/resume mirror must not turn
-    /// tracking back on behind their back (pi_agent_rust#78).
+    /// tracking back on behind their back (recur_agent#78).
     mouse: bool,
     /// Set while a ctrl+z suspension is in flight: freezes spinner ticks so
     /// the pre-stop frames stay byte-identical (the diff engine then emits
     /// nothing into the restored cooked terminal). Cleared by
-    /// [`PiFtuiMsg::Resumed`].
+    /// [`RaFtuiMsg::Resumed`].
     suspending: bool,
     /// Test seam replacing the real SIGTSTP task (which would stop or fail
     /// on a headless test host). `None` in production.
     #[cfg(test)]
-    suspend_task_override: Option<Box<dyn FnOnce() -> PiFtuiMsg + Send>>,
+    suspend_task_override: Option<Box<dyn FnOnce() -> RaFtuiMsg + Send>>,
     /// Blocking work an input handler queued for the runtime (a mid-turn
     /// `/btw`); the key handler returns it as a `Cmd::task`.
-    pending_task: Option<Box<dyn FnOnce() -> PiFtuiMsg + Send>>,
+    pending_task: Option<Box<dyn FnOnce() -> RaFtuiMsg + Send>>,
     /// When ctrl+c last cleared the editor: a second press within
     /// [`CTRL_C_EXIT_WINDOW`] quits (OMP's double-tap exit).
     last_ctrl_c: Option<std::time::Instant>,
@@ -1637,7 +1637,7 @@ pub struct PiFtuiModel {
     /// The draft set aside when recall began, restored past the newest entry.
     history_draft: String,
     /// Loop-lag probe with render/input/agent-event attribution. Inert unless
-    /// `PI_PERF_TELEMETRY=1`.
+    /// `RECUR_AGENT_PERF_TELEMETRY=1`.
     watchdog: LoopWatchdog,
     /// Monotonic source for [`TranscriptEntry::revision`] values (issue
     /// #201). Every push and every in-place entry mutation takes the next
@@ -1655,7 +1655,7 @@ pub struct PiFtuiModel {
     render_cache: std::cell::RefCell<Vec<Option<CachedBlock>>>,
     /// Body width the blocks in `render_cache` were rendered for. A frame at
     /// a different width drops the cache before reusing anything; see
-    /// [`PiFtuiModel::conversation_text`].
+    /// [`RaFtuiModel::conversation_text`].
     render_cache_width: std::cell::Cell<u16>,
     /// `(rendered, reused)` block counts from the most recent
     /// `conversation_text()` pass — the observable that keeps the cache
@@ -1682,7 +1682,7 @@ struct CachedBlock {
 }
 
 /// A long out-of-turn driver operation the status region is animating
-/// (issue #203). `tick_pending` is set by [`PiFtuiModel::begin_busy`] and
+/// (issue #203). `tick_pending` is set by [`RaFtuiModel::begin_busy`] and
 /// consumed by the key handler that routed the input — `update()` owns Cmd
 /// returns, the routing helpers don't.
 #[derive(Debug)]
@@ -1741,7 +1741,7 @@ async fn reload_driver_resources(
     extension_commands: Vec<crate::autocomplete::NamedEntry>,
     resources: &mut Option<crate::resources::ResourceLoader>,
     catalog: &mut AutocompleteCatalog,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     match crate::resources::ResourceLoader::load(
         &source.package_manager,
@@ -1756,10 +1756,10 @@ async fn reload_driver_resources(
             *resources = Some(loader);
             let mut completion = catalog.clone();
             completion.extension_commands = extension_commands;
-            let _ = agent_tx.send(PiMsg::AutocompleteCatalog(completion));
+            let _ = agent_tx.send(RaMsg::AutocompleteCatalog(completion));
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::System(format!(
+            let _ = agent_tx.send(RaMsg::System(format!(
                 "reload: skills and prompt templates were not re-read: {err}"
             )));
         }
@@ -1775,7 +1775,7 @@ const COMPLETION_HINT: &str = "↑↓ move · Tab/Enter accept · Esc dismiss";
 
 /// Rows of single-line chrome around the conversation body: header, status,
 /// footer. The input region's height is dynamic (see
-/// [`PiFtuiModel::input_rows`]), so total chrome = this + input rows.
+/// [`RaFtuiModel::input_rows`]), so total chrome = this + input rows.
 const FIXED_CHROME_ROWS: u16 = 3;
 
 /// The input editor grows with its content up to this many rows.
@@ -1823,8 +1823,8 @@ fn layout_regions(area: Rect, input_rows: u16, banner_rows: u16, completion_rows
     }
 }
 
-impl PiFtuiModel {
-    pub fn new(agent_rx: Receiver<PiMsg>) -> Self {
+impl RaFtuiModel {
+    pub fn new(agent_rx: Receiver<RaMsg>) -> Self {
         Self {
             state: AgentUiState::Ready,
             transcript: Vec::new(),
@@ -1897,7 +1897,7 @@ impl PiFtuiModel {
 
     /// Install the launch-time completion catalog (prompt templates, skills)
     /// plus the working directory and popup height (issue #208). Extension
-    /// commands arrive later via [`PiMsg::AutocompleteCatalog`] once the
+    /// commands arrive later via [`RaMsg::AutocompleteCatalog`] once the
     /// driver's session exists.
     #[must_use]
     pub fn with_autocomplete(mut self, launch: AutocompleteLaunch) -> Self {
@@ -2025,7 +2025,7 @@ impl PiFtuiModel {
     /// touch termios (and stop the process) inside a unit test.
     #[cfg(test)]
     #[must_use]
-    pub fn with_suspend_task(mut self, task: impl FnOnce() -> PiFtuiMsg + Send + 'static) -> Self {
+    pub fn with_suspend_task(mut self, task: impl FnOnce() -> RaFtuiMsg + Send + 'static) -> Self {
         self.suspend_task_override = Some(Box::new(task));
         self
     }
@@ -2433,7 +2433,7 @@ impl PiFtuiModel {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn handle_agent(&mut self, msg: PiMsg) -> Cmd<PiFtuiMsg> {
+    fn handle_agent(&mut self, msg: RaMsg) -> Cmd<RaFtuiMsg> {
         // A busy out-of-turn operation (issue #203) is over once the
         // sequential driver replies with anything of substance. Background
         // ticks don't count, and neither does the in-progress chatter of an
@@ -2442,17 +2442,17 @@ impl PiFtuiModel {
         if self.busy.is_some()
             && !matches!(
                 msg,
-                PiMsg::AutocompleteRefresh
-                    | PiMsg::AutocompleteCatalog(_)
-                    | PiMsg::ToolStart { .. }
-                    | PiMsg::ToolInvocation { .. }
-                    | PiMsg::ToolUpdate { .. }
+                RaMsg::AutocompleteRefresh
+                    | RaMsg::AutocompleteCatalog(_)
+                    | RaMsg::ToolStart { .. }
+                    | RaMsg::ToolInvocation { .. }
+                    | RaMsg::ToolUpdate { .. }
             )
         {
             self.busy = None;
         }
         match msg {
-            PiMsg::AgentStart => {
+            RaMsg::AgentStart => {
                 self.state = AgentUiState::Working;
                 self.autocomplete.close();
                 // Start the spinner tick chain; it dies naturally once the
@@ -2460,15 +2460,15 @@ impl PiFtuiModel {
                 // same self-limiting pattern as the bubbletea spinner gate).
                 return Cmd::tick(SPINNER_INTERVAL);
             }
-            PiMsg::TextDelta(delta) => {
+            RaMsg::TextDelta(delta) => {
                 // Adversarial-content safety: agent/tool text is sanitized
                 // before it can ever reach a frame.
                 self.streaming.push_str(&sanitize(&delta));
             }
-            PiMsg::ThinkingDelta(delta) => {
+            RaMsg::ThinkingDelta(delta) => {
                 self.thinking.push_str(&sanitize(&delta));
             }
-            PiMsg::ToolStart { name, tool_id, .. } => {
+            RaMsg::ToolStart { name, tool_id, .. } => {
                 // What the model thought and said before calling the tool
                 // comes before the tool's card, not after the whole turn.
                 self.flush_stream();
@@ -2480,7 +2480,7 @@ impl PiFtuiModel {
                 self.current_tool = Some(name.clone());
                 self.push_tool_card(&pair, &name, &name);
             }
-            PiMsg::ToolInvocation { tool_id, summary } => {
+            RaMsg::ToolInvocation { tool_id, summary } => {
                 // The invocation summary REPLACES the card head (omp
                 // renderCall description): pairing by tool_id is immune to
                 // the text change.
@@ -2495,7 +2495,7 @@ impl PiFtuiModel {
                     entry.revision = revision;
                 }
             }
-            PiMsg::ToolEnd {
+            RaMsg::ToolEnd {
                 name,
                 tool_id,
                 is_error,
@@ -2512,10 +2512,10 @@ impl PiFtuiModel {
                 self.finish_tool_card(&pair, &name, !is_error, output, diff_styled);
                 self.current_tool = None;
             }
-            PiMsg::TodoSummary { summary } => {
+            RaMsg::TodoSummary { summary } => {
                 self.todo_summary = summary.map(|s| sanitize(&s).into_owned());
             }
-            PiMsg::AgentDone {
+            RaMsg::AgentDone {
                 usage,
                 error_message,
                 ..
@@ -2538,7 +2538,7 @@ impl PiFtuiModel {
                 self.drain_deferred_notes();
                 self.settle_pending_cards();
             }
-            PiMsg::AgentError(err) => {
+            RaMsg::AgentError(err) => {
                 self.dismiss_pending_interactions();
                 // Pinned above the editor (bd-cv653.9.2), dismiss-on-send —
                 // not duplicated into the transcript. Partial streamed text
@@ -2554,11 +2554,11 @@ impl PiFtuiModel {
                 self.drain_deferred_notes();
                 self.settle_pending_cards();
             }
-            PiMsg::System(text) | PiMsg::SystemNote(text) => {
+            RaMsg::System(text) | RaMsg::SystemNote(text) => {
                 let text = sanitize(&text).into_owned();
                 self.push_entry(EntryRole::System, text);
             }
-            PiMsg::SessionSystemNote {
+            RaMsg::SessionSystemNote {
                 owner_session_id,
                 message,
             } => {
@@ -2579,7 +2579,7 @@ impl PiFtuiModel {
                     }
                 }
             }
-            PiMsg::ConversationReset {
+            RaMsg::ConversationReset {
                 session_id,
                 messages,
                 status,
@@ -2589,7 +2589,7 @@ impl PiFtuiModel {
                 self.displayed_session_id = Some(session_id);
                 self.apply_conversation_reset(messages, status);
             }
-            PiMsg::RetryCommitted {
+            RaMsg::RetryCommitted {
                 session_id,
                 messages,
                 status,
@@ -2603,7 +2603,7 @@ impl PiFtuiModel {
                 // user message, as a typed prompt would be.
                 self.push_entry(EntryRole::User, sanitize(&text).into_owned());
             }
-            PiMsg::BashResult { display, .. } => {
+            RaMsg::BashResult { display, .. } => {
                 let text = sanitize(&display).into_owned();
                 if !self.fold_bash_detail(&text) {
                     self.push_entry(EntryRole::System, text);
@@ -2611,7 +2611,7 @@ impl PiFtuiModel {
                 self.current_tool = None;
                 self.scroll_from_tail = 0;
             }
-            PiMsg::AskUiRequest(request) => {
+            RaMsg::AskUiRequest(request) => {
                 if request.request.questions.is_empty() {
                     // Defensive: an empty card resolves immediately as
                     // dismissed rather than deadlocking the pending tool.
@@ -2632,7 +2632,7 @@ impl PiFtuiModel {
                     });
                 }
             }
-            PiMsg::ExtensionUiRequest(request) => {
+            RaMsg::ExtensionUiRequest(request) => {
                 if !request.expects_response() {
                     // Effects this stack can carry out are applied; the rest
                     // still fall through to a transcript line, which is the
@@ -2651,8 +2651,8 @@ impl PiFtuiModel {
                     self.ext_queue.push_back(request);
                 }
             }
-            PiMsg::UiShutdown => return Cmd::quit(),
-            PiMsg::AutocompleteCatalog(catalog) => {
+            RaMsg::UiShutdown => return Cmd::quit(),
+            RaMsg::AutocompleteCatalog(catalog) => {
                 // Issue #208: extension commands join the popup's command
                 // list once the driver's session (and its extension
                 // runtime) exists. Any open popup was computed against the
@@ -2660,7 +2660,7 @@ impl PiFtuiModel {
                 self.autocomplete.provider.set_catalog(catalog);
                 self.autocomplete.close();
             }
-            PiMsg::TerminalTitle(title) => {
+            RaMsg::TerminalTitle(title) => {
                 // Issue #200: the cell-grid renderer can't carry OSC escapes
                 // in frame content, so write the title directly. This runs on
                 // the UI thread — the same thread that owns renderer writes —
@@ -2672,18 +2672,18 @@ impl PiFtuiModel {
                 let _ = out.write_all(sequence.as_bytes());
                 let _ = out.flush();
             }
-            PiMsg::LoginPending {
+            RaMsg::LoginPending {
                 provider,
                 accepts_empty_input,
             } => {
                 self.login_pending = provider.map(|provider| (provider, accepts_empty_input));
             }
-            PiMsg::StatusSnapshot(snapshot) => {
+            RaMsg::StatusSnapshot(snapshot) => {
                 self.status_snapshot = Some(snapshot);
             }
             // `/fork` hands the selected message back for rewording; a stale
             // reply for a session no longer shown is dropped.
-            PiMsg::SetEditorText {
+            RaMsg::SetEditorText {
                 owner_session_id,
                 text,
             } if self
@@ -2856,7 +2856,7 @@ impl PiFtuiModel {
                         .block_on(client.ask("", &question))
                         .map_err(|err| err.to_string())
                 });
-            PiFtuiMsg::Agent(PiMsg::System(match answer {
+            RaFtuiMsg::Agent(RaMsg::System(match answer {
                 Ok(answer) => format!("(/btw) {answer}"),
                 Err(err) => format!("(/btw) failed: {err}"),
             }))
@@ -3754,7 +3754,7 @@ impl PiFtuiModel {
         }
     }
 
-    /// Write the OSC title sequence, as `PiMsg::TerminalTitle` does.
+    /// Write the OSC title sequence, as `RaMsg::TerminalTitle` does.
     fn write_terminal_title(title: &str) {
         use std::io::Write as _;
 
@@ -3768,7 +3768,7 @@ impl PiFtuiModel {
     /// starts the spinner chain (`Cmd::none()` when nothing was armed).
     /// Split from [`Self::begin_busy`] because the routing helpers return
     /// `bool`/`()` — only `update()`'s key paths own Cmd returns.
-    fn take_busy_tick(&mut self) -> Cmd<PiFtuiMsg> {
+    fn take_busy_tick(&mut self) -> Cmd<RaFtuiMsg> {
         if let Some(op) = &mut self.busy
             && std::mem::take(&mut op.tick_pending)
         {
@@ -3789,7 +3789,7 @@ impl PiFtuiModel {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn handle_term(&mut self, event: &Event) -> Cmd<PiFtuiMsg> {
+    fn handle_term(&mut self, event: &Event) -> Cmd<RaFtuiMsg> {
         match event {
             Event::Tick => {
                 // While a ctrl+z stop is in flight the model must not
@@ -4374,7 +4374,7 @@ impl PiFtuiModel {
         }
     }
 
-    fn consume_scroll(&mut self, scroll: impl FnOnce(&mut Self)) -> Cmd<PiFtuiMsg> {
+    fn consume_scroll(&mut self, scroll: impl FnOnce(&mut Self)) -> Cmd<RaFtuiMsg> {
         scroll(self);
         Cmd::none()
     }
@@ -4514,18 +4514,18 @@ impl PiFtuiModel {
     }
 }
 
-impl Model for PiFtuiModel {
-    type Message = PiFtuiMsg;
+impl Model for RaFtuiModel {
+    type Message = RaFtuiMsg;
 
-    fn update(&mut self, msg: PiFtuiMsg) -> Cmd<PiFtuiMsg> {
+    fn update(&mut self, msg: RaFtuiMsg) -> Cmd<RaFtuiMsg> {
         let probe = self.watchdog.start();
         let phase = match &msg {
-            PiFtuiMsg::Term(_) | PiFtuiMsg::Edited { .. } => LoopPhase::Input,
-            PiFtuiMsg::Agent(_) | PiFtuiMsg::Resumed => LoopPhase::AgentEvent,
+            RaFtuiMsg::Term(_) | RaFtuiMsg::Edited { .. } => LoopPhase::Input,
+            RaFtuiMsg::Agent(_) | RaFtuiMsg::Resumed => LoopPhase::AgentEvent,
         };
         let cmd = match msg {
-            PiFtuiMsg::Term(event) => self.handle_term(&event),
-            PiFtuiMsg::Edited {
+            RaFtuiMsg::Term(event) => self.handle_term(&event),
+            RaFtuiMsg::Edited {
                 text,
                 width,
                 height,
@@ -4541,11 +4541,11 @@ impl Model for PiFtuiModel {
                 }
                 cmd
             }
-            PiFtuiMsg::Agent(agent) => self.handle_agent(agent),
+            RaFtuiMsg::Agent(agent) => self.handle_agent(agent),
             // Back from a SIGTSTP stop: the suspend task already re-acquired
             // raw mode / alt screen / mouse; the next frame repaints the
             // freshly-cleared alternate buffer in full.
-            PiFtuiMsg::Resumed => {
+            RaFtuiMsg::Resumed => {
                 self.suspending = false;
                 Cmd::none()
             }
@@ -4560,7 +4560,7 @@ impl Model for PiFtuiModel {
         self.watchdog.finish(LoopPhase::Render, probe);
     }
 
-    fn subscriptions(&self) -> Vec<Box<dyn Subscription<PiFtuiMsg>>> {
+    fn subscriptions(&self) -> Vec<Box<dyn Subscription<RaFtuiMsg>>> {
         // Re-declared every cycle under the stable AGENT_EVENTS_SUB_ID; the
         // runtime dedups by id, so exactly one instance runs and takes the
         // receiver from the shared slot.
@@ -4570,8 +4570,8 @@ impl Model for PiFtuiModel {
     }
 }
 
-impl PiFtuiModel {
-    /// Counters for the loop watchdog (`pi.tui.loop_watchdog.v1`). Timings
+impl RaFtuiModel {
+    /// Counters for the loop watchdog (`ra.tui.loop_watchdog.v1`). Timings
     /// only — never prompt, tool, or model content.
     #[must_use]
     pub fn loop_watchdog_snapshot(&self) -> serde_json::Value {
@@ -4909,18 +4909,18 @@ fn tool_output_preview(result: &crate::tools::ToolOutput) -> Option<String> {
     Some(preview)
 }
 
-/// Translate one [`AgentEvent`](crate::agent::AgentEvent) into the `PiMsg`
+/// Translate one [`AgentEvent`](crate::agent::AgentEvent) into the `RaMsg`
 /// vocabulary the model consumes. Pure so tests can pin the mapping.
 ///
 /// Deliberately narrow: lifecycle, streaming deltas, tool lifecycle, and
 /// error surfacing. Retry/failover/compaction events surface as system notes;
 /// everything else is dropped until its surface is ported.
-pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
+pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<RaMsg> {
     use crate::agent::AgentEvent as E;
     use crate::model::AssistantMessageEvent as A;
 
     match event {
-        E::AgentStart { .. } => vec![PiMsg::AgentStart],
+        E::AgentStart { .. } => vec![RaMsg::AgentStart],
         E::AgentEnd {
             messages, error, ..
         } => {
@@ -4944,7 +4944,7 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
                     raw.clone()
                 }
             });
-            vec![PiMsg::AgentDone {
+            vec![RaMsg::AgentDone {
                 usage: last_assistant.map(|a| a.usage.clone()),
                 stop_reason,
                 error_message,
@@ -4957,8 +4957,8 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
             assistant_message_event,
             ..
         } => match assistant_message_event {
-            A::TextDelta { delta, .. } => vec![PiMsg::TextDelta(delta.clone())],
-            A::ThinkingDelta { delta, .. } => vec![PiMsg::ThinkingDelta(delta.clone())],
+            A::TextDelta { delta, .. } => vec![RaMsg::TextDelta(delta.clone())],
+            A::ThinkingDelta { delta, .. } => vec![RaMsg::ThinkingDelta(delta.clone())],
             _ => Vec::new(),
         },
         E::ToolExecutionStart {
@@ -4967,7 +4967,7 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
             args,
             ..
         } => {
-            let mut msgs = vec![PiMsg::ToolStart {
+            let mut msgs = vec![RaMsg::ToolStart {
                 name: tool_name.clone(),
                 tool_id: tool_call_id.clone(),
             }];
@@ -4975,7 +4975,7 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
             // human head ("Bash: cargo test", "Read src/main.rs") from the
             // args; absent a derivable summary the card keeps the name.
             if let Some(summary) = crate::interactive::tool_invocation_summary(tool_name, args) {
-                msgs.push(PiMsg::ToolInvocation {
+                msgs.push(RaMsg::ToolInvocation {
                     tool_id: tool_call_id.clone(),
                     summary,
                 });
@@ -4988,7 +4988,7 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
             is_error,
             result,
             ..
-        } => vec![PiMsg::ToolEnd {
+        } => vec![RaMsg::ToolEnd {
             name: tool_name.clone(),
             tool_id: tool_call_id.clone(),
             is_error: *is_error,
@@ -4999,11 +4999,11 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
             max_attempts,
             error_message,
             ..
-        } => vec![PiMsg::SystemNote(format!(
+        } => vec![RaMsg::SystemNote(format!(
             "retry {attempt}/{max_attempts}: {error_message}"
         ))],
         E::AutoCompactionStart { reason } => {
-            vec![PiMsg::SystemNote(format!("compacting context: {reason}"))]
+            vec![RaMsg::SystemNote(format!("compacting context: {reason}"))]
         }
         E::AutoCompactionEnd {
             aborted,
@@ -5017,10 +5017,10 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
             } else {
                 String::from("compaction complete")
             };
-            vec![PiMsg::SystemNote(note)]
+            vec![RaMsg::SystemNote(note)]
         }
         E::ExtensionError { event, error, .. } => {
-            vec![PiMsg::System(format!("extension error ({event}): {error}"))]
+            vec![RaMsg::System(format!("extension error ({event}): {error}"))]
         }
         _ => Vec::new(),
     }
@@ -5030,7 +5030,7 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<PiMsg> {
 const SUBMIT_POLL: Duration = Duration::from_millis(50);
 
 /// Run the ftui interactive stack against a real in-process agent session
-/// (bd-cv653.9.1 rollout: `pi --ftui`). Blocks until the UI exits.
+/// (bd-cv653.9.1 rollout: `ra --ftui`). Blocks until the UI exits.
 ///
 /// Architecture: the UI runs the ftui `Program` on the calling thread; a
 /// driver thread owns an asupersync runtime plus the
@@ -5053,11 +5053,11 @@ const INLINE_MAX_HEIGHT: u16 = 15;
 const EXT_UI_TIMEOUT_MS: u64 = 300_000;
 
 /// Driver-side extension UI surface (bd-1eoh4): forwards requests to the UI
-/// as `PiMsg::ExtensionUiRequest` and awaits the typed reply routed back over
+/// as `RaMsg::ExtensionUiRequest` and awaits the typed reply routed back over
 /// the extension reply channel — the same oneshot-pending shape as
 /// `AskTool::install_channel_ui`.
 struct FtuiExtensionUiHandler {
-    agent_tx: Sender<PiMsg>,
+    agent_tx: Sender<RaMsg>,
     reply_channel_open: std::sync::atomic::AtomicBool,
     pending: Mutex<
         std::collections::HashMap<
@@ -5068,7 +5068,7 @@ struct FtuiExtensionUiHandler {
 }
 
 impl FtuiExtensionUiHandler {
-    fn new(agent_tx: Sender<PiMsg>) -> Self {
+    fn new(agent_tx: Sender<RaMsg>) -> Self {
         Self {
             agent_tx,
             reply_channel_open: std::sync::atomic::AtomicBool::new(true),
@@ -5150,7 +5150,7 @@ impl crate::sdk::ExtensionUiHandler for FtuiExtensionUiHandler {
             return Ok(Some(Self::cancelled_response(id)));
         }
         if !request.expects_response() {
-            let _ = self.agent_tx.send(PiMsg::ExtensionUiRequest(request));
+            let _ = self.agent_tx.send(RaMsg::ExtensionUiRequest(request));
             return Ok(None);
         }
         let timeout_ms = request.timeout_ms.unwrap_or(EXT_UI_TIMEOUT_MS);
@@ -5169,7 +5169,7 @@ impl crate::sdk::ExtensionUiHandler for FtuiExtensionUiHandler {
             pending.insert(id.clone(), reply_tx);
             if self
                 .agent_tx
-                .send(PiMsg::ExtensionUiRequest(request))
+                .send(RaMsg::ExtensionUiRequest(request))
                 .is_err()
             {
                 pending.remove(&id);
@@ -5245,7 +5245,7 @@ fn spawn_ext_reply_pump(
 /// host), so `/resume` handle swaps keep replies pairable.
 fn install_ask_bridges(
     handle: &crate::sdk::AgentSessionHandle,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     ask_reply_rx: Receiver<AskUiReply>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> CurrentAsk {
@@ -5281,11 +5281,11 @@ async fn run_btw_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     client: Option<&Arc<crate::btw::BtwClient>>,
     question: String,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) {
     let Some(client) = client.cloned() else {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(BTW_UNAVAILABLE)));
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(BTW_UNAVAILABLE)));
         return;
     };
     let summary = crate::btw::build_context_summary(handle.session().agent.messages());
@@ -5300,7 +5300,7 @@ async fn run_btw_command(
     let (context, question) = match prepared {
         Ok(prepared) => prepared,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("/btw refused: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("/btw refused: {err}")));
             return;
         }
     };
@@ -5308,7 +5308,7 @@ async fn run_btw_command(
         .with_session(|session| session.header.id.clone())
         .await
     else {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from("/btw: session busy")));
+        let _ = agent_tx.send(RaMsg::AgentError(String::from("/btw: session busy")));
         return;
     };
     // ubs:ignore Sender clone per background question — the task must own it
@@ -5318,7 +5318,7 @@ async fn run_btw_command(
             Ok(answer) => format!("(/btw) {answer}"),
             Err(err) => format!("(/btw) failed: {err}"),
         };
-        let _ = tx.send(PiMsg::SessionSystemNote {
+        let _ = tx.send(RaMsg::SessionSystemNote {
             owner_session_id,
             message,
         });
@@ -5329,13 +5329,13 @@ async fn run_btw_command(
 type TurnControlSlot = Arc<Mutex<Option<crate::session_control::SessionControlHandle>>>;
 
 /// Install the per-handle half of the ask bridge: a channel picker surface on
-/// the tool plus a forwarder task that turns cards into `PiMsg::AskUiRequest`.
+/// the tool plus a forwarder task that turns cards into `RaMsg::AskUiRequest`.
 /// The forwarder dies naturally when the handle (and its ask tool clones)
 /// drop. Spawned, not inline: asks arrive MID-TURN while the driver loop is
 /// blocked inside `prompt().await`.
 fn install_ask_forwarder(
     ask: &crate::ask::AskTool,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> asupersync::runtime::JoinHandle<()> {
     let (ask_ui_tx, mut ask_ui_rx) = asupersync::channel::mpsc::channel::<AskUiRequest>(4);
@@ -5352,12 +5352,12 @@ fn install_ask_forwarder(
 
 fn forward_ask_ui_request(
     ask: &crate::ask::AskTool,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     request: AskUiRequest,
 ) -> bool {
     let request_id = request.id.clone();
     ask.try_forward_channel_ui_request(&request_id, || {
-        agent_tx.send(PiMsg::AskUiRequest(request)).is_ok()
+        agent_tx.send(RaMsg::AskUiRequest(request)).is_ok()
     })
 }
 
@@ -5430,7 +5430,7 @@ async fn run_share_command(
     cwd: &std::path::Path,
     gh_path: Option<String>,
     turn_abort: &TurnAbortSlot,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     use crate::interactive::share::ShareOutcome;
 
@@ -5444,16 +5444,16 @@ async fn run_share_command(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     let _ = agent_tx.send(match outcome {
-        ShareOutcome::Created(report) => PiMsg::System(report),
-        ShareOutcome::Cancelled => PiMsg::System(String::from("Share cancelled")),
-        ShareOutcome::Failed(reason) => PiMsg::AgentError(reason),
+        ShareOutcome::Created(report) => RaMsg::System(report),
+        ShareOutcome::Cancelled => RaMsg::System(String::from("Share cancelled")),
+        ShareOutcome::Failed(reason) => RaMsg::AgentError(reason),
     });
 }
 
 /// Handle `/tan` in the driver: start a background child agent and deliver its
 /// answer as a session note when it finishes.
 ///
-/// The runner is `pi::subagents::SubagentTool::run_background_tan`, shared with
+/// The runner is `ra::subagents::SubagentTool::run_background_tan`, shared with
 /// the classic stack (bd-ydz1t.2). What this contributes is the gating and the
 /// delivery: the `subagent` tool is opt-in, so a session without it must say so
 /// rather than fail obscurely, and the completion is addressed to the session
@@ -5467,11 +5467,11 @@ async fn run_tan_command(
     cwd: &std::path::Path,
     role_spec: Option<String>,
     work: String,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) {
     if !handle.has_tool("subagent") {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
             "/tan unavailable: enable the opt-in subagent tool with --tools ...subagent",
         )));
         return;
@@ -5482,7 +5482,7 @@ async fn run_tan_command(
     {
         Ok(id) => id,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("/tan: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("/tan: {err}")));
             return;
         }
     };
@@ -5507,7 +5507,7 @@ async fn run_tan_command(
             }
             Err(err) => format!("(/tan failed)\n{err}"),
         };
-        let _ = tx.send(PiMsg::SessionSystemNote {
+        let _ = tx.send(RaMsg::SessionSystemNote {
             owner_session_id,
             message,
         });
@@ -5522,7 +5522,7 @@ async fn run_prompt_turn(
     handle: &mut crate::sdk::AgentSessionHandle,
     prompt: String,
     images: Vec<crate::model::ImageContent>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     turn_control: &TurnControlSlot,
 ) {
     let mut next = Some((prompt, images));
@@ -5540,17 +5540,17 @@ async fn run_prompt_turn(
                 .with_session(|session| session.header.id.clone())
                 .await
             {
-                let _ = agent_tx.send(PiMsg::SetEditorText {
+                let _ = agent_tx.send(RaMsg::SetEditorText {
                     owner_session_id,
                     text,
                 });
-                let _ = agent_tx.send(PiMsg::System(format!(
+                let _ = agent_tx.send(RaMsg::System(format!(
                     "Restored {} unsent message(s) to the editor.",
                     leftover.len()
                 )));
             }
         } else {
-            let _ = agent_tx.send(PiMsg::System(format!(
+            let _ = agent_tx.send(RaMsg::System(format!(
                 "Running {} message(s) sent as the last turn ended.",
                 leftover.len()
             )));
@@ -5565,7 +5565,7 @@ async fn run_controlled_turn(
     handle: &mut crate::sdk::AgentSessionHandle,
     prompt: String,
     images: Vec<crate::model::ImageContent>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     turn_control: &TurnControlSlot,
 ) -> (Vec<String>, bool) {
     // ubs:ignore Sender clone per turn — the event callback must own its sender
@@ -5600,7 +5600,7 @@ async fn run_controlled_turn(
 
 fn report_turn_result(
     result: crate::error::Result<crate::model::AssistantMessage>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     match result {
         // #209: the transcript already holds the structured turn-end card
@@ -5611,17 +5611,17 @@ fn report_turn_result(
             let raw = err.to_string();
             let headline =
                 crate::error::ProviderErrorSummary::from_error_text(None, &raw).headline();
-            let _ = agent_tx.send(PiMsg::AgentError(headline));
+            let _ = agent_tx.send(RaMsg::AgentError(headline));
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(err.to_string()));
+            let _ = agent_tx.send(RaMsg::AgentError(err.to_string()));
         }
         Ok(message) if message.stop_reason == crate::model::StopReason::Error => {
             let raw = message.error_message.as_deref().unwrap_or("Request failed");
             let headline =
                 crate::error::ProviderErrorSummary::from_error_text(Some(&message.provider), raw)
                     .headline();
-            let _ = agent_tx.send(PiMsg::AgentError(headline));
+            let _ = agent_tx.send(RaMsg::AgentError(headline));
         }
         Ok(_) => {}
     }
@@ -5673,7 +5673,7 @@ const EXT_COMMAND_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
 /// have.
 ///
 /// Reaching this means two things at once: the routing chain in
-/// [`PiFtuiModel::route_slash_command_tail`] did not claim the command, and no
+/// [`RaFtuiModel::route_slash_command_tail`] did not claim the command, and no
 /// extension registered it. If pi itself defines the name, "Unknown command"
 /// is then false — the command exists, this stack has not implemented it — and
 /// it points at `/help`, which lists only what this stack does have. Saying so
@@ -5685,7 +5685,7 @@ const EXT_COMMAND_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
 fn unrouted_command_message(name: &str, extensions_enabled: bool) -> String {
     if crate::interactive::SlashCommand::parse(&format!("/{name}")).is_some() {
         return format!(
-            "/{name} is a pi command that this stack does not implement yet; run `pi --classic` for it"
+            "/{name} is a pi command that this stack does not implement yet; run `ra --classic` for it"
         );
     }
     if extensions_enabled {
@@ -5718,6 +5718,12 @@ fn prepare_prompt(
         return Ok((expand(prompt), Vec::new()));
     }
     let single;
+    // `WorkspaceHandle::single` canonicalizes (an fs syscall), so the
+    // fallback must stay lazy: `map_or_else` would pay that cost on every
+    // prompt even when a workspace handle was already supplied. The same
+    // judgement is recorded at the `option_if_let_else` allows elsewhere
+    // in this tree (e.g. `resources.rs`, `lsp/jsonrpc.rs`).
+    #[allow(clippy::option_if_let_else)]
     let workspace = if let Some(workspace) = workspace {
         workspace
     } else {
@@ -5764,7 +5770,7 @@ async fn run_extension_command(
     cwd: &std::path::Path,
     name: &str,
     args: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let manager = handle
         .session()
@@ -5772,20 +5778,20 @@ async fn run_extension_command(
         .as_ref()
         .map(|region| region.manager().clone());
     let Some(manager) = manager else {
-        let _ = agent_tx.send(PiMsg::System(unrouted_command_message(name, false)));
+        let _ = agent_tx.send(RaMsg::System(unrouted_command_message(name, false)));
         return;
     };
     if !manager.has_command(name) {
-        let _ = agent_tx.send(PiMsg::System(unrouted_command_message(name, true)));
+        let _ = agent_tx.send(RaMsg::System(unrouted_command_message(name, true)));
         return;
     }
     let Some(runtime) = manager.runtime() else {
-        let _ = agent_tx.send(PiMsg::System(format!(
+        let _ = agent_tx.send(RaMsg::System(format!(
             "Extension command '/{name}' is not available (runtime not enabled)"
         )));
         return;
     };
-    let _ = agent_tx.send(PiMsg::ToolStart {
+    let _ = agent_tx.send(RaMsg::ToolStart {
         name: format!("/{name}"),
         tool_id: String::from("ftui-ext-command"),
     });
@@ -5803,13 +5809,13 @@ async fn run_extension_command(
         .await;
     let is_error = result.is_err();
     let msg = match result {
-        Ok(value) if value.is_null() => PiMsg::SystemNote(format!("/{name} done")),
-        Ok(value) => PiMsg::SystemNote(format!("/{name} → {value}")),
-        Err(err) => PiMsg::AgentError(format!("/{name}: {err}")),
+        Ok(value) if value.is_null() => RaMsg::SystemNote(format!("/{name} done")),
+        Ok(value) => RaMsg::SystemNote(format!("/{name} → {value}")),
+        Err(err) => RaMsg::AgentError(format!("/{name}: {err}")),
     };
     // ToolEnd before the error: the AgentError sweep settles pending
     // cards, which would turn this ToolEnd into a duplicate trace line.
-    let _ = agent_tx.send(PiMsg::ToolEnd {
+    let _ = agent_tx.send(RaMsg::ToolEnd {
         name: format!("/{name}"),
         tool_id: String::from("ftui-ext-command"),
         is_error,
@@ -5824,10 +5830,10 @@ async fn run_mcp_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     subcommand: &str,
     name: Option<&str>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let Some(manager) = handle.mcp_manager() else {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
             "MCP discovery is disabled for this session",
         )));
         return;
@@ -5851,12 +5857,12 @@ async fn run_mcp_command(
         for warning in manager.warnings() {
             let _ = writeln!(content, "  ⚠ {warning}");
         }
-        let _ = agent_tx.send(PiMsg::System(content));
+        let _ = agent_tx.send(RaMsg::System(content));
         return;
     }
 
     let Some(name) = name else {
-        let _ = agent_tx.send(PiMsg::AgentError(format!(
+        let _ = agent_tx.send(RaMsg::AgentError(format!(
             "usage: /mcp {subcommand} <name>"
         )));
         return;
@@ -5866,7 +5872,7 @@ async fn run_mcp_command(
         "test" => manager.test(name).await,
         "trust" => manager.trust(name).await,
         _ => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!(
+            let _ = agent_tx.send(RaMsg::AgentError(format!(
                 "unknown /mcp subcommand {subcommand:?}"
             )));
             return;
@@ -5901,7 +5907,7 @@ async fn run_mcp_command(
         }
         Err(err) => format!("MCP {name:?}: {err}"),
     };
-    let _ = agent_tx.send(PiMsg::System(message));
+    let _ = agent_tx.send(RaMsg::System(message));
 }
 
 /// A `/login` waiting for the user's input, with the localhost callback
@@ -5911,8 +5917,8 @@ type DriverLogin = (
     Option<crate::auth::OAuthCallbackServer>,
 );
 
-fn send_login_pending(agent_tx: &Sender<PiMsg>, pending: Option<&DriverLogin>) {
-    let _ = agent_tx.send(PiMsg::LoginPending {
+fn send_login_pending(agent_tx: &Sender<RaMsg>, pending: Option<&DriverLogin>) {
+    let _ = agent_tx.send(RaMsg::LoginPending {
         provider: pending.map(|(login, _)| login.provider().to_string()),
         accepts_empty_input: pending.is_some_and(|(login, _)| login.accepts_empty_input()),
     });
@@ -5924,7 +5930,7 @@ async fn run_login_command(
     handle: &crate::sdk::AgentSessionHandle,
     args: &str,
     login: &mut Option<Box<DriverLogin>>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     use crate::interactive::login_flow::{LoginStart, start_login};
 
@@ -5936,7 +5942,7 @@ async fn run_login_command(
         .unwrap_or_default();
     match start_login(args, &auth_path, &models, handle.extension_manager()).await {
         Ok(LoginStart::Listing(listing)) => {
-            let _ = agent_tx.send(PiMsg::System(listing));
+            let _ = agent_tx.send(RaMsg::System(listing));
         }
         Ok(LoginStart::Pending {
             pending,
@@ -5944,13 +5950,13 @@ async fn run_login_command(
             callback,
         }) => {
             let pending = Box::new((pending, callback));
-            let _ = agent_tx.send(PiMsg::System(message));
+            let _ = agent_tx.send(RaMsg::System(message));
             send_login_pending(agent_tx, Some(&pending));
             *login = Some(pending);
         }
         Err(message) => {
             *login = None;
-            let _ = agent_tx.send(PiMsg::AgentError(message));
+            let _ = agent_tx.send(RaMsg::AgentError(message));
             send_login_pending(agent_tx, None);
         }
     }
@@ -5962,12 +5968,12 @@ async fn run_login_submit(
     handle: &mut crate::sdk::AgentSessionHandle,
     input: &str,
     login: &mut Option<Box<DriverLogin>>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     use crate::interactive::login_flow::{LoginFailure, complete_login};
 
     let Some(pending) = login.take() else {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
             "No login in progress; run /login <provider>",
         )));
         send_login_pending(agent_tx, None);
@@ -5978,16 +5984,16 @@ async fn run_login_submit(
     match complete_login(pending, input, &auth_path).await {
         Ok((_provider, status)) => {
             adopt_stored_credentials(handle, &auth_path);
-            let _ = agent_tx.send(PiMsg::System(status));
+            let _ = agent_tx.send(RaMsg::System(status));
             send_login_pending(agent_tx, None);
         }
         Err(LoginFailure::StillPending(pending, message)) => {
             // Device flow not approved yet: the same prompt stays armed.
             *login = Some(Box::new((pending, callback)));
-            let _ = agent_tx.send(PiMsg::System(message));
+            let _ = agent_tx.send(RaMsg::System(message));
         }
         Err(LoginFailure::Failed(message)) => {
-            let _ = agent_tx.send(PiMsg::AgentError(message));
+            let _ = agent_tx.send(RaMsg::AgentError(message));
             send_login_pending(agent_tx, None);
         }
     }
@@ -5997,17 +6003,17 @@ async fn run_login_submit(
 fn run_logout_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     args: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let (active_provider, _) = handle.model();
     let auth_path = crate::config::Config::auth_path();
     match crate::interactive::login_flow::logout(args, &active_provider, &auth_path) {
         Ok((_provider, status)) => {
             adopt_stored_credentials(handle, &auth_path);
-            let _ = agent_tx.send(PiMsg::System(status));
+            let _ = agent_tx.send(RaMsg::System(status));
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("logout: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("logout: {err}")));
         }
     }
 }
@@ -6033,7 +6039,7 @@ async fn run_set_model_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     provider: &str,
     model: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let msg = match handle.set_model(provider, model).await {
         Ok(()) => {
@@ -6043,9 +6049,9 @@ async fn run_set_model_command(
                 || format!("{provider}/{model}"),
                 |entry| entry.model.display_label(),
             );
-            PiMsg::System(format!("model set to {label}"))
+            RaMsg::System(format!("model set to {label}"))
         }
-        Err(err) => PiMsg::AgentError(format!("model switch: {err}")),
+        Err(err) => RaMsg::AgentError(format!("model switch: {err}")),
     };
     let _ = agent_tx.send(msg);
 }
@@ -6057,7 +6063,7 @@ async fn run_set_model_command(
 async fn run_compact_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     shake: bool,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     // ubs:ignore Sender clone per command — the event callback must own its sender
     let tx = agent_tx.clone();
@@ -6079,17 +6085,17 @@ async fn run_compact_command(
     match result {
         Ok(()) => send_conversation_reset(handle, agent_tx, done).await,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("{label}: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("{label}: {err}")));
         }
     }
 }
 
 fn report_replacement_shutdown_failure(
     shutdown: &crate::sdk::SessionResourceShutdown,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let summary = shutdown.failures().collect::<Vec<_>>().join("; ");
-    let _ = agent_tx.send(PiMsg::AgentError(format!(
+    let _ = agent_tx.send(RaMsg::AgentError(format!(
         "session replacement cancelled because previous-session shutdown preflight failed: {summary}"
     )));
 }
@@ -6124,7 +6130,7 @@ async fn new_session_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     current_ask: &CurrentAsk,
     ext_handler: &Arc<FtuiExtensionUiHandler>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> std::result::Result<(), String> {
     let (provider, model_id) = handle.model();
@@ -6143,7 +6149,7 @@ async fn new_session_command(
                     report_replacement_shutdown_failure(&shutdown, agent_tx);
                     let cleanup = new_handle.discard_uncommitted_resources().await;
                     for issue in cleanup.messages() {
-                        let _ = agent_tx.send(PiMsg::System(format!(
+                        let _ = agent_tx.send(RaMsg::System(format!(
                             "Uncommitted new session cleanup issue: {issue}"
                         )));
                     }
@@ -6159,7 +6165,7 @@ async fn new_session_command(
             }
             let shutdown = old_handle.commit_resource_shutdown(prepared).await;
             if let Err(issues) = complete_replacement_after_shutdown(handle, &shutdown).await {
-                let _ = agent_tx.send(PiMsg::AgentError(format!(
+                let _ = agent_tx.send(RaMsg::AgentError(format!(
                     "Previous-session cleanup was incomplete; ending the FTUI session without activating replacement MCP: {issues}"
                 )));
                 return Err(issues);
@@ -6192,10 +6198,10 @@ async fn new_session_command(
                 || format!("{provider}/{model_id}"),
                 |entry| crate::interactive::model_display_label(&entry),
             );
-            let _ = agent_tx.send(PiMsg::TerminalTitle(format!("Pi · {label}")));
+            let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {label}")));
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("new session: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("new session: {err}")));
         }
     }
     Ok(())
@@ -6207,12 +6213,12 @@ async fn new_session_command(
 /// worse than absent lines.
 async fn run_session_info_command(
     handle: &crate::sdk::AgentSessionHandle,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let state = match handle.state().await {
         Ok(state) => state,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("session info: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("session info: {err}")));
             return;
         }
     };
@@ -6241,10 +6247,10 @@ async fn run_session_info_command(
         .await;
     match info {
         Ok(text) => {
-            let _ = agent_tx.send(PiMsg::System(text));
+            let _ = agent_tx.send(RaMsg::System(text));
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("session info: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("session info: {err}")));
         }
     }
 }
@@ -6255,7 +6261,7 @@ async fn run_session_info_command(
 /// through to extension dispatch and report "Unknown command".
 async fn run_tree_summary_command(
     handle: &crate::sdk::AgentSessionHandle,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let summary = handle.with_session(|session| {
         let leaves = session.list_leaves();
@@ -6275,10 +6281,10 @@ async fn run_tree_summary_command(
     });
     match summary.await {
         Ok(text) => {
-            let _ = agent_tx.send(PiMsg::System(text));
+            let _ = agent_tx.send(RaMsg::System(text));
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("tree: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("tree: {err}")));
         }
     }
 }
@@ -6288,22 +6294,22 @@ async fn run_tree_summary_command(
 async fn run_set_thinking_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     level: Option<crate::model::ThinkingLevel>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let msg = match level {
         None => match handle.state().await {
-            Ok(state) => PiMsg::System(format!(
+            Ok(state) => RaMsg::System(format!(
                 "Thinking level: {}",
                 state
                     .thinking_level
                     .as_ref()
                     .map_or_else(|| String::from("off"), ToString::to_string)
             )),
-            Err(err) => PiMsg::AgentError(format!("thinking: {err}")),
+            Err(err) => RaMsg::AgentError(format!("thinking: {err}")),
         },
         Some(level) => match handle.set_thinking_level(level).await {
-            Ok(()) => PiMsg::System(format!("Thinking level: {level}")),
-            Err(err) => PiMsg::AgentError(format!("thinking: {err}")),
+            Ok(()) => RaMsg::System(format!("Thinking level: {level}")),
+            Err(err) => RaMsg::AgentError(format!("thinking: {err}")),
         },
     };
     let _ = agent_tx.send(msg);
@@ -6315,7 +6321,7 @@ async fn run_set_thinking_command(
 async fn send_status_snapshot(
     handle: &crate::sdk::AgentSessionHandle,
     cwd: &std::path::Path,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let entry = handle.session().current_model_entry();
     let (_, model_id) = handle.model();
@@ -6349,7 +6355,7 @@ async fn send_status_snapshot(
     let Ok((usage, last_prompt, session_name)) = totals else {
         return;
     };
-    let _ = agent_tx.send(PiMsg::StatusSnapshot(
+    let _ = agent_tx.send(RaMsg::StatusSnapshot(
         crate::interactive::FtuiStatusSnapshot {
             model,
             thinking: handle.thinking_level().map(|level| level.to_string()),
@@ -6477,11 +6483,11 @@ fn run_scoped_models_command(
     available: &[String],
     cycle: &mut Vec<String>,
     cwd: &std::path::Path,
-) -> PiMsg {
+) -> RaMsg {
     const USAGE: &str = "Usage: /scoped-models [patterns|clear] (e.g. gpt-5*,claude-sonnet*)";
     let args = args.trim();
     if args.is_empty() {
-        return PiMsg::System(format!(
+        return RaMsg::System(format!(
             "Scoped models: ctrl+p cycles {} model(s): {}",
             cycle.len(),
             cycle.join(", ")
@@ -6492,7 +6498,7 @@ fn run_scoped_models_command(
     } else {
         let patterns = crate::interactive::parse_scoped_model_patterns(args);
         if patterns.is_empty() {
-            return PiMsg::System(String::from(USAGE));
+            return RaMsg::System(String::from(USAGE));
         }
         patterns
     };
@@ -6501,13 +6507,13 @@ fn run_scoped_models_command(
     } else {
         match scope_models(&patterns, available) {
             Ok(models) if models.is_empty() => {
-                return PiMsg::System(format!(
+                return RaMsg::System(format!(
                     "No models matched {}; the ctrl+p cycle is unchanged.",
                     patterns.join(", ")
                 ));
             }
             Ok(models) => models,
-            Err(err) => return PiMsg::AgentError(err),
+            Err(err) => return RaMsg::AgentError(err),
         }
     };
     *cycle = next;
@@ -6531,14 +6537,14 @@ fn run_scoped_models_command(
     ) {
         let _ = write!(message, " (not saved: {err})");
     }
-    PiMsg::System(message)
+    RaMsg::System(message)
 }
 
 async fn run_cycle_model_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     models: &[String],
     forward: bool,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let (provider, model_id) = handle.model();
     let current = format!("{provider}/{model_id}");
@@ -6548,11 +6554,11 @@ async fn run_cycle_model_command(
         } else {
             "Only one model available"
         };
-        let _ = agent_tx.send(PiMsg::System(String::from(message)));
+        let _ = agent_tx.send(RaMsg::System(String::from(message)));
         return;
     };
     let Some((provider, model)) = next.split_once('/') else {
-        let _ = agent_tx.send(PiMsg::AgentError(format!(
+        let _ = agent_tx.send(RaMsg::AgentError(format!(
             "model cycle: {next} is not provider/model"
         )));
         return;
@@ -6567,12 +6573,12 @@ async fn run_cycle_model_command(
 /// stacks say the same thing about the same model.
 async fn run_cycle_thinking_command(
     handle: &mut crate::sdk::AgentSessionHandle,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let msg = match handle.cycle_thinking_level().await {
-        Ok(Some(level)) => PiMsg::System(format!("Thinking level: {level}")),
-        Ok(None) => PiMsg::System(String::from("Current model does not support thinking")),
-        Err(err) => PiMsg::AgentError(format!("thinking: {err}")),
+        Ok(Some(level)) => RaMsg::System(format!("Thinking level: {level}")),
+        Ok(None) => RaMsg::System(String::from("Current model does not support thinking")),
+        Err(err) => RaMsg::AgentError(format!("thinking: {err}")),
     };
     let _ = agent_tx.send(msg);
 }
@@ -6586,13 +6592,13 @@ async fn run_export_command(
     handle: &crate::sdk::AgentSessionHandle,
     cwd: &std::path::Path,
     raw_path: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let cx = crate::agent_cx::AgentCx::for_request();
     let (output_path, html) = {
         let store = handle.session_store();
         let Ok(session) = store.lock(cx.cx()).await else {
-            let _ = agent_tx.send(PiMsg::AgentError(String::from(
+            let _ = agent_tx.send(RaMsg::AgentError(String::from(
                 "export: session busy; try again",
             )));
             return;
@@ -6609,14 +6615,14 @@ async fn run_export_command(
         && !parent.as_os_str().is_empty()
         && let Err(err) = std::fs::create_dir_all(parent)
     {
-        let _ = agent_tx.send(PiMsg::AgentError(format!(
+        let _ = agent_tx.send(RaMsg::AgentError(format!(
             "export: failed to create dir: {err}"
         )));
         return;
     }
     let message = match std::fs::write(&output_path, html) {
-        Ok(()) => PiMsg::System(format!("Exported HTML: {}", output_path.display())),
-        Err(err) => PiMsg::AgentError(format!("export: failed to write: {err}")),
+        Ok(()) => RaMsg::System(format!("Exported HTML: {}", output_path.display())),
+        Err(err) => RaMsg::AgentError(format!("export: failed to write: {err}")),
     };
     let _ = agent_tx.send(message);
 }
@@ -6625,16 +6631,16 @@ async fn run_export_command(
 async fn run_set_name_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     name: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let msg = match handle.set_session_name(name).await {
         Ok(()) => {
             // Issue #200: a named session titles the terminal tab after
             // itself.
-            let _ = agent_tx.send(PiMsg::TerminalTitle(format!("Pi · {name}")));
-            PiMsg::System(format!("Session name: {name}"))
+            let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {name}")));
+            RaMsg::System(format!("Session name: {name}"))
         }
-        Err(err) => PiMsg::AgentError(format!("name: {err}")),
+        Err(err) => RaMsg::AgentError(format!("name: {err}")),
     };
     let _ = agent_tx.send(msg);
 }
@@ -6644,17 +6650,17 @@ async fn run_set_name_command(
 async fn run_add_dir_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     dir: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     if dir.trim().is_empty() {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
             "usage: /add-dir <directory>",
         )));
         return;
     }
     let msg = match handle.add_workspace_root(dir).await {
-        Ok(status) => PiMsg::System(status),
-        Err(err) => PiMsg::AgentError(format!("add-dir: {err}")),
+        Ok(status) => RaMsg::System(status),
+        Err(err) => RaMsg::AgentError(format!("add-dir: {err}")),
     };
     let _ = agent_tx.send(msg);
 }
@@ -6665,32 +6671,32 @@ async fn run_add_dir_command(
 async fn run_remove_dir_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     dir: &str,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     if dir.trim().is_empty() {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
             "usage: /remove-dir <directory>",
         )));
         return;
     }
     let msg = match handle.remove_workspace_root(dir).await {
-        Ok(status) => PiMsg::System(status),
-        Err(err) => PiMsg::AgentError(format!("remove-dir: {err}")),
+        Ok(status) => RaMsg::System(status),
+        Err(err) => RaMsg::AgentError(format!("remove-dir: {err}")),
     };
     let _ = agent_tx.send(msg);
 }
 
 /// `/crash [list|show|delete]` driver (bd-cv653.7.12): inspect or clear
 /// redacted crash bundles under the agent dir. Nothing is transmitted.
-fn run_crash_command(action: &str, agent_tx: &Sender<PiMsg>) {
+fn run_crash_command(action: &str, agent_tx: &Sender<RaMsg>) {
     let agent_dir = crate::config::Config::global_dir();
     let msg = match action {
         "" | "list" => {
-            let bundles = pi::crash::list_bundles(&agent_dir);
+            let bundles = ra::crash::list_bundles(&agent_dir);
             if bundles.is_empty() {
-                PiMsg::System(String::from("No crash bundles recorded."))
+                RaMsg::System(String::from("No crash bundles recorded."))
             } else {
-                PiMsg::System(
+                RaMsg::System(
                     bundles
                         .iter()
                         .map(|b| {
@@ -6707,15 +6713,15 @@ fn run_crash_command(action: &str, agent_tx: &Sender<PiMsg>) {
                 )
             }
         }
-        "show" => pi::crash::show_latest(&agent_dir).map_or_else(
-            || PiMsg::System(String::from("No crash bundles recorded.")),
-            PiMsg::System,
+        "show" => ra::crash::show_latest(&agent_dir).map_or_else(
+            || RaMsg::System(String::from("No crash bundles recorded.")),
+            RaMsg::System,
         ),
         "delete" => {
-            let removed = pi::crash::delete_all(&agent_dir);
-            PiMsg::System(format!("Deleted {removed} crash bundle(s)"))
+            let removed = ra::crash::delete_all(&agent_dir);
+            RaMsg::System(format!("Deleted {removed} crash bundle(s)"))
         }
-        other => PiMsg::AgentError(format!("usage: /crash [list|show|delete] (got: {other})")),
+        other => RaMsg::AgentError(format!("usage: /crash [list|show|delete] (got: {other})")),
     };
     let _ = agent_tx.send(msg);
 }
@@ -6727,11 +6733,11 @@ fn run_undo_command(
     count: usize,
     force: bool,
     redo: bool,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let verb = if redo { "redo" } else { "undo" };
     let Some(recorder) = handle.session().agent.mutation_recorder() else {
-        let _ = agent_tx.send(PiMsg::AgentError(format!(
+        let _ = agent_tx.send(RaMsg::AgentError(format!(
             "/{verb} unavailable: no mutation recorder in this session"
         )));
         return;
@@ -6741,13 +6747,13 @@ fn run_undo_command(
     } else {
         recorder.undo(count, force)
     };
-    let _ = agent_tx.send(PiMsg::System(crate::undo::render_outcome_text(
+    let _ = agent_tx.send(RaMsg::System(crate::undo::render_outcome_text(
         &outcome, redo, count,
     )));
 }
 
 /// Handle `/usage` in the driver (bd-cv653.7.4): read-only quota table.
-async fn run_usage_command(refresh: bool, agent_tx: &Sender<PiMsg>) {
+async fn run_usage_command(refresh: bool, agent_tx: &Sender<RaMsg>) {
     let message = match crate::auth::AuthStorage::load(crate::config::Config::auth_path()) {
         Ok(auth) => {
             let rows = crate::usage::gather_usage(&auth, refresh).await;
@@ -6755,7 +6761,7 @@ async fn run_usage_command(refresh: bool, agent_tx: &Sender<PiMsg>) {
         }
         Err(err) => format!("failed to load credentials: {err}"),
     };
-    let _ = agent_tx.send(PiMsg::System(message));
+    let _ = agent_tx.send(RaMsg::System(message));
 }
 
 /// Build the forked session `/fork` switches to: the source's path up to (not
@@ -6796,7 +6802,7 @@ async fn fork_session_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     current_ask: &CurrentAsk,
     ext_handler: &Arc<FtuiExtensionUiHandler>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> std::result::Result<(), String> {
     use crate::extensions::{EXTENSION_EVENT_TIMEOUT_MS, ExtensionEventName};
@@ -6815,7 +6821,7 @@ async fn fork_session_command(
     let (source, candidates) = match snapshot {
         Ok(snapshot) => snapshot,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("fork: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("fork: {err}")));
             return Ok(());
         }
     };
@@ -6825,13 +6831,13 @@ async fn fork_session_command(
         } else {
             crate::interactive::format_fork_candidates(&candidates)
         };
-        let _ = agent_tx.send(PiMsg::System(text));
+        let _ = agent_tx.send(RaMsg::System(text));
         return Ok(());
     }
     let selection = match crate::interactive::select_fork_candidate(&candidates, args) {
         Ok(selection) => selection,
         Err(message) => {
-            let _ = agent_tx.send(PiMsg::AgentError(message));
+            let _ = agent_tx.send(RaMsg::AgentError(message));
             return Ok(());
         }
     };
@@ -6850,7 +6856,7 @@ async fn fork_session_command(
             .await
             .unwrap_or(false);
         if cancelled {
-            let _ = agent_tx.send(PiMsg::System(String::from("Fork cancelled by extension")));
+            let _ = agent_tx.send(RaMsg::System(String::from("Fork cancelled by extension")));
             return Ok(());
         }
     }
@@ -6860,17 +6866,17 @@ async fn fork_session_command(
         match build_fork_session(&source, &selection.id, provider, model_id) {
             Ok(built) => built,
             Err(err) => {
-                let _ = agent_tx.send(PiMsg::AgentError(format!("Failed to build fork: {err}")));
+                let _ = agent_tx.send(RaMsg::AgentError(format!("Failed to build fork: {err}")));
                 return Ok(());
             }
         };
     let new_session_id = forked.header.id.clone();
     if let Err(err) = forked.save().await {
-        let _ = agent_tx.send(PiMsg::AgentError(format!("Failed to save fork: {err}")));
+        let _ = agent_tx.send(RaMsg::AgentError(format!("Failed to save fork: {err}")));
         return Ok(());
     }
     let Some(path) = forked.path.clone() else {
-        let _ = agent_tx.send(PiMsg::AgentError(String::from(
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
             "Failed to save fork: the session has no file",
         )));
         return Ok(());
@@ -6892,11 +6898,11 @@ async fn fork_session_command(
         .await
         .unwrap_or(false);
     if switched {
-        let _ = agent_tx.send(PiMsg::System(format!(
+        let _ = agent_tx.send(RaMsg::System(format!(
             "Forked new session from {}",
             selection.summary
         )));
-        let _ = agent_tx.send(PiMsg::SetEditorText {
+        let _ = agent_tx.send(RaMsg::SetEditorText {
             owner_session_id: new_session_id.clone(),
             text: selected_text,
         });
@@ -6927,7 +6933,7 @@ async fn reload_session_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     current_ask: &CurrentAsk,
     ext_handler: &Arc<FtuiExtensionUiHandler>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> std::result::Result<(), String> {
     let snapshot = handle
@@ -6939,7 +6945,7 @@ async fn reload_session_command(
     let (saved, empty) = match snapshot {
         Ok(snapshot) => snapshot,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("reload: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("reload: {err}")));
             return Ok(());
         }
     };
@@ -6968,14 +6974,14 @@ async fn reload_session_command(
             .await?;
         }
         None => {
-            let _ = agent_tx.send(PiMsg::AgentError(String::from(
+            let _ = agent_tx.send(RaMsg::AgentError(String::from(
                 "reload: this conversation is not saved to a session file, so reloading would \
                  lose it. Start a saved session (/new) to reload resources.",
             )));
             return Ok(());
         }
     }
-    let _ = agent_tx.send(PiMsg::System(String::from(
+    let _ = agent_tx.send(RaMsg::System(String::from(
         "Reloaded extensions, skills, prompt templates, themes and context files.",
     )));
     Ok(())
@@ -6992,7 +6998,7 @@ async fn resume_session_command(
     handle: &mut crate::sdk::AgentSessionHandle,
     current_ask: &CurrentAsk,
     ext_handler: &Arc<FtuiExtensionUiHandler>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> std::result::Result<(), String> {
     let mut options = replacement_options(template, ext_handler, runtime_handle);
@@ -7005,7 +7011,7 @@ async fn resume_session_command(
                     report_replacement_shutdown_failure(&shutdown, agent_tx);
                     let cleanup = new_handle.discard_uncommitted_resources().await;
                     for issue in cleanup.messages() {
-                        let _ = agent_tx.send(PiMsg::System(format!(
+                        let _ = agent_tx.send(RaMsg::System(format!(
                             "Uncommitted resumed session cleanup issue: {issue}"
                         )));
                     }
@@ -7018,7 +7024,7 @@ async fn resume_session_command(
             }
             let shutdown = old_handle.commit_resource_shutdown(prepared).await;
             if let Err(issues) = complete_replacement_after_shutdown(handle, &shutdown).await {
-                let _ = agent_tx.send(PiMsg::AgentError(format!(
+                let _ = agent_tx.send(RaMsg::AgentError(format!(
                     "Previous-session cleanup was incomplete; ending the FTUI session without activating replacement MCP: {issues}"
                 )));
                 return Err(issues);
@@ -7032,11 +7038,11 @@ async fn resume_session_command(
             send_conversation_reset(handle, agent_tx, "session resumed").await;
             // Issue #200: a resumed named session restores its tab title.
             if let Ok(Some(name)) = handle.with_session(crate::session::Session::get_name).await {
-                let _ = agent_tx.send(PiMsg::TerminalTitle(format!("Pi · {name}")));
+                let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {name}")));
             }
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("resume: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("resume: {err}")));
         }
     }
     Ok(())
@@ -7048,12 +7054,12 @@ async fn resume_session_command(
 /// Returns the text to re-send, or `None` after reporting why not.
 async fn prepare_retry_turn(
     handle: &mut crate::sdk::AgentSessionHandle,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) -> Option<String> {
     let text = match handle.prepare_retry().await {
         Ok(text) => text,
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("retry: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("retry: {err}")));
             return None;
         }
     };
@@ -7065,7 +7071,7 @@ async fn prepare_retry_turn(
         .await;
     match snapshot {
         Ok((session_id, messages, usage)) => {
-            let _ = agent_tx.send(PiMsg::RetryCommitted {
+            let _ = agent_tx.send(RaMsg::RetryCommitted {
                 session_id,
                 messages,
                 usage,
@@ -7075,7 +7081,7 @@ async fn prepare_retry_turn(
             Some(text)
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("retry: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("retry: {err}")));
             None
         }
     }
@@ -7083,7 +7089,7 @@ async fn prepare_retry_turn(
 
 async fn send_conversation_reset(
     handle: &crate::sdk::AgentSessionHandle,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     status: &str,
 ) {
     match handle
@@ -7095,7 +7101,7 @@ async fn send_conversation_reset(
         .await
     {
         Ok((session_id, messages, usage)) => {
-            let _ = agent_tx.send(PiMsg::ConversationReset {
+            let _ = agent_tx.send(RaMsg::ConversationReset {
                 session_id,
                 messages,
                 usage,
@@ -7103,7 +7109,7 @@ async fn send_conversation_reset(
             });
         }
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("conversation snapshot: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("conversation snapshot: {err}")));
         }
     }
 }
@@ -7136,14 +7142,14 @@ async fn run_bash_ui_command(
     shell: &BashUiShell,
     command: &str,
     exclude: bool,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) -> Option<String> {
     // Bracket the run with AgentStart/AgentDone (submit_bash_command
     // parity: bubbletea flips to ToolRunning so the status region shows the
     // running tool and the editor gates input). Without AgentStart the
     // model stays Ready and "running bash" never renders.
-    let _ = agent_tx.send(PiMsg::AgentStart);
-    let _ = agent_tx.send(PiMsg::ToolStart {
+    let _ = agent_tx.send(RaMsg::AgentStart);
+    let _ = agent_tx.send(RaMsg::ToolStart {
         name: String::from("bash"),
         tool_id: String::from("ftui-bash"),
     });
@@ -7170,7 +7176,7 @@ async fn run_bash_ui_command(
             if exclude {
                 shown.push_str("\n\n[Output excluded from model context]");
             }
-            let _ = agent_tx.send(PiMsg::BashResult {
+            let _ = agent_tx.send(RaMsg::BashResult {
                 display: shown,
                 content_for_agent: None,
             });
@@ -7180,18 +7186,18 @@ async fn run_bash_ui_command(
             // ToolEnd must precede AgentError: the error sweep settles
             // pending cards, and a card already settled there makes this
             // ToolEnd fall back to a duplicate trace line.
-            let _ = agent_tx.send(PiMsg::ToolEnd {
+            let _ = agent_tx.send(RaMsg::ToolEnd {
                 name: String::from("bash"),
                 tool_id: String::from("ftui-bash"),
                 is_error: true,
                 output: None,
             });
-            let _ = agent_tx.send(PiMsg::AgentError(format!("bash: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("bash: {err}")));
             None
         }
     };
     if output.is_some() {
-        let _ = agent_tx.send(PiMsg::ToolEnd {
+        let _ = agent_tx.send(RaMsg::ToolEnd {
             name: String::from("bash"),
             tool_id: String::from("ftui-bash"),
             is_error: false,
@@ -7200,7 +7206,7 @@ async fn run_bash_ui_command(
             output: None,
         });
     }
-    let _ = agent_tx.send(PiMsg::AgentDone {
+    let _ = agent_tx.send(RaMsg::AgentDone {
         usage: None,
         stop_reason: crate::model::StopReason::Stop,
         error_message: None,
@@ -7213,7 +7219,7 @@ async fn run_bash_ui_command(
 /// prompts work too. Errors surface to the UI and yield `None`.
 async fn create_driver_session(
     mut session_options: crate::sdk::SessionOptions,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     ext_reply_rx: std::sync::mpsc::Receiver<ExtensionUiResponse>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) -> Option<(crate::sdk::AgentSessionHandle, Arc<FtuiExtensionUiHandler>)> {
@@ -7229,7 +7235,7 @@ async fn create_driver_session(
     match crate::sdk::create_agent_session(session_options).await {
         Ok(handle) => Some((handle, ext_handler)),
         Err(err) => {
-            let _ = agent_tx.send(PiMsg::AgentError(format!("session: {err}")));
+            let _ = agent_tx.send(RaMsg::AgentError(format!("session: {err}")));
             None
         }
     }
@@ -7254,14 +7260,14 @@ fn finish_ftui_run(
 }
 
 fn terminal_replacement_error(
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
     replacement_failure: String,
     shutdown: &crate::sdk::SessionResourceShutdown,
 ) -> std::io::Error {
     // The diagnostic was enqueued before the driver broke its command loop.
     // Follow it with an ordered quit event so the app stops waiting, joins the
     // failed driver, and returns this terminal error without manual input.
-    let _ = agent_tx.send(PiMsg::UiShutdown);
+    let _ = agent_tx.send(RaMsg::UiShutdown);
     let cleanup_issues = shutdown.failures().collect::<Vec<_>>().join("; ");
     let detail = if cleanup_issues.is_empty() {
         replacement_failure
@@ -7282,9 +7288,9 @@ pub struct FtuiSettings {
     /// `PATH`; the e2e scenarios point it at a mock.
     pub gh_path: Option<String>,
     /// Honour `disableMouseCapture` / `--no-mouse-capture` /
-    /// `PI_NO_MOUSE_CAPTURE`, which the classic frontend already respects.
+    /// `RECUR_AGENT_NO_MOUSE_CAPTURE`, which the classic frontend already respects.
     /// With capture on, the terminal routes mouse events to the app and
-    /// native drag-to-select stops working (pi_agent_rust#78).
+    /// native drag-to-select stops working (recur_agent#78).
     pub disable_mouse_capture: bool,
     /// Model spec a `/tan` child agent runs under, from the `task` role falling
     /// back to `smol` (`app::subagent_role_spec`). `None` lets the child pick
@@ -7336,7 +7342,7 @@ pub fn run(
         .is_none_or(|source| source.config.image_auto_resize());
 
     let (submit_tx, submit_rx) = std::sync::mpsc::channel::<UiCommand>();
-    let (agent_tx, agent_rx) = std::sync::mpsc::channel::<PiMsg>();
+    let (agent_tx, agent_rx) = std::sync::mpsc::channel::<RaMsg>();
     let (ask_reply_tx, ask_reply_rx) = std::sync::mpsc::channel::<AskUiReply>();
     let (ext_reply_tx, ext_reply_rx) = std::sync::mpsc::channel::<ExtensionUiResponse>();
     let bash_cwd = driver_bash_cwd(&session_options);
@@ -7361,7 +7367,7 @@ pub fn run(
             let runtime = match asupersync::runtime::RuntimeBuilder::new().build() {
                 Ok(runtime) => runtime,
                 Err(err) => {
-                    let _ = agent_tx.send(PiMsg::AgentError(format!("runtime build: {err}")));
+                    let _ = agent_tx.send(RaMsg::AgentError(format!("runtime build: {err}")));
                     return Err(std::io::Error::other(format!(
                         "FTUI runtime build failed: {err}"
                     )));
@@ -7395,13 +7401,13 @@ pub fn run(
                 if let Some(manager) = handle.extension_manager() {
                     let mut catalog = driver_catalog;
                     catalog.extension_commands = extension_commands_for_catalog(manager);
-                    let _ = agent_tx.send(PiMsg::AutocompleteCatalog(catalog));
+                    let _ = agent_tx.send(RaMsg::AutocompleteCatalog(catalog));
                 }
                 // Issue #200: a session opened named at launch (--session)
                 // titles the terminal tab after itself immediately.
                 if let Ok(Some(name)) = handle.with_session(crate::session::Session::get_name).await
                 {
-                    let _ = agent_tx.send(PiMsg::TerminalTitle(format!("Pi · {name}")));
+                    let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {name}")));
                 }
                 let mut plans = plan_commands::PlanController::default();
                 let mut replacement_failure = None;
@@ -7437,7 +7443,7 @@ pub fn run(
                                     .await;
                                 }
                                 Err(err) => {
-                                    let _ = agent_tx.send(PiMsg::AgentError(err));
+                                    let _ = agent_tx.send(RaMsg::AgentError(err));
                                 }
                             }
                         }
@@ -7559,10 +7565,10 @@ pub fn run(
                         Ok(UiCommand::Fresh) => {
                             let messages = handle.session().agent.messages().len();
                             let _ = agent_tx.send(match handle.fresh_stream_state().await {
-                                Ok(id) => PiMsg::System(format!(
+                                Ok(id) => RaMsg::System(format!(
                                     "Fresh stream state (session id {id}); transcript untouched ({messages} messages)."
                                 )),
-                                Err(err) => PiMsg::AgentError(format!("fresh: {err}")),
+                                Err(err) => RaMsg::AgentError(format!("fresh: {err}")),
                             });
                         }
                         Ok(UiCommand::Workspace { command, args }) => {
@@ -7589,7 +7595,7 @@ pub fn run(
                             let note = Some(note.trim()).filter(|note| !note.is_empty());
                             let _ = agent_tx.send(
                                 match handle.mark_checkpoint(name.trim(), note).await {
-                                    Ok(checkpoint) => PiMsg::System(format!(
+                                    Ok(checkpoint) => RaMsg::System(format!(
                                         "Checkpoint '{}' marked ({} messages, ~{} tokens). Rewind with /rewind{}.",
                                         checkpoint.name,
                                         checkpoint.message_count,
@@ -7600,20 +7606,20 @@ pub fn run(
                                             format!(" {}", checkpoint.name)
                                         }
                                     )),
-                                    Err(err) => PiMsg::AgentError(format!("checkpoint: {err}")),
+                                    Err(err) => RaMsg::AgentError(format!("checkpoint: {err}")),
                                 },
                             );
                         }
                         Ok(UiCommand::Rewind { name }) => {
                             let name = Some(name.as_str()).filter(|name| !name.is_empty());
                             let _ = agent_tx.send(match handle.rewind_to_checkpoint(name).await {
-                                Ok(outcome) => PiMsg::System(format!(
+                                Ok(outcome) => RaMsg::System(format!(
                                     "Rewound to '{}': {} messages collapsed into a report (~{} tokens). The tree kept everything.",
                                     outcome.checkpoint,
                                     outcome.collapsed_messages,
                                     outcome.summary_tokens_estimate
                                 )),
-                                Err(err) => PiMsg::AgentError(format!("rewind: {err}")),
+                                Err(err) => RaMsg::AgentError(format!("rewind: {err}")),
                             });
                         }
                         Ok(UiCommand::Retry) => {
@@ -7840,7 +7846,7 @@ pub fn run(
         );
     }
 
-    let model = PiFtuiModel::new(agent_rx)
+    let model = RaFtuiModel::new(agent_rx)
         .with_keybindings(keybindings_result.bindings)
         .with_submit_channel(submit_tx)
         .with_turn_abort(turn_abort)
@@ -7904,9 +7910,9 @@ mod tests {
         })
     }
 
-    fn new_model() -> (mpsc::Sender<PiMsg>, PiFtuiModel) {
+    fn new_model() -> (mpsc::Sender<RaMsg>, RaFtuiModel) {
         let (tx, rx) = mpsc::channel();
-        (tx, PiFtuiModel::new(rx))
+        (tx, RaFtuiModel::new(rx))
     }
 
     /// Body width for tests that call `conversation_text` directly. Cached
@@ -7969,7 +7975,7 @@ mod tests {
             .build()
             .expect("runtime for handle");
         let runtime_handle = runtime.handle();
-        let (agent_tx, _agent_rx) = mpsc::channel::<PiMsg>();
+        let (agent_tx, _agent_rx) = mpsc::channel::<RaMsg>();
         let ext_handler = Arc::new(FtuiExtensionUiHandler::new(agent_tx));
         let template = resume_template_from(&crate::sdk::SessionOptions {
             no_session: true,
@@ -8045,7 +8051,7 @@ mod tests {
 
         assert!(matches!(
             agent_rx.recv_timeout(std::time::Duration::from_secs(1)),
-            Ok(PiMsg::UiShutdown)
+            Ok(RaMsg::UiShutdown)
         ));
         let message = error.to_string();
         assert!(message.contains("old MCP shutdown timed out"), "{message}");
@@ -8060,12 +8066,12 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         assert_eq!(sim.model().state, AgentUiState::Working);
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("hello ".into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("world".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("hello ".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("world".into())));
         assert_eq!(sim.model().streaming, "hello world");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -8084,7 +8090,7 @@ mod tests {
         let (_tx, model) = new_model();
         let model = model
             .with_alt_screen(true)
-            .with_suspend_task(|| PiFtuiMsg::Resumed);
+            .with_suspend_task(|| RaFtuiMsg::Resumed);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
 
@@ -8107,7 +8113,7 @@ mod tests {
     #[test]
     fn ctrl_g_replaces_the_draft_with_the_edited_text() {
         let (_tx, model) = new_model();
-        let model = model.with_suspend_task(|| PiFtuiMsg::Edited {
+        let model = model.with_suspend_task(|| RaFtuiMsg::Edited {
             text: Ok(String::from("rewritten in vim\n")),
             width: 100,
             height: 30,
@@ -8125,7 +8131,7 @@ mod tests {
     #[test]
     fn ctrl_g_failure_keeps_the_draft() {
         let (_tx, model) = new_model();
-        let model = model.with_suspend_task(|| PiFtuiMsg::Edited {
+        let model = model.with_suspend_task(|| RaFtuiMsg::Edited {
             text: Err(String::from("external editor: vi exited with 1")),
             width: 80,
             height: 24,
@@ -8190,12 +8196,12 @@ mod tests {
         // frames keep the diff engine silent between terminal restore and
         // SIGTSTP delivery.
         let before = sim.model().spinner.current_frame;
-        sim.send(PiFtuiMsg::Term(Event::Tick));
+        sim.send(RaFtuiMsg::Term(Event::Tick));
         assert_eq!(sim.model().spinner.current_frame, before);
 
         // The suspend task reports back through a Resize after SIGCONT:
         // unfreezes ticks and adopts the post-resume size.
-        sim.send(PiFtuiMsg::Term(Event::Resize {
+        sim.send(RaFtuiMsg::Term(Event::Resize {
             width: 100,
             height: 30,
         }));
@@ -8203,7 +8209,7 @@ mod tests {
         assert_eq!(sim.model().term, (100, 30));
 
         let before = sim.model().spinner.current_frame;
-        sim.send(PiFtuiMsg::Term(Event::Tick));
+        sim.send(RaFtuiMsg::Term(Event::Tick));
         assert_eq!(sim.model().spinner.current_frame, before + 1);
     }
 
@@ -8213,7 +8219,7 @@ mod tests {
         model.suspending = true;
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Resumed);
+        sim.send(RaFtuiMsg::Resumed);
         assert!(!sim.model().suspending);
     }
 
@@ -8233,7 +8239,7 @@ mod tests {
         // Raw ESC and OSC sequences must not survive into model state: a
         // hostile tool result must not be able to retitle the terminal or
         // fake UI. sanitize() strips C0/C1 controls and escape introducers.
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta(
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta(
             "safe\x1b]0;pwned\x07 text".into(),
         )));
         let streamed = sim.model().streaming.clone();
@@ -8295,7 +8301,7 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::System("session restored".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::System("session restored".into())));
         let rendered = buffer_text(sim.capture_frame(40, 8), 40, 8);
         assert!(
             rendered.contains("session restored"),
@@ -8312,7 +8318,7 @@ mod tests {
     fn typing_and_enter_submits_to_channel_and_transcript() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         for ch in ['h', 'i'] {
@@ -8452,7 +8458,7 @@ mod tests {
         // the key reached the editor, which ignores Tab with a modifier.
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
 
@@ -8477,7 +8483,7 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::StatusSnapshot(
+        sim.send(RaFtuiMsg::Agent(RaMsg::StatusSnapshot(
             crate::interactive::FtuiStatusSnapshot {
                 model: String::from("DeepSeek V4 Pro"),
                 thinking: Some(String::from("high")),
@@ -8553,9 +8559,9 @@ mod tests {
             crate::sdk::EventListeners::default(),
         );
         handle.session_mut().set_model_registry(registry);
-        let (agent_tx, agent_rx) = mpsc::channel::<PiMsg>();
+        let (agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
         runtime.block_on(send_status_snapshot(&handle, dir.path(), &agent_tx));
-        let Ok(PiMsg::StatusSnapshot(snapshot)) = agent_rx.try_recv() else {
+        let Ok(RaMsg::StatusSnapshot(snapshot)) = agent_rx.try_recv() else {
             panic!("no status snapshot sent");
         };
         assert_eq!(snapshot.model, entry.model.status_label());
@@ -8599,12 +8605,12 @@ mod tests {
 
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_turn_control(slot);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
 
         type_str(&mut sim, "focus on tests");
         sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
@@ -8675,7 +8681,7 @@ mod tests {
     fn ctrl_p_routes_model_cycling_to_the_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         sim.inject_event(key(KeyCode::Char('p'), Modifiers::CTRL));
@@ -8742,7 +8748,7 @@ mod tests {
         // cycling the thinking level must not steal them mid-completion.
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/he");
@@ -8775,7 +8781,7 @@ mod tests {
             let name = command.canonical();
             let (_agent_tx, rx) = mpsc::channel();
             let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-            let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+            let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
             let mut sim = ProgramSimulator::new(model);
             sim.init();
             type_str(&mut sim, name);
@@ -8820,7 +8826,7 @@ mod tests {
         // "Unknown command: /export" until it was routed.
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
 
@@ -8849,7 +8855,7 @@ mod tests {
     fn slash_changelog_prints_the_embedded_changelog_without_the_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         let before = sim.model().transcript.len();
@@ -8883,7 +8889,7 @@ mod tests {
     fn slash_copy_takes_the_last_non_empty_assistant_turn() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let mut model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let mut model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         model.push_entry(EntryRole::Assistant, String::from("first answer"));
         model.push_entry(EntryRole::User, String::from("a follow-up question"));
         model.push_entry(EntryRole::Assistant, String::from("   "));
@@ -8922,7 +8928,7 @@ mod tests {
     #[test]
     fn slash_copy_says_so_when_there_is_nothing_to_copy() {
         let (_agent_tx, rx) = mpsc::channel();
-        let model = PiFtuiModel::new(rx);
+        let model = RaFtuiModel::new(rx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
 
@@ -8949,7 +8955,7 @@ mod tests {
         // canonical command this stack claims must appear in /help.
         let help = {
             let (_agent_tx, rx) = mpsc::channel();
-            let mut sim = ProgramSimulator::new(PiFtuiModel::new(rx));
+            let mut sim = ProgramSimulator::new(RaFtuiModel::new(rx));
             sim.init();
             type_str(&mut sim, "/help");
             sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
@@ -8966,7 +8972,7 @@ mod tests {
             let name = command.canonical();
             let (_agent_tx, rx) = mpsc::channel();
             let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-            let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+            let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
             let mut sim = ProgramSimulator::new(model);
             sim.init();
             type_str(&mut sim, name);
@@ -9209,7 +9215,7 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         sim.inject_event(key(KeyCode::Char('x'), Modifiers::empty()));
         assert!(
             sim.model().input.is_empty(),
@@ -9223,7 +9229,7 @@ mod tests {
     fn submitted_text_is_sanitized() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         // Simulate a hostile paste carrying an OSC title change.
@@ -9244,7 +9250,7 @@ mod tests {
     fn slash_model_routes_set_model_and_bad_specs_error() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/model openai/gpt-5");
@@ -9273,7 +9279,7 @@ mod tests {
     fn non_builtin_slash_commands_route_to_extension_dispatch() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/deploy --force");
@@ -9303,8 +9309,8 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "bash".into(),
             tool_id: "t1".into(),
         }));
@@ -9313,7 +9319,7 @@ mod tests {
             rendered.contains("running bash"),
             "missing tool status: {rendered:?}"
         );
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "bash".into(),
             tool_id: "t1".into(),
             is_error: false,
@@ -9329,7 +9335,7 @@ mod tests {
             "durable tool trace missing: {rendered:?}"
         );
         // Errored tools leave an ✗ trace.
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "edit".into(),
             tool_id: "t2".into(),
             is_error: true,
@@ -9355,7 +9361,7 @@ mod tests {
             height: 10,
         });
         for i in 0..20 {
-            sim.send(PiFtuiMsg::Agent(PiMsg::System(format!("line-{i}"))));
+            sim.send(RaFtuiMsg::Agent(RaMsg::System(format!("line-{i}"))));
         }
         // Following the tail: newest line visible, oldest not.
         let rendered = buffer_text(sim.capture_frame(30, 10), 30, 10);
@@ -9378,7 +9384,7 @@ mod tests {
         );
 
         // New content while pinned must not yank the view back to the tail.
-        sim.send(PiFtuiMsg::Agent(PiMsg::System("line-20".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::System("line-20".into())));
         let rendered = buffer_text(sim.capture_frame(30, 10), 30, 10);
         assert!(
             !rendered.contains("line-20"),
@@ -9404,7 +9410,7 @@ mod tests {
             height: 10,
         });
         for i in 0..12 {
-            sim.send(PiFtuiMsg::Agent(PiMsg::System(format!("line-{i}"))));
+            sim.send(RaFtuiMsg::Agent(RaMsg::System(format!("line-{i}"))));
         }
         sim.inject_event(key(KeyCode::PageUp, Modifiers::empty()));
         assert!(sim.model().scroll_from_tail > 0);
@@ -9503,26 +9509,26 @@ mod tests {
 
     #[test]
     fn drain_loop_bridges_agent_channel_until_disconnect() {
-        let (agent_tx, agent_rx) = mpsc::channel::<PiMsg>();
-        let (msg_tx, msg_rx) = mpsc::channel::<PiFtuiMsg>();
+        let (agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
+        let (msg_tx, msg_rx) = mpsc::channel::<RaFtuiMsg>();
         let handle = std::thread::spawn(move || {
             // Dropping the agent sender terminates the loop via Disconnected,
             // the same teardown path the bridge shutdown uses today.
             drain_agent_events(&agent_rx, &msg_tx, || false);
         });
-        agent_tx.send(PiMsg::AgentStart).unwrap();
+        agent_tx.send(RaMsg::AgentStart).unwrap();
         let bridged = msg_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("bridged message");
-        assert!(matches!(bridged, PiFtuiMsg::Agent(PiMsg::AgentStart)));
+        assert!(matches!(bridged, RaFtuiMsg::Agent(RaMsg::AgentStart)));
         drop(agent_tx);
         handle.join().expect("bridge thread exits cleanly");
     }
 
     #[test]
     fn drain_loop_honors_stop_predicate() {
-        let (_agent_tx, agent_rx) = mpsc::channel::<PiMsg>();
-        let (msg_tx, _msg_rx) = mpsc::channel::<PiFtuiMsg>();
+        let (_agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
+        let (msg_tx, _msg_rx) = mpsc::channel::<RaFtuiMsg>();
         // stop=true up front: must return immediately without receiving.
         drain_agent_events(&agent_rx, &msg_tx, || true);
     }
@@ -9534,7 +9540,7 @@ mod tests {
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         // AgentStart schedules the first tick.
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         assert!(
             matches!(sim.command_log().last(), Some(CmdRecord::Tick(_))),
             "AgentStart did not schedule a tick: {:?}",
@@ -9552,7 +9558,7 @@ mod tests {
             "status missing spinner frame {spin:?}: {rendered:?}"
         );
         // ...but the chain dies once the agent is idle.
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -9568,8 +9574,8 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ThinkingDelta(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ThinkingDelta(
             "mull it over".into(),
         )));
         let rendered = buffer_text(sim.capture_frame(44, 8), 44, 8);
@@ -9577,13 +9583,13 @@ mod tests {
             rendered.contains("thinking ..."),
             "missing thinking: {rendered:?}"
         );
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("answer".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("answer".into())));
         let rendered = buffer_text(sim.capture_frame(44, 8), 44, 8);
         assert!(
             rendered.contains("responding ..."),
             "missing responding: {rendered:?}"
         );
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: Some(crate::model::Usage {
                 input: 120,
                 output: 45,
@@ -9625,7 +9631,7 @@ mod tests {
         }
     }
 
-    fn type_str(sim: &mut ProgramSimulator<PiFtuiModel>, s: &str) {
+    fn type_str(sim: &mut ProgramSimulator<RaFtuiModel>, s: &str) {
         for ch in s.chars() {
             sim.inject_event(key(KeyCode::Char(ch), Modifiers::empty()));
         }
@@ -9635,13 +9641,13 @@ mod tests {
     fn ask_card_collects_answers_across_questions() {
         let (agent_tx, agent_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel::<AskUiReply>();
-        let model = PiFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
+        let model = RaFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
         drop(agent_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         // Mid-turn: agent working, ask arrives with two questions.
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-1",
             vec![
                 question("Pick a color?", &["red", "blue"], false),
@@ -9680,12 +9686,12 @@ mod tests {
     fn ask_cancel_dismisses() {
         let (agent_tx, agent_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel::<AskUiReply>();
-        let model = PiFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
+        let model = RaFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
         drop(agent_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-2",
             vec![question("Sure?", &["yes", "no"], false)],
         ))));
@@ -9701,16 +9707,16 @@ mod tests {
     fn overlapping_ask_is_dismissed_without_replacing_active_card() {
         let (agent_tx, agent_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel::<AskUiReply>();
-        let model = PiFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
+        let model = RaFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
         drop(agent_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-active",
             vec![question("First?", &["a", "b"], false)],
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-overlap",
             vec![question("Second?", &["c", "d"], false)],
         ))));
@@ -9734,17 +9740,17 @@ mod tests {
         let (_agent_tx, rx) = mpsc::channel();
         let (ask_tx, ask_rx) = mpsc::channel::<AskUiReply>();
         let (ext_tx, _ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_ask_reply_channel(ask_tx)
             .with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-active",
             "confirm",
             serde_json::json!({"title": "First?"}),
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-overlap",
             vec![question("Second?", &["a", "b"], false)],
         ))));
@@ -9766,12 +9772,12 @@ mod tests {
     fn ask_free_text_becomes_other_answer() {
         let (agent_tx, agent_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel::<AskUiReply>();
-        let model = PiFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
+        let model = RaFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
         drop(agent_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-3",
             vec![question("Which env?", &["dev", "prod"], false)],
         ))));
@@ -9810,11 +9816,11 @@ mod tests {
     }
 
     fn send_ui_effect(
-        sim: &mut ProgramSimulator<PiFtuiModel>,
+        sim: &mut ProgramSimulator<RaFtuiModel>,
         method: &str,
         payload: serde_json::Value,
     ) {
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "effect", method, payload,
         ))));
     }
@@ -9872,11 +9878,11 @@ mod tests {
     ) -> (Option<serde_json::Value>, bool, usize) {
         let (_agent_tx, rx) = mpsc::channel();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
+        let model = RaFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         let before = sim.model().transcript.len();
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "q", method, payload,
         ))));
         let reply = ext_rx.try_recv().ok().and_then(|r| r.value);
@@ -10046,7 +10052,7 @@ mod tests {
             );
             assert!(matches!(
                 agent_rx.try_recv(),
-                Ok(PiMsg::ExtensionUiRequest(request)) if request.id == "notify-1"
+                Ok(RaMsg::ExtensionUiRequest(request)) if request.id == "notify-1"
             ));
         });
     }
@@ -10067,7 +10073,7 @@ mod tests {
             assert!(futures::poll!(attempt.as_mut()).is_pending());
             assert!(matches!(
                 agent_rx.try_recv(),
-                Ok(PiMsg::ExtensionUiRequest(request))
+                Ok(RaMsg::ExtensionUiRequest(request))
                     if request.id == "cancelled-ftui-request"
             ));
             assert_eq!(
@@ -10140,11 +10146,11 @@ mod tests {
     fn extension_confirm_prompt_renders_and_reply_routes() {
         let (_agent_tx, rx) = mpsc::channel();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
+        let model = RaFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-1",
             "confirm",
             serde_json::json!({"title": "Deploy?", "message": "Ship to prod?"}),
@@ -10169,15 +10175,15 @@ mod tests {
     fn extension_prompt_escape_cancels_and_queue_advances() {
         let (_agent_tx, rx) = mpsc::channel();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
+        let model = RaFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-a",
             "confirm",
             serde_json::json!({"title": "First?"}),
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-b",
             "confirm",
             serde_json::json!({"title": "Second?"}),
@@ -10198,12 +10204,12 @@ mod tests {
     fn extension_prompt_escape_discards_partial_answer_and_restores_draft() {
         let (_agent_tx, rx) = mpsc::channel();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
+        let model = RaFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "saved extension draft");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-escape",
             "input",
             serde_json::json!({"title": "Value?"}),
@@ -10226,17 +10232,17 @@ mod tests {
         let (_agent_tx, rx) = mpsc::channel();
         let (ask_tx, _ask_rx) = mpsc::channel::<AskUiReply>();
         let (ext_tx, _ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_ask_reply_channel(ask_tx)
             .with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-hold",
             vec![question("Pick?", &["a", "b"], false)],
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-waiting",
             "confirm",
             serde_json::json!({"title": "Later?"}),
@@ -10257,19 +10263,19 @@ mod tests {
         let (_agent_tx, rx) = mpsc::channel();
         let (ask_tx, _ask_rx) = mpsc::channel::<AskUiReply>();
         let (ext_tx, _ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_ask_reply_channel(ask_tx)
             .with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "keep this draft");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-first",
             vec![question("Pick?", &["a", "b"], false)],
         ))));
         assert!(sim.model().input.text().is_empty());
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-second",
             "confirm",
             serde_json::json!({"title": "Continue?"}),
@@ -10299,12 +10305,12 @@ mod tests {
     fn whitespace_only_draft_is_preserved_byte_for_byte_around_card() {
         let (_agent_tx, rx) = mpsc::channel();
         let (ask_tx, _ask_rx) = mpsc::channel::<AskUiReply>();
-        let model = PiFtuiModel::new(rx).with_ask_reply_channel(ask_tx);
+        let model = RaFtuiModel::new(rx).with_ask_reply_channel(ask_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         sim.model_mut().input.set_text(" \n\t");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-whitespace-draft",
             vec![question("Pick?", &["a", "b"], false)],
         ))));
@@ -10325,17 +10331,17 @@ mod tests {
         let (_agent_tx, rx) = mpsc::channel();
         let (ask_tx, _ask_rx) = mpsc::channel::<AskUiReply>();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_ask_reply_channel(ask_tx)
             .with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-hold",
             vec![question("Pick?", &["a", "b"], false)],
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "notify-during-ask",
             "notify",
             serde_json::json!({"title": "Heads up", "message": "Build finished"}),
@@ -10360,29 +10366,29 @@ mod tests {
         );
     }
 
-    fn assert_terminal_event_dismisses_ask_and_queued_extension(event: PiMsg) {
+    fn assert_terminal_event_dismisses_ask_and_queued_extension(event: RaMsg) {
         let (_agent_tx, rx) = mpsc::channel();
         let (ask_tx, ask_rx) = mpsc::channel::<AskUiReply>();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_ask_reply_channel(ask_tx)
             .with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "saved draft");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-stale",
             vec![question("Pick?", &["a", "b"], false)],
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-stale",
             "confirm",
             serde_json::json!({"title": "Later?"}),
         ))));
         type_str(&mut sim, "draft");
 
-        sim.send(PiFtuiMsg::Agent(event));
+        sim.send(RaFtuiMsg::Agent(event));
 
         assert!(sim.model().active_ask.is_none());
         assert!(sim.model().active_ext.is_none());
@@ -10401,15 +10407,15 @@ mod tests {
 
     #[test]
     fn terminal_agent_events_invalidate_turn_owned_interactions() {
-        assert_terminal_event_dismisses_ask_and_queued_extension(PiMsg::AgentDone {
+        assert_terminal_event_dismisses_ask_and_queued_extension(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
         });
-        assert_terminal_event_dismisses_ask_and_queued_extension(PiMsg::AgentError(String::from(
+        assert_terminal_event_dismisses_ask_and_queued_extension(RaMsg::AgentError(String::from(
             "turn failed",
         )));
-        assert_terminal_event_dismisses_ask_and_queued_extension(PiMsg::ConversationReset {
+        assert_terminal_event_dismisses_ask_and_queued_extension(RaMsg::ConversationReset {
             session_id: String::from("replacement"),
             messages: Vec::new(),
             usage: crate::model::Usage::default(),
@@ -10421,22 +10427,22 @@ mod tests {
     fn agent_done_cancels_active_and_queued_extension_prompts() {
         let (_agent_tx, rx) = mpsc::channel();
         let (ext_tx, ext_rx) = mpsc::channel::<ExtensionUiResponse>();
-        let model = PiFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
+        let model = RaFtuiModel::new(rx).with_ext_reply_channel(ext_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-active",
             "confirm",
             serde_json::json!({"title": "Now?"}),
         ))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ExtensionUiRequest(ext_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::ExtensionUiRequest(ext_request(
             "ext-queued",
             "input",
             serde_json::json!({"title": "Later?"}),
         ))));
 
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -10503,13 +10509,13 @@ mod tests {
     fn escape_dismisses_active_ask() {
         let (agent_tx, agent_rx) = mpsc::channel();
         let (reply_tx, reply_rx) = mpsc::channel::<AskUiReply>();
-        let model = PiFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
+        let model = RaFtuiModel::new(agent_rx).with_ask_reply_channel(reply_tx);
         drop(agent_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "saved draft");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AskUiRequest(ask_request(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AskUiRequest(ask_request(
             "ask-esc",
             vec![question("Continue?", &["yes", "no"], false)],
         ))));
@@ -10531,7 +10537,7 @@ mod tests {
         let msgs = agent_event_to_pi_msgs(&E::AgentStart {
             session_id: Arc::from("s1"),
         });
-        assert!(matches!(msgs.as_slice(), [PiMsg::AgentStart]));
+        assert!(matches!(msgs.as_slice(), [RaMsg::AgentStart]));
 
         let assistant = Arc::new(AssistantMessage {
             usage: Usage {
@@ -10552,7 +10558,7 @@ mod tests {
                 partial,
             },
         });
-        assert!(matches!(msgs.as_slice(), [PiMsg::TextDelta(d)] if d == "hi"));
+        assert!(matches!(msgs.as_slice(), [RaMsg::TextDelta(d)] if d == "hi"));
 
         let msgs = agent_event_to_pi_msgs(&E::ToolExecutionStart {
             tool_call_id: "t1".into(),
@@ -10560,7 +10566,7 @@ mod tests {
             args: serde_json::json!({}),
         });
         assert!(
-            matches!(msgs.as_slice(), [PiMsg::ToolStart { name, tool_id }] if name == "bash" && tool_id == "t1")
+            matches!(msgs.as_slice(), [RaMsg::ToolStart { name, tool_id }] if name == "bash" && tool_id == "t1")
         );
 
         let msgs = agent_event_to_pi_msgs(&E::AgentEnd {
@@ -10570,7 +10576,7 @@ mod tests {
         });
         match msgs.as_slice() {
             [
-                PiMsg::AgentDone {
+                RaMsg::AgentDone {
                     usage: Some(usage),
                     stop_reason: StopReason::Stop,
                     error_message: None,
@@ -10586,11 +10592,11 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta(
             "# Release Notes\n\nplain body".into(),
         )));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -10833,7 +10839,7 @@ mod tests {
     fn bare_model_command_opens_picker_and_selection_routes_set_model() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_available_models(vec![
                 String::from("openai/gpt-5"),
@@ -10864,10 +10870,10 @@ mod tests {
 
     fn filter_test_model(
         models: &[&str],
-    ) -> (ProgramSimulator<PiFtuiModel>, mpsc::Receiver<UiCommand>) {
+    ) -> (ProgramSimulator<RaFtuiModel>, mpsc::Receiver<UiCommand>) {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_available_models(models.iter().map(|m| (*m).to_string()).collect());
         let mut sim = ProgramSimulator::new(model);
@@ -10967,7 +10973,7 @@ mod tests {
     fn resume_picker_filters_on_labels() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_available_sessions(vec![
                 (
@@ -11023,7 +11029,7 @@ mod tests {
     fn bash_ui_command_uses_configured_shell_and_prefix() {
         let config = crate::config::Config {
             shell_path: Some(String::from("/bin/sh")),
-            shell_command_prefix: Some(String::from("PI_GH182=prefixed")),
+            shell_command_prefix: Some(String::from("RECUR_AGENT_GH182=prefixed")),
             ..crate::config::Config::default()
         };
         let shell = BashUiShell::from_config(&config);
@@ -11036,7 +11042,7 @@ mod tests {
         let output = runtime.block_on(run_bash_ui_command(
             dir.path(),
             &shell,
-            "echo \"value=$PI_GH182\"",
+            "echo \"value=$RECUR_AGENT_GH182\"",
             false,
             &agent_tx,
         ));
@@ -11061,7 +11067,7 @@ mod tests {
         let errors: Vec<String> = agent_rx
             .try_iter()
             .filter_map(|msg| match msg {
-                PiMsg::AgentError(err) => Some(err),
+                RaMsg::AgentError(err) => Some(err),
                 _ => None,
             })
             .collect();
@@ -11073,7 +11079,7 @@ mod tests {
 
     /// Deliver one keystroke the way a Windows console does: a Press
     /// followed by a Release of the same key.
-    fn windows_keystroke(sim: &mut ProgramSimulator<PiFtuiModel>, code: KeyCode) {
+    fn windows_keystroke(sim: &mut ProgramSimulator<RaFtuiModel>, code: KeyCode) {
         sim.inject_event(key(code, Modifiers::empty()));
         sim.inject_event(Event::Key(KeyEvent {
             code,
@@ -11082,7 +11088,7 @@ mod tests {
         }));
     }
 
-    fn windows_type_str(sim: &mut ProgramSimulator<PiFtuiModel>, s: &str) {
+    fn windows_type_str(sim: &mut ProgramSimulator<RaFtuiModel>, s: &str) {
         for ch in s.chars() {
             windows_keystroke(sim, KeyCode::Char(ch));
         }
@@ -11094,7 +11100,7 @@ mod tests {
     fn windows_key_releases_do_not_confirm_or_skip_in_the_model_picker() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_available_models(vec![
                 String::from("openai/gpt-5"),
@@ -11166,7 +11172,7 @@ mod tests {
     fn slash_undo_redo_usage_route_commands() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
 
@@ -11226,7 +11232,7 @@ mod tests {
     fn slash_compact_routes_command() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/compact");
@@ -11248,7 +11254,7 @@ mod tests {
     fn slash_tan_routes_command() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/tan summarise the changelog");
@@ -11279,7 +11285,7 @@ mod tests {
     fn slash_tan_without_work_is_refused_before_the_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/tan");
@@ -11303,17 +11309,17 @@ mod tests {
     #[test]
     fn a_background_note_arriving_mid_turn_waits_for_the_turn_boundary() {
         let (_agent_tx, rx) = mpsc::channel();
-        let mut sim = ProgramSimulator::new(PiFtuiModel::new(rx));
+        let mut sim = ProgramSimulator::new(RaFtuiModel::new(rx));
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::ConversationReset {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ConversationReset {
             session_id: "s1".to_string(),
             messages: Vec::new(),
             usage: crate::model::Usage::default(),
             status: None,
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("partial".to_string())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::SessionSystemNote {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("partial".to_string())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::SessionSystemNote {
             owner_session_id: "s1".to_string(),
             message: "(/tan completed)\nbackground answer".to_string(),
         }));
@@ -11326,7 +11332,7 @@ mod tests {
             "the note must not interleave with the streaming reply"
         );
 
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: crate::model::StopReason::Stop,
             error_message: None,
@@ -11347,7 +11353,7 @@ mod tests {
     fn slash_share_routes_command() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/share");
@@ -11369,7 +11375,7 @@ mod tests {
     fn slash_login_and_logout_route_to_the_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/login anthropic");
@@ -11417,7 +11423,7 @@ mod tests {
         };
         write_extension("v1-cmd");
 
-        let (agent_tx, agent_rx) = mpsc::channel::<PiMsg>();
+        let (agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
         let ext_handler = Arc::new(FtuiExtensionUiHandler::new(agent_tx.clone()));
         let template = resume_template_from(&crate::sdk::SessionOptions {
             provider: Some(String::from("openai")),
@@ -11493,7 +11499,7 @@ mod tests {
             assert!(
                 replies
                     .iter()
-                    .any(|msg| matches!(msg, PiMsg::System(text) if text.starts_with("Reloaded"))),
+                    .any(|msg| matches!(msg, RaMsg::System(text) if text.starts_with("Reloaded"))),
                 "the user is told the reload happened"
             );
 
@@ -11540,7 +11546,7 @@ mod tests {
             assert!(
                 agent_rx
                     .try_iter()
-                    .any(|msg| matches!(msg, PiMsg::AgentError(text) if text.contains("not saved"))),
+                    .any(|msg| matches!(msg, RaMsg::AgentError(text) if text.contains("not saved"))),
                 "the refusal is reported"
             );
             let _ = unsaved.shutdown_owned_resources().await;
@@ -11565,7 +11571,7 @@ mod tests {
     fn slash_btw_routes_when_a_smol_client_exists_and_refuses_otherwise() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_btw_client(Some(unroutable_btw_client()));
         let mut sim = ProgramSimulator::new(model);
@@ -11579,7 +11585,7 @@ mod tests {
 
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let mut sim = ProgramSimulator::new(PiFtuiModel::new(rx).with_submit_channel(submit_tx));
+        let mut sim = ProgramSimulator::new(RaFtuiModel::new(rx).with_submit_channel(submit_tx));
         sim.init();
         type_str(&mut sim, "/btw anything");
         sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
@@ -11604,13 +11610,13 @@ mod tests {
         let slot: TurnControlSlot = Arc::new(Mutex::new(None));
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_turn_control(slot)
             .with_btw_client(Some(unroutable_btw_client()));
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         type_str(&mut sim, "/btw quick check");
         sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
         assert!(
@@ -11633,7 +11639,7 @@ mod tests {
     fn omp_info_commands_and_aliases_route_to_the_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         let mut send = |text: &str| {
@@ -11721,7 +11727,7 @@ mod tests {
     fn slash_fork_routes_and_the_selected_text_returns_to_the_editor() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/fork 2");
@@ -11733,18 +11739,18 @@ mod tests {
             }
         );
 
-        sim.send(PiFtuiMsg::Agent(PiMsg::ConversationReset {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ConversationReset {
             session_id: String::from("forked"),
             messages: Vec::new(),
             usage: crate::model::Usage::default(),
             status: None,
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::SetEditorText {
+        sim.send(RaFtuiMsg::Agent(RaMsg::SetEditorText {
             owner_session_id: String::from("some-other-session"),
             text: String::from("stale"),
         }));
         assert_eq!(sim.model().input.text(), "", "a stale hand-back is dropped");
-        sim.send(PiFtuiMsg::Agent(PiMsg::SetEditorText {
+        sim.send(RaFtuiMsg::Agent(RaMsg::SetEditorText {
             owner_session_id: String::from("forked"),
             text: String::from("reword me"),
         }));
@@ -11806,10 +11812,10 @@ mod tests {
     fn pending_login_input_reaches_the_driver_without_being_echoed() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::LoginPending {
+        sim.send(RaFtuiMsg::Agent(RaMsg::LoginPending {
             provider: Some(String::from("openai")),
             accepts_empty_input: false,
         }));
@@ -11869,7 +11875,7 @@ mod tests {
     fn slash_share_refuses_an_argument_without_reaching_the_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/share public");
@@ -11918,7 +11924,7 @@ mod tests {
     fn resume_picker_shows_labels_and_routes_paths() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_available_sessions(vec![
                 (
@@ -11961,14 +11967,14 @@ mod tests {
         use crate::interactive::{ConversationMessage, MessageRole};
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let mut sim = ProgramSimulator::new(PiFtuiModel::new(rx).with_submit_channel(submit_tx));
+        let mut sim = ProgramSimulator::new(RaFtuiModel::new(rx).with_submit_channel(submit_tx));
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::System("abandoned reply".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::System("abandoned reply".into())));
         type_str(&mut sim, "/retry");
         sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
         assert_eq!(submit_rx.try_recv().expect("routed"), UiCommand::Retry);
 
-        sim.send(PiFtuiMsg::Agent(PiMsg::RetryCommitted {
+        sim.send(RaFtuiMsg::Agent(RaMsg::RetryCommitted {
             session_id: "s".into(),
             messages: vec![ConversationMessage {
                 role: MessageRole::User,
@@ -11993,8 +11999,8 @@ mod tests {
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         // Preexisting content is replaced wholesale.
-        sim.send(PiFtuiMsg::Agent(PiMsg::System("old line".into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ConversationReset {
+        sim.send(RaFtuiMsg::Agent(RaMsg::System("old line".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ConversationReset {
             session_id: "resumed-session".into(),
             messages: vec![
                 ConversationMessage {
@@ -12034,7 +12040,7 @@ mod tests {
                 .any(|e| e.text.contains("session resumed"))
         );
 
-        sim.send(PiFtuiMsg::Agent(PiMsg::SessionSystemNote {
+        sim.send(RaFtuiMsg::Agent(RaMsg::SessionSystemNote {
             owner_session_id: "replaced-session".into(),
             message: "stale note".into(),
         }));
@@ -12046,7 +12052,7 @@ mod tests {
             "an old session's note must not enter the replacement transcript"
         );
 
-        sim.send(PiFtuiMsg::Agent(PiMsg::SessionSystemNote {
+        sim.send(RaFtuiMsg::Agent(RaMsg::SessionSystemNote {
             owner_session_id: "resumed-session".into(),
             message: "current note".into(),
         }));
@@ -12076,7 +12082,7 @@ mod tests {
     fn bang_routes_bash_command_and_result_renders() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "!echo hi");
@@ -12110,7 +12116,7 @@ mod tests {
             "bare-bang usage error missing"
         );
         // A BashResult renders into the transcript as a system entry.
-        sim.send(PiFtuiMsg::Agent(PiMsg::BashResult {
+        sim.send(RaFtuiMsg::Agent(RaMsg::BashResult {
             display: "$ echo hi\nhi".into(),
             content_for_agent: None,
         }));
@@ -12123,7 +12129,7 @@ mod tests {
 
     #[test]
     fn subscription_id_is_stable() {
-        let (_tx, rx) = mpsc::channel::<PiMsg>();
+        let (_tx, rx) = mpsc::channel::<RaMsg>();
         let sub = AgentEventSubscription::new(rx);
         assert_eq!(sub.id(), AGENT_EVENTS_SUB_ID);
     }
@@ -12131,7 +12137,7 @@ mod tests {
     fn session_slash_commands_route_to_driver() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/new");
@@ -12227,10 +12233,10 @@ mod tests {
         // guard.
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         type_str(&mut sim, "/new");
         sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
         type_str(&mut sim, "/tree");
@@ -12244,7 +12250,7 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::System(String::from(
+        sim.send(RaFtuiMsg::Agent(RaMsg::System(String::from(
             "earlier note",
         ))));
         type_str(&mut sim, "/cls");
@@ -12260,7 +12266,7 @@ mod tests {
         // simulated input processing.
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         // Bare /M with no models errors locally instead of reaching a driver.
@@ -12345,7 +12351,7 @@ mod tests {
     fn tab_accepts_first_completion_and_enter_then_submits_the_command() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/he");
@@ -12374,7 +12380,7 @@ mod tests {
     fn arrow_keys_navigate_and_enter_accepts_the_highlighted_row() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/");
@@ -12473,7 +12479,7 @@ mod tests {
         sim.init();
         type_str(&mut sim, "/he");
         assert!(sim.model().completion_visible());
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         assert!(!sim.model().autocomplete.open, "a turn owns the editor");
         assert_eq!(sim.model().completion_rows(), 0);
         let rendered = buffer_text(sim.capture_frame(80, 12), 80, 12);
@@ -12501,7 +12507,7 @@ mod tests {
             }],
             ..AutocompleteCatalog::default()
         };
-        sim.send(PiFtuiMsg::Agent(PiMsg::AutocompleteCatalog(catalog)));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AutocompleteCatalog(catalog)));
         assert!(!sim.model().autocomplete.open, "a stale popup is dropped");
         type_str(&mut sim, "l");
         let model = sim.model();
@@ -12518,7 +12524,7 @@ mod tests {
     #[test]
     fn popup_height_caps_at_max_visible_and_scrolls_to_the_highlight() {
         let (_agent_tx, rx) = mpsc::channel();
-        let model = PiFtuiModel::new(rx).with_autocomplete(AutocompleteLaunch {
+        let model = RaFtuiModel::new(rx).with_autocomplete(AutocompleteLaunch {
             catalog: AutocompleteCatalog::default(),
             cwd: std::path::PathBuf::from("."),
             max_visible: 3,
@@ -12610,10 +12616,10 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
         // !bash flow: ToolStart opens a pending card, BashResult folds an
         // 8-line-capped preview into it, ToolEnd flips it to Ok in place.
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "bash".into(),
             tool_id: "t1".into(),
         }));
@@ -12626,7 +12632,7 @@ mod tests {
             "ToolStart must open a pending card"
         );
         let output = "line-one\nline-two";
-        sim.send(PiFtuiMsg::Agent(PiMsg::BashResult {
+        sim.send(RaFtuiMsg::Agent(RaMsg::BashResult {
             display: format!("$ demo\n{output}"),
             content_for_agent: None,
         }));
@@ -12643,7 +12649,7 @@ mod tests {
                 .is_some_and(|d| d.contains("line-one") && d.contains("line-two")),
             "BashResult must fold its preview into the pending card"
         );
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "bash".into(),
             tool_id: "t1".into(),
             is_error: false,
@@ -12656,11 +12662,11 @@ mod tests {
                 .any(|e| e.card == Some(CardState::Ok))
         );
         // An errored run opens and closes its own Err card.
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "edit".into(),
             tool_id: "t2".into(),
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "edit".into(),
             tool_id: "t2".into(),
             is_error: true,
@@ -12707,7 +12713,7 @@ mod tests {
             error: Some(raw.into()),
         });
         let [
-            PiMsg::AgentDone {
+            RaMsg::AgentDone {
                 stop_reason: StopReason::Error,
                 error_message: Some(card),
                 ..
@@ -12761,7 +12767,7 @@ mod tests {
         assert!(
             matches!(
                 msgs.as_slice(),
-                [PiMsg::AgentDone { error_message: Some(text), .. }] if text == "Aborted"
+                [RaMsg::AgentDone { error_message: Some(text), .. }] if text == "Aborted"
             ),
             "abort must keep its plain message: {msgs:?}"
         );
@@ -12770,12 +12776,12 @@ mod tests {
         // even when partial text streamed first.
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, _submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta(String::from("partial "))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta(String::from("partial "))));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Error,
             error_message: Some(card.clone()),
@@ -12799,10 +12805,10 @@ mod tests {
     fn agent_error_pins_banner_and_send_dismisses() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentError(String::from("boom"))));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentError(String::from("boom"))));
         assert_eq!(
             sim.model().error_banner.as_deref(),
             Some("boom"),
@@ -12832,11 +12838,11 @@ mod tests {
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         for _ in 0..3 {
-            sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+            sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
                 name: "read".into(),
                 tool_id: "t".into(),
             }));
-            sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+            sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
                 name: "read".into(),
                 tool_id: "t".into(),
                 is_error: false,
@@ -12852,12 +12858,12 @@ mod tests {
         assert_eq!(read_cards.len(), 1, "reads must collapse into one card");
         assert_eq!(read_cards[0].group_count, 3);
         // A non-read entry between runs splits the group.
-        sim.send(PiFtuiMsg::Agent(PiMsg::System(String::from("note"))));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::System(String::from("note"))));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "read".into(),
             tool_id: "t2".into(),
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "read".into(),
             tool_id: "t2".into(),
             is_error: false,
@@ -12960,14 +12966,14 @@ mod tests {
         ];
         let mut cycle = available.clone();
         let reply = run_scoped_models_command("gpt-*", &available, &mut cycle, dir.path());
-        assert!(matches!(reply, PiMsg::System(ref text) if text.contains("1 model(s)")));
+        assert!(matches!(reply, RaMsg::System(ref text) if text.contains("1 model(s)")));
         assert_eq!(cycle, vec![String::from("openai/gpt-5")]);
-        let saved = std::fs::read_to_string(dir.path().join(".pi").join("settings.json"))
+        let saved = std::fs::read_to_string(dir.path().join(".ra").join("settings.json"))
             .expect("project settings written");
         assert!(saved.contains("gpt-*"), "{saved}");
 
         let unchanged = run_scoped_models_command("zzz-*", &available, &mut cycle, dir.path());
-        assert!(matches!(unchanged, PiMsg::System(ref text) if text.contains("unchanged")));
+        assert!(matches!(unchanged, RaMsg::System(ref text) if text.contains("unchanged")));
         assert_eq!(cycle, vec![String::from("openai/gpt-5")]);
 
         run_scoped_models_command("clear", &available, &mut cycle, dir.path());
@@ -13001,7 +13007,7 @@ mod tests {
     fn up_and_down_recall_sent_prompts_and_restore_the_draft() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, _submit_rx) = mpsc::channel::<UiCommand>();
-        let mut sim = ProgramSimulator::new(PiFtuiModel::new(rx).with_submit_channel(submit_tx));
+        let mut sim = ProgramSimulator::new(RaFtuiModel::new(rx).with_submit_channel(submit_tx));
         sim.init();
         for prompt in ["first prompt", "second prompt"] {
             type_str(&mut sim, prompt);
@@ -13057,21 +13063,21 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ThinkingDelta("look first".into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("Let me look.".into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ThinkingDelta("look first".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("Let me look.".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "read".into(),
             tool_id: "r1".into(),
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "read".into(),
             tool_id: "r1".into(),
             is_error: false,
             output: None,
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("Found it.".into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("Found it.".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -13099,12 +13105,12 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ThinkingDelta(
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ThinkingDelta(
             "weigh option alpha\nweigh option beta".into(),
         )));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("beta.".into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("beta.".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -13164,7 +13170,7 @@ mod tests {
                 theme_paths: Vec::new(),
             },
         };
-        let prompts = dir.path().join(".pi").join("prompts");
+        let prompts = dir.path().join(".ra").join("prompts");
         std::fs::create_dir_all(&prompts).expect("prompts dir");
         std::fs::write(
             prompts.join("triage.md"),
@@ -13196,7 +13202,7 @@ mod tests {
             Some("Triage issue #12")
         );
         assert!(catalog.prompt_templates.iter().any(|t| t.name == "triage"));
-        let Ok(PiMsg::AutocompleteCatalog(sent)) = rx.try_recv() else {
+        let Ok(RaMsg::AutocompleteCatalog(sent)) = rx.try_recv() else {
             panic!("the refreshed catalog goes to the UI");
         };
         assert!(sent.prompt_templates.iter().any(|t| t.name == "triage"));
@@ -13214,11 +13220,11 @@ mod tests {
             .map(|n| format!("row{n:02}"))
             .collect::<Vec<_>>()
             .join("\n");
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "grep".into(),
             tool_id: "g1".into(),
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "grep".into(),
             tool_id: "g1".into(),
             is_error: false,
@@ -13280,10 +13286,10 @@ mod tests {
 
     /// Complete one streamed assistant turn, leaving `text` as a transcript
     /// entry.
-    fn finish_turn(sim: &mut ProgramSimulator<PiFtuiModel>, text: &str) {
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta(text.into())));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+    fn finish_turn(sim: &mut ProgramSimulator<RaFtuiModel>, text: &str) {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta(text.into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -13328,8 +13334,8 @@ mod tests {
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         finish_turn(&mut sim, "before the tool");
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "bash".into(),
             tool_id: "t1".into(),
         }));
@@ -13340,13 +13346,13 @@ mod tests {
             (1, 1),
             "a pending card renders fresh every frame (spinner-dependent)"
         );
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "bash".into(),
             tool_id: "t1".into(),
             is_error: false,
             output: Some("ok".into()),
         }));
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentDone {
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -13368,8 +13374,8 @@ mod tests {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        sim.send(PiFtuiMsg::Agent(PiMsg::AgentStart));
-        sim.send(PiFtuiMsg::Agent(PiMsg::TextDelta("streaming tail".into())));
+        sim.send(RaFtuiMsg::Agent(RaMsg::AgentStart));
+        sim.send(RaFtuiMsg::Agent(RaMsg::TextDelta("streaming tail".into())));
         let text = sim.model().conversation_text(TEST_BODY_WIDTH);
         assert!(
             text.lines()
@@ -13420,7 +13426,7 @@ mod tests {
         finish_turn(&mut sim, source);
         // The body width is the render argument, matching `render_frame`;
         // the resize events drive the cache-invalidation half of the test.
-        let widest = |model: &PiFtuiModel, width: u16| {
+        let widest = |model: &RaFtuiModel, width: u16| {
             model
                 .conversation_text(width)
                 .lines()
@@ -13471,7 +13477,7 @@ mod tests {
         let source = "para one\n\npara two\n\n# Section\n\nbody text\n\n```rust\nlet x = 1;\n```\n\ntail line";
         let render = |spacing: crate::config::MarkdownSpacing| {
             let (_tx, rx) = mpsc::channel();
-            let model = PiFtuiModel::new(rx).with_markdown_spacing(spacing);
+            let model = RaFtuiModel::new(rx).with_markdown_spacing(spacing);
             let mut sim = ProgramSimulator::new(model);
             sim.init();
             finish_turn(&mut sim, source);
@@ -13542,7 +13548,7 @@ mod tests {
         use ftui::runtime::simulator::CmdRecord;
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, _submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/model openai/gpt-5");
@@ -13568,7 +13574,7 @@ mod tests {
             "status region missing busy spinner: {rendered:?}"
         );
         // The driver's reply clears busy and parks the ticks.
-        sim.send(PiFtuiMsg::Agent(PiMsg::System(
+        sim.send(RaFtuiMsg::Agent(RaMsg::System(
             "model set to openai/gpt-5".into(),
         )));
         assert!(sim.model().busy.is_none(), "driver reply must clear busy");
@@ -13583,7 +13589,7 @@ mod tests {
         use ftui::runtime::simulator::CmdRecord;
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx)
+        let model = RaFtuiModel::new(rx)
             .with_submit_channel(submit_tx)
             .with_available_sessions(vec![("old session · 3 msgs".into(), "/tmp/s.jsonl".into())]);
         let mut sim = ProgramSimulator::new(model);
@@ -13609,7 +13615,7 @@ mod tests {
     fn extension_command_busy_survives_its_own_tool_card_until_it_ends() {
         let (_agent_tx, rx) = mpsc::channel();
         let (submit_tx, _submit_rx) = mpsc::channel::<UiCommand>();
-        let model = PiFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
         let mut sim = ProgramSimulator::new(model);
         sim.init();
         type_str(&mut sim, "/mycmd arg");
@@ -13617,7 +13623,7 @@ mod tests {
         assert_eq!(sim.model().busy_label(), Some("running /mycmd ..."));
         // The driver renders the command as a tool card; its start/progress
         // must not clear the busy state — only the settled result does.
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolStart {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
             name: "/mycmd".into(),
             tool_id: "ftui-ext-command".into(),
         }));
@@ -13625,7 +13631,7 @@ mod tests {
             sim.model().busy.is_some(),
             "ToolStart must not clear the busy label"
         );
-        sim.send(PiFtuiMsg::Agent(PiMsg::ToolEnd {
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolEnd {
             name: "/mycmd".into(),
             tool_id: "ftui-ext-command".into(),
             is_error: false,
@@ -13941,7 +13947,7 @@ mod loop_watchdog_tests {
         wd.finish(LoopPhase::Render, wd.start());
 
         let snap = wd.snapshot();
-        assert_eq!(snap["schema"], "pi.tui.loop_watchdog.v1");
+        assert_eq!(snap["schema"], "ra.tui.loop_watchdog.v1");
         assert_eq!(snap["surface"], "ftui");
         assert_eq!(snap["phases"]["render"]["samples"], 2);
         assert_eq!(snap["phases"]["input"]["samples"], 1);

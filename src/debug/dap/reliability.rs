@@ -195,7 +195,7 @@ fn real_stdio_output_flood_preserves_the_following_stop() {
         .is_ok_and(|status| status.success())
     {
         assert!(
-            std::env::var_os("PI_DEBUG_REQUIRE_PROTOCOL").is_none(),
+            std::env::var_os("RECUR_AGENT_DEBUG_REQUIRE_PROTOCOL").is_none(),
             "python3 required for DAP protocol tests"
         );
         eprintln!("skip: python3 absent; no real stdio flood probe ran");

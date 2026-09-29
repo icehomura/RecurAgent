@@ -53,7 +53,7 @@ pub(super) async fn finish_selection(
         && !region.shutdown().await
     {
         tracing::warn!(
-            target: "pi::sdk",
+            target: "ra::sdk",
             "extension runtime did not stop within its budget after provider selection failed"
         );
     }

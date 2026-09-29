@@ -33,7 +33,9 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 use crate::session_sqlite::{SqliteConnection, run_on_sqlite_thread};
 
-mod reflection;
+pub mod lattice;
+pub mod providers;
+pub mod reflection;
 pub mod shared;
 #[cfg(test)]
 mod shared_tests;
@@ -41,7 +43,7 @@ mod transactions;
 pub use reflection::ReflectTool;
 
 /// Tool-result schema tag for memory operations (stable audit contract).
-pub const MEMORY_SCHEMA: &str = "pi.memory.v1";
+pub const MEMORY_SCHEMA: &str = "ra.memory.v1";
 
 /// Default recall result cap.
 const DEFAULT_RECALL_LIMIT: usize = 10;
@@ -244,10 +246,28 @@ fn reject_active_duplicate(conn: &SqliteConnection, content: &str, except_id: i6
     if rows.first().map_or(Ok(0), |row| row_i64(row, 0))? > 0 {
         return Err(Error::tool(
             "memory",
-            "PI_MEMORY_DUPLICATE: an identical active memory already exists",
+            "RECUR_AGENT_MEMORY_DUPLICATE: an identical active memory already exists",
         ));
     }
     Ok(())
+}
+
+/// Uniform memory backend surface for M7 ContextLattice fusion.
+///
+/// Namespace/key are logical coordinates; backends map them onto their own
+/// storage (the builtin FTS5 bank maps namespace onto the project scope).
+/// Kept to four KV methods on purpose — fusion ranking belongs to
+/// [`lattice::ContextLattice`], not to the transport.
+#[async_trait::async_trait]
+pub trait MemoryProvider: Send + Sync {
+    /// Save a value under a namespace + key (overwrite semantics).
+    async fn save(&self, namespace: &str, key: &str, value: &str) -> Result<()>;
+    /// Load a value; `Ok(None)` when the key is absent.
+    async fn load(&self, namespace: &str, key: &str) -> Result<Option<String>>;
+    /// List all namespaces known to this backend.
+    async fn list_namespaces(&self) -> Result<Vec<String>>;
+    /// Delete a value; an absent key is not an error.
+    async fn delete(&self, namespace: &str, key: &str) -> Result<()>;
 }
 
 /// Per-project memory store (SQLite + FTS5).
@@ -352,7 +372,7 @@ impl MemoryStore {
     /// screening. Returns only after the row, FTS entry, and audit commit.
     ///
     /// # Errors
-    /// Store errors; named `PI_MEMORY_DUPLICATE` for exact active dupes.
+    /// Store errors; named `RECUR_AGENT_MEMORY_DUPLICATE` for exact active dupes.
     pub fn retain(
         &self,
         kind: MemoryKind,
@@ -408,12 +428,12 @@ impl MemoryStore {
                     )
                     .map_err(|error| Error::tool("memory", format!("lookup failed: {error}")))?;
                 let row = rows.first().ok_or_else(|| {
-                    Error::tool("memory", format!("PI_MEMORY_UNKNOWN_ID: no memory with id {id}"))
+                    Error::tool("memory", format!("RECUR_AGENT_MEMORY_UNKNOWN_ID: no memory with id {id}"))
                 })?;
                 if row_text(row, 0)? != "active" {
                     return Err(Error::tool(
                         "memory",
-                        "PI_MEMORY_SUPERSESSION_CONFLICT: predecessor is no longer active; recall the current memory before replacing it",
+                        "RECUR_AGENT_MEMORY_SUPERSESSION_CONFLICT: predecessor is no longer active; recall the current memory before replacing it",
                     ));
                 }
             }
@@ -491,7 +511,7 @@ impl MemoryStore {
     /// Apply an edit op (audit-logged in the same transaction).
     ///
     /// # Errors
-    /// Named `PI_MEMORY_UNKNOWN_ID` for unknown ids.
+    /// Named `RECUR_AGENT_MEMORY_UNKNOWN_ID` for unknown ids.
     pub fn edit(&self, id: i64, op: MemoryEditOp, content: Option<&str>) -> Result<()> {
         if op == MemoryEditOp::Update && content.is_none_or(|text| text.trim().is_empty()) {
             return Err(Error::validation(
@@ -512,7 +532,7 @@ impl MemoryStore {
             if count == 0 {
                 return Err(Error::tool(
                     "memory",
-                    format!("PI_MEMORY_UNKNOWN_ID: no memory with id {id}"),
+                    format!("RECUR_AGENT_MEMORY_UNKNOWN_ID: no memory with id {id}"),
                 ));
             }
             match op {
@@ -1115,7 +1135,7 @@ mod tests {
             .retain(MemoryKind::Fact, "unique fact", &[], None)
             .unwrap_err();
         assert!(
-            err.to_string().contains("PI_MEMORY_DUPLICATE"),
+            err.to_string().contains("RECUR_AGENT_MEMORY_DUPLICATE"),
             "expected duplicate error: {err}"
         );
     }

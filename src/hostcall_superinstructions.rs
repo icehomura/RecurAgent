@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 /// Versioned schema for serialized superinstruction plans.
-pub const HOSTCALL_SUPERINSTRUCTION_SCHEMA_VERSION: &str = "pi.ext.hostcall_superinstruction.v1";
+pub const HOSTCALL_SUPERINSTRUCTION_SCHEMA_VERSION: &str = "ra.ext.hostcall_superinstruction.v1";
 /// Plan payload version.
 pub const HOSTCALL_SUPERINSTRUCTION_PLAN_VERSION: u16 = 1;
 
@@ -70,12 +70,12 @@ impl HostcallSuperinstructionCompiler {
 
     #[must_use]
     pub fn from_env() -> Self {
-        let enabled = bool_from_env("PI_HOSTCALL_SUPERINSTRUCTIONS", true);
-        let min_support = std::env::var("PI_HOSTCALL_SUPERINSTRUCTION_MIN_SUPPORT")
+        let enabled = bool_from_env("RECUR_AGENT_HOSTCALL_SUPERINSTRUCTIONS", true);
+        let min_support = std::env::var("RECUR_AGENT_HOSTCALL_SUPERINSTRUCTION_MIN_SUPPORT")
             .ok()
             .and_then(|raw| raw.trim().parse::<u32>().ok())
             .map_or(DEFAULT_MIN_SUPPORT, |value| value.max(2));
-        let max_window = std::env::var("PI_HOSTCALL_SUPERINSTRUCTION_MAX_WINDOW")
+        let max_window = std::env::var("RECUR_AGENT_HOSTCALL_SUPERINSTRUCTION_MAX_WINDOW")
             .ok()
             .and_then(|raw| raw.trim().parse::<usize>().ok())
             .map_or(DEFAULT_MAX_WINDOW, |value| value.max(2));

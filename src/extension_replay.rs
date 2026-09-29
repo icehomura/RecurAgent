@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 /// Canonical schema identifier for replay trace bundles.
-pub const REPLAY_TRACE_SCHEMA_V1: &str = "pi.ext.replay.trace.v1";
+pub const REPLAY_TRACE_SCHEMA_V1: &str = "ra.ext.replay.trace.v1";
 
 /// Kind of extension runtime event captured for deterministic replay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
@@ -1641,7 +1641,7 @@ mod tests {
     #[test]
     fn divergence_detects_schema_mismatch() {
         let mut observed = standard_bundle();
-        observed.schema = "pi.ext.replay.trace.v2".to_string();
+        observed.schema = "ra.ext.replay.trace.v2".to_string();
 
         let divergence = first_divergence(&standard_bundle(), &observed)
             .expect("comparison should succeed")
@@ -1651,7 +1651,7 @@ mod tests {
         match divergence.reason {
             ReplayDivergenceReason::SchemaMismatch { expected, observed } => {
                 assert_eq!(expected, REPLAY_TRACE_SCHEMA_V1);
-                assert_eq!(observed, "pi.ext.replay.trace.v2");
+                assert_eq!(observed, "ra.ext.replay.trace.v2");
             }
             other => unreachable!("expected SchemaMismatch, got: {other:?}"),
         }
@@ -1660,13 +1660,13 @@ mod tests {
     #[test]
     fn divergence_rejects_same_unknown_schema() {
         let mut expected = standard_bundle();
-        expected.schema = "pi.ext.replay.trace.v2".to_string();
+        expected.schema = "ra.ext.replay.trace.v2".to_string();
         let observed = expected.clone();
 
         let error = first_divergence(&expected, &observed).expect_err("unsupported schema");
         assert!(matches!(
             error,
-            ReplayTraceValidationError::UnknownSchema(schema) if schema == "pi.ext.replay.trace.v2"
+            ReplayTraceValidationError::UnknownSchema(schema) if schema == "ra.ext.replay.trace.v2"
         ));
     }
 
@@ -2219,7 +2219,7 @@ mod tests {
     fn compare_replay_bundles_reports_schema_mismatch_with_hint() {
         let reference = standard_bundle();
         let mut observed = standard_bundle();
-        observed.schema = "pi.ext.replay.trace.v2".to_string();
+        observed.schema = "ra.ext.replay.trace.v2".to_string();
         let gate =
             evaluate_replay_capture_gate(standard_capture_budget(), within_budget_observation());
 
@@ -2241,7 +2241,7 @@ mod tests {
         {
             ReplayDivergenceReason::SchemaMismatch { expected, observed } => {
                 assert_eq!(expected, REPLAY_TRACE_SCHEMA_V1);
-                assert_eq!(observed, "pi.ext.replay.trace.v2");
+                assert_eq!(observed, "ra.ext.replay.trace.v2");
             }
             other => unreachable!("expected SchemaMismatch, got: {other:?}"),
         }

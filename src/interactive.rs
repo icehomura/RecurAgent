@@ -110,7 +110,7 @@ pub(crate) use self::tree::{fork_candidates, format_fork_candidates, select_fork
 
 /// Where `/export` writes when it is given no argument.
 ///
-/// Free rather than a `PiApp` method because the ftui stack runs the same
+/// Free rather than a `RaApp` method because the ftui stack runs the same
 /// `/export` (bd-cv653) and must not name its files differently: an exported
 /// conversation should land in the same place whichever stack wrote it.
 pub(crate) fn default_export_path(cwd: &Path, session: &Session) -> PathBuf {
@@ -179,7 +179,7 @@ use self::tree::{
 /// bindings are restored.
 ///
 /// The override is pane-scoped: other panes in the same tmux session are not
-/// affected.  If `PI_TMUX_WHEEL_OVERRIDE=0` is set, no override is installed.
+/// affected.  If `RECUR_AGENT_TMUX_WHEEL_OVERRIDE=0` is set, no override is installed.
 struct TmuxWheelGuard {
     /// Original WheelUp binding (None if there was no binding).
     saved_wheel_up: Option<String>,
@@ -192,11 +192,11 @@ impl TmuxWheelGuard {
     ///
     /// Returns `None` if:
     /// - Not running inside tmux (`$TMUX` unset)
-    /// - `PI_TMUX_WHEEL_OVERRIDE=0` env is set
+    /// - `RECUR_AGENT_TMUX_WHEEL_OVERRIDE=0` env is set
     /// - `tmux` binary is not available or returns errors
     fn install() -> Option<Self> {
         // Respect opt-out env var.
-        if std::env::var("PI_TMUX_WHEEL_OVERRIDE").is_ok_and(|v| v == "0") {
+        if std::env::var("RECUR_AGENT_TMUX_WHEEL_OVERRIDE").is_ok_and(|v| v == "0") {
             return None;
         }
 
@@ -430,7 +430,7 @@ fn overlay_max_visible(term_height: usize) -> usize {
 // Slash Commands
 // ============================================================================
 
-impl PiApp {
+impl RaApp {
     /// Rebuild viewport content after conversation state changes.
     /// If `follow_tail` is true the viewport is scrolled to the very bottom;
     /// otherwise the current scroll position is preserved.
@@ -768,9 +768,9 @@ impl PiApp {
     }
 
     fn effective_show_hardware_cursor(&self) -> bool {
-        self.config
-            .show_hardware_cursor
-            .unwrap_or_else(|| std::env::var("PI_HARDWARE_CURSOR").is_ok_and(|val| val == "1"))
+        self.config.show_hardware_cursor.unwrap_or_else(|| {
+            std::env::var("RECUR_AGENT_HARDWARE_CURSOR").is_ok_and(|val| val == "1")
+        })
     }
 
     fn effective_default_permissive(&self) -> bool {
@@ -1160,7 +1160,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock session: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock session: {err}")),
                         )
                         .await;
                         return;
@@ -1171,7 +1171,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(format!("Failed to save session: {err}")),
+                    RaMsg::AgentError(format!("Failed to save session: {err}")),
                 )
                 .await;
             }
@@ -1440,7 +1440,7 @@ impl PiApp {
     }
 
     pub fn set_terminal_size(&mut self, width: usize, height: usize) {
-        let test_mode = std::env::var_os("PI_TEST_MODE").is_some();
+        let test_mode = std::env::var_os("RECUR_AGENT_TEST_MODE").is_some();
         let previous_height = self.term_height;
         self.term_width = width.max(1);
         self.term_height = height.max(1);
@@ -1561,7 +1561,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::System("Session switch cancelled by extension".to_string()),
+                        RaMsg::System("Session switch cancelled by extension".to_string()),
                     )
                     .await;
                     return;
@@ -1574,7 +1574,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::AgentError(format!("Failed to open session: {err}")),
+                        RaMsg::AgentError(format!("Failed to open session: {err}")),
                     )
                     .await;
                     return;
@@ -1598,7 +1598,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &task_cx,
-                    PiMsg::AgentError(err.to_string()),
+                    RaMsg::AgentError(err.to_string()),
                 )
                 .await;
                 return;
@@ -1607,7 +1607,7 @@ impl PiApp {
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &task_cx,
-                PiMsg::ConversationReset {
+                RaMsg::ConversationReset {
                     session_id: new_session_id.clone(),
                     messages,
                     usage,
@@ -1659,8 +1659,8 @@ pub async fn run_interactive(
     runtime_handle: RuntimeHandle,
     workspace: WorkspaceHandle,
     ask_tool: Option<crate::ask::AskTool>,
-    btw_client: Option<Arc<pi::btw::BtwClient>>,
-    btw_factory: Option<pi::btw::BtwClientFactory>,
+    btw_client: Option<Arc<ra::btw::BtwClient>>,
+    btw_factory: Option<ra::btw::BtwClientFactory>,
     mcp_manager: Option<std::sync::Arc<crate::mcp::McpManager>>,
 ) -> anyhow::Result<()> {
     // Resolve the initial transcript before taking ownership of the terminal
@@ -1676,18 +1676,18 @@ pub async fn run_interactive(
     };
 
     let should_check_for_updates = config.should_check_for_updates();
-    let show_hardware_cursor = config
-        .show_hardware_cursor
-        .unwrap_or_else(|| std::env::var("PI_HARDWARE_CURSOR").is_ok_and(|val| val == "1"));
+    let show_hardware_cursor = config.show_hardware_cursor.unwrap_or_else(|| {
+        std::env::var("RECUR_AGENT_HARDWARE_CURSOR").is_ok_and(|val| val == "1")
+    });
     // Mouse capture defaults ON (preserves existing in-app wheel-scroll
     // behaviour). Users on Windows/CMD/Windows Terminal can opt out via
     // `--no-mouse-capture`, `disable_mouse_capture: true` in settings, or
-    // `PI_NO_MOUSE_CAPTURE=1` env var to restore terminal-native click-to-
-    // select / right-click-paste / Shift-Insert. See pi_agent_rust#78 for
+    // `RECUR_AGENT_NO_MOUSE_CAPTURE=1` env var to restore terminal-native click-to-
+    // select / right-click-paste / Shift-Insert. See recur_agent#78 for
     // the OAuth-flow copy-out problem this solves.
-    let disable_mouse_capture = config
-        .disable_mouse_capture
-        .unwrap_or_else(|| std::env::var("PI_NO_MOUSE_CAPTURE").is_ok_and(|val| val == "1"));
+    let disable_mouse_capture = config.disable_mouse_capture.unwrap_or_else(|| {
+        std::env::var("RECUR_AGENT_NO_MOUSE_CAPTURE").is_ok_and(|val| val == "1")
+    });
     let mut stdout = std::io::stdout();
     if show_hardware_cursor {
         let _ = crossterm::execute!(stdout, cursor::Show);
@@ -1695,14 +1695,14 @@ pub async fn run_interactive(
         let _ = crossterm::execute!(stdout, cursor::Hide);
     }
 
-    let (event_tx, mut event_rx) = mpsc::channel::<PiMsg>(1024);
+    let (event_tx, mut event_rx) = mpsc::channel::<RaMsg>(1024);
     let shutdown_event_tx = event_tx.clone();
     let (ui_tx, ui_rx) = std::sync::mpsc::channel::<Message>();
 
     let ui_bridge_cx = Cx::current().unwrap_or_else(Cx::for_request);
     runtime_handle.spawn(async move {
         while let Ok(msg) = event_rx.recv(&ui_bridge_cx).await {
-            if matches!(msg, PiMsg::UiShutdown) {
+            if matches!(msg, RaMsg::UiShutdown) {
                 break;
             }
             let _ = ui_tx.send(Message::new(msg));
@@ -1733,7 +1733,7 @@ pub async fn run_interactive(
             while let Ok(request) = ask_ui_rx.recv(&ask_ui_cx).await {
                 let request_id = request.id.clone();
                 ask_forwarder.try_forward_channel_ui_request(&request_id, || {
-                    ask_event_tx.try_send(PiMsg::AskUiRequest(request)).is_ok()
+                    ask_event_tx.try_send(RaMsg::AskUiRequest(request)).is_ok()
                 });
             }
         });
@@ -1756,7 +1756,7 @@ pub async fn run_interactive(
                 if !enqueue_pi_event(
                     &extension_event_tx,
                     &extension_ui_cx,
-                    PiMsg::ExtensionUiRequest(request),
+                    RaMsg::ExtensionUiRequest(request),
                 )
                 .await
                 {
@@ -1769,11 +1769,11 @@ pub async fn run_interactive(
     // Build the bubbletea program. Mouse capture is conditional: ON by
     // default (so in-app mouse-wheel scrolling routes to the TUI), but
     // disabled when the user opts out via --no-mouse-capture / settings /
-    // PI_NO_MOUSE_CAPTURE so terminal-native copy/paste keeps working
-    // (Windows-specific UX win — see pi_agent_rust#78). When disabled,
+    // RECUR_AGENT_NO_MOUSE_CAPTURE so terminal-native copy/paste keeps working
+    // (Windows-specific UX win — see recur_agent#78). When disabled,
     // users scroll with Page Up/Down or arrow keys instead.
     let program_result = {
-        let mut app = Box::new(PiApp::new(
+        let mut app = Box::new(RaApp::new(
             agent,
             session,
             config,
@@ -1846,12 +1846,12 @@ pub async fn run_interactive(
     Ok(())
 }
 
-pub(crate) async fn enqueue_pi_event(event_tx: &mpsc::Sender<PiMsg>, cx: &Cx, msg: PiMsg) -> bool {
+pub(crate) async fn enqueue_pi_event(event_tx: &mpsc::Sender<RaMsg>, cx: &Cx, msg: RaMsg) -> bool {
     event_tx.send(cx, msg).await.is_ok()
 }
 
-pub(crate) async fn enqueue_ui_shutdown(event_tx: &mpsc::Sender<PiMsg>, cx: &Cx) {
-    let _ = enqueue_pi_event(event_tx, cx, PiMsg::UiShutdown).await;
+pub(crate) async fn enqueue_ui_shutdown(event_tx: &mpsc::Sender<RaMsg>, cx: &Cx) {
+    let _ = enqueue_pi_event(event_tx, cx, RaMsg::UiShutdown).await;
 }
 
 /// In-flight ask card (bd-cv653.3.8): one question shown at a time,
@@ -1865,7 +1865,7 @@ pub(crate) struct ActiveAskCard {
 
 /// Which kind of input card currently owns the editor (bd-1qol9).
 ///
-/// Exactly one may be active at a time; `PiApp::input_card_order` preserves
+/// Exactly one may be active at a time; `RaApp::input_card_order` preserves
 /// global arrival order across both kinds so answers can never reorder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InputCardKind {
@@ -1893,7 +1893,7 @@ pub struct FtuiStatusSnapshot {
 }
 
 #[derive(Debug, Clone)]
-pub enum PiMsg {
+pub enum RaMsg {
     /// Agent started processing.
     AgentStart,
     /// Trigger processing of the next queued input (CLI startup messages).
@@ -2070,11 +2070,11 @@ pub enum PiMsg {
 pub(super) const SESSION_EVENT_LOCK_RETRY_ATTEMPTS: u8 = 80;
 const SESSION_EVENT_LOCK_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(25);
 
-pub(super) fn session_event_retry_cmd(event: PiMsg, attempts_remaining: u8) -> Option<Cmd> {
+pub(super) fn session_event_retry_cmd(event: RaMsg, attempts_remaining: u8) -> Option<Cmd> {
     let next_attempts = attempts_remaining.checked_sub(1)?;
     Some(Cmd::blocking(move || {
         std::thread::sleep(SESSION_EVENT_LOCK_RETRY_DELAY);
-        Message::new(PiMsg::SessionEventRetry {
+        Message::new(RaMsg::SessionEventRetry {
             event: Box::new(event),
             attempts_remaining: next_attempts,
         })
@@ -2159,7 +2159,7 @@ fn read_jj_change(cwd: &Path) -> Option<String> {
 /// reference to it for the editor, as ctrl+v does on the classic stack.
 /// `None` when the clipboard holds no image (or clipboard support is off).
 pub(crate) fn paste_clipboard_image_ref() -> Option<String> {
-    let path = PiApp::paste_image_from_clipboard()?;
+    let path = RaApp::paste_image_from_clipboard()?;
     Some(format_file_ref(&path.display().to_string()))
 }
 
@@ -2645,7 +2645,7 @@ fn apply_editor_keybinding_overrides(keybindings: &KeyBindings, input: &mut Text
 /// The main interactive TUI application model.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(bubbletea::Model)]
-pub struct PiApp {
+pub struct RaApp {
     // Multi-root workspace state (bd-cv653.3.12); installed post-construction.
     workspace: WorkspaceHandle,
     input: TextArea,
@@ -2669,10 +2669,10 @@ pub struct PiApp {
     thinking_badge_cache: std::cell::Cell<Option<ThinkingLevel>>,
     /// `/btw` side-question client on the smol role (bd-cv653.3.16);
     /// `None` when the role does not resolve or lacks credentials.
-    btw_client: Option<Arc<pi::btw::BtwClient>>,
+    btw_client: Option<Arc<ra::btw::BtwClient>>,
     /// Rebinds the `/btw` client when `/model smol <spec>` changes the role
     /// (bd-9jgrt); absent on surfaces without startup auth context.
-    btw_factory: Option<pi::btw::BtwClientFactory>,
+    btw_factory: Option<ra::btw::BtwClientFactory>,
     spinner: SpinnerModel,
     agent_state: AgentState,
 
@@ -2711,7 +2711,7 @@ pub struct PiApp {
     /// when a new/resume/fork replacement commits so stale JS continuations
     /// cannot mutate the replacement Session.
     session_action_admission: SessionActionAdmissionGate,
-    /// Session whose state is currently rendered by this `PiApp`. This is UI
+    /// Session whose state is currently rendered by this `RaApp`. This is UI
     /// transition bookkeeping only; security-sensitive event ownership still
     /// verifies the authoritative Session mutex and fails closed on contention.
     displayed_session_id: Option<String>,
@@ -2722,7 +2722,7 @@ pub struct PiApp {
     resources: ResourceLoader,
     resource_cli: ResourceCliOptions,
     /// Startup-configured package resolver retained for `/reload`. Direct
-    /// `PiApp::new` construction starts fail-closed until its host installs an
+    /// `RaApp::new` construction starts fail-closed until its host installs an
     /// explicitly trusted manager.
     package_manager: PackageManager,
     cwd: PathBuf,
@@ -2740,7 +2740,7 @@ pub struct PiApp {
     total_usage: Usage,
 
     // Async channel for agent events
-    event_tx: mpsc::Sender<PiMsg>,
+    event_tx: mpsc::Sender<RaMsg>,
     runtime_handle: RuntimeHandle,
 
     // Extension session state
@@ -2854,7 +2854,7 @@ pub struct PiApp {
     tmux_wheel_guard: Option<TmuxWheelGuard>,
 }
 
-impl BubbleteaModel for Box<PiApp> {
+impl BubbleteaModel for Box<RaApp> {
     fn init(&self) -> Option<Cmd> {
         self.as_ref().init()
     }
@@ -2868,7 +2868,7 @@ impl BubbleteaModel for Box<PiApp> {
     }
 }
 
-impl PiApp {
+impl RaApp {
     /// Install the startup-configured resolver used by `/reload`.
     ///
     /// Keeping this as one explicit seam prevents reload from reconstructing a
@@ -2889,13 +2889,13 @@ impl PiApp {
     }
 
     /// Attach the `/btw` side-question client (bd-cv653.3.16).
-    pub fn set_btw_client(&mut self, client: Arc<pi::btw::BtwClient>) {
+    pub fn set_btw_client(&mut self, client: Arc<ra::btw::BtwClient>) {
         self.btw_client = Some(client);
     }
 
     /// Install the factory used to rebind the `/btw` client on smol-role
     /// change (bd-9jgrt).
-    pub fn set_btw_factory(&mut self, factory: pi::btw::BtwClientFactory) {
+    pub fn set_btw_factory(&mut self, factory: ra::btw::BtwClientFactory) {
         self.btw_factory = Some(factory);
     }
 
@@ -2916,12 +2916,12 @@ impl PiApp {
     }
 
     fn autocomplete_refresh_cmd() -> Option<Cmd> {
-        if std::env::var_os("PI_TEST_MODE").is_some() {
+        if std::env::var_os("RECUR_AGENT_TEST_MODE").is_some() {
             return None;
         }
         Some(Cmd::new(|| {
             std::thread::sleep(std::time::Duration::from_secs(30));
-            Message::new(PiMsg::AutocompleteRefresh)
+            Message::new(RaMsg::AutocompleteRefresh)
         }))
     }
 
@@ -2949,7 +2949,7 @@ impl PiApp {
         available_models: Vec<ModelEntry>,
         title_model_entry: Option<ModelEntry>,
         pending_inputs: Vec<PendingInput>,
-        event_tx: mpsc::Sender<PiMsg>,
+        event_tx: mpsc::Sender<RaMsg>,
         runtime_handle: RuntimeHandle,
         save_enabled: bool,
         persist_startup_settings: bool,
@@ -3087,7 +3087,7 @@ impl PiApp {
         }
         let mut autocomplete = AutocompleteState::new(cwd.clone(), autocomplete_catalog);
         autocomplete.max_visible = autocomplete_max_visible;
-        if std::env::var_os("PI_TEST_MODE").is_none() {
+        if std::env::var_os("RECUR_AGENT_TEST_MODE").is_none() {
             autocomplete.provider.refresh_background();
         }
 
@@ -3358,14 +3358,14 @@ impl PiApp {
         let pending_cmd = if self.pending_inputs.is_empty() {
             None
         } else {
-            Some(Cmd::new(|| Message::new(PiMsg::RunPending)))
+            Some(Cmd::new(|| Message::new(RaMsg::RunPending)))
         };
         // Ensure the initial window-size refresh lands before any queued startup work.
         Self::startup_init_cmd(input_cmd, pending_cmd)
     }
 
     fn spinner_init_cmd(&self) -> Option<Cmd> {
-        if std::env::var_os("PI_TEST_MODE").is_some() {
+        if std::env::var_os("RECUR_AGENT_TEST_MODE").is_some() {
             None
         } else {
             BubbleteaModel::init(&self.spinner)
@@ -3405,10 +3405,10 @@ impl PiApp {
         self.run_memory_pressure_actions();
 
         // Handle our custom Pi messages (take ownership to avoid per-token clone).
-        if msg.is::<PiMsg>() {
+        if msg.is::<RaMsg>() {
             let pi_msg = msg
-                .downcast::<PiMsg>()
-                .expect("PiMsg downcast should succeed after type check");
+                .downcast::<RaMsg>()
+                .expect("RaMsg downcast should succeed after type check");
             return self.handle_pi_message(pi_msg);
         }
 

@@ -562,32 +562,32 @@ fn eval_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"\beval\s*\(").expect("eval"))
 }
 
-fn pi_tool_regex() -> &'static Regex {
+fn ra_tool_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r#"\bpi\.tool\s*\(\s*["'`]((?:[^"'`]+))["'`]"#).expect("pi.tool"))
 }
 
-fn pi_exec_regex() -> &'static Regex {
+fn ra_exec_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\bpi\.exec\s*\(").expect("pi.exec"))
 }
 
-fn pi_http_regex() -> &'static Regex {
+fn ra_http_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\bpi\.http\s*\(").expect("pi.http"))
 }
 
-fn pi_log_regex() -> &'static Regex {
+fn ra_log_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\bpi\.log\s*\(").expect("pi.log"))
 }
 
-fn pi_session_regex() -> &'static Regex {
+fn ra_session_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\bpi\.session\.").expect("pi.session"))
 }
 
-fn pi_ui_regex() -> &'static Regex {
+fn ra_ui_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"\bpi\.ui\.").expect("pi.ui"))
 }
@@ -763,7 +763,7 @@ fn extract_pi_capabilities(line: &str) -> Vec<(String, String, usize)> {
     }
 
     if line.contains("pi.tool") {
-        for caps in pi_tool_regex().captures_iter(line) {
+        for caps in ra_tool_regex().captures_iter(line) {
             let Some(tool) = caps.get(1) else { continue };
             let tool_name = tool.as_str().trim().to_ascii_lowercase();
             let (capability, reason) = match tool_name.as_str() {
@@ -777,31 +777,31 @@ fn extract_pi_capabilities(line: &str) -> Vec<(String, String, usize)> {
     }
 
     if line.contains("pi.exec")
-        && let Some(column) = find_regex_column(line, pi_exec_regex())
+        && let Some(column) = find_regex_column(line, ra_exec_regex())
     {
         out.push(("exec".to_string(), "pi.exec".to_string(), column));
     }
 
     if line.contains("pi.http")
-        && let Some(column) = find_regex_column(line, pi_http_regex())
+        && let Some(column) = find_regex_column(line, ra_http_regex())
     {
         out.push(("http".to_string(), "pi.http".to_string(), column));
     }
 
     if line.contains("pi.log")
-        && let Some(column) = find_regex_column(line, pi_log_regex())
+        && let Some(column) = find_regex_column(line, ra_log_regex())
     {
         out.push(("log".to_string(), "pi.log".to_string(), column));
     }
 
     if line.contains("pi.session")
-        && let Some(column) = find_regex_column(line, pi_session_regex())
+        && let Some(column) = find_regex_column(line, ra_session_regex())
     {
         out.push(("session".to_string(), "pi.session.*".to_string(), column));
     }
 
     if line.contains("pi.ui")
-        && let Some(column) = find_regex_column(line, pi_ui_regex())
+        && let Some(column) = find_regex_column(line, ra_ui_regex())
     {
         out.push(("ui".to_string(), "pi.ui.*".to_string(), column));
     }

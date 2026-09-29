@@ -378,7 +378,7 @@ pub fn plugins(manager: &crate::package_manager::PackageManager) -> Report {
         Err(e) => return Report::status(format!("Could not list packages: {e}")),
     };
     if packages.is_empty() {
-        return Report::status("No packages installed. `pi install <source>` adds one.");
+        return Report::status("No packages installed. `ra install <source>` adds one.");
     }
     let mut card = format!("### 📦 Installed packages ({})\n\n", packages.len());
     for package in &packages {
@@ -390,7 +390,7 @@ pub fn plugins(manager: &crate::package_manager::PackageManager) -> Report {
         let _ = writeln!(card, "- `{}` ({scope})", package.source);
     }
     card.push_str(
-        "\n`pi install <source>` / `pi remove <source>` manage them; `/reload` applies changes.",
+        "\n`ra install <source>` / `ra remove <source>` manage them; `/reload` applies changes.",
     );
     Report::card(card, format!("{} package(s)", packages.len()))
 }

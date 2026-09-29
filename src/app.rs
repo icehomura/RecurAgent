@@ -397,7 +397,7 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
     let mut prompt = format!(
         "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\nAvailable tools:\n{tools_list}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.\n\nGuidelines:\n{guidelines}"
     );
-    if let Some(docs) = pi_docs_prompt_section(&stable_package_dir(package_dir, None)) {
+    if let Some(docs) = ra_docs_prompt_section(&stable_package_dir(package_dir, None)) {
         prompt.push_str("\n\n");
         prompt.push_str(&docs);
     }
@@ -427,10 +427,10 @@ pub(crate) fn stable_package_dir(
 ///
 /// Upstream pi ships `README.md`, `docs/`, and `examples/` inside its npm
 /// package, so its prompt can point at them unconditionally. A standalone
-/// `pi` binary provisions none of them, and instructing the model to read
+/// `ra` binary provisions none of them, and instructing the model to read
 /// files that do not exist just wastes a tool call and confuses the model
 /// (gh #183). Returns `None` when nothing is available.
-fn pi_docs_prompt_section(package_dir: &Path) -> Option<String> {
+fn ra_docs_prompt_section(package_dir: &Path) -> Option<String> {
     const SINGLE_FILE_TOPICS: [(&str, &str); 9] = [
         ("themes", "docs/themes.md"),
         ("skills", "docs/skills.md"),
@@ -1367,7 +1367,7 @@ pub fn resolve_api_key(
 ///
 /// Parity with pi-mono (`packages/ai/src/providers/anthropic.ts`,
 /// `resolveCacheRetention`): caching defaults to short-lived retention
-/// ("ephemeral", ~5 minutes on Anthropic) and the `PI_CACHE_RETENTION`
+/// ("ephemeral", ~5 minutes on Anthropic) and the `RECUR_AGENT_CACHE_RETENTION`
 /// environment variable can override it (`"long"` for ~1 hour TTL, `"none"`
 /// to disable). Providers that do not support prompt caching ignore the
 /// option entirely, so applying the default globally is safe.
@@ -1385,10 +1385,10 @@ pub fn cache_retention_from_env(value: Option<&str>) -> CacheRetention {
 /// Parity with pi-mono (`packages/ai/src/providers/openai-responses.ts`):
 /// `prompt_cache_key: cacheRetention === "none" ? undefined : options?.sessionId`
 /// — the key defaults to the session id so every request in a session lands on
-/// the same provider cache shard, and disabling caching (`PI_CACHE_RETENTION=none`)
+/// the same provider cache shard, and disabling caching (`RECUR_AGENT_CACHE_RETENTION=none`)
 /// suppresses the key entirely.
 ///
-/// `PI_PROMPT_CACHE_KEY` overrides the default: `off`/`none` disables the
+/// `RECUR_AGENT_PROMPT_CACHE_KEY` overrides the default: `off`/`none` disables the
 /// field; any other non-empty value is sent verbatim (a shared key across
 /// sessions). The retention gate still applies — with caching disabled no key
 /// is sent at all.
@@ -1416,7 +1416,9 @@ pub fn resolve_prompt_cache_key(
 pub fn rebind_stream_options_session(options: &mut StreamOptions, session_id: &str) {
     options.session_id = Some(session_id.to_string());
     options.prompt_cache_key = resolve_prompt_cache_key(
-        std::env::var("PI_PROMPT_CACHE_KEY").ok().as_deref(),
+        std::env::var("RECUR_AGENT_PROMPT_CACHE_KEY")
+            .ok()
+            .as_deref(),
         options.cache_retention,
         Some(session_id),
     );
@@ -1432,7 +1434,7 @@ pub fn build_stream_options(
     // Without this, Anthropic requests never set cache_control and users pay
     // full input-token price on every turn.
     let cache_retention =
-        cache_retention_from_env(std::env::var("PI_CACHE_RETENTION").ok().as_deref());
+        cache_retention_from_env(std::env::var("RECUR_AGENT_CACHE_RETENTION").ok().as_deref());
     let mut options = StreamOptions {
         api_key,
         headers: selection.model_entry.headers.clone(),
@@ -1440,7 +1442,9 @@ pub fn build_stream_options(
         cache_retention,
         // Session-scoped cache affinity for OpenAI-shaped requests (gh #188).
         prompt_cache_key: resolve_prompt_cache_key(
-            std::env::var("PI_PROMPT_CACHE_KEY").ok().as_deref(),
+            std::env::var("RECUR_AGENT_PROMPT_CACHE_KEY")
+                .ok()
+                .as_deref(),
             cache_retention,
             Some(session.header.id.as_str()),
         ),
@@ -2617,14 +2621,14 @@ mod tests {
         let options =
             build_stream_options(&config, Some("test-key".to_string()), &selection, &session);
 
-        // The default must track PI_CACHE_RETENTION exactly as the pure
+        // The default must track RECUR_AGENT_CACHE_RETENTION exactly as the pure
         // resolver does; when the variable is unset (the normal case, and the
         // CI case) that means Short — matching pi-mono's default so Anthropic
         // requests carry cache_control breakpoints out of the box.
         let expected =
-            cache_retention_from_env(std::env::var("PI_CACHE_RETENTION").ok().as_deref());
+            cache_retention_from_env(std::env::var("RECUR_AGENT_CACHE_RETENTION").ok().as_deref());
         assert_eq!(options.cache_retention, expected);
-        if std::env::var_os("PI_CACHE_RETENTION").is_none() {
+        if std::env::var_os("RECUR_AGENT_CACHE_RETENTION").is_none() {
             assert_eq!(options.cache_retention, CacheRetention::Short);
         }
     }

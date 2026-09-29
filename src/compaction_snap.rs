@@ -26,7 +26,7 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
 /// Schema tag stored with the frames inside `CompactionEntry.details`.
-pub const SNAPCOMPACT_DETAILS_SCHEMA: &str = "pi.compaction.snapcompact.v1";
+pub const SNAPCOMPACT_DETAILS_SCHEMA: &str = "ra.compaction.snapcompact.v1";
 
 /// Key under `CompactionEntry.details` holding the snapcompact payload.
 pub const SNAPCOMPACT_DETAILS_KEY: &str = "snapcompact";

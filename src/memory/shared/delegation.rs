@@ -21,9 +21,9 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-const GRANT_ENV: &str = "PI_SUBAGENT_SHARED_MEMORY";
-const PARENT_ENV: &str = "PI_SUBAGENT_PARENT_PID";
-const RUN_ENV: &str = "PI_SUBAGENT_RUN_ID";
+const GRANT_ENV: &str = "RECUR_AGENT_SUBAGENT_SHARED_MEMORY";
+const PARENT_ENV: &str = "RECUR_AGENT_SUBAGENT_PARENT_PID";
+const RUN_ENV: &str = "RECUR_AGENT_SUBAGENT_RUN_ID";
 const MAX_GRANT_BYTES: usize = 16 * 1024;
 const GRANT_VERSION: u32 = 1;
 const TOOL_NAMES: [&str; 3] = ["read_memory", "write_memory", "list_memory"];
@@ -81,7 +81,7 @@ impl SharedMemoryBinding {
     pub async fn resolve(&self, timeout: Duration) -> Result<SharedMemoryGrant> {
         if timeout < Duration::from_millis(1) || timeout > Duration::from_hours(24) {
             return Err(failure(
-                "PI_SHARED_MEMORY_TIMEOUT",
+                "RECUR_AGENT_SHARED_MEMORY_TIMEOUT",
                 "Resolution requires a budget from 1 ms to 24 hours",
             ));
         }
@@ -89,7 +89,7 @@ impl SharedMemoryBinding {
         checkpoint(&owner)?;
         if !owner.capabilities().io || !owner.capabilities().time {
             return Err(failure(
-                "PI_SHARED_MEMORY_PERMISSION",
+                "RECUR_AGENT_SHARED_MEMORY_PERMISSION",
                 "Delegation requires I/O and timer capabilities",
             ));
         }
@@ -101,7 +101,7 @@ impl SharedMemoryBinding {
             .await
             .map_err(|_| {
                 failure(
-                    "PI_SHARED_MEMORY_TIMEOUT",
+                    "RECUR_AGENT_SHARED_MEMORY_TIMEOUT",
                     "Shared-memory owner resolution timed out",
                 )
             })?
@@ -122,7 +122,7 @@ impl SharedMemoryBinding {
 fn checkpoint(owner: &AgentCx) -> Result<()> {
     owner.checkpoint().map_err(|_| {
         failure(
-            "PI_SHARED_MEMORY_CANCELLED",
+            "RECUR_AGENT_SHARED_MEMORY_CANCELLED",
             "Shared-memory delegation cancelled before dispatch",
         )
     })
@@ -130,14 +130,14 @@ fn checkpoint(owner: &AgentCx) -> Result<()> {
 
 fn invalid_grant() -> crate::error::Error {
     failure(
-        "PI_SHARED_MEMORY_DELEGATION",
+        "RECUR_AGENT_SHARED_MEMORY_DELEGATION",
         "Invalid or unavailable shared-memory grant; no fallback namespace is used",
     )
 }
 
 fn read_only_error() -> crate::error::Error {
     failure(
-        "PI_SHARED_MEMORY_READ_ONLY",
+        "RECUR_AGENT_SHARED_MEMORY_READ_ONLY",
         "This child may read shared keys but cannot modify them",
     )
 }
@@ -220,7 +220,7 @@ impl SharedMemoryGrant {
         let cwd = cwd.canonicalize().map_err(|_| invalid_grant())?;
         if !cwd.starts_with(root) {
             return Err(failure(
-                "PI_SHARED_MEMORY_DELEGATION_SCOPE",
+                "RECUR_AGENT_SHARED_MEMORY_DELEGATION_SCOPE",
                 "The source directory is outside the authorized project",
             ));
         }
@@ -353,7 +353,7 @@ impl SharedMemoryGrant {
             .any(|name| self.allowed_tools & tool_bit(name) == 0)
         {
             return Err(failure(
-                "PI_SHARED_MEMORY_TOOL_SCOPE",
+                "RECUR_AGENT_SHARED_MEMORY_TOOL_SCOPE",
                 "A requested shared-memory tool is outside the inherited role selection",
             ));
         }
@@ -368,7 +368,7 @@ impl SharedMemoryGrant {
                     .any(|tool| tool.name() == name)
             {
                 return Err(failure(
-                    "PI_SHARED_MEMORY_TOOL_COLLISION",
+                    "RECUR_AGENT_SHARED_MEMORY_TOOL_COLLISION",
                     "A delegated shared-memory tool name is already registered",
                 ));
             }

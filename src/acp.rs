@@ -36,12 +36,13 @@ use crate::auth::AuthStorage;
 use crate::compaction::ResolvedCompactionSettings;
 use crate::config::Config;
 use crate::error::{Error, Result};
-use crate::model::{AssistantMessageEvent, ContentBlock};
+use crate::model::{AssistantMessageEvent, ContentBlock, UserContent};
 use crate::models::{ModelEntry, ModelRegistry};
 use crate::provider::StreamOptions;
 use crate::provider_metadata::provider_ids_match;
 use crate::providers;
-use crate::session::{Session, SessionStoreKind};
+use crate::session::{Session, SessionEntry, SessionMessage, SessionStoreKind};
+use crate::session_index::SessionIndex;
 use crate::tools::ToolRegistry;
 use asupersync::channel::oneshot;
 use asupersync::runtime::RuntimeHandle;
@@ -204,10 +205,11 @@ pub struct AcpOptions {
     pub model_registry: ModelRegistry,
     pub auth: AuthStorage,
     pub runtime_handle: RuntimeHandle,
-    /// When set (from the `--session-dir` CLI flag), ACP sessions persist to
-    /// this directory and autosave is enabled, so they can be resumed later via
-    /// `pi --session`/`--resume` (#102). When `None`, ACP keeps its in-memory,
-    /// non-persisted behavior.
+    /// Directory ACP sessions persist to and restore from. `main` passes an
+    /// explicit `--session-dir` when given and otherwise defaults to
+    /// `Config::sessions_dir()`, so ACP sessions autosave and can be restored
+    /// via `session/load` / `session/resume`. `None` keeps the in-memory,
+    /// non-persisted behavior (used by tests and embedders that want it).
     pub session_dir: Option<PathBuf>,
 }
 
@@ -341,7 +343,9 @@ pub async fn run_stdio(options: AcpOptions) -> Result<()> {
         }
     });
 
-    run(options, in_rx, out_tx).await
+    // Box the future: `run`'s state is large enough that keeping it inline
+    // blows the `clippy::large_future` budget for this async fn.
+    Box::pin(run(options, in_rx, out_tx)).await
 }
 
 /// Core ACP event loop.
@@ -691,36 +695,100 @@ async fn run(
                     continue;
                 };
 
-                let exists = sessions
+                // Re-attach if the session is already live (e.g. the client
+                // called load on a session it just created) — nothing to
+                // rehydrate. Otherwise load it from the on-disk store and
+                // replay its history as `session/update` notifications.
+                let already_live = sessions
                     .lock(&cx)
                     .await
                     .is_ok_and(|guard| guard.contains_key(&session_id));
 
-                if exists {
-                    let models: Vec<AcpModel> = options
-                        .available_models
-                        .iter()
-                        .map(|entry| AcpModel {
-                            id: entry.model.id.clone(),
-                            name: entry.model.name.clone(),
-                            provider: Some(entry.model.provider.clone()),
-                        })
-                        .collect();
-
-                    let _ = out_tx.send(json_rpc_ok(
-                        id,
-                        json!({
-                            "sessionId": session_id,
-                            "models": models,
-                        }),
-                    ));
-                } else {
-                    let _ = out_tx.send(json_rpc_error(
-                        id,
-                        SESSION_NOT_FOUND,
-                        format!("Session not found: {session_id}"),
-                    ));
+                if !already_live {
+                    let permission_client = AcpPermissionClient {
+                        out_tx: out_tx.clone(),
+                        pending: Arc::clone(&pending_permissions),
+                        request_counter: Arc::clone(&permission_counter),
+                        timeout: acp_permission_timeout(),
+                        cx: cx.clone(),
+                    };
+                    match load_persisted_session(&options, &session_id).await {
+                        Ok(Some(session)) => {
+                            // Persisted ACP sessions autosave so the resumed
+                            // conversation continues to be resumable.
+                            match build_acp_session_state(
+                                session,
+                                true,
+                                &options,
+                                Some(&permission_client),
+                            ) {
+                                Ok((resolved_id, state)) => {
+                                    replay_session_history(&state, &resolved_id, &out_tx, &cx)
+                                        .await;
+                                    if let Ok(mut guard) = sessions.lock(&cx).await {
+                                        guard.insert(resolved_id, Arc::new(Mutex::new(state)));
+                                    }
+                                }
+                                Err(err) => {
+                                    let _ = out_tx.send(json_rpc_error(
+                                        id,
+                                        INTERNAL_ERROR,
+                                        format!("Failed to load session: {err}"),
+                                    ));
+                                    continue;
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            let _ = out_tx.send(json_rpc_error(
+                                id,
+                                SESSION_NOT_FOUND,
+                                format!("Session not found: {session_id}"),
+                            ));
+                            continue;
+                        }
+                        Err(err) => {
+                            let _ = out_tx.send(json_rpc_error(
+                                id,
+                                INTERNAL_ERROR,
+                                format!("Failed to load session: {err}"),
+                            ));
+                            continue;
+                        }
+                    }
                 }
+
+                let session_state = {
+                    sessions
+                        .lock(&cx)
+                        .await
+                        .map_or_else(|_| None, |guard| guard.get(&session_id).cloned())
+                };
+                let config_options = match session_state.as_ref() {
+                    Some(state) => match state.lock(&cx).await {
+                        Ok(guard) => config_options_for(&guard, &options.available_models),
+                        Err(_) => None,
+                    },
+                    None => None,
+                };
+                let models: Vec<AcpModel> = options
+                    .available_models
+                    .iter()
+                    .map(|entry| AcpModel {
+                        id: entry.model.id.clone(),
+                        name: entry.model.name.clone(),
+                        provider: Some(entry.model.provider.clone()),
+                    })
+                    .collect();
+
+                let mut response = json!({
+                    "sessionId": session_id,
+                    "models": models,
+                });
+                if let Some(config_options) = config_options {
+                    response["configOptions"] = config_options;
+                }
+                let _ = out_tx.send(json_rpc_ok(id, response));
             }
 
             "session/resume" => {
@@ -739,26 +807,71 @@ async fn run(
                     continue;
                 };
 
-                let exists = sessions
+                // Resume restores context without replaying history: the client
+                // (and the model) keep the prior conversation, but no
+                // `session/update` transcript is emitted — that is `load`'s job.
+                let already_live = sessions
                     .lock(&cx)
                     .await
                     .is_ok_and(|guard| guard.contains_key(&session_id));
 
-                if exists {
-                    let _ = out_tx.send(json_rpc_ok(
-                        id,
-                        json!({
-                            "sessionId": session_id,
-                            "resumed": true,
-                        }),
-                    ));
-                } else {
-                    let _ = out_tx.send(json_rpc_error(
-                        id,
-                        SESSION_NOT_FOUND,
-                        format!("Session not found: {session_id}"),
-                    ));
+                if !already_live {
+                    let permission_client = AcpPermissionClient {
+                        out_tx: out_tx.clone(),
+                        pending: Arc::clone(&pending_permissions),
+                        request_counter: Arc::clone(&permission_counter),
+                        timeout: acp_permission_timeout(),
+                        cx: cx.clone(),
+                    };
+                    match load_persisted_session(&options, &session_id).await {
+                        Ok(Some(session)) => {
+                            match build_acp_session_state(
+                                session,
+                                true,
+                                &options,
+                                Some(&permission_client),
+                            ) {
+                                Ok((resolved_id, state)) => {
+                                    if let Ok(mut guard) = sessions.lock(&cx).await {
+                                        guard.insert(resolved_id, Arc::new(Mutex::new(state)));
+                                    }
+                                }
+                                Err(err) => {
+                                    let _ = out_tx.send(json_rpc_error(
+                                        id,
+                                        INTERNAL_ERROR,
+                                        format!("Failed to resume session: {err}"),
+                                    ));
+                                    continue;
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            let _ = out_tx.send(json_rpc_error(
+                                id,
+                                SESSION_NOT_FOUND,
+                                format!("Session not found: {session_id}"),
+                            ));
+                            continue;
+                        }
+                        Err(err) => {
+                            let _ = out_tx.send(json_rpc_error(
+                                id,
+                                INTERNAL_ERROR,
+                                format!("Failed to resume session: {err}"),
+                            ));
+                            continue;
+                        }
+                    }
                 }
+
+                let _ = out_tx.send(json_rpc_ok(
+                    id,
+                    json!({
+                        "sessionId": session_id,
+                        "resumed": true,
+                    }),
+                ));
             }
 
             // Dynamic, per-session model switch (#105). Switches the live
@@ -1239,12 +1352,14 @@ fn handle_initialize() -> Value {
     json!({
         "protocolVersion": 1,
         "agentInfo": {
-            "name": "pi-agent",
+            "name": "recur-agent",
             "version": version,
         },
         "agentCapabilities": {
-            // Sessions live only in-process; we do not rehydrate persisted history.
-            "loadSession": false,
+            // `session/load` rehydrates persisted history from the on-disk
+            // session store (via `--session-dir`, defaulting to
+            // `Config::sessions_dir()`) and replays it as `session/update`s.
+            "loadSession": true,
             "mcpCapabilities": {
                 "http": false,
                 "sse": false,
@@ -1254,12 +1369,12 @@ fn handle_initialize() -> Value {
                 "embeddedContext": false,
                 "image": false,
             },
-            // `session/list` is implemented (GH #245). `loadSession` stays
-            // false: ACP's `session/load` must replay the whole conversation
-            // as `session/update`s, and ours only re-attaches a live session.
-            "sessionCapabilities": { "list": {} },
+            // `session/list` (GH #245) and `session/resume` are both
+            // implemented. `resume` re-attaches a persisted session's context
+            // without replaying history; `load` additionally replays it.
+            "sessionCapabilities": { "list": {}, "resume": {} },
             "_meta": {
-                "pi.dev": {
+                "ra.dev": {
                     "toolApproval": true,
                     "requestPermission": true,
                 },
@@ -1342,7 +1457,7 @@ fn build_acp_system_prompt(cwd: &std::path::Path, enabled_tools: &[&str]) -> Str
     );
 
     // Load project context files (pi.md, AGENTS.md) if they exist.
-    for filename in &["pi.md", "AGENTS.md", ".pi"] {
+    for filename in &["pi.md", "AGENTS.md", ".ra"] {
         let path = cwd.join(filename);
         if path.is_file()
             && let Ok(content) = std::fs::read_to_string(&path)
@@ -1365,7 +1480,7 @@ fn build_acp_system_prompt(cwd: &std::path::Path, enabled_tools: &[&str]) -> Str
 ///
 /// When `--session-dir` is configured, the session persists to that directory
 /// using the configured store kind, and autosave is enabled (`save_enabled =
-/// true`) so the ACP session can be resumed later via `pi --session`/`--resume`
+/// true`) so the ACP session can be resumed later via `ra --session`/`--resume`
 /// (#102). Without it, ACP keeps its existing in-memory, non-persisted behavior.
 /// Takes the two inputs it needs (rather than the whole `AcpOptions`) so it can
 /// be unit-tested without constructing auth/runtime handles.
@@ -1379,6 +1494,90 @@ fn new_acp_session(
     });
     session.header.cwd = cwd.display().to_string();
     (session, session_dir.is_some())
+}
+
+/// Resolve the sessions root ACP persists to and restores from.
+///
+/// Mirrors the rest of pi: an explicit `--session-dir` wins, otherwise the
+/// per-user default (`Config::sessions_dir()`).
+fn acp_sessions_root(options: &AcpOptions) -> PathBuf {
+    options
+        .session_dir
+        .clone()
+        .unwrap_or_else(Config::sessions_dir)
+}
+
+/// Load a persisted session by its `sessionId` from the sessions root.
+///
+/// `sessionId` is matched against the indexed session `id` (the value
+/// `Session::header.id` carries), which is what `session/list` and
+/// `session/new` hand back to the client. Returns `Ok(None)` when no session
+/// with that id exists on disk so callers can answer with `SESSION_NOT_FOUND`.
+async fn load_persisted_session(options: &AcpOptions, session_id: &str) -> Result<Option<Session>> {
+    let root = acp_sessions_root(options);
+    let index = SessionIndex::for_sessions_root(&root);
+
+    // The index may be cold or stale (e.g. sessions written by another
+    // process), so refresh it before trusting a miss. A refresh failure is
+    // non-fatal: the on-disk scan below is the source of truth.
+    if index.list_sessions(None).unwrap_or_default().is_empty() {
+        let _ = index.reindex_all();
+    }
+
+    let entries = index.list_sessions(None).unwrap_or_default();
+    let Some(meta) = entries.iter().find(|meta| meta.id == session_id) else {
+        // Index miss — fall back to a direct scan of the project directories so
+        // a session that has not been indexed yet is still recoverable.
+        if let Some(path) = scan_for_session_id(&root, session_id) {
+            return Session::open(path.to_string_lossy().as_ref())
+                .await
+                .map(Some);
+        }
+        return Ok(None);
+    };
+
+    Session::open(&meta.path).await.map(Some)
+}
+
+/// Directly scan the sessions root for a session whose header id matches.
+///
+/// Used only as a fallback when the SQLite index has no row for `session_id`
+/// (cold index, unindexed file, or a session written by another process).
+fn scan_for_session_id(root: &std::path::Path, session_id: &str) -> Option<PathBuf> {
+    if !root.is_dir() {
+        return None;
+    }
+    crate::session_index::walk_sessions(root)
+        .into_iter()
+        .flatten()
+        .find(|path| session_file_matches_id(path, session_id))
+}
+
+/// Read the `SessionHeader` (first JSONL line) of a session file and compare
+/// its id. Returns `false` on any read/parse failure — a corrupt file is not a
+/// match.
+fn session_file_matches_id(path: &std::path::Path, session_id: &str) -> bool {
+    use std::io::BufRead as _;
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut first_line = String::new();
+    if std::io::BufReader::new(file)
+        .read_line(&mut first_line)
+        .is_err()
+    {
+        return false;
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&first_line) else {
+        return false;
+    };
+    let candidate = value.get("id").and_then(Value::as_str).or_else(|| {
+        value
+            .get("header")
+            .and_then(|h| h.get("id"))
+            .and_then(Value::as_str)
+    });
+    candidate.is_some_and(|id| id == session_id)
 }
 
 fn handle_session_new(
@@ -1395,15 +1594,52 @@ fn handle_session_new(
     // (save_enabled), otherwise in-memory (existing default behavior).
     let (session, save_enabled) =
         new_acp_session(options.session_dir.as_ref(), &options.config, &cwd);
+
+    build_acp_session_state(session, save_enabled, options, permission_client)
+}
+
+/// Build the live `AcpSessionState` for a session.
+///
+/// Shared by `session/new` (fresh session), `session/load` and
+/// `session/resume` (both rehydrated from disk). The caller supplies the
+/// already-constructed `Session` and its persistence flag; this wires up the
+/// provider, tool registry, system prompt, stream options, and the
+/// `AgentSession` wrapper (including the model registry / auth storage needed
+/// for runtime model switches).
+fn build_acp_session_state(
+    session: Session,
+    save_enabled: bool,
+    options: &AcpOptions,
+    permission_client: Option<&AcpPermissionClient>,
+) -> Result<(String, AcpSessionState)> {
+    // For a rehydrated session, `header.cwd` is the recorded working directory;
+    // fall back to the process cwd when the persisted value is empty.
+    let cwd = if session.header.cwd.trim().is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        PathBuf::from(&session.header.cwd)
+    };
     let session_id = session.header.id.clone();
 
     // Set up the enabled tools (all standard tools).
     let enabled_tools: Vec<&str> = vec!["read", "bash", "edit", "write", "grep", "find", "ls"];
     let tools = ToolRegistry::new(&enabled_tools, &cwd, Some(&options.config));
 
-    // ACP should respect the same configured default provider/model preference
-    // as the normal startup path instead of picking an arbitrary ready model.
-    let model_entry = select_acp_model_entry(&options.config, &options.available_models)
+    // Prefer a model the rehydrated session recorded (via `ModelChange`
+    // entries) when it is still in the ready list; otherwise fall back to the
+    // configured default so `session/new`, `load`, and `resume` all honor the
+    // same startup preference.
+    let restored_model_entry = session
+        .effective_model_for_current_path()
+        .and_then(|(provider, model_id)| {
+            options.available_models.iter().find(|entry| {
+                provider_ids_match(&entry.model.provider, &provider)
+                    && entry.model.id.eq_ignore_ascii_case(&model_id)
+            })
+        })
+        .cloned();
+    let model_entry = restored_model_entry
+        .or_else(|| select_acp_model_entry(&options.config, &options.available_models))
         .ok_or_else(|| Error::provider("acp", "No models available"))?;
 
     let provider = providers::create_provider(&model_entry, None)
@@ -1861,6 +2097,20 @@ fn extract_prompt_text(blocks: &[Value]) -> std::result::Result<String, String> 
 /// { "jsonrpc": "2.0", "method": "session/update",
 ///   "params": { "sessionId": ..., "update": { "sessionUpdate": <kind>, ... } } }
 /// ```
+/// Attach DAG event details to a `tool_call_update` frame as `_meta["ra.dev/dag"]`.
+///
+/// `details` also carries approval audit / cancellation / artifact payloads, so
+/// only `ra.dag.*` schemas are forwarded — anything else would be parsed as a
+/// DAG event by the frontend. Returns `None` when there is nothing to attach.
+fn dag_meta(details: Option<&serde_json::Value>) -> Option<serde_json::Value> {
+    let details = details?;
+    details
+        .get("schema")
+        .and_then(serde_json::Value::as_str)?
+        .starts_with("ra.dag.")
+        .then(|| json!({ "ra.dev/dag": details }))
+}
+
 fn build_acp_event_handler(
     out_tx: std::sync::mpsc::SyncSender<String>,
     session_id: String,
@@ -1927,6 +2177,9 @@ fn build_acp_event_handler(
                         "content": { "type": "text", "text": content_text },
                     }]);
                 }
+                if let Some(meta) = dag_meta(partial_result.details.as_ref()) {
+                    update["_meta"] = meta;
+                }
                 Some(update)
             }
 
@@ -1946,7 +2199,7 @@ fn build_acp_event_handler(
                     .collect::<Vec<_>>()
                     .join("\n");
 
-                Some(json!({
+                let mut update = json!({
                     "sessionUpdate": "tool_call_update",
                     "toolCallId": tool_call_id,
                     "status": if *is_error { "failed" } else { "completed" },
@@ -1954,7 +2207,11 @@ fn build_acp_event_handler(
                         "type": "content",
                         "content": { "type": "text", "text": content_text },
                     }],
-                }))
+                });
+                if let Some(meta) = dag_meta(result.details.as_ref()) {
+                    update["_meta"] = meta;
+                }
+                Some(update)
             }
 
             // Turn-/agent-level events have no direct ACP equivalent. They were
@@ -1972,6 +2229,138 @@ fn build_acp_event_handler(
                 }),
             ));
         }
+    }
+}
+
+/// Replay a restored session's history as `session/update` notifications.
+///
+/// ACP's `session/load` requires the agent to replay the whole conversation so
+/// the client can render it. We walk the persisted entries in order and emit
+/// the same update kinds the live prompt path uses: `user_message_chunk`,
+/// `agent_message_chunk`, `agent_thought_chunk`, and `tool_call` /
+/// `tool_call_update`. Non-message entries (model/thinking changes,
+/// compaction, labels) have no ACP client-visible equivalent and are skipped.
+async fn replay_session_history(
+    state: &AcpSessionState,
+    session_id: &str,
+    out_tx: &std::sync::mpsc::SyncSender<String>,
+    cx: &AgentCx,
+) {
+    let Some(agent_session) = state.agent_session.as_ref() else {
+        return;
+    };
+    let Ok(guard) = agent_session.session.lock(cx).await else {
+        return;
+    };
+
+    for entry in &guard.entries {
+        let SessionEntry::Message(message_entry) = entry else {
+            continue;
+        };
+        for update in session_message_to_acp_updates(&message_entry.message) {
+            let _ = out_tx.send(json_rpc_notification(
+                "session/update",
+                json!({
+                    "sessionId": session_id,
+                    "update": update,
+                }),
+            ));
+        }
+    }
+}
+
+/// Translate one persisted session message into zero or more ACP updates.
+fn session_message_to_acp_updates(message: &SessionMessage) -> Vec<Value> {
+    match message {
+        SessionMessage::User { content, .. } => {
+            let text = user_content_text(content);
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![json!({
+                    "sessionUpdate": "user_message_chunk",
+                    "content": { "type": "text", "text": text },
+                })]
+            }
+        }
+        SessionMessage::Assistant { message } => {
+            let mut updates = Vec::new();
+            for block in &message.content {
+                match block {
+                    ContentBlock::Text(t) if !t.text.is_empty() => {
+                        updates.push(json!({
+                            "sessionUpdate": "agent_message_chunk",
+                            "content": { "type": "text", "text": t.text },
+                        }));
+                    }
+                    ContentBlock::Thinking(t) if !t.thinking.is_empty() => {
+                        updates.push(json!({
+                            "sessionUpdate": "agent_thought_chunk",
+                            "content": { "type": "text", "text": t.thinking },
+                        }));
+                    }
+                    ContentBlock::ToolCall(tool_call) => {
+                        updates.push(json!({
+                            "sessionUpdate": "tool_call",
+                            "toolCallId": tool_call.id,
+                            "title": tool_call.name,
+                            "kind": classify_tool_kind(&tool_call.name),
+                            "status": "completed",
+                            "rawInput": tool_call.arguments,
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+            updates
+        }
+        SessionMessage::ToolResult {
+            tool_call_id,
+            content,
+            is_error,
+            details,
+            ..
+        } => {
+            let text = content
+                .iter()
+                .filter_map(|block| match block {
+                    ContentBlock::Text(t) => Some(t.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let mut update = json!({
+                "sessionUpdate": "tool_call_update",
+                "toolCallId": tool_call_id,
+                "status": if *is_error { "failed" } else { "completed" },
+                "content": [{
+                    "type": "content",
+                    "content": { "type": "text", "text": text },
+                }],
+            });
+            if let Some(meta) = dag_meta(details.as_ref()) {
+                update["_meta"] = meta;
+            }
+            vec![update]
+        }
+        // Custom / bash / summary messages are pi-internal and have no
+        // standard ACP client rendering; skip them on replay.
+        _ => Vec::new(),
+    }
+}
+
+/// Flatten a user message's content to plain text for replay.
+fn user_content_text(content: &UserContent) -> String {
+    match content {
+        UserContent::Text(text) => text.clone(),
+        UserContent::Blocks(blocks) => blocks
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::Text(t) => Some(t.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
     }
 }
 
@@ -2056,6 +2445,241 @@ mod tests {
             "session must persist to the provided --session-dir"
         );
         assert_eq!(session.header.cwd, "/tmp/proj");
+    }
+
+    #[test]
+    fn replay_maps_user_message_to_user_chunk() {
+        let message = SessionMessage::User {
+            content: UserContent::Text("hello there".to_string()),
+            timestamp: Some(1),
+        };
+        let updates = session_message_to_acp_updates(&message);
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0]["sessionUpdate"], "user_message_chunk");
+        assert_eq!(updates[0]["content"]["type"], "text");
+        assert_eq!(updates[0]["content"]["text"], "hello there");
+    }
+
+    #[test]
+    fn replay_maps_assistant_text_and_tool_call() {
+        let message = SessionMessage::Assistant {
+            message: crate::model::AssistantMessage {
+                content: vec![
+                    ContentBlock::Text(crate::model::TextContent::new("working on it")),
+                    ContentBlock::ToolCall(crate::model::ToolCall {
+                        id: "call-1".to_string(),
+                        name: "bash".to_string(),
+                        arguments: json!({ "command": "ls" }),
+                        thought_signature: None,
+                    }),
+                ],
+                ..crate::model::AssistantMessage::default()
+            },
+        };
+        let updates = session_message_to_acp_updates(&message);
+        assert_eq!(updates.len(), 2);
+        assert_eq!(updates[0]["sessionUpdate"], "agent_message_chunk");
+        assert_eq!(updates[0]["content"]["text"], "working on it");
+        assert_eq!(updates[1]["sessionUpdate"], "tool_call");
+        assert_eq!(updates[1]["toolCallId"], "call-1");
+        assert_eq!(updates[1]["title"], "bash");
+        // bash 是规范映射（见 classify_tool_kind_maps_common_names）。
+        assert_eq!(updates[1]["kind"], "execute");
+        assert_eq!(updates[1]["rawInput"]["command"], "ls");
+    }
+
+    #[test]
+    fn replay_maps_tool_result_to_tool_call_update() {
+        let message = SessionMessage::ToolResult {
+            tool_call_id: "call-1".to_string(),
+            tool_name: "bash".to_string(),
+            content: vec![ContentBlock::Text(crate::model::TextContent::new("ok"))],
+            details: None,
+            is_error: false,
+            timestamp: Some(2),
+        };
+        let updates = session_message_to_acp_updates(&message);
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0]["sessionUpdate"], "tool_call_update");
+        assert_eq!(updates[0]["toolCallId"], "call-1");
+        assert_eq!(updates[0]["status"], "completed");
+        assert_eq!(updates[0]["content"][0]["content"]["text"], "ok");
+        assert!(updates[0].get("_meta").is_none());
+    }
+
+    /// DAG details reach the frontend as `tool_call_update._meta["ra.dev/dag"]`.
+    #[test]
+    fn tool_execution_update_attaches_dag_meta() {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<String>(4);
+        let handler = build_acp_event_handler(tx, "sess-1".to_string());
+        handler(AgentEvent::ToolExecutionUpdate {
+            tool_call_id: "call-dag".to_string(),
+            tool_name: "dag".to_string(),
+            args: json!({}),
+            partial_result: crate::tools::ToolOutput {
+                content: vec![],
+                details: Some(json!({
+                    "schema": "ra.dag.node_state.v1",
+                    "graphId": "call-dag",
+                    "nodeId": 2,
+                    "state": "running",
+                    "seq": 7,
+                    "layer": 1,
+                })),
+                is_error: false,
+            },
+        });
+        let frame: serde_json::Value =
+            serde_json::from_str(&rx.try_recv().expect("one frame")).expect("valid json");
+        let update = &frame["params"]["update"];
+        assert_eq!(update["sessionUpdate"], "tool_call_update");
+        assert_eq!(update["toolCallId"], "call-dag");
+        assert_eq!(
+            update["_meta"]["ra.dev/dag"]["schema"],
+            "ra.dag.node_state.v1"
+        );
+        assert_eq!(update["_meta"]["ra.dev/dag"]["seq"], 7);
+    }
+
+    /// Non-DAG details (approval audit / cancellation) must stay out of
+    /// the `ra.dev/dag` namespace or the frontend would parse them as DAG events.
+    #[test]
+    fn non_dag_details_are_not_attached() {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<String>(4);
+        let handler = build_acp_event_handler(tx, "sess-1".to_string());
+        handler(AgentEvent::ToolExecutionUpdate {
+            tool_call_id: "call-2".to_string(),
+            tool_name: "bash".to_string(),
+            args: json!({}),
+            partial_result: crate::tools::ToolOutput {
+                content: vec![],
+                details: Some(json!({
+                    "schema": "ra.tool_approval.audit.v1",
+                    "decision": "approved",
+                })),
+                is_error: false,
+            },
+        });
+        let frame: serde_json::Value =
+            serde_json::from_str(&rx.try_recv().expect("one frame")).expect("valid json");
+        assert!(frame["params"]["update"].get("_meta").is_none());
+    }
+
+    /// Terminal `ToolExecutionEnd` carries the final DAG snapshot in `_meta` too.
+    #[test]
+    fn tool_execution_end_attaches_dag_meta() {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<String>(4);
+        let handler = build_acp_event_handler(tx, "sess-1".to_string());
+        handler(AgentEvent::ToolExecutionEnd {
+            tool_call_id: "call-dag-end".to_string(),
+            tool_name: "dag".to_string(),
+            result: crate::tools::ToolOutput {
+                content: vec![ContentBlock::Text(crate::model::TextContent::new(
+                    "DAG finished",
+                ))],
+                details: Some(json!({
+                    "schema": "ra.dag.result.v1",
+                    "nodes": [{"id": 1, "status": "succeeded"}],
+                })),
+                is_error: false,
+            },
+            is_error: false,
+        });
+        let frame: serde_json::Value =
+            serde_json::from_str(&rx.try_recv().expect("one frame")).expect("valid json");
+        let update = &frame["params"]["update"];
+        assert_eq!(update["status"], "completed");
+        assert_eq!(update["_meta"]["ra.dev/dag"]["schema"], "ra.dag.result.v1");
+    }
+
+    /// Session restore replays the terminal DAG snapshot through `_meta`.
+    #[test]
+    fn replay_attaches_dag_meta_from_tool_result() {
+        let message = SessionMessage::ToolResult {
+            tool_call_id: "call-dag-r".to_string(),
+            tool_name: "dag".to_string(),
+            content: vec![ContentBlock::Text(crate::model::TextContent::new(
+                "DAG finished",
+            ))],
+            details: Some(json!({
+                "schema": "ra.dag.result.v1",
+                "nodes": [{"id": 1, "status": "succeeded"}],
+            })),
+            is_error: false,
+            timestamp: Some(4),
+        };
+        let updates = session_message_to_acp_updates(&message);
+        assert_eq!(updates.len(), 1);
+        assert_eq!(
+            updates[0]["_meta"]["ra.dev/dag"]["schema"],
+            "ra.dag.result.v1"
+        );
+    }
+
+    #[test]
+    fn replay_skips_pi_internal_messages() {
+        let message = SessionMessage::Custom {
+            custom_type: "hook".to_string(),
+            content: "internal".to_string(),
+            display: false,
+            details: None,
+            timestamp: Some(3),
+        };
+        assert!(session_message_to_acp_updates(&message).is_empty());
+    }
+
+    #[test]
+    fn user_content_text_flattens_blocks() {
+        assert_eq!(
+            user_content_text(&UserContent::Text("plain".to_string())),
+            "plain"
+        );
+        assert_eq!(
+            user_content_text(&UserContent::Blocks(vec![
+                ContentBlock::Text(crate::model::TextContent::new("a")),
+                ContentBlock::Text(crate::model::TextContent::new("b")),
+            ])),
+            "a\nb"
+        );
+    }
+
+    #[test]
+    fn session_file_matches_id_reads_the_header_line() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("session.jsonl");
+        let header = json!({
+            "type": "session",
+            "id": "session-abc",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "cwd": "/tmp/proj",
+        });
+        std::fs::write(&path, format!("{header}\n")).expect("write header");
+
+        assert!(session_file_matches_id(&path, "session-abc"));
+        assert!(!session_file_matches_id(&path, "session-other"));
+        assert!(!session_file_matches_id(
+            &dir.path().join("missing.jsonl"),
+            "session-abc"
+        ));
+    }
+
+    #[test]
+    fn scan_for_session_id_walks_project_dirs() {
+        let root = tempfile::tempdir().expect("temp root");
+        let project = root.path().join("encoded-cwd");
+        std::fs::create_dir_all(&project).expect("project dir");
+        let session_path = project.join("abc.jsonl");
+        std::fs::write(
+            &session_path,
+            format!(
+                "{}\n",
+                json!({ "type": "session", "id": "abc", "cwd": "/p" })
+            ),
+        )
+        .expect("write session");
+
+        assert_eq!(scan_for_session_id(root.path(), "abc"), Some(session_path));
+        assert!(scan_for_session_id(root.path(), "nope").is_none());
     }
 
     fn test_model_entry(provider: &str, id: &str) -> ModelEntry {
@@ -2178,12 +2802,14 @@ mod tests {
 
         // ACP requires protocolVersion as an integer, not a string.
         assert_eq!(result["protocolVersion"], 1);
-        assert_eq!(result["agentInfo"]["name"], "pi-agent");
+        assert_eq!(result["agentInfo"]["name"], "recur-agent");
         assert_eq!(result["agentInfo"]["version"], env!("CARGO_PKG_VERSION"));
-        // Sessions are in-process only — we never advertise loadSession.
-        assert_eq!(result["agentCapabilities"]["loadSession"], false);
+        // Sessions persist to disk and are replayed on `session/load`.
+        assert_eq!(result["agentCapabilities"]["loadSession"], true);
         // GH #245: session/list is implemented, so it is advertised.
         assert!(result["agentCapabilities"]["sessionCapabilities"]["list"].is_object());
+        // `session/resume` restores context without replaying history.
+        assert!(result["agentCapabilities"]["sessionCapabilities"]["resume"].is_object());
         // promptCapabilities advertise text/resource_link baseline only.
         assert_eq!(
             result["agentCapabilities"]["promptCapabilities"]["audio"],
@@ -2202,11 +2828,11 @@ mod tests {
         // Tool approval is exposed as implementation metadata; the standard
         // permission request itself is an Agent -> Client JSON-RPC call.
         assert_eq!(
-            result["agentCapabilities"]["_meta"]["pi.dev"]["toolApproval"],
+            result["agentCapabilities"]["_meta"]["ra.dev"]["toolApproval"],
             true
         );
         assert_eq!(
-            result["agentCapabilities"]["_meta"]["pi.dev"]["requestPermission"],
+            result["agentCapabilities"]["_meta"]["ra.dev"]["requestPermission"],
             true
         );
         // authMethods is required even when empty.

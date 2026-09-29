@@ -330,7 +330,7 @@ mod store_tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_MEMORY_SUPERSESSION_CONFLICT")
+                .contains("RECUR_AGENT_MEMORY_SUPERSESSION_CONFLICT")
         );
         assert_eq!(reopened.list(10).unwrap().len(), 2);
     }
@@ -382,7 +382,10 @@ mod store_tests {
             .iter()
             .find_map(|result| result.as_ref().err())
             .unwrap();
-        assert!(error.to_string().contains("PI_MEMORY_DUPLICATE"), "{error}");
+        assert!(
+            error.to_string().contains("RECUR_AGENT_MEMORY_DUPLICATE"),
+            "{error}"
+        );
         assert_eq!(bank.recall("durable", None).unwrap().len(), 1);
         assert_eq!(bank.list(10).unwrap().len(), 1);
     }

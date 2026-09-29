@@ -2389,7 +2389,7 @@ fn stream_simple_yields_chunks_in_order() {
 
         let tools = Arc::new(crate::tools::ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2462,7 +2462,7 @@ fn stream_simple_error_in_js_propagates() {
 
         let tools = Arc::new(crate::tools::ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2577,7 +2577,7 @@ fn stream_simple_cancel_stops_iteration() {
 
         let tools = Arc::new(crate::tools::ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2729,7 +2729,7 @@ fn isolated_runtime_cold_reload_calls_return_on_active_provider_iterators() {
 
             let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
             let js_runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: dir.path().display().to_string(),
                     ..Default::default()
                 },
@@ -2805,7 +2805,7 @@ fn isolated_runtime_provider_collision_cancels_inner_and_quarantines_shard() {
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },

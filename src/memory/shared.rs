@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 pub mod delegation;
 
-pub const SHARED_MEMORY_SCHEMA: &str = "pi.memory.shared.v1";
+pub const SHARED_MEMORY_SCHEMA: &str = "ra.memory.shared.v1";
 pub const MAX_VALUE_BYTES: usize = 64 * 1024;
 const MAX_KEY_BYTES: usize = 128;
 const MAX_SESSION_BYTES: usize = 512;
@@ -51,7 +51,7 @@ fn failure(code: &str, message: &str) -> Error {
 
 fn storage_error() -> Error {
     failure(
-        "PI_SHARED_MEMORY_STORAGE",
+        "RECUR_AGENT_SHARED_MEMORY_STORAGE",
         "Shared memory storage operation failed",
     )
 }
@@ -62,7 +62,7 @@ fn validate_session(session_id: &str) -> Result<()> {
         || session_id.chars().any(char::is_control)
     {
         return Err(failure(
-            "PI_SHARED_MEMORY_SESSION_UNAVAILABLE",
+            "RECUR_AGENT_SHARED_MEMORY_SESSION_UNAVAILABLE",
             "A non-empty, bounded host session identity is required",
         ));
     }
@@ -78,7 +78,7 @@ fn validate_key(key: &str) -> Result<()> {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
     {
         return Err(failure(
-            "PI_SHARED_MEMORY_INVALID_KEY",
+            "RECUR_AGENT_SHARED_MEMORY_INVALID_KEY",
             "Keys must start with an ASCII letter or digit and contain at most 128 letters, digits, dots, underscores or hyphens",
         ));
     }
@@ -91,7 +91,7 @@ fn valid_revision(revision: &str) -> bool {
 
 fn conflict() -> Error {
     failure(
-        "PI_SHARED_MEMORY_CONFLICT",
+        "RECUR_AGENT_SHARED_MEMORY_CONFLICT",
         "The key changed or already exists; read it and retry with its current revision",
     )
 }
@@ -220,7 +220,7 @@ impl SharedMemoryStore {
         validate_key(key)?;
         if content.len() > MAX_VALUE_BYTES {
             return Err(failure(
-                "PI_SHARED_MEMORY_VALUE_LIMIT",
+                "RECUR_AGENT_SHARED_MEMORY_VALUE_LIMIT",
                 "Shared values are limited to 65536 UTF-8 bytes",
             ));
         }
@@ -228,7 +228,7 @@ impl SharedMemoryStore {
             .is_some_and(|revision| revision != "absent" && !valid_revision(revision))
         {
             return Err(failure(
-                "PI_SHARED_MEMORY_INVALID_REVISION",
+                "RECUR_AGENT_SHARED_MEMORY_INVALID_REVISION",
                 "Use a returned revision or 'absent'",
             ));
         }
@@ -313,7 +313,7 @@ impl SharedMemoryStore {
         validate_key(key)?;
         if !valid_revision(expected_revision) {
             return Err(failure(
-                "PI_SHARED_MEMORY_INVALID_REVISION",
+                "RECUR_AGENT_SHARED_MEMORY_INVALID_REVISION",
                 "Removal requires the observed revision",
             ));
         }
@@ -356,7 +356,7 @@ impl SharedMemoryStore {
         }
         if !(1..=MAX_LIST_LIMIT).contains(&limit) {
             return Err(failure(
-                "PI_SHARED_MEMORY_LIST_LIMIT",
+                "RECUR_AGENT_SHARED_MEMORY_LIST_LIMIT",
                 "List limit must be between 1 and 50",
             ));
         }
@@ -427,7 +427,7 @@ fn check_quota(
             > max_bytes
     {
         return Err(failure(
-            "PI_SHARED_MEMORY_CAPACITY",
+            "RECUR_AGENT_SHARED_MEMORY_CAPACITY",
             "Shared memory key or byte capacity is exhausted; existing values were preserved",
         ));
     }
@@ -440,7 +440,7 @@ pub(super) fn session_requested(input: &Value) -> Result<bool> {
         Some(Value::String(scope)) if scope == "project" => Ok(false),
         Some(Value::String(scope)) if scope == "session" => Ok(true),
         _ => Err(failure(
-            "PI_SHARED_MEMORY_INVALID_SCOPE",
+            "RECUR_AGENT_SHARED_MEMORY_INVALID_SCOPE",
             "scope must be 'project' or 'session'",
         )),
     }
@@ -448,7 +448,7 @@ pub(super) fn session_requested(input: &Value) -> Result<bool> {
 
 fn invalid_input() -> Error {
     failure(
-        "PI_SHARED_MEMORY_INVALID_INPUT",
+        "RECUR_AGENT_SHARED_MEMORY_INVALID_INPUT",
         "Invalid shared-memory arguments; session identity is host-controlled",
     )
 }
@@ -456,7 +456,7 @@ fn invalid_input() -> Error {
 fn scoped_input(mut input: Value) -> Result<Value> {
     if input.get("scope").is_some() && !session_requested(&input)? {
         return Err(failure(
-            "PI_SHARED_MEMORY_INVALID_SCOPE",
+            "RECUR_AGENT_SHARED_MEMORY_INVALID_SCOPE",
             "This operation requires session scope",
         ));
     }
@@ -491,7 +491,7 @@ async fn bound_store(
     let checkpoint = || {
         owner.checkpoint().map_err(|_| {
             failure(
-                "PI_SHARED_MEMORY_CANCELLED",
+                "RECUR_AGENT_SHARED_MEMORY_CANCELLED",
                 "Shared memory operation cancelled before dispatch",
             )
         })
@@ -499,19 +499,19 @@ async fn bound_store(
     checkpoint()?;
     if !owner.capabilities().io {
         return Err(failure(
-            "PI_SHARED_MEMORY_PERMISSION",
+            "RECUR_AGENT_SHARED_MEMORY_PERMISSION",
             "Shared memory requires I/O capability",
         ));
     }
     let scope = scope.ok_or_else(|| {
         failure(
-            "PI_SHARED_MEMORY_SESSION_UNAVAILABLE",
+            "RECUR_AGENT_SHARED_MEMORY_SESSION_UNAVAILABLE",
             "Shared memory requires a bound session; no global fallback is used",
         )
     })?;
     let session_id = scope.session_id().await.map_err(|_| {
         failure(
-            "PI_SHARED_MEMORY_SESSION_UNAVAILABLE",
+            "RECUR_AGENT_SHARED_MEMORY_SESSION_UNAVAILABLE",
             "The current session identity is unavailable",
         )
     })?;
@@ -570,13 +570,13 @@ pub(super) async fn read_or_list_output(
     if let Some(key) = input.key {
         if input.prefix.is_some() || input.after.is_some() || input.limit.is_some() {
             return Err(failure(
-                "PI_SHARED_MEMORY_INVALID_INPUT",
+                "RECUR_AGENT_SHARED_MEMORY_INVALID_INPUT",
                 "A key read cannot also request listing options",
             ));
         }
         let value = store.read(&key)?.ok_or_else(|| {
             failure(
-                "PI_SHARED_MEMORY_NOT_FOUND",
+                "RECUR_AGENT_SHARED_MEMORY_NOT_FOUND",
                 "No shared value exists for this key in the current session",
             )
         })?;
@@ -670,7 +670,7 @@ impl ToolRegistry {
                 || self.inactive_tools().iter().any(|tool| tool.name() == name)
             {
                 return Err(failure(
-                    "PI_SHARED_MEMORY_TOOL_COLLISION",
+                    "RECUR_AGENT_SHARED_MEMORY_TOOL_COLLISION",
                     "A shared-memory tool name is already registered",
                 ));
             }
@@ -743,11 +743,11 @@ impl Tool for SharedMemoryTool {
         match self.operation {
             Operation::Write => write_output(&self.bank, self.scope.as_ref(), input).await,
             Operation::Read if input.get("key").and_then(Value::as_str).is_none() => Err(failure(
-                "PI_SHARED_MEMORY_INVALID_INPUT",
+                "RECUR_AGENT_SHARED_MEMORY_INVALID_INPUT",
                 "read_memory requires key",
             )),
             Operation::List if input.get("key").is_some() => Err(failure(
-                "PI_SHARED_MEMORY_INVALID_INPUT",
+                "RECUR_AGENT_SHARED_MEMORY_INVALID_INPUT",
                 "list_memory does not accept key",
             )),
             _ => read_or_list_output(&self.bank, self.scope.as_ref(), input).await,

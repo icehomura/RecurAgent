@@ -1,7 +1,7 @@
 //! Deterministic, read-only swarm progress SLO evaluator.
 //!
 //! The evaluator consumes already-normalized progress sources and emits
-//! `pi.swarm.progress_slo.v1`. It never reads files, mutates Beads, sends
+//! `ra.swarm.progress_slo.v1`. It never reads files, mutates Beads, sends
 //! Agent Mail, starts RCH work, or changes git state.
 
 use std::collections::BTreeSet;
@@ -9,13 +9,13 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 /// Schema emitted by progress SLO reports.
-pub const SWARM_PROGRESS_SLO_SCHEMA: &str = "pi.swarm.progress_slo.v1";
+pub const SWARM_PROGRESS_SLO_SCHEMA: &str = "ra.swarm.progress_slo.v1";
 
 /// Contract version implemented by this evaluator.
 pub const SWARM_PROGRESS_SLO_CONTRACT_VERSION: &str = "1.0.0";
 
 /// Schema emitted by synthetic stress-budget verdicts for the progress SLO evaluator.
-pub const SWARM_PROGRESS_SLO_STRESS_BUDGET_SCHEMA: &str = "pi.swarm.progress_slo.stress_budget.v1";
+pub const SWARM_PROGRESS_SLO_STRESS_BUDGET_SCHEMA: &str = "ra.swarm.progress_slo.stress_budget.v1";
 
 /// Required caveat for synthetic stress-budget evidence.
 pub const SWARM_PROGRESS_SLO_STRESS_BUDGET_CAVEAT: &str =

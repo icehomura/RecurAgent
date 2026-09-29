@@ -475,7 +475,7 @@ fn secret_broker_allows_non_secret_vars() {
     assert!(!broker.is_secret("USER"));
     assert!(!broker.is_secret("SHELL"));
     assert!(!broker.is_secret("TERM"));
-    assert!(!broker.is_secret("PI_TEST_MODE"));
+    assert!(!broker.is_secret("RECUR_AGENT_TEST_MODE"));
 }
 
 #[test]

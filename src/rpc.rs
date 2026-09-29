@@ -3767,7 +3767,7 @@ pub async fn run(
                     candidate.append_custom_entry(
                         "fresh".to_string(),
                         Some(json!({
-                            "schema": "pi.fresh.v1",
+                            "schema": "ra.fresh.v1",
                             "newSessionId": new_id,
                             "reason": "operator fresh: provider cache + stream bookkeeping reset",
                         })),
@@ -3795,7 +3795,7 @@ pub async fn run(
                     crate::app::rebind_stream_options_session(guard.agent.stream_options_mut(), &new_id);
                     guard.refresh_extension_completion_host_state();
                     state.provider_admission.clear();
-                    Ok(json!({ "schema": "pi.fresh.v1", "newSessionId": new_id }))
+                    Ok(json!({ "schema": "ra.fresh.v1", "newSessionId": new_id }))
                 }
                 .await;
                 match result {
@@ -3879,7 +3879,7 @@ pub async fn run(
                     id,
                     "retry",
                     Some(json!({
-                        "schema": "pi.retry.v1",
+                        "schema": "ra.retry.v1",
                         "rerunning": true,
                         "characters": text.len()
                     })),
@@ -4811,7 +4811,7 @@ pub async fn run(
     // Drain any in-flight work (streaming turn, extension
     // command, auto-compaction, background bash) before tearing down so a
     // client that pipes a single command and closes stdin
-    // (`printf '{"type":"prompt",...}' | pi --mode rpc`) still receives the
+    // (`printf '{"type":"prompt",...}' | ra --mode rpc`) still receives the
     // full event stream through `agent_end` (gh #137). Without this the
     // process shuts down while the spawned task is still starting or
     // streaming, and the work is silently dropped. The Ctrl+C abort path in
@@ -5411,7 +5411,7 @@ async fn run_prompt_with_retry(
     let mut failovers_this_turn: u32 = 0;
     // Distinct from retry_count: a failover resets the retry BUDGET but must
     // never replay the first attempt (which would re-add the user message and
-    // re-execute completed tool cycles — pi_agent_rust#125 semantics).
+    // re-execute completed tool cycles — recur_agent#125 semantics).
     let mut first_attempt_done = false;
     let mut follow_up_first = false;
     let mut expected_follow_up_fetch: Option<(Arc<AtomicU64>, u64)> = None;
@@ -5473,7 +5473,7 @@ async fn run_prompt_with_retry(
                 // failed request was stripped via `revert_incomplete_response`
                 // below; every completed tool cycle stays on the path, so the
                 // retry re-issues only the failed provider request — no tool
-                // re-execution, no re-billing of prior work (pi_agent_rust#125).
+                // re-execution, no re-billing of prior work (recur_agent#125).
                 if follow_up_first {
                     let ready_linearizer = Arc::clone(&turn_phase_linearizer);
                     let ready_compacting = Arc::clone(&is_compacting);
@@ -5650,7 +5650,7 @@ async fn run_prompt_with_retry(
                 let err_str = err.to_string();
                 // `call_error_is_retryable` refuses a session-persistence
                 // failure first (bd-8188r), then classifies from the TYPED
-                // error before its flattened prose (pi_agent_rust#118). Print
+                // error before its flattened prose (recur_agent#118). Print
                 // mode inlined the same two checks until bd-u2qv4.
                 if !crate::failover::call_error_is_retryable(&err) {
                     final_error = Some(err_str);
@@ -5775,7 +5775,7 @@ async fn run_prompt_with_retry(
         // Strip only the failed request's incomplete output before the resume;
         // the user prompt and every completed tool cycle stay on the session
         // path so the retry re-issues only the failed provider request rather
-        // than replaying the whole turn (pi_agent_rust#125).
+        // than replaying the whole turn (recur_agent#125).
         if let Err(restore_err) =
             restore_rpc_retry_tail(&session, &shared_state, &cx, require_incomplete_tail).await
         {
@@ -13740,7 +13740,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    const RPC_OUTPUT_PRESSURE_SCHEMA_V1: &str = "pi.rpc_output_pressure.v1";
+    const RPC_OUTPUT_PRESSURE_SCHEMA_V1: &str = "ra.rpc_output_pressure.v1";
     const RPC_OUTPUT_PRESSURE_DEBUG_BUDGET_US: u64 = 50_000;
 
     // -----------------------------------------------------------------------
@@ -14892,7 +14892,7 @@ mod tests {
     }
 
     fn write_rpc_pressure_evidence(entry: &Value) {
-        let path = std::env::var_os("PI_RPC_OUTPUT_PRESSURE_EVIDENCE")
+        let path = std::env::var_os("RECUR_AGENT_RPC_OUTPUT_PRESSURE_EVIDENCE")
             .filter(|path| !path.as_os_str().is_empty())
             .map_or_else(
                 || {
@@ -16006,7 +16006,7 @@ export default function init(pi) {
             let ui_event = recv_ui_request(&out_rx, "wait-confirm-report ui before eof").await;
             assert_eq!(ui_event["method"], "confirm");
 
-            // Simulate `printf ... | pi --mode rpc`: stdin closes immediately.
+            // Simulate `printf ... | ra --mode rpc`: stdin closes immediately.
             drop(in_tx);
 
             // The server must drain the in-flight command (cancelling the

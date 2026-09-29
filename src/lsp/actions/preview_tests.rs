@@ -125,7 +125,7 @@ impl Fixture {
         });
         let Some(python) = python else {
             assert!(
-                std::env::var_os("PI_LSP_REQUIRE_PROTOCOL").is_none(),
+                std::env::var_os("RECUR_AGENT_LSP_REQUIRE_PROTOCOL").is_none(),
                 "Python is required for the selected code-action review tests"
             );
             eprintln!("SKIP code-action review peer: Python unavailable");

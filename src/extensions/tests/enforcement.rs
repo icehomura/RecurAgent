@@ -492,7 +492,7 @@ fn enforcement_machine_custom_config() {
 
 #[test]
 fn apply_env_capability_denied_policy_leaves_config_untouched() {
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
     assert!(config.deny_env, "default config must deny env");
     // The shipped default policy denies the env capability.
     let policy = ExtensionPolicy::default();
@@ -507,7 +507,7 @@ fn apply_env_capability_denied_policy_leaves_config_untouched() {
 
 #[test]
 fn apply_env_capability_permitting_policy_snapshots_process_env() {
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
     // Permissive mode + no deny: the full capability model grants env.
     // (A bare empty deny list is NOT enough — Prompt/Strict modes deny by
     // default, mirroring check_exec_capability.)
@@ -537,7 +537,7 @@ fn apply_env_capability_non_permissive_mode_denies_without_explicit_allow() {
     // process-env snapshot merely because "env" is absent from deny_caps —
     // the capability model is deny-by-default outside Permissive mode.
     for mode in [ExtensionPolicyMode::Strict, ExtensionPolicyMode::Prompt] {
-        let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
+        let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
         let policy = ExtensionPolicy {
             deny_caps: Vec::new(),
             mode,
@@ -548,7 +548,7 @@ fn apply_env_capability_non_permissive_mode_denies_without_explicit_allow() {
         assert!(config.env.is_empty());
     }
     // default_caps listing "env" is the explicit allow that overrides mode.
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
     let mut policy = ExtensionPolicy {
         deny_caps: Vec::new(),
         mode: ExtensionPolicyMode::Strict,
@@ -564,10 +564,11 @@ fn apply_env_capability_non_permissive_mode_denies_without_explicit_allow() {
 
 #[test]
 fn apply_env_capability_preserves_caller_supplied_snapshot() {
-    let mut config = crate::extensions_js::PiJsRuntimeConfig::default();
-    config
-        .env
-        .insert("PI_TEST_CALLER_ENV".to_string(), "kept".to_string());
+    let mut config = crate::extensions_js::RaJsRuntimeConfig::default();
+    config.env.insert(
+        "RECUR_AGENT_TEST_CALLER_ENV".to_string(),
+        "kept".to_string(),
+    );
     let policy = ExtensionPolicy {
         deny_caps: Vec::new(),
         mode: ExtensionPolicyMode::Permissive,
@@ -581,7 +582,10 @@ fn apply_env_capability_preserves_caller_supplied_snapshot() {
         "an explicit caller-provided env map must never be widened"
     );
     assert_eq!(
-        config.env.get("PI_TEST_CALLER_ENV").map(String::as_str),
+        config
+            .env
+            .get("RECUR_AGENT_TEST_CALLER_ENV")
+            .map(String::as_str),
         Some("kept")
     );
 }

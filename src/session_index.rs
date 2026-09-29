@@ -2912,7 +2912,7 @@ mod tests {
     }
 
     const SESSION_INDEX_SCALE_SESSION_COUNT: usize = 256;
-    const SESSION_INDEX_SCALE_EVIDENCE_SCHEMA: &str = "pi.session_index.cold_start_scalability.v1";
+    const SESSION_INDEX_SCALE_EVIDENCE_SCHEMA: &str = "ra.session_index.cold_start_scalability.v1";
 
     struct SessionIndexScaleEvidence {
         seed_summary: SessionIndexRefreshSummary,
@@ -3148,15 +3148,15 @@ mod tests {
 
     #[test]
     fn for_sessions_root_constructs_correct_paths() {
-        let root = Path::new("/home/user/.pi/sessions");
+        let root = Path::new("/home/user/.ra/sessions");
         let index = SessionIndex::for_sessions_root(root);
         assert_eq!(
             index.db_path,
-            PathBuf::from("/home/user/.pi/sessions/session-index.sqlite")
+            PathBuf::from("/home/user/.ra/sessions/session-index.sqlite")
         );
         assert_eq!(
             index.lock_path,
-            PathBuf::from("/home/user/.pi/sessions/session-index.lock")
+            PathBuf::from("/home/user/.ra/sessions/session-index.lock")
         );
     }
 
@@ -3164,7 +3164,7 @@ mod tests {
 
     #[test]
     fn sessions_root_returns_parent_of_db_path() {
-        let root = Path::new("/home/user/.pi/sessions");
+        let root = Path::new("/home/user/.ra/sessions");
         let index = SessionIndex::for_sessions_root(root);
         assert_eq!(index.sessions_root(), root);
     }

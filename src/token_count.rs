@@ -88,7 +88,7 @@ pub fn count_tokens(text: &str, provider: &str) -> u64 {
     active_counter().count(text, table_for_provider(provider))
 }
 
-/// Per-table counts for `pi token` output.
+/// Per-table counts for `ra token` output.
 #[must_use]
 pub fn count_all_tables(text: &str) -> Vec<(TokenTable, u64)> {
     [TokenTable::O200k, TokenTable::Cl100k]

@@ -10,8 +10,8 @@ use crate::connectors::http::HttpConnector;
 use crate::error::{Error, Result};
 use crate::extension_events::{ToolCallEventResult, ToolResultEventResult};
 use crate::extensions_js::{
-    ExtensionRepairEvent, ExtensionToolDef, HostcallKind, HostcallRequest, PiJsRuntime,
-    PiJsRuntimeConfig, js_to_json, json_to_js,
+    ExtensionRepairEvent, ExtensionToolDef, HostcallKind, HostcallRequest, RaJsRuntime,
+    RaJsRuntimeConfig, js_to_json, json_to_js,
 };
 use crate::hostcall_amac::AmacBatchExecutor;
 #[cfg(test)]
@@ -679,9 +679,9 @@ pub struct HostResultPayload {
     pub chunk: Option<HostStreamChunk>,
 }
 
-pub const HOSTCALL_OPCODE_SCHEMA_VERSION: &str = "pi.ext.hostcall_opcode.v1";
+pub const HOSTCALL_OPCODE_SCHEMA_VERSION: &str = "ra.ext.hostcall_opcode.v1";
 pub const HOSTCALL_OPCODE_VERSION: u16 = 1;
-pub const HOSTCALL_IO_URING_CONTEXT_SCHEMA_VERSION: &str = "pi.ext.io_uring_lane_input.v1";
+pub const HOSTCALL_IO_URING_CONTEXT_SCHEMA_VERSION: &str = "ra.ext.io_uring_lane_input.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommonHostcallOpcode {
@@ -734,7 +734,7 @@ pub struct HostCallContext<'a> {
     /// Policy governing capability access.
     pub policy: &'a ExtensionPolicy,
     /// Optional JS runtime for exec streaming.
-    pub js_runtime: Option<&'a PiJsRuntime>,
+    pub js_runtime: Option<&'a RaJsRuntime>,
     /// Host-authenticated Session provenance for this causal JS task.
     ///
     /// This is populated from Rust-owned runtime bookkeeping, never from the
@@ -1985,26 +1985,26 @@ fn hash_hostcall_envelope(
 }
 
 pub const PROTOCOL_VERSION: &str = "1.0";
-pub const LOG_SCHEMA_VERSION: &str = "pi.ext.log.v1";
-pub const COMPAT_LEDGER_SCHEMA_VERSION: &str = "pi.ext.compat_ledger.v1";
-pub const RUNTIME_RISK_LEDGER_SCHEMA_VERSION: &str = "pi.ext.runtime_risk_ledger.v1";
-pub const RUNTIME_RISK_REPLAY_SCHEMA_VERSION: &str = "pi.ext.runtime_risk_replay.v1";
-pub const RUNTIME_RISK_CALIBRATION_SCHEMA_VERSION: &str = "pi.ext.runtime_risk_calibration.v1";
+pub const LOG_SCHEMA_VERSION: &str = "ra.ext.log.v1";
+pub const COMPAT_LEDGER_SCHEMA_VERSION: &str = "ra.ext.compat_ledger.v1";
+pub const RUNTIME_RISK_LEDGER_SCHEMA_VERSION: &str = "ra.ext.runtime_risk_ledger.v1";
+pub const RUNTIME_RISK_REPLAY_SCHEMA_VERSION: &str = "ra.ext.runtime_risk_replay.v1";
+pub const RUNTIME_RISK_CALIBRATION_SCHEMA_VERSION: &str = "ra.ext.runtime_risk_calibration.v1";
 pub const ADAPTIVE_HOSTCALL_POLICY_DIFF_SCHEMA_VERSION: &str =
-    "pi.ext.adaptive_hostcall_policy_diff.v1";
-pub const RUNTIME_HOSTCALL_TELEMETRY_SCHEMA_VERSION: &str = "pi.ext.hostcall_telemetry.v1";
-pub const RUNTIME_HOSTCALL_FEATURE_SCHEMA_VERSION: &str = "pi.ext.hostcall_feature_vector.v1";
+    "ra.ext.adaptive_hostcall_policy_diff.v1";
+pub const RUNTIME_HOSTCALL_TELEMETRY_SCHEMA_VERSION: &str = "ra.ext.hostcall_telemetry.v1";
+pub const RUNTIME_HOSTCALL_FEATURE_SCHEMA_VERSION: &str = "ra.ext.hostcall_feature_vector.v1";
 pub const RUNTIME_HOSTCALL_FEATURE_BUDGET_US: u64 = 250;
-pub const RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION: &str = "pi.ext.runtime_risk_explanation.v1";
+pub const RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION: &str = "ra.ext.runtime_risk_explanation.v1";
 pub const RUNTIME_RISK_EXPLANATION_TERM_BUDGET: usize = 12;
 // Keep runtime fallback deterministic under normal CI/workstation variance.
 pub const RUNTIME_RISK_EXPLANATION_TIME_BUDGET_MS: u64 = 25;
-pub const RUNTIME_RISK_BASELINE_SCHEMA_VERSION: &str = "pi.ext.runtime_risk_baseline.v1";
-pub const SECURITY_ALERT_SCHEMA_VERSION: &str = "pi.ext.security_alert.v1";
-pub const INCIDENT_EVIDENCE_BUNDLE_SCHEMA_VERSION: &str = "pi.ext.incident_evidence_bundle.v1";
+pub const RUNTIME_RISK_BASELINE_SCHEMA_VERSION: &str = "ra.ext.runtime_risk_baseline.v1";
+pub const SECURITY_ALERT_SCHEMA_VERSION: &str = "ra.ext.security_alert.v1";
+pub const INCIDENT_EVIDENCE_BUNDLE_SCHEMA_VERSION: &str = "ra.ext.incident_evidence_bundle.v1";
 const RUNTIME_HOSTCALL_SEQUENCE_WINDOW: usize = 64;
-const CAPABILITY_MANIFEST_SCHEMA_V1: &str = "pi.ext.cap.v1";
-const CAPABILITY_MANIFEST_SCHEMA_V2: &str = "pi.ext.cap.v2";
+const CAPABILITY_MANIFEST_SCHEMA_V1: &str = "ra.ext.cap.v1";
+const CAPABILITY_MANIFEST_SCHEMA_V2: &str = "ra.ext.cap.v2";
 
 fn runtime_risk_explanation_schema_default() -> String {
     RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION.to_string()
@@ -7816,7 +7816,7 @@ pub fn build_incident_evidence_bundle(
     }
 
     let filtered_exec_artifact = ExecMediationArtifact {
-        schema: "pi.ext.exec_mediation.v1".to_string(),
+        schema: "ra.ext.exec_mediation.v1".to_string(),
         generated_at_ms,
         entry_count: filtered_exec.len(),
         entries: filtered_exec,
@@ -7842,7 +7842,7 @@ pub fn build_incident_evidence_bundle(
     }
 
     let filtered_secret_artifact = SecretBrokerArtifact {
-        schema: "pi.ext.secret_broker.v1".to_string(),
+        schema: "ra.ext.secret_broker.v1".to_string(),
         generated_at_ms,
         entry_count: filtered_secret.len(),
         entries: filtered_secret,
@@ -10387,7 +10387,7 @@ fn extension_id_regex() -> &'static Regex {
 }
 
 fn validate_extension_manifest(manifest: &ExtensionManifest) -> Result<()> {
-    if manifest.schema != "pi.ext.manifest.v1" {
+    if manifest.schema != "ra.ext.manifest.v1" {
         return Err(Error::validation(format!(
             "Unsupported extension manifest schema: {}",
             manifest.schema
@@ -10496,7 +10496,7 @@ pub fn load_extension_manifest(root: &Path) -> Result<Option<ExtensionManifestSo
     }
 
     if let Some(pi) = package_pi
-        && pi.get("schema").and_then(Value::as_str) == Some("pi.ext.manifest.v1")
+        && pi.get("schema").and_then(Value::as_str) == Some("ra.ext.manifest.v1")
     {
         let manifest = parse_extension_manifest_value(pi, package_name, package_version)?;
         let manifest_json = serde_json::to_string(&manifest)
@@ -10666,7 +10666,7 @@ pub fn resolve_extension_load_spec(entry: &Path) -> Result<ExtensionLoadSpec> {
 }
 
 // ============================================================================
-// JS Extension Runtime (QuickJS via PiJsRuntime)
+// JS Extension Runtime (QuickJS via RaJsRuntime)
 // ============================================================================
 
 #[derive(Debug, Clone)]
@@ -11217,7 +11217,7 @@ enum JsRuntimeCommand {
 
 struct JsRuntimeShard {
     extension_id: String,
-    runtime: PiJsRuntime,
+    runtime: RaJsRuntime,
     snapshot: JsExtensionSnapshot,
     /// Terminal pump failure retained so unrelated shards can continue while
     /// future calls targeting this shard still receive the original failure.
@@ -11539,7 +11539,7 @@ fn js_extension_spec_token(spec: &JsExtensionLoadSpec) -> Value {
 }
 
 fn warm_runtime_pool_fingerprint(
-    config: &PiJsRuntimeConfig,
+    config: &RaJsRuntimeConfig,
     policy: &ExtensionPolicy,
     specs: &[JsExtensionLoadSpec],
 ) -> String {
@@ -11641,7 +11641,7 @@ impl Clone for JsExtensionRuntimeHandle {
 /// secret filter), and the JS `process.env` proxy deliberately cannot
 /// enumerate keys, so this only lets policy-permitted lookups observe real
 /// values.
-fn apply_env_capability(config: &mut PiJsRuntimeConfig, policy: &ExtensionPolicy) {
+fn apply_env_capability(config: &mut RaJsRuntimeConfig, policy: &ExtensionPolicy) {
     // Full capability model, mirroring check_exec_capability: global deny →
     // default_caps allow → mode fallback (Strict/Prompt = deny). A bare
     // deny-list check would grant a Strict policy without "env" in
@@ -11668,7 +11668,7 @@ fn apply_env_capability(config: &mut PiJsRuntimeConfig, policy: &ExtensionPolicy
 impl JsExtensionRuntimeHandle {
     #[allow(clippy::too_many_lines)]
     pub async fn start(
-        config: PiJsRuntimeConfig,
+        config: RaJsRuntimeConfig,
         tools: impl Into<crate::tools::SharedToolRegistry>,
         manager: ExtensionManager,
     ) -> Result<Self> {
@@ -11677,7 +11677,7 @@ impl JsExtensionRuntimeHandle {
 
     /// Like [`start`](Self::start) but uses a specific [`ExtensionPolicy`].
     pub async fn start_with_policy(
-        config: PiJsRuntimeConfig,
+        config: RaJsRuntimeConfig,
         tools: impl Into<crate::tools::SharedToolRegistry>,
         manager: ExtensionManager,
         policy: ExtensionPolicy,
@@ -11689,7 +11689,7 @@ impl JsExtensionRuntimeHandle {
     /// can short-circuit hostcalls before they reach real dispatch handlers.
     /// Used by conformance tests to provide deterministic exec/http/ui stubs.
     pub async fn start_with_interceptor(
-        config: PiJsRuntimeConfig,
+        config: RaJsRuntimeConfig,
         tools: impl Into<crate::tools::SharedToolRegistry>,
         manager: ExtensionManager,
         interceptor: Arc<dyn HostcallInterceptor>,
@@ -11700,7 +11700,7 @@ impl JsExtensionRuntimeHandle {
     /// Like [`start_with_interceptor`](Self::start_with_interceptor) but with
     /// an explicit [`ExtensionPolicy`].
     pub async fn start_with_interceptor_and_policy(
-        config: PiJsRuntimeConfig,
+        config: RaJsRuntimeConfig,
         tools: impl Into<crate::tools::SharedToolRegistry>,
         manager: ExtensionManager,
         interceptor: Arc<dyn HostcallInterceptor>,
@@ -11711,7 +11711,7 @@ impl JsExtensionRuntimeHandle {
 
     #[allow(clippy::too_many_lines)]
     async fn start_inner(
-        mut config: PiJsRuntimeConfig,
+        mut config: RaJsRuntimeConfig,
         tools: impl Into<crate::tools::SharedToolRegistry>,
         manager: ExtensionManager,
         interceptor: Option<Arc<dyn HostcallInterceptor>>,
@@ -11747,7 +11747,7 @@ impl JsExtensionRuntimeHandle {
                 let warm_pool = crate::extensions_js::WarmIsolatePool::new(runtime_config.clone());
                 let cold_init_started = Instant::now();
                 let init_config = warm_pool.make_config();
-                let init = PiJsRuntime::with_clock_and_config_with_policy(
+                let init = RaJsRuntime::with_clock_and_config_with_policy(
                     crate::scheduler::WallClock,
                     init_config.clone(),
                     Some(runtime_policy.clone()),
@@ -13389,7 +13389,7 @@ fn read_pi_extensions_from_package(package_json_path: &Path) -> Result<Option<Ve
     };
     let Some(pi) = pi.as_object() else {
         return Err(Error::config(format!(
-            "Invalid package manifest {}: `pi` must be an object",
+            "Invalid package manifest {}: `ra` must be an object",
             package_json_path.display()
         )));
     };
@@ -13518,7 +13518,7 @@ fn resolve_package_declared_entries(
 
 /// True when `dir` follows the independent-extensions auto-discovery
 /// convention: a directory literally named `extensions` (for example
-/// `~/.pi/agent/extensions/` or `.pi/extensions/`). Entries that live
+/// `~/.ra/agent/extensions/` or `.ra/extensions/`). Entries that live
 /// directly inside such a directory are independent extensions by
 /// convention, never fragments of a single package or workspace bundle.
 fn is_independent_extensions_root(dir: &Path) -> bool {
@@ -13607,7 +13607,7 @@ fn collect_js_extension_roots(
                     continue;
                 };
                 let canonical_parent = safe_canonicalize(parent);
-                // Inside an independent-extensions root (e.g. `.pi/extensions/`)
+                // Inside an independent-extensions root (e.g. `.ra/extensions/`)
                 // sibling entry files are separate extensions by convention, so
                 // ownership is tracked per entry file. Everywhere else the leaf
                 // directory is the exclusive ownership unit, keeping distinct
@@ -13650,7 +13650,7 @@ fn js_runtime_shard_config(
     warm_pool: &crate::extensions_js::WarmIsolatePool,
     shard_count: usize,
     shard_index: usize,
-) -> Result<PiJsRuntimeConfig> {
+) -> Result<RaJsRuntimeConfig> {
     let mut config = warm_pool.make_config();
     config.limits.memory_limit_bytes = config
         .limits
@@ -13712,7 +13712,7 @@ async fn build_js_runtime_shards(
     for (shard_index, (extension_id, extension_specs)) in grouped_specs.into_iter().enumerate() {
         let shard_config = js_runtime_shard_config(warm_pool, shard_count, shard_index)?;
 
-        let runtime = PiJsRuntime::with_clock_and_config_with_policy_for_extension(
+        let runtime = RaJsRuntime::with_clock_and_config_with_policy_for_extension(
             crate::scheduler::WallClock,
             shard_config,
             Some(policy.clone()),
@@ -13849,7 +13849,7 @@ async fn scrub_and_drop_runtime_shards(
 
 #[allow(clippy::future_not_send)]
 async fn load_one_extension(
-    runtime: &PiJsRuntime,
+    runtime: &RaJsRuntime,
     host: &JsRuntimeHost,
     spec: &JsExtensionLoadSpec,
     entry_paths: &[PathBuf],
@@ -13947,7 +13947,7 @@ fn resolve_extension_load_entry_paths(
 }
 
 #[allow(clippy::future_not_send)]
-async fn snapshot_extensions(runtime: &PiJsRuntime) -> Result<Vec<JsExtensionSnapshot>> {
+async fn snapshot_extensions(runtime: &RaJsRuntime) -> Result<Vec<JsExtensionSnapshot>> {
     let bridge_secret = runtime.bridge_secret().to_string();
     let json = runtime
         .with_ctx(|ctx| {
@@ -14046,7 +14046,7 @@ fn quarantine_runtime_shard(
 
 #[allow(clippy::future_not_send)]
 async fn set_extension_flag_value(
-    runtime: &PiJsRuntime,
+    runtime: &RaJsRuntime,
     extension_id: &str,
     flag_name: &str,
     value: &Value,
@@ -14069,7 +14069,7 @@ async fn set_extension_flag_value(
 
 #[allow(clippy::future_not_send)]
 async fn register_extension_mcp_server(
-    runtime: &PiJsRuntime,
+    runtime: &RaJsRuntime,
     extension_id: &str,
     name: &str,
     spec: &Value,
@@ -15195,19 +15195,19 @@ async fn cancel_active_provider_streams_for_replacement(
 
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 async fn pump_js_runtime_once_for_owner(
-    runtime: &PiJsRuntime,
+    runtime: &RaJsRuntime,
     host: &JsRuntimeHost,
     expected_owner: Option<&str>,
     root_deadline: Option<Instant>,
 ) -> Result<bool> {
-    fn drain_requests(runtime: &PiJsRuntime) -> std::collections::VecDeque<HostcallRequest> {
+    fn drain_requests(runtime: &RaJsRuntime) -> std::collections::VecDeque<HostcallRequest> {
         runtime.drain_hostcall_requests()
     }
 
     /// Dispatch a single hostcall request, recording timing and returning
     /// the completion pair plus elapsed nanoseconds for AMAC telemetry.
     async fn dispatch_one(
-        runtime: &PiJsRuntime,
+        runtime: &RaJsRuntime,
         host: &JsRuntimeHost,
         expected_owner: Option<&str>,
         root_deadline: Option<Instant>,
@@ -15289,7 +15289,7 @@ async fn pump_js_runtime_once_for_owner(
     }
 
     async fn dispatch_requests(
-        runtime: &PiJsRuntime,
+        runtime: &RaJsRuntime,
         host: &JsRuntimeHost,
         expected_owner: Option<&str>,
         root_deadline: Option<Instant>,
@@ -15318,7 +15318,7 @@ async fn pump_js_runtime_once_for_owner(
 
     /// Sequential dispatch path (AMAC disabled or fallback).
     async fn dispatch_requests_sequential(
-        runtime: &PiJsRuntime,
+        runtime: &RaJsRuntime,
         host: &JsRuntimeHost,
         expected_owner: Option<&str>,
         root_deadline: Option<Instant>,
@@ -15343,7 +15343,7 @@ async fn pump_js_runtime_once_for_owner(
     /// AMAC batch dispatch path: group requests by kind, decide per-group
     /// whether to interleave, and dispatch with timing telemetry.
     async fn dispatch_requests_amac(
-        runtime: &PiJsRuntime,
+        runtime: &RaJsRuntime,
         host: &JsRuntimeHost,
         expected_owner: Option<&str>,
         root_deadline: Option<Instant>,
@@ -15435,7 +15435,7 @@ async fn pump_js_runtime_once_for_owner(
 }
 
 #[allow(clippy::future_not_send)]
-async fn pump_js_runtime_once(runtime: &PiJsRuntime, host: &JsRuntimeHost) -> Result<bool> {
+async fn pump_js_runtime_once(runtime: &RaJsRuntime, host: &JsRuntimeHost) -> Result<bool> {
     pump_js_runtime_once_for_owner(runtime, host, None, None).await
 }
 
@@ -17950,7 +17950,7 @@ async fn dispatch_hostcall(host: &JsRuntimeHost, request: HostcallRequest) -> Ho
 /// it operates on the JS-specific [`HostcallRequest`] type.
 #[allow(clippy::future_not_send)]
 async fn dispatch_hostcall_with_runtime(
-    runtime: Option<&PiJsRuntime>,
+    runtime: Option<&RaJsRuntime>,
     host: &JsRuntimeHost,
     request: HostcallRequest,
 ) -> HostcallOutcome {
@@ -18018,7 +18018,7 @@ async fn dispatch_hostcall_tool(
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 #[allow(dead_code)]
 async fn dispatch_hostcall_exec(
-    runtime: Option<&PiJsRuntime>,
+    runtime: Option<&RaJsRuntime>,
     call_id: &str,
     cmd: &str,
     payload: Value,
@@ -18028,7 +18028,7 @@ async fn dispatch_hostcall_exec(
 
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 async fn dispatch_hostcall_exec_ref(
-    runtime: Option<&PiJsRuntime>,
+    runtime: Option<&RaJsRuntime>,
     call_id: &str,
     cmd: &str,
     payload: &Value,
@@ -18047,7 +18047,7 @@ async fn dispatch_hostcall_exec_ref(
 
 #[allow(clippy::future_not_send, clippy::too_many_lines)]
 async fn dispatch_hostcall_exec_ref_with_limit(
-    runtime: Option<&PiJsRuntime>,
+    runtime: Option<&RaJsRuntime>,
     call_id: &str,
     cmd: &str,
     payload: &Value,
@@ -19745,7 +19745,7 @@ enum JsTaskTakeResult {
 }
 
 #[allow(clippy::future_not_send)]
-async fn take_js_task_state(runtime: &PiJsRuntime, task_id: &str) -> Result<JsTaskTakeResult> {
+async fn take_js_task_state(runtime: &RaJsRuntime, task_id: &str) -> Result<JsTaskTakeResult> {
     let bridge_secret = runtime.bridge_secret().to_string();
     runtime
         .with_ctx(|ctx| {
@@ -19864,7 +19864,7 @@ fn js_task_timed_out(
 
 #[allow(clippy::future_not_send)]
 async fn await_js_task(
-    runtime: &PiJsRuntime,
+    runtime: &RaJsRuntime,
     host: &JsRuntimeHost,
     expected_owner: Option<&str>,
     task_id: &str,

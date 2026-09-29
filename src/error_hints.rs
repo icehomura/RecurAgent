@@ -62,7 +62,7 @@ fn config_hints(msg: &str) -> ErrorHint {
         return ErrorHint {
             summary: "Invalid or missing configuration file",
             hints: &[
-                "Check that ~/.pi/agent/settings.json exists and is valid JSON",
+                "Check that ~/.ra/agent/settings.json exists and is valid JSON",
                 "Run 'pi config' to see configuration paths and precedence",
             ],
             context_fields: &["file_path"],
@@ -72,7 +72,7 @@ fn config_hints(msg: &str) -> ErrorHint {
         return ErrorHint {
             summary: "Invalid models configuration",
             hints: &[
-                "Verify ~/.pi/agent/models.json has valid JSON syntax",
+                "Verify ~/.ra/agent/models.json has valid JSON syntax",
                 "Check that 'providers' key exists in models.json",
             ],
             context_fields: &["file_path", "parse_error"],
@@ -91,7 +91,7 @@ fn session_hints(error: &Error) -> ErrorHint {
             summary: "Session file not found",
             hints: &[
                 "Use 'pi' without --session to start a new session",
-                "Use 'pi --resume' to pick from existing sessions",
+                "Use 'ra --resume' to pick from existing sessions",
             ],
             context_fields: &["path"],
         },
@@ -122,7 +122,7 @@ fn auth_hints(msg: &str) -> ErrorHint {
             summary: "GitHub Copilot OAuth client_id not configured",
             hints: &[
                 "Set GITHUB_COPILOT_CLIENT_ID to your GitHub OAuth App / GitHub App client id",
-                "Or run on a workstation with a browser, or use device flow over SSH (set PI_COPILOT_FORCE_DEVICE_FLOW=1)",
+                "Or run on a workstation with a browser, or use device flow over SSH (set RECUR_AGENT_COPILOT_FORCE_DEVICE_FLOW=1)",
             ],
             context_fields: &["provider"],
         };
@@ -132,7 +132,7 @@ fn auth_hints(msg: &str) -> ErrorHint {
             summary: "API key not configured",
             hints: &[
                 "Set ANTHROPIC_API_KEY environment variable",
-                "Or add key to ~/.pi/agent/auth.json",
+                "Or add key to ~/.ra/agent/auth.json",
             ],
             context_fields: &["provider"],
         };
@@ -222,7 +222,7 @@ fn provider_hints(message: &str) -> ErrorHint {
             summary: "Model not found or unavailable",
             hints: &[
                 "Check that the model ID is correct",
-                "Use 'pi --list-models' to see available models",
+                "Use 'ra --list-models' to see available models",
             ],
             context_fields: &["provider", "model_id"],
         };
@@ -478,7 +478,7 @@ const fn sqlite_hints(err: &fsqlite::FrankenError) -> ErrorHint {
             summary: "Database corrupted",
             hints: &[
                 "The session index may need to be rebuilt",
-                "Delete ~/.pi/agent/sessions/index.db to rebuild",
+                "Delete ~/.ra/agent/sessions/index.db to rebuild",
             ],
             context_fields: &["db_path"],
         };
@@ -509,7 +509,7 @@ fn api_hints(msg: &str) -> ErrorHint {
         return ErrorHint {
             summary: "Request timed out",
             hints: &[
-                "Raise the timeout: --request-timeout <seconds>, PI_HTTP_REQUEST_TIMEOUT_SECS=<seconds>, or requestTimeoutSecs in settings.json (0 = no timeout)",
+                "Raise the timeout: --request-timeout <seconds>, RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS=<seconds>, or requestTimeoutSecs in settings.json (0 = no timeout)",
                 "Local providers (Ollama/LM Studio): the first request can block while the model loads — ensure the model is pulled (ollama pull <model>) and the server is reachable (ollama list)",
             ],
             context_fields: &["url", "timeout_seconds"],
@@ -1079,7 +1079,7 @@ mod tests {
         let error = Error::extension("extension my-ext not found");
         let hint = hints_for_error(&error);
         assert!(hint.summary.contains("not found"));
-        assert!(hint.hints.iter().any(|h| h.contains("pi list")));
+        assert!(hint.hints.iter().any(|h| h.contains("ra list")));
     }
 
     #[test]

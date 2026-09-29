@@ -26,7 +26,7 @@ const DEFAULT_EXTENSION_TOOL_TIMEOUT_MS: u64 = 60_000;
 /// Wraps a JS extension-registered tool so it can be used as a Rust [`Tool`].
 ///
 /// Note: This wrapper uses [`ExtensionRuntimeHandle`] rather than
-/// [`crate::extensions_js::PiJsRuntime`] so it remains `Send + Sync` and can be
+/// [`crate::extensions_js::RaJsRuntime`] so it remains `Send + Sync` and can be
 /// stored in the shared tool registry.
 pub struct ExtensionToolWrapper {
     def: ExtensionToolDef,
@@ -276,7 +276,7 @@ mod tests {
 
     use crate::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
     use crate::extensions::{ExtensionManager, JsExtensionLoadSpec};
-    use crate::extensions_js::PiJsRuntimeConfig;
+    use crate::extensions_js::RaJsRuntimeConfig;
     use crate::model::{
         AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall,
         Usage,
@@ -308,7 +308,7 @@ mod tests {
         let manager = ExtensionManager::new();
         let tools = Arc::new(ToolRegistry::new(&[], temp_dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: temp_dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -372,7 +372,7 @@ mod tests {
             let manager = ExtensionManager::new();
             let tools = Arc::new(ToolRegistry::new(&[], temp_dir.path(), None));
             let js_runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: temp_dir.path().display().to_string(),
                     ..Default::default()
                 },
@@ -636,7 +636,7 @@ mod tests {
             let manager = ExtensionManager::new();
             let tools_for_runtime = Arc::new(ToolRegistry::new(&[], temp_dir.path(), None));
             let js_runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: temp_dir.path().display().to_string(),
                     ..Default::default()
                 },
@@ -742,7 +742,7 @@ mod tests {
         let shared =
             crate::tools::SharedToolRegistry::new(ToolRegistry::new(&[], temp_dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start_with_policy(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: temp_dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -1102,7 +1102,7 @@ mod tests {
             let manager = ExtensionManager::new();
             let tools = Arc::new(ToolRegistry::new(&[], temp_dir.path(), None));
             let js_runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: temp_dir.path().display().to_string(),
                     ..Default::default()
                 },
@@ -1163,7 +1163,7 @@ mod tests {
             let manager = ExtensionManager::new();
             let tools = Arc::new(ToolRegistry::new(&[], temp_dir.path(), None));
             let js_runtime = JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: temp_dir.path().display().to_string(),
                     ..Default::default()
                 },

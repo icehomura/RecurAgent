@@ -184,7 +184,11 @@ fn nested_read_only_grants_reject_writes_even_if_the_writer_is_selected() {
         None,
     ))
     .unwrap_err();
-    assert!(error.to_string().contains("PI_SHARED_MEMORY_READ_ONLY"));
+    assert!(
+        error
+            .to_string()
+            .contains("RECUR_AGENT_SHARED_MEMORY_READ_ONLY")
+    );
     assert!(!error.to_string().contains("must not persist"));
     assert_eq!(
         parent.store.read("key").unwrap().unwrap().content,
@@ -229,7 +233,7 @@ fn name_collision_leaves_the_registry_unchanged() {
     assert!(
         error
             .to_string()
-            .contains("PI_SHARED_MEMORY_TOOL_COLLISION")
+            .contains("RECUR_AGENT_SHARED_MEMORY_TOOL_COLLISION")
     );
     assert_eq!(registry.tools().len(), before);
     assert!(registry.get("write_memory").is_none());
@@ -254,7 +258,11 @@ fn a_nested_host_cannot_widen_the_exact_role_tool_selection() {
     let error = nested
         .install_tools(&mut registry, &TOOL_NAMES)
         .unwrap_err();
-    assert!(error.to_string().contains("PI_SHARED_MEMORY_TOOL_SCOPE"));
+    assert!(
+        error
+            .to_string()
+            .contains("RECUR_AGENT_SHARED_MEMORY_TOOL_SCOPE")
+    );
     assert!(
         registry.tools().is_empty(),
         "a rejected wider pin must not partially install"
@@ -271,7 +279,7 @@ fn a_nested_host_cannot_widen_the_exact_role_tool_selection() {
     assert!(
         error
             .to_string()
-            .contains("PI_SHARED_MEMORY_TOOL_COLLISION")
+            .contains("RECUR_AGENT_SHARED_MEMORY_TOOL_COLLISION")
     );
     assert!(
         mixed.get("read_memory").is_none(),
@@ -308,7 +316,9 @@ fn malformed_and_mismatched_grants_never_select_a_fallback_namespace() {
                 .err()
                 .unwrap();
         assert!(
-            error.to_string().contains("PI_SHARED_MEMORY_DELEGATION"),
+            error
+                .to_string()
+                .contains("RECUR_AGENT_SHARED_MEMORY_DELEGATION"),
             "{field}"
         );
         assert!(!error.to_string().contains("secret-value"));
@@ -379,7 +389,11 @@ fn resolution_rejects_invalid_budgets_and_bounds_a_stalled_owner() {
     let error = run(binding.resolve(Duration::from_millis(10)))
         .err()
         .unwrap();
-    assert!(error.to_string().contains("PI_SHARED_MEMORY_TIMEOUT"));
+    assert!(
+        error
+            .to_string()
+            .contains("RECUR_AGENT_SHARED_MEMORY_TIMEOUT")
+    );
 }
 
 #[test]
@@ -399,7 +413,11 @@ fn separate_children_share_revisions_without_sharing_other_sessions() {
         .store
         .write("counter", "stale", Some(&original.revision))
         .unwrap_err();
-    assert!(error.to_string().contains("PI_SHARED_MEMORY_CONFLICT"));
+    assert!(
+        error
+            .to_string()
+            .contains("RECUR_AGENT_SHARED_MEMORY_CONFLICT")
+    );
     assert_eq!(
         parent.store.read("counter").unwrap().unwrap().content,
         "after"
@@ -437,7 +455,7 @@ fn sdk_child_bootstrap_reads_and_writes_the_parent_bank_in_another_process() {
         "--exact",
         "memory::shared::delegation::tests::child_host_fixture",
     ])
-    .env("PI_GRANT_FIXTURE", "1");
+    .env("RECUR_AGENT_GRANT_FIXTURE", "1");
     let mut child = ChildGuard(Some(cmd.spawn().unwrap()));
     let limit = Instant::now() + Duration::from_secs(15);
     loop {
@@ -458,7 +476,7 @@ fn sdk_child_bootstrap_reads_and_writes_the_parent_bank_in_another_process() {
 #[test]
 #[ignore = "subprocess helper invoked only by the parent fixture"]
 fn child_host_fixture() {
-    assert_eq!(std::env::var("PI_GRANT_FIXTURE").unwrap(), "1");
+    assert_eq!(std::env::var("RECUR_AGENT_GRANT_FIXTURE").unwrap(), "1");
     let cwd = std::env::current_dir().unwrap();
     let grant = SharedMemoryGrant::from_environment(&cwd).unwrap().unwrap();
     let mut registry = ToolRegistry::from_tools(Vec::new());

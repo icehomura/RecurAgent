@@ -1,13 +1,13 @@
 //! Prioritized parallel code review engine with ship verdict (bd-cv653.3.11).
 //!
-//! Provides `/review` and `pi review` with:
+//! Provides `/review` and `ra review` with:
 //! - Target diff acquisition (uncommitted work, commit ranges, branches)
 //! - Diff hunk chunking and file triage
 //! - Rubric-based rule evaluations (correctness, security, perf, contract drift)
 //! - Severity classification (P0 blocker through P3 nit) and confidence scoring
 //! - Deduplication and ranking
 //! - Ship verdict card calculation (`SHIP`, `SHIP-WITH-NITS`, `BLOCK`)
-//! - Strict schema-governed JSON (`pi.review.v1`), Markdown, and terminal formats
+//! - Strict schema-governed JSON (`ra.review.v1`), Markdown, and terminal formats
 
 use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
@@ -22,7 +22,7 @@ use crate::commit_split::{DiffHunk, DiffParser};
 use crate::error::{Error, Result};
 
 /// Review schema tag.
-pub const REVIEW_SCHEMA: &str = "pi.review.v1";
+pub const REVIEW_SCHEMA: &str = "ra.review.v1";
 
 /// Finding severity level ranked from P0 (blocker) to P3 (suggestion).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -143,7 +143,7 @@ pub struct ReviewStats {
     pub p3_count: usize,
 }
 
-/// Complete code review report conforming to `pi.review.v1`.
+/// Complete code review report conforming to `ra.review.v1`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewReport {

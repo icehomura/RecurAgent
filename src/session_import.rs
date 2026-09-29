@@ -32,7 +32,7 @@ mod conversion;
 mod transcript;
 
 /// Result-envelope schema (the public fields remain unchanged).
-pub const IMPORT_SCHEMA: &str = "pi.session_import.v1";
+pub const IMPORT_SCHEMA: &str = "ra.session_import.v1";
 /// Conversion semantics, included in provenance and content-addressed ids.
 const IMPORT_FORMAT_REVISION: u32 = 2;
 const MAX_IMPORT_BYTES: u64 = 128 * 1024 * 1024;

@@ -2538,7 +2538,7 @@ mod tests {
         }
 
         let summary = serde_json::json!({
-            "schema": "pi.scheduler.fairness_replay.v1",
+            "schema": "ra.scheduler.fairness_replay.v1",
             "rounds": ROUNDS,
             "total_tasks": trace.len(),
             "class_counts": class_counts,
@@ -2554,7 +2554,7 @@ mod tests {
         assert_eq!(
             summary,
             serde_json::json!({
-                "schema": "pi.scheduler.fairness_replay.v1",
+                "schema": "ra.scheduler.fairness_replay.v1",
                 "rounds": 160,
                 "total_tasks": 3840,
                 "class_counts": {

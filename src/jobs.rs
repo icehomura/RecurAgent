@@ -89,7 +89,7 @@ impl JobSessionScope {
             .ok_or_else(|| {
                 Error::tool(
                     "jobs",
-                    "PI_JOBS_SESSION_UNAVAILABLE: current agent session identity is unavailable"
+                    "RECUR_AGENT_JOBS_SESSION_UNAVAILABLE: current agent session identity is unavailable"
                         .to_string(),
                 )
             })
@@ -103,7 +103,7 @@ impl Default for JobSessionScope {
 }
 
 /// Tool-result schema tag for job descriptors (stable audit contract).
-pub const JOB_SCHEMA: &str = "pi.bash_job.v1";
+pub const JOB_SCHEMA: &str = "ra.bash_job.v1";
 
 /// Maximum concurrently running jobs; the next spawn is rejected with a
 /// named capacity error.
@@ -125,7 +125,7 @@ const MAX_ARTIFACT_BYTES: usize = 16 * 1024 * 1024;
 
 /// The dedicated directory never exceeds this aggregate budget. By default the
 /// oldest unlocked artifacts rotate out to admit a new job;
-/// `PI_JOBS_ARTIFACT_RETENTION=preserve` keeps every artifact and refuses the
+/// `RECUR_AGENT_JOBS_ARTIFACT_RETENTION=preserve` keeps every artifact and refuses the
 /// job instead.
 const MAX_TOTAL_ARTIFACT_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -685,7 +685,7 @@ fn session_closing_error(owner_session_id: &str) -> Error {
     Error::tool(
         "jobs",
         format!(
-            "PI_JOBS_SESSION_CLOSING: agent session {owner_session_id:?} is shutting down and cannot start background jobs"
+            "RECUR_AGENT_JOBS_SESSION_CLOSING: agent session {owner_session_id:?} is shutting down and cannot start background jobs"
         ),
     )
 }
@@ -811,7 +811,7 @@ fn capture_session_spawn_generation(owner_session_id: &str) -> Result<SessionSpa
         Error::tool(
             "jobs",
             format!(
-                "PI_JOBS_SESSION_SPAWN_OVERFLOW: too many concurrent background spawns for session {owner_session_id:?}"
+                "RECUR_AGENT_JOBS_SESSION_SPAWN_OVERFLOW: too many concurrent background spawns for session {owner_session_id:?}"
             ),
         )
     })?;
@@ -872,7 +872,7 @@ fn reserve_job_slot() -> Result<(String, u64, StartingJobSlot)> {
         return Err(Error::tool(
             "bash",
             format!(
-                "PI_JOBS_AT_CAPACITY: {MAX_CONCURRENT_JOBS} background jobs already running; \
+                "RECUR_AGENT_JOBS_AT_CAPACITY: {MAX_CONCURRENT_JOBS} background jobs already running; \
                  cancel one with the jobs tool or wait for a completion before starting more."
             ),
         ));
@@ -902,7 +902,8 @@ impl ArtifactRetentionPolicy {
         let value = value.to_str().ok_or_else(|| {
             Error::tool(
                 "bash",
-                "PI_JOBS_ARTIFACT_RETENTION must be valid UTF-8: preserve or rotate".to_string(),
+                "RECUR_AGENT_JOBS_ARTIFACT_RETENTION must be valid UTF-8: preserve or rotate"
+                    .to_string(),
             )
         })?;
         match value.trim().to_ascii_lowercase().as_str() {
@@ -911,14 +912,14 @@ impl ArtifactRetentionPolicy {
             _ => Err(Error::tool(
                 "bash",
                 format!(
-                    "PI_JOBS_ARTIFACT_RETENTION has unsupported value {value:?}; expected preserve or rotate"
+                    "RECUR_AGENT_JOBS_ARTIFACT_RETENTION has unsupported value {value:?}; expected preserve or rotate"
                 ),
             )),
         }
     }
 
     fn from_environment() -> Result<Self> {
-        Self::from_value(std::env::var_os("PI_JOBS_ARTIFACT_RETENTION").as_deref())
+        Self::from_value(std::env::var_os("RECUR_AGENT_JOBS_ARTIFACT_RETENTION").as_deref())
     }
 
     const fn as_str(self) -> &'static str {
@@ -1198,7 +1199,7 @@ fn enforce_artifact_retention(
         return Err(Error::tool(
             "bash",
             format!(
-                "PI_JOBS_ARTIFACT_CAPACITY: refusing a new background job because {} accounts for {stored_entries} entries and {stored_bytes} bytes (limits: {max_entries} entries, {max_bytes} bytes including live-job reservations; retention policy: {}; cleanup removed {} files and reclaimed {} bytes)",
+                "RECUR_AGENT_JOBS_ARTIFACT_CAPACITY: refusing a new background job because {} accounts for {stored_entries} entries and {stored_bytes} bytes (limits: {max_entries} entries, {max_bytes} bytes including live-job reservations; retention policy: {}; cleanup removed {} files and reclaimed {} bytes)",
                 jobs_dir.display(),
                 policy.as_str(),
                 outcome.removed_files,
@@ -1449,8 +1450,8 @@ impl Drop for BackgroundChild {
 /// has already classified the command by the time we get here.
 ///
 /// # Errors
-/// Named `PI_JOBS_AT_CAPACITY` when 8 jobs are already running,
-/// `PI_JOBS_SESSION_CLOSING` when owner teardown has started, or tool errors
+/// Named `RECUR_AGENT_JOBS_AT_CAPACITY` when 8 jobs are already running,
+/// `RECUR_AGENT_JOBS_SESSION_CLOSING` when owner teardown has started, or tool errors
 /// for spawn/artifact failures.
 // Guard scope is deliberate; tightening drops would change lock-hold semantics.
 #[allow(clippy::too_many_lines, clippy::significant_drop_tightening)]
@@ -1466,7 +1467,7 @@ pub fn spawn_background(
     if owner_session_id.trim().is_empty() {
         return Err(Error::tool(
             "jobs",
-            "PI_JOBS_SESSION_UNAVAILABLE: current agent session identity is unavailable"
+            "RECUR_AGENT_JOBS_SESSION_UNAVAILABLE: current agent session identity is unavailable"
                 .to_string(),
         ));
     }
@@ -2241,7 +2242,7 @@ pub fn list(owner_session_id: &str) -> Result<Vec<JobSnapshot>> {
 fn unknown_job_error(id: &str) -> Error {
     Error::tool(
         "jobs",
-        format!("PI_JOBS_UNKNOWN_ID: no background job named '{id}'"),
+        format!("RECUR_AGENT_JOBS_UNKNOWN_ID: no background job named '{id}'"),
     )
 }
 
@@ -2324,7 +2325,7 @@ fn remaining_wait_slice(now: Instant, deadline: Option<Instant>) -> Option<Durat
 /// Wait for a job to settle (bounded), returning its snapshot either way.
 ///
 /// # Errors
-/// Named `PI_JOBS_UNKNOWN_ID` for unknown or foreign-session job ids.
+/// Named `RECUR_AGENT_JOBS_UNKNOWN_ID` for unknown or foreign-session job ids.
 #[allow(clippy::significant_drop_tightening)]
 pub fn wait(owner_session_id: &str, id: &str, timeout: Duration) -> Result<JobSnapshot> {
     let handle = wait_handle(owner_session_id, id)?;
@@ -2335,7 +2336,7 @@ pub fn wait(owner_session_id: &str, id: &str, timeout: Duration) -> Result<JobSn
 /// abort/steering and unrelated sessions.
 ///
 /// # Errors
-/// Named `PI_JOBS_UNKNOWN_ID` for unknown or foreign-session job ids.
+/// Named `RECUR_AGENT_JOBS_UNKNOWN_ID` for unknown or foreign-session job ids.
 pub async fn wait_async(
     owner_session_id: &str,
     id: &str,
@@ -2445,7 +2446,7 @@ fn request_cancel(owner_session_id: &str, id: &str) -> Result<JobWaitHandle> {
         return Err(Error::tool(
             "jobs",
             format!(
-                "PI_JOBS_NOT_RUNNING: job '{id}' no longer owns a live process ({})",
+                "RECUR_AGENT_JOBS_NOT_RUNNING: job '{id}' no longer owns a live process ({})",
                 job.status.as_str()
             ),
         ));
@@ -2464,7 +2465,7 @@ fn request_cancel(owner_session_id: &str, id: &str) -> Result<JobWaitHandle> {
 /// KILL + tree walk).
 ///
 /// # Errors
-/// Named `PI_JOBS_UNKNOWN_ID` for unknown job ids; `PI_JOBS_NOT_RUNNING`
+/// Named `RECUR_AGENT_JOBS_UNKNOWN_ID` for unknown job ids; `RECUR_AGENT_JOBS_NOT_RUNNING`
 /// when the job already settled.
 #[allow(clippy::significant_drop_tightening)]
 pub fn cancel(owner_session_id: &str, id: &str) -> Result<JobSnapshot> {
@@ -2475,7 +2476,9 @@ pub fn cancel(owner_session_id: &str, id: &str) -> Result<JobSnapshot> {
     if snapshot.status == JobStatus::Running.as_str() {
         return Err(Error::tool(
             "jobs",
-            format!("PI_JOBS_CANCEL_TIMEOUT: job '{id}' did not settle after cancellation"),
+            format!(
+                "RECUR_AGENT_JOBS_CANCEL_TIMEOUT: job '{id}' did not settle after cancellation"
+            ),
         ));
     }
     Ok(snapshot)
@@ -2486,7 +2489,7 @@ pub fn cancel(owner_session_id: &str, id: &str) -> Result<JobSnapshot> {
 /// executor worker for the grace period.
 ///
 /// # Errors
-/// Same named errors as [`cancel`], plus `PI_JOBS_CANCEL_TIMEOUT` if the monitor
+/// Same named errors as [`cancel`], plus `RECUR_AGENT_JOBS_CANCEL_TIMEOUT` if the monitor
 /// cannot publish a terminal state within the bounded cleanup window.
 pub async fn cancel_async(owner_session_id: &str, id: &str) -> Result<JobSnapshot> {
     let handle = request_cancel(owner_session_id, id)?;
@@ -2494,7 +2497,9 @@ pub async fn cancel_async(owner_session_id: &str, id: &str) -> Result<JobSnapsho
     if snapshot.status == JobStatus::Running.as_str() {
         return Err(Error::tool(
             "jobs",
-            format!("PI_JOBS_CANCEL_TIMEOUT: job '{id}' did not settle after cancellation"),
+            format!(
+                "RECUR_AGENT_JOBS_CANCEL_TIMEOUT: job '{id}' did not settle after cancellation"
+            ),
         ));
     }
     Ok(snapshot)
@@ -2612,13 +2617,13 @@ fn completion_notice_message(text: String) -> Message {
 /// identical.
 ///
 /// # Errors
-/// Returns `PI_JOBS_SESSION_UNAVAILABLE` when the owner identity is empty or
+/// Returns `RECUR_AGENT_JOBS_SESSION_UNAVAILABLE` when the owner identity is empty or
 /// whitespace-only.
 pub fn push_completion_notice(owner_session_id: &str, text: impl Into<String>) -> Result<()> {
     if owner_session_id.trim().is_empty() {
         return Err(Error::tool(
             "jobs",
-            "PI_JOBS_SESSION_UNAVAILABLE: completion notice owner is empty".to_string(),
+            "RECUR_AGENT_JOBS_SESSION_UNAVAILABLE: completion notice owner is empty".to_string(),
         ));
     }
     let text = text.into();
@@ -2678,7 +2683,7 @@ impl SessionShutdownAttempt {
             return Err(Error::tool(
                 "jobs",
                 format!(
-                    "PI_JOBS_SESSION_SHUTDOWN_OVERFLOW: shutdown generation exhausted for session {owner_session_id:?}"
+                    "RECUR_AGENT_JOBS_SESSION_SHUTDOWN_OVERFLOW: shutdown generation exhausted for session {owner_session_id:?}"
                 ),
             ));
         };
@@ -2692,7 +2697,7 @@ impl SessionShutdownAttempt {
             Error::tool(
                 "jobs",
                 format!(
-                    "PI_JOBS_SESSION_SHUTDOWN_OVERFLOW: too many concurrent shutdown attempts for session {owner_session_id:?}"
+                    "RECUR_AGENT_JOBS_SESSION_SHUTDOWN_OVERFLOW: too many concurrent shutdown attempts for session {owner_session_id:?}"
                 ),
             )
         })?;
@@ -2726,7 +2731,7 @@ fn finish_session_shutdown_attempt(owner_session_id: &str, clear_when_safe: bool
         return Err(Error::tool(
             "jobs",
             format!(
-                "PI_JOBS_SESSION_SHUTDOWN_STATE_LOST: session {owner_session_id:?} has no shutdown state"
+                "RECUR_AGENT_JOBS_SESSION_SHUTDOWN_STATE_LOST: session {owner_session_id:?} has no shutdown state"
             ),
         ));
     };
@@ -2734,7 +2739,7 @@ fn finish_session_shutdown_attempt(owner_session_id: &str, clear_when_safe: bool
         Error::tool(
             "jobs",
             format!(
-                "PI_JOBS_SESSION_SHUTDOWN_STATE_LOST: session {owner_session_id:?} has no active shutdown attempt"
+                "RECUR_AGENT_JOBS_SESSION_SHUTDOWN_STATE_LOST: session {owner_session_id:?} has no active shutdown attempt"
             ),
         )
     })?;
@@ -2765,7 +2770,7 @@ fn request_session_shutdown_with_timeout(
     if owner_session_id.trim().is_empty() {
         return Err(Error::tool(
             "jobs",
-            "PI_JOBS_SESSION_UNAVAILABLE: current agent session identity is unavailable"
+            "RECUR_AGENT_JOBS_SESSION_UNAVAILABLE: current agent session identity is unavailable"
                 .to_string(),
         ));
     }
@@ -2790,7 +2795,7 @@ fn request_session_shutdown_with_timeout(
                 return Err(Error::tool(
                     "jobs",
                     format!(
-                        "PI_JOBS_SESSION_SHUTDOWN_LOCK_TIMEOUT: session {owner_session_id:?} could not acquire the jobs lifecycle fence within {} seconds",
+                        "RECUR_AGENT_JOBS_SESSION_SHUTDOWN_LOCK_TIMEOUT: session {owner_session_id:?} could not acquire the jobs lifecycle fence within {} seconds",
                         lifecycle_timeout.as_secs_f64()
                     ),
                 ));
@@ -2830,9 +2835,9 @@ fn request_session_shutdown_with_timeout(
 /// by another live handle in the same process.
 ///
 /// # Errors
-/// Named `PI_JOBS_SESSION_UNAVAILABLE` for a blank owner, registry/lifecycle
-/// errors, `PI_JOBS_SESSION_SHUTDOWN_LOCK_TIMEOUT` when the closing fence
-/// cannot be acquired, or `PI_JOBS_SESSION_SHUTDOWN_INCOMPLETE` when any
+/// Named `RECUR_AGENT_JOBS_SESSION_UNAVAILABLE` for a blank owner, registry/lifecycle
+/// errors, `RECUR_AGENT_JOBS_SESSION_SHUTDOWN_LOCK_TIMEOUT` when the closing fence
+/// cannot be acquired, or `RECUR_AGENT_JOBS_SESSION_SHUTDOWN_INCOMPLETE` when any
 /// requested job remains unsettled after the bounded cancellation window.
 pub async fn kill_session(owner_session_id: &str) -> Result<()> {
     let request_owner = owner_session_id.to_string();
@@ -2862,7 +2867,7 @@ pub async fn kill_session(owner_session_id: &str) -> Result<()> {
         Err(Error::tool(
             "jobs",
             format!(
-                "PI_JOBS_SESSION_SHUTDOWN_INCOMPLETE: {}",
+                "RECUR_AGENT_JOBS_SESSION_SHUTDOWN_INCOMPLETE: {}",
                 failures.join("; ")
             ),
         ))
@@ -3350,7 +3355,7 @@ mod tests {
         assert!(
             bytes_error
                 .to_string()
-                .contains("PI_JOBS_ARTIFACT_CAPACITY")
+                .contains("RECUR_AGENT_JOBS_ARTIFACT_CAPACITY")
         );
 
         std::fs::write(temp.path().join("two.log"), b"").expect("second artifact");
@@ -3359,7 +3364,7 @@ mod tests {
         assert!(
             entries_error
                 .to_string()
-                .contains("PI_JOBS_ARTIFACT_CAPACITY")
+                .contains("RECUR_AGENT_JOBS_ARTIFACT_CAPACITY")
         );
     }
 
@@ -3381,7 +3386,11 @@ mod tests {
             .saturating_mul(2);
         let error = ensure_artifact_budget(temp.path(), two_job_budget - 1, 10)
             .expect_err("live artifact plus prospective job must reserve two full caps");
-        assert!(error.to_string().contains("PI_JOBS_ARTIFACT_CAPACITY"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_ARTIFACT_CAPACITY")
+        );
         fs4::FileExt::unlock(&live).expect("release live artifact reservation");
     }
 
@@ -3647,7 +3656,11 @@ mod tests {
             0,
         )
         .expect_err("a symlink cannot become a cleanup candidate");
-        assert!(error.to_string().contains("PI_JOBS_ARTIFACT_CAPACITY"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_ARTIFACT_CAPACITY")
+        );
         assert!(planted.symlink_metadata().is_ok());
         assert_eq!(
             std::fs::read_to_string(&victim).expect("victim remains readable"),
@@ -3657,14 +3670,14 @@ mod tests {
 
     #[test]
     fn artifact_budget_lock_child() {
-        let Ok(mode) = std::env::var("PI_JOBS_BUDGET_LOCK_CHILD") else {
+        let Ok(mode) = std::env::var("RECUR_AGENT_JOBS_BUDGET_LOCK_CHILD") else {
             return;
         };
         let jobs_dir = PathBuf::from(
-            std::env::var_os("PI_JOBS_BUDGET_LOCK_DIR").expect("child lock directory"),
+            std::env::var_os("RECUR_AGENT_JOBS_BUDGET_LOCK_DIR").expect("child lock directory"),
         );
         let marker_dir = PathBuf::from(
-            std::env::var_os("PI_JOBS_BUDGET_MARKER_DIR").expect("child marker directory"),
+            std::env::var_os("RECUR_AGENT_JOBS_BUDGET_MARKER_DIR").expect("child marker directory"),
         );
         if mode == "probe" {
             std::fs::write(marker_dir.join("probe-attempted"), b"").expect("probe marker");
@@ -3695,9 +3708,9 @@ mod tests {
         let spawn_child = |mode: &str| {
             std::process::Command::new(&test_binary)
                 .args(["--exact", "jobs::tests::artifact_budget_lock_child"])
-                .env("PI_JOBS_BUDGET_LOCK_CHILD", mode)
-                .env("PI_JOBS_BUDGET_LOCK_DIR", &jobs_dir)
-                .env("PI_JOBS_BUDGET_MARKER_DIR", &marker_dir)
+                .env("RECUR_AGENT_JOBS_BUDGET_LOCK_CHILD", mode)
+                .env("RECUR_AGENT_JOBS_BUDGET_LOCK_DIR", &jobs_dir)
+                .env("RECUR_AGENT_JOBS_BUDGET_MARKER_DIR", &marker_dir)
                 .spawn()
                 .expect("spawn budget-lock child")
         };
@@ -3833,7 +3846,9 @@ mod tests {
         )
         .expect_err("a closing owner must reject new background jobs");
         assert!(
-            spawn_error.to_string().contains("PI_JOBS_SESSION_CLOSING"),
+            spawn_error
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_SESSION_CLOSING"),
             "unexpected closing-owner error: {spawn_error}"
         );
 
@@ -3919,7 +3934,11 @@ mod tests {
             }
         };
         gate.assert_not_timed_out();
-        assert!(error.to_string().contains("PI_JOBS_SESSION_CLOSING"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_SESSION_CLOSING")
+        );
         assert!(
             !reached_pre_spawn.load(Ordering::Acquire),
             "under-lifecycle owner check must reject before artifact and OS-spawn setup"
@@ -3993,7 +4012,11 @@ mod tests {
             .recv_timeout(Duration::from_secs(2))
             .expect("first stale spawn result")
         {
-            Err(error) => assert!(error.to_string().contains("PI_JOBS_SESSION_CLOSING")),
+            Err(error) => assert!(
+                error
+                    .to_string()
+                    .contains("RECUR_AGENT_JOBS_SESSION_CLOSING")
+            ),
             Ok(snapshot) => {
                 let _ = cancel(&owner, &snapshot.id);
                 panic!("first stale spawn escaped the completed shutdown")
@@ -4015,7 +4038,11 @@ mod tests {
             .recv_timeout(Duration::from_secs(2))
             .expect("second stale spawn result")
         {
-            Err(error) => assert!(error.to_string().contains("PI_JOBS_SESSION_CLOSING")),
+            Err(error) => assert!(
+                error
+                    .to_string()
+                    .contains("RECUR_AGENT_JOBS_SESSION_CLOSING")
+            ),
             Ok(snapshot) => {
                 let _ = cancel(&owner, &snapshot.id);
                 panic!("second stale spawn escaped the completed shutdown")
@@ -4080,7 +4107,11 @@ mod tests {
             }
         };
         gate.assert_not_timed_out();
-        assert!(error.to_string().contains("PI_JOBS_SESSION_CLOSING"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_SESSION_CLOSING")
+        );
         assert!(
             !reached_os_spawn.load(Ordering::Acquire),
             "pre-spawn owner check must reject before creating a child"
@@ -4149,7 +4180,11 @@ mod tests {
             }
         };
         gate.assert_not_timed_out();
-        assert!(error.to_string().contains("PI_JOBS_SESSION_CLOSING"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_SESSION_CLOSING")
+        );
         assert!(!process_exists(pid), "rejected child must be reaped");
         let reg = registry()
             .lock()
@@ -4285,7 +4320,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("PI_JOBS_SESSION_SHUTDOWN_LOCK_TIMEOUT"),
+                .contains("RECUR_AGENT_JOBS_SESSION_SHUTDOWN_LOCK_TIMEOUT"),
             "unexpected lifecycle-timeout error: {error}"
         );
         assert!(
@@ -4409,7 +4444,7 @@ mod tests {
         let error = request_cancel(TEST_SESSION_ID, &id)
             .err()
             .expect("reaped process must not be signalled");
-        assert!(error.to_string().contains("PI_JOBS_NOT_RUNNING"));
+        assert!(error.to_string().contains("RECUR_AGENT_JOBS_NOT_RUNNING"));
         registry()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -4676,7 +4711,11 @@ mod tests {
         let valid_owner = format!("valid-owner-{}", uuid::Uuid::new_v4().simple());
         for (owner, text) in [("", "empty-owner"), ("   ", "blank-owner")] {
             let error = push_completion_notice(owner, text).expect_err("invalid owner");
-            assert!(error.to_string().contains("PI_JOBS_SESSION_UNAVAILABLE"));
+            assert!(
+                error
+                    .to_string()
+                    .contains("RECUR_AGENT_JOBS_SESSION_UNAVAILABLE")
+            );
             assert!(
                 take_completion_notices(owner).is_empty(),
                 "an invalid owner must fail before consuming registry capacity"
@@ -4735,7 +4774,7 @@ mod tests {
                 .expect("foreign cancel"),
         ] {
             let rendered = error.to_string();
-            assert!(rendered.contains("PI_JOBS_UNKNOWN_ID"));
+            assert!(rendered.contains("RECUR_AGENT_JOBS_UNKNOWN_ID"));
             assert!(!rendered.contains("private-command"));
             assert!(!rendered.contains(&artifact_path.display().to_string()));
         }
@@ -4797,7 +4836,7 @@ mod tests {
     fn background_metadata_excludes_configured_shell_prefix() {
         let _guard = process_test_guard();
         let root = temp_root();
-        let prefix_secret = "PI_PRIVATE_PREFIX_MARKER=must-not-leak";
+        let prefix_secret = "RECUR_AGENT_PRIVATE_PREFIX_MARKER=must-not-leak";
         let user_command = "printf prefix-metadata-ok";
         let snapshot = spawn_background(
             TEST_SESSION_ID,
@@ -5027,7 +5066,7 @@ mod tests {
             Duration::from_millis(10),
         )
         .unwrap_err();
-        assert!(err.to_string().contains("PI_JOBS_UNKNOWN_ID"));
+        assert!(err.to_string().contains("RECUR_AGENT_JOBS_UNKNOWN_ID"));
     }
 
     #[test]
@@ -5445,7 +5484,11 @@ mod tests {
             .collect();
         assert_eq!(succeeded.len(), MAX_CONCURRENT_JOBS);
         assert_eq!(rejected.len(), 1);
-        assert!(rejected[0].to_string().contains("PI_JOBS_AT_CAPACITY"));
+        assert!(
+            rejected[0]
+                .to_string()
+                .contains("RECUR_AGENT_JOBS_AT_CAPACITY")
+        );
 
         for snapshot in succeeded {
             cancel(TEST_SESSION_ID, &snapshot.id).expect("cleanup capacity test job");

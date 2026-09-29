@@ -26,7 +26,7 @@ use sha2::Digest as _;
 use crate::file_identity::FileIdentity;
 
 /// Schema tag for undo/redo session entries and tool-result details.
-pub const UNDO_SCHEMA: &str = "pi.undo.v1";
+pub const UNDO_SCHEMA: &str = "ra.undo.v1";
 
 /// Default byte budget for the snapshot store.
 pub const DEFAULT_STORE_BUDGET_BYTES: u64 = 64 * 1024 * 1024;

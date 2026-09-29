@@ -1416,7 +1416,7 @@ pub const PROVIDER_METADATA: &[ProviderMetadata] = &[
         // llama.cpp's bundled `llama-server` exposes an OpenAI-compatible API on
         // localhost and requires NO API key by default (parity with ollama /
         // lmstudio). It is registered as a first-class local provider so that
-        // `pi --provider llamacpp --model <id>` works out-of-the-box without a
+        // `ra --provider llamacpp --model <id>` works out-of-the-box without a
         // models.json entry and, critically, without tripping the API-key gate.
         // (#104)
         canonical_id: "llamacpp",
@@ -1849,7 +1849,7 @@ pub fn provider_routing_defaults(provider_id: &str) -> Option<ProviderRoutingDef
 /// Used by the OpenAI-completions / OpenAI-responses request paths so that a
 /// missing API key is NOT treated as a fatal error for these providers (they
 /// are simply called without a bearer token), matching how `ollama` already
-/// works. Without this, `pi --provider llamacpp ...` errors with
+/// works. Without this, `ra --provider llamacpp ...` errors with
 /// "Missing API key for provider" even though the provider needs none. (#104)
 ///
 /// The predicate is derived from the canonical metadata (`auth_env_keys` empty
@@ -1899,7 +1899,7 @@ pub fn split_provider_model_spec(model_spec: &str) -> Option<(&str, &str)> {
 /// The docs table is GENERATED from this registry so prose never drifts from
 /// code; `tests/provider_metadata_comprehensive.rs` asserts the checked-in
 /// docs section matches this exact output (regenerate with
-/// `PI_BLESS_MODELS_DOC=1 cargo test ...docs_provider_table...`).
+/// `RECUR_AGENT_BLESS_MODELS_DOC=1 cargo test ...docs_provider_table...`).
 #[must_use]
 pub fn render_provider_docs_table() -> String {
     let mut out = String::from(

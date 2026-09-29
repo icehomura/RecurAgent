@@ -437,7 +437,7 @@ pub(crate) fn acquire_global_trust_lock_for(
 
     let stable_path = stable_trust_lock_path(path)?;
     let mut digest = Sha256::new();
-    digest.update(b"pi_agent_rust:mcp-global-trust-lock:v1\0");
+    digest.update(b"recur_agent:mcp-global-trust-lock:v1\0");
     digest.update(stable_path.as_os_str().as_encoded_bytes());
     let target_name = OsString::from(format!(
         "trust-{}",

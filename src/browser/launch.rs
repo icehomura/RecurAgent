@@ -54,29 +54,33 @@ impl Connection {
             validate_options(launch)?;
             return Ok(Self::Managed(launch.clone()));
         }
-        if let Some(endpoint) = lookup("PI_BROWSER_CDP_URL") {
+        if let Some(endpoint) = lookup("RECUR_AGENT_BROWSER_CDP_URL") {
             let endpoint = endpoint
                 .to_str()
-                .ok_or_else(|| error("PI_BROWSER_CDP_URL must be UTF-8"))?;
+                .ok_or_else(|| error("RECUR_AGENT_BROWSER_CDP_URL must be UTF-8"))?;
             return Ok(Self::Attach(policy::endpoint(endpoint, false)?));
         }
-        let headless = match lookup("PI_BROWSER_HEADLESS") {
+        let headless = match lookup("RECUR_AGENT_BROWSER_HEADLESS") {
             None => true,
             Some(value) => match value.to_str() {
                 Some("1" | "true") => true,
                 Some("0" | "false") => false,
-                _ => return Err(error("PI_BROWSER_HEADLESS must be true, false, 1 or 0")),
+                _ => {
+                    return Err(error(
+                        "RECUR_AGENT_BROWSER_HEADLESS must be true, false, 1 or 0",
+                    ));
+                }
             },
         };
-        let user_agent = lookup("PI_BROWSER_USER_AGENT")
+        let user_agent = lookup("RECUR_AGENT_BROWSER_USER_AGENT")
             .map(|value| {
                 value
                     .into_string()
-                    .map_err(|_| error("PI_BROWSER_USER_AGENT must be UTF-8"))
+                    .map_err(|_| error("RECUR_AGENT_BROWSER_USER_AGENT must be UTF-8"))
             })
             .transpose()?;
         let options = BrowserLaunchOptions {
-            executable_path: lookup("PI_BROWSER_EXECUTABLE").map(PathBuf::from),
+            executable_path: lookup("RECUR_AGENT_BROWSER_EXECUTABLE").map(PathBuf::from),
             headless,
             user_agent,
         };
@@ -337,7 +341,7 @@ fn executable(explicit: Option<&Path>, cwd: &Path) -> Result<PathBuf> {
         }
     }
     Err(error(
-        "no installed Chromium/Chrome executable found; set PI_BROWSER_EXECUTABLE or attach explicitly with PI_BROWSER_CDP_URL",
+        "no installed Chromium/Chrome executable found; set RECUR_AGENT_BROWSER_EXECUTABLE or attach explicitly with RECUR_AGENT_BROWSER_CDP_URL",
     ))
 }
 

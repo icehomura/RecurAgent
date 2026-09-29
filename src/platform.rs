@@ -268,15 +268,15 @@ pub fn platform_tag() -> String {
     format!("{}/{}", os_name(), arch_name())
 }
 
-/// Canonical Pi User-Agent: `"pi_agent_rust/{version}"`.
-pub fn pi_user_agent() -> String {
-    format!("pi_agent_rust/{VERSION}")
+/// Canonical Pi User-Agent: `"recur_agent/{version}"`.
+pub fn ra_user_agent() -> String {
+    format!("recur_agent/{VERSION}")
 }
 
 /// Canonical Pi User-Agent with an additional component:
-/// `"pi_agent_rust/{version} {extra}"`.
-pub fn pi_user_agent_with(extra: &str) -> String {
-    format!("pi_agent_rust/{VERSION} {extra}")
+/// `"recur_agent/{version} {extra}"`.
+pub fn ra_user_agent_with(extra: &str) -> String {
+    format!("recur_agent/{VERSION} {extra}")
 }
 
 // ---------------------------------------------------------------------------
@@ -335,16 +335,16 @@ mod tests {
     }
 
     #[test]
-    fn pi_user_agent_contains_version() {
-        let ua = pi_user_agent();
-        assert!(ua.starts_with("pi_agent_rust/"), "ua: {ua}");
+    fn ra_user_agent_contains_version() {
+        let ua = ra_user_agent();
+        assert!(ua.starts_with("recur_agent/"), "ua: {ua}");
         assert!(ua.contains(VERSION), "ua should contain version");
     }
 
     #[test]
-    fn pi_user_agent_with_appends() {
-        let ua = pi_user_agent_with("Antigravity/1.2.3");
-        assert!(ua.starts_with("pi_agent_rust/"));
+    fn ra_user_agent_with_appends() {
+        let ua = ra_user_agent_with("Antigravity/1.2.3");
+        assert!(ua.starts_with("recur_agent/"));
         assert!(ua.ends_with("Antigravity/1.2.3"));
     }
 

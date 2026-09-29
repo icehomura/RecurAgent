@@ -20,7 +20,7 @@ use crate::model::{Message, UserContent, UserMessage};
 use crate::session::{CustomEntry, Session, SessionEntry, SessionMessage};
 
 /// Tool-result schema tag for checkpoint/rewind operations.
-pub const CHECKPOINT_SCHEMA: &str = "pi.checkpoint.v1";
+pub const CHECKPOINT_SCHEMA: &str = "ra.checkpoint.v1";
 
 /// A checkpoint marker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,7 +275,7 @@ pub fn fresh_stream_state(agent: &mut crate::agent::Agent, session: &mut Session
     session.append_custom_entry(
         "fresh".to_string(),
         Some(serde_json::json!({
-            "schema": "pi.fresh.v1",
+            "schema": "ra.fresh.v1",
             "newSessionId": new_id,
             "reason": "operator /fresh: provider cache + stream bookkeeping reset",
         })),

@@ -1016,7 +1016,7 @@ impl McpManager {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": {},
                     "clientInfo": {
-                        "name": "pi_agent_rust",
+                        "name": "recur_agent",
                         "version": crate::platform::VERSION,
                     },
                 }),
@@ -2113,7 +2113,7 @@ mod tests {
             headers: Vec::new(),
             transport_hint: Some("stdio".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = McpManager::new(
             &cwd,
@@ -2146,7 +2146,7 @@ mod tests {
                 headers: Vec::new(),
                 transport_hint: Some("stdio".to_string()),
                 provenance: Provenance::ProjectPi,
-                source_file: cwd.join(".pi/mcp.json"),
+                source_file: cwd.join(".ra/mcp.json"),
             })
             .collect();
         let manager = McpManager::new(
@@ -2340,7 +2340,7 @@ mod tests {
             headers: Vec::new(),
             transport_hint: Some("http".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = McpManager::new(
             &cwd,
@@ -2594,7 +2594,7 @@ mod tests {
             headers: Vec::new(),
             transport_hint: Some("stdio".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = McpManager::new(
             &cwd,
@@ -2652,7 +2652,7 @@ mod tests {
             headers: Vec::new(),
             transport_hint: Some("stdio".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = McpManager::new(
             &cwd,
@@ -3001,7 +3001,7 @@ mod tests {
             headers: vec![("Authorization".to_string(), command)],
             transport_hint: Some("http".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = Arc::new(McpManager::new(
             &cwd,
@@ -3119,7 +3119,7 @@ mod tests {
             headers: Vec::new(),
             transport_hint: Some("stdio".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = Arc::new(McpManager::new(
             &cwd,
@@ -3237,7 +3237,7 @@ mod tests {
             headers: Vec::new(),
             transport_hint: Some("stdio".to_string()),
             provenance: Provenance::ProjectPi,
-            source_file: cwd.join(".pi/mcp.json"),
+            source_file: cwd.join(".ra/mcp.json"),
         };
         let manager = Arc::new(McpManager::new(
             &cwd,

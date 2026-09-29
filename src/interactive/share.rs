@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use url::Url;
 
-use super::{AgentState, Cmd, PiApp, PiMsg};
+use super::{AgentState, Cmd, RaApp, RaMsg};
 use crate::session::Session;
 
 #[cfg(feature = "clipboard")]
@@ -883,7 +883,7 @@ mod tests {
 
 /// What a share attempt ended up doing, independent of which stack asked.
 ///
-/// The classic stack maps these onto its `PiMsg` channel; the ftui driver maps
+/// The classic stack maps these onto its `RaMsg` channel; the ftui driver maps
 /// them onto transcript entries. Keeping the `gh` driver free of both is what
 /// lets one implementation serve both stacks, instead of the default stack
 /// growing a second copy of a 250-line external-process flow (bd-ydz1t.1).
@@ -1064,7 +1064,7 @@ pub async fn run_share(
     ))
 }
 
-impl PiApp {
+impl RaApp {
     pub(super) fn handle_slash_share(&mut self, args: &str) -> Option<Cmd> {
         if self.agent_state != AgentState::Idle {
             self.status_message = Some("Cannot share while processing".to_string());
@@ -1097,12 +1097,12 @@ impl PiApp {
         runtime_handle.spawn(async move {
             // The `gh` driver itself is `run_share`, shared with the ftui stack
             // (bd-ydz1t.1). What stays here is what is genuinely this stack's:
-            // mapping the outcome onto its PiMsg channel. A cancellation is a
+            // mapping the outcome onto its RaMsg channel. A cancellation is a
             // note, not an error, on every surface.
             let message = match run_share(gh_path_override, &session, &cwd, &abort_signal).await {
-                ShareOutcome::Created(report) => PiMsg::System(report),
-                ShareOutcome::Cancelled => PiMsg::System("Share cancelled".to_string()),
-                ShareOutcome::Failed(reason) => PiMsg::AgentError(reason),
+                ShareOutcome::Created(report) => RaMsg::System(report),
+                ShareOutcome::Cancelled => RaMsg::System("Share cancelled".to_string()),
+                ShareOutcome::Failed(reason) => RaMsg::AgentError(reason),
             };
             let _ = crate::interactive::enqueue_pi_event(
                 &event_tx,

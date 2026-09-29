@@ -49,8 +49,8 @@ fn every_entrypoint_resumes_instead_of_replaying_user_input() {
     for entrypoint in ENTRYPOINTS {
         let (handle, calls) = flaky_handle(1);
         let mut handle = handle.with_retry(Some(fast_retry_policy(2)));
-        let message = run_async(invoke(&mut handle, entrypoint, Arc::new(|_| {})))
-            .expect("retry completes");
+        let message =
+            run_async(invoke(&mut handle, entrypoint, Arc::new(|_| {}))).expect("retry completes");
         assert_eq!(message.stop_reason, StopReason::Stop, "{entrypoint:?}");
         assert_eq!(calls.load(Ordering::SeqCst), 2, "{entrypoint:?}");
         let messages = run_async(handle.messages()).expect("session messages");
@@ -62,7 +62,10 @@ fn every_entrypoint_resumes_instead_of_replaying_user_input() {
             entrypoint,
             Entrypoint::Prompt | Entrypoint::PromptWithAbort
         ));
-        assert_eq!(users, expected_users, "{entrypoint:?}: input must not replay");
+        assert_eq!(
+            users, expected_users,
+            "{entrypoint:?}: input must not replay"
+        );
         assert!(
             !messages.iter().any(|message| matches!(
                 message,
@@ -131,10 +134,16 @@ fn recovery_events_reach_subscribers_without_double_firing_typed_hooks() {
         .expect("retry completes");
         let subscribed = subscribed.lock().unwrap();
         let per_prompt = per_prompt.lock().unwrap();
-        assert_eq!(*subscribed, *per_prompt, "{entrypoint:?}: one shared fan-out");
+        assert_eq!(
+            *subscribed, *per_prompt,
+            "{entrypoint:?}: one shared fan-out"
+        );
         for name in ["auto_retry_start", "auto_retry_end"] {
             assert_eq!(
-                subscribed.iter().filter(|event| event["type"] == name).count(),
+                subscribed
+                    .iter()
+                    .filter(|event| event["type"] == name)
+                    .count(),
                 1,
                 "{entrypoint:?}: missing or duplicated {name}"
             );
@@ -204,7 +213,11 @@ fn aborting_at_retry_start_returns_abort_not_the_original_capacity_error() {
             }
         });
         assert!(matches!(result, Err(Error::Aborted)));
-        assert_eq!(calls.load(Ordering::SeqCst), 1, "no replay after cancellation");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "no replay after cancellation"
+        );
         let events = events.lock().unwrap();
         let ends: Vec<_> = events
             .iter()
@@ -219,6 +232,7 @@ fn aborting_at_retry_start_returns_abort_not_the_original_capacity_error() {
                 .to_ascii_lowercase()
                 .contains("abort")
         );
+            drop(events);
     }
 }
 
@@ -297,7 +311,12 @@ fn known_model_capacity_blocks_silent_overflow_recovery_on_every_entrypoint() {
             AgentSessionHandle::from_session_with_listeners(session, EventListeners::new())
                 .with_retry(Some(fast_retry_policy(3)));
         assert_eq!(
-            handle.session.current_model_entry().unwrap().model.context_window,
+            handle
+                .session
+                .current_model_entry()
+                .unwrap()
+                .model
+                .context_window,
             8_192
         );
         let message = run_async(invoke(&mut handle, entrypoint, Arc::new(|_| {}))).unwrap();
@@ -313,13 +332,16 @@ fn known_model_capacity_blocks_silent_overflow_recovery_on_every_entrypoint() {
 fn saving_recovery_handle(dir: &Path) -> (AgentSessionHandle, Arc<AtomicUsize>) {
     let mut handle = saving_handle(dir);
     let calls = Arc::new(AtomicUsize::new(0));
-    handle.session.agent.set_provider(Arc::new(FlakyThenOkProvider {
-        failures: usize::MAX,
-        calls: Arc::clone(&calls),
-        name: "anthropic".to_string(),
-        model: "claude-3-5-haiku-latest".to_string(),
-        input_tokens: 0,
-    }));
+    handle
+        .session
+        .agent
+        .set_provider(Arc::new(FlakyThenOkProvider {
+            failures: usize::MAX,
+            calls: Arc::clone(&calls),
+            name: "anthropic".to_string(),
+            model: "claude-3-5-haiku-latest".to_string(),
+            input_tokens: 0,
+        }));
     (handle, calls)
 }
 
@@ -328,7 +350,9 @@ fn assert_quarantined_entrypoints(handle: &mut AgentSessionHandle, calls: &Atomi
     for entrypoint in ENTRYPOINTS {
         let result = run_async(invoke(handle, entrypoint, Arc::new(|_| {})));
         assert!(
-            result.as_ref().is_err_and(|error| error.is_session_persistence()),
+            result
+                .as_ref()
+                .is_err_and(crate::error::Error::is_session_persistence),
             "{entrypoint:?}: uncertain durability must remain quarantined: {result:?}"
         );
         assert_eq!(calls.load(Ordering::SeqCst), before, "{entrypoint:?}");
@@ -363,7 +387,11 @@ fn retry_save_failure_quarantines_later_calls_even_after_the_path_is_repaired() 
             .unwrap()
             .push(serde_json::to_value(event).unwrap());
     }));
-    assert!(result.as_ref().is_err_and(|error| error.is_session_persistence()));
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(crate::error::Error::is_session_persistence)
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     let (original_path, expected) = injected.lock().unwrap().clone().expect("fault injected");
     assert_eq!(
@@ -378,7 +406,10 @@ fn retry_save_failure_quarantines_later_calls_even_after_the_path_is_repaired() 
     {
         let events = events.lock().unwrap();
         assert_eq!(
-            events.iter().filter(|event| event["type"] == "auto_retry_end").count(),
+            events
+                .iter()
+                .filter(|event| event["type"] == "auto_retry_end")
+                .count(),
             1
         );
         assert_eq!(events.last().unwrap()["type"], "agent_end");
@@ -388,6 +419,7 @@ fn retry_save_failure_quarantines_later_calls_even_after_the_path_is_repaired() 
                 .unwrap()
                 .contains(Error::SESSION_PERSISTENCE_PREFIX)
         );
+            drop(events);
     }
     handle.session_store().try_lock().unwrap().path = Some(original_path);
     assert_quarantined_entrypoints(&mut handle, &calls);
@@ -401,7 +433,13 @@ fn failover_save_failure_preserves_source_state_and_quarantines_reentry() {
     let (mut handle, calls) = saving_recovery_handle(dir.path());
     let first = run_async(handle.prompt("source input", |_| {})).unwrap();
     assert_eq!(first.stop_reason, StopReason::Error);
-    let original_path = handle.session_store().try_lock().unwrap().path.clone().unwrap();
+    let original_path = handle
+        .session_store()
+        .try_lock()
+        .unwrap()
+        .path
+        .clone()
+        .unwrap();
     let expected = serde_json::to_value(run_async(handle.messages()).unwrap()).unwrap();
     let mut fallback = crate::models::ad_hoc_model_entry("openai", "gpt-4o-mini").unwrap();
     // This test calls the real candidate/commit path, not the target provider.
@@ -426,12 +464,19 @@ fn failover_save_failure_preserves_source_state_and_quarantines_reentry() {
             .push(serde_json::to_value(event).unwrap());
     });
     let result = run_async(handle.try_chain_failover(&Ok(first), true, None, 1, &callback));
-    assert!(result.as_ref().is_err_and(|error| error.is_session_persistence()));
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(crate::error::Error::is_session_persistence)
+    );
     assert_eq!(handle.model().1, "claude-3-5-haiku-latest");
     assert!(handle.failover_state.primary().is_none());
     assert!(handle.failover_state.lifecycle_id().is_none());
     assert_eq!(handle.failover_state.chain_position(), 0);
-    assert!(events.lock().unwrap().is_empty(), "no successful swap was published");
+    assert!(
+        events.lock().unwrap().is_empty(),
+        "no successful swap was published"
+    );
     assert_eq!(
         serde_json::to_value(run_async(handle.messages()).unwrap()).unwrap(),
         expected
@@ -467,18 +512,32 @@ fn saving_handle_after_failover(dir: &Path) -> (AgentSessionHandle, Arc<AtomicUs
 fn first_failover_uses_one_lifecycle_identity_in_memory_and_on_reopen() {
     let dir = tempdir().unwrap();
     let (handle, _) = saving_handle_after_failover(dir.path());
-    let path = handle.session_store().try_lock().unwrap().path.clone().unwrap();
+    let path = handle
+        .session_store()
+        .try_lock()
+        .unwrap()
+        .path
+        .clone()
+        .unwrap();
     let reopened = run_async(Session::open(&path.display().to_string())).unwrap();
-    let provenance = reopened.active_failover_provenance_for_current_path().unwrap();
+    let provenance = reopened
+        .active_failover_provenance_for_current_path()
+        .unwrap();
     assert!(provenance.lifecycle_id.is_some());
-    assert_eq!(provenance.lifecycle_id.as_deref(), handle.failover_state.lifecycle_id());
-    let reconstructed = crate::failover::FailoverState::reconstruct_from_session(
-        &reopened,
-        0,
-        chrono::Utc::now(),
+    assert_eq!(
+        provenance.lifecycle_id.as_deref(),
+        handle.failover_state.lifecycle_id()
     );
-    assert_eq!(reconstructed.lifecycle_id(), handle.failover_state.lifecycle_id());
-    assert_eq!(reconstructed.chain_position(), handle.failover_state.chain_position());
+    let reconstructed =
+        crate::failover::FailoverState::reconstruct_from_session(&reopened, 0, chrono::Utc::now());
+    assert_eq!(
+        reconstructed.lifecycle_id(),
+        handle.failover_state.lifecycle_id()
+    );
+    assert_eq!(
+        reconstructed.chain_position(),
+        handle.failover_state.chain_position()
+    );
 }
 
 #[test]
@@ -487,7 +546,13 @@ fn lenient_primary_restore_cannot_hide_indeterminate_persistence() {
     let (mut handle, calls) = saving_handle_after_failover(dir.path());
     let blocked = dir.path().join("blocked-primary-restore.jsonl");
     std::fs::create_dir(&blocked).unwrap();
-    let original_path = handle.session_store().try_lock().unwrap().path.clone().unwrap();
+    let original_path = handle
+        .session_store()
+        .try_lock()
+        .unwrap()
+        .path
+        .clone()
+        .unwrap();
     let expected = serde_json::to_value(run_async(handle.messages()).unwrap()).unwrap();
     handle.session_store().try_lock().unwrap().path = Some(blocked);
     let events = Arc::new(Mutex::new(Vec::<Value>::new()));
@@ -498,7 +563,11 @@ fn lenient_primary_restore_cannot_hide_indeterminate_persistence() {
             .unwrap()
             .push(serde_json::to_value(event).unwrap());
     }));
-    assert!(result.as_ref().is_err_and(|error| error.is_session_persistence()));
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(crate::error::Error::is_session_persistence)
+    );
     assert_eq!(handle.model().1, "gpt-4o-mini");
     assert!(handle.failover_state.primary().is_some());
     assert!(
@@ -510,7 +579,11 @@ fn lenient_primary_restore_cannot_hide_indeterminate_persistence() {
         expected
     );
     let reopened = run_async(Session::open(&original_path.display().to_string())).unwrap();
-    assert!(reopened.active_failover_provenance_for_current_path().is_some());
+    assert!(
+        reopened
+            .active_failover_provenance_for_current_path()
+            .is_some()
+    );
     handle.session_store().try_lock().unwrap().path = Some(original_path);
     assert_quarantined_entrypoints(&mut handle, &calls);
 }
@@ -597,8 +670,13 @@ fn the_terminal_event_excludes_history_from_earlier_public_calls() {
     let events = events.lock().unwrap();
     let new_messages = events.last().unwrap()["messages"].as_array().unwrap();
     assert_eq!(new_messages.len(), 2);
-    assert!(!serde_json::to_string(new_messages).unwrap().contains("earlier input"));
+    assert!(
+        !serde_json::to_string(new_messages)
+            .unwrap()
+            .contains("earlier input")
+    );
     assert_eq!(run_async(handle.messages()).unwrap().len(), 4);
+        drop(events);
 }
 
 #[test]
@@ -618,7 +696,12 @@ fn an_aborted_retry_reports_one_failed_terminal_event_not_a_premature_503_end() 
     let events = events.lock().unwrap();
     assert_eq!(
         lifecycle_names(&events),
-        ["agent_start", "retry_start:1", "retry_end:1:false", "agent_end"]
+        [
+            "agent_start",
+            "retry_start:1",
+            "retry_end:1:false",
+            "agent_end"
+        ]
     );
     assert!(
         events.last().unwrap()["error"]
@@ -627,6 +710,7 @@ fn an_aborted_retry_reports_one_failed_terminal_event_not_a_premature_503_end() 
             .to_ascii_lowercase()
             .contains("abort")
     );
+        drop(events);
 }
 
 /// A bounded local HTTP fixture: exercises the real provider factory, request
@@ -667,8 +751,12 @@ impl RecoveryHttpFixture {
                         Err(error) => panic!("accept failed: {error}"),
                     }
                 };
-                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-                stream.set_write_timeout(Some(Duration::from_secs(5))).unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                stream
+                    .set_write_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
                 let mut request = Vec::new();
                 let mut buffer = [0_u8; 4096];
                 let (header_end, content_length) = loop {
@@ -679,7 +767,13 @@ impl RecoveryHttpFixture {
                     assert!(request.len() <= 128 * 1024, "oversized fixture request");
                     if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
                         let headers = std::str::from_utf8(&request[..end]).unwrap();
-                        assert!(headers.lines().next().unwrap().contains("/chat/completions"));
+                        assert!(
+                            headers
+                                .lines()
+                                .next()
+                                .unwrap()
+                                .contains("/chat/completions")
+                        );
                         let length = headers
                             .lines()
                             .find_map(|line| {
@@ -699,8 +793,9 @@ impl RecoveryHttpFixture {
                     request.extend_from_slice(&buffer[..read]);
                     assert!(request.len() <= 256 * 1024);
                 }
-                let value = serde_json::from_slice(&request[header_end..header_end + content_length])
-                    .expect("provider request JSON");
+                let value =
+                    serde_json::from_slice(&request[header_end..header_end + content_length])
+                        .expect("provider request JSON");
                 captured.lock().unwrap().push(value);
                 let reason = if status == 200 { "OK" } else { "Fixture Error" };
                 let response = format!(
@@ -721,7 +816,11 @@ impl RecoveryHttpFixture {
 
     fn finish(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
-        self.worker.take().unwrap().join().expect("HTTP fixture worker");
+        self.worker
+            .take()
+            .unwrap()
+            .join()
+            .expect("HTTP fixture worker");
     }
 }
 
@@ -755,6 +854,30 @@ fn completion_response() -> (u16, &'static str, String) {
     )
 }
 
+
+/// Build the retry fixture's agent: an ad-hoc `openai-completions` entry
+/// bound to `base_url` with a write-only tool registry.
+///
+/// Split out of `real_tool_work_survives_retry_once_and_terminal_end_follows_persistence`
+/// so the test body itself stays within the function line limit; the
+/// assertions it makes are unchanged.
+fn build_retry_agent(dir: &Path, base_url: &str) -> Agent {
+    let mut entry = crate::models::ad_hoc_model_entry("openai", "fallback-b").unwrap();
+    entry.model.api = "openai-completions".to_string();
+    entry.model.base_url = base_url.to_string();
+    let provider = crate::providers::create_provider(&entry, None).unwrap();
+    Agent::new(
+        provider,
+        ToolRegistry::new(&["write"], dir, None),
+        AgentConfig {
+            stream_options: StreamOptions {
+                api_key: Some("test-key".to_string()),
+                ..Default::default()
+            },
+            ..AgentConfig::default()
+        },
+    )
+}
 fn http_chain_handle(url: &str, cap: u32) -> (AgentSessionHandle, Arc<AtomicUsize>) {
     let (handle, calls) = flaky_handle_as(usize::MAX, "anthropic", "claude-x");
     let entries = ["fallback-a", "fallback-b"]
@@ -864,6 +987,7 @@ fn abort_after_the_second_swap_closes_both_hops_without_contacting_its_provider(
             .to_ascii_lowercase()
             .contains("abort")
     );
+        drop(events);
 }
 
 #[test]
@@ -875,7 +999,9 @@ fn a_swap_cap_counts_commits_not_skipped_specs_or_terminal_events() {
     server.finish();
     assert!(
         result.is_err()
-            || result.as_ref().is_ok_and(|message| message.stop_reason == StopReason::Error)
+            || result
+                .as_ref()
+                .is_ok_and(|message| message.stop_reason == StopReason::Error)
     );
     assert_eq!(server.requests.lock().unwrap().len(), 1);
     assert_eq!(handle.model().1, "fallback-a");
@@ -890,11 +1016,12 @@ fn a_swap_cap_counts_commits_not_skipped_specs_or_terminal_events() {
         ]
     );
     assert!(events.last().unwrap()["error"].is_string());
+    drop(events);
 }
 
 fn write_tool_response() -> (u16, &'static str, String) {
-    let arguments = serde_json::json!({"path": "result.txt", "content": "saved exactly once"})
-        .to_string();
+    let arguments =
+        serde_json::json!({"path": "result.txt", "content": "saved exactly once"}).to_string();
     let chunk = serde_json::json!({
         "id": "chatcmpl-tool-fixture", "object": "chat.completion.chunk", "created": 0,
         "model": "fallback-b",
@@ -922,21 +1049,7 @@ fn real_tool_work_survives_retry_once_and_terminal_end_follows_persistence() {
         capacity_response(),
         completion_response(),
     ]);
-    let mut entry = crate::models::ad_hoc_model_entry("openai", "fallback-b").unwrap();
-    entry.model.api = "openai-completions".to_string();
-    entry.model.base_url = server.url.clone();
-    let provider = crate::providers::create_provider(&entry, None).unwrap();
-    let agent = Agent::new(
-        provider,
-        ToolRegistry::new(&["write"], dir.path(), None),
-        AgentConfig {
-            stream_options: StreamOptions {
-                api_key: Some("test-key".to_string()),
-                ..Default::default()
-            },
-            ..AgentConfig::default()
-        },
-    );
+    let agent = build_retry_agent(dir.path(), &server.url);
     let mut stored = Session::create_with_dir(Some(dir.path().join("sessions")));
     stored.header.cwd = dir.path().display().to_string();
     stored.header.provider = Some("openai".to_string());
@@ -957,9 +1070,14 @@ fn real_tool_work_survives_retry_once_and_terminal_end_follows_persistence() {
     let store = handle.session_store();
     let result = run_async(handle.prompt("write result.txt once", move |event| {
         if matches!(event, AgentEvent::AgentEnd { .. }) {
-            let stored = store.try_lock().expect("terminal callback must not hold session lock");
+            let stored = store
+                .try_lock()
+                .expect("terminal callback must not hold session lock");
             let bytes = std::fs::read_to_string(stored.path.as_ref().unwrap()).unwrap();
-            assert!(bytes.contains("Recovered"), "AgentEnd preceded final persistence");
+            assert!(
+                bytes.contains("Recovered"),
+                "AgentEnd preceded final persistence"
+            );
         }
         callback(event);
     }))
@@ -980,19 +1098,43 @@ fn real_tool_work_survives_retry_once_and_terminal_end_follows_persistence() {
     );
     assert_eq!(
         lifecycle_names(&events),
-        ["agent_start", "retry_start:1", "retry_end:1:true", "agent_end"]
+        [
+            "agent_start",
+            "retry_start:1",
+            "retry_end:1:true",
+            "agent_end"
+        ]
     );
     let requests = server.requests.lock().unwrap();
     assert_eq!(requests.len(), 3);
     let resumed = requests[2]["messages"].as_array().unwrap();
-    assert_eq!(resumed.iter().filter(|message| message["role"] == "tool").count(), 1);
-    assert_eq!(resumed.iter().filter(|message| message["role"] == "user").count(), 1);
-    let path = handle.session_store().try_lock().unwrap().path.clone().unwrap();
+    assert_eq!(
+        resumed
+            .iter()
+            .filter(|message| message["role"] == "tool")
+            .count(),
+        1
+    );
+    assert_eq!(
+        resumed
+            .iter()
+            .filter(|message| message["role"] == "user")
+            .count(),
+        1
+    );
+    let path = handle
+        .session_store()
+        .try_lock()
+        .unwrap()
+        .path
+        .clone()
+        .unwrap();
     let reopened = run_async(Session::open(&path.display().to_string())).unwrap();
     assert_eq!(
         events.last().unwrap()["messages"],
         serde_json::to_value(reopened.to_messages_for_current_path()).unwrap()
     );
+        drop(requests);
 }
 
 struct TransportDropProvider;
@@ -1030,7 +1172,10 @@ impl Provider for TransportDropProvider {
 fn a_typed_transport_failure_can_fail_over_without_transient_words_in_display() {
     let mut server = RecoveryHttpFixture::new(vec![completion_response()]);
     let (mut handle, _) = http_chain_handle(&server.url, 1);
-    handle.session.agent.set_provider(Arc::new(TransportDropProvider));
+    handle
+        .session
+        .agent
+        .set_provider(Arc::new(TransportDropProvider));
     let (events, callback) = event_log();
     let result = run_async(handle.prompt("recover the wire", move |event| callback(event)))
         .expect("typed transport recovery");
@@ -1039,7 +1184,10 @@ fn a_typed_transport_failure_can_fail_over_without_transient_words_in_display() 
     assert_eq!(server.requests.lock().unwrap().len(), 1);
     assert_eq!(handle.model().1, "fallback-a");
     let events = events.lock().unwrap();
-    let start = events.iter().find(|event| event["type"] == "failover_start").unwrap();
+    let start = events
+        .iter()
+        .find(|event| event["type"] == "failover_start")
+        .unwrap();
     assert_eq!(start["class"], "transient");
     assert_eq!(start["attempt"], 1);
     assert_eq!(
@@ -1051,4 +1199,5 @@ fn a_typed_transport_failure_can_fail_over_without_transient_words_in_display() 
             "agent_end",
         ]
     );
+        drop(events);
 }

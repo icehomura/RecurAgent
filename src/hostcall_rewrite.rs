@@ -45,7 +45,11 @@ impl HostcallRewriteEngine {
 
     #[must_use]
     pub fn from_env() -> Self {
-        Self::from_opt(std::env::var("PI_HOSTCALL_EGRAPH_REWRITE").ok().as_deref())
+        Self::from_opt(
+            std::env::var("RECUR_AGENT_HOSTCALL_EGRAPH_REWRITE")
+                .ok()
+                .as_deref(),
+        )
     }
 
     #[must_use]

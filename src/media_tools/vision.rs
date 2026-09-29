@@ -153,7 +153,7 @@ impl Tool for InspectImageTool {
         let timeout = transport::timeout(&args, NAME, 120_000)?;
         let is_mock = self
             .mock_mode
-            .unwrap_or_else(|| std::env::var("PI_MEDIA_MOCK").unwrap_or_default() == "1");
+            .unwrap_or_else(|| std::env::var("RECUR_AGENT_MEDIA_MOCK").unwrap_or_default() == "1");
         if is_mock {
             return Ok(ToolOutput {
                 content: vec![ContentBlock::Text(TextContent::new(format!(
@@ -167,7 +167,7 @@ impl Tool for InspectImageTool {
                 is_error: false,
             });
         }
-        let env_provider = std::env::var("PI_VISION_PROVIDER").ok();
+        let env_provider = std::env::var("RECUR_AGENT_VISION_PROVIDER").ok();
         let provider = transport::provider(
             NAME,
             transport::optional(&args, NAME, "provider")?
@@ -186,7 +186,7 @@ impl Tool for InspectImageTool {
                 ));
             }
         };
-        let env_model = std::env::var("PI_VISION_MODEL").ok();
+        let env_model = std::env::var("RECUR_AGENT_VISION_MODEL").ok();
         let model = transport::model_id(
             NAME,
             transport::optional(&args, NAME, "model")?

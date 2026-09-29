@@ -7,7 +7,7 @@
 use std::path::Path;
 use std::sync::mpsc::Sender;
 
-use crate::interactive::PiMsg;
+use crate::interactive::RaMsg;
 use crate::interactive::workspace_reports::{self, Report};
 use crate::sdk::AgentSessionHandle;
 
@@ -48,8 +48,8 @@ impl WorkspaceCommand {
 }
 
 /// The card when there is one (it carries the detail), else the status.
-fn render(report: Report) -> PiMsg {
-    PiMsg::System(report.card.unwrap_or(report.status))
+fn render(report: Report) -> RaMsg {
+    RaMsg::System(report.card.unwrap_or(report.status))
 }
 
 /// Run `command` with `args` against the live session; `advisor` is the
@@ -62,7 +62,7 @@ pub async fn run(
     cwd: &Path,
     advisor: Option<&str>,
     packages: Option<&crate::package_manager::PackageManager>,
-    agent_tx: &Sender<PiMsg>,
+    agent_tx: &Sender<RaMsg>,
 ) {
     let msg = match command {
         WorkspaceCommand::Rules => render(workspace_reports::rules(cwd, args)),
@@ -74,7 +74,7 @@ pub async fn run(
         WorkspaceCommand::Hub => render(workspace_reports::hub(args)),
         WorkspaceCommand::Security => render(workspace_reports::security(cwd, args)),
         WorkspaceCommand::Plugins => packages.map_or_else(
-            || PiMsg::System(String::from("The package manager is not available here.")),
+            || RaMsg::System(String::from("The package manager is not available here.")),
             |manager| render(workspace_reports::plugins(manager)),
         ),
         WorkspaceCommand::Handoff => {
@@ -83,7 +83,7 @@ pub async fn run(
                 .await
             {
                 Ok(report) => render(report),
-                Err(err) => PiMsg::AgentError(format!("handoff: {err}")),
+                Err(err) => RaMsg::AgentError(format!("handoff: {err}")),
             }
         }
         WorkspaceCommand::Approval => run_approval(handle, args).await,
@@ -91,15 +91,15 @@ pub async fn run(
     let _ = agent_tx.send(msg);
 }
 
-async fn run_approval(handle: &mut AgentSessionHandle, args: &str) -> PiMsg {
+async fn run_approval(handle: &mut AgentSessionHandle, args: &str) -> RaMsg {
     let Some(state) = handle.session().agent.approval_state() else {
-        return PiMsg::System(String::from("Tool approval state not configured"));
+        return RaMsg::System(String::from("Tool approval state not configured"));
     };
     let (report, changed) = workspace_reports::approval(&state, args);
     if let Some(mode) = changed
         && let Err(err) = handle.record_approval_mode(mode).await
     {
-        return PiMsg::AgentError(format!(
+        return RaMsg::AgentError(format!(
             "{} (not recorded in the session: {err})",
             report.status
         ));

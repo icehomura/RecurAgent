@@ -19,7 +19,7 @@ const BUFFER_BYTES: usize = 8192;
 // A continuously writing stream cannot monopolize an executor or starve its peer.
 const CHUNKS_PER_DRAIN: usize = 32;
 const PIPE_TIMEOUT: &str =
-    "PI_SUBAGENT_PIPE_TIMEOUT: child pipes did not close after process termination";
+    "RECUR_AGENT_SUBAGENT_PIPE_TIMEOUT: child pipes did not close after process termination";
 
 struct FramedPipe<R> {
     reader: Option<BufReader<R>>,
@@ -109,7 +109,7 @@ fn next_pipe_frame<R: Read>(
         Ok(Some(bytes)) => Some(match kind {
             PipeKind::Stderr => PipeFrame::Data(kind, String::from_utf8_lossy(&bytes).into_owned()),
             PipeKind::Stdout => String::from_utf8(bytes).map_or(
-                PipeFrame::Error("PI_SUBAGENT_PROTOCOL: child stdout is not UTF-8"),
+                PipeFrame::Error("RECUR_AGENT_SUBAGENT_PROTOCOL: child stdout is not UTF-8"),
                 |line| PipeFrame::Data(kind, line),
             ),
         }),

@@ -638,7 +638,7 @@ mod tests {
         assert!(!transport_needs_spawn(&config));
         for (value, expected) in [
             ("literal-token", false),
-            ("$ENV:PI_TEST_TOKEN", false),
+            ("$ENV:RECUR_AGENT_TEST_TOKEN", false),
             ("prefix $CMD:literal", false),
             ("$CMD:credential-helper", true),
             ("  $CMD:credential-helper  ", true),

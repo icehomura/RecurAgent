@@ -6,7 +6,7 @@
 
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
-use crate::interactive::PiMsg;
+use crate::interactive::RaMsg;
 use crate::plan::{PlanChange, PlanMode, PlanPersistence, SessionPlanReview};
 use crate::sdk::AgentSessionHandle;
 use std::fmt::Write as _;
@@ -80,11 +80,11 @@ impl PlanController {
         &mut self,
         handle: &mut AgentSessionHandle,
         args: &str,
-        sender: &Sender<PiMsg>,
+        sender: &Sender<RaMsg>,
     ) {
         let message = match self.execute(handle, args).await {
-            Ok(text) => PiMsg::SystemNote(text),
-            Err(error) => PiMsg::AgentError(format!("plan: {error}")),
+            Ok(text) => RaMsg::SystemNote(text),
+            Err(error) => RaMsg::AgentError(format!("plan: {error}")),
         };
         if sender.send(message).is_err() {
             self.clear_review();

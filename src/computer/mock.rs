@@ -48,7 +48,7 @@ pub(super) fn execute(tool: &ComputerTool, args: &Value) -> Result<ToolOutput> {
             let windows = vec![
                 WindowInfo {
                     id: 101,
-                    title: "Pi Agent Terminal".into(),
+                    title: "Recur Agent Terminal".into(),
                     app_name: "Ghostty".into(),
                     x: 100,
                     y: 100,
@@ -59,7 +59,7 @@ pub(super) fn execute(tool: &ComputerTool, args: &Value) -> Result<ToolOutput> {
                 },
                 WindowInfo {
                     id: 102,
-                    title: "Cargo.toml - pi_agent_rust".into(),
+                    title: "Cargo.toml - recur_agent".into(),
                     app_name: "Visual Studio Code".into(),
                     x: 400,
                     y: 200,
@@ -70,7 +70,7 @@ pub(super) fn execute(tool: &ComputerTool, args: &Value) -> Result<ToolOutput> {
                 },
             ];
             Ok(output(
-                "Found 2 window(s): Pi Agent Terminal; Cargo.toml - pi_agent_rust (mock)".into(),
+                "Found 2 window(s): Recur Agent Terminal; Cargo.toml - recur_agent (mock)".into(),
                 json!({"windows":windows}),
                 true,
             ))

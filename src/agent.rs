@@ -35,7 +35,7 @@ use crate::extensions::{
 };
 #[cfg(feature = "wasm-host")]
 use crate::extensions::{WasmExtensionHost, WasmExtensionLoadSpec};
-use crate::extensions_js::{PiJsRuntimeConfig, RepairMode};
+use crate::extensions_js::{RaJsRuntimeConfig, RepairMode};
 use crate::model::{
     AssistantMessage, AssistantMessageEvent, ContentBlock, CustomMessage, ImageContent, Message,
     StopReason, StreamEvent, TextContent, ThinkingContent, ToolCall, ToolResultMessage, Usage,
@@ -80,14 +80,14 @@ const MAX_FOLLOW_UP_QUEUE_SIZE: usize = 100;
 /// Maximum messages in agent history to prevent unbounded growth
 const MAX_AGENT_MESSAGES: usize = 10_000;
 /// Schema identifier for per-turn latency budget breakdowns.
-pub const TURN_LATENCY_BREAKDOWN_SCHEMA_V1: &str = "pi.agent.turn_latency_breakdown.v1";
+pub const TURN_LATENCY_BREAKDOWN_SCHEMA_V1: &str = "ra.agent.turn_latency_breakdown.v1";
 /// Schema identifier for deterministic tool-effect batch plan evidence.
-pub const TOOL_EFFECT_BATCH_PLAN_SCHEMA_V1: &str = "pi.agent.tool_effect_batch_plan.v1";
-const TOOL_CANCELLATION_SCHEMA_V1: &str = "pi.tool.cancellation.v1";
-const TOOL_APPROVAL_DENIED_SCHEMA_V1: &str = "pi.tool.approval_denied.v1";
-const TOOL_APPROVAL_STATUS_SCHEMA_V1: &str = "pi.tool.approval_status.v1";
-const SEMANTIC_CONTEXT_PROMPT_SCHEMA_V1: &str = "pi.semantic_context_prompt.v1";
-const SEMANTIC_CONTEXT_PROVENANCE_SCHEMA_V1: &str = "pi.semantic_context_provenance.v1";
+pub const TOOL_EFFECT_BATCH_PLAN_SCHEMA_V1: &str = "ra.agent.tool_effect_batch_plan.v1";
+const TOOL_CANCELLATION_SCHEMA_V1: &str = "ra.tool.cancellation.v1";
+const TOOL_APPROVAL_DENIED_SCHEMA_V1: &str = "ra.tool.approval_denied.v1";
+const TOOL_APPROVAL_STATUS_SCHEMA_V1: &str = "ra.tool.approval_status.v1";
+const SEMANTIC_CONTEXT_PROMPT_SCHEMA_V1: &str = "ra.semantic_context_prompt.v1";
+const SEMANTIC_CONTEXT_PROVENANCE_SCHEMA_V1: &str = "ra.semantic_context_provenance.v1";
 const SEMANTIC_CONTEXT_CUSTOM_TYPE: &str = "semantic_context_bundle";
 
 /// Custom messages pi records for provenance only. They are persisted hidden
@@ -144,7 +144,7 @@ fn normalize_before_provider_request_response(response: Value) -> Option<Value> 
     }
 }
 
-fn compatible_tool_parallelism_limit() -> usize {
+pub(crate) fn compatible_tool_parallelism_limit() -> usize {
     static LIMIT: OnceLock<usize> = OnceLock::new();
     *LIMIT.get_or_init(|| {
         let host_parallelism = std::thread::available_parallelism()
@@ -152,7 +152,7 @@ fn compatible_tool_parallelism_limit() -> usize {
                 parallelism.get()
             });
         resolve_compatible_tool_parallelism(
-            std::env::var("PI_MAX_CONCURRENT_COMPATIBLE_TOOLS")
+            std::env::var("RECUR_AGENT_MAX_CONCURRENT_COMPATIBLE_TOOLS")
                 .ok()
                 .as_deref(),
             host_parallelism,
@@ -177,7 +177,7 @@ fn resolve_compatible_tool_parallelism(
         Ok(0) => {
             warn!(
                 value = raw,
-                "Ignoring PI_MAX_CONCURRENT_COMPATIBLE_TOOLS=0; using host-scaled default"
+                "Ignoring RECUR_AGENT_MAX_CONCURRENT_COMPATIBLE_TOOLS=0; using host-scaled default"
             );
             host_default
         }
@@ -186,7 +186,7 @@ fn resolve_compatible_tool_parallelism(
             warn!(
                 value = raw,
                 error = %err,
-                "Ignoring invalid PI_MAX_CONCURRENT_COMPATIBLE_TOOLS; using host-scaled default"
+                "Ignoring invalid RECUR_AGENT_MAX_CONCURRENT_COMPATIBLE_TOOLS; using host-scaled default"
             );
             host_default
         }
@@ -431,9 +431,9 @@ fn record_extension_hostcall_latency(latency: &SharedTurnLatencyAccumulator, dur
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ToolEffectBatch {
-    start: usize,
-    end: usize,
+pub(crate) struct ToolEffectBatch {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 /// Serializable evidence for one planned tool-effect batch.
@@ -469,7 +469,7 @@ pub struct ToolEffectBatchPlanEvidence {
     pub batches: Vec<ToolEffectBatchEvidence>,
 }
 
-fn plan_tool_effect_batches(effects: &[ToolEffects]) -> Vec<ToolEffectBatch> {
+pub(crate) fn plan_tool_effect_batches(effects: &[ToolEffects]) -> Vec<ToolEffectBatch> {
     let Some((&first_effects, remaining_effects)) = effects.split_first() else {
         return Vec::new();
     };
@@ -555,7 +555,7 @@ pub fn tool_effect_batch_plan_evidence(
 /// Default cap for tool-call iterations per agent turn.
 ///
 /// Override per-invocation via `--max-tool-iterations` / the
-/// `PI_MAX_TOOL_ITERATIONS` env var, or programmatically by writing
+/// `RECUR_AGENT_MAX_TOOL_ITERATIONS` env var, or programmatically by writing
 /// [`AgentConfig::max_tool_iterations`] directly. Resolved through
 /// [`resolve_max_tool_iterations`] which clamps invalid values back to this
 /// default rather than failing the run.
@@ -588,13 +588,17 @@ const ITERATION_WARN_DENOMINATOR: usize = 5;
 /// noise rather than help.
 const ITERATION_WARN_MIN_CAP: usize = 5;
 
-/// Resolve the effective tool-iteration cap from `PI_MAX_TOOL_ITERATIONS`.
+/// Resolve the effective tool-iteration cap from `RECUR_AGENT_MAX_TOOL_ITERATIONS`.
 ///
 /// Falls back to [`MAX_TOOL_ITERATIONS_DEFAULT`] when unset/invalid. Used
 /// by callers that build an [`AgentConfig`] without going through the CLI
 /// parser (ACP server, SDK).
 pub fn resolved_max_tool_iterations_default() -> usize {
-    resolve_max_tool_iterations(std::env::var("PI_MAX_TOOL_ITERATIONS").ok().as_deref())
+    resolve_max_tool_iterations(
+        std::env::var("RECUR_AGENT_MAX_TOOL_ITERATIONS")
+            .ok()
+            .as_deref(),
+    )
 }
 
 /// Pure resolver for `max_tool_iterations` string overrides.
@@ -609,21 +613,21 @@ pub fn resolve_max_tool_iterations(raw_override: Option<&str>) -> usize {
     match raw.parse::<usize>() {
         Ok(0) => {
             warn!(
-                "PI_MAX_TOOL_ITERATIONS=0 is invalid; falling back to {}",
+                "RECUR_AGENT_MAX_TOOL_ITERATIONS=0 is invalid; falling back to {}",
                 MAX_TOOL_ITERATIONS_DEFAULT
             );
             MAX_TOOL_ITERATIONS_DEFAULT
         }
         Ok(n) if n > MAX_TOOL_ITERATIONS_CEILING => {
             warn!(
-                "PI_MAX_TOOL_ITERATIONS={n} exceeds ceiling {MAX_TOOL_ITERATIONS_CEILING}; clamping to {MAX_TOOL_ITERATIONS_CEILING}"
+                "RECUR_AGENT_MAX_TOOL_ITERATIONS={n} exceeds ceiling {MAX_TOOL_ITERATIONS_CEILING}; clamping to {MAX_TOOL_ITERATIONS_CEILING}"
             );
             MAX_TOOL_ITERATIONS_CEILING
         }
         Ok(n) => n,
         Err(err) => {
             warn!(
-                "PI_MAX_TOOL_ITERATIONS={raw:?} is not a valid usize ({err}); falling back to {}",
+                "RECUR_AGENT_MAX_TOOL_ITERATIONS={raw:?} is not a valid usize ({err}); falling back to {}",
                 MAX_TOOL_ITERATIONS_DEFAULT
             );
             MAX_TOOL_ITERATIONS_DEFAULT
@@ -1833,6 +1837,44 @@ pub struct Agent {
     /// Session-scoped secrets vault (bd-cv653.7.9): placeholder map lives in
     /// memory and dies with the session — never persisted raw.
     secrets_vault: crate::secrets::SecretVault,
+
+    /// M1: 自动反思钩子（默认 off，由 ReflectionConfig.enabled 控制）。
+    /// TurnEnd 后触发异步反思，使用 reflection 框架的现有 LLM 调用能力。
+    reflection_hooks: Option<Arc<crate::reflection_hooks::ReflectionHooks>>,
+
+    /// M1: 反思产物的落库目标。为 `None` 时钩子只判定不落库。
+    reflection_store: Option<Arc<crate::memory::MemoryStore>>,
+
+    /// M1/M3: 反思（以及模型驱动的 lesson 合成）使用的会话 provider。绑定后
+    /// 反思复用当前凭据，不再走 catalog 回退解析。
+    reflection_provider: Option<Arc<dyn Provider>>,
+
+    /// M3: 跨会话相关性注入器。`None` 表示不注入（关闭态）。
+    relevance_injector: Option<Arc<crate::relevance_injector::RelevanceInjector>>,
+
+    /// M7: 记忆融合层。装进 agent 后被 M3 的同一条检索路径消费——lattice
+    /// 候选与 FTS5 recall 结果融合后一起注入。`None` 或 `enabled=false` 时
+    /// 检索完全走既有路径，行为不变。
+    memory_lattice: Option<Arc<crate::memory::lattice::ContextLattice>>,
+
+    /// M3: 成功注入相关性上下文的会话集合（按 session_id）。每个会话只注入
+    /// 一次，后续 turn 不重复占用上下文预算。
+    relevance_injected_sessions: std::collections::HashSet<String>,
+
+    /// M8: 技能热刷新的消费者句柄。安装工具成功安装技能时把同一个
+    /// process-wide 句柄 mark_dirty；agent 在每轮开始时 `take_dirty()`，
+    /// 命中就在 [`Agent::refresh_skills_prompt_if_dirty`] 里从磁盘重载 L0
+    /// 技能索引，结果暂存在 [`Agent::refreshed_skills_block`]，由
+    /// [`Agent::build_context`] 追加到 system prompt 尾部。
+    skills_reload: Option<crate::skill_hub::SkillsReloadHandle>,
+
+    /// M8: 热刷新时重载技能所用的工作目录（与启动时构建 L0 索引的 cwd 一致）。
+    skills_reload_cwd: Option<PathBuf>,
+
+    /// M8: 最近一次热刷新生成的 L0 技能块。`None` 表示尚未刷新过；
+    /// [`Agent::build_context`] 在存在时把它拼到 system prompt 之后，因此
+    /// `run_loop` 在 follow-up 边界重置 `config.system_prompt` 也不会把它冲掉。
+    refreshed_skills_block: Option<String>,
 }
 
 /// Activation state for glob-scoped foreign rules (bd-cv653.6.2).
@@ -1922,6 +1964,202 @@ impl Agent {
             magic_keyword_scan_override: None,
             keyword_max_thinking_level,
             secrets_vault: crate::secrets::SecretVault::default(),
+            reflection_hooks: None,
+            reflection_store: None,
+            reflection_provider: None,
+            relevance_injector: None,
+            memory_lattice: None,
+            relevance_injected_sessions: std::collections::HashSet::new(),
+            skills_reload: None,
+            skills_reload_cwd: None,
+            refreshed_skills_block: None,
+        }
+    }
+
+    /// M1: 注入自动反思钩子。字段是 agent 的运行态，由调用方在构造后按
+    /// CLI / settings 决定装不装（`None` 即完全关闭）。
+    pub fn set_reflection_hooks(
+        &mut self,
+        hooks: Option<Arc<crate::reflection_hooks::ReflectionHooks>>,
+    ) {
+        self.reflection_hooks = hooks;
+    }
+
+    /// M1: 设置反思产物的落库目标。没有 store 时钩子只做判定与计数，
+    /// 不会写入记忆库（保持「不落库 = 观测模式」的语义）。
+    pub fn set_reflection_store(&mut self, store: Option<Arc<crate::memory::MemoryStore>>) {
+        self.reflection_store = store;
+    }
+
+    /// M1: 绑定反思使用的会话 provider。绑定后反思在本会话凭据下执行；
+    /// 未绑定时回退到 `ReflectTool` 的 catalog 解析路径。
+    pub fn set_reflection_provider(&mut self, provider: Option<Arc<dyn Provider>>) {
+        self.reflection_provider = provider;
+    }
+
+    /// M3: 注入跨会话相关性检索器。`None` 表示新会话不注入历史内容。
+    pub fn set_relevance_injector(
+        &mut self,
+        injector: Option<Arc<crate::relevance_injector::RelevanceInjector>>,
+    ) {
+        self.relevance_injector = injector;
+    }
+
+    /// M7: 注入记忆融合层。装上后与 M3 的同一条检索路径融合：lattice 候选
+    /// 经 `fused_rank` 排序后追加到 FTS5 recall 结果中一起注入。默认
+    /// `enabled=false` 时 `ContextLattice::search` 直接返回空，检索行为不变。
+    pub fn set_memory_lattice(
+        &mut self,
+        lattice: Option<Arc<crate::memory::lattice::ContextLattice>>,
+    ) {
+        self.memory_lattice = lattice;
+    }
+
+    /// M8: 绑定技能热刷新句柄与技能加载目录。绑定后 agent 在每轮开始会
+    /// `take_dirty()`；命中即从 `cwd` 重载 L0 技能索引并追加到 system prompt。
+    /// `handle` 为 `None` 时热刷新完全关闭（默认），行为与此前一致。
+    pub fn set_skills_reload(
+        &mut self,
+        handle: Option<crate::skill_hub::SkillsReloadHandle>,
+        cwd: PathBuf,
+    ) {
+        self.skills_reload = handle;
+        self.skills_reload_cwd = Some(cwd);
+    }
+
+    /// M8: 若热刷新句柄报告 dirty，则从磁盘重载技能并重建 L0 技能块，
+    /// 结果存入 [`Agent::refreshed_skills_block`] 供 `build_context` 追加。
+    ///
+    /// 返回本次是否真的重载（`false` 表示未装句柄、未标脏、或无 cwd）。
+    /// 采用「旁路字段 + 读取时拼接」而不是改写 `config.system_prompt`，
+    /// 这样 `run_loop` 在 follow-up 边界把 `system_prompt` 重置回 turn 起点
+    /// 基线时也不会丢掉刷新结果。
+    fn refresh_skills_prompt_if_dirty(&mut self) -> bool {
+        let Some(handle) = self.skills_reload.as_ref() else {
+            return false;
+        };
+        if !handle.take_dirty() {
+            return false;
+        }
+        let Some(cwd) = self.skills_reload_cwd.clone() else {
+            // 没有 cwd 就无法定位技能根；保持既有 prompt 不动。
+            return false;
+        };
+        let loaded = crate::resources::load_skills(crate::resources::LoadSkillsOptions {
+            cwd,
+            agent_dir: crate::config::Config::global_dir(),
+            skill_paths: Vec::new(),
+            include_defaults: true,
+        });
+        let block = crate::resources::format_skills_for_prompt(&loaded.skills);
+        self.refreshed_skills_block = if block.is_empty() { None } else { Some(block) };
+        true
+    }
+
+    /// M1: 检测最近一轮对话中是否存在用户纠正信号。
+    /// 扫描最后一条用户消息中的纠正关键词，用于反思钩子的触发判断。
+    fn detect_correction_signal(&self) -> bool {
+        self.messages
+            .iter()
+            .rev()
+            .find_map(|m| match m {
+                Message::User(user) => match &user.content {
+                    crate::model::UserContent::Text(text) => Some(text.as_str()),
+                    // Exhaustive: `UserContent` has exactly these two variants,
+                    // so a wildcard here would also swallow future ones.
+                    crate::model::UserContent::Blocks(_) => None,
+                },
+                _ => None,
+            })
+            .is_some_and(|text| {
+                let lower = text.to_ascii_lowercase();
+                [
+                    "错了",
+                    "不对",
+                    "重试",
+                    "重做",
+                    "重新",
+                    "wrong",
+                    "incorrect",
+                    "redo",
+                    "try again",
+                    "retry",
+                    "that's wrong",
+                    "not right",
+                    "fix this",
+                ]
+                .iter()
+                .any(|kw| lower.contains(kw))
+            })
+    }
+
+    /// M1: 收集本次任务调用过的工具名（按出现顺序，含重复）。
+    ///
+    /// 只取最后一条 assistant 之前的工具调用不足以覆盖多轮工具循环，这里
+    /// 扫描整个会话消息序列，得到完整执行路径；`task_shape` 再做相邻去重。
+    fn task_tool_names(&self) -> Vec<String> {
+        self.messages
+            .iter()
+            .flat_map(|message| match message {
+                Message::Assistant(assistant) => assistant
+                    .content
+                    .iter()
+                    .filter_map(|block| match block {
+                        ContentBlock::ToolCall(call) => Some(call.name.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    /// M1: TurnEnd 后的自动反思执行体。
+    ///
+    /// 流程：记录本次任务形状 → 判定是否触发 → 命中则（可选）用会话模型
+    /// 合成 lesson、否则用确定性 lesson → 写入记忆库（`retain` 内建精确去重，
+    /// 重复 lesson 返回 `RECUR_AGENT_MEMORY_DUPLICATE` 视为已存在）。任何失败都不影响
+    /// 主循环，只记 warn —— 反思是增益，不是关键路径。
+    async fn maybe_run_reflection(&self, session_id: &str) {
+        let Some(hooks) = self.reflection_hooks.clone() else {
+            return;
+        };
+        let tool_names = self.task_tool_names();
+        hooks.note_task(&tool_names);
+        let tool_call_count = tool_names.len();
+        let correction_signal = self.detect_correction_signal();
+        let shape = crate::memory::reflection::task_shape(&tool_names);
+        let Some(outcome) = hooks.decide(tool_call_count, correction_signal, shape.as_deref())
+        else {
+            return;
+        };
+        // 无论落库是否成功都计入小时预算：预算是「调用成本」的闸门，而不是
+        // 「成功写库」的计数器，否则失败会无限重试烧钱。
+        hooks.record_reflection();
+        let Some(store) = self.reflection_store.clone() else {
+            tracing::debug!(
+                reason = %outcome.reason,
+                tool_calls = outcome.tool_call_count,
+                "reflection triggered but no memory store is bound; skipping persistence"
+            );
+            return;
+        };
+        match crate::reflection_hooks::persist_lesson(&store, &outcome, Some(session_id)) {
+            Ok(Some(memory)) => tracing::info!(
+                memory_id = memory.id,
+                reason = %outcome.reason,
+                tool_calls = outcome.tool_call_count,
+                "auto-reflection persisted a lesson"
+            ),
+            Ok(None) => tracing::debug!(
+                reason = %outcome.reason,
+                "auto-reflection found the lesson already present; nothing written"
+            ),
+            Err(error) => tracing::warn!(
+                reason = %outcome.reason,
+                error = %error,
+                "auto-reflection failed to persist its lesson"
+            ),
         }
     }
 
@@ -2413,8 +2651,19 @@ impl Agent {
                 .expect("cache populated above"),
         );
 
+        let system_prompt: Option<Cow<'_, str>> =
+            match (&self.config.system_prompt, &self.refreshed_skills_block) {
+                // M8: 热刷新命中后，把新的 L0 技能块追加到 system prompt 尾部。
+                // 追加（而非替换 config）使其不受 run_loop 在 follow-up 边界重置
+                // config.system_prompt 的影响，每轮都从本字段新鲜读取。
+                (Some(base), Some(block)) => Some(Cow::Owned(format!("{base}{block}"))),
+                (None, Some(block)) => Some(Cow::Borrowed(block.as_str())),
+                (Some(base), None) => Some(Cow::Borrowed(base.as_str())),
+                (None, None) => None,
+            };
+
         Context {
-            system_prompt: self.config.system_prompt.as_deref().map(Cow::Borrowed),
+            system_prompt,
             messages,
             tools,
         }
@@ -3433,6 +3682,10 @@ impl Agent {
                 on_event(turn_end_event);
 
                 turn_index = turn_index.saturating_add(1);
+
+                // M1: 自动反思钩子（默认 on，由 ReflectionConfig.enabled 控制）。
+                // TurnEnd 后判定是否反思；命中则真正合成 lesson 并落库（带去重）。
+                self.maybe_run_reflection(&session_id).await;
 
                 if let Some(steering) = steering_after_tools.take() {
                     pending_messages = steering;
@@ -6049,15 +6302,15 @@ impl ExtensionHostActions for AgentSessionHostActions {
                     if message.stop_reason == StopReason::Error {
                         return Err(Error::provider(
                             provider_name,
-                            pi_ai_assistant_error_message(&message),
+                            ra_ai_assistant_error_message(&message),
                         ));
                     }
-                    return pi_ai_completion_response(&message, request.simple);
+                    return ra_ai_completion_response(&message, request.simple);
                 }
                 StreamEvent::Error { error, .. } => {
                     return Err(Error::provider(
                         provider_name,
-                        pi_ai_assistant_error_message(&error),
+                        ra_ai_assistant_error_message(&error),
                     ));
                 }
                 StreamEvent::Start { .. }
@@ -6356,7 +6609,7 @@ fn shape_native_compact_result(
     }))
 }
 
-fn pi_ai_model_entry_value(entry: &ModelEntry) -> Value {
+fn ra_ai_model_entry_value(entry: &ModelEntry) -> Value {
     json!({
         "id": entry.model.id,
         "name": entry.model.name,
@@ -6373,11 +6626,11 @@ fn pi_ai_model_entry_value(entry: &ModelEntry) -> Value {
     })
 }
 
-fn pi_ai_model_registry_values(registry: &ModelRegistry) -> Vec<Value> {
+fn ra_ai_model_registry_values(registry: &ModelRegistry) -> Vec<Value> {
     registry
         .models()
         .iter()
-        .map(pi_ai_model_entry_value)
+        .map(ra_ai_model_entry_value)
         .collect()
 }
 
@@ -6473,7 +6726,7 @@ fn collect_pi_ai_context_messages(
                 .get("systemPrompt")
                 .or_else(|| map.get("system_prompt"))
                 .or_else(|| map.get("system"))
-                .and_then(pi_ai_text_from_value)
+                .and_then(ra_ai_text_from_value)
             {
                 system_prompts.push(system);
             }
@@ -6486,7 +6739,7 @@ fn collect_pi_ai_context_messages(
                 .get("prompt")
                 .or_else(|| map.get("input"))
                 .or_else(|| map.get("message"))
-                .and_then(pi_ai_text_from_value)
+                .and_then(ra_ai_text_from_value)
             {
                 push_pi_ai_user_message(&prompt, messages);
             } else if map.contains_key("role") {
@@ -6504,7 +6757,7 @@ fn push_pi_ai_message(
     messages: &mut Vec<Message>,
 ) -> Result<()> {
     let Value::Object(map) = value else {
-        if let Some(text) = pi_ai_text_from_value(value) {
+        if let Some(text) = ra_ai_text_from_value(value) {
             push_pi_ai_user_message(&text, messages);
         }
         return Ok(());
@@ -6519,7 +6772,7 @@ fn push_pi_ai_message(
     let content = map
         .get("content")
         .or_else(|| map.get("text"))
-        .and_then(pi_ai_text_from_value)
+        .and_then(ra_ai_text_from_value)
         .unwrap_or_default();
 
     match role.as_str() {
@@ -6555,7 +6808,7 @@ fn push_pi_ai_assistant_message(text: &str, messages: &mut Vec<Message>) {
     }));
 }
 
-fn pi_ai_text_from_value(value: &Value) -> Option<String> {
+fn ra_ai_text_from_value(value: &Value) -> Option<String> {
     match value {
         Value::Null => None,
         Value::String(text) => Some(text.clone()),
@@ -6563,7 +6816,7 @@ fn pi_ai_text_from_value(value: &Value) -> Option<String> {
         Value::Array(items) => {
             let mut text = String::new();
             for item in items {
-                if let Some(part) = pi_ai_text_from_value(item)
+                if let Some(part) = ra_ai_text_from_value(item)
                     && !part.is_empty()
                 {
                     text.push_str(&part);
@@ -6575,11 +6828,11 @@ fn pi_ai_text_from_value(value: &Value) -> Option<String> {
             .get("text")
             .or_else(|| map.get("content"))
             .or_else(|| map.get("delta"))
-            .and_then(pi_ai_text_from_value),
+            .and_then(ra_ai_text_from_value),
     }
 }
 
-fn pi_ai_assistant_text(message: &AssistantMessage) -> String {
+fn ra_ai_assistant_text(message: &AssistantMessage) -> String {
     let mut text = String::new();
     for block in &message.content {
         if let ContentBlock::Text(text_block) = block {
@@ -6589,13 +6842,13 @@ fn pi_ai_assistant_text(message: &AssistantMessage) -> String {
     text
 }
 
-fn pi_ai_assistant_error_message(message: &AssistantMessage) -> String {
+fn ra_ai_assistant_error_message(message: &AssistantMessage) -> String {
     message
         .error_message
         .clone()
         .filter(|text| !text.trim().is_empty())
         .unwrap_or_else(|| {
-            let text = pi_ai_assistant_text(message);
+            let text = ra_ai_assistant_text(message);
             if text.trim().is_empty() {
                 "provider returned an error without a message".to_string()
             } else {
@@ -6604,8 +6857,8 @@ fn pi_ai_assistant_error_message(message: &AssistantMessage) -> String {
         })
 }
 
-fn pi_ai_completion_response(message: &AssistantMessage, simple: bool) -> Result<Value> {
-    let text = pi_ai_assistant_text(message);
+fn ra_ai_completion_response(message: &AssistantMessage, simple: bool) -> Result<Value> {
+    let text = ra_ai_assistant_text(message);
     if simple {
         return Ok(Value::String(text));
     }
@@ -7435,6 +7688,72 @@ mod extensions_integration_tests {
         );
     }
 
+    /// M1: `task_tool_names` walks every assistant message in order so a
+    /// multi-turn tool loop yields the full execution path (duplicates kept for
+    /// `task_shape` to collapse).
+    #[test]
+    fn task_tool_names_collects_tool_calls_in_order() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let provider: Arc<dyn Provider> = Arc::new(NoopProvider);
+        let tools = ToolRegistry::new(&[], tmp.path(), None);
+        let mut agent = Agent::new(provider, tools, AgentConfig::default());
+
+        let assistant_with = |names: &[&str]| {
+            let content: Vec<ContentBlock> = names
+                .iter()
+                .map(|name| {
+                    ContentBlock::ToolCall(ToolCall {
+                        id: format!("call-{name}"),
+                        name: (*name).to_string(),
+                        arguments: json!({}),
+                        thought_signature: None,
+                    })
+                })
+                .collect();
+            Message::Assistant(Arc::new(AssistantMessage {
+                content,
+                ..AssistantMessage::default()
+            }))
+        };
+        agent.replace_messages(vec![
+            Message::User(UserMessage {
+                content: UserContent::Text("do the thing".to_string()),
+                timestamp: 0,
+            }),
+            assistant_with(&["read", "edit"]),
+            assistant_with(&["bash"]),
+        ]);
+
+        assert_eq!(agent.task_tool_names(), ["read", "edit", "bash"]);
+        let shape = crate::memory::reflection::task_shape(&agent.task_tool_names());
+        assert_eq!(shape.as_deref(), Some("read→edit→bash"));
+    }
+
+    /// M3: the relevance block is appended verbatim after the base prompt, and
+    /// a `None` block leaves the base prompt untouched.
+    #[test]
+    fn relevance_injection_appends_to_base_prompt() {
+        let base = AgentSession::with_relevance_injection(
+            Some("base prompt".to_string()),
+            Some("Relevant context from previous sessions:\n- [id=1] x".to_string()),
+        )
+        .expect("prompt");
+        assert!(base.starts_with("base prompt"));
+        assert!(base.contains("Relevant context"));
+        assert!(base.contains("id=1"));
+
+        assert_eq!(
+            AgentSession::with_relevance_injection(Some("base".to_string()), None).as_deref(),
+            Some("base")
+        );
+        // A base-less session still gets the relevance block.
+        assert!(
+            AgentSession::with_relevance_injection(None, Some("block".to_string()))
+                .expect("prompt")
+                .starts_with("block")
+        );
+    }
+
     /// bd-1q31s: handler responses accept the upstream shapes (rewritten
     /// payload object directly, or `{ payload: ... }`) and treat null /
     /// non-object responses as "no rewrite".
@@ -8212,18 +8531,18 @@ mod extensions_integration_tests {
     }
 
     #[derive(Debug, Default)]
-    pub(super) struct PiAiCapturedProviderContext {
+    pub(super) struct RaAiCapturedProviderContext {
         pub(super) system_prompt: Option<String>,
         pub(super) messages: Vec<Message>,
     }
 
     #[derive(Debug)]
-    pub(super) struct PiAiCaptureProvider {
-        pub(super) calls: Arc<StdMutex<Vec<PiAiCapturedProviderContext>>>,
+    pub(super) struct RaAiCaptureProvider {
+        pub(super) calls: Arc<StdMutex<Vec<RaAiCapturedProviderContext>>>,
     }
 
     #[async_trait]
-    impl Provider for PiAiCaptureProvider {
+    impl Provider for RaAiCaptureProvider {
         fn name(&self) -> &'static str {
             "capturing-provider"
         }
@@ -8248,7 +8567,7 @@ mod extensions_integration_tests {
             self.calls
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(PiAiCapturedProviderContext {
+                .push(RaAiCapturedProviderContext {
                     system_prompt: context.system_prompt.as_ref().map(ToString::to_string),
                     messages: context.messages.iter().cloned().collect(),
                 });
@@ -8281,7 +8600,7 @@ mod extensions_integration_tests {
         runtime.block_on(async {
             let session = Arc::new(Mutex::new(Session::in_memory()));
             let calls = Arc::new(StdMutex::new(Vec::new()));
-            let provider = Arc::new(PiAiCaptureProvider {
+            let provider = Arc::new(RaAiCaptureProvider {
                 calls: Arc::clone(&calls),
             });
             let actions = AgentSessionHostActions {
@@ -8389,7 +8708,7 @@ mod extensions_integration_tests {
         runtime.block_on(async {
             let session = Arc::new(Mutex::new(Session::in_memory()));
             let calls = Arc::new(StdMutex::new(Vec::new()));
-            let provider = Arc::new(PiAiCaptureProvider {
+            let provider = Arc::new(RaAiCaptureProvider {
                 calls: Arc::clone(&calls),
             });
             let actions = AgentSessionHostActions {
@@ -8608,7 +8927,7 @@ mod extensions_integration_tests {
         runtime.block_on(async {
             let session = Arc::new(Mutex::new(Session::in_memory()));
             let calls = Arc::new(StdMutex::new(Vec::new()));
-            let provider = Arc::new(PiAiCaptureProvider {
+            let provider = Arc::new(RaAiCaptureProvider {
                 calls: Arc::clone(&calls),
             });
             let actions = AgentSessionHostActions {
@@ -12223,10 +12542,10 @@ impl AgentSession {
         repair_mode: RepairMode,
         memory_limit_bytes: usize,
     ) -> Result<ExtensionRuntimeHandle> {
-        let mut config = PiJsRuntimeConfig {
+        let mut config = RaJsRuntimeConfig {
             cwd: cwd.display().to_string(),
             repair_mode,
-            ..PiJsRuntimeConfig::default()
+            ..RaJsRuntimeConfig::default()
         };
         config.limits.memory_limit_bytes = Some(memory_limit_bytes).filter(|bytes| *bytes > 0);
 
@@ -12377,14 +12696,14 @@ impl AgentSession {
             || self.agent.tool_call_dialect(),
             ModelEntry::tool_call_dialect,
         ));
-        self.set_extension_ai_models(pi_ai_model_registry_values(&registry));
+        self.set_extension_ai_models(ra_ai_model_registry_values(&registry));
         // Keep the extension ctx catalog in sync when the registry is
         // replaced after extension boot (e.g. after merging extension
         // providers in main). No-op before boot; boot seeds it (gh #167).
         if let Some(region) = &self.extensions {
             region
                 .manager()
-                .set_extension_models(pi_ai_model_registry_values(&registry));
+                .set_extension_models(ra_ai_model_registry_values(&registry));
         }
         self.model_registry = Some(registry);
     }
@@ -12947,7 +13266,7 @@ impl AgentSession {
     /// A transient drop leaves a partial or error assistant message on the
     /// path. Reverting only that keeps the user prompt and every completed tool
     /// cycle, so the retry re-issues one provider request rather than re-running
-    /// tools and re-billing work already done (pi_agent_rust#125).
+    /// tools and re-billing work already done (recur_agent#125).
     ///
     /// The whole transition is built on a private `Session` candidate: the live
     /// transcript and the agent's message list are untouched unless the revert
@@ -14705,7 +15024,7 @@ impl AgentSession {
         // fallback + cache-generation bump on switches), and the effective
         // system prompt (ctx.getSystemPrompt before any before_agent_start).
         if let Some(registry) = &self.model_registry {
-            manager.set_extension_models(pi_ai_model_registry_values(registry));
+            manager.set_extension_models(ra_ai_model_registry_values(registry));
         }
         manager.set_current_model(
             Some(self.agent.provider().name().to_string()),
@@ -14886,7 +15205,7 @@ impl AgentSession {
             return;
         };
         let outcome = runtime.review_turn(&digest, turn_index).await;
-        if std::env::var_os("PI_DEBUG_ADVISOR").is_some() {
+        if std::env::var_os("RECUR_AGENT_DEBUG_ADVISOR").is_some() {
             eprintln!(
                 "[advisor] digest tools={} trivial={} outcome={}",
                 digest.tool_call_count,
@@ -14924,7 +15243,7 @@ impl AgentSession {
         });
         self.agent.queue_generated_steering(message);
         // Session audit entry (replayable advisor trail).
-        let cx = pi::agent_cx::AgentCx::for_request();
+        let cx = ra::agent_cx::AgentCx::for_request();
         if let Ok(mut inner) = self.session.lock(cx.cx()).await {
             inner.append_custom_entry(
                 "advisor_note".to_string(),
@@ -15094,7 +15413,7 @@ impl AgentSession {
     /// (the partial/error message from a transient connection drop), preserving
     /// the user prompt and every completed tool cycle. Used before a retry that
     /// *resumes* the turn (`run_continue_with_abort`) rather than replaying it
-    /// from the user message (pi_agent_rust#125). Syncs the agent's in-memory
+    /// from the user message (recur_agent#125). Syncs the agent's in-memory
     /// transcript to the reverted session path so a subsequent resume streams
     /// from the last completed state.
     pub async fn revert_incomplete_response(&mut self) -> Result<bool> {
@@ -15226,6 +15545,124 @@ impl AgentSession {
                 tracing::warn!("session_before_compact extension hook failed (fail-open): {err}");
                 SessionBeforeCompactOutcome::default()
             }
+        }
+    }
+
+    /// M3: 会话标识（用于「每会话只注入一次」的去重）。
+    ///
+    /// 优先用持久会话头 `Session::header.id`（每次 `new`/`resume` 生成唯一
+    /// id，是权威身份）；无持久会话时退回 `stream_options.session_id`，仍为
+    /// 空则以进程级空串退化，语义与「每会话一次」一致。
+    async fn current_session_id(&self) -> String {
+        let cx = crate::agent_cx::AgentCx::for_request();
+        if let Ok(session) = self.session.lock(cx.cx()).await {
+            let id = session.header.id.trim();
+            if !id.is_empty() {
+                return id.to_string();
+            }
+        }
+        self.agent
+            .stream_options()
+            .session_id
+            .clone()
+            .unwrap_or_default()
+    }
+
+    /// M3: 会话首次输入时，按相关性从记忆库检索历史内容并格式化为
+    /// system-prompt 追加块。每个会话只注入一次，重复 turn 返回 `None`。
+    ///
+    /// M7: 若装了 `memory_lattice`，在同一条检索路径上把 lattice 候选与
+    /// FTS5 recall 结果融合后一起注入——lattice 是这条链路的**消费者**，
+    /// 不是"实例化后只打日志"的摆设。`enabled=false`（默认）时 lattice
+    /// 返回空，注入内容与 M3 完全一致。
+    ///
+    /// 硬边界：注入总量由 `RelevanceInjector::max_tokens` 截断；检索失败不
+    /// 影响主流程（返回 `None`）。
+    async fn prepare_relevance_injection(
+        &mut self,
+        session_id: &str,
+        query: &str,
+    ) -> Option<String> {
+        let injector = self.agent.relevance_injector.clone()?;
+        let store = self.agent.reflection_store.clone()?;
+        if self.agent.relevance_injected_sessions.contains(session_id) {
+            return None;
+        }
+        let mut contexts = match injector.inject(query, &store) {
+            Ok(contexts) => contexts,
+            Err(error) => {
+                tracing::warn!(error = %error, "relevance injection recall failed");
+                return None;
+            }
+        };
+        // M7: 融合层候选与 FTS5 recall 结果合并。查询为空或层未启用时
+        // `search` 直接返回空，行为与纯 M3 路径一致。
+        if let Some(lattice) = self.agent.memory_lattice.clone() {
+            match lattice.search(query, injector.top_k).await {
+                Ok(candidates) => {
+                    let mut fused: Vec<_> = candidates
+                        .into_iter()
+                        .map(|candidate| Self::lattice_candidate_to_context(&candidate))
+                        .collect();
+                    if !fused.is_empty() {
+                        // 按 `fused_rank` 降序：证据数越多、置信越高越靠前，
+                        // 与 FTS5 结果拼接后由注入器统一按 token 预算截断。
+                        fused.sort_by(|a, b| {
+                            b.relevance_score
+                                .partial_cmp(&a.relevance_score)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        tracing::debug!(
+                            lattice_fused = fused.len(),
+                            fts_hits = contexts.len(),
+                            "M7 lattice candidates fused into relevance injection"
+                        );
+                        contexts.extend(fused);
+                        contexts.truncate(injector.top_k);
+                    }
+                }
+                Err(error) => {
+                    // 融合层失败绝不影响主检索路径（degraded-not-fatal）。
+                    tracing::debug!(error = %error, "M7 lattice search degraded");
+                }
+            }
+        }
+        if contexts.is_empty() {
+            // 空结果也标记为已注入：没有命中的查询不值得每个 turn 重试。
+            self.agent
+                .relevance_injected_sessions
+                .insert(session_id.to_string());
+            return None;
+        }
+        let rendered = injector.format_for_prompt(&contexts);
+        if rendered.trim().is_empty() {
+            return None;
+        }
+        self.agent
+            .relevance_injected_sessions
+            .insert(session_id.to_string());
+        tracing::info!(
+            fragments = contexts.len(),
+            bytes = rendered.len(),
+            "cross-session relevance context injected"
+        );
+        Some(rendered)
+    }
+
+    /// M7: 把一个 lattice 候选映射成注入用的 `InjectedContext`。
+    ///
+    /// `memory_id` 用 0 占位（lattice 候选没有 FTS 行号），来源与 topic 写进
+    /// `source`，让注入块里的每一条都能回溯到融合层。
+    fn lattice_candidate_to_context(
+        candidate: &crate::memory::lattice::LatticeCandidate,
+    ) -> crate::relevance_injector::InjectedContext {
+        crate::relevance_injector::InjectedContext {
+            content: candidate.content.clone(),
+            memory_id: 0,
+            kind: candidate.topic_path.clone(),
+            source: format!("lattice:{}", candidate.source),
+            created_at_ms: 0,
+            relevance_score: candidate.fused_rank(),
         }
     }
 
@@ -15366,6 +15803,19 @@ impl AgentSession {
             prompt.push_str("\n\n");
         }
         prompt.push_str(&prepared.prompt);
+        Some(prompt)
+    }
+
+    /// M3: 把相关性注入块追加到 system prompt 末尾（带来源标注、已按预算截断）。
+    fn with_relevance_injection(base: Option<String>, relevance: Option<String>) -> Option<String> {
+        let Some(relevance) = relevance else {
+            return base;
+        };
+        let mut prompt = base.unwrap_or_default();
+        if !prompt.is_empty() {
+            prompt.push_str("\n\n");
+        }
+        prompt.push_str(relevance.trim_end());
         Some(prompt)
     }
 
@@ -15566,6 +16016,12 @@ impl AgentSession {
         self.sync_runtime_selection_from_session_header().await?;
 
         self.maybe_compact(Arc::clone(&on_event)).await?;
+        // M8: 若安装工具在本轮之前 mark_dirty，就从磁盘重载技能并重建 L0
+        // 索引块；结果经 build_context 在 system prompt 尾部生效。
+        self.agent.refresh_skills_prompt_if_dirty();
+        // M3: 用用户首条输入检索记忆库，把 top-k 相关历史注入 system prompt。
+        let session_id = self.current_session_id().await;
+        let relevance = self.prepare_relevance_injection(&session_id, &input).await;
         let history = {
             let cx = crate::agent_cx::AgentCx::for_request();
             let session = self
@@ -15612,11 +16068,13 @@ impl AgentSession {
 
         let streaming_guard = AtomicBoolGuard::activate(&self.extensions_is_streaming);
         let base_system_prompt = self.agent.system_prompt().map(str::to_string);
-        self.agent
-            .set_system_prompt(Self::semantic_context_system_prompt_for_turn(
+        self.agent.set_system_prompt(Self::with_relevance_injection(
+            Self::semantic_context_system_prompt_for_turn(
                 base_system_prompt.clone(),
                 semantic_context.as_ref(),
-            ));
+            ),
+            relevance,
+        ));
         let on_event_for_run = Arc::clone(&on_event);
         let result = self
             .agent
@@ -15650,6 +16108,12 @@ impl AgentSession {
         self.sync_runtime_selection_from_session_header().await?;
 
         self.maybe_compact(Arc::clone(&on_event)).await?;
+        // M8: 与文本路径一致——多模态轮开始前同样应用一次技能热刷新。
+        self.agent.refresh_skills_prompt_if_dirty();
+        // M3: 图片输入时用文本块拼出检索 query（无文本则为空，不注入）。
+        let session_id = self.current_session_id().await;
+        let query = Self::split_content_blocks_for_input(&content).0;
+        let relevance = self.prepare_relevance_injection(&session_id, &query).await;
         let history = {
             let cx = crate::agent_cx::AgentCx::for_request();
             let session = self
@@ -15696,11 +16160,13 @@ impl AgentSession {
 
         let streaming_guard = AtomicBoolGuard::activate(&self.extensions_is_streaming);
         let base_system_prompt = self.agent.system_prompt().map(str::to_string);
-        self.agent
-            .set_system_prompt(Self::semantic_context_system_prompt_for_turn(
+        self.agent.set_system_prompt(Self::with_relevance_injection(
+            Self::semantic_context_system_prompt_for_turn(
                 base_system_prompt.clone(),
                 semantic_context.as_ref(),
-            ));
+            ),
+            relevance,
+        ));
         let on_event_for_run = Arc::clone(&on_event);
         let result = self
             .agent
@@ -15729,7 +16195,7 @@ impl AgentSession {
     /// on the session path), so a retry re-issues only the failed provider
     /// request instead of replaying the whole turn. This is what makes
     /// auto-retry idempotent — no tool re-execution, no re-billing of prior
-    /// work (pi_agent_rust#125).
+    /// work (recur_agent#125).
     ///
     /// Callers should strip the failed request's incomplete output first via
     /// [`Self::revert_incomplete_response`] so the resume streams from a clean
@@ -16195,7 +16661,7 @@ fn safe_context_field(value: &str) -> String {
 
 /// Log a summary of auto-repair events that fired during extension loading.
 ///
-/// Default: one-line summary.  Set `PI_AUTO_REPAIR_VERBOSE=1` for per-extension
+/// Default: one-line summary.  Set `RECUR_AGENT_AUTO_REPAIR_VERBOSE=1` for per-extension
 /// detail.  Structured tracing events are always emitted regardless of verbosity.
 fn log_repair_diagnostics(events: &[crate::extensions_js::ExtensionRepairEvent]) {
     use std::collections::BTreeMap;
@@ -16221,7 +16687,7 @@ fn log_repair_diagnostics(events: &[crate::extensions_js::ExtensionRepairEvent])
             .push(&ev.extension_id);
     }
 
-    let verbose = std::env::var("PI_AUTO_REPAIR_VERBOSE")
+    let verbose = std::env::var("RECUR_AGENT_AUTO_REPAIR_VERBOSE")
         .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
 
     if verbose {
@@ -16398,7 +16864,7 @@ fn extract_tool_calls(content: &[ContentBlock]) -> Vec<ToolCall> {
 
 #[cfg(test)]
 mod tests {
-    use super::extensions_integration_tests::PiAiCaptureProvider;
+    use super::extensions_integration_tests::RaAiCaptureProvider;
     use super::*;
     use crate::auth::AuthCredential;
     use crate::provider::{InputType, Model, ModelCost};
@@ -18659,7 +19125,7 @@ mod tests {
     fn test_agent_config_default() {
         // Tests don't mutate env (the crate forbids unsafe code, and
         // `std::env::set_var` is unsafe in 2024 edition); under typical
-        // `cargo test` invocation `PI_MAX_TOOL_ITERATIONS` is unset, so
+        // `cargo test` invocation `RECUR_AGENT_MAX_TOOL_ITERATIONS` is unset, so
         // this assertion holds. If a developer's shell happens to export
         // that var, this test will reflect their effective default — which
         // is the correct behavior, not a bug.
@@ -18971,6 +19437,88 @@ mod tests {
         let context = agent.build_context();
         assert_eq!(context.messages.len(), 1);
         assert_eq!(image_count_in_message(&context.messages[0]), 1);
+    }
+
+    /// M8: 安装标记 dirty 后，agent 的 L0 技能索引必须在不重启进程的情况下
+    /// 刷新——构造一个只含单个技能的临时技能根，先验证未标脏时不刷新，
+    /// 再 mark_dirty 并验证刷新把新技能带进 system prompt。
+    #[test]
+    fn skills_reload_consumer_observes_dirty_mark() {
+        let skill_root = std::env::temp_dir().join(format!(
+            "pi_m8_skills_reload_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        ));
+        let skill_dir = skill_root
+            .join(".ra")
+            .join("skills")
+            .join("m8-hot-reload-probe");
+        std::fs::create_dir_all(&skill_dir).expect("create temp skill dir");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: m8-hot-reload-probe\ndescription: probe skill for m8 hot reload\n---\n\nbody\n",
+        )
+        .expect("write temp SKILL.md");
+
+        let mut agent = Agent::new(
+            Arc::new(SilentProvider),
+            ToolRegistry::new(&[], Path::new("."), None),
+            AgentConfig {
+                system_prompt: Some("BASE".to_string()),
+                max_tool_iterations: 50,
+                stream_options: StreamOptions::default(),
+                block_images: false,
+                model_accepts_images: true,
+                fail_closed_hooks: false,
+                tool_approval: None,
+                keyword_settings: None,
+                max_time: None,
+                turn_recovery: crate::turn_recovery::TurnRecoveryMode::default(),
+                approval_state: None,
+                bash_settings: None,
+                secrets: None,
+            },
+        );
+        let handle = crate::skill_hub::SkillsReloadHandle::new();
+        agent.set_skills_reload(Some(handle.clone()), skill_root.clone());
+
+        // 未标脏：take_dirty 返回 false，不刷新，system prompt 保持基线。
+        assert!(
+            !agent.refresh_skills_prompt_if_dirty(),
+            "clean handle must not trigger a refresh"
+        );
+        assert!(agent.refreshed_skills_block.is_none());
+        let before = agent.build_context();
+        assert_eq!(before.system_prompt.as_deref(), Some("BASE"));
+
+        // 安装工具标脏后：刷新把新技能带进 L0 索引并追加到 system prompt。
+        handle.mark_dirty();
+        assert!(
+            agent.refresh_skills_prompt_if_dirty(),
+            "dirty handle must trigger a refresh"
+        );
+        let block = agent
+            .refreshed_skills_block
+            .as_deref()
+            .expect("refresh must produce a skills block");
+        assert!(
+            block.contains("m8-hot-reload-probe"),
+            "refreshed block must list the newly installed skill: {block}"
+        );
+        let after = agent.build_context();
+        let prompt = after.system_prompt.as_deref().expect("prompt present");
+        assert!(prompt.starts_with("BASE"), "baseline prompt preserved");
+        assert!(
+            prompt.contains("m8-hot-reload-probe"),
+            "hot-reloaded skill must reach the built context prompt"
+        );
+
+        // 一次性语义：第二次刷新不再触发（take_dirty 已被消费）。
+        assert!(!agent.refresh_skills_prompt_if_dirty());
+
+        let _ = std::fs::remove_dir_all(&skill_root);
     }
 
     #[test]
@@ -20482,7 +21030,7 @@ mod tests {
             .expect("write compaction extension");
 
             let calls = Arc::new(StdMutex::new(Vec::new()));
-            let provider = Arc::new(PiAiCaptureProvider {
+            let provider = Arc::new(RaAiCaptureProvider {
                 calls: Arc::clone(&calls),
             });
             let tools = ToolRegistry::new(&[], temp_dir.path(), None);

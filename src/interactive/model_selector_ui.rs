@@ -2,7 +2,7 @@ use super::commands::{model_entry_matches, resolve_model_key_from_default_auth};
 use super::*;
 use crate::models::model_requires_configured_credential;
 
-impl PiApp {
+impl RaApp {
     fn normalize_model_key(entry: &ModelEntry) -> (String, String) {
         let canonical_provider =
             crate::provider_metadata::canonical_provider_id(entry.model.provider.as_str())
@@ -415,7 +415,7 @@ mod tests {
         }
     }
 
-    fn build_test_app(current: ModelEntry, available: Vec<ModelEntry>) -> PiApp {
+    fn build_test_app(current: ModelEntry, available: Vec<ModelEntry>) -> RaApp {
         let provider: Arc<dyn Provider> = Arc::new(DummyProvider);
         let agent = Agent::new(
             provider,
@@ -439,7 +439,7 @@ mod tests {
             last_changelog_version: Some(crate::platform::VERSION.to_string()),
             ..Config::default()
         };
-        PiApp::new(
+        RaApp::new(
             agent,
             session,
             config,

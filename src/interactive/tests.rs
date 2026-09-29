@@ -78,7 +78,7 @@ fn test_model_entry() -> ModelEntry {
     }
 }
 
-fn build_test_app(cwd: PathBuf) -> PiApp {
+fn build_test_app(cwd: PathBuf) -> RaApp {
     let config = Config::default();
     let provider: Arc<dyn Provider> = Arc::new(DummyProvider);
     let agent = Agent::new(
@@ -100,7 +100,7 @@ fn build_test_app(cwd: PathBuf) -> PiApp {
     let model_entry = test_model_entry();
     let (event_tx, _event_rx) = mpsc::channel(64);
 
-    PiApp::new(
+    RaApp::new(
         agent,
         Arc::new(asupersync::sync::Mutex::new(Session::in_memory())),
         config,
@@ -456,7 +456,7 @@ impl TuiDegradationDrillTrace {
         self.event_count += 1;
     }
 
-    fn render(&mut self, app: &PiApp) -> String {
+    fn render(&mut self, app: &RaApp) -> String {
         let frame = app.view();
         self.redraw_count += 1;
         self.max_rendered_rows = self.max_rendered_rows.max(frame.lines().count());
@@ -491,7 +491,7 @@ const FINAL_MARKER: &str = "semantic-provider-delta-71";
 const TOOL_MARKER: &str = "semantic-tool-final";
 const SESSION_MARKER: &str = "session write burst 9 committed";
 
-fn seed_normal_tui_load(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
+fn seed_normal_tui_load(app: &mut RaApp, trace: &mut TuiDegradationDrillTrace) {
     app.messages.push(ConversationMessage::new(
         MessageRole::User,
         "normal-load prompt remains readable".to_string(),
@@ -511,16 +511,16 @@ fn seed_normal_tui_load(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
     ));
 }
 
-fn drive_provider_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
+fn drive_provider_pressure(app: &mut RaApp, trace: &mut TuiDegradationDrillTrace) {
     app.tui_pressure_frame_p99_us.store(
         TuiPressureController::HIGH_FRAME_P99_US,
         std::sync::atomic::Ordering::Relaxed,
     );
-    app.handle_pi_message(PiMsg::AgentStart);
+    app.handle_pi_message(RaMsg::AgentStart);
     trace.event();
     for idx in 0..PROVIDER_DELTA_COUNT {
         let delta = format!("semantic-provider-delta-{idx} ");
-        app.handle_pi_message(PiMsg::TextDelta(delta));
+        app.handle_pi_message(RaMsg::TextDelta(delta));
         trace.event();
         if idx % 16 == 0 {
             let frame = trace.render(app);
@@ -531,13 +531,13 @@ fn drive_provider_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace
         }
     }
     for idx in 0..THINKING_DELTA_COUNT {
-        app.handle_pi_message(PiMsg::ThinkingDelta(format!("thinking-step-{idx} ")));
+        app.handle_pi_message(RaMsg::ThinkingDelta(format!("thinking-step-{idx} ")));
         trace.event();
     }
 }
 
-fn drive_tool_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
-    app.handle_pi_message(PiMsg::ToolStart {
+fn drive_tool_pressure(app: &mut RaApp, trace: &mut TuiDegradationDrillTrace) {
+    app.handle_pi_message(RaMsg::ToolStart {
         name: "bash".to_string(),
         tool_id: "tool-pressure".to_string(),
     });
@@ -548,7 +548,7 @@ fn drive_tool_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
         } else {
             "low-value-tool-noise"
         };
-        app.handle_pi_message(PiMsg::ToolUpdate {
+        app.handle_pi_message(RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-pressure".to_string(),
             content: vec![pressure_tool_block(label)],
@@ -560,7 +560,7 @@ fn drive_tool_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
         trace.event();
     }
     trace.coalesced_count += TOOL_UPDATE_COUNT.saturating_sub(1);
-    app.handle_pi_message(PiMsg::ToolEnd {
+    app.handle_pi_message(RaMsg::ToolEnd {
         name: "bash".to_string(),
         tool_id: "tool-pressure".to_string(),
         is_error: false,
@@ -569,16 +569,16 @@ fn drive_tool_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
     trace.event();
 }
 
-fn drive_session_write_bursts(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
+fn drive_session_write_bursts(app: &mut RaApp, trace: &mut TuiDegradationDrillTrace) {
     for idx in 0..SESSION_BURST_COUNT {
-        app.handle_pi_message(PiMsg::SystemNote(format!(
+        app.handle_pi_message(RaMsg::SystemNote(format!(
             "session write burst {idx} committed"
         )));
         trace.event();
     }
 }
 
-fn drive_resize_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
+fn drive_resize_pressure(app: &mut RaApp, trace: &mut TuiDegradationDrillTrace) {
     let _ = app.update(Message::new(WindowSizeMsg {
         width: 92,
         height: 26,
@@ -597,8 +597,8 @@ fn drive_resize_pressure(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) 
     trace.event();
 }
 
-fn finish_agent_and_preserve_input(app: &mut PiApp, trace: &mut TuiDegradationDrillTrace) {
-    app.handle_pi_message(PiMsg::AgentDone {
+fn finish_agent_and_preserve_input(app: &mut RaApp, trace: &mut TuiDegradationDrillTrace) {
+    app.handle_pi_message(RaMsg::AgentDone {
         usage: None,
         stop_reason: StopReason::Stop,
         error_message: None,
@@ -613,7 +613,7 @@ fn finish_agent_and_preserve_input(app: &mut PiApp, trace: &mut TuiDegradationDr
     }
 }
 
-fn assert_tui_degradation_evidence(app: &PiApp, trace: &mut TuiDegradationDrillTrace) {
+fn assert_tui_degradation_evidence(app: &RaApp, trace: &mut TuiDegradationDrillTrace) {
     let final_frame = trace.render(app);
     let collapsed_tool_messages = app
         .messages
@@ -635,7 +635,7 @@ fn assert_tui_degradation_evidence(app: &PiApp, trace: &mut TuiDegradationDrillT
         TOOL_UPDATE_COUNT,
     );
     let evidence = json!({
-        "schema": "pi.tui.degradation_drill.v1",
+        "schema": "ra.tui.degradation_drill.v1",
         "fixture": "sustained_event_pressure",
         "event_count": trace.event_count,
         "redraw_count": trace.redraw_count,
@@ -657,7 +657,7 @@ fn assert_tui_degradation_evidence(app: &PiApp, trace: &mut TuiDegradationDrillT
         },
     });
 
-    assert_eq!(evidence["schema"], "pi.tui.degradation_drill.v1");
+    assert_eq!(evidence["schema"], "ra.tui.degradation_drill.v1");
     assert_eq!(evidence["event_count"], 122);
     assert_eq!(evidence["redraw_count"], 8);
     assert_eq!(evidence["coalesced_count"], TOOL_UPDATE_COUNT - 1);
@@ -761,7 +761,7 @@ fn todo_summary_message_drives_footer_line() {
     assert!(app.todo_summary.is_none());
     assert!(!app.view().contains("1/2 · implement"));
 
-    app.handle_pi_message(PiMsg::TodoSummary {
+    app.handle_pi_message(RaMsg::TodoSummary {
         summary: Some("1/2 · implement".to_string()),
     });
     let view = app.view();
@@ -773,7 +773,7 @@ fn todo_summary_message_drives_footer_line() {
         "todo footer consumes two chrome rows"
     );
 
-    app.handle_pi_message(PiMsg::TodoSummary { summary: None });
+    app.handle_pi_message(RaMsg::TodoSummary { summary: None });
     assert!(app.todo_summary.is_none());
     assert!(!app.view().contains("1/2 · implement"));
     assert_eq!(app.view_effective_conversation_height(), base_height);
@@ -831,7 +831,7 @@ fn ask_card_consumes_input_and_advances_questions() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("req-1");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "req-1".to_string(),
         request,
     }));
@@ -861,7 +861,7 @@ fn ask_card_consumes_input_and_advances_questions() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("req-2");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "req-2".to_string(),
         request,
     }));
@@ -892,7 +892,7 @@ fn ask_card_answer_is_not_queued_as_steering_while_agent_busy() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("req-busy");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "req-busy".to_string(),
         request,
     }));
@@ -944,7 +944,7 @@ fn ask_card_answer_is_not_queued_as_steering_while_agent_busy() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("req-busy-2");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "req-busy-2".to_string(),
         request,
     }));
@@ -983,7 +983,7 @@ fn mixed_cards_extension_then_ask_serialize_in_arrival_order() {
     app.set_terminal_size(100, 30);
     app.ask_tool = Some(crate::ask::AskTool::new(crate::ask::AskPolicy::Recommended));
 
-    app.handle_pi_message(PiMsg::ExtensionUiRequest(ext_input_card("e1", "Say?")));
+    app.handle_pi_message(RaMsg::ExtensionUiRequest(ext_input_card("e1", "Say?")));
     assert_eq!(
         app.active_input_card_kind,
         Some(InputCardKind::Extension),
@@ -997,7 +997,7 @@ fn mixed_cards_extension_then_ask_serialize_in_arrival_order() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("a1");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a1".to_string(),
         request,
     }));
@@ -1044,7 +1044,7 @@ fn mixed_cards_ask_then_ext_preserve_drafts_across_resolution_paths() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("a-order");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a-order".to_string(),
         request,
     }));
@@ -1054,7 +1054,7 @@ fn mixed_cards_ask_then_ext_preserve_drafts_across_resolution_paths() {
     );
     assert!(app.card_draft_snapshot.is_some());
 
-    app.handle_pi_message(PiMsg::ExtensionUiRequest(ext_input_card("e-order", "Env?")));
+    app.handle_pi_message(RaMsg::ExtensionUiRequest(ext_input_card("e-order", "Env?")));
     assert_eq!(app.active_input_card_kind, Some(InputCardKind::Ask));
 
     // Answer the ACTIVE ask through the REAL Enter path; the queued ext
@@ -1094,7 +1094,7 @@ fn normal_card_resolution_restores_only_the_preexisting_draft() {
     app.ask_tool = Some(crate::ask::AskTool::new(crate::ask::AskPolicy::Recommended));
     app.input.set_value("keep this draft");
 
-    app.handle_pi_message(PiMsg::ExtensionUiRequest(ext_input_card(
+    app.handle_pi_message(RaMsg::ExtensionUiRequest(ext_input_card(
         "e-normal", "Env?",
     )));
     let request: crate::ask::AskRequest = serde_json::from_value(json!({
@@ -1104,7 +1104,7 @@ fn normal_card_resolution_restores_only_the_preexisting_draft() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("a-normal");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a-normal".to_string(),
         request,
     }));
@@ -1143,12 +1143,12 @@ fn escape_advances_one_card_at_a_time_across_ask_ask_extension() {
         if let Some(tool) = app.ask_tool.as_ref() {
             tool.register_channel_ui_request_for_tests(id);
         }
-        app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+        app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
             id: id.to_string(),
             request,
         }));
     }
-    app.handle_pi_message(PiMsg::ExtensionUiRequest(ext_input_card(
+    app.handle_pi_message(RaMsg::ExtensionUiRequest(ext_input_card(
         "e-third", "Third?",
     )));
 
@@ -1213,7 +1213,7 @@ fn pending_ask_card_keeps_editor_visible_while_turn_is_running() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("a-approval");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a-approval".to_string(),
         request,
     }));
@@ -1280,7 +1280,7 @@ fn pending_ask_card_routes_typed_keys_to_the_editor_mid_turn() {
     if let Some(tool) = app.ask_tool.as_ref() {
         tool.register_channel_ui_request_for_tests("a-approval-keys");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a-approval-keys".to_string(),
         request,
     }));
@@ -1333,13 +1333,13 @@ fn agent_done_discards_partial_extension_answer_and_restores_draft() {
     let mut app = build_test_app(dir.path().to_path_buf());
     app.set_terminal_size(100, 30);
     app.input.set_value("original draft");
-    app.handle_pi_message(PiMsg::ExtensionUiRequest(ext_input_card(
+    app.handle_pi_message(RaMsg::ExtensionUiRequest(ext_input_card(
         "e-invalidated",
         "Answer?",
     )));
     app.input.set_value("partial card answer");
 
-    let _ = app.handle_pi_message(PiMsg::AgentDone {
+    let _ = app.handle_pi_message(RaMsg::AgentDone {
         usage: None,
         stop_reason: StopReason::Aborted,
         error_message: None,
@@ -1370,25 +1370,25 @@ fn agent_done_invalidates_all_outstanding_cards_before_idle() {
         tool.register_channel_ui_request_for_tests("a-done");
         tool.register_channel_ui_request_for_tests("a-queued");
     }
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a-done".to_string(),
         request,
     }));
-    app.handle_pi_message(PiMsg::AskUiRequest(crate::ask::AskUiRequest {
+    app.handle_pi_message(RaMsg::AskUiRequest(crate::ask::AskUiRequest {
         id: "a-queued".to_string(),
         request: serde_json::from_value(json!({
             "questions": [{"question": "Queued?", "options": [{"label": "B"}]}]
         }))
         .expect("queued ask"),
     }));
-    app.handle_pi_message(PiMsg::ExtensionUiRequest(ext_input_card("e-done", "late?")));
+    app.handle_pi_message(RaMsg::ExtensionUiRequest(ext_input_card("e-done", "late?")));
 
     assert!(!app.ask_ui_queue.is_empty());
     assert!(!app.extension_ui_queue.is_empty());
 
     app.pending_inputs
         .push_back(PendingInput::Text("queued user input".to_string()));
-    let cmd = app.handle_pi_message(PiMsg::AgentDone {
+    let cmd = app.handle_pi_message(RaMsg::AgentDone {
         usage: None,
         stop_reason: StopReason::Aborted,
         error_message: None,
@@ -1413,7 +1413,7 @@ fn agent_done_invalidates_all_outstanding_cards_before_idle() {
 
 #[test]
 fn export_paths_are_chosen_the_same_way_for_both_stacks() {
-    // These two are free functions rather than `PiApp` methods so the ftui
+    // These two are free functions rather than `RaApp` methods so the ftui
     // stack's `/export` lands the same file in the same place. Pin the naming
     // here, where both callers can be broken by one change.
     use super::{default_export_path, resolve_output_path};

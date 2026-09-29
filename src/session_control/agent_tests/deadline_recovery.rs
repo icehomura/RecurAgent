@@ -132,7 +132,7 @@ fn native_stream_timeout_recovers_attachments_into_a_real_tool_turn_exactly_once
     eprintln!(
         "{}",
         json!({
-            "schema": "pi.test.session_deadline_recovery.v1",
+            "schema": "ra.test.session_deadline_recovery.v1",
             "outcome": "timeout_then_explicit_recovery",
             "original_requests": 1, "recovery_requests": 3,
             "tool_calls": 1, "transferred_inputs": 1,

@@ -468,7 +468,7 @@ mod tests {
     #[test]
     fn inclusion_list_serde() {
         let list = InclusionList {
-            schema: "pi.ext.inclusion.v1".into(),
+            schema: "ra.ext.inclusion.v1".into(),
             generated_at: "2026-01-01T00:00:00Z".into(),
             task: Some("test".into()),
             stats: Some(InclusionStats {
@@ -494,13 +494,13 @@ mod tests {
         };
         let json = serde_json::to_string(&list).unwrap();
         let back: InclusionList = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.schema, "pi.ext.inclusion.v1");
+        assert_eq!(back.schema, "ra.ext.inclusion.v1");
     }
 
     #[test]
     fn normalized_manifest_hash_ignores_generated_at_and_key_order() {
         let first = serde_json::json!({
-            "schema": "pi.ext.inclusion_list.v1",
+            "schema": "ra.ext.inclusion_list.v1",
             "generated_at": "2026-02-10T00:00:00Z",
             "summary": {
                 "tier1_count": 2,
@@ -516,7 +516,7 @@ mod tests {
                 "tier1_count": 2
             },
             "generated_at": "2030-01-01T12:34:56Z",
-            "schema": "pi.ext.inclusion_list.v1"
+            "schema": "ra.ext.inclusion_list.v1"
         });
 
         let first_hash = normalized_manifest_hash_from_value(&first).unwrap();
@@ -527,12 +527,12 @@ mod tests {
     #[test]
     fn normalized_manifest_hash_detects_content_changes() {
         let baseline = serde_json::json!({
-            "schema": "pi.ext.inclusion_list.v1",
+            "schema": "ra.ext.inclusion_list.v1",
             "generated_at": "2026-02-10T00:00:00Z",
             "summary": { "tier1_count": 2 }
         });
         let changed = serde_json::json!({
-            "schema": "pi.ext.inclusion_list.v1",
+            "schema": "ra.ext.inclusion_list.v1",
             "generated_at": "2026-02-10T00:00:00Z",
             "summary": { "tier1_count": 3 }
         });

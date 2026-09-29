@@ -16,12 +16,14 @@ pub(super) const PIPE_QUEUE_CAPACITY: usize = 2;
 const MAX_ANSWER_BYTES: usize = 256 * 1024;
 const MAX_CONTENT_BLOCKS: usize = 4096;
 
-pub(super) const FRAME_LIMIT: &str = "PI_SUBAGENT_FRAME_LIMIT: child output frame exceeds 8 MiB";
-pub(super) const PIPE_ERROR: &str = "PI_SUBAGENT_PIPE_ERROR: failed to read child output";
-const INVALID_FRAME: &str = "PI_SUBAGENT_PROTOCOL: child stdout is not a valid JSONL event";
+pub(super) const FRAME_LIMIT: &str =
+    "RECUR_AGENT_SUBAGENT_FRAME_LIMIT: child output frame exceeds 8 MiB";
+pub(super) const PIPE_ERROR: &str = "RECUR_AGENT_SUBAGENT_PIPE_ERROR: failed to read child output";
+const INVALID_FRAME: &str =
+    "RECUR_AGENT_SUBAGENT_PROTOCOL: child stdout is not a valid JSONL event";
 const INVALID_MESSAGE: &str =
-    "PI_SUBAGENT_PROTOCOL: child completion has an invalid assistant message";
-const ANSWER_LIMIT: &str = "PI_SUBAGENT_OUTPUT_LIMIT: child answer exceeds 256 KiB; it cannot be accepted or schema-validated";
+    "RECUR_AGENT_SUBAGENT_PROTOCOL: child completion has an invalid assistant message";
+const ANSWER_LIMIT: &str = "RECUR_AGENT_SUBAGENT_OUTPUT_LIMIT: child answer exceeds 256 KiB; it cannot be accepted or schema-validated";
 
 /// Read a complete line without first allocating an unbounded `String` through
 /// `BufRead::lines`. CRLF and a complete final line without a newline are legal.
@@ -146,65 +148,8 @@ impl ChildProtocol {
                 }
                 Ok(false)
             }
-            "agent_end" => {
-                if event.get("error").is_some_and(|error| !error.is_null()) {
-                    return Err("PI_SUBAGENT_FAILED: child agent reported an unsuccessful run");
-                }
-                let last = event
-                    .get("messages")
-                    .and_then(Value::as_array)
-                    .and_then(|messages| messages.last())
-                    .ok_or(INVALID_MESSAGE)?;
-                // Searching backwards could accept an old answer while the
-                // actual run ended on an unresolved tool result or new input.
-                if last.get("role").and_then(Value::as_str) != Some("assistant") {
-                    return Err(
-                        "PI_SUBAGENT_INCOMPLETE: child ended without a final assistant answer",
-                    );
-                }
-                replace_answer(last, output)?;
-                match last.get("stopReason").and_then(Value::as_str) {
-                    Some("stop") => {}
-                    Some("length") => {
-                        return Err("PI_SUBAGENT_TRUNCATED: child answer hit its output limit");
-                    }
-                    Some("toolUse" | "pauseTurn") => {
-                        return Err(
-                            "PI_SUBAGENT_INCOMPLETE: child requires another tool or continuation turn",
-                        );
-                    }
-                    Some("refusal") => return Err("PI_SUBAGENT_REFUSAL: child declined the task"),
-                    Some("error" | "aborted") => {
-                        return Err("PI_SUBAGENT_FAILED: child generation failed or was aborted");
-                    }
-                    _ => return Err(INVALID_MESSAGE),
-                }
-                if last
-                    .get("errorMessage")
-                    .is_some_and(|error| !error.is_null())
-                {
-                    return Err("PI_SUBAGENT_FAILED: child final message contains an error");
-                }
-                if last
-                    .get("content")
-                    .and_then(Value::as_array)
-                    .is_some_and(|blocks| {
-                        blocks.iter().any(|block| {
-                            block.get("type").and_then(Value::as_str) == Some("toolCall")
-                        })
-                    })
-                {
-                    return Err(
-                        "PI_SUBAGENT_INCOMPLETE: child final answer contains unresolved tool calls",
-                    );
-                }
-                if output.trim().is_empty() {
-                    return Err("PI_SUBAGENT_EMPTY_RESULT: child completed without an answer");
-                }
-                self.completed = true;
-                Ok(true)
-            }
-            "error" => Err("PI_SUBAGENT_FAILED: child emitted an error event"),
+            "agent_end" => self.finish_agent_end(&event, output),
+            "error" => Err("RECUR_AGENT_SUBAGENT_FAILED: child emitted an error event"),
             "turn_start" | "tool_execution_start" => {
                 self.completed = false;
                 Ok(false)
@@ -213,12 +158,83 @@ impl ChildProtocol {
         }
     }
 
+    /// Validate a terminal `agent_end` frame and record completion.
+    ///
+    /// Split out of `ingest_inner`: this branch alone carries the answer
+    /// validation, stop-reason mapping and completion latch.
+    fn finish_agent_end(
+        &mut self,
+        event: &Value,
+        output: &mut String,
+    ) -> Result<bool, &'static str> {
+        if event.get("error").is_some_and(|error| !error.is_null()) {
+            return Err("RECUR_AGENT_SUBAGENT_FAILED: child agent reported an unsuccessful run");
+        }
+        let last = event
+            .get("messages")
+            .and_then(Value::as_array)
+            .and_then(|messages| messages.last())
+            .ok_or(INVALID_MESSAGE)?;
+        // Searching backwards could accept an old answer while the
+        // actual run ended on an unresolved tool result or new input.
+        if last.get("role").and_then(Value::as_str) != Some("assistant") {
+            return Err(
+                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child ended without a final assistant answer",
+            );
+        }
+        replace_answer(last, output)?;
+        match last.get("stopReason").and_then(Value::as_str) {
+            Some("stop") => {}
+            Some("length") => {
+                return Err("RECUR_AGENT_SUBAGENT_TRUNCATED: child answer hit its output limit");
+            }
+            Some("toolUse" | "pauseTurn") => {
+                return Err(
+                    "RECUR_AGENT_SUBAGENT_INCOMPLETE: child requires another tool or continuation turn",
+                );
+            }
+            Some("refusal") => {
+                return Err("RECUR_AGENT_SUBAGENT_REFUSAL: child declined the task");
+            }
+            Some("error" | "aborted") => {
+                return Err("RECUR_AGENT_SUBAGENT_FAILED: child generation failed or was aborted");
+            }
+            _ => return Err(INVALID_MESSAGE),
+        }
+        if last
+            .get("errorMessage")
+            .is_some_and(|error| !error.is_null())
+        {
+            return Err("RECUR_AGENT_SUBAGENT_FAILED: child final message contains an error");
+        }
+        if last
+            .get("content")
+            .and_then(Value::as_array)
+            .is_some_and(|blocks| {
+                blocks
+                    .iter()
+                    .any(|block| block.get("type").and_then(Value::as_str) == Some("toolCall"))
+            })
+        {
+            return Err(
+                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child final answer contains unresolved tool calls",
+            );
+        }
+        if output.trim().is_empty() {
+            return Err("RECUR_AGENT_SUBAGENT_EMPTY_RESULT: child completed without an answer");
+        }
+        self.completed = true;
+        Ok(true)
+    }
+
     pub(super) const fn finish(&self) -> Result<(), &'static str> {
         if let Some(error) = self.failure {
             return Err(error);
         }
         if !self.completed {
-            return Err("PI_SUBAGENT_INCOMPLETE: child exited before a successful agent_end");
+            return Err(
+                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child exited before a successful agent_end",
+            );
         }
         Ok(())
     }

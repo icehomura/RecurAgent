@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Canonical schema identifier for the handoff JSON payload.
-pub const HANDOFF_SCHEMA_V1: &str = "pi.handoff.v1";
+pub const HANDOFF_SCHEMA_V1: &str = "ra.handoff.v1";
 
 /// Target recipient or storage destination for a generated handoff brief.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,7 +99,7 @@ pub struct FileTouched {
 /// Complete handoff document containing structured session analysis.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HandoffDocument {
-    /// Schema version (`pi.handoff.v1`).
+    /// Schema version (`ra.handoff.v1`).
     pub schema: String,
     /// Session identifier.
     pub session_id: String,
@@ -264,7 +264,7 @@ impl HandoffDocument {
         md
     }
 
-    /// Serialize to JSON string matching `pi.handoff.v1`.
+    /// Serialize to JSON string matching `ra.handoff.v1`.
     pub fn to_json(&self) -> Result<String> {
         serde_json::to_string_pretty(self)
             .map_err(|e| Error::session(format!("Failed to serialize handoff to JSON: {e}")))

@@ -15,13 +15,13 @@ use crate::agent::AgentEvent;
 use crate::error::{Error, Result};
 
 /// JSONL row schema emitted by [`SwarmFlightRecorder`].
-pub const SWARM_FLIGHT_RECORDER_EVENT_SCHEMA: &str = "pi.swarm.flight_recorder.event.v1";
+pub const SWARM_FLIGHT_RECORDER_EVENT_SCHEMA: &str = "ra.swarm.flight_recorder.event.v1";
 
 /// Summary report schema emitted by [`SwarmFlightRecorder::build_report`].
-pub const SWARM_FLIGHT_RECORDER_REPORT_SCHEMA: &str = "pi.swarm.flight_recorder.report.v1";
+pub const SWARM_FLIGHT_RECORDER_REPORT_SCHEMA: &str = "ra.swarm.flight_recorder.report.v1";
 
 /// Replay metadata schema nested inside the summary report.
-pub const SWARM_FLIGHT_RECORDER_REPLAY_SCHEMA: &str = "pi.swarm.flight_recorder.replay.v1";
+pub const SWARM_FLIGHT_RECORDER_REPLAY_SCHEMA: &str = "ra.swarm.flight_recorder.replay.v1";
 
 const REDACTED: &str = "[REDACTED]";
 const SENSITIVE_KEY_FRAGMENTS: &[&str] = &[

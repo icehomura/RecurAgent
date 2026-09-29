@@ -31,7 +31,7 @@ const INIT_BLOBS: &str = "CREATE TABLE IF NOT EXISTS pi_session_blobs (\
     data BLOB NOT NULL)";
 
 fn blob_error(reason: &'static str) -> Error {
-    Error::session(format!("PI_SESSION_ATTACHMENT_INVALID: {reason}"))
+    Error::session(format!("RECUR_AGENT_SESSION_ATTACHMENT_INVALID: {reason}"))
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

@@ -8,7 +8,7 @@
 //!
 //! ## Public API policy
 //!
-//! The `pi` crate is primarily the implementation crate for the `pi` CLI binary.
+//! The `ra` crate is primarily the implementation crate for the `ra` CLI binary.
 //! External consumers should treat non-`sdk` modules/types as **unstable**
 //! and subject to change. Use [`sdk`] as the stable library-facing surface.
 //!
@@ -57,9 +57,9 @@
     clippy::wildcard_imports
 )]
 
-// Allow in-crate tests that include integration test helpers to resolve `pi::...`
+// Allow in-crate tests that include integration test helpers to resolve `ra::...`
 // paths the same way integration tests do.
-extern crate self as pi;
+extern crate self as ra;
 
 /// Serialize unit tests that temporarily change the process-wide current
 /// directory. Rust's test runner executes modules concurrently, so separate
@@ -136,8 +136,10 @@ pub mod crash;
 #[doc(hidden)]
 pub mod crypto_shim;
 pub mod current_time;
+pub mod dag_scheduler;
+pub mod dag_tool;
 // Always declared: the module is dual-mode internally (its non-feature
-// `imp` degrades to named errors), and main.rs's `pi profile` arm calls
+// `imp` degrades to named errors), and main.rs's `ra profile` arm calls
 // its unconditional helpers — gating the declaration broke default builds.
 #[doc(hidden)]
 pub mod debug;
@@ -271,6 +273,9 @@ pub mod provider;
 pub mod provider_metadata;
 #[doc(hidden)]
 pub mod providers;
+pub mod ptc_bridge;
+pub mod reflection_hooks;
+pub mod relevance_injector;
 #[doc(hidden)]
 pub mod resource_governor;
 #[doc(hidden)]
@@ -307,6 +312,8 @@ pub mod session_picker;
 pub mod session_sqlite;
 #[doc(hidden)]
 pub mod session_store_v2;
+pub mod skill_hub;
+pub mod skill_merge;
 #[doc(hidden)]
 pub mod skills_managed;
 pub mod sse;
@@ -324,6 +331,7 @@ pub mod swarm_flight_recorder;
 pub mod swarm_progress_slo;
 #[doc(hidden)]
 pub mod swarm_replay;
+pub mod task_dag;
 #[doc(hidden)]
 pub mod terminal_images;
 #[doc(hidden)]

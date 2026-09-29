@@ -178,7 +178,7 @@ impl ComputerTool {
 
     fn is_mock(&self) -> bool {
         self.mock_mode
-            .unwrap_or_else(|| std::env::var("PI_COMPUTER_MOCK").as_deref() == Ok("1"))
+            .unwrap_or_else(|| std::env::var("RECUR_AGENT_COMPUTER_MOCK").as_deref() == Ok("1"))
     }
 
     async fn authorize(&self, action: &str, args: &Value) -> Result<()> {

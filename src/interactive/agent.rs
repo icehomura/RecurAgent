@@ -287,14 +287,14 @@ fn content_blocks_estimated_output_bytes(content: &[ContentBlock]) -> usize {
 }
 
 struct UiStreamDeltaBatcher {
-    sender: mpsc::Sender<PiMsg>,
-    pending: std::collections::VecDeque<PiMsg>,
+    sender: mpsc::Sender<RaMsg>,
+    pending: std::collections::VecDeque<RaMsg>,
     pending_bytes: usize,
     flush_interval: std::time::Duration,
     max_pending_bytes: usize,
     last_flush: std::time::Instant,
     frame_p99_us: Arc<AtomicU64>,
-    pending_tool_update: Option<PiMsg>,
+    pending_tool_update: Option<RaMsg>,
     pending_tool_update_bytes: usize,
     pending_tool_update_events: usize,
     last_tool_update_flush: std::time::Instant,
@@ -306,11 +306,11 @@ struct UiStreamDeltaBatcher {
 
 impl UiStreamDeltaBatcher {
     #[cfg(test)]
-    fn new(sender: mpsc::Sender<PiMsg>) -> Self {
+    fn new(sender: mpsc::Sender<RaMsg>) -> Self {
         Self::new_with_frame_p99(sender, Arc::new(AtomicU64::new(0)))
     }
 
-    fn new_with_frame_p99(sender: mpsc::Sender<PiMsg>, frame_p99_us: Arc<AtomicU64>) -> Self {
+    fn new_with_frame_p99(sender: mpsc::Sender<RaMsg>, frame_p99_us: Arc<AtomicU64>) -> Self {
         let now = std::time::Instant::now();
         let flush_interval = UI_STREAM_DELTA_FLUSH_INTERVAL;
         Self {
@@ -336,8 +336,8 @@ impl UiStreamDeltaBatcher {
         }
         if let Some(last) = self.pending.back_mut() {
             match (kind, last) {
-                (StreamDeltaKind::Text, PiMsg::TextDelta(text))
-                | (StreamDeltaKind::Thinking, PiMsg::ThinkingDelta(text)) => {
+                (StreamDeltaKind::Text, RaMsg::TextDelta(text))
+                | (StreamDeltaKind::Thinking, RaMsg::ThinkingDelta(text)) => {
                     text.push_str(delta);
                     self.pending_bytes += delta.len();
                     self.flush(false);
@@ -348,16 +348,16 @@ impl UiStreamDeltaBatcher {
         }
 
         let msg = match kind {
-            StreamDeltaKind::Text => PiMsg::TextDelta(delta.to_string()),
-            StreamDeltaKind::Thinking => PiMsg::ThinkingDelta(delta.to_string()),
+            StreamDeltaKind::Text => RaMsg::TextDelta(delta.to_string()),
+            StreamDeltaKind::Thinking => RaMsg::ThinkingDelta(delta.to_string()),
         };
         self.pending.push_back(msg);
         self.pending_bytes += delta.len();
         self.flush(false);
     }
 
-    fn send_immediate(&mut self, msg: PiMsg) {
-        if matches!(msg, PiMsg::ToolUpdate { .. }) {
+    fn send_immediate(&mut self, msg: RaMsg) {
+        if matches!(msg, RaMsg::ToolUpdate { .. }) {
             self.push_tool_update(msg);
             return;
         }
@@ -366,16 +366,16 @@ impl UiStreamDeltaBatcher {
         self.flush(true);
     }
 
-    const fn delta_bytes_for_msg(msg: &PiMsg) -> usize {
+    const fn delta_bytes_for_msg(msg: &RaMsg) -> usize {
         match msg {
-            PiMsg::TextDelta(text) | PiMsg::ThinkingDelta(text) => text.len(),
+            RaMsg::TextDelta(text) | RaMsg::ThinkingDelta(text) => text.len(),
             _ => 0,
         }
     }
 
-    fn push_tool_update(&mut self, msg: PiMsg) {
+    fn push_tool_update(&mut self, msg: RaMsg) {
         let output_bytes = match &msg {
-            PiMsg::ToolUpdate { content, .. } => content_blocks_estimated_output_bytes(content),
+            RaMsg::ToolUpdate { content, .. } => content_blocks_estimated_output_bytes(content),
             _ => 0,
         };
         let pending_tool_output_bytes = self.pending_tool_update_bytes.saturating_add(output_bytes);
@@ -467,7 +467,7 @@ impl UiStreamDeltaBatcher {
     }
 }
 
-fn build_agent_done_pi_msg(messages: &[ModelMessage]) -> PiMsg {
+fn build_agent_done_pi_msg(messages: &[ModelMessage]) -> RaMsg {
     let last = last_assistant_message(messages);
     let mut usage = Usage::default();
     for message in messages {
@@ -491,7 +491,7 @@ fn build_agent_done_pi_msg(messages: &[ModelMessage]) -> PiMsg {
             }
         })
     });
-    PiMsg::AgentDone {
+    RaMsg::AgentDone {
         usage: Some(usage),
         stop_reason,
         error_message,
@@ -513,14 +513,14 @@ fn dispatch_agent_event_to_ui(event: &AgentEvent, batcher: &mut UiStreamDeltaBat
             _ => {}
         },
         AgentEvent::AgentStart { .. } => {
-            batcher.send_immediate(PiMsg::AgentStart);
+            batcher.send_immediate(RaMsg::AgentStart);
         }
         AgentEvent::ToolExecutionStart {
             tool_name,
             tool_call_id,
             args,
         } => {
-            batcher.send_immediate(PiMsg::ToolStart {
+            batcher.send_immediate(RaMsg::ToolStart {
                 name: tool_name.clone(),
                 tool_id: tool_call_id.clone(),
             });
@@ -528,7 +528,7 @@ fn dispatch_agent_event_to_ui(event: &AgentEvent, batcher: &mut UiStreamDeltaBat
             // line) so the transcript is not just "Running bash ..." with an
             // anonymous output block.
             if let Some(summary) = tool_invocation_summary(tool_name, args) {
-                batcher.send_immediate(PiMsg::ToolInvocation {
+                batcher.send_immediate(RaMsg::ToolInvocation {
                     tool_id: tool_call_id.clone(),
                     summary,
                 });
@@ -540,7 +540,7 @@ fn dispatch_agent_event_to_ui(event: &AgentEvent, batcher: &mut UiStreamDeltaBat
             partial_result,
             ..
         } => {
-            batcher.send_immediate(PiMsg::ToolUpdate {
+            batcher.send_immediate(RaMsg::ToolUpdate {
                 name: tool_name.clone(),
                 tool_id: tool_call_id.clone(),
                 content: partial_result.content.clone(),
@@ -561,7 +561,7 @@ fn dispatch_agent_event_to_ui(event: &AgentEvent, batcher: &mut UiStreamDeltaBat
                 && details.get("schema").and_then(serde_json::Value::as_str)
                     == Some(crate::todo::TODO_LIST_SCHEMA)
             {
-                batcher.send_immediate(PiMsg::TodoSummary {
+                batcher.send_immediate(RaMsg::TodoSummary {
                     summary: details
                         .get("summary")
                         .and_then(serde_json::Value::as_str)
@@ -572,13 +572,13 @@ fn dispatch_agent_event_to_ui(event: &AgentEvent, batcher: &mut UiStreamDeltaBat
             // as a final ToolUpdate so the transcript block reflects the full
             // result even when intermediate updates were coalesced away (or
             // the tool never emitted streaming updates at all).
-            batcher.send_immediate(PiMsg::ToolUpdate {
+            batcher.send_immediate(RaMsg::ToolUpdate {
                 name: tool_name.clone(),
                 tool_id: tool_call_id.clone(),
                 content: result.content.clone(),
                 details: result.details.clone(),
             });
-            batcher.send_immediate(PiMsg::ToolEnd {
+            batcher.send_immediate(RaMsg::ToolEnd {
                 name: tool_name.clone(),
                 tool_id: tool_call_id.clone(),
                 is_error: *is_error,
@@ -592,7 +592,7 @@ fn dispatch_agent_event_to_ui(event: &AgentEvent, batcher: &mut UiStreamDeltaBat
             if error.is_some()
                 && matches!(
                     &done,
-                    PiMsg::AgentDone {
+                    RaMsg::AgentDone {
                         stop_reason: StopReason::Error,
                         error_message: Some(_),
                         ..
@@ -921,7 +921,7 @@ enum SessionEventOwnership {
     Busy,
 }
 
-impl PiApp {
+impl RaApp {
     fn session_event_ownership(&self, expected_session_id: &str) -> SessionEventOwnership {
         match self.session.try_lock() {
             Ok(session) if session.header.id == expected_session_id => {
@@ -932,7 +932,7 @@ impl PiApp {
         }
     }
 
-    fn retry_busy_session_event(&mut self, event: PiMsg, attempts_remaining: u8) -> Option<Cmd> {
+    fn retry_busy_session_event(&mut self, event: RaMsg, attempts_remaining: u8) -> Option<Cmd> {
         let retry = session_event_retry_cmd(event, attempts_remaining);
         if retry.is_none() {
             // The Session lock is still contended, so ownership remains
@@ -946,27 +946,27 @@ impl PiApp {
     }
 
     /// Handle custom Pi messages from the agent.
-    pub(super) fn handle_pi_message(&mut self, msg: PiMsg) -> Option<Cmd> {
+    pub(super) fn handle_pi_message(&mut self, msg: RaMsg) -> Option<Cmd> {
         self.handle_pi_message_with_session_retry(msg, SESSION_EVENT_LOCK_RETRY_ATTEMPTS)
     }
 
     #[allow(clippy::too_many_lines)]
     fn handle_pi_message_with_session_retry(
         &mut self,
-        msg: PiMsg,
+        msg: RaMsg,
         attempts_remaining: u8,
     ) -> Option<Cmd> {
         match msg {
-            PiMsg::AgentStart => {
+            RaMsg::AgentStart => {
                 self.agent_state = AgentState::Processing;
                 self.current_response.clear();
                 self.current_thinking.clear();
                 self.extension_streaming.store(true, Ordering::SeqCst);
             }
-            PiMsg::RunPending => {
+            RaMsg::RunPending => {
                 return self.run_next_pending();
             }
-            PiMsg::EnqueuePendingInput { session_id, input } => {
+            RaMsg::EnqueuePendingInput { session_id, input } => {
                 if self.agent_state != AgentState::Idle {
                     return None;
                 }
@@ -975,7 +975,7 @@ impl PiApp {
                     SessionEventOwnership::Stale => return None,
                     SessionEventOwnership::Busy => {
                         return self.retry_busy_session_event(
-                            PiMsg::EnqueuePendingInput { session_id, input },
+                            RaMsg::EnqueuePendingInput { session_id, input },
                             attempts_remaining,
                         );
                     }
@@ -985,11 +985,11 @@ impl PiApp {
                     return self.run_next_pending();
                 }
             }
-            PiMsg::SessionEventRetry {
+            RaMsg::SessionEventRetry {
                 event,
                 attempts_remaining,
             } => {
-                if matches!(event.as_ref(), PiMsg::SessionEventRetry { .. }) {
+                if matches!(event.as_ref(), RaMsg::SessionEventRetry { .. }) {
                     self.status_message =
                         Some("Rejected nested session-event retry envelope".to_string());
                     return None;
@@ -1001,16 +1001,16 @@ impl PiApp {
             // it defensively. TerminalTitle: driver-pushed title updates are
             // an ftui affordance (issue #200) — the charmed stack re-emits
             // the terminal title from render_header every frame.
-            PiMsg::UiShutdown
-            | PiMsg::TerminalTitle(_)
-            | PiMsg::AutocompleteCatalog(_)
-            | PiMsg::LoginPending { .. }
-            | PiMsg::StatusSnapshot(_) => {}
-            PiMsg::AutocompleteRefresh => {
+            RaMsg::UiShutdown
+            | RaMsg::TerminalTitle(_)
+            | RaMsg::AutocompleteCatalog(_)
+            | RaMsg::LoginPending { .. }
+            | RaMsg::StatusSnapshot(_) => {}
+            RaMsg::AutocompleteRefresh => {
                 self.autocomplete.provider.refresh_background();
                 return Self::autocomplete_refresh_cmd();
             }
-            PiMsg::TextDelta(text) => {
+            RaMsg::TextDelta(text) => {
                 self.current_response.push_str(&text);
                 // While tail-following, `view()` computes the bottom slice
                 // directly, so we can skip full viewport rebuilds on every
@@ -1019,13 +1019,13 @@ impl PiApp {
                     self.refresh_conversation_viewport(false);
                 }
             }
-            PiMsg::ThinkingDelta(text) => {
+            RaMsg::ThinkingDelta(text) => {
                 self.current_thinking.push_str(&text);
                 if !self.follow_stream_tail {
                     self.refresh_conversation_viewport(false);
                 }
             }
-            PiMsg::ToolStart { name, tool_id } => {
+            RaMsg::ToolStart { name, tool_id } => {
                 self.agent_state = AgentState::ToolRunning;
                 self.current_tool = Some(name);
                 // The status row looks its summary up by THIS id; the map
@@ -1035,10 +1035,10 @@ impl PiApp {
                 self.tool_progress = Some(ToolProgress::new());
                 self.pending_tool_output = None;
             }
-            PiMsg::ToolInvocation { tool_id, summary } => {
+            RaMsg::ToolInvocation { tool_id, summary } => {
                 self.current_tool_summary.insert(tool_id, summary);
             }
-            PiMsg::ToolUpdate {
+            RaMsg::ToolUpdate {
                 name,
                 tool_id,
                 content,
@@ -1072,7 +1072,7 @@ impl PiApp {
                     ));
                 }
             }
-            PiMsg::ToolEnd { tool_id, .. } => {
+            RaMsg::ToolEnd { tool_id, .. } => {
                 self.agent_state = AgentState::Processing;
                 self.current_tool = None;
                 // Drop only THIS tool's summary; interleaved siblings keep
@@ -1092,10 +1092,10 @@ impl PiApp {
                     self.refresh_conversation_viewport(follow_tail);
                 }
             }
-            PiMsg::TodoSummary { summary } => {
+            RaMsg::TodoSummary { summary } => {
                 self.todo_summary = summary;
             }
-            PiMsg::AskUiRequest(request) => {
+            RaMsg::AskUiRequest(request) => {
                 if self
                     .ask_tool
                     .as_ref()
@@ -1107,7 +1107,7 @@ impl PiApp {
                 self.ask_ui_queue.push_back(request);
                 self.advance_ask_ui_queue();
             }
-            PiMsg::AgentDone {
+            RaMsg::AgentDone {
                 usage,
                 stop_reason,
                 error_message,
@@ -1202,10 +1202,10 @@ impl PiApp {
                 self.invalidate_input_cards_for_turn_end();
 
                 if !self.pending_inputs.is_empty() {
-                    return Some(Cmd::new(|| Message::new(PiMsg::RunPending)));
+                    return Some(Cmd::new(|| Message::new(RaMsg::RunPending)));
                 }
             }
-            PiMsg::SessionTitleSuggestion {
+            RaMsg::SessionTitleSuggestion {
                 owner_session_id,
                 title,
             } => {
@@ -1226,7 +1226,7 @@ impl PiApp {
                         Ok(_) => {}
                         Err(_) => {
                             return self.retry_busy_session_event(
-                                PiMsg::SessionTitleSuggestion {
+                                RaMsg::SessionTitleSuggestion {
                                     owner_session_id,
                                     title,
                                 },
@@ -1236,7 +1236,7 @@ impl PiApp {
                     }
                 }
             }
-            PiMsg::AgentError(error) => {
+            RaMsg::AgentError(error) => {
                 self.current_response.clear();
                 self.current_thinking.clear();
                 let content = if error.contains('\n') || error.starts_with("Error:") {
@@ -1263,13 +1263,13 @@ impl PiApp {
                 self.refresh_conversation_viewport(true);
 
                 if !self.pending_inputs.is_empty() {
-                    return Some(Cmd::new(|| Message::new(PiMsg::RunPending)));
+                    return Some(Cmd::new(|| Message::new(RaMsg::RunPending)));
                 }
             }
-            PiMsg::CredentialUpdated { provider } => {
+            RaMsg::CredentialUpdated { provider } => {
                 self.sync_active_provider_credentials(&provider);
             }
-            PiMsg::UpdateLastUserMessage(content) => {
+            RaMsg::UpdateLastUserMessage(content) => {
                 if let Some(message) = self
                     .messages
                     .iter_mut()
@@ -1280,7 +1280,7 @@ impl PiApp {
                 }
                 self.scroll_to_bottom();
             }
-            PiMsg::System(message) => {
+            RaMsg::System(message) => {
                 self.messages.push(ConversationMessage {
                     role: MessageRole::System,
                     content: message,
@@ -1300,10 +1300,10 @@ impl PiApp {
                 self.input.focus();
 
                 if !self.pending_inputs.is_empty() {
-                    return Some(Cmd::new(|| Message::new(PiMsg::RunPending)));
+                    return Some(Cmd::new(|| Message::new(RaMsg::RunPending)));
                 }
             }
-            PiMsg::SystemNote(message) => {
+            RaMsg::SystemNote(message) => {
                 self.messages.push(ConversationMessage {
                     role: MessageRole::System,
                     content: message,
@@ -1312,7 +1312,7 @@ impl PiApp {
                 });
                 self.scroll_to_bottom();
             }
-            PiMsg::SessionSystemNote {
+            RaMsg::SessionSystemNote {
                 owner_session_id,
                 message,
             } => {
@@ -1321,7 +1321,7 @@ impl PiApp {
                     SessionEventOwnership::Stale => return None,
                     SessionEventOwnership::Busy => {
                         return self.retry_busy_session_event(
-                            PiMsg::SessionSystemNote {
+                            RaMsg::SessionSystemNote {
                                 owner_session_id,
                                 message,
                             },
@@ -1337,7 +1337,7 @@ impl PiApp {
                 });
                 self.scroll_to_bottom();
             }
-            PiMsg::BashResult {
+            RaMsg::BashResult {
                 display,
                 content_for_agent,
             } => {
@@ -1366,10 +1366,10 @@ impl PiApp {
                 self.input.focus();
 
                 if !self.pending_inputs.is_empty() {
-                    return Some(Cmd::new(|| Message::new(PiMsg::RunPending)));
+                    return Some(Cmd::new(|| Message::new(RaMsg::RunPending)));
                 }
             }
-            PiMsg::OAuthDeviceFlowStarted {
+            RaMsg::OAuthDeviceFlowStarted {
                 provider,
                 device_code,
                 user_code,
@@ -1403,7 +1403,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 self.input.focus();
                 self.status_message = None;
             }
-            PiMsg::RetryCommitted {
+            RaMsg::RetryCommitted {
                 session_id,
                 messages,
                 usage,
@@ -1415,7 +1415,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     SessionEventOwnership::Stale => return None,
                     SessionEventOwnership::Busy => {
                         return self.retry_busy_session_event(
-                            PiMsg::RetryCommitted {
+                            RaMsg::RetryCommitted {
                                 session_id,
                                 messages,
                                 usage,
@@ -1427,7 +1427,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     }
                 }
                 let reset_cmd = self.handle_pi_message_with_session_retry(
-                    PiMsg::ConversationReset {
+                    RaMsg::ConversationReset {
                         session_id,
                         messages,
                         usage,
@@ -1445,7 +1445,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     .push_back(PendingInput::GeneratedText(text));
                 return self.run_next_pending();
             }
-            PiMsg::ConversationReset {
+            RaMsg::ConversationReset {
                 session_id,
                 messages,
                 usage,
@@ -1456,7 +1456,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     SessionEventOwnership::Stale => return None,
                     SessionEventOwnership::Busy => {
                         return self.retry_busy_session_event(
-                            PiMsg::ConversationReset {
+                            RaMsg::ConversationReset {
                                 session_id,
                                 messages,
                                 usage,
@@ -1505,7 +1505,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 self.scroll_to_bottom();
                 self.input.focus();
             }
-            PiMsg::SetEditorText {
+            RaMsg::SetEditorText {
                 owner_session_id,
                 text,
             } => {
@@ -1514,7 +1514,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     SessionEventOwnership::Stale => return None,
                     SessionEventOwnership::Busy => {
                         return self.retry_busy_session_event(
-                            PiMsg::SetEditorText {
+                            RaMsg::SetEditorText {
                                 owner_session_id,
                                 text,
                             },
@@ -1525,7 +1525,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 self.input.set_value(&text);
                 self.input.focus();
             }
-            PiMsg::OpenTree {
+            RaMsg::OpenTree {
                 owner_session_id,
                 initial_selected_id,
                 label,
@@ -1538,7 +1538,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let session = Arc::clone(&self.session);
                 let Ok(session_guard) = session.try_lock() else {
                     return self.retry_busy_session_event(
-                        PiMsg::OpenTree {
+                        RaMsg::OpenTree {
                             owner_session_id,
                             initial_selected_id,
                             label,
@@ -1557,7 +1557,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 );
                 self.tree_ui = Some(TreeUiState::Selector(selector));
             }
-            PiMsg::ResourcesReloaded {
+            RaMsg::ResourcesReloaded {
                 resources,
                 status,
                 diagnostics,
@@ -1588,17 +1588,17 @@ After approving access in the browser, press Enter in Pi to complete login."
                 }
                 self.input.focus();
             }
-            PiMsg::ExtensionUiRequest(request) => {
+            RaMsg::ExtensionUiRequest(request) => {
                 return self.handle_extension_ui_request(request);
             }
-            PiMsg::CapabilityPromptTick {
+            RaMsg::CapabilityPromptTick {
                 id,
                 generation,
                 timer_generation,
             } => {
                 return self.handle_capability_prompt_tick(&id, generation, timer_generation);
             }
-            PiMsg::ExtensionCommandDone {
+            RaMsg::ExtensionCommandDone {
                 command: _,
                 display,
                 is_error: _,
@@ -1626,10 +1626,10 @@ After approving access in the browser, press Enter in Pi to complete login."
                 self.input.focus();
 
                 if !self.pending_inputs.is_empty() {
-                    return Some(Cmd::new(|| Message::new(PiMsg::RunPending)));
+                    return Some(Cmd::new(|| Message::new(RaMsg::RunPending)));
                 }
             }
-            PiMsg::OAuthCallbackReceived(callback_url) => {
+            RaMsg::OAuthCallbackReceived(callback_url) => {
                 // Auto-submit the OAuth code received from the local callback server.
                 if let Some(pending) = self.pending_oauth.take() {
                     self.messages.push(ConversationMessage {
@@ -1866,7 +1866,7 @@ After approving access in the browser, press Enter in Pi to complete login."
         let timer = overlay.timer();
         Some(Cmd::new_optional(move || {
             timer.wait(delay).then(|| {
-                Message::new(PiMsg::CapabilityPromptTick {
+                Message::new(RaMsg::CapabilityPromptTick {
                     id,
                     generation,
                     timer_generation,
@@ -1886,7 +1886,7 @@ After approving access in the browser, press Enter in Pi to complete login."
         let timer = overlay.timer();
         Some(Cmd::new_optional(move || {
             timer.wait(remaining).then(|| {
-                Message::new(PiMsg::CapabilityPromptTick {
+                Message::new(RaMsg::CapabilityPromptTick {
                     id,
                     generation,
                     timer_generation,
@@ -2728,7 +2728,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::ExtensionCommandDone {
+                        RaMsg::ExtensionCommandDone {
                             command: cmd_for_msg,
                             display,
                             is_error: false,
@@ -2740,7 +2740,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::ExtensionCommandDone {
+                        RaMsg::ExtensionCommandDone {
                             command: cmd_for_msg,
                             display: format!("Extension command error: {err}"),
                             is_error: true,
@@ -2796,7 +2796,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::ExtensionCommandDone {
+                        RaMsg::ExtensionCommandDone {
                             command: key_for_msg,
                             display,
                             is_error: false,
@@ -2808,7 +2808,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &task_cx,
-                        PiMsg::ExtensionCommandDone {
+                        RaMsg::ExtensionCommandDone {
                             command: key_for_msg,
                             display: format!("Shortcut error: {err}"),
                             is_error: true,
@@ -2873,7 +2873,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &cx,
-                    PiMsg::SessionTitleSuggestion {
+                    RaMsg::SessionTitleSuggestion {
                         owner_session_id,
                         title,
                     },
@@ -3067,7 +3067,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                         )
                         .await;
                         return;
@@ -3119,7 +3119,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock session: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock session: {err}")),
                         )
                         .await;
                         return;
@@ -3133,7 +3133,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &Cx::for_request(),
-                        PiMsg::AgentError(format!("Failed to drain turn audit ledger: {err}")),
+                        RaMsg::AgentError(format!("Failed to drain turn audit ledger: {err}")),
                     )
                     .await;
                     return;
@@ -3158,7 +3158,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(err),
+                    RaMsg::AgentError(err),
                 )
                 .await;
             }
@@ -3170,7 +3170,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(formatted),
+                    RaMsg::AgentError(formatted),
                 )
                 .await;
             }
@@ -3257,7 +3257,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                             let _ = crate::interactive::enqueue_pi_event(
                                 &event_tx,
                                 &Cx::for_request(),
-                                PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                                RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                             )
                             .await;
                             return;
@@ -3277,7 +3277,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                             let _ = crate::interactive::enqueue_pi_event(
                                 &event_tx,
                                 &task_cx,
-                                PiMsg::UpdateLastUserMessage(updated),
+                                RaMsg::UpdateLastUserMessage(updated),
                             )
                             .await;
                         }
@@ -3286,14 +3286,14 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::UpdateLastUserMessage("[input blocked]".to_string()),
+                            RaMsg::UpdateLastUserMessage("[input blocked]".to_string()),
                         )
                         .await;
                         let message = reason.unwrap_or_else(|| "Input blocked".to_string());
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::AgentError(message),
+                            RaMsg::AgentError(message),
                         )
                         .await;
                         return;
@@ -3302,7 +3302,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::AgentError(err.to_string()),
+                            RaMsg::AgentError(err.to_string()),
                         )
                         .await;
                         return;
@@ -3331,7 +3331,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                         )
                         .await;
                         return;
@@ -3407,7 +3407,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock session: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock session: {err}")),
                         )
                         .await;
                         return;
@@ -3421,7 +3421,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &Cx::for_request(),
-                        PiMsg::AgentError(format!("Failed to drain turn audit ledger: {err}")),
+                        RaMsg::AgentError(format!("Failed to drain turn audit ledger: {err}")),
                     )
                     .await;
                     return;
@@ -3446,7 +3446,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(err),
+                    RaMsg::AgentError(err),
                 )
                 .await;
             }
@@ -3458,7 +3458,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(formatted),
+                    RaMsg::AgentError(formatted),
                 )
                 .await;
             }
@@ -3651,7 +3651,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                             let _ = crate::interactive::enqueue_pi_event(
                                 &event_tx,
                                 &Cx::for_request(),
-                                PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                                RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                             )
                             .await;
                             return;
@@ -3670,7 +3670,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                             let _ = crate::interactive::enqueue_pi_event(
                                 &event_tx,
                                 &task_cx,
-                                PiMsg::UpdateLastUserMessage(message_for_agent.clone()),
+                                RaMsg::UpdateLastUserMessage(message_for_agent.clone()),
                             )
                             .await;
                         }
@@ -3679,14 +3679,14 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::UpdateLastUserMessage("[input blocked]".to_string()),
+                            RaMsg::UpdateLastUserMessage("[input blocked]".to_string()),
                         )
                         .await;
                         let message = reason.unwrap_or_else(|| "Input blocked".to_string());
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::AgentError(message),
+                            RaMsg::AgentError(message),
                         )
                         .await;
                         return;
@@ -3695,7 +3695,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &task_cx,
-                            PiMsg::AgentError(err.to_string()),
+                            RaMsg::AgentError(err.to_string()),
                         )
                         .await;
                         return;
@@ -3722,7 +3722,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                         )
                         .await;
                         return;
@@ -3797,7 +3797,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &Cx::for_request(),
-                            PiMsg::AgentError(format!("Failed to lock session: {err}")),
+                            RaMsg::AgentError(format!("Failed to lock session: {err}")),
                         )
                         .await;
                         return;
@@ -3811,7 +3811,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &Cx::for_request(),
-                        PiMsg::AgentError(format!("Failed to drain turn audit ledger: {err}")),
+                        RaMsg::AgentError(format!("Failed to drain turn audit ledger: {err}")),
                     )
                     .await;
                     return;
@@ -3836,7 +3836,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(err),
+                    RaMsg::AgentError(err),
                 )
                 .await;
             }
@@ -3847,7 +3847,7 @@ After approving access in the browser, press Enter in Pi to complete login."
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &Cx::for_request(),
-                    PiMsg::AgentError(err.to_string()),
+                    RaMsg::AgentError(err.to_string()),
                 )
                 .await;
             }
@@ -4040,8 +4040,8 @@ mod stream_delta_batcher_tests {
         while std::time::Instant::now() < deadline {
             match event_rx.try_recv() {
                 Ok(msg) => {
-                    let is_done = matches!(msg, PiMsg::AgentDone { .. });
-                    if let PiMsg::AgentError(err) = &msg {
+                    let is_done = matches!(msg, RaMsg::AgentDone { .. });
+                    if let RaMsg::AgentError(err) = &msg {
                         panic!("error must surface via the turn-end card, got AgentError: {err}");
                     }
                     let _ = app.handle_pi_message(msg);
@@ -4060,7 +4060,7 @@ mod stream_delta_batcher_tests {
         let settle = std::time::Instant::now() + std::time::Duration::from_millis(300);
         while std::time::Instant::now() < settle {
             match event_rx.try_recv() {
-                Ok(PiMsg::AgentError(err)) => {
+                Ok(RaMsg::AgentError(err)) => {
                     panic!("duplicate error block after the turn-end card: {err}")
                 }
                 Ok(msg) => {
@@ -4105,7 +4105,7 @@ mod stream_delta_batcher_tests {
             OVERLOADED_503_BODY,
         )
         .turn_end_card(OVERLOADED_503_BODY, None);
-        let _ = app.handle_pi_message(PiMsg::AgentDone {
+        let _ = app.handle_pi_message(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Error,
             error_message: Some(card),
@@ -4178,8 +4178,8 @@ mod stream_delta_batcher_tests {
         runtime().handle()
     }
 
-    fn text_tool_update(text: &str) -> PiMsg {
-        PiMsg::ToolUpdate {
+    fn text_tool_update(text: &str) -> RaMsg {
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "t1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(text))],
@@ -4220,7 +4220,7 @@ mod stream_delta_batcher_tests {
         }
     }
 
-    fn build_test_app_with_provider(provider: Arc<dyn Provider>) -> (PiApp, mpsc::Receiver<PiMsg>) {
+    fn build_test_app_with_provider(provider: Arc<dyn Provider>) -> (RaApp, mpsc::Receiver<RaMsg>) {
         let current = model_entry("continue-probe", "continue-probe-model");
         let agent = Agent::new(
             provider,
@@ -4245,7 +4245,7 @@ mod stream_delta_batcher_tests {
             ..Config::default()
         };
         (
-            PiApp::new(
+            RaApp::new(
                 agent,
                 session,
                 config,
@@ -4271,7 +4271,7 @@ mod stream_delta_batcher_tests {
         )
     }
 
-    fn build_test_app() -> PiApp {
+    fn build_test_app() -> RaApp {
         let (app, _event_rx) = build_test_app_with_provider(Arc::new(DummyProvider));
         app
     }
@@ -4388,12 +4388,12 @@ mod stream_delta_batcher_tests {
         let mut saw_done = false;
         while std::time::Instant::now() < deadline {
             match event_rx.try_recv() {
-                Ok(PiMsg::AgentDone { error_message, .. }) => {
+                Ok(RaMsg::AgentDone { error_message, .. }) => {
                     assert!(error_message.is_none(), "turn error: {error_message:?}");
                     saw_done = true;
                     break;
                 }
-                Ok(PiMsg::AgentError(err)) => panic!("interactive turn failed: {err}"),
+                Ok(RaMsg::AgentError(err)) => panic!("interactive turn failed: {err}"),
                 Ok(_) | Err(_) => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -4443,7 +4443,7 @@ mod stream_delta_batcher_tests {
                     crate::session::SessionEntry::Custom(custom)
                         if custom.custom_type == "magic_keyword"
                             && custom.data.as_ref().is_some_and(|data| {
-                                data["schema"] == json!("pi.magic_keyword.v1")
+                                data["schema"] == json!("ra.magic_keyword.v1")
                                     && data["word"] == json!("ultrathink")
                             })
                 ))
@@ -4622,15 +4622,15 @@ mod stream_delta_batcher_tests {
         }
     }
 
-    fn wait_for_agent_done(event_rx: &mut mpsc::Receiver<PiMsg>) {
+    fn wait_for_agent_done(event_rx: &mut mpsc::Receiver<RaMsg>) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
         while std::time::Instant::now() < deadline {
             match event_rx.try_recv() {
-                Ok(PiMsg::AgentDone { error_message, .. }) => {
+                Ok(RaMsg::AgentDone { error_message, .. }) => {
                     assert!(error_message.is_none(), "turn error: {error_message:?}");
                     return;
                 }
-                Ok(PiMsg::AgentError(err)) => panic!("interactive turn failed: {err}"),
+                Ok(RaMsg::AgentError(err)) => panic!("interactive turn failed: {err}"),
                 Ok(_) | Err(_) => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -4782,7 +4782,7 @@ mod stream_delta_batcher_tests {
 
         batcher.flush(true);
         let msg = rx.try_recv().expect("expected coalesced text delta");
-        assert!(matches!(msg, PiMsg::TextDelta(text) if text == "Hello"));
+        assert!(matches!(msg, RaMsg::TextDelta(text) if text == "Hello"));
         assert!(rx.try_recv().is_err());
     }
 
@@ -4794,16 +4794,16 @@ mod stream_delta_batcher_tests {
         batcher.last_flush = std::time::Instant::now();
 
         batcher.push_delta(StreamDeltaKind::Text, "partial");
-        batcher.send_immediate(PiMsg::ToolStart {
+        batcher.send_immediate(RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "t1".to_string(),
         });
 
         let first = rx.try_recv().expect("expected flushed text delta first");
         let second = rx.try_recv().expect("expected immediate tool start second");
-        assert!(matches!(first, PiMsg::TextDelta(text) if text == "partial"));
+        assert!(matches!(first, RaMsg::TextDelta(text) if text == "partial"));
         assert!(
-            matches!(second, PiMsg::ToolStart { name, tool_id } if name == "bash" && tool_id == "t1")
+            matches!(second, RaMsg::ToolStart { name, tool_id } if name == "bash" && tool_id == "t1")
         );
     }
 
@@ -4817,7 +4817,7 @@ mod stream_delta_batcher_tests {
         let msg = rx.try_recv().expect("expected immediate tool update");
         assert!(matches!(
             msg,
-            PiMsg::ToolUpdate { content, .. }
+            RaMsg::ToolUpdate { content, .. }
                 if matches!(content.first(), Some(ContentBlock::Text(text)) if text.text == "first")
         ));
         assert!(rx.try_recv().is_err());
@@ -4834,7 +4834,7 @@ mod stream_delta_batcher_tests {
         batcher.send_immediate(text_tool_update("second"));
         assert!(rx.try_recv().is_err());
 
-        batcher.send_immediate(PiMsg::ToolEnd {
+        batcher.send_immediate(RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "t1".to_string(),
             is_error: false,
@@ -4845,10 +4845,10 @@ mod stream_delta_batcher_tests {
         let second = rx.try_recv().expect("expected tool end after update");
         assert!(matches!(
             first,
-            PiMsg::ToolUpdate { content, .. }
+            RaMsg::ToolUpdate { content, .. }
                 if matches!(content.first(), Some(ContentBlock::Text(text)) if text.text == "second")
         ));
-        assert!(matches!(second, PiMsg::ToolEnd { tool_id, .. } if tool_id == "t1"));
+        assert!(matches!(second, RaMsg::ToolEnd { tool_id, .. } if tool_id == "t1"));
         assert!(rx.try_recv().is_err());
     }
 
@@ -4868,7 +4868,7 @@ mod stream_delta_batcher_tests {
             .expect("expected latest update after pending cap");
         assert!(matches!(
             msg,
-            PiMsg::ToolUpdate { content, .. }
+            RaMsg::ToolUpdate { content, .. }
                 if matches!(
                     content.first(),
                     Some(ContentBlock::Text(text))
@@ -4902,7 +4902,7 @@ mod stream_delta_batcher_tests {
             .expect("expected latest update after pending byte cap");
         assert!(matches!(
             msg,
-            PiMsg::ToolUpdate { content, .. }
+            RaMsg::ToolUpdate { content, .. }
                 if matches!(content.first(), Some(ContentBlock::Text(text)) if text.text == expected_latest)
         ));
         assert!(rx.try_recv().is_err());
@@ -4915,7 +4915,7 @@ mod stream_delta_batcher_tests {
         batcher.flush_interval = std::time::Duration::from_secs(60);
         batcher.last_flush = std::time::Instant::now();
 
-        batcher.send_immediate(PiMsg::System("occupy".to_string()));
+        batcher.send_immediate(RaMsg::System("occupy".to_string()));
         batcher.push_delta(StreamDeltaKind::Text, "later");
         batcher.flush(true);
         assert_eq!(batcher.pending_bytes, "later".len());
@@ -4924,7 +4924,7 @@ mod stream_delta_batcher_tests {
         batcher.flush(true);
 
         let msg = rx.try_recv().expect("expected retained text delta");
-        assert!(matches!(msg, PiMsg::TextDelta(text) if text == "later"));
+        assert!(matches!(msg, RaMsg::TextDelta(text) if text == "later"));
         assert_eq!(batcher.pending_bytes, 0);
     }
 
@@ -4936,11 +4936,11 @@ mod stream_delta_batcher_tests {
         batcher.last_flush = std::time::Instant::now();
 
         // Occupy the single slot.
-        batcher.send_immediate(PiMsg::System("occupy".to_string()));
+        batcher.send_immediate(RaMsg::System("occupy".to_string()));
 
         // Queue a delta and a control event while the channel is full.
         batcher.push_delta(StreamDeltaKind::Text, "before-done");
-        batcher.send_immediate(PiMsg::AgentDone {
+        batcher.send_immediate(RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -4954,11 +4954,11 @@ mod stream_delta_batcher_tests {
         let _ = rx.try_recv().expect("expected occupied slot message");
         batcher.flush(true);
         let first = rx.try_recv().expect("expected retained text delta");
-        assert!(matches!(first, PiMsg::TextDelta(text) if text == "before-done"));
+        assert!(matches!(first, RaMsg::TextDelta(text) if text == "before-done"));
 
         batcher.flush(true);
         let second = rx.try_recv().expect("expected retained agent_done event");
-        assert!(matches!(second, PiMsg::AgentDone { .. }));
+        assert!(matches!(second, RaMsg::AgentDone { .. }));
     }
 
     #[test]
@@ -4974,11 +4974,11 @@ mod stream_delta_batcher_tests {
         app.agent_state = AgentState::Processing;
         let original_messages = app.messages.len();
 
-        let _ = app.handle_pi_message(PiMsg::EnqueuePendingInput {
+        let _ = app.handle_pi_message(RaMsg::EnqueuePendingInput {
             session_id: "replaced-session".to_string(),
             input: PendingInput::GeneratedText("stale input".to_string()),
         });
-        let _ = app.handle_pi_message(PiMsg::SessionSystemNote {
+        let _ = app.handle_pi_message(RaMsg::SessionSystemNote {
             owner_session_id: "replaced-session".to_string(),
             message: "stale tan card".to_string(),
         });
@@ -4992,7 +4992,7 @@ mod stream_delta_batcher_tests {
             "an old session's display card must not enter the new transcript"
         );
 
-        let _ = app.handle_pi_message(PiMsg::EnqueuePendingInput {
+        let _ = app.handle_pi_message(RaMsg::EnqueuePendingInput {
             session_id: session_id.clone(),
             input: PendingInput::GeneratedText("current input".to_string()),
         });
@@ -5005,7 +5005,7 @@ mod stream_delta_batcher_tests {
         // accepted input starts its turn on a spawned task that takes the
         // Session lock, and `session_event_ownership` would then defer the
         // card through the busy-retry path instead of appending it.
-        let _ = app.handle_pi_message(PiMsg::SessionSystemNote {
+        let _ = app.handle_pi_message(RaMsg::SessionSystemNote {
             owner_session_id: session_id.clone(),
             message: "current tan card".to_string(),
         });
@@ -5014,7 +5014,7 @@ mod stream_delta_batcher_tests {
             Some(ConversationMessage { role: MessageRole::System, content, .. })
                 if content == "current tan card"
         ));
-        let _ = app.handle_pi_message(PiMsg::EnqueuePendingInput {
+        let _ = app.handle_pi_message(RaMsg::EnqueuePendingInput {
             session_id,
             input: PendingInput::GeneratedText("current input".to_string()),
         });
@@ -5038,7 +5038,7 @@ mod stream_delta_batcher_tests {
             .id
             .clone();
 
-        let _ = app.handle_pi_message(PiMsg::OpenTree {
+        let _ = app.handle_pi_message(RaMsg::OpenTree {
             owner_session_id: "replaced-session".to_string(),
             initial_selected_id: None,
             label: Some("stale tree".to_string()),
@@ -5048,7 +5048,7 @@ mod stream_delta_batcher_tests {
             "an old session's async tree request must not open in its replacement"
         );
 
-        let _ = app.handle_pi_message(PiMsg::OpenTree {
+        let _ = app.handle_pi_message(RaMsg::OpenTree {
             owner_session_id: current_session_id,
             initial_selected_id: None,
             label: Some("current tree".to_string()),
@@ -5071,7 +5071,7 @@ mod stream_delta_batcher_tests {
             .clone();
         app.input.set_value("current draft");
 
-        let _ = app.handle_pi_message(PiMsg::SetEditorText {
+        let _ = app.handle_pi_message(RaMsg::SetEditorText {
             owner_session_id: "replaced-session".to_string(),
             text: "stale branch prompt".to_string(),
         });
@@ -5081,7 +5081,7 @@ mod stream_delta_batcher_tests {
             "an old session's branch prompt must not overwrite the replacement editor"
         );
 
-        let _ = app.handle_pi_message(PiMsg::SetEditorText {
+        let _ = app.handle_pi_message(RaMsg::SetEditorText {
             owner_session_id: current_session_id,
             text: "current branch prompt".to_string(),
         });
@@ -5117,7 +5117,7 @@ mod stream_delta_batcher_tests {
             .header
             .id
             .clone();
-        let _ = app.handle_pi_message(PiMsg::EnqueuePendingInput {
+        let _ = app.handle_pi_message(RaMsg::EnqueuePendingInput {
             session_id,
             input: PendingInput::Continue,
         });
@@ -5126,13 +5126,13 @@ mod stream_delta_batcher_tests {
         let mut saw_done = false;
         while std::time::Instant::now() < deadline {
             match event_rx.try_recv() {
-                Ok(PiMsg::AgentDone { error_message, .. }) => {
+                Ok(RaMsg::AgentDone { error_message, .. }) => {
                     saw_done = true;
                     if let Some(err) = error_message {
                         println!("AgentDone error: {}", err);
                     }
                 }
-                Ok(PiMsg::AgentError(err)) => {
+                Ok(RaMsg::AgentError(err)) => {
                     println!("AgentError: {}", err);
                 }
                 Ok(_) => {}
@@ -5249,14 +5249,14 @@ mod stream_delta_batcher_tests {
         let mut agent_error = None;
         while std::time::Instant::now() < deadline {
             match event_rx.try_recv() {
-                Ok(PiMsg::ExtensionCommandDone {
+                Ok(RaMsg::ExtensionCommandDone {
                     display, is_error, ..
                 }) => {
                     assert!(!is_error, "unexpected extension command error: {display}");
                     completion = Some(display);
                     break;
                 }
-                Ok(PiMsg::AgentError(err)) => {
+                Ok(RaMsg::AgentError(err)) => {
                     agent_error = Some(err);
                     break;
                 }
@@ -5448,7 +5448,7 @@ mod stream_delta_batcher_tests {
             .header
             .id
             .clone();
-        let _ = app.handle_pi_message(PiMsg::EnqueuePendingInput {
+        let _ = app.handle_pi_message(RaMsg::EnqueuePendingInput {
             session_id,
             input: PendingInput::Continue,
         });
@@ -5478,7 +5478,7 @@ mod stream_delta_batcher_tests {
             crate::models::ModelRole::Smol,
             ("fixture-provider".to_string(), "fixture-model".to_string()),
         );
-        let _ = app.handle_pi_message(PiMsg::OAuthDeviceFlowStarted {
+        let _ = app.handle_pi_message(RaMsg::OAuthDeviceFlowStarted {
             provider: "fixture-provider".to_string(),
             device_code: "device-code".to_string(),
             user_code: "user-code".to_string(),
@@ -5493,7 +5493,7 @@ mod stream_delta_batcher_tests {
             .header
             .id
             .clone();
-        let _ = app.handle_pi_message(PiMsg::OpenTree {
+        let _ = app.handle_pi_message(RaMsg::OpenTree {
             owner_session_id: current_session_id,
             initial_selected_id: None,
             label: Some("old session tree".to_string()),
@@ -5518,12 +5518,12 @@ mod stream_delta_batcher_tests {
         });
         app.ask_tool = Some(ask_tool.clone());
         app.input.set_value("old session draft");
-        let _ = app.handle_pi_message(PiMsg::AskUiRequest(ask_request));
+        let _ = app.handle_pi_message(RaMsg::AskUiRequest(ask_request));
         assert!(
             app.active_ask_ui.is_some(),
             "fixture must activate a real Ask waiter"
         );
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(ExtensionUiRequest::new(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(ExtensionUiRequest::new(
             "old-session-extension",
             "confirm",
             serde_json::json!({"title": "Old extension prompt"}),
@@ -5538,7 +5538,7 @@ mod stream_delta_batcher_tests {
             .id
             .clone_from(&replacement_session_id);
 
-        let _ = app.handle_pi_message(PiMsg::ConversationReset {
+        let _ = app.handle_pi_message(RaMsg::ConversationReset {
             session_id: replacement_session_id,
             messages: Vec::new(),
             usage: Usage::default(),
@@ -5609,7 +5609,7 @@ mod stream_delta_batcher_tests {
             collapsed: false,
         });
 
-        let _ = app.handle_pi_message(PiMsg::ConversationReset {
+        let _ = app.handle_pi_message(RaMsg::ConversationReset {
             session_id: old_session_id.clone(),
             messages: Vec::new(),
             usage: Usage::default(),
@@ -5622,7 +5622,7 @@ mod stream_delta_batcher_tests {
             Some(old_session_id.as_str())
         );
 
-        let _ = app.handle_pi_message(PiMsg::ConversationReset {
+        let _ = app.handle_pi_message(RaMsg::ConversationReset {
             session_id: replacement_session_id.clone(),
             messages: Vec::new(),
             usage: Usage::default(),
@@ -5658,7 +5658,7 @@ mod stream_delta_batcher_tests {
         let session = Arc::clone(&app.session);
         let session_guard = session.try_lock().expect("hold session lock");
         let retry = app
-            .handle_pi_message(PiMsg::ConversationReset {
+            .handle_pi_message(RaMsg::ConversationReset {
                 session_id: session_id.clone(),
                 messages: Vec::new(),
                 usage: Usage::default(),
@@ -5668,12 +5668,12 @@ mod stream_delta_batcher_tests {
         let retry_message = retry
             .execute()
             .expect("session retry command must emit a message")
-            .downcast::<PiMsg>()
-            .expect("session retry command must emit PiMsg");
+            .downcast::<RaMsg>()
+            .expect("session retry command must emit RaMsg");
         assert!(
             matches!(
                 &retry_message,
-                PiMsg::SessionEventRetry {
+                RaMsg::SessionEventRetry {
                     attempts_remaining,
                     ..
                 } if *attempts_remaining == SESSION_EVENT_LOCK_RETRY_ATTEMPTS - 1
@@ -5723,8 +5723,8 @@ mod stream_delta_batcher_tests {
         app.extension_compacting.store(true, Ordering::SeqCst);
         let session = Arc::clone(&app.session);
         let session_guard = session.try_lock().expect("hold session lock");
-        let exhausted = app.handle_pi_message(PiMsg::SessionEventRetry {
-            event: Box::new(PiMsg::ConversationReset {
+        let exhausted = app.handle_pi_message(RaMsg::SessionEventRetry {
+            event: Box::new(RaMsg::ConversationReset {
                 session_id: stale_session_id,
                 messages: Vec::new(),
                 usage: Usage::default(),
@@ -5773,7 +5773,7 @@ mod stream_delta_batcher_tests {
             crate::models::ModelRole::Smol,
             ("fixture-provider".to_string(), "fixture-model".to_string()),
         );
-        let _ = app.handle_pi_message(PiMsg::OAuthDeviceFlowStarted {
+        let _ = app.handle_pi_message(RaMsg::OAuthDeviceFlowStarted {
             provider: "fixture-provider".to_string(),
             device_code: "device-code".to_string(),
             user_code: "user-code".to_string(),
@@ -5788,7 +5788,7 @@ mod stream_delta_batcher_tests {
             .id
             .clone();
 
-        let _ = app.handle_pi_message(PiMsg::ConversationReset {
+        let _ = app.handle_pi_message(RaMsg::ConversationReset {
             session_id,
             messages: Vec::new(),
             usage: Usage::default(),
@@ -5812,7 +5812,7 @@ mod stream_delta_batcher_tests {
             .id
             .clone();
 
-        let _ = app.handle_pi_message(PiMsg::SessionTitleSuggestion {
+        let _ = app.handle_pi_message(RaMsg::SessionTitleSuggestion {
             owner_session_id: "replaced-session".to_string(),
             title: "stale title".to_string(),
         });
@@ -5825,7 +5825,7 @@ mod stream_delta_batcher_tests {
             "a title generated for an old session must not rename its replacement"
         );
 
-        let _ = app.handle_pi_message(PiMsg::SessionTitleSuggestion {
+        let _ = app.handle_pi_message(RaMsg::SessionTitleSuggestion {
             owner_session_id: current_session_id,
             title: "current title".to_string(),
         });
@@ -5858,7 +5858,7 @@ mod stream_delta_batcher_tests {
             session_guard.header.id.clone()
         });
 
-        let _ = app.handle_pi_message(PiMsg::ConversationReset {
+        let _ = app.handle_pi_message(RaMsg::ConversationReset {
             session_id,
             messages: Vec::new(),
             usage: Usage::default(),
@@ -6118,12 +6118,12 @@ mod stream_delta_batcher_tests {
             let wait_for_error = async {
                 loop {
                     match event_rx.recv(&recv_cx).await {
-                        Ok(PiMsg::AgentError(message))
+                        Ok(RaMsg::AgentError(message))
                             if message.contains("could not be confirmed") =>
                         {
                             break message;
                         }
-                        Ok(PiMsg::ConversationReset { .. }) => {
+                        Ok(RaMsg::ConversationReset { .. }) => {
                             break "unexpected ConversationReset".to_string();
                         }
                         Ok(_) => {}
@@ -6214,11 +6214,11 @@ mod stream_delta_batcher_tests {
             let wait = async {
                 loop {
                     match event_rx.recv(&recv_cx).await {
-                        Ok(PiMsg::AgentError(message)) => break format!("error:{message}"),
-                        Ok(PiMsg::ConversationReset { status, .. }) => {
+                        Ok(RaMsg::AgentError(message)) => break format!("error:{message}"),
+                        Ok(RaMsg::ConversationReset { status, .. }) => {
                             break format!("reset:{status:?}");
                         }
-                        Ok(PiMsg::System(message)) => break format!("system:{message}"),
+                        Ok(RaMsg::System(message)) => break format!("system:{message}"),
                         Ok(_) => {}
                         Err(err) => break format!("event receive failed: {err}"),
                     }
@@ -6439,12 +6439,12 @@ mod stream_delta_batcher_tests {
         )
         .with_timeout_ms(1_000);
         // Production requests bind at manager admission. These state-machine
-        // fixtures inject PiMsg directly, so bind at the equivalent seam.
+        // fixtures inject RaMsg directly, so bind at the equivalent seam.
         request.bind_deadline(std::time::Instant::now());
         request
     }
 
-    fn active_capability(app: &PiApp) -> Option<(String, u64, u64)> {
+    fn active_capability(app: &RaApp) -> Option<(String, u64, u64)> {
         app.capability_prompt.as_ref().map(|prompt| {
             (
                 prompt.request.id.clone(),
@@ -6454,7 +6454,7 @@ mod stream_delta_batcher_tests {
         })
     }
 
-    fn force_capability_deadline_elapsed(app: &mut PiApp, id: &str) {
+    fn force_capability_deadline_elapsed(app: &mut RaApp, id: &str) {
         let elapsed = std::time::Instant::now();
         if let Some(prompt) = app
             .capability_prompt
@@ -6475,7 +6475,7 @@ mod stream_delta_batcher_tests {
     fn capability_prompts_queue_fifo_and_resolve_in_order() {
         let mut app = build_test_app();
 
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "r1", "ext-a", "exec",
         )));
         let (first_id, first_gen, first_timer_gen) =
@@ -6483,7 +6483,7 @@ mod stream_delta_batcher_tests {
         assert_eq!(first_id, "r1");
         assert!(app.capability_prompt_queue.is_empty());
 
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "r2", "ext-b", "http",
         )));
         let unchanged = active_capability(&app).expect("active survives arrival");
@@ -6505,7 +6505,7 @@ mod stream_delta_batcher_tests {
         // Only the exact (id, generation) identity resolves the live prompt;
         // resolution promotes the FIFO successor and schedules its wake.
         force_capability_deadline_elapsed(&mut app, &first_id);
-        let cmd = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let cmd = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id: first_id.clone(),
             generation: first_gen,
             timer_generation: first_timer_gen,
@@ -6522,7 +6522,7 @@ mod stream_delta_batcher_tests {
 
         // Stale replay of the resolved identity must be ignored outright...
         assert!(
-            app.handle_pi_message(PiMsg::CapabilityPromptTick {
+            app.handle_pi_message(RaMsg::CapabilityPromptTick {
                 id: first_id,
                 generation: first_gen,
                 timer_generation: first_timer_gen,
@@ -6531,7 +6531,7 @@ mod stream_delta_batcher_tests {
         );
         // ...as must a foreign id wearing a live generation.
         assert!(
-            app.handle_pi_message(PiMsg::CapabilityPromptTick {
+            app.handle_pi_message(RaMsg::CapabilityPromptTick {
                 id: "zzz-unknown".to_string(),
                 generation: second_gen,
                 timer_generation: second_timer_gen,
@@ -6543,7 +6543,7 @@ mod stream_delta_batcher_tests {
 
         // Correct final resolution empties everything; no successor exists.
         force_capability_deadline_elapsed(&mut app, &second_id);
-        let tail_cmd = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let tail_cmd = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id: second_id,
             generation: second_gen,
             timer_generation: second_timer_gen,
@@ -6571,7 +6571,7 @@ mod stream_delta_batcher_tests {
             let cx = Cx::for_request();
             ui_rx.recv(&cx).await.expect("first prompt reaches TUI")
         });
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(first_request));
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(first_request));
 
         let mut second_attempt = Box::pin(manager.request_ui(capability_request(
             "timeout-second",
@@ -6583,12 +6583,12 @@ mod stream_delta_batcher_tests {
             let cx = Cx::for_request();
             ui_rx.recv(&cx).await.expect("second prompt reaches TUI")
         });
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(second_request));
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(second_request));
 
         force_capability_deadline_elapsed(&mut app, "timeout-first");
         let (_, prompt_generation, timer_generation) =
             active_capability(&app).expect("first prompt remains active");
-        let successor_wake = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let successor_wake = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id: "timeout-first".to_string(),
             generation: prompt_generation,
             timer_generation,
@@ -6644,7 +6644,7 @@ mod stream_delta_batcher_tests {
             let cx = Cx::for_request();
             ui_rx.recv(&cx).await.expect("first prompt reaches TUI")
         });
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(first_request));
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(first_request));
         let mut second_attempt =
             Box::pin(manager.request_ui(capability_request("orphan-second", "ext-orphan", "http")));
         let second_request = runtime().block_on(async {
@@ -6652,7 +6652,7 @@ mod stream_delta_batcher_tests {
             let cx = Cx::for_request();
             ui_rx.recv(&cx).await.expect("second prompt reaches TUI")
         });
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(second_request));
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(second_request));
         let (id, generation, timer_generation) =
             active_capability(&app).expect("first prompt is active");
         assert_eq!(id, "orphan-first");
@@ -6662,7 +6662,7 @@ mod stream_delta_batcher_tests {
         drop(first_attempt);
         assert!(!manager.ui_request_is_pending("orphan-first"));
 
-        let successor_wake = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let successor_wake = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id,
             generation,
             timer_generation,
@@ -6683,10 +6683,10 @@ mod stream_delta_batcher_tests {
     #[test]
     fn capability_prompt_queue_bound_denies_excess_fail_closed() {
         let mut app = build_test_app();
-        let total = PiApp::MAX_CAPABILITY_PROMPT_QUEUE + 3;
+        let total = RaApp::MAX_CAPABILITY_PROMPT_QUEUE + 3;
         for i in 0..total {
             let id = format!("cap-{i:02}");
-            let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+            let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
                 &id,
                 "ext-flood",
                 "exec",
@@ -6696,7 +6696,7 @@ mod stream_delta_batcher_tests {
         // The bound holds exactly; ordering of admitted prompts is FIFO.
         assert_eq!(
             app.capability_prompt_queue.len(),
-            PiApp::MAX_CAPABILITY_PROMPT_QUEUE
+            RaApp::MAX_CAPABILITY_PROMPT_QUEUE
         );
         assert_eq!(
             app.capability_prompt
@@ -6704,7 +6704,7 @@ mod stream_delta_batcher_tests {
                 .map(|prompt| prompt.request.id.as_str()),
             Some("cap-00")
         );
-        for (slot, expected) in (1..=PiApp::MAX_CAPABILITY_PROMPT_QUEUE).enumerate() {
+        for (slot, expected) in (1..=RaApp::MAX_CAPABILITY_PROMPT_QUEUE).enumerate() {
             let want = format!("cap-{expected:02}");
             let got = app
                 .capability_prompt_queue
@@ -6715,7 +6715,7 @@ mod stream_delta_batcher_tests {
         }
         // Admitted identities are exactly active (00) + FIFO (01..=MAX);
         // everything beyond that bound was denied on arrival.
-        for i in PiApp::MAX_CAPABILITY_PROMPT_QUEUE + 1..total {
+        for i in RaApp::MAX_CAPABILITY_PROMPT_QUEUE + 1..total {
             let id = format!("cap-{i:02}");
             assert!(
                 app.capability_prompt_queue
@@ -6752,7 +6752,7 @@ mod stream_delta_batcher_tests {
             });
             assert!(manager.ui_request_is_pending(&delivered.id));
             wakes.push(
-                app.handle_pi_message(PiMsg::ExtensionUiRequest(delivered))
+                app.handle_pi_message(RaMsg::ExtensionUiRequest(delivered))
                     .expect("bounded prompt schedules a cancellable wake"),
             );
             attempts.push(attempt);
@@ -6767,7 +6767,7 @@ mod stream_delta_batcher_tests {
             .id
             .clone();
 
-        app.handle_pi_message(PiMsg::ConversationReset {
+        app.handle_pi_message(RaMsg::ConversationReset {
             session_id,
             messages: Vec::new(),
             usage: Usage::default(),
@@ -6803,11 +6803,11 @@ mod stream_delta_batcher_tests {
     #[test]
     fn live_queued_tick_rearms_once_with_a_fresh_timer_epoch() {
         let mut app = build_test_app();
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "active", "ext-a", "exec",
         )));
         let active_before = active_capability(&app).expect("first prompt activates");
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "queued", "ext-b", "http",
         )));
         let queued = app
@@ -6818,7 +6818,7 @@ mod stream_delta_batcher_tests {
         let prompt_generation = queued.generation;
         let timer_generation = queued.timer_generation();
 
-        let next_waiter = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let next_waiter = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id: "queued".to_string(),
             generation: prompt_generation,
             timer_generation,
@@ -6836,7 +6836,7 @@ mod stream_delta_batcher_tests {
         assert_eq!(rearmed.generation, prompt_generation);
         assert_ne!(rearmed.timer_generation(), timer_generation);
         assert!(
-            app.handle_pi_message(PiMsg::CapabilityPromptTick {
+            app.handle_pi_message(RaMsg::CapabilityPromptTick {
                 id: "queued".to_string(),
                 generation: prompt_generation,
                 timer_generation,
@@ -6866,7 +6866,7 @@ mod stream_delta_batcher_tests {
                 "message": "no deadline supplied"
             }),
         );
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(unbudgeted));
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(unbudgeted));
         let active_before = active_capability(&app).expect("unbudgeted r0 activates");
         assert!(
             app.capability_prompt
@@ -6879,7 +6879,7 @@ mod stream_delta_batcher_tests {
 
         // Budgeted successor arrives and queues; enqueue must schedule its
         // own independent wake now (the audited stranding gap).
-        let wake = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let wake = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "r2", "ext-b", "http",
         )));
         assert!(
@@ -6895,7 +6895,7 @@ mod stream_delta_batcher_tests {
             .expect("r2 still queued");
         let queued_generation = queued.generation;
         let queued_timer_generation = queued.timer_generation();
-        let expired_wake = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let expired_wake = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id: "r2".to_string(),
             generation: queued_generation,
             timer_generation: queued_timer_generation,
@@ -6916,7 +6916,7 @@ mod stream_delta_batcher_tests {
 
         // A replay of the same identity after removal is inert (stale guard).
         assert!(
-            app.handle_pi_message(PiMsg::CapabilityPromptTick {
+            app.handle_pi_message(RaMsg::CapabilityPromptTick {
                 id: "r2".to_string(),
                 generation: u64::MAX,
                 timer_generation: u64::MAX,
@@ -6941,7 +6941,7 @@ mod stream_delta_batcher_tests {
             }),
         );
 
-        let wake = app.handle_pi_message(PiMsg::ExtensionUiRequest(unbudgeted));
+        let wake = app.handle_pi_message(RaMsg::ExtensionUiRequest(unbudgeted));
         assert!(wake.is_none(), "no timeout means no timer");
         assert!(
             app.capability_prompt
@@ -6954,7 +6954,7 @@ mod stream_delta_batcher_tests {
     #[test]
     fn capability_prompt_tick_repaints_before_expiry_without_resolving() {
         let mut app = build_test_app();
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "tick-1", "ext-tick", "exec",
         )));
         app.capability_prompt
@@ -6963,7 +6963,7 @@ mod stream_delta_batcher_tests {
             .expires_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(30));
         let (id, generation, timer_generation) = active_capability(&app).expect("prompt activates");
 
-        let next_tick = app.handle_pi_message(PiMsg::CapabilityPromptTick {
+        let next_tick = app.handle_pi_message(RaMsg::CapabilityPromptTick {
             id: id.clone(),
             generation,
             timer_generation,
@@ -6981,7 +6981,7 @@ mod stream_delta_batcher_tests {
             "each periodic waiter must own a fresh timer epoch"
         );
         assert!(
-            app.handle_pi_message(PiMsg::CapabilityPromptTick {
+            app.handle_pi_message(RaMsg::CapabilityPromptTick {
                 id: rearmed.0,
                 generation,
                 timer_generation,
@@ -6994,7 +6994,7 @@ mod stream_delta_batcher_tests {
     #[test]
     fn capability_prompt_render_countdown_visibly_decreases_without_input() {
         let mut app = build_test_app();
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "render-tick",
             "ext-tick",
             "exec",
@@ -7026,11 +7026,11 @@ mod stream_delta_batcher_tests {
     #[test]
     fn promoting_queued_prompt_cancels_and_invalidates_queued_timer() {
         let mut app = build_test_app();
-        let _ = app.handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+        let _ = app.handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
             "active", "ext-a", "exec",
         )));
         let queued_wake = app
-            .handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+            .handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
                 "queued", "ext-b", "http",
             )))
             .expect("queued bounded prompt owns a deadline waiter");
@@ -7050,7 +7050,7 @@ mod stream_delta_batcher_tests {
             "promotion must interrupt the queued deadline waiter"
         );
         assert!(
-            app.handle_pi_message(PiMsg::CapabilityPromptTick {
+            app.handle_pi_message(RaMsg::CapabilityPromptTick {
                 id: "queued".to_string(),
                 generation: stale_prompt_generation,
                 timer_generation: stale_timer_generation,
@@ -7065,7 +7065,7 @@ mod stream_delta_batcher_tests {
     fn resolving_capability_prompt_cancels_outstanding_tick_command() {
         let mut app = build_test_app();
         let wake = app
-            .handle_pi_message(PiMsg::ExtensionUiRequest(capability_request(
+            .handle_pi_message(RaMsg::ExtensionUiRequest(capability_request(
                 "cancel-tick",
                 "ext-tick",
                 "exec",
@@ -7127,7 +7127,7 @@ mod stream_delta_batcher_tests {
         )))
     }
 
-    fn seed_linear_retry_turn(app: &PiApp) -> (String, String, String) {
+    fn seed_linear_retry_turn(app: &RaApp) -> (String, String, String) {
         runtime().block_on(async {
             let cx = Cx::for_request();
             let mut session_guard =
@@ -7150,16 +7150,16 @@ mod stream_delta_batcher_tests {
         })
     }
 
-    fn wait_for_retry_terminal(event_rx: &mut mpsc::Receiver<PiMsg>) -> PiMsg {
+    fn wait_for_retry_terminal(event_rx: &mut mpsc::Receiver<RaMsg>) -> RaMsg {
         runtime().block_on(async {
             let recv_cx = Cx::for_testing();
             let wait = async {
                 loop {
                     match event_rx.recv(&recv_cx).await {
                         Ok(
-                            msg @ (PiMsg::RetryCommitted { .. }
-                            | PiMsg::AgentError(_)
-                            | PiMsg::System(_)),
+                            msg @ (RaMsg::RetryCommitted { .. }
+                            | RaMsg::AgentError(_)
+                            | RaMsg::System(_)),
                         ) => break msg,
                         Ok(_) => {}
                         Err(err) => panic!("retry event receive failed: {err}"),
@@ -7196,7 +7196,7 @@ mod stream_delta_batcher_tests {
 
         let _ = app.submit_message("/retry");
         let terminal = wait_for_retry_terminal(&mut event_rx);
-        let PiMsg::RetryCommitted {
+        let RaMsg::RetryCommitted {
             session_id: committed_id,
             text,
             ..
@@ -7351,7 +7351,7 @@ mod stream_delta_batcher_tests {
         let _ = app.submit_message("/retry");
         let terminal = wait_for_retry_terminal(&mut event_rx);
         assert!(
-            matches!(terminal, PiMsg::AgentError(ref message) if message.contains("could not be confirmed")),
+            matches!(terminal, RaMsg::AgentError(ref message) if message.contains("could not be confirmed")),
             "save failure must be terminal: {terminal:?}"
         );
         let _ = app.handle_pi_message(terminal);

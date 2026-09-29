@@ -74,7 +74,7 @@ impl ReflectTool {
         }
         let root = self.store.project_root();
         let global_dir = Config::global_dir();
-        let override_path = std::env::var_os("PI_CONFIG_PATH").map(PathBuf::from);
+        let override_path = std::env::var_os("RECUR_AGENT_CONFIG_PATH").map(PathBuf::from);
         let global = Config::load_with_roots_and_project_trust(
             override_path.as_deref(),
             &global_dir,
@@ -698,4 +698,235 @@ mod tests {
         assert!(provider_disabled("amazon-bedrock", &config));
         assert!(!provider_disabled("google", &config));
     }
+
+    #[test]
+    fn trigger_complex_task_when_tool_calls_exceed_threshold() {
+        let trigger = ReflectionTrigger::new(5, 3);
+        let decision = trigger.evaluate(6, "refactor", false);
+        assert!(decision.should_reflect);
+        assert_eq!(decision.reason, "complex_task");
+    }
+
+    #[test]
+    fn trigger_user_correction_signal() {
+        let trigger = ReflectionTrigger::new(5, 3);
+        let decision = trigger.evaluate(2, "simple_task", true);
+        assert!(decision.should_reflect);
+        assert_eq!(decision.reason, "user_correction");
+    }
+
+    #[test]
+    fn no_trigger_for_simple_task_without_correction() {
+        let trigger = ReflectionTrigger::new(5, 3);
+        let decision = trigger.evaluate(3, "simple_task", false);
+        assert!(!decision.should_reflect);
+    }
+
+    #[test]
+    fn repeated_task_shape_triggers_after_threshold() {
+        let mut trigger = ReflectionTrigger::new(5, 3);
+        let shape = task_shape(&["read".into(), "edit".into(), "bash".into()]);
+        assert_eq!(shape.as_deref(), Some("read→edit→bash"));
+        for _ in 0..2 {
+            trigger.observe_task(shape.as_deref());
+        }
+        // Below threshold (2 < 3): a short task does not reflect yet.
+        assert!(!trigger.evaluate(1, "read→edit→bash", false).should_reflect);
+        trigger.observe_task(shape.as_deref());
+        let decision = trigger.evaluate(1, "read→edit→bash", false);
+        assert!(decision.should_reflect);
+        assert_eq!(decision.reason, "repeated_task");
+    }
+
+    #[test]
+    fn task_shape_collapses_consecutive_repeats_and_ignores_empty() {
+        assert!(task_shape(&[]).is_none());
+        assert_eq!(
+            task_shape(&["read".into(), "read".into(), "edit".into(), "edit".into()]).as_deref(),
+            Some("read→edit")
+        );
+    }
+
+    #[test]
+    fn distinct_shapes_are_counted_separately() {
+        let mut trigger = ReflectionTrigger::new(5, 3);
+        trigger.observe_task(Some("a→b"));
+        trigger.observe_task(Some("a→b"));
+        trigger.observe_task(Some("c"));
+        assert_eq!(trigger.observed_count("a→b"), 2);
+        assert_eq!(trigger.observed_count("c"), 1);
+        assert_eq!(trigger.observed_count("missing"), 0);
+        assert_eq!(trigger.distinct_shapes(), 2);
+    }
+
+    #[test]
+    fn task_shape_tracking_is_bounded() {
+        let mut trigger = ReflectionTrigger::new(5, 3);
+        for index in 0..(MAX_TRACKED_TASK_SHAPES * 2) {
+            trigger.observe_task(Some(&format!("shape-{index}")));
+        }
+        assert!(trigger.distinct_shapes() <= MAX_TRACKED_TASK_SHAPES);
+    }
 }
+
+/// Decides whether a reflection should be triggered after a task completes.
+///
+/// Reflection is the process of synthesizing an answer from active project
+/// memories. This trigger controls *when* that synthesis runs, based on
+/// heuristics like tool-call count, user-correction signals, and how many
+/// times the *same* task shape has already been observed.
+///
+/// The trigger carries state: `observe_task` records the shape of each
+/// completed task, and once a shape has been seen `same_task_threshold`
+/// times a reflection fires even for short tasks. This is what gives
+/// `same_task_threshold` real semantics instead of being a dead field.
+#[derive(Debug)]
+pub struct ReflectionTrigger {
+    /// Minimum tool calls before a task is considered complex.
+    tool_calls_threshold: usize,
+    /// Minimum repeated same-type tasks before automatic reflection.
+    same_task_threshold: usize,
+    /// Count of completed tasks per task shape, inserted in first-seen order.
+    task_counts: HashMap<String, usize>,
+}
+
+/// Result of evaluating whether a reflection should fire.
+pub struct TriggerDecision {
+    /// Whether the reflection should run.
+    pub should_reflect: bool,
+    /// Human-readable reason for the decision (e.g. `"complex_task"`,
+    /// `"user_correction"`, `"repeated_task"`).
+    pub reason: String,
+}
+
+/// Derive a stable task shape from the tool names invoked during a task.
+///
+/// The shape is the execution path, not the payload: two runs that call
+/// `read → edit → bash` share a shape regardless of which files they touched.
+/// Unordered repetitions collapse (`read, read, edit` → `read→edit`) so the
+/// counter measures *repeated workflows* rather than call volume. Returns
+/// `None` when the task used no tools, because "no work done" is not a shape
+/// worth reflecting on.
+#[must_use]
+pub fn task_shape(tool_names: &[String]) -> Option<String> {
+    let mut shape: Vec<&str> = Vec::new();
+    for name in tool_names {
+        let name = name.as_str();
+        if shape.last() != Some(&name) {
+            shape.push(name);
+        }
+    }
+    if shape.is_empty() {
+        return None;
+    }
+    Some(shape.join("→"))
+}
+
+impl ReflectionTrigger {
+    /// Create a trigger with explicit thresholds.
+    #[must_use]
+    pub fn new(tool_calls_threshold: usize, same_task_threshold: usize) -> Self {
+        Self {
+            tool_calls_threshold,
+            same_task_threshold,
+            task_counts: HashMap::new(),
+        }
+    }
+
+    /// Record one completed task of the given shape. No-op for `None` shapes.
+    ///
+    /// Insertion order is preserved so the map stays bounded: once
+    /// [`MAX_TRACKED_TASK_SHAPES`] distinct workflows accumulate, the oldest
+    /// half is evicted. A long-lived session therefore tracks *recent*
+    /// workflows, not every task it has ever run.
+    pub fn observe_task(&mut self, shape: Option<&str>) {
+        if let Some(shape) = shape {
+            *self.task_counts.entry(shape.to_string()).or_insert(0) += 1;
+            self.prune();
+        }
+    }
+
+    /// Evict the oldest half of tracked shapes when the cap is exceeded.
+    fn prune(&mut self) {
+        if self.task_counts.len() <= MAX_TRACKED_TASK_SHAPES {
+            return;
+        }
+        let keep_from = self.task_counts.len() / 2;
+        let mut kept = HashMap::with_capacity(self.task_counts.len() - keep_from);
+        for (index, (shape, count)) in self.task_counts.iter().enumerate() {
+            if index >= keep_from {
+                kept.insert(shape.clone(), *count);
+            }
+        }
+        self.task_counts = kept;
+    }
+
+    /// Number of times the given shape has been observed so far.
+    #[must_use]
+    pub fn observed_count(&self, shape: &str) -> usize {
+        self.task_counts.get(shape).copied().unwrap_or(0)
+    }
+
+    /// Number of distinct task shapes observed so far.
+    #[must_use]
+    pub fn distinct_shapes(&self) -> usize {
+        self.task_counts.len()
+    }
+
+    /// Evaluate whether a reflection should fire for the given task context.
+    ///
+    /// Priority:
+    /// 1. `tool_call_count >= tool_calls_threshold` → `"complex_task"`
+    /// 2. `correction_signal == true` → `"user_correction"`
+    /// 3. a previously recorded shape reaching `same_task_threshold`
+    ///    observations → `"repeated_task"`
+    /// 4. otherwise → no reflection
+    #[must_use]
+    pub fn evaluate(
+        &self,
+        tool_call_count: usize,
+        task_type: &str,
+        correction_signal: bool,
+    ) -> TriggerDecision {
+        if tool_call_count >= self.tool_calls_threshold {
+            return TriggerDecision {
+                should_reflect: true,
+                reason: "complex_task".to_string(),
+            };
+        }
+        if correction_signal {
+            return TriggerDecision {
+                should_reflect: true,
+                reason: "user_correction".to_string(),
+            };
+        }
+        if !task_type.is_empty()
+            && self.same_task_threshold > 0
+            && self.observed_count(task_type) >= self.same_task_threshold
+        {
+            return TriggerDecision {
+                should_reflect: true,
+                reason: "repeated_task".to_string(),
+            };
+        }
+        TriggerDecision {
+            should_reflect: false,
+            reason: String::new(),
+        }
+    }
+}
+
+impl Default for ReflectionTrigger {
+    fn default() -> Self {
+        Self {
+            tool_calls_threshold: 5,
+            same_task_threshold: 3,
+            task_counts: HashMap::new(),
+        }
+    }
+}
+
+/// Maximum task-shape observations retained per trigger. Bounds memory for a
+/// long-lived session (100-process constraint: memory must be O(distinct
+/// recent workflows), not O(turns)).
+pub const MAX_TRACKED_TASK_SHAPES: usize = 256;

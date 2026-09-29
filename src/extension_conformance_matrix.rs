@@ -206,7 +206,7 @@ fn build_behaviors(
             &mut behaviors,
             ExpectedBehavior {
                 description: "Extension load emits structured log".into(),
-                protocol_surface: "pi.ext.log.v1".into(),
+                protocol_surface: "ra.ext.log.v1".into(),
                 pass_criteria: "Load event logged with correct extension_id and schema".into(),
                 fail_criteria: "Missing load log or wrong extension_id".into(),
             },
@@ -910,7 +910,7 @@ mod tests {
     #[test]
     fn build_test_plan_empty_inclusion() {
         let inclusion = InclusionList {
-            schema: "pi.ext.inclusion.v1".into(),
+            schema: "ra.ext.inclusion.v1".into(),
             generated_at: "2026-01-01T00:00:00Z".into(),
             task: Some("test".into()),
             stats: Some(crate::extension_inclusion::InclusionStats {
@@ -1135,7 +1135,7 @@ mod tests {
             }
 
             let inclusion = InclusionList {
-                schema: "pi.ext.inclusion.v1".to_string(),
+                schema: "ra.ext.inclusion.v1".to_string(),
                 generated_at: "2026-01-01T00:00:00Z".to_string(),
                 task: Some("prop-generated".to_string()),
                 stats: None,
@@ -1307,7 +1307,7 @@ mod tests {
             #[test]
             fn build_test_plan_coverage_invariants(task_id in "[a-z0-9_-]{1,32}") {
                 let inclusion = InclusionList {
-                    schema: "pi.ext.inclusion.v1".to_string(),
+                    schema: "ra.ext.inclusion.v1".to_string(),
                     generated_at: "2026-01-01T00:00:00Z".to_string(),
                     task: Some(task_id.clone()),
                     stats: None,

@@ -33,10 +33,10 @@ const ANTHROPIC_API_VERSION: &str = "2023-06-01";
 const DEFAULT_MAX_TOKENS: u32 = 8192;
 const ANTHROPIC_OAUTH_TOKEN_PREFIX: &str = "sk-ant-oat";
 /// Beta flags added when using Anthropic OAuth bearer tokens.
-/// Override via `PI_ANTHROPIC_BETA_FLAGS`.
+/// Override via `RECUR_AGENT_ANTHROPIC_BETA_FLAGS`.
 const ANTHROPIC_OAUTH_BETA_FLAGS: &str = "claude-code-20250219,oauth-2025-04-20";
 /// Beta flag for Anthropic prompt caching.
-/// Override via `PI_ANTHROPIC_CACHE_BETA_FLAG`.
+/// Override via `RECUR_AGENT_ANTHROPIC_CACHE_BETA_FLAG`.
 const ANTHROPIC_CACHE_BETA_FLAG: &str = "prompt-caching-2024-07-31";
 /// Beta flag for the extended (1h) prompt-cache TTL. Only sent when the request
 /// actually carries a `ttl: "1h"` cache breakpoint (first-party API + `Long`
@@ -45,14 +45,14 @@ const ANTHROPIC_EXTENDED_CACHE_TTL_BETA_FLAG: &str = "extended-cache-ttl-2025-04
 const KIMI_SHARE_DIR_ENV_KEY: &str = "KIMI_SHARE_DIR";
 
 fn anthropic_oauth_beta_flags() -> String {
-    std::env::var("PI_ANTHROPIC_BETA_FLAGS")
+    std::env::var("RECUR_AGENT_ANTHROPIC_BETA_FLAGS")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| ANTHROPIC_OAUTH_BETA_FLAGS.to_string())
 }
 
 fn anthropic_cache_beta_flag() -> String {
-    std::env::var("PI_ANTHROPIC_CACHE_BETA_FLAG")
+    std::env::var("RECUR_AGENT_ANTHROPIC_CACHE_BETA_FLAG")
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| ANTHROPIC_CACHE_BETA_FLAG.to_string())
@@ -252,7 +252,7 @@ fn kimi_device_id_paths() -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     let primary = kimi_share_dir()?.join("device_id");
     let legacy = home_dir().map_or_else(
         || primary.clone(),
-        |home| home.join(".pi").join("agent").join("kimi-device-id"),
+        |home| home.join(".ra").join("agent").join("kimi-device-id"),
     );
     Some((primary, legacy))
 }
@@ -695,16 +695,13 @@ impl Provider for AnthropicProvider {
                 .header("x-app", "cli")
                 .header(
                     "user-agent",
-                    format!(
-                        "pi_agent_rust/{} (external, cli)",
-                        env!("CARGO_PKG_VERSION")
-                    ),
+                    format!("recur_agent/{} (external, cli)", env!("CARGO_PKG_VERSION")),
                 );
         } else if kimi_oauth_token {
             request = request.header(
                 "user-agent",
                 format!(
-                    "pi_agent_rust/{} (kimi-oauth, cli)",
+                    "recur_agent/{} (kimi-oauth, cli)",
                     env!("CARGO_PKG_VERSION")
                 ),
             );
@@ -2794,7 +2791,7 @@ mod tests {
             captured
                 .headers
                 .get("user-agent")
-                .is_some_and(|value| value.contains("pi_agent_rust/"))
+                .is_some_and(|value| value.contains("recur_agent/"))
         );
     }
 

@@ -2,7 +2,7 @@
 //! `mcp__<server>_<tool>` agent tools (bd-cv653.6.1).
 //!
 //! One registry ([`McpManager`]) unifies three config sources — native files
-//! (`.pi/mcp.json`, `.agents/mcp.json`, `~/.pi/agent/mcp.json`, `--mcp-config`),
+//! (`.ra/mcp.json`, `.agents/mcp.json`, `~/.ra/agent/mcp.json`, `--mcp-config`),
 //! foreign files (`.claude/`, `.cursor/`, ...), and extension-registered
 //! specs — with one trust gate, one spawn path, and one `/mcp` view showing
 //! all three provenances.
@@ -68,7 +68,7 @@ pub fn mounted_name(server: &str, tool: &str) -> String {
     // collide), and `DefaultHasher` is not a cross-version persistence
     // contract. Bind the original length-framed names with a stable digest.
     let mut hasher = Sha256::new();
-    hasher.update(b"pi_agent_rust:mcp-mounted-tool:v1\0");
+    hasher.update(b"recur_agent:mcp-mounted-tool:v1\0");
     for part in [server, tool] {
         hasher.update(u64::try_from(part.len()).unwrap_or(u64::MAX).to_be_bytes());
         hasher.update(part.as_bytes());
@@ -180,7 +180,7 @@ impl McpContextTool {
             })
             .collect();
         let mut hasher = Sha256::new();
-        hasher.update(b"pi_agent_rust:mcp-context:v1\0");
+        hasher.update(b"recur_agent:mcp-context:v1\0");
         hasher.update(server.as_bytes());
         let hash = crate::package_manager::hex_encode(&hasher.finalize());
         Self {

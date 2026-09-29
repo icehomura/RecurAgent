@@ -4,7 +4,7 @@
 //! lanes: initialize → initialized → tools/list → tools/call → ping, with
 //! canned tools (`echo`, `env_probe`), a startup stderr marker (stderr
 //! capture proof), and an optional crash mode
-//! (`PI_MCP_FIXTURE_CRASH_AFTER=<n>` exits after n requests) for the
+//! (`RECUR_AGENT_MCP_FIXTURE_CRASH_AFTER=<n>` exits after n requests) for the
 //! restart/backoff lane. Not shipped to end users (feature-gated binary).
 //! This fixture proves Pi's local wire behavior only; it is not evidence that
 //! any third-party MCP server is available or interoperable.
@@ -155,7 +155,7 @@ fn call_tool(params: &Value, requests: u64) -> Value {
                     "text": json!({
                         "PATH": present("PATH"),
                         "HOME": present("HOME"),
-                        "PI_MCP_SECRET_MARKER": present("PI_MCP_SECRET_MARKER"),
+                        "RECUR_AGENT_MCP_SECRET_MARKER": present("RECUR_AGENT_MCP_SECRET_MARKER"),
                         "AWS_SECRET_ACCESS_KEY": present("AWS_SECRET_ACCESS_KEY"),
                     })
                     .to_string()
@@ -171,7 +171,7 @@ fn call_tool(params: &Value, requests: u64) -> Value {
 }
 
 fn main() {
-    if std::env::var_os("PI_MCP_FIXTURE_CHILD_SENTINEL").is_some() {
+    if std::env::var_os("RECUR_AGENT_MCP_FIXTURE_CHILD_SENTINEL").is_some() {
         loop {
             std::thread::park_timeout(std::time::Duration::from_secs(60));
         }
@@ -179,17 +179,17 @@ fn main() {
 
     // Startup stderr marker: the client surfaces this in diagnostics.
     eprintln!("pi_mcp_fixture: ready marker 7f3a9c-v2");
-    let crash_after = std::env::var("PI_MCP_FIXTURE_CRASH_AFTER")
+    let crash_after = std::env::var("RECUR_AGENT_MCP_FIXTURE_CRASH_AFTER")
         .ok()
         .and_then(|v| v.parse::<u64>().ok());
-    let response_mode = std::env::var("PI_MCP_FIXTURE_RESPONSE_MODE").unwrap_or_default();
-    let _descendant = if std::env::var_os("PI_MCP_FIXTURE_SPAWN_DESCENDANT").is_some() {
+    let response_mode = std::env::var("RECUR_AGENT_MCP_FIXTURE_RESPONSE_MODE").unwrap_or_default();
+    let _descendant = if std::env::var_os("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT").is_some() {
         let mut descendant =
             std::process::Command::new(std::env::current_exe().expect("fixture executable path"));
         descendant
-            .env("PI_MCP_FIXTURE_CHILD_SENTINEL", "1")
+            .env("RECUR_AGENT_MCP_FIXTURE_CHILD_SENTINEL", "1")
             .stdin(std::process::Stdio::null());
-        if std::env::var_os("PI_MCP_FIXTURE_DESCENDANT_INHERIT_OUTPUT").is_none() {
+        if std::env::var_os("RECUR_AGENT_MCP_FIXTURE_DESCENDANT_INHERIT_OUTPUT").is_none() {
             descendant
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());

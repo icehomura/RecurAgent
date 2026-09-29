@@ -341,14 +341,14 @@ impl Provider for GeminiProvider {
                 .header("client-metadata", client_metadata);
 
             if is_antigravity {
-                let antigravity_version = std::env::var("PI_AI_ANTIGRAVITY_VERSION")
+                let antigravity_version = std::env::var("RECUR_AGENT_AI_ANTIGRAVITY_VERSION")
                     .unwrap_or_else(|_| pi_version.to_string());
                 request = request.header(
                     "User-Agent",
                     format!("antigravity/{antigravity_version} {platform}"),
                 );
             } else {
-                request = request.header("User-Agent", crate::platform::pi_user_agent());
+                request = request.header("User-Agent", crate::platform::ra_user_agent());
             }
 
             // Apply provider-specific custom headers from compat config.

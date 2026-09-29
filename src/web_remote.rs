@@ -76,7 +76,7 @@ pub struct AuthTokenRecord {
     pub revoked: bool,
 }
 
-/// Frame payload schema `pi.web.frame.v1`.
+/// Frame payload schema `ra.web.frame.v1`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WebFrame {
     pub schema: String,
@@ -101,7 +101,7 @@ pub enum WebFrameType {
 impl WebFrame {
     pub fn new_keyframe(seq: u64, width: u16, height: u16, data: impl Into<String>) -> Self {
         Self {
-            schema: "pi.web.frame.v1".to_string(),
+            schema: "ra.web.frame.v1".to_string(),
             seq,
             timestamp_ms: current_time_ms(),
             frame_type: WebFrameType::Keyframe,
@@ -113,7 +113,7 @@ impl WebFrame {
 
     pub fn new_patch(seq: u64, width: u16, height: u16, patch: impl Into<String>) -> Self {
         Self {
-            schema: "pi.web.frame.v1".to_string(),
+            schema: "ra.web.frame.v1".to_string(),
             seq,
             timestamp_ms: current_time_ms(),
             frame_type: WebFrameType::Patch,
@@ -145,7 +145,7 @@ pub struct ClientSession {
     pub remote_addr: String,
 }
 
-/// Audit event record schema `pi.web.audit.v1`.
+/// Audit event record schema `ra.web.audit.v1`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WebAuditEvent {
     pub schema: String,
@@ -158,7 +158,7 @@ pub struct WebAuditEvent {
 impl WebAuditEvent {
     pub fn new(event_type: impl Into<String>, client_id: Option<String>) -> Self {
         Self {
-            schema: "pi.web.audit.v1".to_string(),
+            schema: "ra.web.audit.v1".to_string(),
             timestamp_ms: current_time_ms(),
             event_type: event_type.into(),
             client_id,
@@ -446,7 +446,7 @@ impl WebRemoteManager {
         };
 
         WebFrame {
-            schema: "pi.web.frame.v1".to_string(),
+            schema: "ra.web.frame.v1".to_string(),
             seq,
             timestamp_ms: current_time_ms(),
             frame_type,
@@ -509,7 +509,7 @@ pub const EMBEDDED_WEB_CLIENT_HTML: &str = r#"<!DOCTYPE html>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:;">
-    <title>Pi Agent Remote TUI</title>
+    <title>Recur Agent Remote TUI</title>
     <style>
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -534,7 +534,7 @@ pub const EMBEDDED_WEB_CLIENT_HTML: &str = r#"<!DOCTYPE html>
     <div id="terminal-container">
         <div id="status-bar">
             <span id="conn-status">Connecting...</span>
-            <span id="session-info">Pi Agent Web Remote (pi.web.frame.v1)</span>
+            <span id="session-info">Recur Agent Web Remote (ra.web.frame.v1)</span>
         </div>
         <pre id="canvas-grid"></pre>
     </div>
@@ -553,7 +553,7 @@ pub const EMBEDDED_WEB_CLIENT_HTML: &str = r#"<!DOCTYPE html>
         socket.onmessage = (event) => {
             try {
                 const frame = JSON.parse(event.data);
-                if (frame.schema === 'pi.web.frame.v1') {
+                if (frame.schema === 'ra.web.frame.v1') {
                     grid.textContent = frame.data;
                 }
             } catch (e) {}

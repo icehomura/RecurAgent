@@ -9,7 +9,7 @@ use crate::provider::ModelCost;
 use crate::provider_metadata::canonical_provider_id;
 use serde::{Deserialize, Serialize};
 
-pub const ROUTING_EVIDENCE_SCHEMA: &str = "pi.provider_routing.evidence.v1";
+pub const ROUTING_EVIDENCE_SCHEMA: &str = "ra.provider_routing.evidence.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

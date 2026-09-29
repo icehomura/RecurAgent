@@ -112,7 +112,7 @@ fn fixture(root: &Path, mode: &str) -> Option<(LspTool, asupersync::runtime::Run
     });
     let Some(python) = python else {
         assert!(
-            std::env::var_os("PI_LSP_REQUIRE_PROTOCOL").is_none(),
+            std::env::var_os("RECUR_AGENT_LSP_REQUIRE_PROTOCOL").is_none(),
             "Python required for refactoring protocol tests"
         );
         eprintln!("SKIP refactoring protocol fixture: Python unavailable");

@@ -105,7 +105,8 @@ fn known_long_option(name: &str) -> Option<LongOptionSpec> {
         | "charmed"
         | "bubbletea"
         | "inline"
-        | "hide-cwd-in-prompt" => (false, false),
+        | "hide-cwd-in-prompt"
+        | "disable-reflection" => (false, false),
         "provider"
         | "model"
         | "api-key"
@@ -135,6 +136,8 @@ fn known_long_option(name: &str) -> Option<LongOptionSpec> {
         | "max-tool-iterations"
         | "max-time"
         | "request-timeout"
+        | "reflection-threshold"
+        | "reflection-max-per-hour"
         | "export"
         | "fetch-models" => (true, false),
         "list-models" => (true, true),
@@ -178,7 +181,7 @@ fn is_negative_numeric_token(token: &str) -> bool {
 #[allow(clippy::too_many_lines)] // Argument normalization needs single-pass stateful parsing.
 fn preprocess_extension_flags(raw_args: &[String]) -> (Vec<String>, Vec<ExtensionCliFlag>) {
     if raw_args.is_empty() {
-        return (vec!["pi".to_string()], Vec::new());
+        return (vec!["ra".to_string()], Vec::new());
     }
     let mut filtered = Vec::with_capacity(raw_args.len());
     filtered.push(raw_args[0].clone());
@@ -277,7 +280,7 @@ fn preprocess_extension_flags(raw_args: &[String]) -> (Vec<String>, Vec<Extensio
 
 pub fn parse_with_extension_flags(raw_args: Vec<String>) -> Result<ParsedCli, clap::Error> {
     if raw_args.is_empty() {
-        let cli = Cli::try_parse_from(["pi"])?;
+        let cli = Cli::try_parse_from(["ra"])?;
         return Ok(ParsedCli {
             cli,
             extension_flags: Vec::new(),
@@ -287,7 +290,7 @@ pub fn parse_with_extension_flags(raw_args: Vec<String>) -> Result<ParsedCli, cl
     match Cli::try_parse_from(raw_args.clone()) {
         Ok(_) => {
             // We do NOT return early here because `Cli` has trailing varargs for `message`.
-            // If the user provided `pi hello --unknown flag`, clap might happily parse
+            // If the user provided `ra hello --unknown flag`, clap might happily parse
             // `--unknown flag` into `message`. We must preprocess extension flags first!
         }
         Err(err) => {
@@ -319,15 +322,15 @@ pub fn parse_with_extension_flags(raw_args: Vec<String>) -> Result<ParsedCli, cl
 /// Pi - AI coding agent CLI
 #[derive(Parser, Debug)]
 #[allow(clippy::struct_excessive_bools)] // CLI flags are naturally boolean
-#[command(name = "pi")]
+#[command(name = "ra")]
 #[command(version, about, long_about = None, disable_version_flag = true)]
 #[command(after_help = "Examples:
-  pi \"explain this code\"              Start new session with message
-  pi @file.rs \"review this\"           Include file in context
-  pi -c                                Continue previous session
-  pi -r                                Resume from session picker
-  pi -p \"what is 2+2\"                 Print mode (non-interactive)
-  pi --model claude-opus-4 \"help\"     Use specific model
+  ra \"explain this code\"              Start new session with message
+  ra @file.rs \"review this\"           Include file in context
+  ra -c                                Continue previous session
+  ra -r                                Resume from session picker
+  ra -p \"what is 2+2\"                 Print mode (non-interactive)
+  ra --model claude-opus-4 \"help\"     Use specific model
 ")]
 pub struct Cli {
     // === Help & Version ===
@@ -338,11 +341,11 @@ pub struct Cli {
     // === Model Configuration ===
     /// LLM provider (e.g., anthropic, openai, google).
     /// Run --list-providers for canonical IDs + aliases.
-    #[arg(long, env = "PI_PROVIDER")]
+    #[arg(long, env = "RECUR_AGENT_PROVIDER")]
     pub provider: Option<String>,
 
     /// Model ID (e.g., claude-opus-4, gpt-4o)
-    #[arg(long, env = "PI_MODEL")]
+    #[arg(long, env = "RECUR_AGENT_MODEL")]
     pub model: Option<String>,
 
     /// API key (overrides environment variable)
@@ -396,9 +399,13 @@ pub struct Cli {
     /// 600s (10 minutes) for local providers (Ollama, LM Studio) where the
     /// first request can block while the model loads into memory. Raise this if
     /// a local model's cold start exceeds the default. Equivalent to the
-    /// `PI_HTTP_REQUEST_TIMEOUT_SECS` env var and the `requestTimeoutSecs`
-    /// setting. See pi_agent_rust#90.
-    #[arg(long, value_name = "SECONDS", env = "PI_HTTP_REQUEST_TIMEOUT_SECS")]
+    /// `RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS` env var and the `requestTimeoutSecs`
+    /// setting. See recur_agent#90.
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        env = "RECUR_AGENT_HTTP_REQUEST_TIMEOUT_SECS"
+    )]
     pub request_timeout: Option<u64>,
 
     // === Thinking/Reasoning ===
@@ -441,7 +448,7 @@ pub struct Cli {
     /// Conflicts with `--classic`: the two select opposite stacks, and until
     /// this conflict was declared, nothing read this flag at all — `--ftui`
     /// appeared to work only because it names the default, and
-    /// `pi --classic --ftui` silently gave you classic.
+    /// `ra --classic --ftui` silently gave you classic.
     #[cfg(feature = "ftui")]
     #[arg(long, conflicts_with = "classic")]
     pub ftui: bool,
@@ -474,14 +481,14 @@ pub struct Cli {
     /// terminal-native click-to-select / right-click-paste / Shift-Insert
     /// behaviour, making it effectively impossible to copy out the OAuth
     /// authorization URL (which is ~600 characters). Setting this flag (or
-    /// `disable_mouse_capture: true` in settings, or `PI_NO_MOUSE_CAPTURE=1`)
+    /// `disable_mouse_capture: true` in settings, or `RECUR_AGENT_NO_MOUSE_CAPTURE=1`)
     /// turns the capture off so terminal-native copy/paste keeps working.
     /// In-app mouse wheel scrolling is sacrificed; users can still scroll
     /// with Page Up/Down or arrow keys.
     ///
     /// Note: the env-var path is intentionally read in `run_interactive`
     /// (not via `#[arg(env = "...")]` here) so the truthiness semantics
-    /// stay "only `=1` is truthy", matching how `PI_HARDWARE_CURSOR`
+    /// stay "only `=1` is truthy", matching how `RECUR_AGENT_HARDWARE_CURSOR`
     /// behaves and avoiding clap's bool-env ambiguity where `=0` /
     /// `=false` may otherwise set the flag to true.
     #[arg(long)]
@@ -520,7 +527,7 @@ pub struct Cli {
     #[arg(
         long,
         value_name = "TOOLS",
-        default_value = "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time"
+        default_value = "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code"
     )]
     pub tools: String,
 
@@ -530,7 +537,7 @@ pub struct Cli {
     pub extension: Vec<String>,
 
     /// Extra MCP server config file (can be repeated; highest precedence
-    /// over .pi/mcp.json, .agents/mcp.json, ~/.pi/agent/mcp.json, and
+    /// over .ra/mcp.json, .agents/mcp.json, ~/.ra/agent/mcp.json, and
     /// discovered foreign configs)
     #[arg(long, value_name = "PATH", action = clap::ArgAction::Append)]
     pub mcp_config: Vec<PathBuf>,
@@ -539,8 +546,8 @@ pub struct Cli {
     #[arg(long)]
     pub no_extensions: bool,
 
-    /// Trust this workspace: allow project-local .pi/settings.json packages
-    /// and .pi/extensions to load and execute (persisted for the current
+    /// Trust this workspace: allow project-local .ra/settings.json packages
+    /// and .ra/extensions to load and execute (persisted for the current
     /// content digest; content changes re-prompt)
     #[arg(long)]
     pub trust: bool,
@@ -576,7 +583,7 @@ pub struct Cli {
     /// foreign-format workspace rules import. Use it when a host composes the
     /// whole system prompt itself (`--system-prompt`) and must not pick up
     /// ambient project instructions. Separate from `--no-skills` (gh #216).
-    #[arg(long, env = "PI_NO_CONTEXT_FILES")]
+    #[arg(long, env = "RECUR_AGENT_NO_CONTEXT_FILES")]
     pub no_context_files: bool,
 
     // === Prompt Templates ===
@@ -603,7 +610,7 @@ pub struct Cli {
 
     // === System prompt modifiers ===
     /// Hide the current working directory from the system prompt.
-    #[arg(long, env = "PI_HIDE_CWD_IN_PROMPT")]
+    #[arg(long, env = "RECUR_AGENT_HIDE_CWD_IN_PROMPT")]
     pub hide_cwd_in_prompt: bool,
 
     /// Maximum tool-call iterations per agent turn before stopping.
@@ -612,7 +619,7 @@ pub struct Cli {
     /// at 80% of the cap, a one-shot steering message is injected so the agent
     /// can begin a graceful handoff rather than being silently killed at the
     /// ceiling. Override per-invocation via this flag, or globally via the
-    /// `PI_MAX_TOOL_ITERATIONS` env var (read at agent start; invalid values
+    /// `RECUR_AGENT_MAX_TOOL_ITERATIONS` env var (read at agent start; invalid values
     /// fall back to the default with a warning, never abort startup).
     //
     // NOTE: `env =` is intentionally NOT set here. Clap's env wiring is strict
@@ -630,6 +637,23 @@ pub struct Cli {
     /// --max-tool-iterations (per-turn count).
     #[arg(long, value_name = "SECONDS")]
     pub max_time: Option<u64>,
+
+    // === Reflection ===
+    /// Disable automatic reflection hooks. Reflection is enabled by default:
+    /// after every N tool calls the agent pauses to self-evaluate progress,
+    /// surface mistakes, and adjust strategy before continuing. Pass this
+    /// flag to opt out.
+    #[arg(long)]
+    pub disable_reflection: bool,
+
+    /// Number of tool calls that must occur before a reflection is triggered.
+    #[arg(long, value_name = "N", default_value_t = 5)]
+    pub reflection_threshold: usize,
+
+    /// Maximum reflections permitted within a one-hour sliding window.
+    /// Prevents excessive self-interruption on long-running tasks.
+    #[arg(long, value_name = "N", default_value_t = 10)]
+    pub reflection_max_per_hour: usize,
 
     /// Additional workspace roots (bd-cv653.3.12): grant the agent access to
     /// extra directories beyond the primary cwd. Repeatable. Tools and the
@@ -669,7 +693,7 @@ pub struct Cli {
     /// (OpenAI-compatible providers only). Falls back to the static registry
     /// when the live call fails. Long-lived library callers reuse successful
     /// results in-process for 5 minutes; separate CLI invocations do not share
-    /// that cache. Set `PI_DISABLE_MODEL_CACHE=1` to bypass it.
+    /// that cache. Set `RECUR_AGENT_DISABLE_MODEL_CACHE=1` to bypass it.
     #[arg(long, value_name = "PROVIDER")]
     pub fetch_models: Option<String>,
 
@@ -708,7 +732,7 @@ mod tests {
     #[test]
     fn parse_resource_flags_and_mode() {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--mode",
             "rpc",
             "--models",
@@ -738,7 +762,7 @@ mod tests {
 
     #[test]
     fn parse_continue_short_flag() {
-        let cli = Cli::parse_from(["pi", "-c"]);
+        let cli = Cli::parse_from(["ra", "-c"]);
         assert!(cli.r#continue);
         assert!(!cli.resume);
         assert!(!cli.print);
@@ -746,26 +770,26 @@ mod tests {
 
     #[test]
     fn parse_continue_long_flag() {
-        let cli = Cli::parse_from(["pi", "--continue"]);
+        let cli = Cli::parse_from(["ra", "--continue"]);
         assert!(cli.r#continue);
     }
 
     #[test]
     fn parse_resume_short_flag() {
-        let cli = Cli::parse_from(["pi", "-r"]);
+        let cli = Cli::parse_from(["ra", "-r"]);
         assert!(cli.resume);
         assert!(!cli.r#continue);
     }
 
     #[test]
     fn parse_session_path() {
-        let cli = Cli::parse_from(["pi", "--session", "/tmp/session.jsonl"]);
+        let cli = Cli::parse_from(["ra", "--session", "/tmp/session.jsonl"]);
         assert_eq!(cli.session.as_deref(), Some("/tmp/session.jsonl"));
     }
 
     #[test]
     fn parse_session_dir() {
-        let cli = Cli::parse_from(["pi", "--session-dir", "/tmp/sessions"]);
+        let cli = Cli::parse_from(["ra", "--session-dir", "/tmp/sessions"]);
         assert_eq!(cli.session_dir.as_deref(), Some("/tmp/sessions"));
     }
 
@@ -778,34 +802,34 @@ mod tests {
     /// does not end up in `session`.
     /// `--ftui` and `--classic` pick opposite stacks, so asking for both is a
     /// mistake worth reporting rather than resolving silently. Before this,
-    /// `pi --classic --ftui` ran classic and said nothing.
+    /// `ra --classic --ftui` ran classic and said nothing.
     #[cfg(feature = "ftui")]
     #[test]
     fn ftui_and_classic_cannot_both_be_requested() {
-        let cli = Cli::parse_from(["pi", "--ftui"]);
+        let cli = Cli::parse_from(["ra", "--ftui"]);
         assert!(cli.ftui);
         assert!(!cli.classic);
 
-        let cli = Cli::parse_from(["pi", "--classic"]);
+        let cli = Cli::parse_from(["ra", "--classic"]);
         assert!(!cli.ftui);
         assert!(cli.classic);
 
         assert!(
-            Cli::try_parse_from(["pi", "--classic", "--ftui"]).is_err(),
+            Cli::try_parse_from(["ra", "--classic", "--ftui"]).is_err(),
             "two stack selectors at once must be refused, not silently ordered"
         );
         assert!(
-            Cli::try_parse_from(["pi", "--ftui", "--classic"]).is_err(),
+            Cli::try_parse_from(["ra", "--ftui", "--classic"]).is_err(),
             "and in the other order too"
         );
         // The documented aliases for --classic conflict as well.
-        assert!(Cli::try_parse_from(["pi", "--ftui", "--classic-tui"]).is_err());
+        assert!(Cli::try_parse_from(["ra", "--ftui", "--classic-tui"]).is_err());
     }
 
     #[test]
     fn parse_session_path_in_a_full_print_mode_argv() {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--print",
             "--mode",
             "json",
@@ -828,7 +852,7 @@ mod tests {
     #[test]
     fn parse_session_path_without_a_message() {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--print",
             "--mode",
             "json",
@@ -841,63 +865,63 @@ mod tests {
 
     #[test]
     fn parse_no_session() {
-        let cli = Cli::parse_from(["pi", "--no-session"]);
+        let cli = Cli::parse_from(["ra", "--no-session"]);
         assert!(cli.no_session);
     }
 
     #[test]
     fn parse_session_durability() {
-        let cli = Cli::parse_from(["pi", "--session-durability", "throughput"]);
+        let cli = Cli::parse_from(["ra", "--session-durability", "throughput"]);
         assert_eq!(cli.session_durability.as_deref(), Some("throughput"));
     }
 
     #[test]
     fn parse_no_migrations() {
-        let cli = Cli::parse_from(["pi", "--no-migrations"]);
+        let cli = Cli::parse_from(["ra", "--no-migrations"]);
         assert!(cli.no_migrations);
     }
 
     #[test]
     fn parse_print_short_flag() {
-        let cli = Cli::parse_from(["pi", "-p", "what is 2+2"]);
+        let cli = Cli::parse_from(["ra", "-p", "what is 2+2"]);
         assert!(cli.print);
         assert_eq!(cli.message_args(), vec!["what is 2+2"]);
     }
 
     #[test]
     fn parse_print_long_flag() {
-        let cli = Cli::parse_from(["pi", "--print", "question"]);
+        let cli = Cli::parse_from(["ra", "--print", "question"]);
         assert!(cli.print);
     }
 
     #[test]
     fn parse_rpc_alias_sets_rpc_flag() {
-        let cli = Cli::parse_from(["pi", "--rpc"]);
+        let cli = Cli::parse_from(["ra", "--rpc"]);
         assert!(cli.rpc);
     }
 
     #[test]
     fn parse_rpc_alias_conflicts_with_print() {
-        let result = Cli::try_parse_from(["pi", "--rpc", "--print", "question"]);
+        let result = Cli::try_parse_from(["ra", "--rpc", "--print", "question"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn parse_model_flag() {
-        let cli = Cli::parse_from(["pi", "--model", "claude-opus-4"]);
+        let cli = Cli::parse_from(["ra", "--model", "claude-opus-4"]);
         assert_eq!(cli.model.as_deref(), Some("claude-opus-4"));
     }
 
     /// bd-cv653.3.1: role model flags parse independently and together.
     #[test]
     fn parse_role_model_flags() {
-        let cli = Cli::parse_from(["pi", "--smol", "openai/gpt-5-mini"]);
+        let cli = Cli::parse_from(["ra", "--smol", "openai/gpt-5-mini"]);
         assert_eq!(cli.smol.as_deref(), Some("openai/gpt-5-mini"));
         assert!(cli.slow.is_none());
         assert!(cli.plan.is_none());
 
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--smol",
             "openai/gpt-5-mini",
             "--slow",
@@ -913,52 +937,52 @@ mod tests {
     /// bd-cv653.3.1: role flags compose with the classic model flags.
     #[test]
     fn parse_role_flags_compose_with_model_flag() {
-        let cli = Cli::parse_from(["pi", "--model", "gpt-5.5", "--smol", "openai/gpt-5-mini"]);
+        let cli = Cli::parse_from(["ra", "--model", "gpt-5.5", "--smol", "openai/gpt-5-mini"]);
         assert_eq!(cli.model.as_deref(), Some("gpt-5.5"));
         assert_eq!(cli.smol.as_deref(), Some("openai/gpt-5-mini"));
     }
 
     #[test]
     fn parse_provider_flag() {
-        let cli = Cli::parse_from(["pi", "--provider", "openai"]);
+        let cli = Cli::parse_from(["ra", "--provider", "openai"]);
         assert_eq!(cli.provider.as_deref(), Some("openai"));
     }
 
     #[test]
     fn parse_api_key_flag() {
-        let cli = Cli::parse_from(["pi", "--api-key", "sk-ant-test123"]);
+        let cli = Cli::parse_from(["ra", "--api-key", "sk-ant-test123"]);
         assert_eq!(cli.api_key.as_deref(), Some("sk-ant-test123"));
     }
 
     #[test]
     fn parse_version_short_flag() {
-        let cli = Cli::parse_from(["pi", "-v"]);
+        let cli = Cli::parse_from(["ra", "-v"]);
         assert!(cli.version);
     }
 
     #[test]
     fn parse_version_long_flag() {
-        let cli = Cli::parse_from(["pi", "--version"]);
+        let cli = Cli::parse_from(["ra", "--version"]);
         assert!(cli.version);
     }
 
     #[test]
     fn parse_with_extension_flags_preserves_help_error() {
-        let err = parse_with_extension_flags(vec!["pi".into(), "--help".into()])
+        let err = parse_with_extension_flags(vec!["ra".into(), "--help".into()])
             .expect_err("`--help` should stay a clap help path");
         assert!(matches!(err.kind(), clap::error::ErrorKind::DisplayHelp));
     }
 
     #[test]
     fn parse_verbose_flag() {
-        let cli = Cli::parse_from(["pi", "--verbose"]);
+        let cli = Cli::parse_from(["ra", "--verbose"]);
         assert!(cli.verbose);
     }
 
     #[test]
     fn parse_system_prompt_flags() {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--system-prompt",
             "You are a helper",
             "--append-system-prompt",
@@ -970,7 +994,7 @@ mod tests {
 
     #[test]
     fn parse_export_flag() {
-        let cli = Cli::parse_from(["pi", "--export", "output.html"]);
+        let cli = Cli::parse_from(["ra", "--export", "output.html"]);
         assert_eq!(cli.export.as_deref(), Some("output.html"));
     }
 
@@ -979,14 +1003,14 @@ mod tests {
     #[test]
     fn parse_all_thinking_levels() {
         for level in &["off", "minimal", "low", "medium", "high", "xhigh", "max"] {
-            let cli = Cli::parse_from(["pi", "--thinking", level]);
+            let cli = Cli::parse_from(["ra", "--thinking", level]);
             assert_eq!(cli.thinking.as_deref(), Some(*level));
         }
     }
 
     #[test]
     fn invalid_thinking_level_rejected() {
-        let result = Cli::try_parse_from(["pi", "--thinking", "ultra"]);
+        let result = Cli::try_parse_from(["ra", "--thinking", "ultra"]);
         assert!(result.is_err());
     }
 
@@ -994,35 +1018,35 @@ mod tests {
 
     #[test]
     fn file_and_message_args_split() {
-        let cli = Cli::parse_from(["pi", "@a.txt", "hello", "@b.md", "world"]);
+        let cli = Cli::parse_from(["ra", "@a.txt", "hello", "@b.md", "world"]);
         assert_eq!(cli.file_args(), vec!["a.txt", "b.md"]);
         assert_eq!(cli.message_args(), vec!["hello", "world"]);
     }
 
     #[test]
     fn file_args_empty_when_none() {
-        let cli = Cli::parse_from(["pi", "hello", "world"]);
+        let cli = Cli::parse_from(["ra", "hello", "world"]);
         assert!(cli.file_args().is_empty());
         assert_eq!(cli.message_args(), vec!["hello", "world"]);
     }
 
     #[test]
     fn message_args_empty_when_only_files() {
-        let cli = Cli::parse_from(["pi", "@src/main.rs", "@Cargo.toml"]);
+        let cli = Cli::parse_from(["ra", "@src/main.rs", "@Cargo.toml"]);
         assert_eq!(cli.file_args(), vec!["src/main.rs", "Cargo.toml"]);
         assert!(cli.message_args().is_empty());
     }
 
     #[test]
     fn no_positional_args_yields_empty() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(cli.file_args().is_empty());
         assert!(cli.message_args().is_empty());
     }
 
     #[test]
     fn at_prefix_stripped_from_file_paths() {
-        let cli = Cli::parse_from(["pi", "@/absolute/path.rs"]);
+        let cli = Cli::parse_from(["ra", "@/absolute/path.rs"]);
         assert_eq!(cli.file_args(), vec!["/absolute/path.rs"]);
     }
 
@@ -1030,7 +1054,7 @@ mod tests {
 
     #[test]
     fn parse_install_subcommand() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "install", "npm:@org/pkg"]);
+        let cli = Cli::parse_from(["ra", "install", "npm:@org/pkg"]);
         let Some(Commands::Install { source, local }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1041,7 +1065,7 @@ mod tests {
 
     #[test]
     fn parse_install_local_flag() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "install", "--local", "git:https://example.com"]);
+        let cli = Cli::parse_from(["ra", "install", "--local", "git:https://example.com"]);
         let Some(Commands::Install { source, local }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1052,7 +1076,7 @@ mod tests {
 
     #[test]
     fn parse_install_local_short_flag() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "install", "-l", "./local-ext"]);
+        let cli = Cli::parse_from(["ra", "install", "-l", "./local-ext"]);
         let Some(Commands::Install { local, .. }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1062,7 +1086,7 @@ mod tests {
 
     #[test]
     fn parse_remove_subcommand() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "remove", "npm:pkg"]);
+        let cli = Cli::parse_from(["ra", "remove", "npm:pkg"]);
         let Some(Commands::Remove { source, local }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1073,7 +1097,7 @@ mod tests {
 
     #[test]
     fn parse_remove_local_flag() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "remove", "--local", "npm:pkg"]);
+        let cli = Cli::parse_from(["ra", "remove", "--local", "npm:pkg"]);
         let Some(Commands::Remove { local, .. }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1083,7 +1107,7 @@ mod tests {
 
     #[test]
     fn parse_update_with_source() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "update", "npm:pkg"]);
+        let cli = Cli::parse_from(["ra", "update", "npm:pkg"]);
         let Some(Commands::Update { source }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1093,7 +1117,7 @@ mod tests {
 
     #[test]
     fn parse_update_all() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "update"]);
+        let cli = Cli::parse_from(["ra", "update"]);
         let Some(Commands::Update { source }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1103,13 +1127,13 @@ mod tests {
 
     #[test]
     fn parse_list_subcommand() {
-        let cli = Cli::parse_from(["pi", "list"]);
+        let cli = Cli::parse_from(["ra", "list"]);
         assert!(matches!(cli.command, Some(Commands::List)));
     }
 
     #[test]
     fn parse_config_subcommand() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "config"]);
+        let cli = Cli::parse_from(["ra", "config"]);
         let Some(Commands::Config { show, paths, json }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1121,7 +1145,7 @@ mod tests {
 
     #[test]
     fn parse_config_show_flag() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "config", "--show"]);
+        let cli = Cli::parse_from(["ra", "config", "--show"]);
         let Some(Commands::Config { show, paths, json }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1133,7 +1157,7 @@ mod tests {
 
     #[test]
     fn parse_config_paths_flag() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "config", "--paths"]);
+        let cli = Cli::parse_from(["ra", "config", "--paths"]);
         let Some(Commands::Config { show, paths, json }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1145,7 +1169,7 @@ mod tests {
 
     #[test]
     fn parse_config_json_flag() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "config", "--json"]);
+        let cli = Cli::parse_from(["ra", "config", "--json"]);
         let Some(Commands::Config { show, paths, json }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1157,14 +1181,14 @@ mod tests {
 
     #[test]
     fn parse_update_index_subcommand() {
-        let cli = Cli::parse_from(["pi", "update-index"]);
+        let cli = Cli::parse_from(["ra", "update-index"]);
         assert!(matches!(cli.command, Some(Commands::UpdateIndex)));
     }
 
     #[test]
     fn parse_validation_broker_plan_subcommand() -> Result<(), String> {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "validation-broker",
             "plan",
             "--request",
@@ -1199,7 +1223,7 @@ mod tests {
     #[test]
     fn parse_swarm_progress_subcommand() -> Result<(), String> {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "swarm-progress",
             "--input",
             "progress-input.json",
@@ -1230,7 +1254,7 @@ mod tests {
 
     #[test]
     fn parse_info_subcommand() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "info", "auto-commit-on-exit"]);
+        let cli = Cli::parse_from(["ra", "info", "auto-commit-on-exit"]);
         let Some(Commands::Info { name }) = cli.command else {
             return Err(format!("unexpected command: {:?}", cli.command));
         };
@@ -1240,7 +1264,7 @@ mod tests {
 
     #[test]
     fn no_subcommand_when_only_message() {
-        let cli = Cli::parse_from(["pi", "hello"]);
+        let cli = Cli::parse_from(["ra", "hello"]);
         assert!(cli.command.is_none());
         assert_eq!(cli.message_args(), vec!["hello"]);
     }
@@ -1249,19 +1273,19 @@ mod tests {
 
     #[test]
     fn list_models_not_set() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(cli.list_models.is_none());
     }
 
     #[test]
     fn list_models_without_pattern() {
-        let cli = Cli::parse_from(["pi", "--list-models"]);
+        let cli = Cli::parse_from(["ra", "--list-models"]);
         assert!(matches!(cli.list_models, Some(None)));
     }
 
     #[test]
     fn list_models_with_pattern() -> Result<(), String> {
-        let cli = Cli::parse_from(["pi", "--list-models", "claude*"]);
+        let cli = Cli::parse_from(["ra", "--list-models", "claude*"]);
         let Some(Some(ref pat)) = cli.list_models else {
             return Err(format!("unexpected list_models: {:?}", cli.list_models));
         };
@@ -1273,7 +1297,7 @@ mod tests {
     fn fetch_models_flags_survive_extension_flag_preprocessing() {
         let parsed = parse_with_extension_flags(
             [
-                "pi",
+                "ra",
                 "--fetch-models",
                 "openrouter",
                 "--refresh-models",
@@ -1301,7 +1325,7 @@ mod tests {
     fn formerly_omitted_builtin_flags_survive_production_preprocessing() {
         let parsed = parse_with_extension_flags(
             [
-                "pi",
+                "ra",
                 "--smol",
                 "openai/smol",
                 "--slow",
@@ -1352,7 +1376,7 @@ mod tests {
         );
 
         let alias = parse_with_extension_flags(
-            ["pi", "--auto-approve"]
+            ["ra", "--auto-approve"]
                 .into_iter()
                 .map(str::to_string)
                 .collect(),
@@ -1388,7 +1412,7 @@ mod tests {
 
     #[test]
     fn persist_models_requires_fetch_models() {
-        let error = Cli::try_parse_from(["pi", "--persist-models"])
+        let error = Cli::try_parse_from(["ra", "--persist-models"])
             .expect_err("persist-models without fetch-models must be rejected");
         assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
     }
@@ -1397,13 +1421,13 @@ mod tests {
 
     #[test]
     fn list_providers_not_set() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(!cli.list_providers);
     }
 
     #[test]
     fn list_providers_set() {
-        let cli = Cli::parse_from(["pi", "--list-providers"]);
+        let cli = Cli::parse_from(["ra", "--list-providers"]);
         assert!(cli.list_providers);
     }
 
@@ -1411,7 +1435,7 @@ mod tests {
 
     #[test]
     fn default_tools() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert_eq!(
             cli.enabled_tools(),
             vec![
@@ -1434,31 +1458,34 @@ mod tests {
                 "jobs",
                 "hub",
                 "current_time",
+                // Added alongside the `ptc_bridge` (RunCodeTool) work; must stay
+                // in lockstep with the `default_value` on `--tools`.
+                "run_code",
             ]
         );
     }
 
     #[test]
     fn custom_tools_list() {
-        let cli = Cli::parse_from(["pi", "--tools", "read,grep,find,ls"]);
+        let cli = Cli::parse_from(["ra", "--tools", "read,grep,find,ls"]);
         assert_eq!(cli.enabled_tools(), vec!["read", "grep", "find", "ls"]);
     }
 
     #[test]
     fn no_tools_flag_returns_empty() {
-        let cli = Cli::parse_from(["pi", "--no-tools"]);
+        let cli = Cli::parse_from(["ra", "--no-tools"]);
         assert!(cli.enabled_tools().is_empty());
     }
 
     #[test]
     fn tools_with_spaces_trimmed() {
-        let cli = Cli::parse_from(["pi", "--tools", "read, bash, edit"]);
+        let cli = Cli::parse_from(["ra", "--tools", "read, bash, edit"]);
         assert_eq!(cli.enabled_tools(), vec!["read", "bash", "edit"]);
     }
 
     #[test]
     fn tools_ignore_empty_entries_and_duplicates() {
-        let cli = Cli::parse_from(["pi", "--tools", "read,, bash,read, ,grep,bash"]);
+        let cli = Cli::parse_from(["ra", "--tools", "read,, bash,read, ,grep,bash"]);
         assert_eq!(cli.enabled_tools(), vec!["read", "bash", "grep"]);
     }
 
@@ -1466,38 +1493,38 @@ mod tests {
 
     #[test]
     fn unknown_flag_rejected() {
-        let result = Cli::try_parse_from(["pi", "--nonexistent"]);
+        let result = Cli::try_parse_from(["ra", "--nonexistent"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn invalid_mode_rejected() {
-        let result = Cli::try_parse_from(["pi", "--mode", "xml"]);
+        let result = Cli::try_parse_from(["ra", "--mode", "xml"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn install_without_source_rejected() {
-        let result = Cli::try_parse_from(["pi", "install"]);
+        let result = Cli::try_parse_from(["ra", "install"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn remove_without_source_rejected() {
-        let result = Cli::try_parse_from(["pi", "remove"]);
+        let result = Cli::try_parse_from(["ra", "remove"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn invalid_subcommand_option_rejected() {
-        let result = Cli::try_parse_from(["pi", "install", "--bogus", "npm:pkg"]);
+        let result = Cli::try_parse_from(["ra", "install", "--bogus", "npm:pkg"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn extension_flags_are_extracted_in_second_pass_parse() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--extension-plan".to_string(),
             "ship it".to_string(),
             "--model".to_string(),
@@ -1514,7 +1541,7 @@ mod tests {
     #[test]
     fn extension_bool_flag_without_value_is_supported() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--dry-run".to_string(),
             "--print".to_string(),
             "hello".to_string(),
@@ -1530,7 +1557,7 @@ mod tests {
     #[test]
     fn extension_flag_accepts_negative_integer_value() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--temperature".to_string(),
             "-1".to_string(),
             "--print".to_string(),
@@ -1547,7 +1574,7 @@ mod tests {
     #[test]
     fn extension_flag_accepts_negative_float_value() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--temperature".to_string(),
             "-0.25".to_string(),
             "--print".to_string(),
@@ -1564,7 +1591,7 @@ mod tests {
     #[test]
     fn parse_with_extension_flags_recognizes_session_durability_as_builtin() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--session-durability".to_string(),
             "throughput".to_string(),
             "--print".to_string(),
@@ -1580,7 +1607,7 @@ mod tests {
     #[test]
     fn parse_with_extension_flags_recognizes_no_mouse_capture_as_builtin() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--no-mouse-capture".to_string(),
             "--extension-plan".to_string(),
             "ship-it".to_string(),
@@ -1600,7 +1627,7 @@ mod tests {
     #[test]
     fn extension_flag_parser_does_not_bypass_subcommand_validation() {
         let result = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "install".to_string(),
             "--bogus".to_string(),
             "pkg".to_string(),
@@ -1611,7 +1638,7 @@ mod tests {
     #[test]
     fn extension_flags_survive_short_cluster_ending_in_e() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "-pe".to_string(),
             "ext.js".to_string(),
             "--extension-plan".to_string(),
@@ -1631,7 +1658,7 @@ mod tests {
     #[test]
     fn extension_flags_after_message_args_are_extracted() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "hello".to_string(),
             "--extension-plan".to_string(),
             "ship-it".to_string(),
@@ -1647,7 +1674,7 @@ mod tests {
     #[test]
     fn extension_flag_inline_value_matches_separate_value() {
         let separate = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--extension-plan".to_string(),
             "ship-it".to_string(),
             "--print".to_string(),
@@ -1656,7 +1683,7 @@ mod tests {
         .expect("parse separate extension flag");
 
         let inline = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--extension-plan=ship-it".to_string(),
             "--print".to_string(),
             "hello".to_string(),
@@ -1690,7 +1717,7 @@ mod tests {
     #[test]
     fn multiple_extensions() {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--extension",
             "ext1.js",
             "-e",
@@ -1709,7 +1736,7 @@ mod tests {
 
     #[test]
     fn multiple_skills() {
-        let cli = Cli::parse_from(["pi", "--skill", "a.md", "--skill", "b.md"]);
+        let cli = Cli::parse_from(["ra", "--skill", "a.md", "--skill", "b.md"]);
         assert_eq!(
             cli.skill,
             vec!["a.md", "b.md"]
@@ -1721,7 +1748,7 @@ mod tests {
 
     #[test]
     fn multiple_theme_paths() {
-        let cli = Cli::parse_from(["pi", "--theme-path", "a/", "--theme-path", "b/"]);
+        let cli = Cli::parse_from(["ra", "--theme-path", "a/", "--theme-path", "b/"]);
         assert_eq!(
             cli.theme_path,
             vec!["a/", "b/"]
@@ -1735,22 +1762,22 @@ mod tests {
 
     #[test]
     fn no_extensions_flag() {
-        let cli = Cli::parse_from(["pi", "--no-extensions"]);
+        let cli = Cli::parse_from(["ra", "--no-extensions"]);
         assert!(cli.no_extensions);
     }
 
     #[test]
     fn trust_flag() {
-        let cli = Cli::parse_from(["pi", "--trust"]);
+        let cli = Cli::parse_from(["ra", "--trust"]);
         assert!(cli.trust);
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(!cli.trust);
     }
 
     #[test]
     fn trust_flag_is_builtin_not_extension_flag() {
         let parsed = parse_with_extension_flags(vec![
-            "pi".to_string(),
+            "ra".to_string(),
             "--trust".to_string(),
             "-p".to_string(),
             "hello".to_string(),
@@ -1765,7 +1792,7 @@ mod tests {
 
     #[test]
     fn no_skills_flag() {
-        let cli = Cli::parse_from(["pi", "--no-skills"]);
+        let cli = Cli::parse_from(["ra", "--no-skills"]);
         assert!(cli.no_skills);
         // gh #216: skills and context files are independent switches.
         assert!(!cli.no_context_files);
@@ -1773,14 +1800,14 @@ mod tests {
 
     #[test]
     fn no_context_files_flag() {
-        let cli = Cli::parse_from(["pi", "--no-context-files"]);
+        let cli = Cli::parse_from(["ra", "--no-context-files"]);
         assert!(cli.no_context_files);
         assert!(!cli.no_skills);
     }
 
     #[test]
     fn no_context_files_flag_is_not_diverted_to_extension_flags() {
-        let args: Vec<String> = vec!["pi".to_string(), "--no-context-files".to_string()];
+        let args: Vec<String> = vec!["ra".to_string(), "--no-context-files".to_string()];
         let (kept, extracted) = preprocess_extension_flags(&args);
         assert!(extracted.is_empty());
         assert_eq!(kept, args);
@@ -1788,7 +1815,7 @@ mod tests {
 
     #[test]
     fn no_prompt_templates_flag() {
-        let cli = Cli::parse_from(["pi", "--no-prompt-templates"]);
+        let cli = Cli::parse_from(["ra", "--no-prompt-templates"]);
         assert!(cli.no_prompt_templates);
     }
 
@@ -1796,7 +1823,7 @@ mod tests {
 
     #[test]
     fn bare_invocation_defaults() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(!cli.version);
         assert!(!cli.r#continue);
         assert!(!cli.resume);
@@ -1810,6 +1837,9 @@ mod tests {
         assert!(!cli.no_context_files);
         assert!(!cli.no_prompt_templates);
         assert!(!cli.no_themes);
+        assert!(!cli.disable_reflection);
+        assert_eq!(cli.reflection_threshold, 5);
+        assert_eq!(cli.reflection_max_per_hour, 10);
         assert!(cli.provider.is_none());
         assert!(cli.model.is_none());
         assert!(cli.api_key.is_none());
@@ -1833,7 +1863,7 @@ mod tests {
     #[test]
     fn print_mode_with_model_and_thinking() {
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "-p",
             "--model",
             "gpt-4o",
@@ -1851,31 +1881,31 @@ mod tests {
 
     #[test]
     fn extension_policy_flag_parses() {
-        let cli = Cli::parse_from(["pi", "--extension-policy", "safe"]);
+        let cli = Cli::parse_from(["ra", "--extension-policy", "safe"]);
         assert_eq!(cli.extension_policy.as_deref(), Some("safe"));
     }
 
     #[test]
     fn extension_policy_flag_permissive() {
-        let cli = Cli::parse_from(["pi", "--extension-policy", "permissive"]);
+        let cli = Cli::parse_from(["ra", "--extension-policy", "permissive"]);
         assert_eq!(cli.extension_policy.as_deref(), Some("permissive"));
     }
 
     #[test]
     fn extension_policy_flag_balanced() {
-        let cli = Cli::parse_from(["pi", "--extension-policy", "balanced"]);
+        let cli = Cli::parse_from(["ra", "--extension-policy", "balanced"]);
         assert_eq!(cli.extension_policy.as_deref(), Some("balanced"));
     }
 
     #[test]
     fn extension_policy_flag_absent() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(cli.extension_policy.is_none());
     }
 
     #[test]
     fn explain_extension_policy_flag_parses() {
-        let cli = Cli::parse_from(["pi", "--explain-extension-policy"]);
+        let cli = Cli::parse_from(["ra", "--explain-extension-policy"]);
         assert!(cli.explain_extension_policy);
     }
 
@@ -1883,25 +1913,25 @@ mod tests {
 
     #[test]
     fn repair_policy_flag_parses() {
-        let cli = Cli::parse_from(["pi", "--repair-policy", "auto-safe"]);
+        let cli = Cli::parse_from(["ra", "--repair-policy", "auto-safe"]);
         assert_eq!(cli.repair_policy.as_deref(), Some("auto-safe"));
     }
 
     #[test]
     fn repair_policy_flag_off() {
-        let cli = Cli::parse_from(["pi", "--repair-policy", "off"]);
+        let cli = Cli::parse_from(["ra", "--repair-policy", "off"]);
         assert_eq!(cli.repair_policy.as_deref(), Some("off"));
     }
 
     #[test]
     fn repair_policy_flag_absent() {
-        let cli = Cli::parse_from(["pi"]);
+        let cli = Cli::parse_from(["ra"]);
         assert!(cli.repair_policy.is_none());
     }
 
     #[test]
     fn explain_repair_policy_flag_parses() {
-        let cli = Cli::parse_from(["pi", "--explain-repair-policy"]);
+        let cli = Cli::parse_from(["ra", "--explain-repair-policy"]);
         assert!(cli.explain_repair_policy);
     }
 
@@ -1915,7 +1945,7 @@ mod tests {
     fn ts_parity_all_shared_flags_parse() {
         // Every flag from the TS args.ts that Rust must support.
         let cli = Cli::parse_from([
-            "pi",
+            "ra",
             "--provider",
             "anthropic",
             "--model",
@@ -1990,37 +2020,37 @@ mod tests {
     fn ts_parity_short_flags_match() {
         // TS short flags: -c (continue), -r (resume), -p (print),
         // -e (extension), -v (version), -h (help)
-        let cli = Cli::parse_from(["pi", "-c", "-p", "-e", "ext.js"]);
+        let cli = Cli::parse_from(["ra", "-c", "-p", "-e", "ext.js"]);
         assert!(cli.r#continue);
         assert!(cli.print);
         assert_eq!(cli.extension, vec!["ext.js"]);
 
-        let cli2 = Cli::parse_from(["pi", "-r"]);
+        let cli2 = Cli::parse_from(["ra", "-r"]);
         assert!(cli2.resume);
     }
 
     #[test]
     fn ts_parity_subcommands() {
         // TS subcommands: install, remove, update, list, config
-        let cli = Cli::parse_from(["pi", "install", "npm:my-ext"]);
+        let cli = Cli::parse_from(["ra", "install", "npm:my-ext"]);
         assert!(matches!(cli.command, Some(Commands::Install { .. })));
 
-        let cli = Cli::parse_from(["pi", "remove", "npm:my-ext"]);
+        let cli = Cli::parse_from(["ra", "remove", "npm:my-ext"]);
         assert!(matches!(cli.command, Some(Commands::Remove { .. })));
 
-        let cli = Cli::parse_from(["pi", "update"]);
+        let cli = Cli::parse_from(["ra", "update"]);
         assert!(matches!(cli.command, Some(Commands::Update { .. })));
 
-        let cli = Cli::parse_from(["pi", "list"]);
+        let cli = Cli::parse_from(["ra", "list"]);
         assert!(matches!(cli.command, Some(Commands::List)));
 
-        let cli = Cli::parse_from(["pi", "config"]);
+        let cli = Cli::parse_from(["ra", "config"]);
         assert!(matches!(cli.command, Some(Commands::Config { .. })));
     }
 
     #[test]
     fn ts_parity_at_file_expansion() {
-        let cli = Cli::parse_from(["pi", "-p", "@readme.md", "summarize this"]);
+        let cli = Cli::parse_from(["ra", "-p", "@readme.md", "summarize this"]);
         assert_eq!(cli.file_args(), vec!["readme.md"]);
         assert_eq!(cli.message_args(), vec!["summarize this"]);
     }
@@ -2028,10 +2058,10 @@ mod tests {
     #[test]
     fn ts_parity_list_models_optional_search() {
         // --list-models with optional search term (TS parity)
-        let cli = Cli::parse_from(["pi", "--list-models"]);
+        let cli = Cli::parse_from(["ra", "--list-models"]);
         assert_eq!(cli.list_models, Some(None));
 
-        let cli = Cli::parse_from(["pi", "--list-models", "sonnet"]);
+        let cli = Cli::parse_from(["ra", "--list-models", "sonnet"]);
         assert_eq!(cli.list_models, Some(Some("sonnet".to_string())));
     }
 
@@ -2160,7 +2190,7 @@ mod tests {
             #[test]
             fn preprocess_empty_returns_pi_program_name(_dummy in Just(())) {
                 let result = preprocess_extension_flags(&[]);
-                assert_eq!(result.0, vec!["pi"]);
+                assert_eq!(result.0, vec!["ra"]);
                 let extracted: &[ExtensionCliFlag] = &result.1;
                 assert!(extracted.is_empty());
             }
@@ -2172,9 +2202,10 @@ mod tests {
                     "--no-extensions", "--no-skills", "--no-context-files",
                     "--no-prompt-templates",
                     "--no-mouse-capture", "--rpc", "--list-providers",
+                    "--disable-reflection",
                 ]),
             ) {
-                let args: Vec<String> = vec!["pi".to_string(), flag.to_string()];
+                let args: Vec<String> = vec!["ra".to_string(), flag.to_string()];
                 let result = preprocess_extension_flags(&args);
                 let extracted: &[ExtensionCliFlag] = &result.1;
                 assert!(
@@ -2196,7 +2227,7 @@ mod tests {
                 ),
             ) {
                 let flag = format!("--{name}");
-                let args: Vec<String> = vec!["pi".to_string(), flag.clone()];
+                let args: Vec<String> = vec!["ra".to_string(), flag.clone()];
                 let result = preprocess_extension_flags(&args);
                 assert!(
                     !result.0.contains(&flag),
@@ -2214,7 +2245,7 @@ mod tests {
                 tail_count in 0..5usize,
                 tail_token in "[a-z]{1,5}",
             ) {
-                let mut args = vec!["pi".to_string(), "--".to_string()];
+                let mut args = vec!["ra".to_string(), "--".to_string()];
                 for i in 0..tail_count {
                     args.push(format!("--{tail_token}{i}"));
                 }
@@ -2236,7 +2267,7 @@ mod tests {
                 ]),
             ) {
                 let args: Vec<String> = vec![
-                    "pi".to_string(),
+                    "ra".to_string(),
                     subcommand.to_string(),
                     "--unknown-flag".to_string(),
                 ];
@@ -2298,7 +2329,7 @@ pub enum Commands {
     #[command(name = "update-index")]
     UpdateIndex,
 
-    /// Manage pi-iso agent worktrees (bd-cv653.5.2)
+    /// Manage ra-iso agent worktrees (bd-cv653.5.2)
     #[command(name = "worktree")]
     Worktree {
         /// `list` live agent worktrees or `clean` stale ones
@@ -2376,7 +2407,7 @@ pub enum Commands {
         format: String,
     },
 
-    /// Import a foreign session into a native continuable pi session
+    /// Import a foreign session into a native continuable ra session
     /// (bd-cv653.6.4): Claude Code or Codex JSONL.
     #[command(name = "import")]
     Import {
@@ -2551,7 +2582,7 @@ pub enum Commands {
     /// Preview an offline swarm replay trace and policy comparison
     #[command(name = "swarm-replay-preview")]
     SwarmReplayPreview {
-        /// Normalized pi.swarm.replay_trace.v1 JSON to replay
+        /// Normalized ra.swarm.replay_trace.v1 JSON to replay
         #[arg(long)]
         trace: String,
         /// Baseline policy to compare; repeatable, defaults to all built-in policies
@@ -2829,7 +2860,7 @@ pub enum RulesCommands {
         /// Reminder directive body injected on match
         #[arg(short, long)]
         body: String,
-        /// Save to global settings (~/.pi/agent/stream-rules.json) instead of project
+        /// Save to global settings (~/.ra/agent/stream-rules.json) instead of project
         #[arg(long)]
         global: bool,
         /// Optional turn cooldown in turns

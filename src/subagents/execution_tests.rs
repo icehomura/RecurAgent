@@ -71,7 +71,7 @@ fn zero_exit_without_an_agent_completion_is_a_failed_delegation() {
         result(&output)["error"]
             .as_str()
             .unwrap()
-            .contains("PI_SUBAGENT_INCOMPLETE")
+            .contains("RECUR_AGENT_SUBAGENT_INCOMPLETE")
     );
 }
 
@@ -91,7 +91,7 @@ fn malformed_stdout_does_not_become_an_ignored_diagnostic() {
     let output = run(&tool, request());
     assert!(output.is_error);
     let encoded = serde_json::to_string(&output).unwrap();
-    assert!(encoded.contains("PI_SUBAGENT_PROTOCOL"));
+    assert!(encoded.contains("RECUR_AGENT_SUBAGENT_PROTOCOL"));
     assert!(!encoded.contains("not-json-secret-content"));
 }
 
@@ -229,7 +229,7 @@ fn public_tool_rejects_a_truncated_answer_instead_of_schema_validating_its_prefi
         result(&output)["error"]
             .as_str()
             .unwrap()
-            .contains("PI_SUBAGENT_OUTPUT_LIMIT")
+            .contains("RECUR_AGENT_SUBAGENT_OUTPUT_LIMIT")
     );
     assert!(result(&output)["output"].as_str().unwrap().len() <= MAX_CHILD_OUTPUT_BYTES);
 }
@@ -462,7 +462,7 @@ fn apply_conflict_marks_result_and_hub_failed() {
         result(&output)["error"]
             .as_str()
             .unwrap()
-            .contains("PI_ISO_CONFLICT")
+            .contains("RECUR_AGENT_ISO_CONFLICT")
     );
     assert_eq!(
         std::fs::read_to_string(tool.cwd.join("tracked.txt")).unwrap(),
@@ -533,7 +533,7 @@ fn oversized_frame_fails_without_waiting_for_newline() {
         result(&output)["error"]
             .as_str()
             .unwrap()
-            .contains("PI_SUBAGENT_FRAME_LIMIT")
+            .contains("RECUR_AGENT_SUBAGENT_FRAME_LIMIT")
     );
     assert!(result(&output)["output"].as_str().unwrap().is_empty());
 }

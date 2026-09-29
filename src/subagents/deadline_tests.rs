@@ -60,7 +60,7 @@ fn assert_timeout(value: &Value) {
         value["error"]
             .as_str()
             .unwrap()
-            .contains("PI_SUBAGENT_TIMEOUT"),
+            .contains("RECUR_AGENT_SUBAGENT_TIMEOUT"),
         "{value}"
     );
 }
@@ -255,7 +255,7 @@ fn corrective_processes_receive_the_same_absolute_deadline() {
     let script = format!(
         "test \"$1\" = --max-time || exit 11\n\
          test \"$2\" -gt 0 || exit 12\n\
-         printf '%s\\n' \"$PI_SUBAGENT_DEADLINE_UNIX_MS\" >> deadlines\n\
+         printf '%s\\n' \"$RECUR_AGENT_SUBAGENT_DEADLINE_UNIX_MS\" >> deadlines\n\
          if [ -f first ]; then\n{}else\n: > first\n{}fi\n",
         end(r#"{"ok":true}"#),
         end("not JSON"),
@@ -341,5 +341,10 @@ fn background_tan_uses_the_same_host_budget() {
         .unwrap();
     assert!(completion.is_error);
     assert_eq!(completion.status, "failed");
-    assert!(completion.error.unwrap().contains("PI_SUBAGENT_TIMEOUT"));
+    assert!(
+        completion
+            .error
+            .unwrap()
+            .contains("RECUR_AGENT_SUBAGENT_TIMEOUT")
+    );
 }

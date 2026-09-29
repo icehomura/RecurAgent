@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-pub(crate) const COMPACTION_ADMISSION_SCHEMA_V1: &str = "pi.compaction.admission.v1";
+pub(crate) const COMPACTION_ADMISSION_SCHEMA_V1: &str = "ra.compaction.admission.v1";
 
 /// Quota controls that bound background compaction resource usage.
 #[derive(Debug, Clone)]
@@ -545,7 +545,7 @@ async fn run_compaction_task(
     // Only this provider future has a panic recovery boundary. Suppress
     // crash capture during its polls, not while it is suspended or while
     // polling the abort/timeout machinery.
-    let compaction_fut = pi::crash::suppress_panic_hook_for_future(
+    let compaction_fut = ra::crash::suppress_panic_hook_for_future(
         std::panic::AssertUnwindSafe(compaction::compact_auto(
             preparation,
             provider,

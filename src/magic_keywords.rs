@@ -83,7 +83,7 @@ pub struct KeywordActivation {
 }
 
 /// Stable schema carried by every session telemetry entry.
-pub const KEYWORD_TELEMETRY_SCHEMA_V1: &str = "pi.magic_keyword.v1";
+pub const KEYWORD_TELEMETRY_SCHEMA_V1: &str = "ra.magic_keyword.v1";
 
 /// Append activation telemetry to the session's replayable custom-entry
 /// stream. Both the SDK/RPC wrapper and the interactive TUI call this shared

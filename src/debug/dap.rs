@@ -555,7 +555,7 @@ fn dispatch<W: Write>(
             };
             let bytes = encode_frame(&serde_json::json!({
                 "seq":seq,"type":"response","request_seq":request_seq,"command":command,
-                "success":false,"message":"pi_agent_rust declines reverse requests (no terminal host)"
+                "success":false,"message":"recur_agent declines reverse requests (no terminal host)"
             }));
             let mut writer = lock(writer);
             if writer

@@ -237,7 +237,7 @@ pub struct PreflightSummary {
     pub info: usize,
 }
 
-pub const PREFLIGHT_SCHEMA: &str = "pi.ext.preflight.v1";
+pub const PREFLIGHT_SCHEMA: &str = "ra.ext.preflight.v1";
 
 impl PreflightReport {
     /// Create from findings.
@@ -1081,7 +1081,7 @@ fn capability_remediation(cap: &str) -> String {
 
 /// Schema version for security scan reports. Bump minor on new rules, major on
 /// breaking structural changes.
-pub const SECURITY_SCAN_SCHEMA: &str = "pi.ext.security_scan.v1";
+pub const SECURITY_SCAN_SCHEMA: &str = "ra.ext.security_scan.v1";
 
 /// Stable rule identifiers. Each variant is a versioned detection rule whose
 /// semantics are frozen once shipped. Add new variants; never rename or
@@ -1451,7 +1451,7 @@ impl SecurityScanReport {
 // ============================================================================
 
 /// Schema version for the security evidence ledger.
-pub const SECURITY_EVIDENCE_LEDGER_SCHEMA: &str = "pi.ext.security_evidence_ledger.v1";
+pub const SECURITY_EVIDENCE_LEDGER_SCHEMA: &str = "ra.ext.security_evidence_ledger.v1";
 
 /// A single evidence entry for the security ledger. Designed for JSONL
 /// serialization so it can be correlated with runtime hostcall telemetry.
@@ -2459,7 +2459,7 @@ fn strip_block_comment_tracking(line: &str, in_block: &mut bool) -> String {
 // ============================================================================
 
 /// Schema version for the install-time risk classification report.
-pub const INSTALL_TIME_RISK_SCHEMA: &str = "pi.ext.install_risk.v1";
+pub const INSTALL_TIME_RISK_SCHEMA: &str = "ra.ext.install_risk.v1";
 
 /// Install-time recommendation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -2716,7 +2716,7 @@ pub fn classify_extension_path(
 // ============================================================================
 
 /// Schema version for trust lifecycle transition events.
-pub const TRUST_LIFECYCLE_SCHEMA: &str = "pi.ext.trust_lifecycle.v1";
+pub const TRUST_LIFECYCLE_SCHEMA: &str = "ra.ext.trust_lifecycle.v1";
 
 /// Extension trust lifecycle states.
 ///

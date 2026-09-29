@@ -145,7 +145,7 @@ async fn stage_and_commit_tree_navigation(
     })
 }
 
-impl PiApp {
+impl RaApp {
     #[allow(clippy::too_many_lines)]
     pub(super) fn handle_tree_ui_key(&mut self, key: &KeyMsg) -> Option<Cmd> {
         let tree_ui = self.tree_ui.take()?;
@@ -557,7 +557,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                        PiMsg::System("Session switch cancelled by extension".to_string()),
+                        RaMsg::System("Session switch cancelled by extension".to_string()),
                     )
                     .await;
                     return;
@@ -583,7 +583,7 @@ impl PiApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            PiMsg::AgentError(format!("Branch summary failed: {err}")),
+                            RaMsg::AgentError(format!("Branch summary failed: {err}")),
                         )
                         .await;
                         return;
@@ -602,7 +602,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError(format!("Failed to lock agent: {err}")),
+                        RaMsg::AgentError(format!("Failed to lock agent: {err}")),
                     )
                     .await;
                     return;
@@ -627,7 +627,7 @@ impl PiApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        PiMsg::AgentError(format!("Branch switch could not be confirmed: {err}")),
+                        RaMsg::AgentError(format!("Branch switch could not be confirmed: {err}")),
                     )
                     .await;
                     return;
@@ -667,7 +667,7 @@ impl PiApp {
             let delivered = crate::interactive::enqueue_pi_event(
                 &event_tx,
                 &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                PiMsg::ConversationReset {
+                RaMsg::ConversationReset {
                     session_id: pending.session_id.clone(),
                     messages,
                     usage,
@@ -680,7 +680,7 @@ impl PiApp {
                 let _ = crate::interactive::enqueue_pi_event(
                     &event_tx,
                     &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                    PiMsg::SetEditorText {
+                    RaMsg::SetEditorText {
                         owner_session_id: pending.session_id.clone(),
                         text,
                     },

@@ -228,7 +228,7 @@ pub(crate) fn read_frame_with_scratch(
     reader: &mut BufReader<impl Read>,
     scratch: &mut Vec<u8>,
 ) -> std::io::Result<Option<Value>> {
-    let trace = std::env::var_os("PI_DAP_TRACE").is_some();
+    let trace = std::env::var_os("RECUR_AGENT_DAP_TRACE").is_some();
     let mut chunk = [0u8; 8192];
     // Phase 1: headers (scratch may already hold some).
     let body_start = loop {

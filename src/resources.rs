@@ -384,7 +384,7 @@ impl ResourceLoader {
         // Extension entries:
         // - `--no-extensions` disables configured + auto discovery but still allows CLI `-e` sources.
         // - Deduplicate by canonical extension ID so that transpiled cache copies
-        //   in `~/.pi/agent/cache/modules/` don't cause command collisions with
+        //   in `~/.ra/agent/cache/modules/` don't cause command collisions with
         //   the original source `.ts` extensions (Issue #37).
         let extension_entries = dedupe_extension_entries_by_id(merge_resource_paths(
             &[],
@@ -748,7 +748,7 @@ fn read_pi_manifest(root: &Path) -> Result<Option<Value>> {
     match json.get("pi") {
         Some(pi) if pi.is_object() => Ok(Some(pi.clone())),
         Some(_) => Err(Error::config(format!(
-            "Invalid package manifest {}: `pi` must be an object",
+            "Invalid package manifest {}: `ra` must be an object",
             manifest_path.display()
         ))),
         None => Ok(None),
@@ -1015,7 +1015,7 @@ pub fn load_skills(options: LoadSkillsOptions) -> LoadSkillsResult {
         );
 
         // Legacy footgun (bd-3znxm): users coming from upstream pi docs put
-        // skills in `~/.pi/skills`, which Pi never loads — previously a
+        // skills in `~/.ra/skills`, which Pi never loads — previously a
         // silent no-op. Surface a diagnostic pointing at the real roots.
         // Only when loading the real global dir: hermetic tests point
         // agent_dir at temp roots and must not see host-dependent warnings.
@@ -1362,12 +1362,106 @@ where
     errors
 }
 
+/// Hard budget for the L0 skill index injected into the system prompt,
+/// measured in characters as a token proxy (≈4 chars/token → ≈3k tokens).
+///
+/// With ~50 skills the typical index sits well under this; the cap exists so
+/// a pathological skill set cannot blow up the always-resident context.
+pub const L0_SKILL_BUDGET_CHARS: usize = 12 * 1024;
+
+/// Per-skill description truncation for the L0 index.
+const L0_DESCRIPTION_LIMIT: usize = 80;
+
+/// A single L0 index entry: the minimum a model needs to decide whether to
+/// load a skill's full body via `skill_view` (L1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillIndexEntry {
+    /// Skill name, exactly as accepted by `skill_view`.
+    pub name: String,
+    /// Description truncated to the L0 budget.
+    pub description: String,
+    /// Whether the description was truncated.
+    pub truncated: bool,
+}
+
+/// The rendered L0 index plus what fell outside the budget.
+#[derive(Debug, Clone, Default)]
+pub struct SkillsIndex {
+    /// Entries that fit within [`L0_SKILL_BUDGET_CHARS`].
+    pub entries: Vec<SkillIndexEntry>,
+    /// Names omitted entirely because the budget ran out.
+    pub omitted: Vec<String>,
+}
+
+impl SkillsIndex {
+    /// Whether any skills were dropped by the budget.
+    pub const fn is_truncated(&self) -> bool {
+        !self.omitted.is_empty()
+    }
+}
+
+/// Build the L0 index entries for the visible skills, applying the hard
+/// character budget.
+///
+/// Skills are kept in the caller's order (loaders emit highest precedence
+/// first). Once appending another entry would exceed
+/// [`L0_SKILL_BUDGET_CHARS`], the remaining skills are reported as omitted
+/// rather than silently dropped, so the injected index can say exactly how
+/// many skills it elided.
+pub fn build_skills_index(skills: &[Skill], budget_chars: usize) -> SkillsIndex {
+    let mut index = SkillsIndex::default();
+    let mut used = 0usize;
+    for skill in skills.iter().filter(|s| !s.disable_model_invocation) {
+        let line = render_index_line(skill);
+        // +1 for the joining newline.
+        let cost = line.chars().count() + 1;
+        if used + cost > budget_chars {
+            index.omitted.push(skill.name.clone());
+            continue;
+        }
+        used += cost;
+        index.entries.push(SkillIndexEntry {
+            name: skill.name.clone(),
+            description: truncated_description(&skill.description),
+            truncated: skill.description.chars().count() > L0_DESCRIPTION_LIMIT,
+        });
+    }
+    index
+}
+
+fn truncated_description(description: &str) -> String {
+    description.chars().take(L0_DESCRIPTION_LIMIT).collect()
+}
+
+fn render_index_line(skill: &Skill) -> String {
+    let description = truncated_description(&skill.description);
+    let suffix = if skill.description.chars().count() > L0_DESCRIPTION_LIMIT {
+        "..."
+    } else {
+        ""
+    };
+    format!(
+        "- {}: {}{}",
+        escape_xml(&skill.name),
+        escape_xml(&description),
+        suffix
+    )
+}
+
+/// Builds the L0 skill index injected into the system prompt.
+///
+/// L0 is intentionally minimal: one line per skill with its name and a
+/// truncated description, bounded by [`L0_SKILL_BUDGET_CHARS`]. Full skill
+/// content is loaded at L1 through the `skill_view` tool, not embedded here.
 pub fn format_skills_for_prompt(skills: &[Skill]) -> String {
-    let visible: Vec<&Skill> = skills
-        .iter()
-        .filter(|s| !s.disable_model_invocation)
-        .collect();
-    if visible.is_empty() {
+    format_skills_for_prompt_with_budget(skills, L0_SKILL_BUDGET_CHARS)
+}
+
+/// Like [`format_skills_for_prompt`] but with an explicit character budget
+/// (used by tests and callers tuning the resident context).
+pub fn format_skills_for_prompt_with_budget(skills: &[Skill], budget_chars: usize) -> String {
+    let index = build_skills_index(skills, budget_chars);
+    if index.entries.is_empty() && index.omitted.is_empty() {
         return String::new();
     }
 
@@ -1380,22 +1474,167 @@ pub fn format_skills_for_prompt(skills: &[Skill]) -> String {
         "<available_skills>".to_string(),
     ];
 
-    for skill in visible {
-        lines.push("  <skill>".to_string());
-        lines.push(format!("    <name>{}</name>", escape_xml(&skill.name)));
+    for entry in &index.entries {
+        let suffix = if entry.truncated { "..." } else { "" };
         lines.push(format!(
-            "    <description>{}</description>",
-            escape_xml(&skill.description)
+            "- {}: {}{}",
+            escape_xml(&entry.name),
+            escape_xml(&entry.description),
+            suffix
         ));
-        lines.push(format!(
-            "    <location>{}</location>",
-            escape_xml(&skill.file_path.display().to_string())
-        ));
-        lines.push("  </skill>".to_string());
     }
 
     lines.push("</available_skills>".to_string());
+    if index.is_truncated() {
+        lines.push(format!(
+            "({} more skill(s) omitted from this index to stay within the L0 budget; \
+             call skills_list to see the rest.)",
+            index.omitted.len()
+        ));
+    }
     lines.join("\n")
+}
+
+// ============================================================================
+// Progressive skill disclosure: L1 (full body) and L2 (auxiliary files)
+// ============================================================================
+
+/// L1: the full `SKILL.md` body of one skill.
+#[derive(Debug, Clone)]
+pub struct SkillBody {
+    /// Skill name as resolved.
+    pub name: String,
+    /// Skill description from frontmatter.
+    pub description: String,
+    /// Absolute path of the `SKILL.md` that was read.
+    pub path: PathBuf,
+    /// Full file content, frontmatter included.
+    pub content: String,
+}
+
+/// Resolve one skill by exact name from a loaded set.
+pub fn find_skill<'a>(skills: &'a [Skill], name: &str) -> Option<&'a Skill> {
+    skills.iter().find(|skill| skill.name == name)
+}
+
+/// L1 loader: read a skill's complete `SKILL.md` (frontmatter included) using
+/// the same bounded read as the resource loader.
+///
+/// # Errors
+/// IO/limit failures surfaced as configuration errors by
+/// [`read_resource_file_bounded`].
+pub fn load_skill_body(skill: &Skill) -> Result<SkillBody> {
+    let content = read_resource_file_bounded(&skill.file_path, "Skill")?;
+    Ok(SkillBody {
+        name: skill.name.clone(),
+        description: skill.description.clone(),
+        path: skill.file_path.clone(),
+        content,
+    })
+}
+
+/// Directories whose contents form the L2 tier of a skill.
+pub const SKILL_L2_DIRS: [&str; 3] = ["references", "templates", "scripts"];
+
+/// One L2 auxiliary file: a path relative to the skill root plus its size.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillAsset {
+    /// Slash-separated path relative to the skill base directory.
+    pub relative_path: String,
+    /// Size in bytes.
+    pub bytes: u64,
+}
+
+/// L2 loader: enumerate the auxiliary files of a skill under `references/`,
+/// `templates/` and `scripts/`, without reading them.
+///
+/// Only the listing lands in the tool result — file contents are read one at
+/// a time by [`load_skill_asset`], so L2 never enters the resident context
+/// wholesale.
+///
+/// # Errors
+/// Never fails; unreadable directories contribute no entries.
+pub fn list_skill_assets(skill: &Skill) -> Vec<SkillAsset> {
+    let mut assets = Vec::new();
+    for dir_name in SKILL_L2_DIRS {
+        let dir = skill.base_dir.join(dir_name);
+        collect_assets(&skill.base_dir, &dir, &mut assets);
+    }
+    assets.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    assets
+}
+
+fn collect_assets(base_dir: &Path, dir: &Path, out: &mut Vec<SkillAsset>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort();
+    for path in paths {
+        let Ok(meta) = fs::metadata(&path) else {
+            continue;
+        };
+        if meta.is_dir() {
+            collect_assets(base_dir, &path, out);
+            continue;
+        }
+        let Ok(relative) = path.strip_prefix(base_dir) else {
+            continue;
+        };
+        let relative_path = relative
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join("/");
+        out.push(SkillAsset {
+            relative_path,
+            bytes: meta.len(),
+        });
+    }
+}
+
+/// L2 loader: read one auxiliary file of a skill on demand.
+///
+/// `relative_path` must name a file under one of [`SKILL_L2_DIRS`]; anything
+/// else (the `SKILL.md` itself, absolute paths, or `..` escapes) is refused.
+///
+/// # Errors
+/// `RECUR_AGENT_SKILL_ASSET_INVALID` for paths outside the L2 directories or escaping
+/// the skill root, plus IO/limit errors from the bounded read.
+pub fn load_skill_asset(skill: &Skill, relative_path: &str) -> Result<String> {
+    let normalized = relative_path.trim().replace('\\', "/");
+    let allowed = SKILL_L2_DIRS.iter().any(|dir| {
+        normalized == *dir
+            || normalized
+                .strip_prefix(dir)
+                .is_some_and(|rest| rest.starts_with('/'))
+    });
+    if !allowed {
+        return Err(Error::config(format!(
+            "RECUR_AGENT_SKILL_ASSET_INVALID: '{relative_path}' is not under any of {SKILL_L2_DIRS:?}"
+        )));
+    }
+    let candidate = skill.base_dir.join(&normalized);
+    for component in candidate.components() {
+        if matches!(component, Component::ParentDir) {
+            return Err(Error::config(format!(
+                "RECUR_AGENT_SKILL_ASSET_INVALID: '{relative_path}' escapes the skill root"
+            )));
+        }
+    }
+    // Confine the read to the skill root against symlink tricks.
+    let root = fs::canonicalize(&skill.base_dir).unwrap_or_else(|_| skill.base_dir.clone());
+    let target = fs::canonicalize(&candidate).map_err(|err| {
+        Error::config(format!(
+            "Failed to resolve skill asset '{relative_path}': {err}"
+        ))
+    })?;
+    if !target.starts_with(&root) {
+        return Err(Error::config(format!(
+            "RECUR_AGENT_SKILL_ASSET_INVALID: '{relative_path}' resolves outside the skill root"
+        )));
+    }
+    read_resource_file_bounded(&target, "Skill asset")
 }
 
 fn escape_xml(input: &str) -> String {
@@ -2236,17 +2475,17 @@ fn module_cache_dir() -> Option<PathBuf> {
             Some(PathBuf::from(raw))
         };
     }
-    dirs::home_dir().map(|home| home.join(".pi").join("agent").join("cache").join("modules"))
+    dirs::home_dir().map(|home| home.join(".ra").join("agent").join("cache").join("modules"))
 }
 
-/// Warn when a non-empty legacy `~/.pi/skills` directory exists (bd-3znxm):
-/// Pi only loads `<agent_dir>/skills` and project `.pi/skills`, so skills
+/// Warn when a non-empty legacy `~/.ra/skills` directory exists (bd-3znxm):
+/// Pi only loads `<agent_dir>/skills` and project `.ra/skills`, so skills
 /// placed there following upstream pi docs silently never load.
 fn legacy_skills_dir_diagnostic(
     home_dir: Option<&Path>,
     agent_dir: &Path,
 ) -> Option<ResourceDiagnostic> {
-    let legacy_dir = home_dir?.join(".pi").join("skills");
+    let legacy_dir = home_dir?.join(".ra").join("skills");
     let loaded_user_dir = agent_dir.join("skills");
     let is_same_dir = match (legacy_dir.canonicalize(), loaded_user_dir.canonicalize()) {
         (Ok(legacy), Ok(user)) => legacy == user,
@@ -2263,7 +2502,7 @@ fn legacy_skills_dir_diagnostic(
         kind: DiagnosticKind::Warning,
         message: format!(
             "skills found in {} are never loaded; move them to {} (global) or \
-             .pi/skills/ (project)",
+             .ra/skills/ (project)",
             legacy_dir.display(),
             loaded_user_dir.display()
         ),
@@ -2312,7 +2551,7 @@ fn extension_dedupe_key_from_path(path: &Path) -> Option<String> {
 /// entries over transpiled cache copies (Issue #37).
 ///
 /// When both a source `.ts` extension and its transpiled cache copy in
-/// `~/.pi/agent/cache/modules/` are discovered, the cache entry is dropped to
+/// `~/.ra/agent/cache/modules/` are discovered, the cache entry is dropped to
 /// prevent command collisions at load time.
 fn dedupe_extension_entries_by_id(entries: Vec<PathBuf>) -> Vec<PathBuf> {
     let cache_dir = module_cache_dir();
@@ -3029,8 +3268,141 @@ mod tests {
         ];
         let prompt = format_skills_for_prompt(&skills);
         assert!(prompt.contains("<available_skills>"));
-        assert!(prompt.contains("<name>a</name>"));
-        assert!(!prompt.contains("<name>b</name>"));
+        assert!(prompt.contains("- a: desc"));
+        assert!(!prompt.contains("- b: desc"));
+        assert!(!prompt.contains("<location>"));
+    }
+
+    fn skill_named(name: &str, description: &str) -> Skill {
+        Skill {
+            name: name.to_string(),
+            description: description.to_string(),
+            file_path: PathBuf::from(format!("/tmp/{name}/SKILL.md")),
+            base_dir: PathBuf::from(format!("/tmp/{name}")),
+            source: "user".to_string(),
+            disable_model_invocation: false,
+        }
+    }
+
+    #[test]
+    fn l0_index_stays_within_budget_for_many_skills() {
+        // 50 skills with realistic descriptions must stay well under the
+        // budget — the resident injection is ~3k tokens, not O(skill count).
+        let skills: Vec<Skill> = (0..50)
+            .map(|i| skill_named(&format!("skill-{i:02}"), "does a thing for testing"))
+            .collect();
+        let index = build_skills_index(&skills, L0_SKILL_BUDGET_CHARS);
+        assert_eq!(index.entries.len(), 50, "50 short skills should all fit");
+        assert!(!index.is_truncated());
+
+        let rendered = format_skills_for_prompt(&skills);
+        assert!(rendered.chars().count() < L0_SKILL_BUDGET_CHARS + 512);
+        assert!(!rendered.contains("omitted"));
+    }
+
+    #[test]
+    fn l0_index_truncates_and_reports_omitted_skills() {
+        let skills: Vec<Skill> = (0..20)
+            .map(|i| {
+                skill_named(
+                    &format!("skill-{i:02}"),
+                    &"x".repeat(200), // forces an early budget hit
+                )
+            })
+            .collect();
+        // Tight budget: only a couple of lines fit.
+        let index = build_skills_index(&skills, 600);
+        assert!(index.is_truncated(), "budget must drop later skills");
+        assert!(!index.entries.is_empty(), "earliest skills are kept");
+        assert_eq!(index.entries.len() + index.omitted.len(), 20);
+        // Order is preserved: kept names precede omitted names.
+        assert_eq!(index.entries[0].name, "skill-00");
+
+        let rendered = format_skills_for_prompt_with_budget(&skills, 600);
+        assert!(rendered.contains("more skill(s) omitted from this index"));
+        assert!(rendered.contains(&format!("{} more skill(s)", index.omitted.len())));
+    }
+
+    #[test]
+    fn l0_index_marks_truncated_descriptions() {
+        let long = "y".repeat(200);
+        let skill = skill_named("long-desc", &long);
+        let index = build_skills_index(std::slice::from_ref(&skill), L0_SKILL_BUDGET_CHARS);
+        assert_eq!(index.entries.len(), 1);
+        assert!(index.entries[0].truncated);
+        assert_eq!(index.entries[0].description.chars().count(), 80);
+    }
+
+    #[test]
+    fn l1_and_l2_load_on_demand() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let skill_dir = dir.path().join("progressive");
+        fs::create_dir_all(skill_dir.join("references")).expect("refs dir");
+        fs::create_dir_all(skill_dir.join("scripts")).expect("scripts dir");
+        let skill_file = skill_dir.join("SKILL.md");
+        fs::write(
+            &skill_file,
+            "---\nname: progressive\ndescription: demo\n---\nFull body.\n",
+        )
+        .expect("write skill");
+        fs::write(skill_dir.join("references/guide.md"), "ref body").expect("write ref");
+        fs::write(skill_dir.join("scripts/run.sh"), "echo hi").expect("write script");
+        // A non-L2 file must not show up in the asset listing.
+        fs::write(skill_dir.join("README.md"), "not l2").expect("write readme");
+
+        let skill = Skill {
+            name: "progressive".to_string(),
+            description: "demo".to_string(),
+            file_path: skill_file.clone(),
+            base_dir: skill_dir,
+            source: "user".to_string(),
+            disable_model_invocation: false,
+        };
+
+        let body = load_skill_body(&skill).expect("l1 body");
+        assert!(body.content.contains("Full body."));
+        assert_eq!(body.path, skill_file);
+
+        let assets = list_skill_assets(&skill);
+        let rels: Vec<&str> = assets.iter().map(|a| a.relative_path.as_str()).collect();
+        assert_eq!(rels, vec!["references/guide.md", "scripts/run.sh"]);
+
+        let content = load_skill_asset(&skill, "references/guide.md").expect("l2 read");
+        assert_eq!(content, "ref body");
+        // Backslashes normalize to the same asset.
+        assert_eq!(
+            load_skill_asset(&skill, "scripts\\run.sh").expect("l2 read 2"),
+            "echo hi"
+        );
+    }
+
+    #[test]
+    fn l2_asset_loader_refuses_escapes() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let skill_dir = dir.path().join("guarded");
+        fs::create_dir_all(&skill_dir).expect("dir");
+        let skill = Skill {
+            name: "guarded".to_string(),
+            description: "demo".to_string(),
+            file_path: skill_dir.join("SKILL.md"),
+            base_dir: skill_dir.clone(),
+            source: "user".to_string(),
+            disable_model_invocation: false,
+        };
+
+        for bad in [
+            "SKILL.md",
+            "../secret",
+            "references/../../escape",
+            "/etc/passwd",
+            "foo/bar",
+        ] {
+            let err = load_skill_asset(&skill, bad).expect_err("must refuse");
+            assert!(
+                err.to_string().contains("RECUR_AGENT_SKILL_ASSET_INVALID"),
+                "expected refusal for {bad}: {err}"
+            );
+        }
     }
 
     #[test]
@@ -3420,7 +3792,7 @@ mod tests {
             let extension_path = temp_dir.path().join("ext.native.json");
             fs::write(&extension_path, "{}").expect("write extension");
 
-            let settings_dir = temp_dir.path().join(".pi");
+            let settings_dir = temp_dir.path().join(".ra");
             fs::create_dir_all(&settings_dir).expect("create settings dir");
             let settings_path = settings_dir.join("settings.json");
             let settings = json!({
@@ -3764,7 +4136,7 @@ still frontmatter",
                 },
             },
             ResolvedResource {
-                path: PathBuf::from("/project/.pi/prompts/review.md"),
+                path: PathBuf::from("/project/.ra/prompts/review.md"),
                 enabled: true,
                 metadata: crate::package_manager::PathMetadata {
                     source: "local:project".to_string(),
@@ -3774,7 +4146,7 @@ still frontmatter",
                 },
             },
             ResolvedResource {
-                path: PathBuf::from("/global/.pi/prompts/review.md"),
+                path: PathBuf::from("/global/.ra/prompts/review.md"),
                 enabled: true,
                 metadata: crate::package_manager::PathMetadata {
                     source: "local:user".to_string(),
@@ -3820,8 +4192,8 @@ still frontmatter",
             sorted,
             vec![
                 PathBuf::from("/tmp/cli-ext/review.md"),
-                PathBuf::from("/project/.pi/prompts/review.md"),
-                PathBuf::from("/global/.pi/prompts/review.md"),
+                PathBuf::from("/project/.ra/prompts/review.md"),
+                PathBuf::from("/global/.ra/prompts/review.md"),
                 PathBuf::from("/project/package/review.md"),
                 PathBuf::from("/global/package/review.md"),
             ]
@@ -3852,7 +4224,7 @@ still frontmatter",
                 },
             },
             ResolvedResource {
-                path: PathBuf::from("/project/.pi/prompts/review.md"),
+                path: PathBuf::from("/project/.ra/prompts/review.md"),
                 enabled: true,
                 metadata: crate::package_manager::PathMetadata {
                     source: "local:project".to_string(),
@@ -3869,7 +4241,7 @@ still frontmatter",
             vec![
                 PathBuf::from("/tmp/cli-ext/zeta/review.md"),
                 PathBuf::from("/tmp/cli-ext/alpha/review.md"),
-                PathBuf::from("/project/.pi/prompts/review.md"),
+                PathBuf::from("/project/.ra/prompts/review.md"),
             ],
             "same-tier resources should keep their original source order"
         );
@@ -3892,7 +4264,7 @@ still frontmatter",
             }],
             vec![
                 ResolvedResource {
-                    path: PathBuf::from("/project/.pi/prompts/review.md"),
+                    path: PathBuf::from("/project/.ra/prompts/review.md"),
                     enabled: true,
                     metadata: crate::package_manager::PathMetadata {
                         source: "local:project".to_string(),
@@ -3902,7 +4274,7 @@ still frontmatter",
                     },
                 },
                 ResolvedResource {
-                    path: PathBuf::from("/global/.pi/prompts/review.md"),
+                    path: PathBuf::from("/global/.ra/prompts/review.md"),
                     enabled: true,
                     metadata: crate::package_manager::PathMetadata {
                         source: "local:user".to_string(),
@@ -3920,8 +4292,8 @@ still frontmatter",
             vec![
                 explicit_path,
                 PathBuf::from("/tmp/cli-ext/review.md"),
-                PathBuf::from("/project/.pi/prompts/review.md"),
-                PathBuf::from("/global/.pi/prompts/review.md"),
+                PathBuf::from("/project/.ra/prompts/review.md"),
+                PathBuf::from("/global/.ra/prompts/review.md"),
             ]
         );
     }
@@ -4034,8 +4406,8 @@ still frontmatter",
     #[test]
     fn legacy_skills_dir_diag_warns_for_nonempty_misplaced_dir() {
         let home = tempfile::tempdir().expect("home dir");
-        let agent_dir = home.path().join(".pi").join("agent");
-        let legacy = home.path().join(".pi").join("skills");
+        let agent_dir = home.path().join(".ra").join("agent");
+        let legacy = home.path().join(".ra").join("skills");
         std::fs::create_dir_all(legacy.join("my-skill")).expect("legacy skill dir");
 
         let diagnostic = legacy_skills_dir_diagnostic(Some(home.path()), &agent_dir)
@@ -4052,20 +4424,20 @@ still frontmatter",
     #[test]
     fn legacy_skills_dir_diag_silent_when_empty_or_missing_or_same() {
         let home = tempfile::tempdir().expect("home dir");
-        let agent_dir = home.path().join(".pi").join("agent");
+        let agent_dir = home.path().join(".ra").join("agent");
 
         // Missing legacy dir: silent.
         assert!(legacy_skills_dir_diagnostic(Some(home.path()), &agent_dir).is_none());
 
         // Empty legacy dir: silent.
-        let legacy = home.path().join(".pi").join("skills");
+        let legacy = home.path().join(".ra").join("skills");
         std::fs::create_dir_all(&legacy).expect("legacy dir");
         assert!(legacy_skills_dir_diagnostic(Some(home.path()), &agent_dir).is_none());
 
-        // agent_dir == ~/.pi (so its skills dir IS the legacy dir): silent
+        // agent_dir == ~/.ra (so its skills dir IS the legacy dir): silent
         // even when non-empty.
         std::fs::create_dir_all(legacy.join("my-skill")).expect("skill entry");
-        let pi_as_agent_dir = home.path().join(".pi");
+        let pi_as_agent_dir = home.path().join(".ra");
         assert!(legacy_skills_dir_diagnostic(Some(home.path()), &pi_as_agent_dir).is_none());
 
         // No home dir at all: silent.
@@ -4341,10 +4713,10 @@ still frontmatter",
         fs::write(&manifest_path, r#"{"name":"pkg","pi":"not-an-object"}"#)
             .expect("write invalid pi manifest");
 
-        let err = read_pi_manifest(tmp.path()).expect_err("non-object `pi` field must error");
+        let err = read_pi_manifest(tmp.path()).expect_err("non-object `ra` field must error");
         let message = err.to_string();
         assert!(message.contains("Invalid package manifest"));
-        assert!(message.contains("`pi` must be an object"));
+        assert!(message.contains("`ra` must be an object"));
         assert!(message.contains(&manifest_path.display().to_string()));
     }
 
@@ -4355,7 +4727,7 @@ still frontmatter",
         fs::write(&manifest_path, r#"{"name":"pkg","version":"1.0.0"}"#)
             .expect("write package.json");
 
-        let pi = read_pi_manifest(tmp.path()).expect("missing `pi` key should not error");
+        let pi = read_pi_manifest(tmp.path()).expect("missing `ra` key should not error");
         assert!(pi.is_none());
     }
 

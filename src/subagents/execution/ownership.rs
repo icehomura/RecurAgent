@@ -13,10 +13,12 @@ use std::sync::Mutex;
 
 const OPERATOR_KILLED: &str = "Child was killed by the operator.";
 const HUB_CANCELLED: &str = "Child was cancelled through the agent hub.";
-const HUB_POISONED: &str = "PI_SUBAGENT_HUB: registry is poisoned; refusing child execution";
-const HUB_MISSING: &str = "PI_SUBAGENT_HUB: registered child ownership was lost";
-const HUB_SETTLED: &str = "PI_SUBAGENT_HUB: child was already settled before result acceptance";
-const HUB_ACTIVATED: &str = "PI_SUBAGENT_HUB: child lease already activated";
+const HUB_POISONED: &str =
+    "RECUR_AGENT_SUBAGENT_HUB: registry is poisoned; refusing child execution";
+const HUB_MISSING: &str = "RECUR_AGENT_SUBAGENT_HUB: registered child ownership was lost";
+const HUB_SETTLED: &str =
+    "RECUR_AGENT_SUBAGENT_HUB: child was already settled before result acceptance";
+const HUB_ACTIVATED: &str = "RECUR_AGENT_SUBAGENT_HUB: child lease already activated";
 
 fn register_in(
     hub: &Mutex<AgentHubRegistry>,
@@ -30,7 +32,7 @@ fn register_in(
     hub.register_kind(name, task, kind).map_err(|error| {
         Error::tool(
             "subagent",
-            format!("PI_SUBAGENT_HUB: cannot register child: {error}"),
+            format!("RECUR_AGENT_SUBAGENT_HUB: cannot register child: {error}"),
         )
     })
 }
@@ -120,7 +122,7 @@ impl HubLease {
         if self.id.is_some() {
             return Err(Error::tool(
                 "subagent",
-                "PI_SUBAGENT_HUB: child lease already registered",
+                "RECUR_AGENT_SUBAGENT_HUB: child lease already registered",
             ));
         }
         let entry = register_in(registry(), name, task, kind)?;
@@ -185,7 +187,7 @@ mod tests {
         let hub = local_hub(&not_a_directory.join("children"));
         let error =
             register_in(&hub, "worker", "private assignment", ChildKind::Subagent).unwrap_err();
-        assert!(error.to_string().contains("PI_SUBAGENT_HUB"));
+        assert!(error.to_string().contains("RECUR_AGENT_SUBAGENT_HUB"));
         assert!(!error.to_string().contains("private assignment"));
         assert!(hub.lock().unwrap().roster().is_empty());
         hub.lock()

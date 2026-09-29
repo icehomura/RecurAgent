@@ -1,4 +1,4 @@
-//! Retention-policy pruning for sessions, artifacts, and caches (`pi gc`) (bd-cv653.7.11).
+//! Retention-policy pruning for sessions, artifacts, and caches (`ra gc`) (bd-cv653.7.11).
 //!
 //! Enforces bounded resource usage across Pi data stores:
 //! - Sessions: JSONL files older than retention window and not named/pinned (retaining `keep_last` per project).
@@ -11,7 +11,7 @@
 //! - Default execution is `--dry-run` printing an itemized plan with byte counts.
 //! - Live execution requires `--yes` or interactive confirmation.
 //! - Pruned sessions move to a trash directory with grace period before permanent purge.
-//! - Every pruning action is appended to `pi.gc.v1` JSONL audit ledger.
+//! - Every pruning action is appended to `ra.gc.v1` JSONL audit ledger.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{self, Write as _};
@@ -26,7 +26,7 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 
 /// Schema tag for the garbage collection audit ledger.
-pub const GC_LEDGER_SCHEMA: &str = "pi.gc.v1";
+pub const GC_LEDGER_SCHEMA: &str = "ra.gc.v1";
 
 /// Kind of data store managed by garbage collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -359,7 +359,7 @@ impl GarbageCollector {
         // pinned marker. Read only that line, bounded: this runs once per
         // session file during a sweep, and a session JSONL can be enormous --
         // slurping a multi-gigabyte history to look at its first line would
-        // make `pi gc` cost time proportional to the data it is deciding
+        // make `ra gc` cost time proportional to the data it is deciding
         // whether to keep.
         if let Ok(file) = fs::File::open(path) {
             let mut first_line = String::new();
@@ -942,7 +942,7 @@ pub fn check_storage_pressure(sessions_dir: &Path, older_than_days: u64) -> Stor
 
     let recommendation = if is_elevated {
         Some(format!(
-            "Storage pressure detected: {} stale sessions ({}) reclaimable. Run `pi gc --yes` to prune.",
+            "Storage pressure detected: {} stale sessions ({}) reclaimable. Run `ra gc --yes` to prune.",
             stale_count,
             format_bytes(plan.total_bytes_reclaimable)
         ))

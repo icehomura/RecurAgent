@@ -1,14 +1,14 @@
 //! Cross-implementation file locking compatible with Node `proper-lockfile`.
 //!
 //! Upstream TS pi (`@earendil-works/pi-coding-agent`) locks the shared files under
-//! `~/.pi/agent/` (`auth.json`, `settings.json`, `sessions/session-index`) with
+//! `~/.ra/agent/` (`auth.json`, `settings.json`, `sessions/session-index`) with
 //! [`proper-lockfile`](https://www.npmjs.com/package/proper-lockfile) `4.1.2`.
 //! That protocol represents a held lock as a **directory** created atomically with
 //! `mkdir(2)` at `<target>.lock`; existence means "held", release is `rmdir(2)`,
 //! and a lock whose directory mtime is older than a staleness threshold may be
 //! reclaimed (`rmdir` + re-`mkdir`).
 //!
-//! pi_agent_rust historically used `flock(2)` (via `fs4`) on a persistent, never-
+//! recur_agent historically used `flock(2)` (via `fs4`) on a persistent, never-
 //! deleted **regular file** at the same `<target>.lock` path. That is mutually
 //! incompatible with proper-lockfile in both directions:
 //!
@@ -19,10 +19,10 @@
 //! * a rust `open(O_CREAT)` against the directory proper-lockfile creates fails
 //!   with `EISDIR`.
 //!
-//! This module makes pi_agent_rust speak proper-lockfile's directory protocol so
+//! This module makes recur_agent speak proper-lockfile's directory protocol so
 //! the two implementations mutually exclude correctly, can reclaim each other's
 //! stale locks, and never leave a poisoning regular file behind. When it
-//! encounters a stale leftover regular file (from an older pi_agent_rust build) it
+//! encounters a stale leftover regular file (from an older recur_agent build) it
 //! removes it, healing the poisoning for the TS side as well.
 //!
 //! Constants mirror proper-lockfile's defaults: `stale = 10_000ms` and
@@ -84,7 +84,7 @@ fn is_stale_modified(modified: SystemTime, stale: Duration) -> bool {
 ///
 /// A directory is removed with `rmdir` (matching proper-lockfile). A regular
 /// file or symlink is a legacy `flock` poisoning artifact from an older
-/// pi_agent_rust build (proper-lockfile never creates one); remove it too so the
+/// recur_agent build (proper-lockfile never creates one); remove it too so the
 /// path stops poisoning the TS side. Errors are ignored: a concurrent acquirer
 /// may have already removed it, and the subsequent `mkdir` is the real arbiter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -779,7 +779,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn heals_stale_leftover_regular_file() {
-        // Simulates the poisoning artifact left by older flock-based pi_agent_rust.
+        // Simulates the poisoning artifact left by older flock-based recur_agent.
         let dir = tempfile::tempdir().expect("tempdir");
         let lp = dir.path().join("auth.json.lock");
         fs::write(&lp, b"").expect("write leftover regular file");

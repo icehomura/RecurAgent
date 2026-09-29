@@ -1,9 +1,9 @@
 //! Workspace trust: a trust-on-first-use gate for project-local configuration
 //! that can execute code (GitHub #151).
 //!
-//! A repository can select Git/npm packages via `.pi/settings.json` (whose npm
+//! A repository can select Git/npm packages via `.ra/settings.json` (whose npm
 //! lifecycle scripts run as the local user during install) and can auto-load
-//! JavaScript from `.pi/extensions/` (which may call `pi.exec` during session
+//! JavaScript from `.ra/extensions/` (which may call `pi.exec` during session
 //! startup). Neither is model-generated content — it is deterministic
 //! configuration execution controlled by whoever authored the repository.
 //!
@@ -11,8 +11,8 @@
 //! current workspace is trusted:
 //!
 //! - The decision is keyed to the canonical workspace path **and** a content
-//!   digest over the project-controlled surfaces (`.pi/settings.json`, every
-//!   file under `.pi/extensions/`, and project-local MCP configuration). Any
+//!   digest over the project-controlled surfaces (`.ra/settings.json`, every
+//!   file under `.ra/extensions/`, and project-local MCP configuration). Any
 //!   content change re-prompts.
 //! - Interactive launches prompt once and persist the answer (trusted or
 //!   untrusted) in `<global_dir>/workspace-trust.json`.
@@ -20,7 +20,7 @@
 //!   project-local configuration is skipped for that run with a warning, and
 //!   nothing is persisted, so a later interactive launch still prompts.
 //! - `--trust` (or `trustAllWorkspaces` in the *global* settings, or the
-//!   `PI_WORKSPACE_TRUST` env var) covers automation.
+//!   `RECUR_AGENT_WORKSPACE_TRUST` env var) covers automation.
 //!
 //! Explicit CLI resource paths (`-e/--extension`, `--skill`, …) are user
 //! consent and are deliberately not gated here.
@@ -40,10 +40,10 @@ pub const TRUST_STORE_FILE: &str = "workspace-trust.json";
 /// Environment override for automation: `trusted` (or `1`) forces trust for
 /// this run, `untrusted` (or `0`) forces the fail-closed path. Neither value
 /// is persisted.
-pub const TRUST_ENV_VAR: &str = "PI_WORKSPACE_TRUST";
+pub const TRUST_ENV_VAR: &str = "RECUR_AGENT_WORKSPACE_TRUST";
 
 const TRUST_STORE_VERSION: u32 = 1;
-const TRUST_SURFACE_DIGEST_DOMAIN: &[u8] = b"pi_agent_rust:workspace-trust-surface:v2";
+const TRUST_SURFACE_DIGEST_DOMAIN: &[u8] = b"recur_agent:workspace-trust-surface:v2";
 const MAX_TRUST_CONFIG_BYTES: usize = 1024 * 1024;
 const MAX_TRUST_EXTENSION_BYTES: usize = 16 * 1024 * 1024;
 
@@ -61,11 +61,11 @@ pub struct WorkspaceTrustSurface {
     /// Escaped canonical workspace path suitable for an untrusted terminal
     /// prompt. The trust-store key retains the underlying canonical path.
     pub workspace_display: String,
-    /// True when `.pi/settings.json` exists.
+    /// True when `.ra/settings.json` exists.
     pub has_project_settings: bool,
-    /// Number of `packages` entries declared in `.pi/settings.json`.
+    /// Number of `packages` entries declared in `.ra/settings.json`.
     pub package_count: usize,
-    /// Files under `.pi/extensions/`, relative to the workspace root, sorted.
+    /// Files under `.ra/extensions/`, relative to the workspace root, sorted.
     pub extension_entries: Vec<String>,
     /// Project-local MCP configuration files, relative to the workspace root,
     /// sorted. Explicit CLI and global MCP files are deliberate operator
@@ -79,7 +79,7 @@ impl WorkspaceTrustSurface {
     /// Scan `cwd` for project-controlled executable surfaces.
     ///
     /// Returns `Ok(None)` when the workspace declares nothing to trust
-    /// (no `.pi/settings.json`, no `.pi/extensions/` entries, and no
+    /// (no `.ra/settings.json`, no `.ra/extensions/` entries, and no
     /// project-local MCP configuration).
     pub fn scan(cwd: &Path) -> Result<Option<Self>> {
         const PROJECT_MCP_CONFIGS: &[&str] = &[
@@ -88,7 +88,7 @@ impl WorkspaceTrustSurface {
             ".codex/config.toml",
             ".cursor/mcp.json",
             ".gemini/settings.json",
-            ".pi/mcp.json",
+            ".ra/mcp.json",
             ".windsurf/mcp.json",
         ];
 
@@ -133,7 +133,7 @@ impl WorkspaceTrustSurface {
             hash_surface_record(
                 &mut surface_hasher,
                 b"settings",
-                Path::new(".pi/settings.json"),
+                Path::new(".ra/settings.json"),
                 bytes,
             );
         }
@@ -146,7 +146,7 @@ impl WorkspaceTrustSurface {
                         escaped_path(&found.absolute)
                     ))
                 })?;
-            let relative = Path::new(".pi/extensions").join(&found.relative);
+            let relative = Path::new(".ra/extensions").join(&found.relative);
             hash_surface_record(&mut surface_hasher, b"extension", &relative, &bytes);
             extension_entries.push(escaped_path(&relative));
         }
@@ -240,7 +240,7 @@ fn escaped_path(path: &Path) -> String {
         .collect()
 }
 
-/// A surface file discovered under `.pi/extensions/`: the absolute path comes
+/// A surface file discovered under `.ra/extensions/`: the absolute path comes
 /// straight from directory traversal (never re-derived by joining), and the
 /// relative path is only used for display and manifest keys.
 struct FoundSurfaceFile {
@@ -376,7 +376,7 @@ pub enum TrustSource {
     CliFlag,
     /// `trustAllWorkspaces` in the global settings (not persisted).
     TrustAllConfig,
-    /// `PI_WORKSPACE_TRUST` environment override (not persisted).
+    /// `RECUR_AGENT_WORKSPACE_TRUST` environment override (not persisted).
     EnvOverride,
     /// A stored decision whose digest still matches.
     Store,
@@ -583,8 +583,8 @@ mod tests {
                 .expect("scan")
                 .is_none()
         );
-        // An unrelated .pi file (e.g. session artifacts) still yields None.
-        write(&dir.path().join(".pi/notes.txt"), "not a surface");
+        // An unrelated .ra file (e.g. session artifacts) still yields None.
+        write(&dir.path().join(".ra/notes.txt"), "not a surface");
         assert!(
             WorkspaceTrustSurface::scan(dir.path())
                 .expect("scan")
@@ -596,12 +596,12 @@ mod tests {
     fn scan_digest_is_stable_and_tracks_content() {
         let dir = tempfile::tempdir().expect("tempdir");
         write(
-            &dir.path().join(".pi/settings.json"),
+            &dir.path().join(".ra/settings.json"),
             r#"{"packages":["npm:left-pad"],"theme":"dark"}"#,
         );
-        write(&dir.path().join(".pi/extensions/hook.js"), "export {}\n");
+        write(&dir.path().join(".ra/extensions/hook.js"), "export {}\n");
         write(
-            &dir.path().join(".pi/extensions/nested/util.ts"),
+            &dir.path().join(".ra/extensions/nested/util.ts"),
             "export const x = 1\n",
         );
 
@@ -617,15 +617,15 @@ mod tests {
         assert_eq!(
             first.extension_entries,
             vec![
-                ".pi/extensions/hook.js".to_string(),
-                ".pi/extensions/nested/util.ts".to_string(),
+                ".ra/extensions/hook.js".to_string(),
+                ".ra/extensions/nested/util.ts".to_string(),
             ]
         );
         assert!(first.mcp_config_entries.is_empty());
 
         // Settings edit changes the digest.
         write(
-            &dir.path().join(".pi/settings.json"),
+            &dir.path().join(".ra/settings.json"),
             r#"{"packages":["npm:left-pad","npm:evil"],"theme":"dark"}"#,
         );
         let settings_changed = WorkspaceTrustSurface::scan(dir.path())
@@ -636,7 +636,7 @@ mod tests {
 
         // Extension content edit changes the digest.
         write(
-            &dir.path().join(".pi/extensions/hook.js"),
+            &dir.path().join(".ra/extensions/hook.js"),
             "export const changed = true\n",
         );
         let extension_changed = WorkspaceTrustSurface::scan(dir.path())
@@ -645,7 +645,7 @@ mod tests {
         assert_ne!(settings_changed.digest, extension_changed.digest);
 
         // A new extension file changes the digest.
-        write(&dir.path().join(".pi/extensions/new.js"), "export {}\n");
+        write(&dir.path().join(".ra/extensions/new.js"), "export {}\n");
         let extension_added = WorkspaceTrustSurface::scan(dir.path())
             .expect("scan")
             .expect("surface");
@@ -655,7 +655,7 @@ mod tests {
     #[test]
     fn scan_tracks_project_mcp_configuration_as_executable_surface() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let project_mcp = dir.path().join(".pi/mcp.json");
+        let project_mcp = dir.path().join(".ra/mcp.json");
         write(
             &project_mcp,
             r#"{"mcpServers":{"local":{"command":"first"}}}"#,
@@ -666,7 +666,7 @@ mod tests {
             .expect("MCP-only workspace must have a trust surface");
         assert!(!first.has_project_settings);
         assert!(first.extension_entries.is_empty());
-        assert_eq!(first.mcp_config_entries, vec![".pi/mcp.json"]);
+        assert_eq!(first.mcp_config_entries, vec![".ra/mcp.json"]);
 
         write(
             &project_mcp,
@@ -689,7 +689,7 @@ mod tests {
             .expect("surface");
         assert_eq!(
             foreign_added.mcp_config_entries,
-            vec![".codex/config.toml", ".pi/mcp.json"]
+            vec![".codex/config.toml", ".ra/mcp.json"]
         );
         assert_ne!(changed.digest, foreign_added.digest);
     }
@@ -697,7 +697,7 @@ mod tests {
     #[test]
     fn scan_rejects_non_regular_and_oversized_trust_surfaces() {
         let non_regular = tempfile::tempdir().expect("tempdir");
-        std::fs::create_dir_all(non_regular.path().join(".pi/mcp.json"))
+        std::fs::create_dir_all(non_regular.path().join(".ra/mcp.json"))
             .expect("create non-regular MCP surface");
         let err = WorkspaceTrustSurface::scan(non_regular.path())
             .expect_err("directories must not be read as trust surfaces");
@@ -705,7 +705,7 @@ mod tests {
 
         let oversized = tempfile::tempdir().expect("tempdir");
         write(
-            &oversized.path().join(".pi/mcp.json"),
+            &oversized.path().join(".ra/mcp.json"),
             &"x".repeat(MAX_TRUST_CONFIG_BYTES + 1),
         );
         let err = WorkspaceTrustSurface::scan(oversized.path())
@@ -719,15 +719,15 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let device = tempfile::tempdir().expect("tempdir");
-        std::fs::create_dir_all(device.path().join(".pi")).expect("create project dir");
-        symlink("/dev/zero", device.path().join(".pi/mcp.json")).expect("create device symlink");
+        std::fs::create_dir_all(device.path().join(".ra")).expect("create project dir");
+        symlink("/dev/zero", device.path().join(".ra/mcp.json")).expect("create device symlink");
         let err = WorkspaceTrustSurface::scan(device.path())
             .expect_err("device symlinks must be rejected before opening");
         assert!(err.to_string().contains("not a regular file"));
 
         let controls = tempfile::tempdir().expect("tempdir");
         write(
-            &controls.path().join(".pi/extensions/evil\n\u{1b}[2J.js"),
+            &controls.path().join(".ra/extensions/evil\n\u{1b}[2J.js"),
             "export {}\n",
         );
         let surface = WorkspaceTrustSurface::scan(controls.path())
@@ -834,10 +834,10 @@ mod tests {
     fn seeded_workspace() -> tempfile::TempDir {
         let dir = tempfile::tempdir().expect("tempdir");
         write(
-            &dir.path().join(".pi/settings.json"),
+            &dir.path().join(".ra/settings.json"),
             r#"{"packages":["npm:left-pad"]}"#,
         );
-        write(&dir.path().join(".pi/extensions/hook.js"), "export {}\n");
+        write(&dir.path().join(".ra/extensions/hook.js"), "export {}\n");
         dir
     }
 
@@ -989,7 +989,7 @@ mod tests {
         .expect("establish");
 
         write(
-            &dir.path().join(".pi/extensions/hook.js"),
+            &dir.path().join(".ra/extensions/hook.js"),
             "export const changed = 1\n",
         );
         let state = establish(

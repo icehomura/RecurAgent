@@ -55,16 +55,19 @@ fn command(repo: &Path) -> Command {
 }
 
 fn run(command: &mut Command, operation: &str) -> Result<Vec<u8>> {
-    let output = command
-        .output()
-        .map_err(|error| failure("PI_ISO_SNAPSHOT", &format!("Cannot {operation}: {error}")))?;
+    let output = command.output().map_err(|error| {
+        failure(
+            "RECUR_AGENT_ISO_SNAPSHOT",
+            &format!("Cannot {operation}: {error}"),
+        )
+    })?;
     if !output.status.success() {
         let diagnostic: String = String::from_utf8_lossy(&output.stderr)
             .chars()
             .take(4096)
             .collect();
         return Err(failure(
-            "PI_ISO_SNAPSHOT",
+            "RECUR_AGENT_ISO_SNAPSHOT",
             &format!("Cannot {operation}: {}", diagnostic.trim()),
         ));
     }
@@ -73,10 +76,10 @@ fn run(command: &mut Command, operation: &str) -> Result<Vec<u8>> {
 
 fn object_id(bytes: &[u8]) -> Result<String> {
     let id = std::str::from_utf8(bytes)
-        .map_err(|_| failure("PI_ISO_SNAPSHOT", "Invalid Git object id"))?
+        .map_err(|_| failure("RECUR_AGENT_ISO_SNAPSHOT", "Invalid Git object id"))?
         .trim();
     if !matches!(id.len(), 40 | 64) || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(failure("PI_ISO_SNAPSHOT", "Invalid Git object id"));
+        return Err(failure("RECUR_AGENT_ISO_SNAPSHOT", "Invalid Git object id"));
     }
     Ok(id.to_string())
 }
@@ -102,13 +105,13 @@ fn repository_path(cwd: &Path, flag: &str) -> Result<PathBuf> {
     #[cfg(not(unix))]
     let path = PathBuf::from(String::from_utf8(bytes).map_err(|_| {
         failure(
-            "PI_ISO_SNAPSHOT",
+            "RECUR_AGENT_ISO_SNAPSHOT",
             "Repository root is not representable on this platform",
         )
     })?);
     path.canonicalize().map_err(|error| {
         failure(
-            "PI_ISO_SNAPSHOT",
+            "RECUR_AGENT_ISO_SNAPSHOT",
             &format!("Cannot resolve repository root: {error}"),
         )
     })
@@ -128,7 +131,7 @@ impl Scratch {
         // TMPDIR can itself be inside the working tree. Snapshot internals
         // must never be staged into the very tree they are recording.
         let root = repository_path(repo, "--absolute-git-dir")?
-            .join(format!("pi-iso-index-{}", uuid::Uuid::new_v4().simple()));
+            .join(format!("ra-iso-index-{}", uuid::Uuid::new_v4().simple()));
         #[cfg_attr(not(unix), allow(unused_mut))]
         let mut builder = fs::DirBuilder::new();
         #[cfg(unix)]
@@ -138,14 +141,14 @@ impl Scratch {
         }
         builder.create(&root).map_err(|error| {
             failure(
-                "PI_ISO_SNAPSHOT",
+                "RECUR_AGENT_ISO_SNAPSHOT",
                 &format!("Cannot create private index directory: {error}"),
             )
         })?;
         let scratch = Self { root };
         fs::create_dir(scratch.root.join("hooks")).map_err(|error| {
             failure(
-                "PI_ISO_SNAPSHOT",
+                "RECUR_AGENT_ISO_SNAPSHOT",
                 &format!("Cannot create empty hook directory: {error}"),
             )
         })?;
@@ -164,7 +167,7 @@ impl Scratch {
         let path = self.root.join(name);
         let file = File::create(&path).map_err(|error| {
             failure(
-                "PI_ISO_SNAPSHOT",
+                "RECUR_AGENT_ISO_SNAPSHOT",
                 &format!("Cannot stage index records: {error}"),
             )
         })?;
@@ -182,13 +185,13 @@ impl Scratch {
             })
             .map_err(|error| {
                 failure(
-                    "PI_ISO_SNAPSHOT",
+                    "RECUR_AGENT_ISO_SNAPSHOT",
                     &format!("Cannot read index records: {error}"),
                 )
             })?;
         if bytes.len() as u64 > MAX_INDEX_RECORD_BYTES {
             return Err(failure(
-                "PI_ISO_SNAPSHOT_LIMIT",
+                "RECUR_AGENT_ISO_SNAPSHOT_LIMIT",
                 "Index records exceed the 32 MiB isolation limit",
             ));
         }
@@ -213,7 +216,7 @@ fn reject_gitlinks(records: &[u8]) -> Result<()> {
         .any(|record| record.starts_with(b"160000 "))
     {
         return Err(failure(
-            "PI_ISO_SUBMODULE_UNSUPPORTED",
+            "RECUR_AGENT_ISO_SUBMODULE_UNSUPPORTED",
             "Isolation cannot materialize submodules or embedded repositories without a separate checkout; no incomplete child was launched",
         ));
     }
@@ -230,17 +233,22 @@ impl Snapshot {
     pub(super) fn checkout(&self, repo: &Path, path: &Path, branch: &str) -> Result<()> {
         let parent = path
             .parent()
-            .ok_or_else(|| failure("PI_ISO_WORKTREE_PATH", "Missing worktree parent directory"))?
+            .ok_or_else(|| {
+                failure(
+                    "RECUR_AGENT_ISO_WORKTREE_PATH",
+                    "Missing worktree parent directory",
+                )
+            })?
             .canonicalize()
             .map_err(|_| {
                 failure(
-                    "PI_ISO_WORKTREE_PATH",
+                    "RECUR_AGENT_ISO_WORKTREE_PATH",
                     "Cannot resolve worktree parent directory",
                 )
             })?;
         if !path.is_absolute() || parent.starts_with(repository_root(repo)?) {
             return Err(failure(
-                "PI_ISO_NESTED_TEMP",
+                "RECUR_AGENT_ISO_NESTED_TEMP",
                 "Choose an absolute temporary directory outside the source repository; a nested child checkout would contaminate later snapshots",
             ));
         }
@@ -268,18 +276,21 @@ pub(super) fn capture(repo: &Path, id: &str) -> Result<Snapshot> {
         .output()
         .map_err(|error| {
             failure(
-                "PI_ISO_SNAPSHOT",
+                "RECUR_AGENT_ISO_SNAPSHOT",
                 &format!("Cannot inspect checkout mode: {error}"),
             )
         })?;
     if sparse.status.success() && sparse.stdout.starts_with(b"true") {
         return Err(failure(
-            "PI_ISO_SPARSE_UNSUPPORTED",
+            "RECUR_AGENT_ISO_SPARSE_UNSUPPORTED",
             "Sparse checkouts require an explicit full checkout before isolation",
         ));
     }
     if !sparse.status.success() && sparse.status.code() != Some(1) {
-        return Err(failure("PI_ISO_SNAPSHOT", "Cannot inspect checkout mode"));
+        return Err(failure(
+            "RECUR_AGENT_ISO_SNAPSHOT",
+            "Cannot inspect checkout mode",
+        ));
     }
     let head = object_id(&run(
         command(repo).args(["rev-parse", "--verify", HEAD_COMMIT_REV]),
@@ -294,7 +305,7 @@ pub(super) fn capture(repo: &Path, id: &str) -> Result<Snapshot> {
     )?;
     let input = File::open(scratch.root.join("parent")).map_err(|error| {
         failure(
-            "PI_ISO_SNAPSHOT",
+            "RECUR_AGENT_ISO_SNAPSHOT",
             &format!("Cannot open index records: {error}"),
         )
     })?;
@@ -316,7 +327,7 @@ pub(super) fn capture(repo: &Path, id: &str) -> Result<Snapshot> {
     )?)?;
 
     // Plumbing does not run commit hooks, use the user's signing key, move HEAD,
-    // or require a configured author. This commit belongs only to the pi-iso
+    // or require a configured author. This commit belongs only to the ra-iso
     // branch and records the launch baseline, not a user-authored source commit.
     let mut commit = command(repo);
     commit
@@ -330,11 +341,11 @@ pub(super) fn capture(repo: &Path, id: &str) -> Result<Snapshot> {
             "--no-gpg-sign",
             "-m",
         ])
-        .arg(format!("pi-iso baseline {id}"))
+        .arg(format!("ra-iso baseline {id}"))
         .env("GIT_AUTHOR_NAME", "Pi Isolation")
-        .env("GIT_AUTHOR_EMAIL", "pi-isolation@localhost")
+        .env("GIT_AUTHOR_EMAIL", "ra-isolation@localhost")
         .env("GIT_COMMITTER_NAME", "Pi Isolation")
-        .env("GIT_COMMITTER_EMAIL", "pi-isolation@localhost")
+        .env("GIT_COMMITTER_EMAIL", "ra-isolation@localhost")
         .env_remove("GIT_AUTHOR_DATE")
         .env_remove("GIT_COMMITTER_DATE");
     let baseline = object_id(&run(&mut commit, "record snapshot baseline")?)?;
@@ -344,7 +355,7 @@ pub(super) fn capture(repo: &Path, id: &str) -> Result<Snapshot> {
     )?)?;
     if current_head != head || scratch.entries(command(repo), "verify")? != parent_entries {
         return Err(failure(
-            "PI_ISO_PARENT_CHANGED",
+            "RECUR_AGENT_ISO_PARENT_CHANGED",
             "Parent HEAD or index changed while capturing isolation; retry the delegation",
         ));
     }
@@ -408,17 +419,20 @@ mod tests {
         let temporary = repo.path().join("temporary");
         fs::create_dir(&temporary).unwrap();
         let snapshot = capture(repo.path(), "nested-temp").unwrap();
-        let path = temporary.join("pi-iso-nested");
+        let path = temporary.join("ra-iso-nested");
         let error = snapshot
-            .checkout(repo.path(), &path, "pi-iso-nested")
+            .checkout(repo.path(), &path, "ra-iso-nested")
             .unwrap_err();
-        assert!(error.to_string().contains("PI_ISO_NESTED_TEMP"), "{error}");
+        assert!(
+            error.to_string().contains("RECUR_AGENT_ISO_NESTED_TEMP"),
+            "{error}"
+        );
         assert!(!path.exists());
         let branches = run(
             command(repo.path()).args([
                 "for-each-ref",
                 "--format=%(refname)",
-                "refs/heads/pi-iso-nested",
+                "refs/heads/ra-iso-nested",
             ]),
             "inspect refs",
         )

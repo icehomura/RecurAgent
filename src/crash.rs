@@ -2,7 +2,7 @@
 //! (bd-cv653.7.12).
 //!
 //! Bundles land under `<agent-dir>/crashes/<stamp>/` as `bundle.json`
-//! (`pi.crash.v1`) plus a human-readable `report.txt`. Every free-text field
+//! (`ra.crash.v1`) plus a human-readable `report.txt`. Every free-text field
 //! is redacted through [`crate::secrets::scan`] before it touches disk, so
 //! credential-shaped strings never persist (privacy acceptance #4).
 //!
@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::Serialize;
 
 /// Schema tag for crash bundles.
-pub const CRASH_SCHEMA: &str = "pi.crash.v1";
+pub const CRASH_SCHEMA: &str = "ra.crash.v1";
 /// Ring capacity for recent-operation context.
 const RING_CAPACITY: usize = 64;
 /// Directory name inside the agent dir.
@@ -144,7 +144,7 @@ pub fn redact_text(text: &str) -> String {
     out
 }
 
-/// Crash bundle written to disk (`pi.crash.v1`).
+/// Crash bundle written to disk (`ra.crash.v1`).
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct CrashBundle {
     pub schema: String,

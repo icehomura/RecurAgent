@@ -1,6 +1,6 @@
 //! Verified in-place self-updater for Pi (bd-cv653.7.10).
 //!
-//! Provides `pi self-update [--version <tag>] [--check]` with:
+//! Provides `ra self-update [--version <tag>] [--check]` with:
 //! - Package manager detection (Homebrew, APT, Pacman, Nix, Cargo) with refusal & remediation
 //! - SHA-256 checksum verification against `SHA256SUMS` (fail-closed)
 //! - Multi-lane artifact resolution (DSR bare-binary naming and release archives)
@@ -24,9 +24,9 @@ use crate::http::client::Client;
 use crate::version_check::{CURRENT_VERSION, is_newer};
 
 const RELEASES_API_BASE: &str =
-    "https://api.github.com/repos/Dicklesworthstone/pi_agent_rust/releases";
+    "https://api.github.com/repos/Dicklesworthstone/recur_agent/releases";
 const RELEASES_DOWNLOAD_BASE: &str =
-    "https://github.com/Dicklesworthstone/pi_agent_rust/releases/download";
+    "https://github.com/Dicklesworthstone/recur_agent/releases/download";
 
 /// Redirect hops followed per request. GitHub serves a release asset through
 /// one hop (`github.com/.../releases/download/...` -> a signed
@@ -118,7 +118,7 @@ const fn is_redirect_status(status: u16) -> bool {
 /// probing several candidate assets can move on to the next one.
 type Fetched = std::result::Result<crate::http::client::Response, String>;
 
-/// Known package managers that might manage the `pi` binary.
+/// Known package managers that might manage the `ra` binary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManager {
     Homebrew,
@@ -166,7 +166,7 @@ impl PackageManager {
             Self::Pacman => Some("sudo pacman -Syu pi-agent-rust"),
             Self::Nix => Some("nix-channel --update && nix-env -u pi"),
             Self::Cargo => {
-                Some("cargo install --git https://github.com/Dicklesworthstone/pi_agent_rust pi")
+                Some("cargo install --git https://github.com/Dicklesworthstone/recur_agent pi")
             }
             Self::Manual => None,
         }

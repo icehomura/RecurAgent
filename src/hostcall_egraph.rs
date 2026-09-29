@@ -51,7 +51,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::hostcall_rewrite::{HostcallRewritePlan, HostcallRewritePlanKind};
 
 /// Schema tag for emitted decision telemetry.
-pub const HOSTCALL_EGRAPH_SCHEMA: &str = "pi.ext.hostcall_egraph_decision.v1";
+pub const HOSTCALL_EGRAPH_SCHEMA: &str = "ra.ext.hostcall_egraph_decision.v1";
 
 /// Default ceiling on saturation iterations.
 pub const DEFAULT_MAX_ITERATIONS: usize = 8;
@@ -279,7 +279,7 @@ pub struct CostModel {
 /// Per-stage costs measured by the workload harness, in microseconds.
 ///
 /// Mirrors the six-stage decomposition `examples/ext_workloads` emits as
-/// `pi.ext.hostcall_hotspot_matrix.v1`. Feed it to
+/// `ra.ext.hostcall_hotspot_matrix.v1`. Feed it to
 /// [`CostModel::from_measured_stages`] to replace the hand-written defaults
 /// with numbers from a real run (bd-oxu87).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1284,7 +1284,11 @@ impl HostcallEGraphEngine {
     /// disables both halves of the rewrite path.
     #[must_use]
     pub fn from_env() -> Self {
-        Self::from_opt(std::env::var("PI_HOSTCALL_EGRAPH_REWRITE").ok().as_deref())
+        Self::from_opt(
+            std::env::var("RECUR_AGENT_HOSTCALL_EGRAPH_REWRITE")
+                .ok()
+                .as_deref(),
+        )
     }
 
     /// Parse the kill switch from an explicit value.

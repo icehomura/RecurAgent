@@ -332,7 +332,7 @@ mod tests {
         command
             .args(["one", "two"])
             .env_clear()
-            .env("PI_TEST", "value");
+            .env("RECUR_AGENT_TEST", "value");
         assert_eq!(command.get_program(), OsStr::new("fixture"));
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),

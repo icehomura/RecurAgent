@@ -211,7 +211,7 @@ impl ChildRunner {
         let capabilities = owner.capabilities();
         if !capabilities.io || !capabilities.spawn || !capabilities.time {
             attempt.result.fail(
-                "PI_SUBAGENT_PERMISSION: child execution requires I/O, spawn and timer capabilities"
+                "RECUR_AGENT_SUBAGENT_PERMISSION: child execution requires I/O, spawn and timer capabilities"
                     .to_string(),
             );
             return attempt;
@@ -273,11 +273,14 @@ impl ChildRunner {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .env("PI_CODING_AGENT_DIR", &self.global_dir)
-            .env("PI_SUBAGENT_PARENT_PID", std::process::id().to_string())
-            .env("PI_SUBAGENT_DEPTH", child_depth().to_string())
-            .env("PI_SUBAGENT_STEER_FILE", &hub_entry.steer_path)
-            .env("PI_SUBAGENT_RUN_ID", &hub_entry.id);
+            .env("RECUR_AGENT_DIR", &self.global_dir)
+            .env(
+                "RECUR_AGENT_SUBAGENT_PARENT_PID",
+                std::process::id().to_string(),
+            )
+            .env("RECUR_AGENT_SUBAGENT_DEPTH", child_depth().to_string())
+            .env("RECUR_AGENT_SUBAGENT_STEER_FILE", &hub_entry.steer_path)
+            .env("RECUR_AGENT_SUBAGENT_RUN_ID", &hub_entry.id);
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt as _;
@@ -303,7 +306,7 @@ impl ChildRunner {
         attempt.result.pid = Some(child.id());
         if !crate::tools::attach_child_job_discipline(child.child.as_ref().expect("owned child")) {
             attempt.result.fail(
-                "PI_SUBAGENT_CONTAINMENT: failed to attach child process cleanup discipline"
+                "RECUR_AGENT_SUBAGENT_CONTAINMENT: failed to attach child process cleanup discipline"
                     .to_string(),
             );
             return attempt;
@@ -337,7 +340,7 @@ impl ChildRunner {
             Err(error) => {
                 attempt
                     .result
-                    .fail(format!("PI_SUBAGENT_PIPE_SETUP: {error}"));
+                    .fail(format!("RECUR_AGENT_SUBAGENT_PIPE_SETUP: {error}"));
                 return attempt;
             }
         };
@@ -435,7 +438,11 @@ fn isolation_policy(task: &SubagentTask) -> Result<(bool, IsoApplyMode), String>
     {
         "none" => false,
         "worktree" => true,
-        _ => return Err("PI_SUBAGENT_ISOLATION: isolation must be none or worktree".to_string()),
+        _ => {
+            return Err(
+                "RECUR_AGENT_SUBAGENT_ISOLATION: isolation must be none or worktree".to_string(),
+            );
+        }
     };
     let mode = IsoApplyMode::parse(task.iso_apply.as_deref()).map_err(|error| error.to_string())?;
     Ok((isolated, mode))
@@ -643,7 +650,7 @@ fn spawn_pipe_reader<R: Read + Send + 'static>(
                 PipeKind::Stdout => {
                     let Ok(line) = String::from_utf8(bytes) else {
                         let _ = sender.send(PipeFrame::Error(
-                            "PI_SUBAGENT_PROTOCOL: child stdout is not UTF-8",
+                            "RECUR_AGENT_SUBAGENT_PROTOCOL: child stdout is not UTF-8",
                         ));
                         break;
                     };
@@ -747,7 +754,7 @@ async fn drain_until_reader_exit(
         if Instant::now() >= deadline {
             if !result.is_error {
                 result.fail(
-                    "PI_SUBAGENT_PIPE_TIMEOUT: child pipes did not close after process termination"
+                    "RECUR_AGENT_SUBAGENT_PIPE_TIMEOUT: child pipes did not close after process termination"
                         .to_string(),
                 );
             }

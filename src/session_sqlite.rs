@@ -1245,7 +1245,11 @@ mod tests {
         assert!(meta.name.is_none());
         let error = futures::executor::block_on(load_session(&path))
             .expect_err("opening the session verifies the attachment");
-        assert!(error.to_string().contains("PI_SESSION_ATTACHMENT_INVALID"));
+        assert!(
+            error
+                .to_string()
+                .contains("RECUR_AGENT_SESSION_ATTACHMENT_INVALID")
+        );
     }
 
     #[test]

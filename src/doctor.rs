@@ -1,4 +1,4 @@
-//! Comprehensive environment health checker for `pi doctor`.
+//! Comprehensive environment health checker for `ra doctor`.
 //!
 //! When invoked without a path, checks config, directories, auth, shell tools,
 //! and sessions. When invoked with a path, runs extension preflight analysis.
@@ -38,37 +38,38 @@ const SWARM_STALE_IN_PROGRESS_HOURS: i64 = 24;
 const SWARM_DETAIL_LIMIT: usize = 5;
 const SWARM_DISK_WARN_AVAILABLE_KB: u64 = 10 * 1024 * 1024;
 const SWARM_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
-const SWARM_DOCTOR_ADMISSION_SCHEMA: &str = "pi.doctor.swarm_admission.v1";
-const SWARM_DOCTOR_RCH_FAILURE_SCHEMA: &str = "pi.doctor.rch_failure.v1";
-const SWARM_DOCTOR_TEMP_DIR_SCHEMA: &str = "pi.doctor.swarm_temp_dir.v1";
-const SWARM_DOCTOR_RESOURCE_PREFLIGHT_SCHEMA: &str = "pi.doctor.swarm_resource_preflight.v1";
-const SWARM_DOCTOR_BUILD_SLOT_SCHEMA: &str = "pi.doctor.agent_mail_build_slots.v1";
-const SWARM_DOCTOR_CONTACTS_SCHEMA: &str = "pi.doctor.agent_mail_contacts.v1";
-const SWARM_DOCTOR_AGENT_MAIL_DEGRADED_SCHEMA: &str = "pi.doctor.agent_mail_degraded_mode.v1";
-const SWARM_DOCTOR_STALLED_REAPER_SCHEMA: &str = "pi.doctor.stalled_bead_reaper.v1";
-const SWARM_DOCTOR_NEXT_ACTION_SCHEMA: &str = "pi.doctor.communication_purgatory_next_action.v1";
-const SWARM_DOCTOR_OPERATIONS_DASHBOARD_SCHEMA: &str = "pi.doctor.swarm_operations_dashboard.v1";
-const SWARM_DOCTOR_CONTEXT_INTELLIGENCE_SCHEMA: &str = "pi.doctor.context_intelligence_posture.v1";
-const SWARM_DOCTOR_VALIDATION_BROKER_SCHEMA: &str = "pi.doctor.validation_broker_posture.v1";
-const SWARM_DOCTOR_PROGRESS_SLO_SCHEMA: &str = "pi.doctor.swarm_progress_slo_posture.v1";
-const SWARM_DOCTOR_RCH_AFFINITY_SCHEMA: &str = "pi.doctor.rch_warm_target_affinity.v1";
-const SWARM_DOCTOR_INCIDENT_DIAGNOSTICS_SCHEMA: &str = "pi.doctor.swarm_incident_diagnostics.v1";
-const SWARM_DOCTOR_LANE_PLACEMENT_SCHEMA: &str = "pi.doctor.swarm_lane_placement.v1";
-const SWARM_RCH_AFFINITY_PLAN_ARTIFACT_SCHEMA: &str = "pi.swarm.rch_affinity_plan.v1";
+const SWARM_DOCTOR_ADMISSION_SCHEMA: &str = "ra.doctor.swarm_admission.v1";
+const SWARM_DOCTOR_RCH_FAILURE_SCHEMA: &str = "ra.doctor.rch_failure.v1";
+const SWARM_DOCTOR_TEMP_DIR_SCHEMA: &str = "ra.doctor.swarm_temp_dir.v1";
+const SWARM_DOCTOR_RESOURCE_PREFLIGHT_SCHEMA: &str = "ra.doctor.swarm_resource_preflight.v1";
+const SWARM_DOCTOR_BUILD_SLOT_SCHEMA: &str = "ra.doctor.agent_mail_build_slots.v1";
+const SWARM_DOCTOR_CONTACTS_SCHEMA: &str = "ra.doctor.agent_mail_contacts.v1";
+const SWARM_DOCTOR_AGENT_MAIL_DEGRADED_SCHEMA: &str = "ra.doctor.agent_mail_degraded_mode.v1";
+const SWARM_DOCTOR_STALLED_REAPER_SCHEMA: &str = "ra.doctor.stalled_bead_reaper.v1";
+const SWARM_DOCTOR_NEXT_ACTION_SCHEMA: &str = "ra.doctor.communication_purgatory_next_action.v1";
+const SWARM_DOCTOR_OPERATIONS_DASHBOARD_SCHEMA: &str = "ra.doctor.swarm_operations_dashboard.v1";
+const SWARM_DOCTOR_CONTEXT_INTELLIGENCE_SCHEMA: &str = "ra.doctor.context_intelligence_posture.v1";
+const SWARM_DOCTOR_VALIDATION_BROKER_SCHEMA: &str = "ra.doctor.validation_broker_posture.v1";
+const SWARM_DOCTOR_PROGRESS_SLO_SCHEMA: &str = "ra.doctor.swarm_progress_slo_posture.v1";
+const SWARM_DOCTOR_RCH_AFFINITY_SCHEMA: &str = "ra.doctor.rch_warm_target_affinity.v1";
+const SWARM_DOCTOR_INCIDENT_DIAGNOSTICS_SCHEMA: &str = "ra.doctor.swarm_incident_diagnostics.v1";
+const SWARM_DOCTOR_LANE_PLACEMENT_SCHEMA: &str = "ra.doctor.swarm_lane_placement.v1";
+const SWARM_RCH_AFFINITY_PLAN_ARTIFACT_SCHEMA: &str = "ra.swarm.rch_affinity_plan.v1";
 const SWARM_DOCTOR_RESERVATION_HEATMAP_SCHEMA: &str =
-    "pi.doctor.agent_mail_reservation_conflict_heatmap.v1";
-const SWARM_DOCTOR_CONFLICT_PREDICTOR_SCHEMA: &str = "pi.doctor.cross_agent_conflict_predictor.v1";
+    "ra.doctor.agent_mail_reservation_conflict_heatmap.v1";
+const SWARM_DOCTOR_CONFLICT_PREDICTOR_SCHEMA: &str = "ra.doctor.cross_agent_conflict_predictor.v1";
 const SWARM_DOCTOR_RESERVATION_RECOMMENDATIONS_SCHEMA: &str =
-    "pi.doctor.swarm_reservation_recommendations.v1";
-const SWARM_CARGO_SCRATCH_ROOT: &str = "/data/tmp/pi_agent_rust_cargo";
-const SWARM_RCH_AFFINITY_JOBS_ENV: &str = "PI_DOCTOR_RCH_AFFINITY_JOBS_JSON";
-const SWARM_RESOURCE_PREFLIGHT_RCH_QUEUE_JSON_ENV: &str = "PI_DOCTOR_RCH_QUEUE_JSON";
-const SWARM_RESOURCE_PREFLIGHT_RCH_QUEUE_JSON_PATH_ENV: &str = "PI_DOCTOR_RCH_QUEUE_JSON_PATH";
+    "ra.doctor.swarm_reservation_recommendations.v1";
+const SWARM_CARGO_SCRATCH_ROOT: &str = "/data/tmp/recur_agent_cargo";
+const SWARM_RCH_AFFINITY_JOBS_ENV: &str = "RECUR_AGENT_DOCTOR_RCH_AFFINITY_JOBS_JSON";
+const SWARM_RESOURCE_PREFLIGHT_RCH_QUEUE_JSON_ENV: &str = "RECUR_AGENT_DOCTOR_RCH_QUEUE_JSON";
+const SWARM_RESOURCE_PREFLIGHT_RCH_QUEUE_JSON_PATH_ENV: &str =
+    "RECUR_AGENT_DOCTOR_RCH_QUEUE_JSON_PATH";
 const SWARM_RESOURCE_PREFLIGHT_LOCAL_BUILD_PROCESS_COUNT_ENV: &str =
-    "PI_DOCTOR_LOCAL_BUILD_PROCESS_COUNT";
-const SWARM_RESOURCE_PREFLIGHT_LOGICAL_CPU_CORES_ENV: &str = "PI_DOCTOR_LOGICAL_CPU_CORES";
-const SWARM_VALIDATION_BROKER_STORE_ENV: &str = "PI_VALIDATION_BROKER_STORE";
-const SWARM_PROGRESS_SLO_JSON_ENV: &str = "PI_SWARM_PROGRESS_SLO_JSON";
+    "RECUR_AGENT_DOCTOR_LOCAL_BUILD_PROCESS_COUNT";
+const SWARM_RESOURCE_PREFLIGHT_LOGICAL_CPU_CORES_ENV: &str = "RECUR_AGENT_DOCTOR_LOGICAL_CPU_CORES";
+const SWARM_VALIDATION_BROKER_STORE_ENV: &str = "RECUR_AGENT_VALIDATION_BROKER_STORE";
+const SWARM_PROGRESS_SLO_JSON_ENV: &str = "RECUR_AGENT_SWARM_PROGRESS_SLO_JSON";
 const SWARM_BUILD_SLOT_SOON_EXPIRING_MINUTES: i64 = 30;
 const SWARM_ACTIVE_AGENT_WINDOW_HOURS: i64 = 24;
 const SWARM_DASHBOARD_AGENT_LIMIT: usize = 12;
@@ -446,7 +447,7 @@ pub fn run_doctor(opts: &DoctorOptions<'_>) -> Result<DoctorReport> {
                 "Extensions check requires an extension path",
             )
             .with_remediation(
-                "Run `pi doctor <path-to-extension>` to evaluate extension compatibility",
+                "Run `ra doctor <path-to-extension>` to evaluate extension compatibility",
             ),
         );
     }
@@ -488,7 +489,7 @@ fn check_config(cwd: &Path, findings: &mut Vec<Finding>) {
         check_settings_file(
             cat,
             &project_path,
-            "Project settings (.pi/settings.json)",
+            "Project settings (.ra/settings.json)",
             findings,
         );
     } else {
@@ -556,7 +557,7 @@ fn check_settings_file(cat: CheckCategory, path: &Path, label: &str, findings: &
 /// Known top-level config keys.
 ///
 /// This used to be a hand-written list of names, and it had drifted badly: it
-/// held 67 of the 108 spellings `Config` accepts, so `pi doctor` reported 41
+/// held 67 of the 108 spellings `Config` accepts, so `ra doctor` reported 41
 /// perfectly valid settings as "unknown keys" — `approval`, `http`, `lsp`,
 /// `tools`, `memory`, `plan`, `secrets`, `trustAllWorkspaces`,
 /// `requestTimeoutSecs`, `modelRoles`, `disabledProviders` among them. Telling
@@ -648,7 +649,7 @@ fn check_auth(fix: bool, findings: &mut Vec<Finding>) {
         findings.push(
             Finding::info(cat, "auth.json: not present")
                 .with_detail("No credentials stored yet")
-                .with_remediation("Run `pi` and follow the login prompt, or set ANTHROPIC_API_KEY"),
+                .with_remediation("Run `ra` and follow the login prompt, or set ANTHROPIC_API_KEY"),
         );
         // Still check env vars
         check_auth_env_vars(cat, findings);
@@ -716,7 +717,7 @@ fn check_auth(fix: bool, findings: &mut Vec<Finding>) {
         if providers.is_empty() {
             findings.push(
                 Finding::info(cat, "No stored credentials")
-                    .with_remediation("Run `pi` to authenticate or set an API key env var"),
+                    .with_remediation("Run `ra` to authenticate or set an API key env var"),
             );
         } else {
             for provider in &providers {
@@ -1386,14 +1387,14 @@ fn build_swarm_doctor_capacity_plan_with_inventory(
 fn live_load_from_beads_summary(summary: &BeadsLedgerSummary) -> SwarmLiveLoad {
     SwarmLiveLoad::empty()
         .with_active_agents(
-            env_u64("PI_DOCTOR_SWARM_ACTIVE_AGENTS")
+            env_u64("RECUR_AGENT_DOCTOR_SWARM_ACTIVE_AGENTS")
                 .unwrap_or_else(|| usize_to_u64(summary.in_progress)),
         )
-        .with_active_tool_calls(env_u64("PI_DOCTOR_SWARM_ACTIVE_TOOL_CALLS").unwrap_or(0))
+        .with_active_tool_calls(env_u64("RECUR_AGENT_DOCTOR_SWARM_ACTIVE_TOOL_CALLS").unwrap_or(0))
         .with_extension_hostcall_lanes(
-            env_u64("PI_DOCTOR_SWARM_EXTENSION_HOSTCALL_LANES").unwrap_or(0),
+            env_u64("RECUR_AGENT_DOCTOR_SWARM_EXTENSION_HOSTCALL_LANES").unwrap_or(0),
         )
-        .with_active_rch_jobs(env_u64("PI_DOCTOR_SWARM_ACTIVE_RCH_JOBS").unwrap_or(0))
+        .with_active_rch_jobs(env_u64("RECUR_AGENT_DOCTOR_SWARM_ACTIVE_RCH_JOBS").unwrap_or(0))
 }
 
 fn classify_swarm_admission(
@@ -1457,7 +1458,7 @@ fn swarm_admission_blocked_finding(
     let next_actions = vec![
         "Do not launch new swarm work while the admission action is deny".to_string(),
         "Repair or refresh the coordination inputs".to_string(),
-        "Rerun `pi doctor --only swarm --format json`".to_string(),
+        "Rerun `ra doctor --only swarm --format json`".to_string(),
     ];
     let remediation = next_actions.join("; ");
     let data = serde_json::json!({
@@ -1567,13 +1568,13 @@ fn swarm_admission_next_actions(action: AdmissionAction, has_warnings: bool) -> 
         AdmissionAction::Backpressure => vec![
             "Delay new swarm work until the reported retry_after_ms has elapsed".to_string(),
             "Reduce active agents or tool calls on the pressure dimension".to_string(),
-            "Rerun `pi doctor --only swarm --format json` before heavyweight cargo checks"
+            "Rerun `ra doctor --only swarm --format json` before heavyweight cargo checks"
                 .to_string(),
         ],
         AdmissionAction::Deny => vec![
             "Do not launch new swarm work while the admission action is deny".to_string(),
             "Stop or defer agents on the pressure dimension".to_string(),
-            "Rerun `pi doctor --only swarm --format json` after pressure clears".to_string(),
+            "Rerun `ra doctor --only swarm --format json` after pressure clears".to_string(),
         ],
     };
     if has_warnings {
@@ -2317,7 +2318,7 @@ fn format_swarm_resource_preflight_detail(
 
 fn read_cgroup_cpu_quota(source_errors: &mut Vec<String>) -> CgroupCpuQuota {
     if let Some((source, raw)) = read_first_existing_trimmed(
-        "PI_DOCTOR_CGROUP_CPU_MAX_PATH",
+        "RECUR_AGENT_DOCTOR_CGROUP_CPU_MAX_PATH",
         &["/sys/fs/cgroup/cpu.max"],
         source_errors,
     ) {
@@ -2329,12 +2330,12 @@ fn read_cgroup_cpu_quota(source_errors: &mut Vec<String>) -> CgroupCpuQuota {
     }
 
     let quota = read_first_existing_trimmed(
-        "PI_DOCTOR_CGROUP_CPU_CFS_QUOTA_US_PATH",
+        "RECUR_AGENT_DOCTOR_CGROUP_CPU_CFS_QUOTA_US_PATH",
         &["/sys/fs/cgroup/cpu/cpu.cfs_quota_us"],
         source_errors,
     );
     let period = read_first_existing_trimmed(
-        "PI_DOCTOR_CGROUP_CPU_CFS_PERIOD_US_PATH",
+        "RECUR_AGENT_DOCTOR_CGROUP_CPU_CFS_PERIOD_US_PATH",
         &["/sys/fs/cgroup/cpu/cpu.cfs_period_us"],
         source_errors,
     );
@@ -2359,7 +2360,7 @@ fn read_cgroup_cpu_quota(source_errors: &mut Vec<String>) -> CgroupCpuQuota {
 
 fn read_cpuset_snapshot(source_errors: &mut Vec<String>) -> CpuSetSnapshot {
     let Some((source, raw)) = read_first_existing_trimmed(
-        "PI_DOCTOR_CPUSET_CPUS_PATH",
+        "RECUR_AGENT_DOCTOR_CPUSET_CPUS_PATH",
         &[
             "/sys/fs/cgroup/cpuset.cpus.effective",
             "/sys/fs/cgroup/cpuset.cpus",
@@ -2392,7 +2393,7 @@ fn read_cpuset_snapshot(source_errors: &mut Vec<String>) -> CpuSetSnapshot {
 
 fn read_numa_topology(source_errors: &mut Vec<String>) -> NumaTopologySnapshot {
     let Some((source, raw)) = read_first_existing_trimmed(
-        "PI_DOCTOR_NUMA_ONLINE_PATH",
+        "RECUR_AGENT_DOCTOR_NUMA_ONLINE_PATH",
         &["/sys/devices/system/node/online"],
         source_errors,
     ) else {
@@ -2415,17 +2416,20 @@ fn read_numa_topology(source_errors: &mut Vec<String>) -> NumaTopologySnapshot {
 }
 
 fn read_memory_limit_snapshot(source_errors: &mut Vec<String>) -> MemoryLimitSnapshot {
-    let mem_total_bytes =
-        read_first_existing_trimmed("PI_DOCTOR_MEMINFO_PATH", &["/proc/meminfo"], source_errors)
-            .and_then(|(source, raw)| {
-                let parsed = parse_mem_total_bytes(&raw);
-                if parsed.is_none() {
-                    source_errors.push(format!("invalid MemTotal in {source}"));
-                }
-                parsed
-            });
+    let mem_total_bytes = read_first_existing_trimmed(
+        "RECUR_AGENT_DOCTOR_MEMINFO_PATH",
+        &["/proc/meminfo"],
+        source_errors,
+    )
+    .and_then(|(source, raw)| {
+        let parsed = parse_mem_total_bytes(&raw);
+        if parsed.is_none() {
+            source_errors.push(format!("invalid MemTotal in {source}"));
+        }
+        parsed
+    });
     let (source, parsed_limit) = read_first_existing_trimmed(
-        "PI_DOCTOR_CGROUP_MEMORY_MAX_PATH",
+        "RECUR_AGENT_DOCTOR_CGROUP_MEMORY_MAX_PATH",
         &[
             "/sys/fs/cgroup/memory.max",
             "/sys/fs/cgroup/memory/memory.limit_in_bytes",
@@ -5373,7 +5377,7 @@ fn swarm_context_intelligence_unavailable_finding(error: &str) -> Finding {
         "Context intelligence posture unavailable",
     )
     .with_detail(error)
-    .with_remediation("Run `pi doctor --only swarm --format json` from a readable project root")
+    .with_remediation("Run `ra doctor --only swarm --format json` from a readable project root")
     .with_data(serde_json::json!({
         "schema": SWARM_DOCTOR_CONTEXT_INTELLIGENCE_SCHEMA,
         "mode": "audit_only",
@@ -5681,7 +5685,7 @@ fn validation_broker_not_configured_json() -> serde_json::Value {
         },
         "degraded_reasons": ["validation_broker_store_not_configured"],
         "recommended_next_actions": [
-            "Set PI_VALIDATION_BROKER_STORE only when broker-guided validation handoff is in use"
+            "Set RECUR_AGENT_VALIDATION_BROKER_STORE only when broker-guided validation handoff is in use"
         ],
         "guards": {
             "advisory_only": true,
@@ -5768,7 +5772,7 @@ fn build_swarm_progress_slo_finding(cwd: &Path, raw_path: Option<&str>) -> Findi
             "not_configured",
             None,
             Some(format!(
-                "Set {SWARM_PROGRESS_SLO_JSON_ENV} to a pi.swarm.progress_slo.v1 JSON report when projecting progress SLO posture into Doctor"
+                "Set {SWARM_PROGRESS_SLO_JSON_ENV} to a ra.swarm.progress_slo.v1 JSON report when projecting progress SLO posture into Doctor"
             )),
             &[],
         );
@@ -5926,7 +5930,7 @@ fn progress_slo_source_finding(
         title: title.to_string(),
         detail: issue,
         remediation: Some(
-            "Capture or refresh a pi.swarm.progress_slo.v1 report before treating progress SLO posture as current handoff evidence"
+            "Capture or refresh a ra.swarm.progress_slo.v1 report before treating progress SLO posture as current handoff evidence"
                 .to_string(),
         ),
         data: Some(data),
@@ -6725,10 +6729,10 @@ fn classify_swarm_incident_diagnostics(findings: &[Finding]) -> Finding {
         component_map.insert(component.domain.to_string(), component.to_json());
     }
     let remediation = primary.map_or_else(
-        || "No incident action needed; rerun `pi doctor --only swarm --format json` before large swarms".to_string(),
+        || "No incident action needed; rerun `ra doctor --only swarm --format json` before large swarms".to_string(),
         |component| {
             component.remediation.clone().unwrap_or_else(|| {
-                "Inspect the component evidence and rerun `pi doctor --only swarm --format json` after remediation".to_string()
+                "Inspect the component evidence and rerun `ra doctor --only swarm --format json` after remediation".to_string()
             })
         },
     );
@@ -7097,7 +7101,7 @@ fn incident_session_queue_component(findings: &[Finding]) -> SwarmIncidentCompon
         "checked": session_finding.is_some(),
         "queue_depth": null,
         "queue_depth_status": "not_available",
-        "next_probe": "pi doctor --only sessions --format json",
+        "next_probe": "ra doctor --only sessions --format json",
     });
 
     component_from_finding(
@@ -9925,7 +9929,7 @@ fn rch_affinity_blocker_action(family: &str) -> &'static str {
             "assign distinct target dirs or align commit/profile/features before reuse"
         }
         "target_dir_outside_swarm_scratch_root" => {
-            "move CARGO_TARGET_DIR under /data/tmp/pi_agent_rust_cargo/<agent>/target"
+            "move CARGO_TARGET_DIR under /data/tmp/recur_agent_cargo/<agent>/target"
         }
         "stale_git_commit" => "rebase or regenerate the job spec for the current checkout",
         "worker_unavailable" => "assign an available RCH worker or keep the job queued",
@@ -10113,10 +10117,10 @@ impl RchFailureKind {
     const fn remediation(self) -> &'static str {
         match self {
             Self::ArtifactRetrievalDiskPressure => {
-                "Remote execution appears to have completed; rerun with CARGO_TARGET_DIR and TMPDIR under /data/tmp/pi_agent_rust_cargo/<agent>/ so artifact retrieval has local headroom"
+                "Remote execution appears to have completed; rerun with CARGO_TARGET_DIR and TMPDIR under /data/tmp/recur_agent_cargo/<agent>/ so artifact retrieval has local headroom"
             }
             Self::LocalTargetDiskPressure => {
-                "Export CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target and TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp, create both dirs, then rerun the RCH command"
+                "Export CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target and TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp, create both dirs, then rerun the RCH command"
             }
             Self::RemoteBuildOrTestFailure => {
                 "Treat this as a real compile/test failure; inspect the cargo error and fix the code or test before rerunning"
@@ -10679,7 +10683,7 @@ fn check_sessions(findings: &mut Vec<Finding>) {
             Finding::warn(cat, format!("{total} sessions, {corrupt} corrupt"))
                 .with_detail("Some session files are empty or have invalid headers")
                 .with_remediation(
-                    "Move corrupt sessions aside with `pi gc` (trash + grace period) rather than deleting them",
+                    "Move corrupt sessions aside with `ra gc` (trash + grace period) rather than deleting them",
                 ),
         );
     }
@@ -10691,7 +10695,7 @@ fn check_sessions(findings: &mut Vec<Finding>) {
         findings.push(
             Finding::warn(cat, "Storage pressure detected in sessions store")
                 .with_detail(rec)
-                .with_remediation("Run `pi gc --yes` to prune aged sessions and free disk space"),
+                .with_remediation("Run `ra gc --yes` to prune aged sessions and free disk space"),
         );
     }
 }
@@ -10762,11 +10766,11 @@ fn check_extension(
                 )
                 .with_detail(err.to_string())
                 .with_remediation(
-                    "Fix the malformed settings.json, point PI_CONFIG_PATH at a valid file, or rerun with `--policy <safe|balanced|permissive>` to inspect extension compatibility independently",
+                    "Fix the malformed settings.json, point RECUR_AGENT_CONFIG_PATH at a valid file, or rerun with `--policy <safe|balanced|permissive>` to inspect extension compatibility independently",
                 ),
             );
-            let has_explicit_policy =
-                policy_override.is_some() || std::env::var_os("PI_EXTENSION_POLICY").is_some();
+            let has_explicit_policy = policy_override.is_some()
+                || std::env::var_os("RECUR_AGENT_EXTENSION_POLICY").is_some();
             if has_explicit_policy {
                 Config::default().resolve_extension_policy_with_metadata(policy_override)
             } else {
@@ -10808,7 +10812,7 @@ fn check_extension(
                         "{} error(s), {} warning(s)",
                         report.summary.errors, report.summary.warnings
                     ))
-                    .with_remediation(format!("Try: pi doctor {path} --policy permissive")),
+                    .with_remediation(format!("Try: ra doctor {path} --policy permissive")),
             );
         }
     }
@@ -11906,7 +11910,7 @@ not-json
         let health = agent_mail_schema_corrupt_fixture()?;
 
         let finding = classify_agent_mail_degraded_mode(
-            "/data/projects/pi_agent_rust",
+            "/data/projects/recur_agent",
             Some("AmberOsprey"),
             Some(&health),
             None,
@@ -12152,7 +12156,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         .expect("write README fixture");
         std::fs::write(
             root.join("docs/evidence/dropin-certification-verdict.json"),
-            r#"{"schema":"pi.dropin.verdict.v1","overall_verdict":"NOT_CERTIFIED","token":"super-secret-value"}"#,
+            r#"{"schema":"ra.dropin.verdict.v1","overall_verdict":"NOT_CERTIFIED","token":"super-secret-value"}"#,
         )
         .expect("write sensitive evidence fixture");
         std::fs::write(
@@ -12794,7 +12798,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
                 .remediation
                 .as_deref()
                 .unwrap_or_default()
-                .contains("/data/tmp/pi_agent_rust_cargo/<agent>/")
+                .contains("/data/tmp/recur_agent_cargo/<agent>/")
         );
     }
 
@@ -12822,7 +12826,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
                 .remediation
                 .as_deref()
                 .unwrap_or_default()
-                .contains("CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target")
+                .contains("CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target")
         );
     }
 
@@ -12833,7 +12837,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
             success: false,
             status_code: Some(101),
             stdout: String::new(),
-            stderr: "error[E0308]: mismatched types\nerror: could not compile `pi` due to previous error\n".to_string(),
+            stderr: "error[E0308]: mismatched types\nerror: could not compile `ra` due to previous error\n".to_string(),
         };
 
         assert_eq!(
@@ -12884,7 +12888,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
 
     #[test]
     fn swarm_rch_affinity_groups_compatible_jobs_on_warm_target() {
-        let target = "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string();
+        let target = "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string();
         let specs = vec![
             RchAffinityJobSpec {
                 id: "tools-a".to_string(),
@@ -12911,7 +12915,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         let plan = build_rch_affinity_plan_from_specs(
             specs,
             Some("abc123".to_string()),
-            "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string(),
+            "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string(),
         );
         let finding = classify_rch_affinity_plan(&plan);
         let data = finding_data(&finding);
@@ -12946,7 +12950,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
 
     #[test]
     fn swarm_rch_affinity_blocks_incompatible_features_on_same_target() {
-        let target = "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string();
+        let target = "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string();
         let specs = vec![
             RchAffinityJobSpec {
                 id: "default-features".to_string(),
@@ -12973,7 +12977,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         let plan = build_rch_affinity_plan_from_specs(
             specs,
             Some("abc123".to_string()),
-            "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string(),
+            "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string(),
         );
         let finding = classify_rch_affinity_plan(&plan);
         let data = finding_data(&finding);
@@ -13006,7 +13010,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
 
     #[test]
     fn swarm_rch_affinity_blocks_stale_commit_specs() {
-        let target = "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string();
+        let target = "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string();
         let specs = vec![RchAffinityJobSpec {
             id: "stale-check".to_string(),
             command: "cargo check --all-targets".to_string(),
@@ -13021,7 +13025,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         let plan = build_rch_affinity_plan_from_specs(
             specs,
             Some("abc123".to_string()),
-            "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string(),
+            "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string(),
         );
         let finding = classify_rch_affinity_plan(&plan);
         let data = finding_data(&finding);
@@ -13044,7 +13048,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
 
     #[test]
     fn swarm_rch_affinity_blocks_unavailable_workers() {
-        let target = "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string();
+        let target = "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string();
         let specs = vec![RchAffinityJobSpec {
             id: "worker-down".to_string(),
             command: "cargo test provider_streaming".to_string(),
@@ -13059,7 +13063,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         let plan = build_rch_affinity_plan_from_specs(
             specs,
             Some("abc123".to_string()),
-            "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string(),
+            "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string(),
         );
         let finding = classify_rch_affinity_plan(&plan);
         let data = finding_data(&finding);
@@ -13082,7 +13086,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
 
     #[test]
     fn swarm_rch_affinity_blocks_low_retrieval_headroom() {
-        let target = "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string();
+        let target = "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string();
         let specs = vec![RchAffinityJobSpec {
             id: "low-headroom".to_string(),
             command: "cargo clippy --all-targets -- -D warnings".to_string(),
@@ -13097,7 +13101,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         let plan = build_rch_affinity_plan_from_specs(
             specs,
             Some("abc123".to_string()),
-            "/data/tmp/pi_agent_rust_cargo/goldenglacier/target".to_string(),
+            "/data/tmp/recur_agent_cargo/goldenglacier/target".to_string(),
         );
         let finding = classify_rch_affinity_plan(&plan);
         let data = finding_data(&finding);
@@ -13131,7 +13135,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
     fn swarm_temp_dir_posture_passes_for_expected_scratch_root() {
         let finding = swarm_temp_dir_finding(
             "CARGO_TARGET_DIR",
-            Path::new("/data/tmp/pi_agent_rust_cargo/sunnybeacon/target"),
+            Path::new("/data/tmp/recur_agent_cargo/sunnybeacon/target"),
             Some(12 * 1024 * 1024),
             None,
         );
@@ -13148,7 +13152,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
     fn swarm_temp_dir_posture_warns_outside_scratch_root_even_with_headroom() {
         let finding = swarm_temp_dir_finding(
             "TMPDIR",
-            Path::new("/tmp/pi_agent_rust_cargo/sunnybeacon/tmp"),
+            Path::new("/tmp/recur_agent_cargo/sunnybeacon/tmp"),
             Some(64 * 1024 * 1024),
             None,
         );
@@ -13454,7 +13458,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
         assert!(
             plan.lane_groups[0]
                 .target_dir
-                .contains("/data/tmp/pi_agent_rust_cargo/<agent>/numa-node-0/target")
+                .contains("/data/tmp/recur_agent_cargo/<agent>/numa-node-0/target")
         );
     }
 
@@ -14079,7 +14083,7 @@ fn doctor_swarm_context_intelligence_json_reports_posture() {
     #[test]
     fn run_doctor_extension_path_uses_supplied_cwd_for_policy_resolution() {
         let project = tempfile::tempdir().expect("project dir");
-        let config_dir = project.path().join(".pi");
+        let config_dir = project.path().join(".ra");
         std::fs::create_dir_all(&config_dir).expect("create project config dir");
         std::fs::write(
             config_dir.join("settings.json"),
@@ -14114,7 +14118,7 @@ export default function(pi) {
     #[test]
     fn run_doctor_extension_path_reports_config_load_failure_without_aborting() {
         let project = tempfile::tempdir().expect("project dir");
-        let config_dir = project.path().join(".pi");
+        let config_dir = project.path().join(".ra");
         std::fs::create_dir_all(&config_dir).expect("create project config dir");
         std::fs::write(config_dir.join("settings.json"), r#"{ "extensionPolicy": "#)
             .expect("write malformed project settings");
@@ -14158,7 +14162,7 @@ import net from "node:net";
     #[test]
     fn run_doctor_extension_path_config_load_failure_falls_back_to_safe_policy() {
         let project = tempfile::tempdir().expect("project dir");
-        let config_dir = project.path().join(".pi");
+        let config_dir = project.path().join(".ra");
         std::fs::create_dir_all(&config_dir).expect("create project config dir");
         std::fs::write(config_dir.join("settings.json"), r#"{ "extensionPolicy": "#)
             .expect("write malformed project settings");
@@ -14196,7 +14200,7 @@ export default function(pi) {
     #[test]
     fn run_doctor_extension_path_config_load_failure_honors_cli_policy_override() {
         let project = tempfile::tempdir().expect("project dir");
-        let config_dir = project.path().join(".pi");
+        let config_dir = project.path().join(".ra");
         std::fs::create_dir_all(&config_dir).expect("create project config dir");
         std::fs::write(config_dir.join("settings.json"), r#"{ "extensionPolicy": "#)
             .expect("write malformed project settings");

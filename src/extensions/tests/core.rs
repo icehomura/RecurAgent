@@ -1212,7 +1212,7 @@ fn parse_register_message_with_capability_manifest_v2() {
             "version": "0.1.0",
             "api_version": "1.0",
             "capability_manifest": {
-              "schema": "pi.ext.cap.v2",
+              "schema": "ra.ext.cap.v2",
               "capabilities": [
                 {
                   "capability": "read",
@@ -1260,7 +1260,7 @@ fn parse_register_message_rejects_v2_manifest_without_provenance() {
             "version": "0.1.0",
             "api_version": "1.0",
             "capability_manifest": {
-              "schema": "pi.ext.cap.v2",
+              "schema": "ra.ext.cap.v2",
               "capabilities": [
                 {
                   "capability": "read",
@@ -1290,7 +1290,7 @@ fn parse_register_message_rejects_v2_manifest_unknown_requirement_field() {
             "version": "0.1.0",
             "api_version": "1.0",
             "capability_manifest": {
-              "schema": "pi.ext.cap.v2",
+              "schema": "ra.ext.cap.v2",
               "capabilities": [
                 {
                   "capability": "read",
@@ -1333,7 +1333,7 @@ fn parse_register_message_rejects_v2_manifest_unknown_provenance_field() {
             "version": "0.1.0",
             "api_version": "1.0",
             "capability_manifest": {
-              "schema": "pi.ext.cap.v2",
+              "schema": "ra.ext.cap.v2",
               "capabilities": [
                 {
                   "capability": "read",
@@ -1372,7 +1372,7 @@ fn reject_invalid_version() {
           "version": "2.0",
           "type": "log",
           "payload": {
-            "schema": "pi.ext.log.v1",
+            "schema": "ra.ext.log.v1",
             "ts": "2026-02-03T03:01:02.123Z",
             "level": "info",
             "event": "tool_call.start",
@@ -1392,7 +1392,7 @@ fn reject_invalid_version() {
 #[test]
 fn extension_manifest_rejects_v1_with_v2_only_fields() {
     let manifest = ExtensionManifest {
-        schema: "pi.ext.manifest.v1".to_string(),
+        schema: "ra.ext.manifest.v1".to_string(),
         extension_id: "ext.test".to_string(),
         name: "ext".to_string(),
         version: "0.1.0".to_string(),
@@ -1429,7 +1429,7 @@ fn extension_manifest_rejects_v1_with_v2_only_fields() {
 #[test]
 fn extension_manifest_accepts_capability_manifest_v2() {
     let manifest = ExtensionManifest {
-        schema: "pi.ext.manifest.v1".to_string(),
+        schema: "ra.ext.manifest.v1".to_string(),
         extension_id: "ext.test".to_string(),
         name: "ext".to_string(),
         version: "0.1.0".to_string(),
@@ -1747,7 +1747,7 @@ fn parse_log_message() {
           "version": "1.0",
           "type": "log",
           "payload": {
-            "schema": "pi.ext.log.v1",
+            "schema": "ra.ext.log.v1",
             "ts": "2026-02-03T03:01:02.123Z",
             "level": "info",
             "event": "tool_call.start",
@@ -1918,7 +1918,7 @@ fn js_runtime_pump_once_advances_timers_and_hostcalls() {
 
         let tools = Arc::new(ToolRegistry::new(&["write"], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -1969,7 +1969,7 @@ fn js_runtime_pump_once_advances_timers_and_hostcalls() {
 fn register_hook_unknown_event_warns_and_still_registers() {
     let (probe, events) = capture_tracing_events(|| {
         run_async(async {
-            let runtime = crate::extensions_js::PiJsRuntime::new()
+            let runtime = crate::extensions_js::RaJsRuntime::new()
                 .await
                 .expect("create runtime");
             let secret =
@@ -2118,7 +2118,7 @@ fn isolated_runtime_reset_drops_registry_routes_and_requires_cold_reload() {
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2231,7 +2231,7 @@ fn isolated_runtime_actor_skips_expired_or_abandoned_commands_before_side_effect
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2323,7 +2323,7 @@ fn isolated_runtime_timeout_quarantines_and_peer_work_skips_failed_shard() {
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2437,7 +2437,7 @@ fn isolated_runtime_denies_peer_fs_and_module_access_inside_workspace() {
 
         let tools = Arc::new(ToolRegistry::new(&[], &workspace, None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
                 ..Default::default()
             },
@@ -2531,7 +2531,7 @@ fn isolated_runtime_rejects_distinct_owners_for_the_same_leaf_directory() {
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2602,7 +2602,7 @@ fn isolated_runtime_allows_sibling_files_under_extensions_discovery_root() {
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2666,13 +2666,13 @@ fn explicit_compat_scan_disable_prevents_static_registration_fallback() {
         .expect("write extension entry");
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
-        let mut config = PiJsRuntimeConfig {
+        let mut config = RaJsRuntimeConfig {
             cwd: dir.path().display().to_string(),
             ..Default::default()
         };
         config
             .env
-            .insert("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string());
+            .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string());
         let js_runtime =
             JsExtensionRuntimeHandle::start(config, Arc::clone(&tools), manager.clone())
                 .await
@@ -2757,7 +2757,7 @@ fn multi_entry_loader_fails_closed_on_failing_non_primary_entrypoints() {
 
         let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
         let js_runtime = JsExtensionRuntimeHandle::start(
-            PiJsRuntimeConfig {
+            RaJsRuntimeConfig {
                 cwd: dir.path().display().to_string(),
                 ..Default::default()
             },
@@ -2805,7 +2805,7 @@ fn js_runtime_pump_once_exec_streaming_callback_delivers_chunks_and_final_result
             interceptor: None,
         };
 
-        let runtime = PiJsRuntime::new().await.expect("runtime");
+        let runtime = RaJsRuntime::new().await.expect("runtime");
         runtime
                 .eval(
                     r#"
@@ -2911,7 +2911,7 @@ fn js_runtime_pump_once_exec_streaming_signal_termination_reports_nonzero_code()
             interceptor: None,
         };
 
-        let runtime = PiJsRuntime::new().await.expect("runtime");
+        let runtime = RaJsRuntime::new().await.expect("runtime");
         runtime
                 .eval(
                     r#"
@@ -3005,7 +3005,7 @@ fn js_runtime_pump_once_exec_streaming_async_iterator_delivers_chunks_in_order()
             interceptor: None,
         };
 
-        let runtime = PiJsRuntime::new().await.expect("runtime");
+        let runtime = RaJsRuntime::new().await.expect("runtime");
         runtime
                 .eval(
                     r#"
@@ -3097,7 +3097,7 @@ fn js_runtime_pump_once_exec_streaming_timeout_sets_killed_final_chunk() {
             interceptor: None,
         };
 
-        let runtime = PiJsRuntime::new().await.expect("runtime");
+        let runtime = RaJsRuntime::new().await.expect("runtime");
         runtime
                 .eval(
                     r#"
@@ -3184,7 +3184,7 @@ fn js_runtime_pump_once_exec_streaming_return_cancels_before_dispatch() {
             interceptor: None,
         };
 
-        let runtime = PiJsRuntime::new().await.expect("runtime");
+        let runtime = RaJsRuntime::new().await.expect("runtime");
         runtime
             .eval(
                 r#"
@@ -3583,7 +3583,7 @@ fn fs_connector_denies_write_when_manifest_does_not_declare_write_scope() {
     std::fs::write(&inside, "hello").expect("write inside");
 
     let manifest = CapabilityManifest {
-        schema: "pi.ext.cap.v1".to_string(),
+        schema: "ra.ext.cap.v1".to_string(),
         capabilities: vec![CapabilityRequirement {
             capability: "read".to_string(),
             methods: vec!["fs".to_string()],

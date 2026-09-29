@@ -1566,7 +1566,7 @@ mod tests {
 
         let result = delete_session_file_with_trash_cmd(
             &session_path,
-            "__pi_agent_rust_nonexistent_trash_command__",
+            "__recur_agent_nonexistent_trash_command__",
         );
         assert!(result.is_ok(), "delete should fall back to remove_file");
         assert!(!session_path.exists(), "session file should be deleted");
@@ -1732,7 +1732,7 @@ mod tests {
 
         let result = delete_session_file_with_trash_cmd(
             &session_path,
-            "__pi_agent_rust_nonexistent_trash_command__",
+            "__recur_agent_nonexistent_trash_command__",
         );
         assert!(result.is_ok(), "delete should fall back to remove_file");
         assert!(
@@ -1762,7 +1762,7 @@ mod tests {
 
         delete_session_file_with_trash_cmd(
             &session_path,
-            "__pi_agent_rust_nonexistent_trash_command__",
+            "__recur_agent_nonexistent_trash_command__",
         )
         .expect("delete dangling sidecars");
 
@@ -1797,7 +1797,7 @@ mod tests {
             started_tx.send(()).expect("announce delete start");
             let result = delete_session_file_with_trash_cmd(
                 &path_for_delete,
-                "__pi_agent_rust_nonexistent_trash_command__",
+                "__recur_agent_nonexistent_trash_command__",
             );
             done_tx.send(result).expect("report delete result");
         });
@@ -1838,7 +1838,7 @@ mod tests {
 
         let result = delete_session_file_with_trash_cmd(
             &session_path,
-            "__pi_agent_rust_nonexistent_trash_command__",
+            "__recur_agent_nonexistent_trash_command__",
         );
         assert!(
             result.is_err(),

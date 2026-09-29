@@ -2013,7 +2013,7 @@ impl ExtensionManager {
             .cloned()
             .collect();
         ExecMediationArtifact {
-            schema: "pi.ext.exec_mediation_ledger.v1".to_string(),
+            schema: "ra.ext.exec_mediation_ledger.v1".to_string(),
             generated_at_ms: runtime_risk_now_ms(),
             entry_count: entries.len(),
             entries,
@@ -2031,7 +2031,7 @@ impl ExtensionManager {
             .cloned()
             .collect();
         SecretBrokerArtifact {
-            schema: "pi.ext.secret_broker_ledger.v1".to_string(),
+            schema: "ra.ext.secret_broker_ledger.v1".to_string(),
             generated_at_ms: runtime_risk_now_ms(),
             entry_count: entries.len(),
             entries,
@@ -3595,7 +3595,7 @@ impl ExtensionManager {
     /// `ctx.modelRegistry.find()` in the JS bridge (gh #167).
     ///
     /// The caller must serialize entries through a credential-free projection
-    /// (see `pi_ai_model_entry_value` in `agent.rs`); this setter stores the
+    /// (see `ra_ai_model_entry_value` in `agent.rs`); this setter stores the
     /// values verbatim and bumps the ctx generation so cached payloads are
     /// rebuilt with the new catalog.
     pub fn set_extension_models(&self, models: Vec<Value>) {
@@ -4468,7 +4468,7 @@ impl ExtensionManager {
 
         // gh #167: whitelisted model catalog for the synchronous
         // ctx.modelRegistry.find() shim. Entries are already projected
-        // through the credential-free `pi_ai_model_entry_value` shape.
+        // through the credential-free `ra_ai_model_entry_value` shape.
         if !extension_models.is_empty() {
             ctx.insert("models".into(), Value::Array(extension_models.to_owned()));
         }

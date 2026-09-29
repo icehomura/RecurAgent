@@ -189,7 +189,7 @@ fn fixture(root: &Path, mode: &str) -> Option<LspTool> {
     });
     let Some(python) = python else {
         assert!(
-            std::env::var_os("PI_LSP_REQUIRE_PROTOCOL").is_none(),
+            std::env::var_os("RECUR_AGENT_LSP_REQUIRE_PROTOCOL").is_none(),
             "Python required for workspace diagnostics protocol tests"
         );
         eprintln!("SKIP workspace diagnostics protocol tests: Python unavailable");
