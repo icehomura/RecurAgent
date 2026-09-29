@@ -283,7 +283,7 @@
         "id": "rpc_swarm_e2e",
         "issue": null,
         "role": "optional_diagnostic",
-        "schema": "pi.rpc.concurrent_swarm_e2e.v1",
+        "schema": "ra.rpc.concurrent_swarm_e2e.v1",
         "status": "ok",
         "timestamp": "[TIMESTAMP]"
       },
@@ -1292,7 +1292,7 @@
             "freshness": "current",
             "id": "rpc_swarm_e2e",
             "path": "[WORKSPACE]/rpc-swarm-e2e.json",
-            "schema": "pi.rpc.concurrent_swarm_e2e.v1",
+            "schema": "ra.rpc.concurrent_swarm_e2e.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1506,7 +1506,7 @@
         "id": "rpc_swarm_e2e",
         "issue": null,
         "path": "[WORKSPACE]/rpc-swarm-e2e.json",
-        "schema": "pi.rpc.concurrent_swarm_e2e.v1",
+        "schema": "ra.rpc.concurrent_swarm_e2e.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -2018,7 +2018,7 @@
       "id": "rpc_swarm_e2e",
       "issue": null,
       "path": "[WORKSPACE]/rpc-swarm-e2e.json",
-      "schema": "pi.rpc.concurrent_swarm_e2e.v1",
+      "schema": "ra.rpc.concurrent_swarm_e2e.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"

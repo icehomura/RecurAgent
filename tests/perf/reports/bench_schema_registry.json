@@ -530,7 +530,7 @@
     },
     {
       "description": "Phase-1 realistic/matched-state matrix validation with stage attribution and release-gate readiness",
-      "name": "pi.perf.phase1_matrix_validation.v1"
+      "name": "ra.perf.phase1_matrix_validation.v1"
     },
     {
       "description": "Host-scale resource-governor admission decision telemetry for swarm pressure control",

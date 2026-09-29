@@ -139,7 +139,7 @@
       "category": "performance",
       "status": "present",
       "artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
-      "schema": "pi.perf.phase1_matrix_validation.v1",
+      "schema": "ra.perf.phase1_matrix_validation.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 17839

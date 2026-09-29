@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.risk_review.v1",
+  "schema": "ra.ext.risk_review.v1",
   "generated_at": "2026-08-04T23:05:30.232784831+00:00",
   "summary": {
     "total_artifacts": 208,

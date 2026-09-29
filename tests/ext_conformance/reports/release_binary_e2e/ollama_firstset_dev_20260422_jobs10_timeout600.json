@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.release_binary_e2e.v1",
+  "schema": "ra.ext.release_binary_e2e.v1",
   "generatedAt": "2026-04-22T18:42:11Z",
   "runId": "release-e2e-20260422T184211Z",
   "correlationId": "ext-release-binary-release-e2e-20260422T184211Z",

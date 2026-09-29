@@ -282,7 +282,7 @@ function updateSpanName(span: Span | undefined, name: string | undefined): void 
 function addSpanEvent(span: Span | undefined, type: string, attrs: Attributes): void {
   if (!span) return;
   span.addEvent(type, {
-    "pi.event.type": type,
+    "ra.event.type": type,
     ...attrs,
   });
 }
@@ -426,15 +426,15 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
 
     invariant(tracer, "Tracer not initialized");
     const span = tracer.startSpan(
-      "pi.session",
+      "ra.session",
       {
         startTime: now(),
       },
       parentContext,
     );
 
-    ensureAttribute(span, "pi.session.id", sessionId);
-    ensureAttribute(span, "pi.session.file", ctx.sessionManager.getSessionFile());
+    ensureAttribute(span, "ra.session.id", sessionId);
+    ensureAttribute(span, "ra.session.file", ctx.sessionManager.getSessionFile());
 
     traceEnvStack.push(traceScopeKeys.session, span);
     syncActiveSpanContext();
@@ -451,7 +451,7 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
   function closeOrphanToolSpans(reason: string): void {
     for (const [toolCallId, span] of spans.tools.entries()) {
       span.setStatus({ code: SpanStatusCode.ERROR, message: `Closed without tool_result (${reason})` });
-      span.setAttribute("pi.tool.missing_result", true);
+      span.setAttribute("ra.tool.missing_result", true);
       span.end();
       traceEnvStack.pop(traceScopeKeys.tool(toolCallId));
     }
@@ -462,7 +462,7 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
   function closeOrphanTurnSpans(reason: string): void {
     for (const [turnIndex, span] of spans.turns.entries()) {
       span.setStatus({ code: SpanStatusCode.ERROR, message: `Closed without turn_end (${reason})` });
-      span.setAttribute("pi.turn.missing_end", true);
+      span.setAttribute("ra.turn.missing_end", true);
       span.end();
       traceEnvStack.pop(traceScopeKeys.turn(turnIndex));
     }
@@ -474,7 +474,7 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
   function closeOrphanAgentSpan(reason: string): void {
     if (!spans.agent) return;
     spans.agent.setStatus({ code: SpanStatusCode.ERROR, message: `Closed without agent_end (${reason})` });
-    spans.agent.setAttribute("pi.agent.missing_end", true);
+    spans.agent.setAttribute("ra.agent.missing_end", true);
     spans.agent.end();
     spans.agent = undefined;
     traceEnvStack.pop(traceScopeKeys.agent);
@@ -561,22 +561,22 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
 
   pi.on("input", (event, ctx) => {
     const sessionSpan = ensureSessionSpan(ctx);
-    const payloadAttributes = buildPayloadAttributes("pi.input.text", event.text);
+    const payloadAttributes = buildPayloadAttributes("ra.input.text", event.text);
     const summary = buildInputSummary(event.text);
 
     lastInputSummary = summary;
 
-    const summaryAttributes = buildInputSummaryAttributes("pi.input", summary);
+    const summaryAttributes = buildInputSummaryAttributes("ra.input", summary);
 
     addSpanEvent(sessionSpan, "input", {
-      "pi.event.source": event.source,
-      "pi.session.id": sessionId ?? "",
-      "pi.input.images": event.images?.length ?? 0,
+      "ra.event.source": event.source,
+      "ra.session.id": sessionId ?? "",
+      "ra.input.images": event.images?.length ?? 0,
       ...payloadAttributes,
       ...summaryAttributes,
     });
 
-    setSpanAttributes(sessionSpan, buildInputSummaryAttributes("pi.input.latest", summary));
+    setSpanAttributes(sessionSpan, buildInputSummaryAttributes("ra.input.latest", summary));
     updateSpanName(sessionSpan, summary.preview ? `pi.session ${summary.preview}` : undefined);
   });
 
@@ -584,12 +584,12 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
     const sessionSpan = ensureSessionSpan(ctx);
     const parent = trace.setSpan(context.active(), sessionSpan);
     invariant(tracer, "Tracer not initialized");
-    const span = tracer.startSpan("pi.agent", { startTime: now() }, parent);
+    const span = tracer.startSpan("ra.agent", { startTime: now() }, parent);
 
-    ensureAttribute(span, "pi.session.id", sessionId);
+    ensureAttribute(span, "ra.session.id", sessionId);
 
     if (lastInputSummary) {
-      setSpanAttributes(span, buildInputSummaryAttributes("pi.input.latest", lastInputSummary));
+      setSpanAttributes(span, buildInputSummaryAttributes("ra.input.latest", lastInputSummary));
       updateSpanName(span, lastInputSummary.preview ? `pi.agent ${lastInputSummary.preview}` : undefined);
     }
 
@@ -607,26 +607,26 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
 
     invariant(tracer, "Tracer not initialized");
     const span = tracer.startSpan(
-      "pi.turn",
+      "ra.turn",
       {
         startTime: event.timestamp ?? now(),
       },
       parent,
     );
 
-    ensureAttribute(span, "pi.session.id", sessionId);
-    ensureAttribute(span, "pi.turn.index", event.turnIndex);
+    ensureAttribute(span, "ra.session.id", sessionId);
+    ensureAttribute(span, "ra.turn.index", event.turnIndex);
 
     if (lastInputSummary) {
-      setSpanAttributes(span, buildInputSummaryAttributes("pi.input.latest", lastInputSummary));
+      setSpanAttributes(span, buildInputSummaryAttributes("ra.input.latest", lastInputSummary));
     }
 
     spans.turns.set(event.turnIndex, span);
     traceEnvStack.push(traceScopeKeys.turn(event.turnIndex), span);
     syncActiveSpanContext();
     addSpanEvent(span, "turn_start", {
-      "pi.turn.index": event.turnIndex,
-      "pi.session.id": sessionId ?? "",
+      "ra.turn.index": event.turnIndex,
+      "ra.session.id": sessionId ?? "",
     });
   });
 
@@ -638,21 +638,21 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
     invariant(tracer, "Tracer not initialized");
     const span = tracer.startSpan(buildToolSpanName(event.toolName, event.input), { startTime: now() }, parent);
 
-    ensureAttribute(span, "pi.session.id", sessionId);
-    ensureAttribute(span, "pi.turn.index", activeTurnIndex);
-    ensureAttribute(span, "pi.tool.name", event.toolName);
-    ensureAttribute(span, "pi.tool.call_id", event.toolCallId);
+    ensureAttribute(span, "ra.session.id", sessionId);
+    ensureAttribute(span, "ra.turn.index", activeTurnIndex);
+    ensureAttribute(span, "ra.tool.name", event.toolName);
+    ensureAttribute(span, "ra.tool.call_id", event.toolCallId);
 
     spans.tools.set(event.toolCallId, span);
     traceEnvStack.push(traceScopeKeys.tool(event.toolCallId), span);
     syncActiveSpanContext();
 
     addSpanEvent(span, "tool_call", {
-      "pi.tool.name": event.toolName,
-      "pi.tool.call_id": event.toolCallId,
-      "pi.session.id": sessionId ?? "",
-      "pi.turn.index": activeTurnIndex ?? -1,
-      ...buildPayloadAttributes("pi.tool.input", event.input),
+      "ra.tool.name": event.toolName,
+      "ra.tool.call_id": event.toolCallId,
+      "ra.session.id": sessionId ?? "",
+      "ra.turn.index": activeTurnIndex ?? -1,
+      ...buildPayloadAttributes("ra.tool.input", event.input),
     });
   });
 
@@ -666,12 +666,12 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
     };
 
     addSpanEvent(span ?? sessionSpan, "tool_result", {
-      "pi.tool.name": event.toolName,
-      "pi.tool.call_id": event.toolCallId,
-      "pi.tool.is_error": event.isError,
-      "pi.session.id": sessionId ?? "",
-      "pi.turn.index": activeTurnIndex ?? -1,
-      ...buildPayloadAttributes("pi.tool.output", outputPayload),
+      "ra.tool.name": event.toolName,
+      "ra.tool.call_id": event.toolCallId,
+      "ra.tool.is_error": event.isError,
+      "ra.session.id": sessionId ?? "",
+      "ra.turn.index": activeTurnIndex ?? -1,
+      ...buildPayloadAttributes("ra.tool.output", outputPayload),
     });
 
     if (span) {
@@ -693,10 +693,10 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
     const turnStopReason = "stopReason" in event.message ? event.message.stopReason : undefined;
 
     addSpanEvent(span ?? sessionSpan, "turn_end", {
-      "pi.turn.index": event.turnIndex,
-      "pi.session.id": sessionId ?? "",
-      "pi.turn.tool_results": event.toolResults.length,
-      "pi.message.stop_reason": turnStopReason ?? "",
+      "ra.turn.index": event.turnIndex,
+      "ra.session.id": sessionId ?? "",
+      "ra.turn.tool_results": event.toolResults.length,
+      "ra.message.stop_reason": turnStopReason ?? "",
     });
 
     endSpan(span, now());
@@ -713,8 +713,8 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
     const stopReason = findLastStopReason(event.messages);
 
     addSpanEvent(spans.agent ?? sessionSpan, "agent_end", {
-      "pi.session.id": sessionId ?? "",
-      "pi.message.stop_reason": stopReason ?? "",
+      "ra.session.id": sessionId ?? "",
+      "ra.message.stop_reason": stopReason ?? "",
     });
 
     closeOrphanToolSpans("agent_end");
@@ -741,30 +741,30 @@ export default function telemetryOtelExtension(pi: ExtensionAPI, options: Teleme
   pi.on("model_select", (event, ctx) => {
     const sessionSpan = ensureSessionSpan(ctx);
     addSpanEvent(sessionSpan, "model_select", {
-      "pi.session.id": sessionId ?? "",
-      "pi.model.provider": event.model.provider,
-      "pi.model.id": event.model.id,
-      "pi.model.source": event.source,
+      "ra.session.id": sessionId ?? "",
+      "ra.model.provider": event.model.provider,
+      "ra.model.id": event.model.id,
+      "ra.model.source": event.source,
     });
   });
 
   pi.on("session_compact", (event, ctx) => {
     const sessionSpan = ensureSessionSpan(ctx);
     addSpanEvent(sessionSpan, "session_compact", {
-      "pi.session.id": sessionId ?? "",
-      "pi.compaction.first_kept_entry": event.compactionEntry?.firstKeptEntryId ?? "",
-      "pi.compaction.tokens_before": event.compactionEntry?.tokensBefore ?? 0,
-      ...buildPayloadAttributes("pi.compaction.summary", event.compactionEntry?.summary),
+      "ra.session.id": sessionId ?? "",
+      "ra.compaction.first_kept_entry": event.compactionEntry?.firstKeptEntryId ?? "",
+      "ra.compaction.tokens_before": event.compactionEntry?.tokensBefore ?? 0,
+      ...buildPayloadAttributes("ra.compaction.summary", event.compactionEntry?.summary),
     });
   });
 
   pi.on("session_tree", (event, ctx) => {
     const sessionSpan = ensureSessionSpan(ctx);
     addSpanEvent(sessionSpan, "session_tree", {
-      "pi.session.id": sessionId ?? "",
-      "pi.tree.new_leaf": event.newLeafId ?? "",
-      "pi.tree.old_leaf": event.oldLeafId ?? "",
-      "pi.tree.from_extension": event.fromExtension ?? false,
+      "ra.session.id": sessionId ?? "",
+      "ra.tree.new_leaf": event.newLeafId ?? "",
+      "ra.tree.old_leaf": event.oldLeafId ?? "",
+      "ra.tree.from_extension": event.fromExtension ?? false,
     });
   });
 

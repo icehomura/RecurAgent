@@ -94,7 +94,7 @@
         "case_id": "unsupported_schema_fail_closed",
         "classification": "unsupported_schema",
         "error_type": "RunpackError",
-        "message": "rpc_swarm_e2e source schema mismatch: expected pi.rpc.concurrent_swarm_e2e.v1, got pi.rpc.concurrent_swarm_e2e.v0"
+        "message": "rpc_swarm_e2e source schema mismatch: expected ra.rpc.concurrent_swarm_e2e.v1, got ra.rpc.concurrent_swarm_e2e.v0"
       },
       "expected_classification": "unsupported_schema",
       "id": "unsupported_schema_fail_closed",

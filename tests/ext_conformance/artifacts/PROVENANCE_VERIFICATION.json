@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.provenance_verification.v1",
+  "schema": "ra.ext.provenance_verification.v1",
   "generated_at": "2026-08-04T23:55:37.371972261+00:00",
   "summary": {
     "total_artifacts": 208,

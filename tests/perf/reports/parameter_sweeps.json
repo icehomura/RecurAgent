@@ -6,7 +6,7 @@
   "source_identity": {
     "source_artifact": "phase1_matrix_validation",
     "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
-    "weighted_bottleneck_schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+    "weighted_bottleneck_schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
     "weighted_bottleneck_status": "missing"
   },
   "readiness": {
