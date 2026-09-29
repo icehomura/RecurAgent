@@ -94,6 +94,32 @@ Moreover:
   inferred from one: the server records the starting connection on the
   running turn and on each approval and question the turn raises, and checks
   that. An external approval never records an approval scope;
+- an approval or question raised by an external connection's turn belongs
+  to that connection (OctoSense ADR 0004, gap G1). Its `approval/requested`,
+  `approval/decided`, `approval/cancelled`, `approval/auto_resolved` and
+  `user_question/requested` go only to that connection: live, on replay, in
+  `session/open` pending approvals and questions, and in `session/hydrate`.
+  The host and every other connection on the session never receive them, so
+  no host automation (developer mode, standing rules) can answer for an
+  external client. An `approval/respond` or `user_question/respond` for one
+  from any other connection, the host included, fails with
+  `permission_denied`, `data.kind: "external_approval_owner_only"` or
+  `"external_question_owner_only"` (another external connection gets
+  `external_turn_denied`), and the prompt stays pending. A remembered
+  `approve_*` scope, which only the host can have recorded, never answers
+  such an approval; a remembered deny still does (fail closed). The owner is
+  recorded both on the pending prompt and in a bounded side table for its
+  ledger events, so an evicted table entry never makes a pending prompt
+  visible or answerable to anyone else. When the external connection closes,
+  its turns are aborted and their pending prompts cancelled
+  (`turn_interrupted`), as for any connection. Ownership is per
+  connection, not per client identity: a client that reconnects cannot
+  answer the prompts of its previous connection (they were cancelled when
+  that connection closed). Pending prompts do not survive a restart; a
+  replayed historical record of an external prompt (its `requested`,
+  `decided` or `cancelled` event) is no longer filtered once the prompt has
+  left the pending store and its side-table entry was evicted, or after a
+  restart. It is read-only (a durable marker is tracked in #2625). Approvals and questions of the host's own turns are unchanged;
 - a `turn/start` refused because the session already runs a turn carries
   `data: {"kind": "turn_in_progress"}` without the running turn's
   `turn_id` (the host's connection still receives `turn_id`);
@@ -169,6 +195,19 @@ never enables. The host stops the server by closing its stdin.
   (the same turn id on the host's approval: still refused)
 - `should_let_an_external_client_answer_only_its_own_turns_questions`
 - `should_let_an_external_client_steer_and_interrupt_only_turns_it_owns`
+- `should_show_an_external_clients_approval_only_to_that_client` (live,
+  `session/open` pending approvals, `session/hydrate`, the decision)
+- `should_let_only_the_external_client_answer_its_approval` (the host:
+  `external_approval_owner_only`; another external client:
+  `external_turn_denied`; the owner: accepted)
+- `should_never_apply_a_host_recorded_approve_scope_to_an_external_turn`
+- `should_keep_a_host_turns_approval_on_the_host_as_before`
+- `should_show_an_external_clients_question_only_to_that_client`
+- `should_let_only_the_external_client_answer_its_question` (the host:
+  `external_question_owner_only`; another external client:
+  `external_turn_denied`; the owner: accepted)
+- `should_keep_a_host_turns_question_on_the_host_as_before`
+- `should_keep_external_prompts_from_the_host_when_the_side_table_forgets_them`
 - `should_refuse_a_turn_id_live_in_another_session_on_a_host_managed_server`
   (also the `turn_in_progress` payload with and without `turn_id`)
 - `should_drop_plugin_and_mcp_tools_with_allowlisted_names_from_an_external_turn`
