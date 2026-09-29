@@ -72,14 +72,14 @@ Extension source  ──[B1: scanner]──>  QuickJS sandbox
 
 **CLI flag (highest priority):**
 ```bash
-pi --extension-policy safe
-pi --extension-policy standard
-pi --extension-policy permissive
+ra --extension-policy safe
+ra --extension-policy standard
+ra --extension-policy permissive
 ```
 
 **Environment variable:**
 ```bash
-export PI_EXTENSION_POLICY=safe
+export RECUR_AGENT_EXTENSION_POLICY=safe
 ```
 
 **Config file** (`~/.config/pi/settings.json`):
@@ -99,7 +99,7 @@ Unknown profile names fail closed to `safe` (invariant INV-006).
 ### Inspecting Effective Policy
 
 ```bash
-pi --explain-extension-policy
+ra --explain-extension-policy
 ```
 
 Outputs the resolved policy with per-capability decisions, showing which layer in the precedence chain determined each decision.
@@ -342,7 +342,7 @@ alert with category `QuotaBreach` is raised.
 
 2. **Identify the extension.**
    ```bash
-   pi --explain-extension-policy  # View current policy state
+   ra --explain-extension-policy  # View current policy state
    ```
 
 3. **Query related alerts.**
@@ -363,7 +363,7 @@ alert with category `QuotaBreach` is raised.
 Export the current security state:
 ```bash
 # View resolved policy with explanations
-pi --explain-extension-policy
+ra --explain-extension-policy
 
 # Run security tests to verify invariants
 cargo test --test security_budgets -- --nocapture
@@ -482,8 +482,8 @@ What failed and why. Reference specific controls:
 
 | Command | Purpose |
 |---------|---------|
-| `pi --explain-extension-policy` | Show resolved policy with per-capability decisions |
-| `pi --extension-policy safe` | Override policy for this session |
+| `ra --explain-extension-policy` | Show resolved policy with per-capability decisions |
+| `ra --extension-policy safe` | Override policy for this session |
 
 ### Testing and Verification
 
@@ -513,10 +513,10 @@ What failed and why. Reference specific controls:
 
 | Artifact | Schema | Purpose |
 |----------|--------|---------|
-| `security_compat_dashboard.json` | `pi.security.compat_dashboard.v1` | Compatibility pass rates under hardened policy |
-| `full_suite_verdict.json` | `pi.ci.full_suite_gate.v1` | Aggregate CI gate verdict |
-| `conformance_summary.json` | `pi.ext.conformance_summary.v2` | Extension conformance pass rates |
-| `waiver_audit.json` | `pi.ci.waiver_audit.v1` | Gate waiver lifecycle status |
+| `security_compat_dashboard.json` | `ra.security.compat_dashboard.v1` | Compatibility pass rates under hardened policy |
+| `full_suite_verdict.json` | `ra.ci.full_suite_gate.v1` | Aggregate CI gate verdict |
+| `conformance_summary.json` | `ra.ext.conformance_summary.v2` | Extension conformance pass rates |
+| `waiver_audit.json` | `ra.ci.waiver_audit.v1` | Gate waiver lifecycle status |
 
 ---
 

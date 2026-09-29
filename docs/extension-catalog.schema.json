@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "pi.ext.catalog.v1",
+  "$id": "ra.ext.catalog.v1",
   "title": "Pi Extension Catalog (Official Upstream)",
   "description": "Schema for docs/extension-catalog.json (enriched metadata for the official upstream corpus).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "generated_at", "total_extensions", "items"],
   "properties": {
-    "schema": { "const": "pi.ext.catalog.v1" },
+    "schema": { "const": "ra.ext.catalog.v1" },
     "generated_at": { "type": "string", "format": "date-time" },
     "total_extensions": { "type": "integer", "minimum": 0 },
     "tier_summary": { "type": "object" },

@@ -1,10 +1,10 @@
 {
-  "schema": "pi.swarm.operator_runpack_contract.v1",
-  "runpack_schema": "pi.swarm.operator_runpack.v1",
-  "scorecard_schema": "pi.swarm.safety_scorecard.v1",
-  "predictive_telemetry_ledger_schema": "pi.swarm.predictive_telemetry_ledger.v1",
-  "validation_scheduler_plan_schema": "pi.swarm.validation_scheduler_plan.v1",
-  "autopilot_handoff_schema": "pi.swarm.autopilot_handoff.v1",
+  "schema": "ra.swarm.operator_runpack_contract.v1",
+  "runpack_schema": "ra.swarm.operator_runpack.v1",
+  "scorecard_schema": "ra.swarm.safety_scorecard.v1",
+  "predictive_telemetry_ledger_schema": "ra.swarm.predictive_telemetry_ledger.v1",
+  "validation_scheduler_plan_schema": "ra.swarm.validation_scheduler_plan.v1",
+  "autopilot_handoff_schema": "ra.swarm.autopilot_handoff.v1",
   "purpose": "operator_handoff_not_release_performance_claim",
   "minimum_redacted_count": 1,
   "required_top_level_keys": [

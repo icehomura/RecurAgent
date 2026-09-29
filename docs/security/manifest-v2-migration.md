@@ -6,7 +6,7 @@ Last updated: 2026-02-14
 
 ## 1. What Changes in v2
 
-`capability_manifest.schema` adds `pi.ext.cap.v2` with stricter per-capability metadata:
+`capability_manifest.schema` adds `ra.ext.cap.v2` with stricter per-capability metadata:
 
 - `intents`: declared behavioral intent classes
 - `connector_classes`: expected connector families used by this capability

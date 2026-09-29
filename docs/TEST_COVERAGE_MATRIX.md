@@ -310,7 +310,7 @@ This document is the current source-file coverage inventory for `src/**/*.rs`. I
 | `src/plan/session/tests.rs` | SDK plan lifecycle contract and wire tests | Test module; 26 tests for submission identity, policy separation, prompt cleanup, persistence and actual tool dispatch. Added, not executed: DSR unavailable. |
 | `src/platform.rs` | Platform helpers | Unit. |
 | `src/pmu_telemetry.rs` | PMU-guided stall-cycle elimination and microarchitectural regression budgets | `tests/pmu_telemetry.rs`. |
-| `src/profiler.rs` | Sampling profiler front-end (`--profile` / `PI_PROFILE=1`, bd-cv653.7.12.1) | Unit (3 tests); no dedicated integration test (manual `pi --profile`). |
+| `src/profiler.rs` | Sampling profiler front-end (`--profile` / `RECUR_AGENT_PROFILE=1`, bd-cv653.7.12.1) | Unit (3 tests); no dedicated integration test (manual `ra --profile`). |
 | `src/provider.rs` | Provider trait/schema | Unit; `tests/provider_factory.rs`, `tests/provider_contract.rs`, `tests/provider_native_contract.rs`. |
 | `src/provider_metadata.rs` | Provider metadata | Unit; `tests/provider_metadata_comprehensive.rs`, `tests/provider_registry_guardrails.rs`. |
 | `src/providers/anthropic.rs` | Anthropic provider | Unit; `tests/provider_streaming/anthropic.rs`, `tests/e2e_provider_streaming.rs`. |
@@ -383,7 +383,7 @@ This document is the current source-file coverage inventory for `src/**/*.rs`. I
 | `src/session_test.rs` | Session test helpers | Waived test-support module; compiled by session tests. |
 | `src/skills_managed.rs` | Managed skills | `tests/skills_managed.rs`. |
 | `src/sse.rs` | SSE parser | Unit; `tests/sse_strict_compliance.rs`, `tests/repro_sse_flush.rs`, `tests/repro_sse_newline.rs`. |
-| `src/stats.rs` | Local usage statistics over session files (`pi stats`, bd-cv653.7.7) | Unit (8 tests); no dedicated integration test. |
+| `src/stats.rs` | Local usage statistics over session files (`ra stats`, bd-cv653.7.7) | Unit (8 tests); no dedicated integration test. |
 | `src/status_line.rs` | Powerline status line, footer, and sticky HUDs (OMP-ADOPT / bd-cv653.9.4) | Unit (7 tests); `tests/status_line.rs`, `tests/chrome_tui_integration.rs`. |
 | `src/stream_rules.rs` | Stream rules | `tests/stream_rules.rs`. |
 | `src/subagents.rs` | Native isolated child-agent tool | Unit tests in this module; opt-in registration coverage through built-in tool tests. |
@@ -509,7 +509,7 @@ cargo test --test ext_conformance_generated --features ext-conformance -- --incl
 cargo test --test ext_conformance_diff --features ext-conformance
 
 # Official extensions only, bounded.
-PI_OFFICIAL_MAX=5 cargo test --test ext_conformance_diff --features ext-conformance
+RECUR_AGENT_OFFICIAL_MAX=5 cargo test --test ext_conformance_diff --features ext-conformance
 
 # Scenario execution tests.
 cargo test --test ext_conformance_scenarios --features ext-conformance

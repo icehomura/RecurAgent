@@ -1,6 +1,6 @@
 # Provider Onboarding Checklist
 
-> Canonical step-by-step guide for adding or maintaining a provider in pi_agent_rust.
+> Canonical step-by-step guide for adding or maintaining a provider in recur_agent.
 
 ---
 
@@ -81,7 +81,7 @@ Self::YourProvider => write!(f, "your-provider"),
 
 ### Step 4: Add Model Entries (Optional)
 
-**File:** User's `~/.pi/agent/models.json` or built-in registry
+**File:** User's `~/.ra/agent/models.json` or built-in registry
 
 If the provider has well-known models, add entries in `models.json`:
 

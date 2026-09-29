@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_setup_guide.v1",
+  "schema": "ra.provider_setup_guide.v1",
   "bead_id": "bd-3uqg.11.8.7",
   "provider_id": "moonshotai",
   "canonical_provider_id": "moonshotai",
@@ -14,7 +14,7 @@
       "steps": [
         "1. Get an API key from https://platform.moonshot.cn/console/api-keys",
         "2. Export: export MOONSHOT_API_KEY=sk-...",
-        "3. Run: pi --provider moonshotai --model moonshot-v1-128k"
+        "3. Run: ra --provider moonshotai --model moonshot-v1-128k"
       ],
       "example_env": {
         "MOONSHOT_API_KEY": "sk-your_api_key_here"
@@ -27,9 +27,9 @@
         "KIMI_API_KEY": "sk-your_kimi_coding_key"
       },
       "example_cli_options": [
-        "pi --provider moonshotai --model moonshot-v1-auto  # Auto-selects 8k/32k/128k based on input",
-        "pi --provider kimi-for-coding --model kimi-k2.5    # Uses Anthropic messages API",
-        "pi --provider moonshotai-cn --model moonshot-v1-128k  # China endpoint"
+        "ra --provider moonshotai --model moonshot-v1-auto  # Auto-selects 8k/32k/128k based on input",
+        "ra --provider kimi-for-coding --model kimi-k2.5    # Uses Anthropic messages API",
+        "ra --provider moonshotai-cn --model moonshot-v1-128k  # China endpoint"
       ],
       "notes": [
         "moonshot-v1-auto optimizes cost by selecting context window based on input length.",

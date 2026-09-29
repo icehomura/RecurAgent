@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.provider_auth_playbook_validation.v1",
+  "schema": "ra.qa.provider_auth_playbook_validation.v1",
   "bead_id": "bd-3uqg.9.3.4",
   "artifact_status": "historical_snapshot",
   "current_release_authority": false,

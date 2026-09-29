@@ -259,7 +259,7 @@ let quota_breaches = manager.quota_breach_events();
 **Step 2 -- Define scope with a filter**
 
 ```rust
-use pi::extensions::{
+use ra::extensions::{
     IncidentBundleFilter, SecurityAlertCategory, SecurityAlertSeverity,
 };
 
@@ -279,7 +279,7 @@ let filter = IncidentBundleFilter {
 
 For external sharing (redact all hashes):
 ```rust
-use pi::extensions::IncidentBundleRedactionPolicy;
+use ra::extensions::IncidentBundleRedactionPolicy;
 
 let redaction = IncidentBundleRedactionPolicy {
     redact_params_hash: true,
@@ -306,7 +306,7 @@ let redaction = IncidentBundleRedactionPolicy {
 **Step 4 -- Build the bundle**
 
 ```rust
-use pi::extensions::build_incident_evidence_bundle;
+use ra::extensions::build_incident_evidence_bundle;
 
 let bundle = build_incident_evidence_bundle(
     &ledger, &alerts, &telemetry, &exec, &secret,
@@ -317,7 +317,7 @@ let bundle = build_incident_evidence_bundle(
 **Step 5 -- Verify integrity**
 
 ```rust
-use pi::extensions::verify_incident_evidence_bundle;
+use ra::extensions::verify_incident_evidence_bundle;
 
 let report = verify_incident_evidence_bundle(&bundle);
 assert!(report.valid, "Bundle integrity check failed: {:?}", report.errors);
@@ -346,7 +346,7 @@ println!("Ledger chain intact: {}", summary.ledger_chain_intact);
 Reconstruct the decision sequence step-by-step:
 
 ```rust
-use pi::extensions::replay_runtime_risk_ledger_artifact;
+use ra::extensions::replay_runtime_risk_ledger_artifact;
 
 let replay = replay_runtime_risk_ledger_artifact(&ledger)?;
 for step in &replay.steps {
@@ -357,7 +357,7 @@ for step in &replay.steps {
 ```
 
 **Expected artifacts:**
-- `IncidentEvidenceBundle` (schema `pi.ext.incident_evidence_bundle.v1`)
+- `IncidentEvidenceBundle` (schema `ra.ext.incident_evidence_bundle.v1`)
 - `IncidentBundleVerificationReport` confirming `valid: true`
 - Optional `RuntimeRiskReplayArtifact` for decision reconstruction
 

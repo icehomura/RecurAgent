@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.proof_carrying_test_fabric.closeout_gate_contract.v1",
-  "decision_gate_schema": "pi.swarm.proof_carrying_test_fabric.closeout_gate.v1",
+  "schema": "ra.swarm.proof_carrying_test_fabric.closeout_gate_contract.v1",
+  "decision_gate_schema": "ra.swarm.proof_carrying_test_fabric.closeout_gate.v1",
   "purpose": "prompt_to_artifact_proof_carrying_swarm_test_fabric_closeout_gate_not_source_of_truth",
   "allowed_statuses": [
     "pass",

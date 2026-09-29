@@ -55,7 +55,7 @@
     },
     {
       "num": 11,
-      "query": ".pi extensions registerTool language:TypeScript",
+      "query": ".ra extensions registerTool language:TypeScript",
       "results": 0
     },
     {

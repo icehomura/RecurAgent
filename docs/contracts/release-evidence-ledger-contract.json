@@ -1,5 +1,5 @@
 {
-  "schema": "pi.release_evidence.ledger.contract.v1",
+  "schema": "ra.release_evidence.ledger.contract.v1",
   "bead_id": "bd-sog97.13",
   "version": "1.0.0",
   "effective_date_utc": "2026-08-24T00:00:00Z",

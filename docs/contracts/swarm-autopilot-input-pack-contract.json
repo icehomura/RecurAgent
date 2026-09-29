@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.autopilot_input_pack_contract.v1",
-  "input_pack_schema": "pi.swarm.autopilot_input_pack.v1",
+  "schema": "ra.swarm.autopilot_input_pack_contract.v1",
+  "input_pack_schema": "ra.swarm.autopilot_input_pack.v1",
   "purpose": "dry_run_swarm_autopilot_input_not_source_of_truth",
   "minimum_redacted_count": 1,
   "required_top_level_keys": [

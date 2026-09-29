@@ -233,27 +233,27 @@ Extension access to sensitive APIs is governed by capability policies.
 | `balanced` (default) | Allowed | Allowed | Warned | Allowed |
 | `permissive` | Allowed | Allowed | Allowed | Allowed |
 
-Use `pi doctor <path> --policy <profile>` to check extension compatibility
+Use `ra doctor <path> --policy <profile>` to check extension compatibility
 under a specific policy.
 
 ---
 
 ## 7. Preflight Analysis
 
-The `pi doctor` command performs static analysis on extensions before loading:
+The `ra doctor` command performs static analysis on extensions before loading:
 
 ```bash
 # Text output (default)
-pi doctor /path/to/extension
+ra doctor /path/to/extension
 
 # JSON for automation
-pi doctor /path/to/extension --format json
+ra doctor /path/to/extension --format json
 
 # Markdown for documentation
-pi doctor /path/to/extension --format markdown
+ra doctor /path/to/extension --format markdown
 
 # Check against specific policy
-pi doctor /path/to/extension --policy safe
+ra doctor /path/to/extension --policy safe
 ```
 
 The report includes:
@@ -302,20 +302,20 @@ The report includes:
 
 ```bash
 # Check your extension
-pi doctor /path/to/your-extension
+ra doctor /path/to/your-extension
 
 # Check with strict policy
-pi doctor /path/to/your-extension --policy safe
+ra doctor /path/to/your-extension --policy safe
 
 # View supported policy modes
-pi --explain-extension-policy
+ra --explain-extension-policy
 ```
 
 ### For CI Integration
 
 ```bash
 # JSON output for automated checks
-pi doctor /path/to/extension --format json | jq '.verdict'
+ra doctor /path/to/extension --format json | jq '.verdict'
 
 # Exit code is always 0 (verdict is in output, not exit code)
 # Parse the JSON verdict field for pass/fail decisions
@@ -327,7 +327,7 @@ pi doctor /path/to/extension --format json | jq '.verdict'
 
 If your extension fails to load and you believe it should be compatible:
 
-1. Run `pi doctor /path/to/extension --format json` and capture the output.
+1. Run `ra doctor /path/to/extension --format json` and capture the output.
 2. Check the findings array for specific error messages.
 3. If the failure is a missing module stub or shim gap, it may be eligible for
    a fix in the PiJS runtime.

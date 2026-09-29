@@ -16,13 +16,13 @@ Pi supports three types of package sources:
 
 Install a package globally (user scope):
 ```bash
-pi install npm:pi-skills
-pi install git:github.com/someuser/my-tools
+ra install npm:pi-skills
+ra install git:github.com/someuser/my-tools
 ```
 
 Install locally for the current project:
 ```bash
-pi install --local npm:@org/project-utils
+ra install --local npm:@org/project-utils
 ```
 
 This adds the package to your `settings.json` (global or project) and installs it.
@@ -31,16 +31,16 @@ This adds the package to your `settings.json` (global or project) and installs i
 
 Remove a package:
 ```bash
-pi remove npm:pi-skills
-pi remove --local npm:@org/project-utils
+ra remove npm:pi-skills
+ra remove --local npm:@org/project-utils
 ```
 
 ### Update
 
 Update all packages (or a specific one):
 ```bash
-pi update
-pi update npm:pi-skills
+ra update
+ra update npm:pi-skills
 ```
 
 Packages with pinned versions (e.g. `npm:pkg@1.2.3` or `git:repo@v1`) are skipped unless the command arguments explicitly change the version.
@@ -49,14 +49,14 @@ Packages with pinned versions (e.g. `npm:pkg@1.2.3` or `git:repo@v1`) are skippe
 
 List installed packages:
 ```bash
-pi list
+ra list
 ```
 
 ## Resource Discovery
 
 When a package is installed, Pi looks for resources in the following locations within the package root:
 
-1. **Manifest**: If `package.json` has a `pi` section, it uses the paths defined there.
+1. **Manifest**: If `package.json` has a `ra` section, it uses the paths defined there.
    ```json
    "pi": {
      "extensions": ["dist/extension.js"],
@@ -131,8 +131,8 @@ Example:
 
 Pi writes a deterministic package lockfile after successful install/update verification:
 
-- Project scope: `.pi/packages.lock.json`
-- User scope: `~/.pi/agent/packages.lock.json`
+- Project scope: `.ra/packages.lock.json`
+- User scope: `~/.ra/agent/packages.lock.json`
 
 Lock entries are sorted deterministically and include:
 
@@ -150,14 +150,14 @@ By default, install/update is fail-closed when trusted provenance or digest does
 - pinned git installs must match pinned ref/commit resolution
 - trusted digest/provenance mismatches block install/update
 
-For unpinned `pi update`, provenance/digest rotation is allowed and re-recorded as a trusted update.
+For unpinned `ra update`, provenance/digest rotation is allowed and re-recorded as a trusted update.
 
 ### Trust Transition Audit Artifact
 
 Pi appends trust-state transitions as JSONL audit events:
 
-- Project scope: `.pi/package-trust-audit.jsonl`
-- User scope: `~/.pi/agent/package-trust-audit.jsonl`
+- Project scope: `.ra/package-trust-audit.jsonl`
+- User scope: `~/.ra/agent/package-trust-audit.jsonl`
 
 Each event records action (`install`, `update`, `remove`), scope, identity, source,
 `from_state`, `to_state`, deterministic reason codes, and optional remediation guidance.

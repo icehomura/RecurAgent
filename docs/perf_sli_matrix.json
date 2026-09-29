@@ -1,5 +1,5 @@
 {
-  "schema": "pi.perf.sli_ux_matrix.v1",
+  "schema": "ra.perf.sli_ux_matrix.v1",
   "contract_version": "1.1.0",
   "bead_id": "bd-3ar8v.1.10",
   "previous_contract_bead_id": "bd-3ar8v.1.9",
@@ -52,7 +52,7 @@
     ]
   },
   "evidence_adjudication_contract": {
-    "schema": "pi.perf.evidence_adjudication_contract.v1",
+    "schema": "ra.perf.evidence_adjudication_contract.v1",
     "required_input_artifacts": [
       "summary_json",
       "baseline_variance_confidence",
@@ -346,7 +346,7 @@
     ]
   },
   "workload_partition_contract": {
-    "schema": "pi.perf.workload_partition_contract.v1",
+    "schema": "ra.perf.workload_partition_contract.v1",
     "contract_version": "1.0.0",
     "bead_id": "bd-3ar8v.1.10",
     "benchmark_script_references": [
@@ -658,7 +658,7 @@
       }
     ],
     "weighting_policy": {
-      "schema": "pi.perf.partition_weighting.v1",
+      "schema": "ra.perf.partition_weighting.v1",
       "decision_weights": {
         "matched-state": 0.35,
         "realistic": 0.65
@@ -1148,7 +1148,7 @@
     }
   ],
   "reporting_contract": {
-    "schema": "pi.perf.epistemology_reporting_contract.v1",
+    "schema": "ra.perf.epistemology_reporting_contract.v1",
     "required_scenarios": [
       "wf-cli-onboarding-and-slash-commands",
       "wf-agent-loop-and-tool-roundtrip",

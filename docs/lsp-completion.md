@@ -181,6 +181,6 @@ preview edits and placeholder metadata.
 
 Regression tests are in `src/lsp/completion/tests.rs`, `completion/item/tests.rs`
 `completion/snippet/tests.rs` and `completion/tests/protocol.rs`. The latter drives the real tool over framed
-child stdio and real temporary source files. `PI_LSP_REQUIRE_PROTOCOL` makes a
+child stdio and real temporary source files. `RECUR_AGENT_LSP_REQUIRE_PROTOCOL` makes a
 missing Python peer an error rather than a skip. Run the repository's DSR
 quality entry point; standalone Python-peer checks are not Rust test evidence.

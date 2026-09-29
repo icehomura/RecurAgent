@@ -13,13 +13,13 @@
             "bd-h3uv0.7": "closed"
           },
           "close_reasons": {
-            "bd-h3uv0.1": "Completed: defined pi.swarm.autopilot_input_pack.v1 with source-status contract, Agent Mail/RCH/git/Beads normalization, self-test coverage, runbook wiring, and RCH-backed validation",
-            "bd-h3uv0.2": "Completed: implemented pi.swarm.autopilot_plan.v1 dry-run planner with contract, CLI output, golden fixture, and degraded/healthy/empty/stale/RCH safety self-test coverage",
+            "bd-h3uv0.1": "Completed: defined ra.swarm.autopilot_input_pack.v1 with source-status contract, Agent Mail/RCH/git/Beads normalization, self-test coverage, runbook wiring, and RCH-backed validation",
+            "bd-h3uv0.2": "Completed: implemented ra.swarm.autopilot_plan.v1 dry-run planner with contract, CLI output, golden fixture, and degraded/healthy/empty/stale/RCH safety self-test coverage",
             "bd-h3uv0.3": "Completed: added diagnostic work_partitions planner output with reservation globs, avoid surfaces, confidence/caveats, contracts, runbook docs, fixture coverage, and temp Beads smoke coverage",
             "bd-h3uv0.4": "Completed: added failure_actions catalog with stable operational IDs, safe commands, escalation text, redacted unknown excerpts, contracts, runbook docs, golden projection, and self-test coverage",
-            "bd-h3uv0.5": "Completed: added pi.swarm.budget_drift.v1 watcher with live budget signals, adjusted fanout recommendations, autopilot plan action, contracts, runbook docs, golden projection, and self-test coverage for CPU, memory, tmpdir, RCH queue, recovered state, and hysteresis",
+            "bd-h3uv0.5": "Completed: added ra.swarm.budget_drift.v1 watcher with live budget signals, adjusted fanout recommendations, autopilot plan action, contracts, runbook docs, golden projection, and self-test coverage for CPU, memory, tmpdir, RCH queue, recovered state, and hysteresis",
             "bd-h3uv0.6": "Completed: added no-mock autopilot E2E JSON/JSONL harness with real temp Beads/git probes, degraded RCH/Mail fixtures, fail-closed malformed-source scenario, safe-command assertions, runbook validation docs, and self-test coverage",
-            "bd-h3uv0.7": "Completed: projected dry-run autopilot input-pack and plan artifacts into operator runpack JSON/Markdown via pi.swarm.autopilot_handoff.v1, updated contract, README, runbook examples, and self-test coverage while preserving source-of-truth wording"
+            "bd-h3uv0.7": "Completed: projected dry-run autopilot input-pack and plan artifacts into operator runpack JSON/Markdown via ra.swarm.autopilot_handoff.v1, updated contract, README, runbook examples, and self-test coverage while preserving source-of-truth wording"
           },
           "path": ".beads/issues.jsonl"
         }
@@ -233,12 +233,12 @@
               "status": "pass"
             },
             {
-              "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/GoldenGlacier/target TMPDIR=/data/tmp/pi_agent_rust_cargo/GoldenGlacier/tmp rch exec -- cargo check --all-targets",
+              "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/GoldenGlacier/target TMPDIR=/data/tmp/recur_agent_cargo/GoldenGlacier/tmp rch exec -- cargo check --all-targets",
               "id": "cargo_check_all_targets_rch",
               "status": "pass"
             },
             {
-              "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/GoldenGlacier/target TMPDIR=/data/tmp/pi_agent_rust_cargo/GoldenGlacier/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
+              "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/GoldenGlacier/target TMPDIR=/data/tmp/recur_agent_cargo/GoldenGlacier/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
               "id": "cargo_clippy_all_targets_rch",
               "status": "pass"
             },
@@ -302,6 +302,6 @@
     "pushed_commits",
     "quality_gates"
   ],
-  "schema": "pi.swarm.autopilot_decision_gate.v1",
+  "schema": "ra.swarm.autopilot_decision_gate.v1",
   "status": "pass"
 }

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.certification_verdict.v1",
+  "schema": "ra.dropin.certification_verdict.v1",
   "git_commit": "52e9fbfb24352045985b59df9d7ea63f1f8f2ef8",
   "generated_at_utc": "2026-05-18T19:37:26Z",
   "overall_verdict": "CERTIFIED",

@@ -1,16 +1,16 @@
 {
-  "schema": "pi.validation_broker.contract.v1",
-  "request_schema": "pi.validation_broker.request.v1",
-  "slot_schema": "pi.validation_broker.slot.v1",
-  "decision_schema": "pi.validation_broker.decision.v1",
-  "fault_corpus_schema": "pi.validation_broker.fault_corpus.v1",
-  "fault_event_schema": "pi.validation_broker.fault_event.v1",
-  "cli_status_schema": "pi.validation_broker.cli_status.v1",
-  "cli_plan_schema": "pi.validation_broker.cli_plan.v1",
-  "cli_lease_mutation_schema": "pi.validation_broker.cli_lease_mutation.v1",
-  "stress_profile_corpus_schema": "pi.validation_broker.stress_profile_corpus.v1",
-  "stress_budget_report_schema": "pi.validation_broker.stress_budget_report.v1",
-  "stress_evidence_schema": "pi.validation_broker.stress_evidence.v1",
+  "schema": "ra.validation_broker.contract.v1",
+  "request_schema": "ra.validation_broker.request.v1",
+  "slot_schema": "ra.validation_broker.slot.v1",
+  "decision_schema": "ra.validation_broker.decision.v1",
+  "fault_corpus_schema": "ra.validation_broker.fault_corpus.v1",
+  "fault_event_schema": "ra.validation_broker.fault_event.v1",
+  "cli_status_schema": "ra.validation_broker.cli_status.v1",
+  "cli_plan_schema": "ra.validation_broker.cli_plan.v1",
+  "cli_lease_mutation_schema": "ra.validation_broker.cli_lease_mutation.v1",
+  "stress_profile_corpus_schema": "ra.validation_broker.stress_profile_corpus.v1",
+  "stress_budget_report_schema": "ra.validation_broker.stress_budget_report.v1",
+  "stress_evidence_schema": "ra.validation_broker.stress_evidence.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-gusp4.1",
   "parent_bead_id": "bd-gusp4",
@@ -278,8 +278,8 @@
   "fault_corpus_contract": {
     "corpus_path": "tests/golden_corpus/validation_broker/fault_corpus.json",
     "event_log_path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-    "schema": "pi.validation_broker.fault_corpus.v1",
-    "event_schema": "pi.validation_broker.fault_event.v1",
+    "schema": "ra.validation_broker.fault_corpus.v1",
+    "event_schema": "ra.validation_broker.fault_event.v1",
     "required_faults": [
       "agent_mail_unavailable",
       "rch_queue_saturated",
@@ -318,10 +318,10 @@
   },
   "stress_budget_contract": {
     "profile_corpus_path": "tests/golden_corpus/validation_broker/stress_profiles.json",
-    "profile_corpus_schema": "pi.validation_broker.stress_profile_corpus.v1",
+    "profile_corpus_schema": "ra.validation_broker.stress_profile_corpus.v1",
     "report_path": "docs/evidence/validation-broker-stress-budgets.json",
-    "report_schema": "pi.validation_broker.stress_budget_report.v1",
-    "entry_schema": "pi.validation_broker.stress_evidence.v1",
+    "report_schema": "ra.validation_broker.stress_budget_report.v1",
+    "entry_schema": "ra.validation_broker.stress_evidence.v1",
     "bead_id": "bd-gusp4.9",
     "required_profiles": [
       "synthetic_64c_256gb_nominal",
@@ -421,7 +421,7 @@
     }
   },
   "doctor_runpack_projection_contract": {
-    "doctor_schema": "pi.doctor.validation_broker_posture.v1",
+    "doctor_schema": "ra.doctor.validation_broker_posture.v1",
     "runpack_optional_source_id": "validation_broker",
     "autopilot_optional_source_id": "validation_broker",
     "required_projection_fields": [

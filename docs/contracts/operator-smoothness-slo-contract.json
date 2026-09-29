@@ -1,6 +1,6 @@
 {
-  "schema": "pi.operator.smoothness_slo_contract.v1",
-  "evidence_schema": "pi.operator.smoothness_slo.v1",
+  "schema": "ra.operator.smoothness_slo_contract.v1",
+  "evidence_schema": "ra.operator.smoothness_slo.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-9yq7i.5",
   "purpose": "operator_smoothness_slo_engineering_fixture_not_release_benchmark",

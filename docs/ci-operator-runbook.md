@@ -162,7 +162,7 @@ cargo test --test qa_certification_dossier -- certification_dossier --nocapture 
 
 **Remediation:**
 1. Regenerate certification artifacts and backlog in a single run (command above).
-2. Verify backlog schema is `pi.qa.extension_remediation_backlog.v1`.
+2. Verify backlog schema is `ra.qa.extension_remediation_backlog.v1`.
 3. Ensure the backlog summary/entries are non-empty when conformance failures exist.
 4. Re-run dependent gates after artifact refresh.
 
@@ -245,7 +245,7 @@ cargo test --test e2e_tui -- --nocapture
 
 **Remediation:**
 1. TUI tests require tmux. Verify `tmux` is installed and accessible.
-2. Set `PI_TEST_MODE=1` for deterministic rendering.
+2. Set `RECUR_AGENT_TEST_MODE=1` for deterministic rendering.
 3. VCR cassettes provide provider responses; check cassette freshness.
 
 ---
@@ -408,7 +408,7 @@ rch exec -- cargo test --test ci_full_suite_gate -- full_suite_gate --nocapture 
 ```
 
 **Remediation:**
-1. Enforce artifact schema `pi.perf.parameter_sweeps.v1`.
+1. Enforce artifact schema `ra.perf.parameter_sweeps.v1`.
 2. Enforce `source_identity` contract (`source_artifact = "phase1_matrix_validation"` and
    `source_artifact_path` references `phase1_matrix_validation.json`).
 3. Enforce readiness invariants:

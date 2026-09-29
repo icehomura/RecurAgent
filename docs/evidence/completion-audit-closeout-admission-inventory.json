@@ -1,5 +1,5 @@
 {
-  "schema": "pi.completion_audit.closeout_admission_inventory.v1",
+  "schema": "ra.completion_audit.closeout_admission_inventory.v1",
   "generated_at": "2026-05-19T05:01:53Z",
   "status": "pass",
   "decision": "completion_audit_closeout_admission_inventory_ready",
@@ -167,7 +167,7 @@
   },
   "current_completion_audit_surface": {
     "script": "scripts/build_completion_audit.py",
-    "current_schema": "pi.completion_audit.v1",
+    "current_schema": "ra.completion_audit.v1",
     "detected_requirement_classes": [
       "command",
       "file",
@@ -200,7 +200,7 @@
     ]
   },
   "proposed_closeout_admission_contract": {
-    "schema": "pi.completion_audit.closeout_admission.v1",
+    "schema": "ra.completion_audit.closeout_admission.v1",
     "required_top_level_keys": [
       "schema",
       "generated_at",

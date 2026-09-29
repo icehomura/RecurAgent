@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_setup_guide.v1",
+  "schema": "ra.provider_setup_guide.v1",
   "bead_id": "bd-3uqg.11.6.7",
   "provider_id": "cerebras",
   "canonical_provider_id": "cerebras",
@@ -14,7 +14,7 @@
       "steps": [
         "1. Get an API key from https://cloud.cerebras.ai/",
         "2. Export: export CEREBRAS_API_KEY=csk-...",
-        "3. Run: pi --provider cerebras --model llama-3.3-70b"
+        "3. Run: ra --provider cerebras --model llama-3.3-70b"
       ],
       "example_env": {
         "CEREBRAS_API_KEY": "csk-your_api_key_here"
@@ -25,7 +25,7 @@
       "example_env": {
         "CEREBRAS_API_KEY": "csk-your_api_key_here"
       },
-      "example_cli": "pi --provider cerebras --model qwen-3-32b",
+      "example_cli": "ra --provider cerebras --model qwen-3-32b",
       "notes": [
         "Tool calling only available on gpt-oss-120b, qwen-3-32b, zai-glm-4.7.",
         "WSE hardware provides unique time_info fields: queue_time, prompt_time, completion_time, total_time.",
@@ -87,7 +87,7 @@
     {
       "symptom": "Provider not found for 'cerebras'",
       "cause": "Model not recognized in registry",
-      "fix": "Use ad-hoc model syntax: pi --provider cerebras --model <model-id>. Model lineup is small (6 models).",
+      "fix": "Use ad-hoc model syntax: ra --provider cerebras --model <model-id>. Model lineup is small (6 models).",
       "test_evidence": "tests/provider_factory.rs (wave presets)"
     }
   ],

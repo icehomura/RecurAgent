@@ -1,5 +1,5 @@
 {
-  "schema": "pi.waiver.ledger.contract.v1",
+  "schema": "ra.waiver.ledger.contract.v1",
   "bead_id": "bd-sog97.12",
   "version": "1.0.0",
   "effective_date_utc": "2026-08-24T00:00:00Z",

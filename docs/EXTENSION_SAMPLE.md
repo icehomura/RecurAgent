@@ -177,7 +177,7 @@ cargo test
 
 Normalization rules (remove non-determinism, preserve semantics):
 - Replace RFC3339 timestamp strings with `<TIMESTAMP>` and numeric `timestamp` fields with `0`.
-- Rewrite absolute paths under the repo to `<PROJECT_ROOT>` and the legacy repo root to `<PI_MONO_ROOT>`.
+- Rewrite absolute paths under the repo to `<PROJECT_ROOT>` and the legacy repo root to `<RECUR_AGENT_MONO_ROOT>`.
 - Rewrite `run-<uuid>` to `<RUN_ID>` and bare UUIDs to `<UUID>`.
 - Rewrite mock OpenAI base URLs to `http://127.0.0.1:<PORT>/v1`.
 - Rewrite `Total output lines: N` to `Total output lines: <N>`.
@@ -192,7 +192,7 @@ This section is the “new maintainer path” for reproducing the committed lega
   - `stdout.jsonl`, `stderr.txt`, `meta.json`, `capture.log.jsonl`
   - plus normalized siblings: `stdout.normalized.jsonl`, `meta.normalized.json`, `capture.normalized.log.jsonl`
 - **Golden fixture outputs** (one file per extension): `tests/ext_conformance/fixtures/<extension_id>.json`
-  - Schema: `pi.ext.legacy_fixtures.v1`
+  - Schema: `ra.ext.legacy_fixtures.v1`
   - Captures provenance (legacy pi-mono HEAD, node/npm versions, manifest commit/checksum, etc.)
 
 ### Prerequisites

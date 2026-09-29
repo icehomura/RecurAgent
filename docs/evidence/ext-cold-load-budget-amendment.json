@@ -1,5 +1,5 @@
 {
-  "schema": "pi.conformal_budget_amendment.v1",
+  "schema": "ra.conformal_budget_amendment.v1",
   "amendment_id": "bd-sog97.5-ext-cold-load-20260824",
   "bead_id": "bd-sog97.5",
   "source_commit": "43de60cd9af4f1414cebf5370a3cc9e59d030a62",

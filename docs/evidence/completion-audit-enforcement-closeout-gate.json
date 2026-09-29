@@ -1,5 +1,5 @@
 {
-  "schema": "pi.completion_audit.enforcement_closeout_gate.v1",
+  "schema": "ra.completion_audit.enforcement_closeout_gate.v1",
   "generated_at": "2026-05-19T05:32:04Z",
   "status": "pass",
   "decision": "advisory_closeout_ready",

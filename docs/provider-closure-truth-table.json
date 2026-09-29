@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.provider_closure_truth_table.v1",
+  "schema": "ra.qa.provider_closure_truth_table.v1",
   "bead_id": "bd-3uqg.12.2.2",
   "generated_at_utc": "2026-02-14T01:00:00Z",
   "generated_by": "Opus4.6-agent (enhanced from CopperBrook baseline)",
@@ -241,13 +241,13 @@
         "additional_headers": [
           {
             "header": "HTTP-Referer",
-            "env_vars": ["OPENROUTER_HTTP_REFERER", "PI_OPENROUTER_HTTP_REFERER"],
+            "env_vars": ["OPENROUTER_HTTP_REFERER", "RECUR_AGENT_OPENROUTER_HTTP_REFERER"],
             "required": false,
             "purpose": "Attribution for OpenRouter dashboard"
           },
           {
             "header": "X-Title",
-            "env_vars": ["OPENROUTER_X_TITLE", "PI_OPENROUTER_X_TITLE"],
+            "env_vars": ["OPENROUTER_X_TITLE", "RECUR_AGENT_OPENROUTER_X_TITLE"],
             "required": false,
             "purpose": "Application title for OpenRouter dashboard"
           }

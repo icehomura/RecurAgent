@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.replay_trace_contract.v1",
-  "trace_schema": "pi.swarm.replay_trace.v1",
+  "schema": "ra.swarm.replay_trace_contract.v1",
+  "trace_schema": "ra.swarm.replay_trace.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-in57w.1",
   "parent_bead_id": "bd-in57w",

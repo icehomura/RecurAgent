@@ -24,7 +24,7 @@ The contract significantly understates current implementation status:
 | SDK-07 (compaction/abort) | partial | ✅ `compact()`, abort methods complete |
 | SDK-08 (tools/hooks) | partial | ✅ Extensive tool factories implemented |
 | SDK-09 (transport adapters) | missing | ❓ RPC client exists, needs validation |
-| SDK-10 (contract stability) | implemented | ✅ Stable `pi::sdk` module |
+| SDK-10 (contract stability) | implemented | ✅ Stable `ra::sdk` module |
 
 **7/10 capabilities are actually implemented or nearly complete**, not "3 missing, 6 partial" as documented.
 

@@ -1,4 +1,4 @@
-# Feature Parity: pi_agent_rust vs Pi Agent (TypeScript)
+# Feature Parity: recur_agent vs Recur Agent (TypeScript)
 
 > **Purpose:** Authoritative single-source-of-truth for implementation status.
 > **Last Updated:** 2026-02-18 (implementation snapshot refresh)
@@ -187,7 +187,7 @@
 | Skill command expansion (`/skill:name`) | ✅ | `src/resources.rs`, `src/interactive.rs` | Unit | Expands to `<skill ...>` block |
 | Prompt template loader | ✅ | `src/resources.rs` | Unit | Global/project + explicit paths |
 | Prompt template expansion (`/name args`) | ✅ | `src/resources.rs`, `src/interactive.rs` | Unit | `$1`, `$@`, `$ARGUMENTS`, `${@:N}` |
-| Package resource discovery | ✅ | `src/resources.rs` | Unit | Reads `package.json` `pi` field or defaults |
+| Package resource discovery | ✅ | `src/resources.rs` | Unit | Reads `package.json` `ra` field or defaults |
 | Themes discovery | ✅ | `src/theme.rs`, `src/interactive.rs` | Unit + `tests/tui_state.rs` | Loader + /theme switching |
 | Themes hot reload | ✅ | `src/interactive.rs` | `tests/tui_state.rs` | `/reload` re-resolves and reapplies current theme |
 
@@ -197,8 +197,8 @@
 |---------|--------|---------------|-------|-------|
 | Extension discovery (paths + packages) | ✅ | `src/package_manager.rs`, `src/resources.rs` | Unit | Resolves `extensions/` sources from settings/auto-discovery/packages/CLI |
 | Extension protocol (v1) + JSON schema | ✅ | `src/extensions.rs`, `docs/schema/extension_protocol.json` | Unit + `tests/extensions_manifest.rs` | `ExtensionMessage::parse_and_validate` + schema compilation tests |
-| Compatibility scanner (Node API audit) | ✅ | `src/extensions.rs`, `src/package_manager.rs` | `tests/ext_conformance_artifacts.rs` | Emits compat ledgers when `PI_EXT_COMPAT_SCAN` is enabled |
-| Capability manifest + policy | ✅ | `src/extensions.rs` | Unit + `tests/extensions_manifest.rs` | `strict/prompt/permissive` + scoped manifests (`pi.ext.cap.v1`) |
+| Compatibility scanner (Node API audit) | ✅ | `src/extensions.rs`, `src/package_manager.rs` | `tests/ext_conformance_artifacts.rs` | Emits compat ledgers when `RECUR_AGENT_EXT_COMPAT_SCAN` is enabled |
+| Capability manifest + policy | ✅ | `src/extensions.rs` | Unit + `tests/extensions_manifest.rs` | `strict/prompt/permissive` + scoped manifests (`ra.ext.cap.v1`) |
 | FS connector (scoped, anti-escape) | ✅ | `src/extensions.rs` | Unit | Path traversal + symlink escape hardening |
 | HTTP connector (policy-gated) | ✅ | `src/connectors/http.rs` | Unit | TLS/allowlist/denylist/size/timeouts |
 | PiJS runtime (QuickJS) | ✅ | `src/extensions_js.rs` | Unit + `tests/event_loop_conformance.rs` | Deterministic scheduler + Promise bridge + budgets/timeouts |
@@ -222,7 +222,7 @@
 | Image settings | ✅ | `src/config.rs` | - | auto_resize, block |
 | Terminal settings | ✅ | `src/config.rs` | - | show_images, clear |
 | Thinking budgets | ✅ | `src/config.rs` | - | Per-level overrides |
-| Environment variables | ✅ | `src/config.rs` | - | PI_CONFIG_PATH/PI_CODING_AGENT_DIR/PI_PACKAGE_DIR/PI_SESSIONS_DIR + provider API keys |
+| Environment variables | ✅ | `src/config.rs` | - | RECUR_AGENT_CONFIG_PATH/RECUR_AGENT_DIR/RECUR_AGENT_PACKAGE_DIR/RECUR_AGENT_SESSIONS_DIR + provider API keys |
 
 ---
 
@@ -232,7 +232,7 @@
 
 | Feature | Status | Rust Location | Tests | Notes |
 |---------|--------|---------------|-------|-------|
-| PiConsole wrapper | ✅ | `src/tui.rs` | 3 | rich_rust integration |
+| RaConsole wrapper | ✅ | `src/tui.rs` | 3 | rich_rust integration |
 | Styled output (markup) | ✅ | `src/tui.rs` | - | Colors, bold, dim |
 | Agent event rendering | ✅ | `src/tui.rs` | - | Text, thinking, tools, errors |
 | Table rendering | ✅ | `src/tui.rs` | - | Via rich_rust Tables |
@@ -244,14 +244,14 @@
 
 | Feature | Status | Rust Location | Tests | Notes |
 |---------|--------|---------------|-------|-------|
-| PiApp Model | ✅ | `src/interactive.rs` | 296+ | Elm Architecture (296 tui_state + 226 lib unit tests) |
+| RaApp Model | ✅ | `src/interactive.rs` | 296+ | Elm Architecture (296 tui_state + 226 lib unit tests) |
 | TextInput with history | ✅ | `src/interactive.rs` | - | bubbles TextInput |
 | Markdown rendering | ✅ | `src/interactive.rs` | - | glamour Dark style |
 | Token/cost footer | ✅ | `src/interactive.rs` | - | Usage tracking |
 | Spinner animation | ✅ | `src/interactive.rs` | - | bubbles spinner |
 | Tool status display | ✅ | `src/interactive.rs` | - | Running tool indicator |
 | Keyboard navigation | ✅ | `src/interactive.rs` | - | Up/Down history, Esc quit |
-| Agent integration | ✅ | `src/interactive.rs` | - | Agent events wired; CLI interactive uses PiApp |
+| Agent integration | ✅ | `src/interactive.rs` | - | Agent events wired; CLI interactive uses RaApp |
 | Multi-line editor | ✅ | `src/interactive.rs` | - | TextArea with line wrapping |
 | Slash command system | ✅ | `src/interactive.rs` | - | /help, /login, /logout, /clear, /model, /thinking, /exit, /history, /export, /session, /resume, /new, /copy, /name, /hotkeys |
 | Viewport scrolling | ✅ | `src/interactive.rs` | - | Viewport with scroll_to_bottom() |
@@ -394,7 +394,7 @@ Fixtures are JSON files in `tests/conformance/fixtures/` with this structure:
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| Startup time | <100ms | 13ms (`pi --version`) | ✅ |
+| Startup time | <100ms | 13ms (`ra --version`) | ✅ |
 | Binary size (release) | <20MB | 8.3MB | ✅ |
 | TUI framerate | 60fps | Instrumented (PERF-3: frame timing telemetry) | ✅ |
 | Frame budget | <16ms | Enforced (PERF-4: auto-degrades when exceeded) | ✅ |

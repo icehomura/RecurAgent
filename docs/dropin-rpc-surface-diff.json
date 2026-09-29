@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.rpc_surface_diff.v1",
+  "schema": "ra.dropin.rpc_surface_diff.v1",
   "bead": "bd-lnmtp.2.1",
   "generated_at": "2026-04-22",
   "domain": "G05-json-rpc-parity",

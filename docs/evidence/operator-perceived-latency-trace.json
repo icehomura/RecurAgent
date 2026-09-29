@@ -505,7 +505,7 @@
     "tool_update",
     "operator_visible"
   ],
-  "schema": "pi.operator.perceived_latency_trace.v1",
+  "schema": "ra.operator.perceived_latency_trace.v1",
   "source_bead": "bd-63x3v.11.5",
   "source_boundaries": [
     {

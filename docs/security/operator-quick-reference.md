@@ -7,18 +7,18 @@ For detailed procedures, see the Incident Response Runbook and Policy Tuning Gui
 
 ```bash
 # Master switches
-PI_EXTENSION_RISK_ENABLED=true      # Enable runtime risk controller
-PI_EXTENSION_RISK_ENFORCE=true       # Enable enforcement (false = shadow mode)
-PI_EXTENSION_RISK_FAIL_CLOSED=true   # Deny on controller errors
+RECUR_AGENT_EXTENSION_RISK_ENABLED=true      # Enable runtime risk controller
+RECUR_AGENT_EXTENSION_RISK_ENFORCE=true       # Enable enforcement (false = shadow mode)
+RECUR_AGENT_EXTENSION_RISK_FAIL_CLOSED=true   # Deny on controller errors
 
 # Tuning
-PI_EXTENSION_RISK_ALPHA=0.01         # Type-I error budget (1e-6..0.5)
-PI_EXTENSION_RISK_WINDOW=128         # Sliding window size (8..4096)
-PI_EXTENSION_RISK_LEDGER_LIMIT=2048  # Max ledger entries (32..20000)
-PI_EXTENSION_RISK_DECISION_TIMEOUT_MS=50  # Decision budget ms (1..2000)
+RECUR_AGENT_EXTENSION_RISK_ALPHA=0.01         # Type-I error budget (1e-6..0.5)
+RECUR_AGENT_EXTENSION_RISK_WINDOW=128         # Sliding window size (8..4096)
+RECUR_AGENT_EXTENSION_RISK_LEDGER_LIMIT=2048  # Max ledger entries (32..20000)
+RECUR_AGENT_EXTENSION_RISK_DECISION_TIMEOUT_MS=50  # Decision budget ms (1..2000)
 
 # Policy profile
-PI_EXTENSION_POLICY=standard         # safe | standard | permissive
+RECUR_AGENT_EXTENSION_POLICY=standard         # safe | standard | permissive
 ```
 
 ## Rollout Phases
@@ -132,7 +132,7 @@ let trust = manager.trust_state("extension-id");
 ## Evidence Bundle Operations
 
 ```rust
-use pi::extensions::{
+use ra::extensions::{
     build_incident_evidence_bundle, verify_incident_evidence_bundle,
     replay_runtime_risk_ledger_artifact,
     IncidentBundleFilter, IncidentBundleRedactionPolicy,
@@ -232,8 +232,8 @@ let policy = ExtensionPolicy {
 
 | Task | Method |
 |------|--------|
-| Enable risk controller | `PI_EXTENSION_RISK_ENABLED=true` |
-| Start in shadow mode | `PI_EXTENSION_RISK_ENFORCE=false` |
+| Enable risk controller | `RECUR_AGENT_EXTENSION_RISK_ENABLED=true` |
+| Start in shadow mode | `RECUR_AGENT_EXTENSION_RISK_ENFORCE=false` |
 | Check current phase | `manager.rollout_state()` |
 | Advance rollout | `manager.advance_rollout()` |
 | Emergency rollback | `manager.set_rollout_phase(RolloutPhase::Shadow)` |

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_gap_test_matrix.v1",
+  "schema": "ra.provider_gap_test_matrix.v1",
   "schema_version": "1.0",
   "bead_id": "bd-3uqg.11.11.1",
   "generated_at_utc": "2026-02-13T05:03:00Z",
@@ -59,7 +59,7 @@
       "evidence_contract.json"
     ],
     "conformance_verify_report_pattern": "verify/<provider>_<scenario>.verify.json",
-    "conformance_verify_schema": "pi.test.native_verify.v1"
+    "conformance_verify_schema": "ra.test.native_verify.v1"
   },
   "test_layers": {
     "unit_contract": {

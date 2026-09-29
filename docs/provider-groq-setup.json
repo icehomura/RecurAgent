@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_setup_guide.v1",
+  "schema": "ra.provider_setup_guide.v1",
   "bead_id": "bd-3uqg.11.5.7",
   "provider_id": "groq",
   "canonical_provider_id": "groq",
@@ -14,7 +14,7 @@
       "steps": [
         "1. Get an API key from https://console.groq.com/keys",
         "2. Export: export GROQ_API_KEY=gsk_...",
-        "3. Run: pi --provider groq --model llama-3.3-70b-versatile"
+        "3. Run: ra --provider groq --model llama-3.3-70b-versatile"
       ],
       "example_env": {
         "GROQ_API_KEY": "gsk_your_api_key_here"
@@ -25,7 +25,7 @@
       "example_env": {
         "GROQ_API_KEY": "gsk_your_api_key_here"
       },
-      "example_cli": "pi --provider groq --model deepseek-r1-distill-llama-70b",
+      "example_cli": "ra --provider groq --model deepseek-r1-distill-llama-70b",
       "notes": [
         "Add Groq-Beta: inference-metrics header for detailed timing (queue_time, prompt_time, completion_time).",
         "Use llama-3.3-70b-versatile for general tasks; deepseek-r1-distill-llama-70b for code generation."
@@ -79,7 +79,7 @@
     {
       "symptom": "Provider not found for 'groq'",
       "cause": "Model not recognized",
-      "fix": "Use ad-hoc model syntax: pi --provider groq --model <model-id>. Check available models at https://console.groq.com/docs/models.",
+      "fix": "Use ad-hoc model syntax: ra --provider groq --model <model-id>. Check available models at https://console.groq.com/docs/models.",
       "test_evidence": "tests/provider_factory.rs (wave presets)"
     }
   ],

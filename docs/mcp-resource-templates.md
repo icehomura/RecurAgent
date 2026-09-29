@@ -57,7 +57,7 @@ syntax, missing variables, unsupported value shapes, and exceeded limits return
 `MCP_TEMPLATE_INVALID` before connection setup or `resources/read`. Errors do
 not echo templates, names, or variable values.
 
-SDK callers can use `pi::mcp::expand_resource_uri(template, &variables)` for
+SDK callers can use `ra::mcp::expand_resource_uri(template, &variables)` for
 pure expansion or `McpManager::read_resource_template(server, template,
 &variables).await` for the same server-bound operation.
 

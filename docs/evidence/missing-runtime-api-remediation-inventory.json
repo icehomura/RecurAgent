@@ -1,5 +1,5 @@
 {
-  "schema": "pi.missing_runtime_api.remediation_inventory.v1",
+  "schema": "ra.missing_runtime_api.remediation_inventory.v1",
   "generated_at": "2026-05-19T05:58:00Z",
   "source_bead": "bd-oq2q5.3",
   "status": "inventory_complete_no_new_implementation_beads",
@@ -79,7 +79,7 @@
   },
   "checked_in_backlog_snapshot": {
     "path": "tests/full_suite_gate/extension_remediation_backlog.json",
-    "schema": "pi.qa.extension_remediation_backlog.v1",
+    "schema": "ra.qa.extension_remediation_backlog.v1",
     "generated_at": "2026-03-12T02:21:56.103Z",
     "summary": {
       "total_non_pass_extensions": 14,

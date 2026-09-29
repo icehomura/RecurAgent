@@ -1,5 +1,5 @@
 {
-  "schema": "pi.validation.semantic_route_plan.closeout_gate.v1",
+  "schema": "ra.validation.semantic_route_plan.closeout_gate.v1",
   "generated_at": "2026-05-19T04:40:00Z",
   "status": "pass",
   "purpose": "prompt_to_artifact_semantic_validation_route_closeout_gate_not_source_of_truth",
@@ -43,7 +43,7 @@
       "status": "pass",
       "evidence": [
         "scripts/plan_semantic_validation_route.py",
-        "pi.validation.semantic_route_plan.v1"
+        "ra.validation.semantic_route_plan.v1"
       ]
     },
     {

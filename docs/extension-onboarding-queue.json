@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.onboarding_queue.v2",
+  "schema": "ra.ext.onboarding_queue.v2",
   "generatedAt": "2026-02-14T08:28:53.904440329+00:00",
   "sourcePoolPath": "docs/extension-candidate-pool.json",
   "sourcePoolTotal": 1000,

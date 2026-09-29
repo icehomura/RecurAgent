@@ -1,8 +1,8 @@
 {
-  "schema": "pi.remote_validation.proof_ledger_contract.v1",
-  "ledger_schema": "pi.remote_validation.proof_ledger.v1",
-  "entry_schema": "pi.remote_validation.proof_entry.v1",
-  "example_corpus_schema": "pi.remote_validation.proof_ledger.example_corpus.v1",
+  "schema": "ra.remote_validation.proof_ledger_contract.v1",
+  "ledger_schema": "ra.remote_validation.proof_ledger.v1",
+  "entry_schema": "ra.remote_validation.proof_entry.v1",
+  "example_corpus_schema": "ra.remote_validation.proof_ledger.example_corpus.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-e5le6.1",
   "parent_bead_id": "bd-e5le6",
@@ -254,7 +254,7 @@
     "runbook_path": "docs/swarm-operations-runbook.md",
     "readme_path": "README.md",
     "required_fragments": [
-      "pi.remote_validation.proof_ledger.v1",
+      "ra.remote_validation.proof_ledger.v1",
       "operator evidence only",
       "not release performance evidence",
       "local fallback",

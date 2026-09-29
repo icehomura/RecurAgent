@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ubs.extension_runtime_noise_baseline.v1",
+  "schema": "ra.ubs.extension_runtime_noise_baseline.v1",
   "bead_id": "bd-wv10l",
   "purpose": "Classify the known whole-file UBS signal in the large extension runtime modules so future reviews can separate guarded or test-only baseline noise from new production defects.",
   "generated_from": {
@@ -10,8 +10,8 @@
       "ubs-rust module 3.0.1"
     ],
     "commands": [
-      "ubs --only=rust --format=json --ci --files src/extensions.rs,src/pi_wasm.rs --report-json=/data/tmp/pi_agent_rust_ubs/ext_runtime_ubs_report.json .",
-      "/home/ubuntu/.local/share/ubs/modules/ubs-rust.sh --ci --no-cargo --format=json --emit-findings-json=/data/tmp/pi_agent_rust_ubs/ext_runtime_findings_full.json /data/tmp/pi_agent_rust_ubs/ext_runtime_scope"
+      "ubs --only=rust --format=json --ci --files src/extensions.rs,src/pi_wasm.rs --report-json=/data/tmp/recur_agent_ubs/ext_runtime_ubs_report.json .",
+      "/home/ubuntu/.local/share/ubs/modules/ubs-rust.sh --ci --no-cargo --format=json --emit-findings-json=/data/tmp/recur_agent_ubs/ext_runtime_findings_full.json /data/tmp/recur_agent_ubs/ext_runtime_scope"
     ],
     "scanned_files": [
       "src/extensions.rs",

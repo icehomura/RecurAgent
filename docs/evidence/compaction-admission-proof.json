@@ -1,5 +1,5 @@
 {
-  "schema": "pi.compaction.admission.v1",
+  "schema": "ra.compaction.admission.v1",
   "generated_at": "2026-05-15T23:31:19Z",
   "bead_id": "bd-h66tp.1",
   "purpose": "deterministic_background_compaction_admission_fixture_not_live_host_measurement",
@@ -16,7 +16,7 @@
   },
   "decisions": [
     {
-      "schema": "pi.compaction.admission.v1",
+      "schema": "ra.compaction.admission.v1",
       "allowed": true,
       "reason": "allowed",
       "tokensBefore": 150000,
@@ -34,7 +34,7 @@
       }
     },
     {
-      "schema": "pi.compaction.admission.v1",
+      "schema": "ra.compaction.admission.v1",
       "allowed": true,
       "reason": "allowed",
       "tokensBefore": 150000,
@@ -52,7 +52,7 @@
       }
     },
     {
-      "schema": "pi.compaction.admission.v1",
+      "schema": "ra.compaction.admission.v1",
       "allowed": false,
       "reason": "queue_saturated",
       "tokensBefore": 150000,
@@ -70,7 +70,7 @@
       }
     },
     {
-      "schema": "pi.compaction.admission.v1",
+      "schema": "ra.compaction.admission.v1",
       "allowed": false,
       "reason": "queue_saturated",
       "tokensBefore": 150000,
@@ -88,7 +88,7 @@
       }
     },
     {
-      "schema": "pi.compaction.admission.v1",
+      "schema": "ra.compaction.admission.v1",
       "allowed": false,
       "reason": "queue_saturated",
       "tokensBefore": 150000,
@@ -118,20 +118,20 @@
   ],
   "validation": [
     {
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/tmp cargo test --lib compaction_admission -- --nocapture",
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/tmp cargo test --lib compaction_admission -- --nocapture",
       "status": "passed",
       "observed": "9 passed; 0 failed; 6524 filtered out"
     },
     {
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/tmp cargo check --all-targets",
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/tmp cargo check --all-targets",
       "status": "passed"
     },
     {
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/tmp cargo clippy --all-targets -- -D warnings",
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/tmp cargo clippy --all-targets -- -D warnings",
       "status": "passed"
     },
     {
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey-compaction-admission/tmp cargo fmt --check",
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey-compaction-admission/tmp cargo fmt --check",
       "status": "passed"
     }
   ]

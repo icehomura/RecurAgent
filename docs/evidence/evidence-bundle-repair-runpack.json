@@ -1,5 +1,5 @@
 {
-  "schema": "pi.evidence.evidence_bundle_repair_runpack.v1",
+  "schema": "ra.evidence.evidence_bundle_repair_runpack.v1",
   "generated_at": "2026-08-28T05:26:00.534855+00:00",
   "bead": "bd-evidence-bundle-invalid-fix-802r8",
   "verdict": "bundle_repaired_to_partial",
@@ -26,7 +26,7 @@
     "must_pass_gate_patched": "tests/ext_conformance/reports/gate/must_pass_gate_verdict.json (git_commit rebind + _rebind_notes field documenting the change)"
   },
   "next_actions": [
-    "When RCH recovers, run the actual cargo test (PI_GENERATE_EVIDENCE_BUNDLE=1 cargo test --test ci_evidence_bundle build_evidence_bundle) and confirm the rebuilt index.json matches this Python rebuild.",
+    "When RCH recovers, run the actual cargo test (RECUR_AGENT_GENERATE_EVIDENCE_BUNDLE=1 cargo test --test ci_evidence_bundle build_evidence_bundle) and confirm the rebuilt index.json matches this Python rebuild.",
     "Run bd-marckrenn-pi-sub-triage-xd3gh to fix the 2 marckrenn failures so must_pass_gate's status flips to 'pass'."
   ],
   "rch_state": {

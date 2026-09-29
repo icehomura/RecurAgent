@@ -1,5 +1,5 @@
 {
-  "schema": "pi.traceability.high_value_suite_artifact_inventory.v1",
+  "schema": "ra.traceability.high_value_suite_artifact_inventory.v1",
   "generated_at": "2026-05-10T05:20:00Z",
   "owner_bead": "bd-8t27h.9",
   "purpose": "Inventory high-value verification suites that already emit or link machine-readable JSON/JSONL evidence so traceability governance can reference artifacts instead of prose-only claims.",
@@ -57,8 +57,8 @@
         }
       ],
       "schema_tags": [
-        "pi.test.log.v2",
-        "pi.test.artifact.v1"
+        "ra.test.log.v2",
+        "ra.test.artifact.v1"
       ],
       "deterministic_replay_command": "./scripts/e2e/run_all.sh --profile ci --suite e2e_provider_streaming --suite e2e_provider_scenarios",
       "tmpdir_policy": "E2E runner writes per-run artifacts under tests/e2e_results or the configured runner output directory; suite internals use TestHarness temp paths."
@@ -99,8 +99,8 @@
       ],
       "schema_tags": [
         "pi.session_store_v2.contract.v1",
-        "pi.test.log.v2",
-        "pi.test.artifact.v1"
+        "ra.test.log.v2",
+        "ra.test.artifact.v1"
       ],
       "deterministic_replay_command": "./scripts/e2e/run_all.sh --profile ci --suite e2e_message_session_control --suite e2e_session_persistence",
       "tmpdir_policy": "Session and E2E tests use harness-managed temp sessions and artifact-index records instead of repo-local mutable state."
@@ -142,7 +142,7 @@
       "schema_tags": [
         "pi.ext.conformance_event",
         "pi.ext.parity_event",
-        "pi.test.log.v2"
+        "ra.test.log.v2"
       ],
       "deterministic_replay_command": "./scripts/ext_quality_pipeline.sh --require-rch",
       "tmpdir_policy": "Extension conformance writes reports under tests/ext_conformance/reports and per-case runtime state under harness temp directories."
@@ -190,10 +190,10 @@
         }
       ],
       "schema_tags": [
-        "pi.cargo_headroom.admission.v1",
-        "pi.cargo_headroom.rch_queue_forecast.v1",
-        "pi.test.log.v2",
-        "pi.test.artifact.v1"
+        "ra.cargo_headroom.admission.v1",
+        "ra.cargo_headroom.rch_queue_forecast.v1",
+        "ra.test.log.v2",
+        "ra.test.artifact.v1"
       ],
       "deterministic_replay_command": "./scripts/cargo_headroom.sh --runner auto test --test resource_loader --test resource_edge_cases --test scheduler_repro --test cargo_headroom_admission",
       "tmpdir_policy": "Resource and scheduler suites use TestHarness temp roots; cargo_headroom admission requires explicit target/tmp roots and rejects unsafe repo-local build storage."
@@ -237,8 +237,8 @@
         }
       ],
       "schema_tags": [
-        "pi.test.log.v2",
-        "pi.test.artifact.v1",
+        "ra.test.log.v2",
+        "ra.test.artifact.v1",
         "insta.snapshot"
       ],
       "deterministic_replay_command": "./scripts/e2e/run_all.sh --profile ci --suite e2e_rpc --suite e2e_tui",
@@ -279,9 +279,9 @@
         }
       ],
       "schema_tags": [
-        "pi.perf.budget_event.v1",
-        "pi.perf.comparison_event.v1",
-        "pi.perf.bench_schema_registry.v1"
+        "ra.perf.budget_event.v1",
+        "ra.perf.comparison_event.v1",
+        "ra.perf.bench_schema_registry.v1"
       ],
       "deterministic_replay_command": "python3 scripts/perf/preflight_budget_inputs.py && ./scripts/cargo_headroom.sh test perf_budgets perf_comparison",
       "tmpdir_policy": "Perf orchestrators write caches under PERF_EVIDENCE_CACHE_DIR or CARGO_TARGET_DIR/perf and stage reports under tests/perf/reports."
@@ -321,9 +321,9 @@
         }
       ],
       "schema_tags": [
-        "pi.security.compat_event.v1",
-        "pi.test.log.v2",
-        "pi.security.invariants.v1"
+        "ra.security.compat_event.v1",
+        "ra.test.log.v2",
+        "ra.security.invariants.v1"
       ],
       "deterministic_replay_command": "./scripts/e2e/run_all.sh --profile ci --suite e2e_security_scenario_sec66 --suite e2e_security_scenarios",
       "tmpdir_policy": "Security scenarios use runner temp roots and committed invariant JSON; live credentials are not required for the default replay command."

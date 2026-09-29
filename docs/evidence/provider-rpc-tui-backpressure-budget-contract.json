@@ -142,7 +142,7 @@
       "rpc_output_flush_progress",
       "frame_budget_degradation_class"
     ],
-    "schema": "pi.swarm.provider_rpc_tui_fairness_stress_gate.v1",
+    "schema": "ra.swarm.provider_rpc_tui_fairness_stress_gate.v1",
     "source_evidence_paths": [
       "tests/provider_streaming.rs",
       "docs/evidence/rpc-output-pressure.jsonl",
@@ -176,7 +176,7 @@
     "rpc_output",
     "tui_degradation"
   ],
-  "schema": "pi.swarm.provider_rpc_tui_backpressure_budget_contract.v1",
+  "schema": "ra.swarm.provider_rpc_tui_backpressure_budget_contract.v1",
   "source_bead": "bd-63x3v.10.5",
   "status": "pass",
   "surfaces": [
@@ -202,7 +202,7 @@
         "status": "pass"
       },
       "operator_summary": "Provider streaming pressure preserves semantic stream boundaries while coalescing low-value deltas into bounded queue pressure.",
-      "schema": "pi.test.provider_stream_backpressure.v1",
+      "schema": "ra.test.provider_stream_backpressure.v1",
       "semantic_loss_assertions": {
         "malformed_stream_fail_closed": true,
         "text_preserved": true,
@@ -229,7 +229,7 @@
       },
       "operator_summary": "RPC output pressure evidence bounds low-value updates without blocking, then flushes the latest pending update before semantic output.",
       "row_count": 1,
-      "schema": "pi.rpc_output_pressure.v1",
+      "schema": "ra.rpc_output_pressure.v1",
       "semantic_loss_assertions": {
         "all_checked_in_rows_pass": true,
         "semantic_events_preserved": true
@@ -257,7 +257,7 @@
         "status": "pass"
       },
       "operator_summary": "TUI degradation evidence preserves semantic output and user input while collapsing low-value tool-update pressure.",
-      "schema": "pi.tui.degradation_drill.v1",
+      "schema": "ra.tui.degradation_drill.v1",
       "semantic_loss_assertions": {
         "dedicated_drill_present": true,
         "input_preserved": true,

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.test_double_inventory.v2",
+  "schema": "ra.qa.test_double_inventory.v2",
   "report_id": "bd-1f42.8.1-test-double-inventory-v2",
   "bead_id": "bd-1f42.8.1",
   "generated_at_utc": "2026-02-13T04:24:50.993406+00:00",
@@ -33,7 +33,7 @@
     "notes": "Entries are deduplicated by (file,module,test_case,double_identifier,double_type) and then aggregated into risk/suite cluster summaries."
   },
   "extension_stub_placeholder_reconciliation": {
-    "schema": "pi.qa.extension_stub_placeholder_reconciliation.v1",
+    "schema": "ra.qa.extension_stub_placeholder_reconciliation.v1",
     "bead_id": "bd-8t27h.14",
     "generated_at_utc": "2026-08-04T06:56:22Z",
     "purpose": "Classify extension-related stubs, mocks, placeholders, and temporary compatibility gaps against current conformance evidence without treating test fixtures as production placeholders.",

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.event_subscription_failure_taxonomy.v1",
+  "schema": "ra.ext.event_subscription_failure_taxonomy.v1",
   "generated_at": "2026-05-12T22:16:24Z",
   "bead": "bd-d7v9g.1",
   "scope": "Diagnostic taxonomy only. It does not mark any journey or health report green.",
@@ -8,13 +8,13 @@
       "path": "tests/ext_conformance/reports/journeys/journey_report.json",
       "sha256": "07653d8e158578700b8962e5fbdd2e7eff97e01951d4c0e3419b353023ff108a",
       "generated_at": "2026-05-01T04:07:47.106Z",
-      "schema": "pi.ext.journey_report.v1"
+      "schema": "ra.ext.journey_report.v1"
     },
     {
       "path": "tests/ext_conformance/reports/health_delta/health_delta_report.json",
       "sha256": "7dbd0036cf789b0e34b3f4b0d02b4e1f7d73afd7fc863951177b3e3561402228",
       "generated_at": "2026-05-01T04:10:28.479Z",
-      "schema": "pi.ext.health_delta.v1"
+      "schema": "ra.ext.health_delta.v1"
     },
     {
       "path": "tests/ext_conformance/VALIDATED_MANIFEST.json",
@@ -1351,7 +1351,7 @@
       "delta_type": "unchanged_fail",
       "current_status": "fail",
       "baseline_status": "fail",
-      "failure_reason": "Load error: Extension error: Error loading module '/data/tmp/pi_agent_rust_cargo/codex-evidence-030/tmp/pi-processes-1777608581425': host write denied: path outside extension root\n    at checkWriteAccess (node:fs:32:47)\n    at mkdirSync (node:fs:572:29)\n    at ProcessManager (/data/projects/pi_agent_rust/tests/ext_conformance/artifacts/npm/aliou-pi-processes/manager.ts:17:19)\n    at default (/data/projects/pi_agent_rust/tests/ext_conformance/artifacts/npm/aliou-pi-processes/index.ts:14:25)\n    at __pi_load_extension (eval_script:472:20)\n",
+      "failure_reason": "Load error: Extension error: Error loading module '/data/tmp/recur_agent_cargo/codex-evidence-030/tmp/pi-processes-1777608581425': host write denied: path outside extension root\n    at checkWriteAccess (node:fs:32:47)\n    at mkdirSync (node:fs:572:29)\n    at ProcessManager (/data/projects/recur_agent/tests/ext_conformance/artifacts/npm/aliou-pi-processes/manager.ts:17:19)\n    at default (/data/projects/recur_agent/tests/ext_conformance/artifacts/npm/aliou-pi-processes/index.ts:14:25)\n    at __pi_load_extension (eval_script:472:20)\n",
       "baseline_failure_reason": "Extension uses relative imports to unbundled sibling/parent modules.",
       "taxonomy_key": "health_delta_host_write_policy_or_packaging_gap",
       "recommended_owner_child": "bd-d7v9g.5"
@@ -1373,7 +1373,7 @@
       "delta_type": "new_failure",
       "current_status": "fail",
       "baseline_status": null,
-      "failure_reason": "Load error: Extension error: Error loading module '/tmp/pi-async-subagent-results': host write denied: path outside extension root\n    at checkWriteAccess (node:fs:32:47)\n    at mkdirSync (node:fs:572:29)\n    at registerSubagentExtension (/data/projects/pi_agent_rust/tests/ext_conformance/artifacts/community/nicobailon-subagents/index.ts:29:18)\n    at __pi_load_extension (eval_script:472:20)\n",
+      "failure_reason": "Load error: Extension error: Error loading module '/tmp/pi-async-subagent-results': host write denied: path outside extension root\n    at checkWriteAccess (node:fs:32:47)\n    at mkdirSync (node:fs:572:29)\n    at registerSubagentExtension (/data/projects/recur_agent/tests/ext_conformance/artifacts/community/nicobailon-subagents/index.ts:29:18)\n    at __pi_load_extension (eval_script:472:20)\n",
       "baseline_failure_reason": null,
       "taxonomy_key": "health_delta_host_write_policy_or_packaging_gap",
       "recommended_owner_child": "bd-d7v9g.5"

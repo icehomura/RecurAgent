@@ -14,11 +14,11 @@ compiles locally:
 ```bash
 # Authoritative gate (registry entry in ~/.config/dsr/repos.yaml, or the
 # checked-in copy in .dsr/repos.yaml on a host that has not registered it)
-dsr quality --tool pi_agent_rust
-DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
+DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool recur_agent
 
 # Cross-platform release artifacts (release operator's machine only)
-dsr build pi_agent_rust
+dsr build recur_agent
 ```
 
 The `rch exec -- cargo ...` commands below are the same invocations the recipe
@@ -35,13 +35,13 @@ rch exec -- cargo build --release
 
 ## Sibling Crates (Published vs Local Dev)
 
-By default, `pi_agent_rust` depends on **published crates.io versions** of the sibling libraries:
+By default, `recur_agent` depends on **published crates.io versions** of the sibling libraries:
 - `asupersync`
 - `rich_rust`
 - `charmed-*` (bubbletea/lipgloss/bubbles/glamour)
 - `fsqlite` (FrankenSQLite, pure-Rust SQLite engine)
 
-If you want to hack on those repos locally (in lockstep), use a local-only Cargo patch. Assuming the sibling repos are checked out next to `pi_agent_rust` (e.g. `../asupersync`, `../rich_rust`, etc), add this to **your local checkout** (do not commit):
+If you want to hack on those repos locally (in lockstep), use a local-only Cargo patch. Assuming the sibling repos are checked out next to `recur_agent` (e.g. `../asupersync`, `../rich_rust`, etc), add this to **your local checkout** (do not commit):
 
 ```toml
 [patch.crates-io]
@@ -63,7 +63,7 @@ We enforce a strict "no mocks" policy for core logic. Tests use real filesystem 
 ```bash
 # Authoritative: the DSR recipe runs `cargo test --locked --all-targets --no-fail-fast`
 # through rch together with fmt/check/clippy/installer/reachability
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 
 # Inner loop only (not a quality claim)
 rch exec -- cargo test
@@ -83,12 +83,12 @@ headroom wrapper because it emits a JSON admission decision before running:
 ./scripts/cargo_headroom.sh --runner auto --admit-only clippy --all-targets -- -D warnings
 
 # Run through rch with target/tmp directories outside the repo
-PI_CARGO_AGENT_SUFFIX="$USER" ./scripts/cargo_headroom.sh --runner rch clippy --all-targets -- -D warnings
+RECUR_AGENT_CARGO_AGENT_SUFFIX="$USER" ./scripts/cargo_headroom.sh --runner rch clippy --all-targets -- -D warnings
 ```
 
 In `--runner auto` mode, the wrapper falls back locally only for safe local
 commands such as `cargo fmt` or when the operator passes
-`--allow-local-fallback` / `PI_CARGO_ALLOW_LOCAL_FALLBACK=1`. If `rch` is
+`--allow-local-fallback` / `RECUR_AGENT_CARGO_ALLOW_LOCAL_FALLBACK=1`. If `rch` is
 missing, saturated, or unhealthy for a heavy command, the wrapper returns a
 machine-readable `backoff` decision instead of silently starting a broad local
 Cargo run.
@@ -97,14 +97,14 @@ Before starting a swarm or a heavyweight all-target gate, inspect the host
 resource budget:
 
 ```bash
-pi doctor --only swarm --format json
+ra doctor --only swarm --format json
 ```
 
-The `pi.doctor.swarm_resource_preflight.v1` finding reports cgroup CPU quota,
+The `ra.doctor.swarm_resource_preflight.v1` finding reports cgroup CPU quota,
 cpuset size, NUMA nodes, cgroup memory limits, and scratch headroom for
 `CARGO_TARGET_DIR` and `TMPDIR`. Treat any `status = fail` or non-empty
 `critical_failures` list as a hard stop until both directories point under
-`/data/tmp/pi_agent_rust_cargo/<agent>/` with enough free space. When the check
+`/data/tmp/recur_agent_cargo/<agent>/` with enough free space. When the check
 passes, use `recommended_budgets` as the operator ceiling for agent fanout, tool
 concurrency, extension hostcall lanes, RCH verification fanout, queue depth, and
 RSS budget.
@@ -127,7 +127,7 @@ For RCH gates that generate checked-in evidence, also bracket the remote command
 with a generated-artifact postcondition:
 
 ```bash
-before_manifest="/data/tmp/pi_agent_rust_cargo/${USER:-agent}/must-pass-before.json"
+before_manifest="/data/tmp/recur_agent_cargo/${USER:-agent}/must-pass-before.json"
 python3 scripts/check_rch_artifact_sync.py --mode postcondition \
   --generated-artifact tests/ext_conformance/reports/gate/must_pass_gate_verdict.json \
   --write-before-manifest "$before_manifest" --json
@@ -175,7 +175,7 @@ These tests run the same unmodified extension in both the legacy TypeScript runt
 cargo test --test ext_conformance_diff --features ext-conformance -- --nocapture
 
 # Limit to first N official extensions (faster iteration)
-PI_OFFICIAL_MAX=5 cargo test --test ext_conformance_diff --features ext-conformance -- --nocapture
+RECUR_AGENT_OFFICIAL_MAX=5 cargo test --test ext_conformance_diff --features ext-conformance -- --nocapture
 
 # Scenario execution (tool calls, commands, events)
 cargo test --test ext_conformance_scenarios --features ext-conformance -- --nocapture
@@ -187,7 +187,7 @@ cargo test --test ext_conformance_generated --features ext-conformance -- --noca
 cargo test --test ext_conformance_diff --features ext-conformance -- --ignored --nocapture
 
 # Npm-registry differential lane (ignored opt-in, bounded to 5 by default)
-rch exec -- env PI_NPM_FILTER=aliou-pi-extension-dev PI_NPM_MAX=1 \
+rch exec -- env RECUR_AGENT_NPM_FILTER=aliou-pi-extension-dev RECUR_AGENT_NPM_MAX=1 \
   cargo test --test ext_conformance_diff --features ext-conformance diff_npm_manifest -- \
   --include-ignored --nocapture
 ```
@@ -196,12 +196,12 @@ rch exec -- env PI_NPM_FILTER=aliou-pi-extension-dev PI_NPM_MAX=1 \
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PI_OFFICIAL_MAX` | (all) | Limit official extensions tested |
-| `PI_NPM_FILTER` | (none) | Filter npm-registry extensions by `dir/entry` substring |
-| `PI_NPM_MAX` | 5 | Limit the ignored npm-registry differential lane to a deterministic bounded sample |
-| `PI_TS_ORACLE_TIMEOUT_SECS` | 30 | TS oracle process timeout |
-| `PI_DETERMINISTIC_TIME_MS` | 1700000000000 | Fixed wall-clock for determinism |
-| `PI_DETERMINISTIC_RANDOM_SEED` | 1337 | Fixed random seed |
+| `RECUR_AGENT_OFFICIAL_MAX` | (all) | Limit official extensions tested |
+| `RECUR_AGENT_NPM_FILTER` | (none) | Filter npm-registry extensions by `dir/entry` substring |
+| `RECUR_AGENT_NPM_MAX` | 5 | Limit the ignored npm-registry differential lane to a deterministic bounded sample |
+| `RECUR_AGENT_TS_ORACLE_TIMEOUT_SECS` | 30 | TS oracle process timeout |
+| `RECUR_AGENT_DETERMINISTIC_TIME_MS` | 1700000000000 | Fixed wall-clock for determinism |
+| `RECUR_AGENT_DETERMINISTIC_RANDOM_SEED` | 1337 | Fixed random seed |
 
 **Reports:** Test results are written to `tests/ext_conformance/reports/` in JSONL and JSON formats.
 

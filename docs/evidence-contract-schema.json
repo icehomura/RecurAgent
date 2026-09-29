@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "$id": "pi.qa.evidence_contract.v1",
+  "$id": "ra.qa.evidence_contract.v1",
   "title": "Evidence Contract",
   "description": "Audit trail linking test results to artifact locations. Each full e2e run produces one evidence_contract.json that maps suite outcomes to their structured artifacts, enabling post-hoc traceability from CI dashboards to per-suite JSONL logs.",
   "type": "object",
@@ -23,7 +23,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.budget_summary.v1" },
+          "schema": { "type": "string", "const": "ra.perf.budget_summary.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 5, "maxItems": 5,
             "items": { "type": "string", "enum": ["schema", "generated_at", "git_commit", "correlation_id", "claim_readiness"] }
@@ -35,7 +35,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.budget_preflight.v1" },
+          "schema": { "type": "string", "const": "ra.perf.budget_preflight.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 4, "maxItems": 4,
             "items": { "type": "string", "enum": ["schema", "missing_inputs", "expected_artifact_paths", "rch_commands"] }
@@ -47,7 +47,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.evidence_cache.v1" },
+          "schema": { "type": "string", "const": "ra.perf.evidence_cache.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 5, "maxItems": 5,
             "items": { "type": "string", "enum": ["schema", "ttl_hours", "entries", "git_commit", "build_profile"] }
@@ -71,7 +71,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.host_topology_fingerprint.v1" },
+          "schema": { "type": "string", "const": "ra.perf.host_topology_fingerprint.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 7, "maxItems": 7,
             "items": { "type": "string", "enum": ["schema", "generated_at", "cgroup_v2_cpu_quota", "cpuset_size", "numa_node_count", "memory_limit_bytes", "budget_profile"] }
@@ -83,7 +83,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.pijs_workload.v1" },
+          "schema": { "type": "string", "const": "ra.perf.pijs_workload.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 9, "maxItems": 9,
             "items": { "type": "string", "enum": ["embedded_timestamp", "source_commit", "source_dirty", "run_id", "correlation_id", "iteration", "tool_name", "latency_us", "throughput_calls_per_sec"] }
@@ -95,7 +95,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.binary_size.v1" },
+          "schema": { "type": "string", "const": "ra.perf.binary_size.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 8, "maxItems": 8,
             "items": { "type": "string", "enum": ["schema", "generated_at", "binary_path", "binary_sha256", "size_bytes", "cargo_profile", "compiled_profile_family", "strip"] }
@@ -107,7 +107,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.criterion_estimate.v1" },
+          "schema": { "type": "string", "const": "ra.perf.criterion_estimate.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 5, "maxItems": 5,
             "items": { "type": "string", "enum": ["schema", "fixture", "budget_name", "p95_us", "status"] }
@@ -119,7 +119,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.scenario_runner.v1" },
+          "schema": { "type": "string", "const": "ra.perf.scenario_runner.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 6, "maxItems": 6,
             "items": { "type": "string", "enum": ["schema", "scenario", "event_count", "latency_p99_us", "budget_p99_us", "status"] }
@@ -132,8 +132,8 @@
   "properties": {
     "schema": {
       "type": "string",
-      "const": "pi.qa.evidence_contract.v1",
-      "description": "Schema identifier. Must be exactly pi.qa.evidence_contract.v1."
+      "const": "ra.qa.evidence_contract.v1",
+      "description": "Schema identifier. Must be exactly ra.qa.evidence_contract.v1."
     },
     "generated_at": {
       "type": "string",
@@ -311,11 +311,11 @@
       "properties": {
         "test_log": {
           "type": ["string", "null"],
-          "description": "Path to test-log.jsonl (pi.test.log.v2 schema)."
+          "description": "Path to test-log.jsonl (ra.test.log.v2 schema)."
         },
         "artifact_index": {
           "type": ["string", "null"],
-          "description": "Path to artifact-index.jsonl (pi.test.artifact.v1 schema)."
+          "description": "Path to artifact-index.jsonl (ra.test.artifact.v1 schema)."
         },
         "result": {
           "type": ["string", "null"],
@@ -343,7 +343,7 @@
       "properties": {
         "schema": {
           "type": "string",
-          "const": "pi.parity.test_logging_contract.v1",
+          "const": "ra.parity.test_logging_contract.v1",
           "description": "Versioned contract identifier for cross-suite parity test/logging policy."
         },
         "suite_taxonomy_ref": {
@@ -352,12 +352,12 @@
         },
         "log_record_schema": {
           "type": "string",
-          "const": "pi.test.log.v2",
+          "const": "ra.test.log.v2",
           "description": "Schema used for JSONL log records."
         },
         "artifact_record_schema": {
           "type": "string",
-          "const": "pi.test.artifact.v1",
+          "const": "ra.test.artifact.v1",
           "description": "Schema used for JSONL artifact-index records."
         },
         "failure_digest_schema": {
@@ -426,7 +426,7 @@
       "properties": {
         "schema": {
           "type": "string",
-          "const": "pi.bench.protocol.v1",
+          "const": "ra.bench.protocol.v1",
           "description": "Versioned benchmark protocol schema identifier."
         },
         "version": {
@@ -575,7 +575,7 @@
               "properties": {
                 "schema": {
                   "type": "string",
-                  "const": "pi.perf.binary_size_measurement.v1"
+                  "const": "ra.perf.binary_size_measurement.v1"
                 },
                 "required_fields": {
                   "type": "array",
@@ -605,7 +605,7 @@
               "properties": {
                 "schema": {
                   "type": "string",
-                  "const": "pi.perf.idle_rss_measurement.v1"
+                  "const": "ra.perf.idle_rss_measurement.v1"
                 },
                 "required_fields": {
                   "type": "array",
@@ -644,7 +644,7 @@
               "properties": {
                 "schema": {
                   "type": "string",
-                  "const": "pi.perf.cold_load_measurement.v1"
+                  "const": "ra.perf.cold_load_measurement.v1"
                 },
                 "required_fields": {
                   "type": "array",
@@ -883,7 +883,7 @@
           "properties": {
             "scope": {
               "type": "string",
-              "const": "pi.perf.workload.v1/pijs_workload"
+              "const": "ra.perf.workload.v1/pijs_workload"
             },
             "inherits": {
               "type": "string",
@@ -927,7 +927,7 @@
             },
             "required_schema": {
               "type": "string",
-              "const": "pi.perf.workload.v1"
+              "const": "ra.perf.workload.v1"
             },
             "required_tool": {
               "type": "string",

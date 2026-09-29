@@ -42,13 +42,13 @@ Pi attempts to use the system clipboard for `/copy` and image pasting.
 
 - Ensure you are running in a terminal that supports clipboard access if using remote sessions (e.g. via SSH).
 - If clipboard operations fail, Pi will typically fall back to printing the content or ignoring the paste.
-- **WSL**: the Linux `pi` binary has no X11/Wayland display inside WSL (unless WSLg is running), so Pi detects WSL and uses Windows' `clip.exe` for `/copy` and `/share`, and `powershell.exe` for image paste. Both are on `PATH` in a default WSL setup; no extra configuration is needed.
+- **WSL**: the Linux `ra` binary has no X11/Wayland display inside WSL (unless WSLg is running), so Pi detects WSL and uses Windows' `clip.exe` for `/copy` and `/share`, and `powershell.exe` for image paste. Both are on `PATH` in a default WSL setup; no extra configuration is needed.
 
 ## Paths
 
 - Pi supports both forward slashes `/` and backslashes `\` in paths.
-- When configuring paths in JSON (e.g. `settings.json`), remember to escape backslashes: `C:\Users\Name\.pi`.
-- Use forward slashes in `settings.json` for cross-platform compatibility if possible (`C:/Users/Name/.pi`).
+- When configuring paths in JSON (e.g. `settings.json`), remember to escape backslashes: `C:\Users\Name\.ra`.
+- Use forward slashes in `settings.json` for cross-platform compatibility if possible (`C:/Users/Name/.ra`).
 
 ## Shell Commands
 

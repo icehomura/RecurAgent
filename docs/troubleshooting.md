@@ -10,7 +10,7 @@ being implemented, the relevant bead ID is listed for tracking.
 **Fixes:**
 - Use env vars: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, etc.
 - Or set `--api-key` per run.
-- Or store credentials in `~/.pi/agent/auth.json` via `/login` (Anthropic OAuth).
+- Or store credentials in `~/.ra/agent/auth.json` via `/login` (Anthropic OAuth).
 
 **Config precedence (most → least):**
 1. `--api-key`
@@ -33,7 +33,7 @@ client secret as an API token.
 
 **5xx/network:** Temporary provider outage or flaky network. Retry or switch models.
 
-**Retry config** lives in `~/.pi/agent/settings.json`:
+**Retry config** lives in `~/.ra/agent/settings.json`:
 ```json
 {
   "retry": {
@@ -63,14 +63,14 @@ Common fixes:
 **Symptom:** extensions or skills not found.
 
 **Fixes:**
-- Check package sources via `pi list`.
-- Confirm settings in `~/.pi/agent/settings.json` or `.pi/settings.json`.
-- Re-run `pi update` after adding a source.
+- Check package sources via `ra list`.
+- Confirm settings in `~/.ra/agent/settings.json` or `.ra/settings.json`.
+- Re-run `ra update` after adding a source.
 
 Extension discovery is tracked under **bd-1e0** (install + resolution). If an
 extension fails to load, expect diagnostics to improve as that bead lands.
 
-**Symptom:** project-local `.pi/settings.json` packages or `.pi/extensions/`
+**Symptom:** project-local `.ra/settings.json` packages or `.ra/extensions/`
 entries are not loading, or a "Trust this workspace?" prompt appears.
 
 Project-local configuration can execute code (npm/git package installs run
@@ -79,31 +79,31 @@ Pi gates it behind a workspace trust decision (GH #151):
 
 - On the first interactive launch in a workspace that declares such
   configuration, Pi lists what would execute and asks once. The answer is
-  remembered in `~/.pi/agent/workspace-trust.json`, keyed to the workspace
-  path **and** a content digest — editing `.pi/settings.json` or anything
-  under `.pi/extensions/` re-prompts.
+  remembered in `~/.ra/agent/workspace-trust.json`, keyed to the workspace
+  path **and** a content digest — editing `.ra/settings.json` or anything
+  under `.ra/extensions/` re-prompts.
 - Non-interactive launches (`--mode rpc`, `-p/--print`, piped stdin) fail
   closed: project-local configuration is skipped for that run with a warning,
   and nothing is persisted.
 - Automation: pass `--trust` once (persists the decision for the current
-  content), set `PI_WORKSPACE_TRUST=trusted`/`untrusted` for a one-shot
+  content), set `RECUR_AGENT_WORKSPACE_TRUST=trusted`/`untrusted` for a one-shot
   override, or set `"trustAllWorkspaces": true` in the **global**
-  `~/.pi/agent/settings.json`.
+  `~/.ra/agent/settings.json`.
 - Explicit CLI resource paths (`-e/--extension`, `--skill`, ...) are treated
   as user consent and are never gated.
 - To revoke trust, edit or delete the workspace's entry in
-  `~/.pi/agent/workspace-trust.json`.
+  `~/.ra/agent/workspace-trust.json`.
 
 ## Sessions (persistence + recovery)
 
 Sessions live under:
 ```
-~/.pi/agent/sessions/
+~/.ra/agent/sessions/
 ```
 
 Overrides:
-- `PI_CODING_AGENT_DIR` (global base)
-- `PI_SESSIONS_DIR` (sessions root)
+- `RECUR_AGENT_DIR` (global base)
+- `RECUR_AGENT_SESSIONS_DIR` (sessions root)
 
 **Corruption recovery:**
 - Run with `--no-session` to bypass persistence.
@@ -115,7 +115,7 @@ Interactive UX parity for `/resume`, `/tree`, `/fork` is tracked by **bd-14cc**.
 
 Keybindings are loaded from:
 ```
-~/.pi/agent/keybindings.json
+~/.ra/agent/keybindings.json
 ```
 
 If shortcuts don’t work as expected:

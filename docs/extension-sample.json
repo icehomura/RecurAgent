@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.sample.v1",
+  "schema": "ra.ext.sample.v1",
   "generated_at": "2026-02-03T06:05:00Z",
   "target_sample_size": 16,
   "min_sample_size": 12,

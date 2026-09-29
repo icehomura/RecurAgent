@@ -18,7 +18,7 @@
 
 ## 1. Executive Summary
 
-This audit documents the concrete security controls in `pi_agent_rust`'s extension
+This audit documents the concrete security controls in `recur_agent`'s extension
 runtime, compares them with the ambient-access model of Node.js/Bun, and classifies
 gaps by severity with exploit narratives and proposed mitigations.
 
@@ -119,8 +119,8 @@ Three-tier blocklist:
 
 **Bypass prevention:**
 - Case-insensitive matching via `.to_ascii_uppercase()` (line 107)
-- `PI_*` vars unconditionally allowed (line 125-127) — but this is checked
-  *after* the blocklist, so `PI_API_KEY` would still be blocked by suffix match
+- `RECUR_AGENT_*` vars unconditionally allowed (line 125-127) — but this is checked
+  *after* the blocklist, so `RECUR_AGENT_API_KEY` would still be blocked by suffix match
 
 **process.env implementation** (lines 14310-14343):
 - Read-only Proxy: `set()` and `deleteProperty()` silently ignored (lines 14319-14325)
@@ -187,7 +187,7 @@ if !allow_unsafe_sync_exec {
 }
 ```
 
-- Default: `false` (line 4355 in `PiJsRuntimeConfig`)
+- Default: `false` (line 4355 in `RaJsRuntimeConfig`)
 - Cannot be changed at runtime — set during construction only
 - `child_process.execSync()` and `spawnSync()` route through this gate (lines 7229-7269)
 
@@ -388,7 +388,7 @@ calls `pi.env("ACME_SECRET_SAUCE")` and exfiltrates it via `pi.http()`.
 to deny-list designs.
 
 **Proposed mitigation:** Consider an optional allow-list mode for high-security
-deployments: `env_allowlist: ["HOME", "PATH", "SHELL", "TERM", "PI_*"]`.
+deployments: `env_allowlist: ["HOME", "PATH", "SHELL", "TERM", "RECUR_AGENT_*"]`.
 Keep the deny-list as the default for compatibility but offer the allow-list
 as a configuration option.
 
@@ -566,7 +566,7 @@ Pi adds 4 interposition boundaries where Node/Bun has 0.
 | Control | Test Module | Test Count | Coverage |
 |---------|------------|------------|---------|
 | Policy evaluation | `extensions::tests` | 20+ | Good (all profiles, per-extension overrides) |
-| Env var filtering | `extensions_js::tests`, `tests/npm_module_stubs.rs` | 38+ | Good (blocklist patterns, PI_ allowlist) |
+| Env var filtering | `extensions_js::tests`, `tests/npm_module_stubs.rs` | 38+ | Good (blocklist patterns, RECUR_AGENT_ allowlist) |
 | Tool path normalization | `tools::tests` | 10+ | Good (dot segments, traversal) |
 | Process tree cleanup | `tools::tests` | 5+ | Adequate (timeout, kill tree) |
 | Extension OAuth | `tests/extensions_provider_oauth.rs` | 20 | Good |

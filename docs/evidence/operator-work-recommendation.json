@@ -642,7 +642,7 @@
     "duplicate_work_risk",
     "dirty_worktree_admission_denial"
   ],
-  "schema": "pi.swarm.operator_work_recommendation.v1",
+  "schema": "ra.swarm.operator_work_recommendation.v1",
   "source_artifacts": [
     {
       "decision": "replay_passed",
@@ -656,7 +656,7 @@
       "id": "incident_replay",
       "load_status": "ok",
       "path": "docs/evidence/swarm-incident-replay.json",
-      "schema": "pi.swarm.incident_replay.v1",
+      "schema": "ra.swarm.incident_replay.v1",
       "sha256": "7e8396795694c4e9bfd35b6e5373bf9f1037b338fcc51fcd7d6853315d7b9b71",
       "size_bytes": 62431,
       "source_status": "pass"
@@ -673,7 +673,7 @@
       "id": "validation_proof_memory_index",
       "load_status": "ok",
       "path": "docs/evidence/validation-proof-memory-index.json",
-      "schema": "pi.validation.proof_memory_index.v1",
+      "schema": "ra.validation.proof_memory_index.v1",
       "sha256": "d37d37d803468d5cedc97a10c41f9669f975808509834e1e336f73fa40dd4d4a",
       "size_bytes": 49102,
       "source_status": "pass"

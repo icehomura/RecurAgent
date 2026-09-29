@@ -1,5 +1,5 @@
 {
-  "$schema": "pi.ext.research_playbook.v1",
+  "$schema": "ra.ext.research_playbook.v1",
   "generated": "2026-02-05",
   "description": "Authoritative discovery sources and query strategy for finding Pi/Claude Code extensions online. Explicit enough to execute verbatim. (bd-2dfa)",
   "sources": [

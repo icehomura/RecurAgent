@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.certification_contract.v1",
+  "schema": "ra.dropin.certification_contract.v1",
   "bead_id": "bd-35t7i",
   "version": "1.0.2",
   "effective_date_utc": "2026-08-04T23:48:36Z",
@@ -367,7 +367,7 @@
     ],
     "verdict_artifact_contract": {
       "path": "docs/evidence/dropin-certification-verdict.json",
-      "schema": "pi.dropin.certification_verdict.v1",
+      "schema": "ra.dropin.certification_verdict.v1",
       "required_fields": [
         "git_commit",
         "generated_at_utc",

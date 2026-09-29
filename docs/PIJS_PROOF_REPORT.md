@@ -61,7 +61,7 @@ Every side-effecting operation must go through an explicit host connector:
 
 Each connector call is:
 1. **Policy-checked** against the extension's granted capabilities
-2. **Logged** in a structured audit ledger (`pi.ext.log.v1`)
+2. **Logged** in a structured audit ledger (`ra.ext.log.v1`)
 3. **Scoped** (path restrictions, host allowlists) when applicable
 4. **Timeout-enforced** with cancellation support
 
@@ -255,11 +255,11 @@ Enforced in CI via `tests/perf_budgets.rs`:
 
 ```bash
 # PR mode (10 diverse extensions, quick)
-PI_BENCH_MODE=pr cargo test --test ext_bench_harness \
+RECUR_AGENT_BENCH_MODE=pr cargo test --test ext_bench_harness \
   --features ext-conformance -- --nocapture
 
 # Full corpus (103 extensions, thorough)
-PI_BENCH_MODE=nightly PI_BENCH_MAX=103 PI_BENCH_ITERATIONS=10 \
+RECUR_AGENT_BENCH_MODE=nightly RECUR_AGENT_BENCH_MAX=103 RECUR_AGENT_BENCH_ITERATIONS=10 \
   cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 ```
 
@@ -297,7 +297,7 @@ cargo test --test ext_conformance_generated --features ext-conformance -- \
   conformance_sharded_matrix --nocapture --exact
 
 # 2. Performance (103 safe extensions)
-PI_BENCH_MODE=nightly PI_BENCH_MAX=103 PI_BENCH_ITERATIONS=10 \
+RECUR_AGENT_BENCH_MODE=nightly RECUR_AGENT_BENCH_MAX=103 RECUR_AGENT_BENCH_ITERATIONS=10 \
   cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 
 # 3. Security (30 negative tests)
@@ -336,7 +336,7 @@ cargo test --test perf_budgets --features ext-conformance -- --nocapture
 3. **wasmtime** — Bytecode Alliance. https://wasmtime.dev/
    - Component model for WASM extensions (Tier A runtime).
 
-4. **EXTENSIONS.md** — Pi Agent Rust extension system architecture.
+4. **EXTENSIONS.md** — Recur Agent extension system architecture.
    - §1A.4: PiJS Runtime Contract (event loop state machine).
    - §2A: Extc Compatibility Contract (rewrite rules, forbidden APIs).
    - §3.2A: Unified capability model.

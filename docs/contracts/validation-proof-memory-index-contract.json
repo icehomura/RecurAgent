@@ -1,6 +1,6 @@
 {
-  "schema": "pi.validation.proof_memory_index_contract.v1",
-  "index_schema": "pi.validation.proof_memory_index.v1",
+  "schema": "ra.validation.proof_memory_index_contract.v1",
+  "index_schema": "ra.validation.proof_memory_index.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-9yq7i.3",
   "purpose": "read_only_validation_proof_memory_not_validation_skipper",

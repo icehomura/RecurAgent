@@ -210,7 +210,7 @@ Use the existing runtime metadata functions rather than maintaining a second
 normalization implementation:
 
 ```rust
-use pi::provider_metadata::{canonical_provider_id, provider_auth_env_keys};
+use ra::provider_metadata::{canonical_provider_id, provider_auth_env_keys};
 
 let canonical = canonical_provider_id(user_input);
 let auth_env_keys = provider_auth_env_keys(user_input);

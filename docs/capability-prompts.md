@@ -304,7 +304,7 @@ Server replies with standard response envelope (`docs/rpc.md`):
 
 ## Logging Requirements
 
-Every prompt resolution MUST emit a structured log event (`pi.ext.log.v1`):
+Every prompt resolution MUST emit a structured log event (`ra.ext.log.v1`):
 
 - `event`: `policy.decision`
 - `data` fields:

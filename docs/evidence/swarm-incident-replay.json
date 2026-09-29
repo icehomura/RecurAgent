@@ -135,7 +135,7 @@
       ],
       "selected_safe_action": "Use live source systems when healthy; use replay only as advisory fixture evidence.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -236,7 +236,7 @@
       ],
       "selected_safe_action": "Use Beads assignee/status/comments as the soft lock, keep the incident visible, and avoid live Agent Mail writes until repaired.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -431,7 +431,7 @@
       ],
       "selected_safe_action": "Deny local heavyweight fallback, keep the exact RCH env shape, and surface or retry only when remote capacity is available.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -626,7 +626,7 @@
       ],
       "selected_safe_action": "Reject stale proof reuse and refresh the focused validation evidence before using it for an operator recommendation.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -821,7 +821,7 @@
       ],
       "selected_safe_action": "Do not revert peer work; use Beads ownership, avoid the contested surface, and choose non-overlapping evidence or surface the conflict.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -1016,7 +1016,7 @@
       ],
       "selected_safe_action": "Preserve dirty unrelated work, deny unsafe admission, and continue only on an owned non-overlapping surface.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -1211,7 +1211,7 @@
       ],
       "selected_safe_action": "Fail closed on malformed source artifacts and require a concrete refresh or follow-up bead before recommendation.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -1406,7 +1406,7 @@
       ],
       "selected_safe_action": "Reject deletion or live-mutation authorization and require the normal explicit operator approval path outside this corpus.",
       "source_corpus_path": "docs/evidence/swarm-incident-corpus.json",
-      "source_corpus_schema": "pi.swarm.incident_corpus.v1",
+      "source_corpus_schema": "ra.swarm.incident_corpus.v1",
       "status": "pass",
       "step_assertions": [
         {
@@ -1520,13 +1520,13 @@
       ]
     }
   ],
-  "schema": "pi.swarm.incident_replay.v1",
+  "schema": "ra.swarm.incident_replay.v1",
   "source_bead": "bd-9yq7i.2",
   "source_corpus": {
     "decision": "incident_corpus_passed",
     "generated_at": "2026-05-18T05:30:00+00:00",
     "path": "docs/evidence/swarm-incident-corpus.json",
-    "schema": "pi.swarm.incident_corpus.v1",
+    "schema": "ra.swarm.incident_corpus.v1",
     "status": "pass"
   },
   "status": "pass",

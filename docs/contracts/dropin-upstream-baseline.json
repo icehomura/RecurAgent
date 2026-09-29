@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.upstream_baseline.v1",
+  "schema": "ra.dropin.upstream_baseline.v1",
   "bead_id": "bd-2ej25",
   "captured_at_utc": "2026-02-14T19:08:00Z",
   "upstream": {
@@ -289,9 +289,9 @@
       "AWS_SECRET_ACCESS_KEY",
       "AWS_BEARER_TOKEN_BEDROCK",
       "AWS_REGION",
-      "PI_PACKAGE_DIR",
-      "PI_SHARE_VIEWER_URL",
-      "PI_AI_ANTIGRAVITY_VERSION"
+      "RECUR_AGENT_PACKAGE_DIR",
+      "RECUR_AGENT_SHARE_VIEWER_URL",
+      "RECUR_AGENT_AI_ANTIGRAVITY_VERSION"
     ]
   },
   "reproducibility": {

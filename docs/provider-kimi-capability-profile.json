@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_capability_profile.v1",
+  "schema": "ra.provider_capability_profile.v1",
   "schema_version": "1.0",
   "bead_id": "bd-3uqg.11.8.1",
   "provider_id": "kimi",

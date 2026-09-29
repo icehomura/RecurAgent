@@ -4,7 +4,7 @@ Generated: 2026-02-14T08:28:53.904440329+00:00
 Source pool: `docs/extension-candidate-pool.json` (1000 total)
 Eligible (unvendored): **777**
 Pi-relevant (heuristic): **322**
-Schema: `pi.ext.onboarding_queue.v2` (repo-level de-bias enabled)
+Schema: `ra.ext.onboarding_queue.v2` (repo-level de-bias enabled)
 
 ## Top 100 (Start Here)
 

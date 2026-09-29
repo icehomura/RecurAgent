@@ -984,7 +984,7 @@
     "tool_update_coalescing",
     "session_write_pressure"
   ],
-  "schema": "pi.operator.smoothness_slo.v1",
+  "schema": "ra.operator.smoothness_slo.v1",
   "source_bead": "bd-9yq7i.5",
   "source_boundaries": [
     {

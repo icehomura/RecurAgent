@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.provider_gaps_audit_report.v1",
+  "schema": "ra.qa.provider_gaps_audit_report.v1",
   "bead_id": "bd-3uqg.12.2",
   "generated_at_utc": "2026-02-14T00:45:00Z",
   "generated_by": "OpusAgent (Claude Opus 4.6)",

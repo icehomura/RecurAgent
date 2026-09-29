@@ -1,7 +1,7 @@
 {
-  "schema": "pi.operator.handoff_summary_contract.v1",
-  "input_schema": "pi.operator.handoff_summary_input.v1",
-  "output_schema": "pi.operator.handoff_summary.v1",
+  "schema": "ra.operator.handoff_summary_contract.v1",
+  "input_schema": "ra.operator.handoff_summary_input.v1",
+  "output_schema": "ra.operator.handoff_summary.v1",
   "purpose": "read_only_operator_handoff_invariant_summary",
   "description": "Contract for deterministic operator handoff summaries that combine Beads, git refs, validation status, evidence freshness, Agent Mail health/reservations, RCH status, and open action-plan decisions into JSON plus Markdown.",
   "allowed_statuses": [

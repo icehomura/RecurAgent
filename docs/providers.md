@@ -1,6 +1,6 @@
 # Providers
 
-This document is the canonical in-repo provider baseline for `pi_agent_rust`.
+This document is the canonical in-repo provider baseline for `recur_agent`.
 It summarizes provider IDs, aliases, API families, auth behavior, and current implementation mode.
 
 Snapshot basis:
@@ -511,9 +511,9 @@ Both configs produce identical runtime behavior. The alias form continues to wor
 **CLI migration** (equivalent commands):
 ```bash
 # Alias (still supported)
-pi --provider gemini --model gemini-2.5-flash -p "Hello"
+ra --provider gemini --model gemini-2.5-flash -p "Hello"
 # Canonical (recommended)
-pi --provider google --model gemini-2.5-flash -p "Hello"
+ra --provider google --model gemini-2.5-flash -p "Hello"
 ```
 
 ### Common Pitfalls
@@ -551,9 +551,9 @@ Auth diagnostics and redaction contract:
 - Key tests: `e2e_all_diagnostic_codes_have_redact_secrets_policy`, `e2e_hints_enrichment_completeness`, `e2e_alias_env_key_consistency` in [`src/error.rs`](../src/error.rs), plus `test_resolve_api_key_*` precedence cases in [`src/auth.rs`](../src/auth.rs).
 
 Choose provider/model via:
-- CLI flags: `pi --provider openai --model gpt-4o "Hello"`
-- Env vars: `PI_PROVIDER`, `PI_MODEL`
-- Settings: `default_provider`, `default_model` in `~/.pi/agent/settings.json`
+- CLI flags: `ra --provider openai --model gpt-4o "Hello"`
+- Env vars: `RECUR_AGENT_PROVIDER`, `RECUR_AGENT_MODEL`
+- Settings: `default_provider`, `default_model` in `~/.ra/agent/settings.json`
 
 Custom endpoints and overrides should be configured in `models.json`:
 - See [models.md](models.md) for schema and examples.

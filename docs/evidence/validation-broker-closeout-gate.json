@@ -1,5 +1,5 @@
 {
-  "schema": "pi.validation_broker.closeout_gate.v1",
+  "schema": "ra.validation_broker.closeout_gate.v1",
   "generated_at": "2026-05-14T18:12:48Z",
   "status": "pass",
   "purpose": "prompt_to_artifact_validation_broker_closeout_gate_not_source_of_truth",
@@ -277,7 +277,7 @@
       "id": "cargo_headroom",
       "status": "pass",
       "evidence": [
-        "Validation commands use /data/tmp/pi_agent_rust_cargo/codex_bdgusp411 target and tmp directories instead of repo-local target output."
+        "Validation commands use /data/tmp/recur_agent_cargo/codex_bdgusp411 target and tmp directories instead of repo-local target output."
       ]
     },
     {
@@ -339,27 +339,27 @@
     {
       "id": "validation_broker_contract_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
     },
     {
       "id": "validation_broker_store_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
     },
     {
       "id": "validation_broker_cli_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
     },
     {
       "id": "validation_broker_e2e_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
     },
     {
       "id": "validation_broker_closeout_gate_contract_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo test --test validation_broker_contract --test validation_broker_store --test validation_broker_cli --test validation_broker_e2e --test validation_broker_closeout_gate_contract -- --nocapture"
     },
     {
       "id": "cargo_fmt",
@@ -374,12 +374,12 @@
     {
       "id": "cargo_check_all_targets_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo check --all-targets"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo check --all-targets"
     },
     {
       "id": "cargo_clippy_all_targets_rch",
       "status": "pass",
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bdgusp411/tmp rch exec -- cargo clippy --all-targets -- -D warnings"
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bdgusp411/tmp rch exec -- cargo clippy --all-targets -- -D warnings"
     },
     {
       "id": "staged_ubs",
@@ -482,7 +482,7 @@
     {
       "id": "cli_surface",
       "status": "pass",
-      "requirement": "`pi validation-broker` exposes status, read-only plan, acquire, renew, and release with stable text/JSON output and overwrite refusal.",
+      "requirement": "`ra validation-broker` exposes status, read-only plan, acquire, renew, and release with stable text/JSON output and overwrite refusal.",
       "evidence": [
         {
           "path": "src/cli.rs"

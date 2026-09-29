@@ -2,7 +2,7 @@
 
 The swarm activity ledger is a redacted JSONL stream for reconstructing what happened during a multi-agent run without storing prompt bodies or secrets.
 
-Each row uses schema `pi.swarm.activity_ledger.v1` and carries:
+Each row uses schema `ra.swarm.activity_ledger.v1` and carries:
 
 - `sequence`: monotonic producer-local order.
 - `timestamp_ms`: Unix milliseconds for timeline reconstruction.
@@ -18,7 +18,7 @@ Redaction is fail-closed for common sensitive fields. Keys containing `prompt`, 
 
 ## Bounded summaries
 
-`SwarmActivityLedger::summarize` and `SwarmActivitySketch` derive schema `pi.swarm.activity_summary.v1` from the raw rows without replacing or mutating them. The raw JSONL remains the audit source; summaries are a bounded-memory view for dashboards, handoff notes, and swarm health checks.
+`SwarmActivityLedger::summarize` and `SwarmActivitySketch` derive schema `ra.swarm.activity_summary.v1` from the raw rows without replacing or mutating them. The raw JSONL remains the audit source; summaries are a bounded-memory view for dashboards, handoff notes, and swarm health checks.
 
 Summaries retain exact totals for event count, redacted entries, redacted fields, and activity kind counts. Hot spot lists are bounded independently for agents, beads, verification IDs, tools, providers/models, and selected detail key/value pairs. Ties sort deterministically by count descending and then key ascending. Long hot spot keys are truncated before retention so a single large detail value cannot dominate memory.
 
@@ -26,7 +26,7 @@ Latency details named `latency_ms`, `duration_ms`, or `elapsed_ms` feed a bounde
 
 ## Swarm digest
 
-`SwarmActivityLedger::digest`, `digest_from_jsonl`, and `SwarmActivityDigest::to_text` derive schema `pi.swarm.activity_digest.v1` for handoff and saturation checks. The digest is a bounded redacted view over existing ledger rows, not a new source of truth.
+`SwarmActivityLedger::digest`, `digest_from_jsonl`, and `SwarmActivityDigest::to_text` derive schema `ra.swarm.activity_digest.v1` for handoff and saturation checks. The digest is a bounded redacted view over existing ledger rows, not a new source of truth.
 
 Digests include:
 
@@ -51,11 +51,11 @@ When saturation is active, the digest may also emit `recommendations`: determini
 
 `TailLatencyRegimeGuard` in `src/resource_governor.rs` consumes live p99, p999, queue-depth, and resource-pressure samples to detect when a swarm has left its calibrated operating regime. It requires consecutive violating samples before entering conservative fallback and consecutive recovered samples before returning to calibrated mode, so brief spikes do not flap the controller.
 
-Regime decisions emit schema `pi.resource_governor.tail_latency_regime.v1` with the active regime, fallback state, hysteresis streaks, the live sample, and fallback reasons such as `p99_latency`, `p999_latency`, `queue_depth`, `resource_pressure`, or `hysteresis_hold`. When fallback is active, callers can apply the decision to `HostResourceBudgets` to reduce output, queue-depth, process, file-descriptor, load, and RSS budgets before admission checks.
+Regime decisions emit schema `ra.resource_governor.tail_latency_regime.v1` with the active regime, fallback state, hysteresis streaks, the live sample, and fallback reasons such as `p99_latency`, `p999_latency`, `queue_depth`, `resource_pressure`, or `hysteresis_hold`. When fallback is active, callers can apply the decision to `HostResourceBudgets` to reduce output, queue-depth, process, file-descriptor, load, and RSS budgets before admission checks.
 
 ## Capacity planner
 
-`plan_swarm_capacity_from_jsonl` in `src/resource_governor.rs` turns the session workload matrix `swarm_metrics` JSONL rows and a `SwarmHostInventory` into schema `pi.resource_governor.capacity_plan.v1`. The generated plan includes conservative starting values for active agent concurrency, tool concurrency, extension hostcall lanes, RCH verification fanout, memory pressure thresholds, backoff windows, `HostResourceBudgets`, and `TailLatencyRegimeConfig`.
+`plan_swarm_capacity_from_jsonl` in `src/resource_governor.rs` turns the session workload matrix `swarm_metrics` JSONL rows and a `SwarmHostInventory` into schema `ra.resource_governor.capacity_plan.v1`. The generated plan includes conservative starting values for active agent concurrency, tool concurrency, extension hostcall lanes, RCH verification fanout, memory pressure thresholds, backoff windows, `HostResourceBudgets`, and `TailLatencyRegimeConfig`.
 
 The planner fails closed when no complete `swarm_metrics` evidence is present, when required nested fields are missing, when host inventory is zero, or when latency/RSS/queue values cannot be parsed as finite non-negative numbers. Rows without `swarm_metrics` are ignored so mixed harness JSONL can still be processed; rows that claim `swarm_metrics` but omit required fields are rejected.
 
@@ -63,7 +63,7 @@ Use `SwarmCapacityPlan::what_if` to replay the same evidence summary against sma
 
 Capacity recommendations are starting points, not proof of a safe maximum. Confidence drops or uncertainties are emitted for sparse evidence, host-capacity mismatches, zero reported CPU usage, queue-depth floors, and RSS headroom pressure. File-descriptor limits are still bounded with conservative built-in defaults because the current swarm harness records CPU/RAM inventory but not host fd limits.
 
-`generate_operator_budget_profiles_from_jsonl` replays one validated capacity evidence run into schema `pi.resource_governor.operator_budget_profiles.v1` for common large-host starting points:
+`generate_operator_budget_profiles_from_jsonl` replays one validated capacity evidence run into schema `ra.resource_governor.operator_budget_profiles.v1` for common large-host starting points:
 
 - `cpu16_mem64gib`: 16 logical CPUs, 64 GiB RAM.
 - `cpu32_mem128gib`: 32 logical CPUs, 128 GiB RAM.
@@ -75,13 +75,13 @@ The profile generator fails closed for empty profile sets, zero CPU/RAM inventor
 
 ## Live admission controller
 
-`SwarmAdmissionController` composes a validated `SwarmCapacityPlan`, `ResourceGovernor`, and `TailLatencyRegimeGuard` into schema `pi.resource_governor.swarm_admission_controller.v1`. Each decision takes the request, live host sample, live p99/p999/queue/resource-pressure sample, and current swarm load counts, then returns one final `admit`, `backpressure`, or `deny` action.
+`SwarmAdmissionController` composes a validated `SwarmCapacityPlan`, `ResourceGovernor`, and `TailLatencyRegimeGuard` into schema `ra.resource_governor.swarm_admission_controller.v1`. Each decision takes the request, live host sample, live p99/p999/queue/resource-pressure sample, and current swarm load counts, then returns one final `admit`, `backpressure`, or `deny` action.
 
 The controller uses the plan's resource budgets for host-pressure checks, the plan's tail-latency thresholds for conservative fallback, and the plan's active-agent/tool/RCH/extension-lane recommendations as live capacity ceilings. Capacity pressure can make a decision stricter than the host-resource decision, so a host that looks healthy still backpressures or denies when the swarm is already at the planned concurrency budget.
 
 ## Admission replay
 
-`replay_swarm_admission_from_jsonl` in `src/resource_governor.rs` replays schema `pi.swarm.activity_ledger.v1` rows against a prevalidated `SwarmCapacityPlan` and captured `SwarmAdmissionReplaySample` values. The report schema is `pi.resource_governor.swarm_admission_replay.v1`.
+`replay_swarm_admission_from_jsonl` in `src/resource_governor.rs` replays schema `ra.swarm.activity_ledger.v1` rows against a prevalidated `SwarmCapacityPlan` and captured `SwarmAdmissionReplaySample` values. The report schema is `ra.resource_governor.swarm_admission_replay.v1`.
 
 Replay is offline incident analysis, not live doctor output. It never samples the current host, Agent Mail, Beads, or RCH. Every decision is derived from already-redacted ledger rows and captured resource samples, so an old incident can be replayed deterministically after the live machine state has changed.
 
@@ -95,7 +95,7 @@ Replayable ledger kinds are `bead_status`, `agent_mail`, `file_reservation`, `rc
 
 Each report includes a decision timeline, the dominant capacity pressure for every replayed decision, and divergence markers for duplicate correlation IDs, stale or missing samples, invalid expected-action details, and expected-action mismatches. Missing optional request fields use deterministic defaults for the ledger kind. Missing or stale resource samples are fail-closed: the report status becomes `fail_closed` and the affected event does not receive an optimistic decision.
 
-`assert_swarm_digest_admission_replay_alignment` produces a separate schema `pi.resource_governor.swarm_admission_replay_digest_alignment.v1` assertion report that compares the transcript-derived digest with the replay report. The digest remains authoritative for transcript summarization and saturation evidence (`saturation.reasons` and `saturation.evidence_pointers`). The replay report remains authoritative for captured host-resource, tail-latency, live-load, and admission-decision evidence. The alignment assertion only checks that those artifacts agree on severity.
+`assert_swarm_digest_admission_replay_alignment` produces a separate schema `ra.resource_governor.swarm_admission_replay_digest_alignment.v1` assertion report that compares the transcript-derived digest with the replay report. The digest remains authoritative for transcript summarization and saturation evidence (`saturation.reasons` and `saturation.evidence_pointers`). The replay report remains authoritative for captured host-resource, tail-latency, live-load, and admission-decision evidence. The alignment assertion only checks that those artifacts agree on severity.
 
 When the digest is saturated, replay must show backpressure, denial, or a fail-closed replay status before operators treat the run as unsafe to expand. When the digest has no saturation signal, replay must stay safe before operators treat the transcript and admission evidence as aligned. Any mismatch emits `status = fail_closed` with an actionable assertion such as pausing new agent launches, inspecting digest evidence, or refreshing captured replay samples before changing fanout budgets. This keeps the replay schema backwards-compatible while giving fixtures a deterministic bridge from transcript saturation to admission expectations.
 
@@ -117,15 +117,15 @@ python3 scripts/run_swarm_smoke_harness.py \
   --out-dir /data/tmp/pi_swarm_smoke_artifacts/bd-2zcs5.26
 ```
 
-The harness writes schema `pi.swarm.smoke_harness.v1` summaries and `pi.swarm.smoke_harness.event.v1` JSONL events. Every event includes the correlation ID, command timing when a command ran, redaction metadata, and the relevant agent names, bead IDs, reservation IDs, or RCH admission decision. Agent Mail registration tokens and sensitive-looking command output are redacted before they reach the artifact bundle. The smoke fixture treats any in-progress temp bead as stale by default; pass `--stale-after-seconds` to test a longer operator threshold. Dirty-worktree scenarios fail if protected unrelated files disappear, change unexpectedly, lose their dirty git status, or if the harness command log contains stash/reset/clean/restore-style worktree mutation commands. If `events.jsonl` or `summary.json` already exists in the requested output directory, the harness fails rather than overwriting evidence.
+The harness writes schema `ra.swarm.smoke_harness.v1` summaries and `ra.swarm.smoke_harness.event.v1` JSONL events. Every event includes the correlation ID, command timing when a command ran, redaction metadata, and the relevant agent names, bead IDs, reservation IDs, or RCH admission decision. Agent Mail registration tokens and sensitive-looking command output are redacted before they reach the artifact bundle. The smoke fixture treats any in-progress temp bead as stale by default; pass `--stale-after-seconds` to test a longer operator threshold. Dirty-worktree scenarios fail if protected unrelated files disappear, change unexpectedly, lose their dirty git status, or if the harness command log contains stash/reset/clean/restore-style worktree mutation commands. If `events.jsonl` or `summary.json` already exists in the requested output directory, the harness fails rather than overwriting evidence.
 
 The harness does not delete or reset production files. Generated fixture projects and artifacts are intentionally left under `TMPDIR` or `/data/tmp` so operators can inspect them after a failed smoke run. If the live RCH posture is degraded, the RCH admission scenario records the backoff decision instead of forcing a local heavy cargo fallback.
 
 ## Operator runpack wrapper
 
-`scripts/build_swarm_operator_runpack.py` assembles schema `pi.swarm.operator_runpack.v1` from existing source artifacts for a single operator handoff view. It accepts captured JSON from `pi doctor --only swarm --format json`, `scripts/report_swarm_claim_readiness.py`, `scripts/run_swarm_smoke_harness.py`, `scripts/cargo_headroom.sh --admit-only`, Beads JSON, git porcelain output, and the latest `pi.swarm.activity_digest.v1` digest. The script reads only the files passed to it, redacts sensitive fields and token-shaped values, and refuses malformed provided sources instead of emitting partial optimistic evidence.
+`scripts/build_swarm_operator_runpack.py` assembles schema `ra.swarm.operator_runpack.v1` from existing source artifacts for a single operator handoff view. It accepts captured JSON from `ra doctor --only swarm --format json`, `scripts/report_swarm_claim_readiness.py`, `scripts/run_swarm_smoke_harness.py`, `scripts/cargo_headroom.sh --admit-only`, Beads JSON, git porcelain output, and the latest `ra.swarm.activity_digest.v1` digest. The script reads only the files passed to it, redacts sensitive fields and token-shaped values, and refuses malformed provided sources instead of emitting partial optimistic evidence.
 
-The runpack includes schema `pi.swarm.safety_scorecard.v1` as `swarm_scale_safety_scorecard`. Its seven dimensions cover coordination health, cargo/RCH posture, perf evidence freshness, dirty-worktree tolerance, stalled-Bead hygiene, resource-governor readiness, and smoke-test coverage. A dimension cannot score green unless the required source artifacts loaded successfully and the dimension retains dotted evidence paths back to the summarized runpack fields.
+The runpack includes schema `ra.swarm.safety_scorecard.v1` as `swarm_scale_safety_scorecard`. Its seven dimensions cover coordination health, cargo/RCH posture, perf evidence freshness, dirty-worktree tolerance, stalled-Bead hygiene, resource-governor readiness, and smoke-test coverage. A dimension cannot score green unless the required source artifacts loaded successfully and the dimension retains dotted evidence paths back to the summarized runpack fields.
 
 Safe self-test:
 
@@ -153,7 +153,7 @@ The runpack is deliberately not a new source of truth. Beads remains authoritati
 Example row:
 
 ```json
-{"schema":"pi.swarm.activity_ledger.v1","sequence":0,"timestamp_ms":1778223600000,"kind":"verification","summary":"cargo check completed","ids":{"correlation_id":"bd-2zcs5.17:verify:1","bead_id":"bd-2zcs5.17","agent_name":"CopperOx","rch_job_id":"29832517041259999","verification_id":"check-all-targets"},"details":{"command":"cargo check --all-targets","status":"passed"},"redaction":{"redacted_count":0}}
+{"schema":"ra.swarm.activity_ledger.v1","sequence":0,"timestamp_ms":1778223600000,"kind":"verification","summary":"cargo check completed","ids":{"correlation_id":"bd-2zcs5.17:verify:1","bead_id":"bd-2zcs5.17","agent_name":"CopperOx","rch_job_id":"29832517041259999","verification_id":"check-all-targets"},"details":{"command":"cargo check --all-targets","status":"passed"},"redaction":{"redacted_count":0}}
 ```
 
 Use the ledger for incident review and handoff. It complements Beads and Agent Mail; it does not replace them as sources of truth.

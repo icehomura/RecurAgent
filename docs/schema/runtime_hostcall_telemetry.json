@@ -6,7 +6,7 @@
   "properties": {
     "schema": {
       "type": "string",
-      "enum": ["pi.ext.hostcall_telemetry.v1"]
+      "enum": ["ra.ext.hostcall_telemetry.v1"]
     },
     "generated_at_ms": {
       "type": "integer",
@@ -66,7 +66,7 @@
       "properties": {
         "schema": {
           "type": "string",
-          "enum": ["pi.ext.hostcall_telemetry.v1"]
+          "enum": ["ra.ext.hostcall_telemetry.v1"]
         },
         "ts_ms": {
           "type": "integer",
@@ -273,7 +273,7 @@
       "properties": {
         "schema": {
           "type": "string",
-          "enum": ["pi.ext.hostcall_feature_vector.v1"]
+          "enum": ["ra.ext.hostcall_feature_vector.v1"]
         },
         "base_score": { "type": "number", "minimum": 0, "maximum": 1 },
         "recent_mean_score": { "type": "number", "minimum": 0, "maximum": 1 },

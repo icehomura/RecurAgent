@@ -12,7 +12,7 @@
     "entrypoint"
   ],
   "properties": {
-    "schema": { "type": "string", "enum": ["pi.ext.manifest.v1"] },
+    "schema": { "type": "string", "enum": ["ra.ext.manifest.v1"] },
     "extension_id": {
       "type": "string",
       "description": "Stable extension identifier. Used for install dirs, policy decisions, and log correlation.",
@@ -54,7 +54,7 @@
       "type": "object",
       "required": ["schema", "capabilities"],
       "properties": {
-        "schema": { "type": "string", "enum": ["pi.ext.cap.v1"] },
+        "schema": { "type": "string", "enum": ["ra.ext.cap.v1"] },
         "capabilities": {
           "type": "array",
           "items": { "$ref": "#/$defs/capability_requirement_v1" }
@@ -66,7 +66,7 @@
       "type": "object",
       "required": ["schema", "capabilities"],
       "properties": {
-        "schema": { "type": "string", "enum": ["pi.ext.cap.v2"] },
+        "schema": { "type": "string", "enum": ["ra.ext.cap.v2"] },
         "capabilities": {
           "type": "array",
           "items": { "$ref": "#/$defs/capability_requirement_v2" }

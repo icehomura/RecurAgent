@@ -2,7 +2,7 @@
 
 Purpose: Explain how operators and developers should capture, preview, and interpret offline swarm replay evidence without treating it as live coordination truth or release evidence.
 
-This guide covers the replay lab shipped under `bd-in57w`: the read-only trace ingestor in `src/swarm_replay.rs`, the `pi swarm-replay-preview` CLI surface, the operator runpack integration, and the no-mock E2E evidence harness. It is written for multi-agent operators who need to understand what happened in a swarm, compare advisory policies, and hand off the next safe action without mutating Beads, Agent Mail, git, RCH, or live build slots.
+This guide covers the replay lab shipped under `bd-in57w`: the read-only trace ingestor in `src/swarm_replay.rs`, the `ra swarm-replay-preview` CLI surface, the operator runpack integration, and the no-mock E2E evidence harness. It is written for multi-agent operators who need to understand what happened in a swarm, compare advisory policies, and hand off the next safe action without mutating Beads, Agent Mail, git, RCH, or live build slots.
 
 ## What Replay Is
 
@@ -10,7 +10,7 @@ Swarm replay is an offline analysis tool over captured coordination artifacts.
 
 It can:
 
-- Normalize Beads, Agent Mail archive snapshots, reservation records, RCH queue/status facts, runpack handoff data, git status, validation artifacts, activity ledger rows, and flight recorder rows into a `pi.swarm.replay_trace.v1` trace.
+- Normalize Beads, Agent Mail archive snapshots, reservation records, RCH queue/status facts, runpack handoff data, git status, validation artifacts, activity ledger rows, and flight recorder rows into a `ra.swarm.replay_trace.v1` trace.
 - Replay those events into deterministic snapshots.
 - Evaluate built-in advisory policies over those snapshots.
 - Emit JSON, text, comparison, manifest, and JSONL event evidence for audit.
@@ -22,7 +22,7 @@ It cannot:
 - Send Agent Mail messages or reserve files.
 - Cancel, start, or prioritize RCH jobs.
 - Stage, commit, push, stash, reset, clean, or edit git state.
-- Replace `pi doctor --only swarm`, Beads, Agent Mail, RCH, CI, or release evidence gates.
+- Replace `ra doctor --only swarm`, Beads, Agent Mail, RCH, CI, or release evidence gates.
 - Prove release-facing performance, strict drop-in certification, or live swarm readiness.
 
 Treat replay output as reproducible operator evidence. Use source systems for authority.
@@ -51,7 +51,7 @@ git status --short --branch > "$capture_dir/git-status.txt"
 rch status > "$capture_dir/rch-status.txt"
 rch queue > "$capture_dir/rch-queue.txt"
 
-pi doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
+ra doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
 scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets \
   --decision-json "$capture_dir/cargo-admission.json"
 ```
@@ -64,7 +64,7 @@ When producing runpack evidence, keep replay artifacts beside the runpack captur
 python3 scripts/build_swarm_operator_runpack.py \
   --capture-current \
   --capture-dir "$capture_dir/runpack" \
-  --project-root /data/projects/pi_agent_rust \
+  --project-root /data/projects/recur_agent \
   --agent-name "${AGENT_NAME:-agent}" \
   --out-json "$capture_dir/operator-runpack.json" \
   --out-md "$capture_dir/operator-runpack.md"
@@ -77,7 +77,7 @@ The runpack is a redacted index over source artifacts, not a new source of truth
 Use the checked-in golden trace when validating the CLI surface:
 
 ```bash
-pi swarm-replay-preview \
+ra swarm-replay-preview \
   --trace tests/golden_corpus/swarm_replay_trace/normalized_trace.json \
   --format json
 ```
@@ -85,7 +85,7 @@ pi swarm-replay-preview \
 Write reproducible preview artifacts with explicit output paths:
 
 ```bash
-pi swarm-replay-preview \
+ra swarm-replay-preview \
   --trace tests/golden_corpus/swarm_replay_trace/normalized_trace.json \
   --policy conservative_manual \
   --policy rch_fanout_limited \
@@ -102,7 +102,7 @@ Feed the preview into the runpack only after the JSON exists:
 python3 scripts/build_swarm_operator_runpack.py \
   --capture-current \
   --capture-dir "$capture_dir/runpack" \
-  --project-root /data/projects/pi_agent_rust \
+  --project-root /data/projects/recur_agent \
   --agent-name "${AGENT_NAME:-agent}" \
   --swarm-replay-preview-json "$capture_dir/swarm-replay-preview.json" \
   --out-json "$capture_dir/operator-runpack.json" \
@@ -168,7 +168,7 @@ Replay often appears in swarms running on hosts with 64 or more cores and 256 Gi
 Use this sequence before increasing fanout:
 
 ```bash
-pi doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
+ra doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
 scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets \
   --decision-json "$capture_dir/cargo-admission.json"
 rch status
@@ -198,8 +198,8 @@ Use captured replay as a warning, then refresh live state:
 ```bash
 rch status
 rch queue
-env CARGO_TARGET_DIR="/data/tmp/pi_agent_rust_cargo/${AGENT_NAME:-agent}/target" \
-  TMPDIR="/data/tmp/pi_agent_rust_cargo/${AGENT_NAME:-agent}/tmp" \
+env CARGO_TARGET_DIR="/data/tmp/recur_agent_cargo/${AGENT_NAME:-agent}/target" \
+  TMPDIR="/data/tmp/recur_agent_cargo/${AGENT_NAME:-agent}/tmp" \
   rch exec -- cargo check --all-targets
 ```
 
@@ -209,7 +209,7 @@ If RCH is saturated, continue docs, source inspection, or non-heavy work. Do not
 
 | Symptom | Likely cause | Response |
 |---------|--------------|----------|
-| `swarm-replay-preview requires --trace` | Missing trace path. | Pass `--trace <pi.swarm.replay_trace.v1 JSON>`. |
+| `swarm-replay-preview requires --trace` | Missing trace path. | Pass `--trace <ra.swarm.replay_trace.v1 JSON>`. |
 | `requires trace schema ...` | Wrong JSON artifact. | Use the normalized trace, not a runpack, preview, or policy report. |
 | `unsupported swarm-replay-preview policy` | Typo or unsupported policy ID. | Use one of the five built-in policy IDs listed above. |
 | Output path already exists | CLI refuses to overwrite evidence. | Use a new capture path; delete only with explicit permission. |
@@ -232,8 +232,8 @@ git diff --check
 If examples or CLI flags change, also run the focused CLI test through RCH:
 
 ```bash
-env CARGO_TARGET_DIR="/data/tmp/pi_agent_rust_cargo/${AGENT_NAME:-agent}/target" \
-  TMPDIR="/data/tmp/pi_agent_rust_cargo/${AGENT_NAME:-agent}/tmp" \
+env CARGO_TARGET_DIR="/data/tmp/recur_agent_cargo/${AGENT_NAME:-agent}/target" \
+  TMPDIR="/data/tmp/recur_agent_cargo/${AGENT_NAME:-agent}/tmp" \
   rch exec -- cargo test --test swarm_replay_preview_cli -- --nocapture
 ```
 

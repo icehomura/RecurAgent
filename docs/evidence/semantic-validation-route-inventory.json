@@ -1,5 +1,5 @@
 {
-  "schema": "pi.validation.semantic_route_inventory.v1",
+  "schema": "ra.validation.semantic_route_inventory.v1",
   "generated_at": "2026-05-19T03:31:00Z",
   "status": "pass",
   "decision": "semantic_route_inventory_ready",
@@ -7,7 +7,7 @@
   "purpose": "design_inventory_for_read_only_semantic_validation_route_planning",
   "summary": {
     "problem": "Pi already has advisory validation scheduling, proof-memory, redundant-work detection, and operator recommendations, but agents still lack a single route-level map from touched paths to proof obligations, RCH-only command templates, cache/coalescing hints, and coordination admission risks.",
-    "recommended_track": "Build pi.validation.semantic_route_plan.v1 as a read-only advisory layer above existing scheduler, proof-memory, Beads, Agent Mail, git, and runpack evidence.",
+    "recommended_track": "Build ra.validation.semantic_route_plan.v1 as a read-only advisory layer above existing scheduler, proof-memory, Beads, Agent Mail, git, and runpack evidence.",
     "ready_follow_on": "bd-4w2mw.2",
     "non_goals": [
       "Do not execute cargo or RCH commands.",
@@ -136,7 +136,7 @@
     },
     {
       "id": "agent_mail",
-      "path": "MCP Agent Mail project /data/projects/pi_agent_rust",
+      "path": "MCP Agent Mail project /data/projects/recur_agent",
       "authority": "coordination_and_reservation_source",
       "semantic_route_use": "Optional live source for health, active agents, and reservations; missing or degraded data must fail closed or recommend Beads soft-lock."
     },
@@ -154,7 +154,7 @@
     }
   ],
   "proposed_route_plan_contract": {
-    "schema": "pi.validation.semantic_route_plan.v1",
+    "schema": "ra.validation.semantic_route_plan.v1",
     "required_top_level_keys": [
       "schema",
       "generated_at",
@@ -304,7 +304,7 @@
         "id": "focused_tests",
         "requires_rch": true,
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo test <focused-target>"
+          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo test <focused-target>"
         ],
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build."
       },
@@ -312,8 +312,8 @@
         "id": "e2e_conformance",
         "requires_rch": true,
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo test conformance",
-          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo test e2e"
+          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo test conformance",
+          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo test e2e"
         ],
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build."
       },
@@ -321,7 +321,7 @@
         "id": "all_targets_check",
         "requires_rch": true,
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo check --all-targets"
+          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo check --all-targets"
         ],
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build."
       },
@@ -329,7 +329,7 @@
         "id": "clippy",
         "requires_rch": true,
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
+          "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
         ],
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build."
       }

@@ -6,8 +6,8 @@ Pi loads available models from a built-in registry and an optional user-defined 
 
 | Path | Description |
 |------|-------------|
-| `~/.pi/agent/models.json` | User-defined model overrides and custom providers |
-| `~/.pi/agent/models.fetched.json` | Generated v2 live-catalog membership; managed only by `--persist-models` |
+| `~/.ra/agent/models.json` | User-defined model overrides and custom providers |
+| `~/.ra/agent/models.fetched.json` | Generated v2 live-catalog membership; managed only by `--persist-models` |
 
 Do not hand-edit `models.fetched.json`. Its provider/model IDs are bound to the
 fetching endpoint and transport shape by a non-secret fingerprint and timestamp. The
@@ -26,7 +26,7 @@ Inference requests still resolve the current account's credential, while only
 the opt-in saved model list can remain stale. Hand-authored `models.json` remains
 authoritative.
 
-Legacy `pi.models.fetched.v1` files lack the endpoint and transport provenance
+Legacy `ra.models.fetched.v1` files lack the endpoint and transport provenance
 required by v2 and are preserved rather than overwritten automatically. Move
 the legacy file aside to `models.fetched.v1.backup.json`, then run a verified
 live `--fetch-models <provider> --refresh-models --persist-models` command to
@@ -80,7 +80,7 @@ If `models` is provided, built-in models for that provider are replaced with the
 }
 ```
 
-Every key of `compat.openRouterRouting` is copied verbatim onto the top level of the OpenRouter request body (`provider`, `models`, `route`, …). `pi --model openrouter/deepseek/deepseek-v4-pro` then resolves to the patched entry.
+Every key of `compat.openRouterRouting` is copied verbatim onto the top level of the OpenRouter request body (`provider`, `models`, `route`, …). `ra --model openrouter/deepseek/deepseek-v4-pro` then resolves to the patched entry.
 
 ### Model Config
 
@@ -135,7 +135,7 @@ A custom OpenAI-compatible proxy that speaks the same shape can opt in with `"co
 The canonical list of bundled providers, aliases, auth environment keys, and
 onboarding modes, generated from `PROVIDER_METADATA` in
 `src/provider_metadata.rs`. Do not edit the table by hand — regenerate with
-`PI_BLESS_MODELS_DOC=1 cargo test --test provider_metadata_comprehensive docs_models_provider_table_matches_registry`.
+`RECUR_AGENT_BLESS_MODELS_DOC=1 cargo test --test provider_metadata_comprehensive docs_models_provider_table_matches_registry`.
 
 <!-- PROVIDER_TABLE:BEGIN -->
 
@@ -349,8 +349,8 @@ out-of-the-box without a `models.json` entry:
 
 ```bash
 # Defaults: llama-server -> http://127.0.0.1:8080/v1, mistral.rs -> http://127.0.0.1:1234/v1
-pi --provider llamacpp  --model ggml-org/gemma-4-E4B-it-GGUF -p "hi"
-pi --provider mistralrs --model default -p "hi"
+ra --provider llamacpp  --model ggml-org/gemma-4-E4B-it-GGUF -p "hi"
+ra --provider mistralrs --model default -p "hi"
 ```
 
 Provider aliases are accepted: `llama.cpp` / `llama-cpp` / `llama-server` ->
@@ -389,7 +389,7 @@ snapshot at runtime. The file uses the same shape as the bundled snapshot:
 
 `<config_dir>` is whatever `dirs::config_dir()` reports — `~/.config` on Linux,
 `~/Library/Application Support` on macOS, `%APPDATA%` on Windows. Set
-`PI_MODELS_OVERRIDE=/path/to/file.json` in the environment to point pi at a
+`RECUR_AGENT_MODELS_OVERRIDE=/path/to/file.json` in the environment to point pi at a
 file outside the standard config directory.
 
 Behavior:

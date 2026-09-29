@@ -18,8 +18,8 @@ The telemetry event captures:
 
 ## Schema
 
-- Artifact schema: `pi.ext.hostcall_telemetry.v1`
-- Feature schema: `pi.ext.hostcall_feature_vector.v1`
+- Artifact schema: `ra.ext.hostcall_telemetry.v1`
+- Feature schema: `ra.ext.hostcall_feature_vector.v1`
 - JSON Schema: `docs/schema/runtime_hostcall_telemetry.json`
 
 The Rust artifact export is `ExtensionManager::runtime_hostcall_telemetry_artifact()`.

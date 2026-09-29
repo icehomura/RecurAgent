@@ -1,4 +1,4 @@
-# Plan: Port Pi Agent to Rust
+# Plan: Port Recur Agent to Rust
 
 ## Executive Summary
 
@@ -138,7 +138,7 @@ Use `tokio` for async I/O (HTTP requests, streaming, file operations).
 ### 6. Configuration
 - TOML format for config files
 - Environment variable overrides
-- Project-local `.pi/` directory support
+- Project-local `.ra/` directory support
 
 ---
 

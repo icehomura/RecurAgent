@@ -167,14 +167,14 @@ I/O = `fs-heavy`, `network-heavy`, `ui-centric`, `cpu-heavy`, `os-heavy`
 | `with-deps/` | pkg-with-deps | mixed | read, write | medium | fs-heavy |
 | `file-trigger.ts` | legacy-js | event_hook | read | small | fs-heavy |
 
-### B) Repo‑local `.pi/extensions`
+### B) Repo‑local `.ra/extensions`
 
 | Candidate | Runtime | Interaction | Capabilities | Complexity | I/O |
 |---|---|---|---|---|---|
-| `.pi/extensions/diff.ts` | legacy-js | slash_command, ui_integration | exec | medium | fs-heavy |
-| `.pi/extensions/files.ts` | legacy-js | slash_command, ui_integration | read | small | fs-heavy |
-| `.pi/extensions/prompt-url-widget.ts` | legacy-js | ui_integration | http | medium | network-heavy |
-| `.pi/extensions/redraws.ts` | legacy-js | ui_integration | env | small | ui-centric |
+| `.ra/extensions/diff.ts` | legacy-js | slash_command, ui_integration | exec | medium | fs-heavy |
+| `.ra/extensions/files.ts` | legacy-js | slash_command, ui_integration | read | small | fs-heavy |
+| `.ra/extensions/prompt-url-widget.ts` | legacy-js | ui_integration | http | medium | network-heavy |
+| `.ra/extensions/redraws.ts` | legacy-js | ui_integration | env | small | ui-centric |
 
 ### C) badlogic gists
 
@@ -195,7 +195,7 @@ I/O = `fs-heavy`, `network-heavy`, `ui-centric`, `cpu-heavy`, `os-heavy`
 ## 3) How to Apply the Matrix
 
 1. Compute candidate scores with the executable rubric (`src/extension_scoring.rs`) and persist
-   ranked output (`pi.ext.scoring.v1`).
+   ranked output (`ra.ext.scoring.v1`).
 2. Apply hard gates (`provenance_pinned`, license redistribution, deterministic scenario,
    unmodified compatibility). Excluded candidates do not count toward quotas.
 3. Allocate Tier-0 first (all official pi-mono), then fill Tier-1 to `>=200` using score order.

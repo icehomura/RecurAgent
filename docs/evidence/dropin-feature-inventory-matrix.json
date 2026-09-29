@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.feature_inventory.v1",
+  "schema": "ra.dropin.feature_inventory.v1",
   "bead_id": "bd-w9i9o",
   "generated_at_utc": "2026-02-14T19:04:00Z",
   "status": "draft_reconciled_to_pinned_baseline",
@@ -666,8 +666,8 @@
         "OPENAI_API_KEY",
         "GEMINI_API_KEY",
         "AZURE_OPENAI_API_KEY",
-        "PI_CODING_AGENT_DIR",
-        "PI_PACKAGE_DIR"
+        "RECUR_AGENT_DIR",
+        "RECUR_AGENT_PACKAGE_DIR"
       ],
       "upstream_evidence": [
         "legacy_pi_mono_code/pi-mono/packages/coding-agent/src/cli/args.ts"
@@ -684,7 +684,7 @@
       "row_id": "env.contracts.pi_ai_antigravity_version",
       "surface": "integration_contract",
       "elements": [
-        "PI_AI_ANTIGRAVITY_VERSION"
+        "RECUR_AGENT_AI_ANTIGRAVITY_VERSION"
       ],
       "upstream_evidence": [
         "legacy_pi_mono_code/pi-mono/packages/coding-agent/src/cli/args.ts"
@@ -741,7 +741,7 @@
       "elements": [
         "cli-overrides-env-overrides-project-overrides-global-overrides-defaults",
         "global+project-settings-loading",
-        "single-file-mode-via-PI_CONFIG_PATH"
+        "single-file-mode-via-RECUR_AGENT_CONFIG_PATH"
       ],
       "upstream_evidence": [
         "legacy_pi_mono_code/pi-mono/packages/coding-agent/docs/settings.md",

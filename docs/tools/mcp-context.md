@@ -113,7 +113,7 @@ Trust revocation, cancellation, and connection-generation checks are the same
 as for resource reads.
 
 SDK callers can use `McpManager::complete_argument` with the typed
-`pi::mcp::McpCompletionReference::{Prompt, Resource}`. There is no automatic
+`ra::mcp::McpCompletionReference::{Prompt, Resource}`. There is no automatic
 keystroke-triggered requester; interactive embedders should debounce their calls.
 
 Wire contract: MCP specification 2025-06-18, Server Utilities / Completion.

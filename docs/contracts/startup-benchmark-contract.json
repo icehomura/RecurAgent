@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "schema": "pi.perf.startup_benchmark.contract.v1",
-  "contract_id": "pi.contract.startup_benchmark.v1",
+  "schema": "ra.perf.startup_benchmark.contract.v1",
+  "contract_id": "ra.contract.startup_benchmark.v1",
   "title": "Release Startup Performance & Binary Size Benchmark Contract",
   "version": "1.0.0",
   "bead_id": "bd-sog97.17",

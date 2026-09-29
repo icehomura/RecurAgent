@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.work_admission_gate_contract.v1",
-  "work_admission_gate_schema": "pi.swarm.work_admission_gate.v1",
+  "schema": "ra.swarm.work_admission_gate_contract.v1",
+  "work_admission_gate_schema": "ra.swarm.work_admission_gate.v1",
   "purpose": "fail_closed_swarm_work_admission_gate_not_source_of_truth",
   "description": "Contract for the advisory swarm work-admission gate. The gate consumes captured Beads, git, RCH, validation, evidence freshness, Agent Mail, autopilot plan, and action-plan signals, then classifies whether implementation, coordination work, evidence renewal, waiting, or escalation is the safest next action. It also emits a read-only dry-run executor view that classifies plan commands and policy boundaries as would_execute, blocked, requires_operator, or never_execute without mutating source systems.",
   "allowed_statuses": [
@@ -58,7 +58,7 @@
     "validation_broker",
     "evidence"
   ],
-  "dry_run_executor_schema": "pi.swarm.work_admission_dry_run_executor.v1",
+  "dry_run_executor_schema": "ra.swarm.work_admission_dry_run_executor.v1",
   "allowed_executor_classifications": [
     "would_execute",
     "blocked",

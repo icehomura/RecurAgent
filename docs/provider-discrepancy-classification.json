@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.provider_discrepancy_classification.v1",
+  "schema": "ra.qa.provider_discrepancy_classification.v1",
   "bead_id": "bd-3uqg.12.1.1",
   "generated_at_utc": "2026-02-14T00:30:00Z",
   "generated_by": "LilacCat (Claude Opus 4.6), updated by Opus4.6-agent",
@@ -269,7 +269,7 @@
         "docs/provider_e2e_artifact_contract.json:gaps_identified[0] (GAP-1)",
         "docs/provider_e2e_artifact_contract.json:correlation_model.ci_correlation_id"
       ],
-      "proposed_action": "Add optional ci_correlation_id field to pi.test.log.v2 context"
+      "proposed_action": "Add optional ci_correlation_id field to ra.test.log.v2 context"
     },
     {
       "id": "DISC-018",
@@ -307,7 +307,7 @@
         "docs/provider_e2e_artifact_contract.json:gaps_identified[3] (GAP-4)",
         "docs/e2e_scenario_matrix.json:ci_policy.required_run_artifacts"
       ],
-      "proposed_action": "Define pi.qa.evidence_contract.v1 schema with required fields"
+      "proposed_action": "Define ra.qa.evidence_contract.v1 schema with required fields"
     },
     {
       "id": "DISC-021",
@@ -315,7 +315,7 @@
       "discrepancy_type": "logging_schema_drift",
       "title": "V1 schema deprecation not enforced",
       "severity": "low",
-      "user_impact": "pi.test.log.v1 is accepted by validator but all new tests should use v2; no enforcement prevents v1 usage in new tests",
+      "user_impact": "ra.test.log.v1 is accepted by validator but all new tests should use v2; no enforcement prevents v1 usage in new tests",
       "evidence_refs": [
         "docs/provider_e2e_artifact_contract.json:gaps_identified[4] (GAP-5)",
         "tests/common/logging.rs:validate_jsonl_line()"
@@ -457,7 +457,7 @@
     {
       "rank": 8,
       "id": "DISC-020",
-      "action": "Define formal pi.qa.evidence_contract.v1 schema",
+      "action": "Define formal ra.qa.evidence_contract.v1 schema",
       "effort": "low (JSON schema document)",
       "impact": "low (documentation completeness)",
       "rollout_risk": "none (docs-only)"

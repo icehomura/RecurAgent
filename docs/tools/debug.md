@@ -281,13 +281,13 @@ Existing debugger/Delve tests are retained and the two raw-ID assumptions in the
 older tool tests are updated to use returned handles. Protocol fixtures check
 partial resume, both step response orders, peer preservation, ID reuse, assignment
 wire shapes, missing capabilities and invalidation during a response. Python-backed
-cases fail on missing Python with `PI_DEBUG_REQUIRE_PROTOCOL=1`, otherwise report
+cases fail on missing Python with `RECUR_AGENT_DEBUG_REQUIRE_PROTOCOL=1`, otherwise report
 a dependency skip. None of these new Rust tests ran in the implementation session.
 
 The authoritative entry point remains:
 
 ```sh
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 ```
 
 This environment has neither Rust nor DSR installed; the invocation returned

@@ -1,12 +1,12 @@
 {
-  "schema": "pi.large_session_tui_frame_budget.proof.v1",
+  "schema": "ra.large_session_tui_frame_budget.proof.v1",
   "generatedAt": "2026-05-16T04:57:24Z",
   "bead": "bd-h66tp.5",
   "purpose": "Deterministic proof that large-session interactive TUI surfaces emit bounded, redaction-safe frame-budget evidence for conversation views, tool previews, model selection, and tree or branch navigation.",
   "frameBudgetUs": 16667,
   "telemetry": {
-    "runtimeSchema": "pi.tui.frame_budget.v1",
-    "emission": "PI_PERF_TELEMETRY gated rolling snapshots plus test-local snapshots",
+    "runtimeSchema": "ra.tui.frame_budget.v1",
+    "emission": "RECUR_AGENT_PERF_TELEMETRY gated rolling snapshots plus test-local snapshots",
     "redaction": {
       "payloadsIncluded": false,
       "omittedFields": [
@@ -133,7 +133,7 @@
         }
       },
       "assertions": [
-        "each snapshot uses schema pi.tui.frame_budget.v1",
+        "each snapshot uses schema ra.tui.frame_budget.v1",
         "each snapshot records at least one frame sample",
         "each snapshot omits prompt, tool payload, and model response content",
         "serialized snapshots do not contain the SECRET_FRAME_PAYLOAD fixture marker"
@@ -161,7 +161,7 @@
         "status": "passed"
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-h66tp5/target TMPDIR=/tmp cargo test -p pi_agent_rust --test tui_state frame_budget -- --nocapture",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-h66tp5/target TMPDIR=/tmp cargo test -p recur_agent --test tui_state frame_budget -- --nocapture",
         "status": "passed",
         "tests": 2
       },
@@ -178,11 +178,11 @@
         "status": "passed"
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-h66tp5/target TMPDIR=/tmp cargo check --all-targets",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-h66tp5/target TMPDIR=/tmp cargo check --all-targets",
         "status": "passed"
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey-h66tp5/target TMPDIR=/tmp cargo clippy --all-targets -- -D warnings",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey-h66tp5/target TMPDIR=/tmp cargo clippy --all-targets -- -D warnings",
         "status": "passed"
       }
     ],

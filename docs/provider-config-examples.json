@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_config_examples.v2",
+  "schema": "ra.provider_config_examples.v2",
   "bead_id": "bd-3uqg.9.2",
   "last_verified_utc": "2026-02-13T20:00:00Z",
   "description": "End-to-end configuration examples for every provider family. Each entry includes minimal env setup, CLI invocation, expected behavior, and known pitfalls.",
@@ -17,10 +17,10 @@
           "base_url": "https://api.anthropic.com/v1/messages",
           "env_required": { "ANTHROPIC_API_KEY": "sk-ant-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider anthropic --model claude-sonnet-4-5",
+          "minimal_cli": "ra --provider anthropic --model claude-sonnet-4-5",
           "advanced_cli": [
-            "pi --provider anthropic --model claude-opus-4-5 --thinking high",
-            "pi --provider anthropic --model claude-haiku-4-5"
+            "ra --provider anthropic --model claude-opus-4-5 --thinking high",
+            "ra --provider anthropic --model claude-haiku-4-5"
           ],
           "supports": ["text", "image", "reasoning", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -42,10 +42,10 @@
           "base_url": "https://api.openai.com/v1",
           "env_required": { "OPENAI_API_KEY": "sk-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider openai --model gpt-4o",
+          "minimal_cli": "ra --provider openai --model gpt-4o",
           "advanced_cli": [
-            "pi --provider openai --model gpt-5.1-codex",
-            "pi --provider openai --model gpt-4o-mini"
+            "ra --provider openai --model gpt-5.1-codex",
+            "ra --provider openai --model gpt-4o-mini"
           ],
           "supports": ["text", "image", "reasoning", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -67,10 +67,10 @@
           "base_url": "https://generativelanguage.googleapis.com/v1beta",
           "env_required": { "GOOGLE_API_KEY": "AIza..." },
           "env_optional": { "GEMINI_API_KEY": "AIza... (alias for GOOGLE_API_KEY)" },
-          "minimal_cli": "pi --provider google --model gemini-2.5-pro",
+          "minimal_cli": "ra --provider google --model gemini-2.5-pro",
           "advanced_cli": [
-            "pi --provider gemini --model gemini-2.5-flash",
-            "pi --provider google --model gemini-1.5-pro"
+            "ra --provider gemini --model gemini-2.5-flash",
+            "ra --provider google --model gemini-1.5-pro"
           ],
           "supports": ["text", "image", "reasoning", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -91,9 +91,9 @@
           "base_url": "(region-based, constructed dynamically)",
           "env_required": { "GOOGLE_CLOUD_API_KEY": "..." },
           "env_optional": { "VERTEX_API_KEY": "... (alias)" },
-          "minimal_cli": "pi --provider google-vertex --model gemini-2.5-pro",
+          "minimal_cli": "ra --provider google-vertex --model gemini-2.5-pro",
           "advanced_cli": [
-            "pi --provider vertexai --model gemini-2.5-pro"
+            "ra --provider vertexai --model gemini-2.5-pro"
           ],
           "supports": ["text", "image", "reasoning", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -115,7 +115,7 @@
           "base_url": "https://api.cohere.com/v2",
           "env_required": { "COHERE_API_KEY": "..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider cohere --model command-r-plus",
+          "minimal_cli": "ra --provider cohere --model command-r-plus",
           "advanced_cli": [],
           "supports": ["text", "reasoning", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -147,9 +147,9 @@
             "AWS_PROFILE": "... (named profile)",
             "AWS_REGION": "us-east-1"
           },
-          "minimal_cli": "pi --provider amazon-bedrock --model anthropic.claude-sonnet-4-20250514-v1:0",
+          "minimal_cli": "ra --provider amazon-bedrock --model anthropic.claude-sonnet-4-20250514-v1:0",
           "advanced_cli": [
-            "pi --provider bedrock --model anthropic.claude-sonnet-4-20250514-v1:0"
+            "ra --provider bedrock --model anthropic.claude-sonnet-4-20250514-v1:0"
           ],
           "supports": ["text", "reasoning", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -172,9 +172,9 @@
           "base_url": "(deployment-specific, must configure)",
           "env_required": { "AZURE_OPENAI_API_KEY": "..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider azure-openai --model gpt-4o",
+          "minimal_cli": "ra --provider azure-openai --model gpt-4o",
           "advanced_cli": [
-            "pi --provider azure --model my-gpt4o-deployment --base-url \"https://my-resource.openai.azure.com/openai/deployments/my-gpt4o-deployment/chat/completions?api-version=2024-02-15-preview\""
+            "ra --provider azure --model my-gpt4o-deployment --base-url \"https://my-resource.openai.azure.com/openai/deployments/my-gpt4o-deployment/chat/completions?api-version=2024-02-15-preview\""
           ],
           "supports": ["text", "image", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -201,9 +201,9 @@
             "SAP_AI_CORE_TOKEN_URL": "https://...",
             "SAP_AI_CORE_SERVICE_URL": "https://..."
           },
-          "minimal_cli": "pi --provider sap-ai-core --model gpt-4o",
+          "minimal_cli": "ra --provider sap-ai-core --model gpt-4o",
           "advanced_cli": [
-            "pi --provider sap --model gpt-4o"
+            "ra --provider sap --model gpt-4o"
           ],
           "supports": ["text", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -226,9 +226,9 @@
           "base_url": "(GitHub API, token exchange)",
           "env_required": { "GITHUB_COPILOT_API_KEY": "..." },
           "env_optional": { "GITHUB_TOKEN": "ghp_... (alternative auth)" },
-          "minimal_cli": "pi --provider github-copilot --model gpt-4o",
+          "minimal_cli": "ra --provider github-copilot --model gpt-4o",
           "advanced_cli": [
-            "pi --provider copilot --model gpt-4o"
+            "ra --provider copilot --model gpt-4o"
           ],
           "supports": ["text", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -250,9 +250,9 @@
           "base_url": "(GitLab instance URL, must configure)",
           "env_required": { "GITLAB_TOKEN": "glpat-..." },
           "env_optional": { "GITLAB_API_KEY": "... (alternative auth)" },
-          "minimal_cli": "pi --provider gitlab --model claude-sonnet-4",
+          "minimal_cli": "ra --provider gitlab --model claude-sonnet-4",
           "advanced_cli": [
-            "pi --provider gitlab-duo --model claude-sonnet-4 --base-url \"https://gitlab.mycompany.com\""
+            "ra --provider gitlab-duo --model claude-sonnet-4 --base-url \"https://gitlab.mycompany.com\""
           ],
           "supports": ["text", "tool_calling", "streaming"],
           "expected_behavior": {
@@ -280,9 +280,9 @@
           "base_url": "https://api.groq.com/openai/v1/chat/completions",
           "env_required": { "GROQ_API_KEY": "gsk_..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider groq --model llama-3.3-70b-versatile",
+          "minimal_cli": "ra --provider groq --model llama-3.3-70b-versatile",
           "advanced_cli": [
-            "pi --provider groq --model deepseek-r1-distill-llama-70b"
+            "ra --provider groq --model deepseek-r1-distill-llama-70b"
           ],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE response",
@@ -302,9 +302,9 @@
           "base_url": "https://api.deepseek.com",
           "env_required": { "DEEPSEEK_API_KEY": "sk-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider deepseek --model deepseek-chat",
+          "minimal_cli": "ra --provider deepseek --model deepseek-chat",
           "advanced_cli": [
-            "pi --provider deepseek --model deepseek-reasoner"
+            "ra --provider deepseek --model deepseek-reasoner"
           ],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE response",
@@ -324,9 +324,9 @@
           "base_url": "https://api.cerebras.ai/v1/chat/completions",
           "env_required": { "CEREBRAS_API_KEY": "csk-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider cerebras --model llama-3.3-70b",
+          "minimal_cli": "ra --provider cerebras --model llama-3.3-70b",
           "advanced_cli": [
-            "pi --provider cerebras --model qwen-3-32b"
+            "ra --provider cerebras --model qwen-3-32b"
           ],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE including time_info",
@@ -346,10 +346,10 @@
           "base_url": "https://openrouter.ai/api/v1/chat/completions",
           "env_required": { "OPENROUTER_API_KEY": "sk-or-v1-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider openrouter --model openai/gpt-4o-mini",
+          "minimal_cli": "ra --provider openrouter --model openai/gpt-4o-mini",
           "advanced_cli": [
-            "pi --provider openrouter --model anthropic/claude-sonnet-4",
-            "pi --provider openrouter --model meta-llama/llama-3.3-70b-instruct"
+            "ra --provider openrouter --model anthropic/claude-sonnet-4",
+            "ra --provider openrouter --model meta-llama/llama-3.3-70b-instruct"
           ],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE (may include OPENROUTER PROCESSING comments)",
@@ -370,7 +370,7 @@
           "base_url": "https://api.mistral.ai/v1/chat/completions",
           "env_required": { "MISTRAL_API_KEY": "..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider mistral --model mistral-large-latest",
+          "minimal_cli": "ra --provider mistral --model mistral-large-latest",
           "advanced_cli": [],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -387,10 +387,10 @@
           "base_url": "https://api.moonshot.ai/v1/chat/completions",
           "env_required": { "MOONSHOT_API_KEY": "sk-..." },
           "env_optional": { "KIMI_API_KEY": "sk-... (moonshotai global only)" },
-          "minimal_cli": "pi --provider moonshotai --model moonshot-v1-128k",
+          "minimal_cli": "ra --provider moonshotai --model moonshot-v1-128k",
           "advanced_cli": [
-            "pi --provider moonshotai-cn --model moonshot-v1-128k",
-            "pi --provider kimi-for-coding --model kimi-k2.5"
+            "ra --provider moonshotai-cn --model moonshot-v1-128k",
+            "ra --provider kimi-for-coding --model kimi-k2.5"
           ],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -412,9 +412,9 @@
           "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
           "env_required": { "DASHSCOPE_API_KEY": "sk-..." },
           "env_optional": { "QWEN_API_KEY": "sk-... (alibaba intl only)" },
-          "minimal_cli": "pi --provider alibaba --model qwen-plus",
+          "minimal_cli": "ra --provider alibaba --model qwen-plus",
           "advanced_cli": [
-            "pi --provider alibaba-cn --model qwen-plus"
+            "ra --provider alibaba-cn --model qwen-plus"
           ],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -435,7 +435,7 @@
           "base_url": "https://api.fireworks.ai/inference/v1",
           "env_required": { "FIREWORKS_API_KEY": "..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider fireworks --model accounts/fireworks/models/llama-v3p1-70b-instruct",
+          "minimal_cli": "ra --provider fireworks --model accounts/fireworks/models/llama-v3p1-70b-instruct",
           "advanced_cli": [],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -452,7 +452,7 @@
           "base_url": "https://api.perplexity.ai",
           "env_required": { "PERPLEXITY_API_KEY": "pplx-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider perplexity --model sonar-pro",
+          "minimal_cli": "ra --provider perplexity --model sonar-pro",
           "advanced_cli": [],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -469,7 +469,7 @@
           "base_url": "https://api.x.ai/v1",
           "env_required": { "XAI_API_KEY": "xai-..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider xai --model grok-2",
+          "minimal_cli": "ra --provider xai --model grok-2",
           "advanced_cli": [],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -486,7 +486,7 @@
           "base_url": "https://api.together.xyz/v1/chat/completions",
           "env_required": { "TOGETHER_API_KEY": "..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider togetherai --model meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+          "minimal_cli": "ra --provider togetherai --model meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
           "advanced_cli": [],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -503,7 +503,7 @@
           "base_url": "https://api.deepinfra.com/v1/openai/chat/completions",
           "env_required": { "DEEPINFRA_API_KEY": "..." },
           "env_optional": {},
-          "minimal_cli": "pi --provider deepinfra --model meta-llama/Meta-Llama-3.1-70B-Instruct",
+          "minimal_cli": "ra --provider deepinfra --model meta-llama/Meta-Llama-3.1-70B-Instruct",
           "advanced_cli": [],
           "expected_behavior": {
             "auth_success": "200 OK with streaming SSE",
@@ -525,7 +525,7 @@
           "api_family": "openai-completions",
           "base_url": "https://integrate.api.nvidia.com/v1/chat/completions",
           "env_required": { "NVIDIA_API_KEY": "nvapi-..." },
-          "minimal_cli": "pi --provider nvidia --model meta/llama-3.1-70b-instruct",
+          "minimal_cli": "ra --provider nvidia --model meta/llama-3.1-70b-instruct",
           "key_caveats": []
         },
         {
@@ -535,7 +535,7 @@
           "api_family": "openai-completions",
           "base_url": "https://router.huggingface.co/v1/chat/completions",
           "env_required": { "HF_TOKEN": "hf_..." },
-          "minimal_cli": "pi --provider huggingface --model meta-llama/Meta-Llama-3.1-70B-Instruct",
+          "minimal_cli": "ra --provider huggingface --model meta-llama/Meta-Llama-3.1-70B-Instruct",
           "key_caveats": []
         },
         {
@@ -545,7 +545,7 @@
           "api_family": "openai-completions",
           "base_url": "https://api.openai-compat.model-serving.eu01.onstackit.cloud/v1/chat/completions",
           "env_required": { "STACKIT_API_KEY": "..." },
-          "minimal_cli": "pi --provider stackit --model <model-id>",
+          "minimal_cli": "ra --provider stackit --model <model-id>",
           "key_caveats": ["EU-hosted with data residency compliance"]
         },
         {
@@ -555,7 +555,7 @@
           "api_family": "openai-completions",
           "base_url": "https://ollama.com/v1/chat/completions",
           "env_required": { "OLLAMA_API_KEY": "..." },
-          "minimal_cli": "pi --provider ollama-cloud --model llama3.1:70b",
+          "minimal_cli": "ra --provider ollama-cloud --model llama3.1:70b",
           "key_caveats": []
         }
       ]
@@ -597,24 +597,24 @@
   "verification_commands": {
     "description": "Quick smoke test commands for each family. Pipe 'Say OK' to verify auth + streaming.",
     "built_in_native": [
-      "pi --provider anthropic --model claude-haiku-4-5 -m 'Say OK'",
-      "pi --provider openai --model gpt-4o-mini -m 'Say OK'",
-      "pi --provider google --model gemini-2.5-flash -m 'Say OK'",
-      "pi --provider cohere --model command-r-plus -m 'Say OK'"
+      "ra --provider anthropic --model claude-haiku-4-5 -m 'Say OK'",
+      "ra --provider openai --model gpt-4o-mini -m 'Say OK'",
+      "ra --provider google --model gemini-2.5-flash -m 'Say OK'",
+      "ra --provider cohere --model command-r-plus -m 'Say OK'"
     ],
     "native_adapter": [
-      "pi --provider amazon-bedrock --model anthropic.claude-sonnet-4-20250514-v1:0 -m 'Say OK'",
-      "pi --provider azure-openai --model gpt-4o -m 'Say OK'",
-      "pi --provider github-copilot --model gpt-4o -m 'Say OK'",
-      "pi --provider gitlab --model claude-sonnet-4 -m 'Say OK'"
+      "ra --provider amazon-bedrock --model anthropic.claude-sonnet-4-20250514-v1:0 -m 'Say OK'",
+      "ra --provider azure-openai --model gpt-4o -m 'Say OK'",
+      "ra --provider github-copilot --model gpt-4o -m 'Say OK'",
+      "ra --provider gitlab --model claude-sonnet-4 -m 'Say OK'"
     ],
     "openai_compatible": [
-      "pi --provider groq --model llama-3.3-70b-versatile -m 'Say OK'",
-      "pi --provider deepseek --model deepseek-chat -m 'Say OK'",
-      "pi --provider cerebras --model llama-3.3-70b -m 'Say OK'",
-      "pi --provider openrouter --model openai/gpt-4o-mini -m 'Say OK'",
-      "pi --provider moonshotai --model moonshot-v1-128k -m 'Say OK'",
-      "pi --provider alibaba --model qwen-plus -m 'Say OK'"
+      "ra --provider groq --model llama-3.3-70b-versatile -m 'Say OK'",
+      "ra --provider deepseek --model deepseek-chat -m 'Say OK'",
+      "ra --provider cerebras --model llama-3.3-70b -m 'Say OK'",
+      "ra --provider openrouter --model openai/gpt-4o-mini -m 'Say OK'",
+      "ra --provider moonshotai --model moonshot-v1-128k -m 'Say OK'",
+      "ra --provider alibaba --model qwen-plus -m 'Say OK'"
     ]
   }
 }

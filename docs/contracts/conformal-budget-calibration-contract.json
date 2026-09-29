@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "schema": "pi.conformal_calibration.contract.v1",
-  "contract_id": "pi.contract.conformal_calibration.v1",
+  "schema": "ra.conformal_calibration.contract.v1",
+  "contract_id": "ra.contract.conformal_calibration.v1",
   "title": "Data-Derived Conformal Budget Calibration & Amendment Contract",
   "version": "1.1.0",
   "bead_id": "bd-sog97.15",

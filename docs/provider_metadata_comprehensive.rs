@@ -8,7 +8,7 @@
 
 mod common;
 
-use pi::provider_metadata::{
+use ra::provider_metadata::{
     PROVIDER_METADATA, ProviderOnboardingMode, canonical_provider_id, provider_auth_env_keys,
     provider_metadata, provider_routing_defaults,
 };
@@ -253,7 +253,7 @@ fn provider_auth_reference_artifacts_match_runtime_metadata() {
             .expect("provider canonical ID policy must be valid JSON");
 
     assert_eq!(PROVIDER_METADATA.len(), 103);
-    assert_eq!(crosswalk["schema"], "pi.docs.provider_auth_crosswalk.v2");
+    assert_eq!(crosswalk["schema"], "ra.docs.provider_auth_crosswalk.v2");
     assert!(crosswalk.get("api_key_resolution_precedence").is_none());
     assert!(crosswalk.get("auth_method_patterns").is_none());
     assert_eq!(
@@ -705,9 +705,9 @@ fn context_window_and_max_tokens_are_positive() {
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Helper: build a `ModelEntry` for an OAI-compatible provider.
-fn oai_entry(provider: &str, api: &str, base_url: &str) -> pi::models::ModelEntry {
-    use pi::provider::{InputType, Model, ModelCost};
-    pi::models::ModelEntry {
+fn oai_entry(provider: &str, api: &str, base_url: &str) -> ra::models::ModelEntry {
+    use ra::provider::{InputType, Model, ModelCost};
+    ra::models::ModelEntry {
         model: Model {
             id: "test-model".to_string(),
             name: "Test Model".to_string(),
@@ -736,7 +736,7 @@ fn oai_entry(provider: &str, api: &str, base_url: &str) -> pi::models::ModelEntr
 
 #[test]
 fn factory_dispatches_every_oai_compatible_provider() {
-    use pi::providers::create_provider;
+    use ra::providers::create_provider;
 
     for meta in PROVIDER_METADATA {
         if meta.onboarding != ProviderOnboardingMode::OpenAICompatiblePreset {
@@ -760,12 +760,12 @@ fn factory_dispatches_every_oai_compatible_provider() {
 #[test]
 #[allow(clippy::too_many_lines)]
 fn factory_dispatches_native_established_providers() {
-    use pi::providers::create_provider;
+    use ra::providers::create_provider;
 
     // Anthropic
     let anthropic_entry = {
-        use pi::provider::{InputType, Model, ModelCost};
-        pi::models::ModelEntry {
+        use ra::provider::{InputType, Model, ModelCost};
+        ra::models::ModelEntry {
             model: Model {
                 id: "claude-sonnet-4-5".to_string(),
                 name: "Claude Sonnet".to_string(),
@@ -796,8 +796,8 @@ fn factory_dispatches_native_established_providers() {
 
     // Google/Gemini
     let google_entry = {
-        use pi::provider::{InputType, Model, ModelCost};
-        pi::models::ModelEntry {
+        use ra::provider::{InputType, Model, ModelCost};
+        ra::models::ModelEntry {
             model: Model {
                 id: "gemini-2.0-flash".to_string(),
                 name: "Gemini Flash".to_string(),
@@ -828,8 +828,8 @@ fn factory_dispatches_native_established_providers() {
 
     // Cohere
     let cohere_entry = {
-        use pi::provider::{InputType, Model, ModelCost};
-        pi::models::ModelEntry {
+        use ra::provider::{InputType, Model, ModelCost};
+        ra::models::ModelEntry {
             model: Model {
                 id: "command-r-plus".to_string(),
                 name: "Command R+".to_string(),
@@ -860,8 +860,8 @@ fn factory_dispatches_native_established_providers() {
 
     // Amazon Bedrock
     let bedrock_entry = {
-        use pi::provider::{InputType, Model, ModelCost};
-        pi::models::ModelEntry {
+        use ra::provider::{InputType, Model, ModelCost};
+        ra::models::ModelEntry {
             model: Model {
                 id: "anthropic.claude-3-5-sonnet-20240620-v1:0".to_string(),
                 name: "Claude Sonnet via Bedrock".to_string(),
@@ -969,7 +969,7 @@ fn generate_canonical_id_alias_table_json() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("docs/provider-canonical-id-table.json");
     let generate = matches!(
-        std::env::var("PI_GENERATE_PROVIDER_CANONICAL_ID_TABLE").as_deref(),
+        std::env::var("RECUR_AGENT_GENERATE_PROVIDER_CANONICAL_ID_TABLE").as_deref(),
         Ok("1")
     );
     if generate {
@@ -983,7 +983,7 @@ fn generate_canonical_id_alias_table_json() {
     assert_eq!(
         parsed, table,
         "committed provider canonical ID table is stale; regenerate explicitly with \
-         PI_GENERATE_PROVIDER_CANONICAL_ID_TABLE=1 cargo test \
+         RECUR_AGENT_GENERATE_PROVIDER_CANONICAL_ID_TABLE=1 cargo test \
          --test provider_metadata_comprehensive generate_canonical_id_alias_table_json -- --exact"
     );
     assert_eq!(
@@ -1419,7 +1419,7 @@ fn no_accidental_duplicate_routing_defaults() {
 /// bd-cv653.7.3: docs/models.md carries a GENERATED provider table between
 /// `<!-- PROVIDER_TABLE:BEGIN -->` / `:END -->` markers. The checked-in section
 /// must match `render_provider_docs_table()` exactly; regenerate with
-/// `PI_BLESS_MODELS_DOC=1 cargo test --test provider_metadata_comprehensive`.
+/// `RECUR_AGENT_BLESS_MODELS_DOC=1 cargo test --test provider_metadata_comprehensive`.
 #[test]
 fn docs_models_provider_table_matches_registry() {
     const BEGIN: &str = "<!-- PROVIDER_TABLE:BEGIN -->";
@@ -1434,11 +1434,11 @@ fn docs_models_provider_table_matches_registry() {
         .unwrap_or_else(|| panic!("docs/models.md is missing {END}"));
     assert!(begin < end, "table markers out of order in docs/models.md");
     let section = doc[begin + BEGIN.len()..end].trim().to_string();
-    let expected = pi::provider_metadata::render_provider_docs_table()
+    let expected = ra::provider_metadata::render_provider_docs_table()
         .trim()
         .to_string();
 
-    if std::env::var_os("PI_BLESS_MODELS_DOC").is_some() {
+    if std::env::var_os("RECUR_AGENT_BLESS_MODELS_DOC").is_some() {
         // Bless path: regenerate the marked section in place.
         let mut updated = String::with_capacity(doc.len() + expected.len());
         updated.push_str(&doc[..begin + BEGIN.len()]);
@@ -1453,7 +1453,7 @@ fn docs_models_provider_table_matches_registry() {
     assert_eq!(
         section, expected,
         "docs/models.md provider table is stale; regenerate with \
-         PI_BLESS_MODELS_DOC=1 cargo test --test provider_metadata_comprehensive \
+         RECUR_AGENT_BLESS_MODELS_DOC=1 cargo test --test provider_metadata_comprehensive \
          docs_models_provider_table_matches_registry"
     );
 }

@@ -50,7 +50,7 @@ DETECT  →  CONTAIN  →  COLLECT  →  VERIFY  →  ANALYZE  →  REMEDIATE  �
 
 2. **Check policy evaluation path.**
    ```bash
-   pi --explain-extension-policy
+   ra --explain-extension-policy
    ```
    - Verify the capability is in `deny_caps`
    - Check if per-extension overrides exist for this extension
@@ -278,7 +278,7 @@ The incident evidence bundle aggregates all security artifacts into a single, ha
 
 **Bundle integrity:**
 - `bundle_hash`: SHA-256 over all content sections
-- `schema`: `pi.security.incident_evidence_bundle.v1`
+- `schema`: `ra.security.incident_evidence_bundle.v1`
 - Verify with `verify_incident_evidence_bundle()`
 
 ### Filtering
@@ -337,7 +337,7 @@ After collecting evidence:
 
 Verification:
 ```bash
-pi --explain-extension-policy  # Confirm safe profile active
+ra --explain-extension-policy  # Confirm safe profile active
 cargo test --test security_conformance_benign -- --nocapture  # Confirm compatibility
 ```
 
@@ -361,7 +361,7 @@ Or disable entirely: set `enabled: false`. The controller stops scoring but exis
 ### Emergency: Kill All Extensions
 
 ```bash
-pi --no-extensions  # Disable all extension discovery and loading
+ra --no-extensions  # Disable all extension discovery and loading
 ```
 
 This is the nuclear option. Use only when containment requires complete extension isolation.

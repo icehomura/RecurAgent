@@ -312,7 +312,7 @@ cargo run --example ext_score_candidates -- \
   --generated-at 2026-02-06T00:00:00Z
 ```
 
-Expected report schema: `pi.ext.scoring.v1`, including deterministic rank ordering and explicit
+Expected report schema: `ra.ext.scoring.v1`, including deterministic rank ordering and explicit
 `gates`, `missingSignals`, and per-criterion score breakdown.
 
 ---

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.parity_certification.v1",
+  "schema": "ra.qa.parity_certification.v1",
   "certification_date": "2026-02-18",
   "generated_by": "Codex (gpt-5)",
   "bead_id": "bd-2pc62",

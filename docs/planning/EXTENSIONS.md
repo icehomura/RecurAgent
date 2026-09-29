@@ -1,6 +1,6 @@
 # Extension System (Big‑Guns Plan)
 
-This document defines the extension architecture for **pi_agent_rust** with the
+This document defines the extension architecture for **recur_agent** with the
 goal of **maximum compatibility**, **formal safety guarantees**, and **measurable
 performance**. The system is **best‑effort** by default, but designed to
 converge to full parity with legacy Pi extensions.
@@ -162,13 +162,13 @@ PiJS and intentionally rejects package/local filesystem resolution.
 
 - The host loads the artifact entry module.
 - The entry module MUST export a **default function** that receives a host-
-  provided `pi` object (the Extension API surface).
+  provided `ra` object (the Extension API surface).
 - Any thrown error during load/initialization MUST be mapped to an extension
   error with sourcemapped location and emitted as structured log events.
 
-#### 1A.4.4 The `pi` API Contract (JS-facing)
+#### 1A.4.4 The `ra` API Contract (JS-facing)
 
-The `pi` object provided to extensions is the single ambient authority. It MUST
+The `ra` object provided to extensions is the single ambient authority. It MUST
 be capability-gated internally.
 
 ##### Registration surface (protocol-facing)
@@ -305,7 +305,7 @@ Then:
 #### 1A.4.7 Observability / Trace Contract
 
 - Every tick and every enqueue/dequeue event MAY be logged (debug-level) under
-  `pi.ext.log.v1` with `trace_id` / `span_id` and correlation ids.
+  `ra.ext.log.v1` with `trace_id` / `span_id` and correlation ids.
 - Deterministic test runs MUST be able to compare traces for equality after the
   normalization rules in §3.1.
 
@@ -339,7 +339,7 @@ It is the reference for selection, conformance, and documentation work.
 
 | Shape | Entrypoint / Config | Runtime | Primary I/O Surface | Notes |
 |---|---|---|---|---|
-| **PiJS extension** | `extension.json` (`pi.ext.manifest.v1`) or package manifest listing `extensions`; entry `.ts`/`.js` | QuickJS + Pi event loop | `register` + `host_call`/`host_result` | Legacy TS/JS compiled and shimmed; no Node/Bun. |
+| **PiJS extension** | `extension.json` (`ra.ext.manifest.v1`) or package manifest listing `extensions`; entry `.ts`/`.js` | QuickJS + Pi event loop | `register` + `host_call`/`host_result` | Legacy TS/JS compiled and shimmed; no Node/Bun. |
 | **WASM component** | `extension.json` with `runtime="wasm"`; entry `.wasm` component | Wasmtime (component model) | WIT hostcalls → `host_call`/`host_result` | Typed hostcalls via WIT. |
 | **MCP server** | MCP config (`*.json`) or CLI args | External process / remote server | MCP protocol (stdio/http/sse) | Not the extension protocol; policy-gated by connector. |
 | **Skill pack** | `SKILL.md` + optional assets | None (resource) | File load only | Injected into prompt context; no hostcalls. |
@@ -457,22 +457,22 @@ used by CI/harnesses:
   corpus** (223 extensions across all source tiers, with conformance status,
   capabilities, IO patterns, complexity buckets, checksums, and perf budgets).
 - `docs/extension-catalog.schema.json` — JSON Schema for `docs/extension-catalog.json`
-  (`pi.ext.catalog.v1`).
+  (`ra.ext.catalog.v1`).
 - `docs/extension-priority.json` — ranking/order plan for the official corpus
   (testability-first execution strategy).
 
 Downstream beads should treat these as inputs and avoid re-scraping/re-scanning
 unless they are explicitly rebuilding the pipeline.
 
-#### Catalog Schema: `pi.ext.catalog.v1`
+#### Catalog Schema: `ra.ext.catalog.v1`
 
 `docs/extension-catalog.json` is the enriched metadata layer for the **official**
 extension corpus. It is defined by:
-- Version tag: `schema: "pi.ext.catalog.v1"` (embedded in the JSON)
+- Version tag: `schema: "ra.ext.catalog.v1"` (embedded in the JSON)
 - Validation: `docs/extension-catalog.schema.json`
 
 **Top-level fields**
-- `schema` *(string, const)*: schema identifier (`pi.ext.catalog.v1`)
+- `schema` *(string, const)*: schema identifier (`ra.ext.catalog.v1`)
 - `generated_at` *(RFC3339 string)*: artifact generation timestamp
 - `total_extensions` *(int)*: number of catalog entries
 - `items` *(array)*: catalog entries (see below)
@@ -741,7 +741,7 @@ Risky constructs that require evidence logging but don't block compilation:
 - **Artifact metadata** (`artifact.json`):
   ```json
   {
-    "schema": "pi.ext.artifact.v1",
+    "schema": "ra.ext.artifact.v1",
     "extension_id": "...",
     "entry_module": "index.js",
     "hash": "sha256:...",
@@ -849,13 +849,13 @@ This is the contract used by:
 - **extc** (compiler + compatibility scanner) during artifact build (§2A), and
 - **runtime + harness** when deciding prompt/deny and validating conformance.
 
-### 2B.1 Extension Manifest (`extension.json`, `pi.ext.manifest.v1`)
+### 2B.1 Extension Manifest (`extension.json`, `ra.ext.manifest.v1`)
 
 **Location:** `<extension_root>/extension.json`
 
 **Fallback:** if `extension.json` is missing, extc MAY read the same schema from
 `package.json#pi`. In that case, `name` / `version` default to top‑level
-`package.json` fields unless overridden inside `pi`. If both exist,
+`package.json` fields unless overridden inside `ra`. If both exist,
 `extension.json` wins.
 
 **Canonicalization (v1):**
@@ -868,7 +868,7 @@ This is the contract used by:
 **Schema (v1) — human‑readable form:**
 ```json
 {
-  "schema": "pi.ext.manifest.v1",
+  "schema": "ra.ext.manifest.v1",
   "extension_id": "ext.todo",
   "name": "Todo",
   "version": "0.1.0",
@@ -878,7 +878,7 @@ This is the contract used by:
 
   "capabilities": ["read"],
   "capability_manifest": {
-    "schema": "pi.ext.cap.v1",
+    "schema": "ra.ext.cap.v1",
     "capabilities": [
       { "capability": "read", "methods": ["tool"], "scope": { "paths": ["src/**"] } }
     ]
@@ -887,7 +887,7 @@ This is the contract used by:
 ```
 
 Fields:
-- `schema` (required): must be `pi.ext.manifest.v1`.
+- `schema` (required): must be `ra.ext.manifest.v1`.
 - `extension_id` (required): stable identifier used in logs (`ext.log.v1`) and
   harness fixtures.
 - `name` / `version` / `api_version` (required): must match the protocol
@@ -899,14 +899,14 @@ Fields:
 - `capabilities` (optional, legacy): flat list used as a coarse capability set
   until all extensions emit a scoped manifest.
 - `capability_manifest` (optional, recommended): scoped requirements using the
-  schema in §3.3 (`pi.ext.cap.v1`).
+  schema in §3.3 (`ra.ext.cap.v1`).
 
-### 2B.2 Capability Inference (`pi.ext.infer.v1`)
+### 2B.2 Capability Inference (`ra.ext.infer.v1`)
 
 **Goal:** deterministically derive the minimum known set of capabilities that an
 artifact *appears* to require, with auditable evidence.
 
-**Output:** an inferred `pi.ext.cap.v1`‑shaped requirement set plus evidence
+**Output:** an inferred `ra.ext.cap.v1`‑shaped requirement set plus evidence
 records. The inferred set is written into `artifact.json` as:
 - `capabilities_required`: a stable, sorted list of capability keys (`read`,
   `write`, `exec`, `http`, ...), and optionally
@@ -981,7 +981,7 @@ At extension load (artifact or dev), the host MUST emit one log entry:
 Example:
 ```json
 {
-  "schema": "pi.ext.log.v1",
+  "schema": "ra.ext.log.v1",
   "ts": "2026-02-03T00:00:00Z",
   "level": "info",
   "event": "capability.resolve",
@@ -1038,7 +1038,7 @@ schema exactly. One log entry per line.
 **Log entry schema (required fields marked \*):**
 ```json
 {
-  "schema": "pi.ext.log.v1",          // *
+  "schema": "ra.ext.log.v1",          // *
   "ts": "2026-02-03T03:01:02.123Z",   // * RFC3339
   "level": "info",                    // * debug|info|warn|error
   "event": "tool_call.start",         // * stable event name
@@ -1095,8 +1095,8 @@ schema exactly. One log entry per line.
 - Stable IDs (like `scenario_id`) must be deterministic and **not** randomized.
 
 **Log sinks (documented contract):**
-- **Runtime:** `~/.pi/agent/logs/extensions/<session_id>.jsonl`
-  (override with `PI_EXTENSION_LOG_DIR`).
+- **Runtime:** `~/.ra/agent/logs/extensions/<session_id>.jsonl`
+  (override with `RECUR_AGENT_EXTENSION_LOG_DIR`).
 - **Capture:** `tests/ext_conformance/capture/<ext>/<scenario>/extension.log.jsonl`
 - **Harness:** `target/ext_conformance/logs/<scenario_id>.jsonl`
 
@@ -1222,7 +1222,7 @@ Notes:
 
 ---
 
-### 3.3 Capability Manifest (`pi.ext.cap.v1`)
+### 3.3 Capability Manifest (`ra.ext.cap.v1`)
 
 `register.payload.capability_manifest` optionally declares the extension’s
 required capabilities up front so policy can prompt/deny deterministically and
@@ -1231,7 +1231,7 @@ the harness can validate conformance.
 Schema (v1):
 ```json
 {
-  "schema": "pi.ext.cap.v1",
+  "schema": "ra.ext.cap.v1",
   "capabilities": [
     { "capability": "read", "methods": ["tool"], "scope": { "paths": ["src/**"] } },
     { "capability": "http", "methods": ["http"], "scope": { "hosts": ["api.github.com"] } }
@@ -1262,7 +1262,7 @@ Notes:
 ### 3.4 Hostcall Evidence Ledger (per-call log contract)
 
 For every hostcall the runtime emits an append-only evidence ledger using
-`pi.ext.log.v1`:
+`ra.ext.log.v1`:
 - `host_call.start`: emitted immediately before dispatch
 - `host_call.end`: emitted once on completion (success, error, or timeout)
 
@@ -1317,10 +1317,10 @@ Pi exposes user-facing presets through `extensionPolicy.profile` and
 To inspect exactly why each capability is allowed/prompted/denied, run:
 
 ```bash
-pi --explain-extension-policy
-pi --explain-extension-policy --extension-policy safe
-pi --explain-extension-policy --extension-policy balanced
-PI_EXTENSION_ALLOW_DANGEROUS=1 pi --extension-policy balanced --explain-extension-policy
+ra --explain-extension-policy
+ra --explain-extension-policy --extension-policy safe
+ra --explain-extension-policy --extension-policy balanced
+RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS=1 ra --extension-policy balanced --explain-extension-policy
 ```
 
 `--explain-extension-policy` emits:
@@ -1331,9 +1331,9 @@ PI_EXTENSION_ALLOW_DANGEROUS=1 pi --extension-policy balanced --explain-extensio
 ### 4.2 Operator Rollout Playbooks (Local + CI)
 
 Recommended rollout order:
-1. Start in `safe` and inspect decisions (`pi --explain-extension-policy`).
+1. Start in `safe` and inspect decisions (`ra --explain-extension-policy`).
 2. Move to `balanced` to validate prompt-mode UX while dangerous caps remain denied.
-3. Use `PI_EXTENSION_ALLOW_DANGEROUS=1` only for runs that require dangerous caps.
+3. Use `RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS=1` only for runs that require dangerous caps.
 4. Use `permissive` only as a short-lived debugging override, then revert.
 
 Local operator baseline (`settings.json`):
@@ -1350,27 +1350,27 @@ Local operator baseline (`settings.json`):
 Local verification:
 
 ```bash
-pi --explain-extension-policy
-pi --extension-policy balanced --explain-extension-policy
-PI_EXTENSION_ALLOW_DANGEROUS=1 pi --extension-policy balanced --explain-extension-policy
+ra --explain-extension-policy
+ra --extension-policy balanced --explain-extension-policy
+RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS=1 ra --extension-policy balanced --explain-extension-policy
 ```
 
 CI baseline (default deny posture):
 
 ```bash
-pi --extension-policy safe --explain-extension-policy
+ra --extension-policy safe --explain-extension-policy
 ```
 
 CI opt-in job (only for suites that require dangerous capabilities):
 
 ```bash
-PI_EXTENSION_ALLOW_DANGEROUS=1 pi --extension-policy balanced --explain-extension-policy
+RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS=1 ra --extension-policy balanced --explain-extension-policy
 ```
 
 Rollback:
-- remove `PI_EXTENSION_ALLOW_DANGEROUS` from the environment,
+- remove `RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS` from the environment,
 - set `extensionPolicy.profile` to `safe`,
-- re-run `pi --explain-extension-policy` and verify dangerous capability decisions are `deny`.
+- re-run `ra --explain-extension-policy` and verify dangerous capability decisions are `deny`.
 
 ### 4.3 Audit Expectations for Dangerous-Capability Runs
 
@@ -1483,10 +1483,10 @@ latency across the corpus, enforces budgets, and detects regressions.
 
 ```bash
 # Quick PR check (10 diverse extensions, 3 iterations)
-PI_BENCH_MODE=pr cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
+RECUR_AGENT_BENCH_MODE=pr cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 
 # Nightly full corpus (103 safe extensions, 10 iterations)
-PI_BENCH_MODE=nightly PI_BENCH_MAX=103 PI_BENCH_ITERATIONS=10 \
+RECUR_AGENT_BENCH_MODE=nightly RECUR_AGENT_BENCH_MAX=103 RECUR_AGENT_BENCH_ITERATIONS=10 \
   cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 ```
 
@@ -1613,7 +1613,7 @@ To add a new extension to the validated corpus:
    ```
 
 6. **Update the catalog** — add an entry to `docs/extension-catalog.json`
-   following the `pi.ext.catalog.v1` schema (§1C.4).
+   following the `ra.ext.catalog.v1` schema (§1C.4).
 
 If the extension fails conformance, classify the failure (see §1C.5 failure
 breakdown) and determine whether a new Node shim, npm stub, or manifest

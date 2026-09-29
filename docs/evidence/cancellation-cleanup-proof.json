@@ -1,5 +1,5 @@
 {
-  "schema": "pi.cancellation.cleanup.proof.v1",
+  "schema": "ra.cancellation.cleanup.proof.v1",
   "generatedAt": "2026-05-15T23:52:16Z",
   "bead": "bd-h66tp.6",
   "purpose": "Deterministic proof that cancellation and timeout paths leave structured session/tool evidence and ignore late successful completions.",
@@ -10,7 +10,7 @@
       "proof": {
         "isError": true,
         "detailsPointer": "/cancellation",
-        "schema": "pi.tool.bash.cancellation.v1",
+        "schema": "ra.tool.bash.cancellation.v1",
         "status": "cancelled",
         "reason": "timeout",
         "cleanup": "process_group_tree_terminated",
@@ -34,7 +34,7 @@
         "persistedMessage": "toolResult",
         "isError": true,
         "detailsPointer": "/",
-        "schema": "pi.tool.cancellation.v1",
+        "schema": "ra.tool.cancellation.v1",
         "status": "cancelled",
         "reason": "abort_signal",
         "cleanup": "tool_result_recorded_no_success",
@@ -65,17 +65,17 @@
     "completedAt": "2026-05-16T00:35:20Z",
     "commands": [
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/tmp cargo test --lib bash -- --nocapture",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/tmp cargo test --lib bash -- --nocapture",
         "status": "passed",
         "tests": 37
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/tmp cargo test --lib hostcall -- --nocapture",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/tmp cargo test --lib hostcall -- --nocapture",
         "status": "passed",
         "tests": 406
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/tmp cargo test --lib abort_during_tool_execution_records_aborted_tool_result -- --nocapture",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/tmp cargo test --lib abort_during_tool_execution_records_aborted_tool_result -- --nocapture",
         "status": "passed",
         "tests": 1
       },
@@ -96,11 +96,11 @@
         "status": "passed"
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/tmp cargo check --all-targets",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/tmp cargo check --all-targets",
         "status": "passed"
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/tmp cargo clippy --all-targets -- -D warnings",
+        "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/tmp cargo clippy --all-targets -- -D warnings",
         "status": "passed"
       }
     ],

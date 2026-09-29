@@ -352,7 +352,7 @@ When new extensions are added to the conformance corpus:
    - Scanner may flag dangerous patterns
    - Check scanner results for the extension
 2. Is the policy too restrictive?
-   - Run `pi --explain-extension-policy` to see effective policy
+   - Run `ra --explain-extension-policy` to see effective policy
 3. Is the QuickJS runtime healthy?
    - Check for module resolution errors in extension logs
 

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.collections.v1",
+  "schema": "ra.ext.collections.v1",
   "generated_at": "2026-02-07T06:45:00Z",
   "taxonomy": {
     "description": "Category taxonomy for extension discovery. Each category has a stable key, display name, and description.",

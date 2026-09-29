@@ -1,5 +1,5 @@
 {
-  "schema": "pi.evidence.cusum_bocpd_drive_dispatch_runpack.v1",
+  "schema": "ra.evidence.cusum_bocpd_drive_dispatch_runpack.v1",
   "generated_at": "2026-08-28T05:32:00.527263+00:00",
   "bead": "bd-cusum-bocpd-drive-dispatch-br42p",
   "verdict": "telemetry_event_added_compile_pending",

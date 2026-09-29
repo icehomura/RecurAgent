@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_setup_guide.v1",
+  "schema": "ra.provider_setup_guide.v1",
   "bead_id": "bd-3uqg.11.12.1",
   "provider_id": "openrouter",
   "canonical_provider_id": "openrouter",
@@ -14,7 +14,7 @@
       "steps": [
         "1. Get an API key from https://openrouter.ai/settings/keys",
         "2. Export: export OPENROUTER_API_KEY=sk-or-v1-...",
-        "3. Run: pi --provider openrouter --model openai/gpt-4o-mini"
+        "3. Run: ra --provider openrouter --model openai/gpt-4o-mini"
       ],
       "example_env": {
         "OPENROUTER_API_KEY": "sk-or-v1-your_api_key_here"
@@ -26,9 +26,9 @@
         "OPENROUTER_API_KEY": "sk-or-v1-your_api_key_here"
       },
       "example_cli_options": [
-        "pi --provider openrouter --model anthropic/claude-sonnet-4  # Route through OpenRouter",
-        "pi --provider openrouter --model google/gemini-2.0-flash     # Gemini via OpenRouter",
-        "pi --provider openrouter --model meta-llama/llama-3.3-70b-instruct  # Open-source models"
+        "ra --provider openrouter --model anthropic/claude-sonnet-4  # Route through OpenRouter",
+        "ra --provider openrouter --model google/gemini-2.0-flash     # Gemini via OpenRouter",
+        "ra --provider openrouter --model meta-llama/llama-3.3-70b-instruct  # Open-source models"
       ],
       "notes": [
         "Model IDs use org/model format (e.g., openai/gpt-4o, not gpt-4o).",
@@ -93,7 +93,7 @@
     {
       "symptom": "Model ID not found",
       "cause": "Model ID must use org/model format",
-      "fix": "Use: pi --provider openrouter --model openai/gpt-4o-mini (not just gpt-4o-mini). Check /api/v1/models for available IDs.",
+      "fix": "Use: ra --provider openrouter --model openai/gpt-4o-mini (not just gpt-4o-mini). Check /api/v1/models for available IDs.",
       "test_evidence": "tests/provider_factory.rs (wave presets)"
     },
     {

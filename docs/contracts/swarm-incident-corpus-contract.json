@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.incident_corpus_contract.v1",
-  "evidence_schema": "pi.swarm.incident_corpus.v1",
+  "schema": "ra.swarm.incident_corpus_contract.v1",
+  "evidence_schema": "ra.swarm.incident_corpus.v1",
   "purpose": "operator_incident_corpus_not_release_dropin_or_coordination_authority",
   "description": "Fail-closed contract for deterministic large-swarm incident fixtures used by replay, proof-memory, and operator recommendation work.",
   "required_top_level_keys": [

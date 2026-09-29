@@ -1,7 +1,7 @@
 {
-  "schema": "pi.validation.proof_reuse_gate_contract.v1",
-  "gate_schema": "pi.validation.proof_reuse_gate.v1",
-  "context_schema": "pi.validation.proof_reuse_context.v1",
+  "schema": "ra.validation.proof_reuse_gate_contract.v1",
+  "gate_schema": "ra.validation.proof_reuse_gate.v1",
+  "context_schema": "ra.validation.proof_reuse_context.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-63x3v.10.2",
   "purpose": "operator_validation_proof_reuse_gate_not_validation_skipper",

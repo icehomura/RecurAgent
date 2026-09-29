@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.parity_gap_ledger.v1",
+  "schema": "ra.dropin.parity_gap_ledger.v1",
   "bead_id": "bd-13pqz",
   "generated_at_utc": "2026-02-14T19:16:00Z",
   "last_updated_at_utc": "2026-08-04T23:48:36Z",
@@ -32,7 +32,7 @@
         "docs/evidence/dropin-feature-inventory-matrix.json#unknown:unknown-01-sdk-dropin-contract"
       ],
       "final_state": "Rust SDK provides Rust-native APIs for core embedding workflows. Contract-shape parity is not claimed and remains outside the supported compatibility contract.",
-      "alternative_solution": "Use the supported pi::sdk module and consult the active certification contract for current parity status.",
+      "alternative_solution": "Use the supported ra::sdk module and consult the active certification contract for current parity status.",
       "owner_issue_primary": "bd-1it6z",
       "owner_issue_supporting": [
         "bd-c9usa",
@@ -359,9 +359,9 @@
         "src/providers/gemini.rs",
         "src/http/client.rs"
       ],
-      "final_state": "PI_AI_ANTIGRAVITY_VERSION is classified as the google-antigravity user-agent version component for Google CLI/Antigravity routing.",
+      "final_state": "RECUR_AGENT_AI_ANTIGRAVITY_VERSION is classified as the google-antigravity user-agent version component for Google CLI/Antigravity routing.",
       "closure_bead": "bd-uuf2z",
-      "closure_reason": "DROPIN-142 config/env parity closure covers representative env precedence, while current provider/http code consumes PI_AI_ANTIGRAVITY_VERSION in the Antigravity request path.",
+      "closure_reason": "DROPIN-142 config/env parity closure covers representative env precedence, while current provider/http code consumes RECUR_AGENT_AI_ANTIGRAVITY_VERSION in the Antigravity request path.",
       "owner_issue_primary": "bd-uuf2z",
       "owner_issue_supporting": [
         "bd-3cqgd",
@@ -373,7 +373,7 @@
         "Document final semantics and migration notes."
       ],
       "verification_evidence": [
-        "src/providers/gemini.rs reads PI_AI_ANTIGRAVITY_VERSION for google-antigravity request user_agent formatting",
+        "src/providers/gemini.rs reads RECUR_AGENT_AI_ANTIGRAVITY_VERSION for google-antigravity request user_agent formatting",
         "src/http/client.rs antigravity_user_agent_format and antigravity_user_agent_in_request_headers cover request-header behavior",
         "bd-uuf2z close evidence: config_precedence suite 105/105 passing"
       ],

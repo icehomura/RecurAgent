@@ -669,7 +669,7 @@
     "malformed_source_artifact",
     "deletion_live_mutation_request_rejected"
   ],
-  "schema": "pi.swarm.incident_corpus.v1",
+  "schema": "ra.swarm.incident_corpus.v1",
   "source_bead": "bd-9yq7i.1",
   "source_boundaries": [
     {

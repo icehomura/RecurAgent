@@ -24,8 +24,8 @@
 
 | Flag | TS Pi | Rust Pi | Notes |
 |------|-------|---------|-------|
-| `--provider <name>` | Y | Y | env: PI_PROVIDER in both |
-| `--model <id>` | Y | Y | env: PI_MODEL in both |
+| `--provider <name>` | Y | Y | env: RECUR_AGENT_PROVIDER in both |
+| `--model <id>` | Y | Y | env: RECUR_AGENT_MODEL in both |
 | `--api-key <key>` | Y | Y | Overrides env vars |
 | `--models <patterns>` | Y | Y | Ctrl+P cycling, comma-separated globs |
 | `--list-models [search]` | Y | Y | Optional fuzzy search pattern |
@@ -341,7 +341,7 @@
 | `AZURE_OPENAI_API_KEY` | Y | Y | |
 | `AZURE_OPENAI_BASE_URL` | Y | N | No base-URL override; pi builds the endpoint from resource + deployment |
 | `AZURE_OPENAI_RESOURCE_NAME` | Y | N | Name near-miss: pi reads `AZURE_OPENAI_RESOURCE` (providers/mod.rs), so the TS spelling is ignored |
-| `AZURE_OPENAI_API_VERSION` | Y | Y | Read in providers/mod.rs; `PI_AZURE_API_VERSION` also works |
+| `AZURE_OPENAI_API_VERSION` | Y | Y | Read in providers/mod.rs; `RECUR_AGENT_AZURE_API_VERSION` also works |
 | `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` | Y | N | pi reads a single `AZURE_OPENAI_DEPLOYMENT`; no per-model deployment map |
 | `AWS_ACCESS_KEY_ID` | Y | Y | Bedrock |
 | `AWS_SECRET_ACCESS_KEY` | Y | Y | Bedrock |
@@ -371,27 +371,27 @@
 
 | Variable | TS Pi | Rust Pi | Notes |
 |----------|-------|---------|-------|
-| `PI_CODING_AGENT_DIR` | Y | Y | Config root |
-| `PI_PACKAGE_DIR` | Y | Y | Package directory |
-| `PI_SESSIONS_DIR` | N | Y | Rust-only |
-| `PI_CONFIG_PATH` | N | Y | Rust-only |
-| `PI_SHARE_VIEWER_URL` | Y | Y | Share viewer base URL; read in `session.rs` |
+| `RECUR_AGENT_DIR` | Y | Y | Config root |
+| `RECUR_AGENT_PACKAGE_DIR` | Y | Y | Package directory |
+| `RECUR_AGENT_SESSIONS_DIR` | N | Y | Rust-only |
+| `RECUR_AGENT_CONFIG_PATH` | N | Y | Rust-only |
+| `RECUR_AGENT_SHARE_VIEWER_URL` | Y | Y | Share viewer base URL; read in `session.rs` |
 
 ### Development / Testing
 
 | Variable | TS Pi | Rust Pi | Notes |
 |----------|-------|---------|-------|
-| `PI_TEST_MODE` | Y | Y | Deterministic rendering |
-| `PI_TIMING` | Y | N | TS gates `core/timings.js` on `PI_TIMING === "1"`. Nothing in Rust reads it; there is no equivalent instrumentation module |
-| `PI_SKIP_VERSION_CHECK` | Y | Y | Skips the startup GitHub-releases check; beats `checkForUpdates`, and an empty value does not skip (matching JS truthiness) |
-| `PI_HARDWARE_CURSOR` | Y | Y | Hardware cursor; read in `interactive.rs` |
-| `PI_CLEAR_ON_SHRINK` | Y | Y | Clear on shrink; read in `config.rs`, settings take precedence |
+| `RECUR_AGENT_TEST_MODE` | Y | Y | Deterministic rendering |
+| `RECUR_AGENT_TIMING` | Y | N | TS gates `core/timings.js` on `RECUR_AGENT_TIMING === "1"`. Nothing in Rust reads it; there is no equivalent instrumentation module |
+| `RECUR_AGENT_SKIP_VERSION_CHECK` | Y | Y | Skips the startup GitHub-releases check; beats `checkForUpdates`, and an empty value does not skip (matching JS truthiness) |
+| `RECUR_AGENT_HARDWARE_CURSOR` | Y | Y | Hardware cursor; read in `interactive.rs` |
+| `RECUR_AGENT_CLEAR_ON_SHRINK` | Y | Y | Clear on shrink; read in `config.rs`, settings take precedence |
 | `VCR_MODE` | N | Y | Rust-only VCR testing |
 | `VCR_CASSETTE_DIR` | N | Y | Rust-only VCR testing |
-| `PI_VCR_TEST_NAME` | N | Y | Rust-only VCR testing |
-| `PI_EXTENSION_ALLOW_DANGEROUS` | N | Y | Rust-only |
-| `PI_REPAIR_POLICY` | N | Y | Rust-only |
-| `PI_EXT_COMPAT_SCAN` | N | Y | Rust-only |
+| `RECUR_AGENT_VCR_TEST_NAME` | N | Y | Rust-only VCR testing |
+| `RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS` | N | Y | Rust-only |
+| `RECUR_AGENT_REPAIR_POLICY` | N | Y | Rust-only |
+| `RECUR_AGENT_EXT_COMPAT_SCAN` | N | Y | Rust-only |
 
 ---
 
@@ -615,7 +615,7 @@
 
 | Feature | TS Pi | Rust Pi | Notes |
 |---------|-------|---------|-------|
-| `keybindings.json` | Y | Y | `~/.pi/agent/keybindings.json` |
+| `keybindings.json` | Y | Y | `~/.ra/agent/keybindings.json` |
 
 ---
 
@@ -733,7 +733,7 @@
 5. **Session**: Labels, branch markers, notes entry types; SQLite backend
 6. **Config**: sessionStore, sessionPickerInput, ghPath, extensionPolicy, repairPolicy, extensionRisk
 7. **Thinking aliases**: Numeric aliases (0-4) and short forms (min, med)
-8. **VCR test infrastructure**: VCR_MODE, VCR_CASSETTE_DIR, PI_VCR_TEST_NAME
+8. **VCR test infrastructure**: VCR_MODE, VCR_CASSETTE_DIR, RECUR_AGENT_VCR_TEST_NAME
 
 ---
 

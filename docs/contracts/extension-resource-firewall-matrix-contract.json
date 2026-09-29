@@ -1,6 +1,6 @@
 {
-  "schema": "pi.ext.resource_firewall_matrix_contract.v1",
-  "evidence_schema": "pi.ext.resource_firewall_matrix.v1",
+  "schema": "ra.ext.resource_firewall_matrix_contract.v1",
+  "evidence_schema": "ra.ext.resource_firewall_matrix.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-9yq7i.6",
   "purpose": "deterministic_extension_resource_firewall_matrix_not_runtime_mutation",

@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.autopilot_plan_contract.v1",
-  "plan_schema": "pi.swarm.autopilot_plan.v1",
+  "schema": "ra.swarm.autopilot_plan_contract.v1",
+  "plan_schema": "ra.swarm.autopilot_plan.v1",
   "purpose": "dry_run_swarm_autopilot_plan_not_source_of_truth",
   "required_top_level_keys": [
     "schema",

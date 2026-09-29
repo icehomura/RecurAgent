@@ -6,7 +6,7 @@
   "properties": {
     "schema": {
       "type": "string",
-      "const": "pi.cli_surface_diff.v1"
+      "const": "ra.cli_surface_diff.v1"
     },
     "generated_at": {
       "type": "string",

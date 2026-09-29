@@ -11,7 +11,7 @@ Reference for running the test suite, interpreting failures, and reproducing iss
 
 ## Contract Checklist (DROPIN-171)
 
-`docs/testing-policy.md` defines the normative contract `pi.parity.test_logging_contract.v1`.
+`docs/testing-policy.md` defines the normative contract `ra.parity.test_logging_contract.v1`.
 Use this runbook section to validate that the contract remains intact.
 
 ### Required Cross-Suite Guarantees
@@ -19,10 +19,10 @@ Use this runbook section to validate that the contract remains intact.
 | Guarantee | Validation Source |
 |-----------|-------------------|
 | Suite taxonomy is explicit (`unit`/`vcr`/`e2e`) | `tests/suite_classification.toml` |
-| Test log schema remains `pi.test.log.v2` | `tests/common/logging.rs` validators |
-| Artifact index schema remains `pi.test.artifact.v1` | `tests/common/logging.rs` validators |
+| Test log schema remains `ra.test.log.v2` | `tests/common/logging.rs` validators |
+| Artifact index schema remains `ra.test.artifact.v1` | `tests/common/logging.rs` validators |
 | Schema evolution policy remains explicit and fail-closed | `docs/testing-policy.md` + `tests/common/logging.rs` v2-only validators |
-| Evidence contract schema remains `pi.qa.evidence_contract.v1` | `docs/evidence-contract-schema.json` + schema tests |
+| Evidence contract schema remains `ra.qa.evidence_contract.v1` | `docs/evidence-contract-schema.json` + schema tests |
 | Failure digest taxonomy + replay metadata remain stable | `docs/evidence-contract-schema.json` |
 
 ### Contract Verification Commands
@@ -106,7 +106,7 @@ python3 scripts/perf/preflight_budget_inputs.py
 `scripts/perf/orchestrate.sh` persists the same check as
 `results/perf_budget_preflight_before_refresh.json` before the perf budget
 suite can refresh `tests/perf/reports/budget_summary.json`. It also writes
-`results/perf_artifact_staging_manifest.json` (`pi.perf.artifact_staging_manifest.v1`)
+`results/perf_artifact_staging_manifest.json` (`ra.perf.artifact_staging_manifest.v1`)
 after artifact collection. Treat that staging manifest as blocked unless every
 required contract has a fresh artifact with source path, retrieved local path,
 mtime, checksum, and schema when the format provides one. If RCH exposes a
@@ -119,7 +119,7 @@ only when their schema, command, git commit, build profile, run
 ID/correlation ID, host/toolchain provenance, checksum, and TTL validate. The
 preflight and staging JSON label reused artifacts with `source_kind=cache` or
 `evidence_source=cache`; rejected cache entries stay visible in
-`rejected_evidence_cache_entries`. Use `PI_PERF_EVIDENCE_CACHE_TTL_HOURS` to
+`rejected_evidence_cache_entries`. Use `RECUR_AGENT_PERF_EVIDENCE_CACHE_TTL_HOURS` to
 shorten the maximum accepted cache lifetime.
 
 When a cargo target directory lives outside the repository, do not ask an RCH
@@ -129,18 +129,18 @@ and run the report with `PERF_EVIDENCE_DIR`:
 
 ```bash
 PERF_EVIDENCE_DIR=tests/perf/reports \
-  PI_GENERATE_PERF_BUDGET_REPORT=1 rch exec -- cargo test --test perf_budgets --profile perf generate_budget_report -- --nocapture
+  RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 rch exec -- cargo test --test perf_budgets --profile perf generate_budget_report -- --nocapture
 ```
 
 Both report-producing integration tests are read-only during ordinary test
 runs. Refresh tracked artifacts only with their explicit opt-ins:
 
 ```bash
-PI_GENERATE_PERF_BUDGET_REPORT=1 cargo test --test perf_budgets generate_budget_report -- --nocapture
-PI_GENERATE_BENCH_SCHEMA_DOCS=1 cargo test --test bench_schema generate_schema_doc -- --nocapture
+RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 cargo test --test perf_budgets generate_budget_report -- --nocapture
+RECUR_AGENT_GENERATE_BENCH_SCHEMA_DOCS=1 cargo test --test bench_schema generate_schema_doc -- --nocapture
 ```
 
-In `pi.perf.budget_summary.v2`, `performance_claims_authorized=true` governs
+In `ra.perf.budget_summary.v2`, `performance_claims_authorized=true` governs
 blanket quantitative performance copy. It therefore requires strict,
 source-bound, same-run evidence for **all declared budgets**: every budget must
 have data and PASS, including budgets that are not CI-enforced, and there must
@@ -174,7 +174,7 @@ Treat benchmark outcomes as definitive only when all required artifacts are pres
 - `tests/perf/reports/phase1_matrix_validation.json` (`pi.perf.phase1_matrix_validation.v1`)
 - `tests/full_suite_gate/full_suite_verdict.json`
 - `tests/full_suite_gate/certification_verdict.json`
-- `tests/full_suite_gate/extension_remediation_backlog.json` (`pi.qa.extension_remediation_backlog.v1`)
+- `tests/full_suite_gate/extension_remediation_backlog.json` (`ra.qa.extension_remediation_backlog.v1`)
 
 ---
 
@@ -186,7 +186,7 @@ Every test file belongs to exactly one suite. See `tests/suite_classification.to
 |-------|---------------|-------------------|
 | **unit** | Pure logic, parsing, serialization, state machines. No mocks, fixtures, or VCR. | `cargo test --lib` + curated `--test` targets |
 | **vcr** | Provider streaming, HTTP client, conformance against recorded data. | `VCR_MODE=playback cargo test` |
-| **e2e** | Full system with real providers, network, or tmux. | `PI_E2E=1 cargo test --test e2e_*` |
+| **e2e** | Full system with real providers, network, or tmux. | `RECUR_AGENT_E2E=1 cargo test --test e2e_*` |
 
 ---
 
@@ -208,7 +208,7 @@ Every test file belongs to exactly one suite. See `tests/suite_classification.to
 | CI gate verdict | `tests/full_suite_gate/full_suite_verdict.json` | Full-suite gate result |
 | CI preflight verdict | `tests/full_suite_gate/preflight_verdict.json` | Preflight fast-fail result |
 | CI certification verdict | `tests/full_suite_gate/certification_verdict.json` | Full certification result |
-| Extension remediation backlog | `tests/full_suite_gate/extension_remediation_backlog.json` | Non-pass extension remediation queue (`pi.qa.extension_remediation_backlog.v1`) |
+| Extension remediation backlog | `tests/full_suite_gate/extension_remediation_backlog.json` | Non-pass extension remediation queue (`ra.qa.extension_remediation_backlog.v1`) |
 | CI waiver audit | `tests/full_suite_gate/waiver_audit.json` | Waiver lifecycle audit |
 | CI replay bundle | `tests/full_suite_gate/replay_bundle.json` | Gate failure replay commands |
 | Compliance report | `target/compliance-report.json` | Module compliance (set `COMPLIANCE_REPORT=1`) |
@@ -382,7 +382,7 @@ in PR checks.
 cargo test --test ci_full_suite_gate -- preflight_fast_fail --nocapture --exact
 ```
 
-Artifact: `tests/full_suite_gate/preflight_verdict.json` (schema `pi.ci.preflight_lane.v1`)
+Artifact: `tests/full_suite_gate/preflight_verdict.json` (schema `ra.ci.preflight_lane.v1`)
 
 ### Full certification lane
 
@@ -466,7 +466,7 @@ PY
 
 Before release messaging can claim strict drop-in parity, evaluate
 `docs/contracts/dropin-certification-contract.json` and emit
-`docs/evidence/dropin-certification-verdict.json` (`pi.dropin.certification_verdict.v1`).
+`docs/evidence/dropin-certification-verdict.json` (`ra.dropin.certification_verdict.v1`).
 
 Blocking rule:
 - if `overall_verdict != CERTIFIED`, release language must not claim strict drop-in replacement.
@@ -504,14 +504,14 @@ is a failure condition, not a warning.
 After running the full certification lane, the following artifacts must exist and
 match expected schemas:
 
-- `tests/full_suite_gate/full_suite_verdict.json` (`pi.ci.full_suite_gate.v1`)
-- `tests/full_suite_gate/certification_verdict.json` (`pi.ci.certification_lane.v1`)
+- `tests/full_suite_gate/full_suite_verdict.json` (`ra.ci.full_suite_gate.v1`)
+- `tests/full_suite_gate/certification_verdict.json` (`ra.ci.certification_lane.v1`)
 - `tests/full_suite_gate/perf3x_bead_coverage_audit.json` (`pi.perf3x.bead_coverage.audit.v1`)
 - `tests/full_suite_gate/practical_finish_checkpoint.json` (`pi.perf3x.practical_finish_checkpoint.v1`)
-- `tests/perf/reports/budget_summary.json` (`pi.perf.budget_summary.v2`)
-- `tests/perf/reports/perf_comparison.json` (`pi.ext.perf_comparison.v1`)
-- `tests/perf/reports/stress_triage.json` (`pi.ext.stress_triage.v1`)
-- `tests/perf/reports/parameter_sweeps.json` (`pi.perf.parameter_sweeps.v1`)
+- `tests/perf/reports/budget_summary.json` (`ra.perf.budget_summary.v2`)
+- `tests/perf/reports/perf_comparison.json` (`ra.ext.perf_comparison.v1`)
+- `tests/perf/reports/stress_triage.json` (`ra.ext.stress_triage.v1`)
+- `tests/perf/reports/parameter_sweeps.json` (`ra.perf.parameter_sweeps.v1`)
 
 ```bash
 python3 - <<'PY'
@@ -520,14 +520,14 @@ import sys
 from pathlib import Path
 
 required = {
-    "tests/full_suite_gate/full_suite_verdict.json": "pi.ci.full_suite_gate.v1",
-    "tests/full_suite_gate/certification_verdict.json": "pi.ci.certification_lane.v1",
+    "tests/full_suite_gate/full_suite_verdict.json": "ra.ci.full_suite_gate.v1",
+    "tests/full_suite_gate/certification_verdict.json": "ra.ci.certification_lane.v1",
     "tests/full_suite_gate/perf3x_bead_coverage_audit.json": "pi.perf3x.bead_coverage.audit.v1",
     "tests/full_suite_gate/practical_finish_checkpoint.json": "pi.perf3x.practical_finish_checkpoint.v1",
-    "tests/perf/reports/budget_summary.json": "pi.perf.budget_summary.v2",
-    "tests/perf/reports/perf_comparison.json": "pi.ext.perf_comparison.v1",
-    "tests/perf/reports/stress_triage.json": "pi.ext.stress_triage.v1",
-    "tests/perf/reports/parameter_sweeps.json": "pi.perf.parameter_sweeps.v1",
+    "tests/perf/reports/budget_summary.json": "ra.perf.budget_summary.v2",
+    "tests/perf/reports/perf_comparison.json": "ra.ext.perf_comparison.v1",
+    "tests/perf/reports/stress_triage.json": "ra.ext.stress_triage.v1",
+    "tests/perf/reports/parameter_sweeps.json": "ra.perf.parameter_sweeps.v1",
 }
 
 issues = []
@@ -663,13 +663,13 @@ command, and artifact pointers together so triage can be reproduced exactly.
 #### Swarm coordination troubleshooting
 
 - Preflight command:
-  `pi doctor --only swarm --format json`
+  `ra doctor --only swarm --format json`
 - Confirms:
   Beads JSONL health, stale `in_progress` work, Agent Mail status/inbox/reservations,
   git dirty-state, `rch status`, and `CARGO_TARGET_DIR`/`TMPDIR` headroom.
 - Admission interpretation:
   In JSON output, inspect the swarm finding whose `data.schema` is
-  `pi.doctor.swarm_admission.v1`. Its `action` is `admit`, `backpressure`,
+  `ra.doctor.swarm_admission.v1`. Its `action` is `admit`, `backpressure`,
   or `deny`; `pressure_dimension` names the active bottleneck; `planned_budgets`
   lists the current agent/tool/extension/RCH limits; `live_counts` records the
   counts used for the decision; `stale_data_warnings` must be empty before
@@ -677,7 +677,7 @@ command, and artifact pointers together so triage can be reproduced exactly.
 - Next actions:
   Contact active owners through Agent Mail before resetting stale beads, resolve
   reservation conflicts before editing overlapping files, and move heavyweight
-  Cargo checks to `/data/tmp/pi_agent_rust_cargo/<agent>/` when headroom is low.
+  Cargo checks to `/data/tmp/recur_agent_cargo/<agent>/` when headroom is low.
 
 #### Durability troubleshooting
 
@@ -751,7 +751,7 @@ remove_when = "QuickJS fix merged and all blocking extension conformance gates p
 cargo test --test ci_full_suite_gate -- waiver_lifecycle_audit --nocapture --exact
 ```
 
-Artifact: `tests/full_suite_gate/waiver_audit.json` (schema `pi.ci.waiver_audit.v1`)
+Artifact: `tests/full_suite_gate/waiver_audit.json` (schema `ra.ci.waiver_audit.v1`)
 
 ---
 

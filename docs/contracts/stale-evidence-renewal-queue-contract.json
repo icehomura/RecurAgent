@@ -1,7 +1,7 @@
 {
-  "schema": "pi.swarm.stale_evidence_renewal_queue_contract.v1",
-  "queue_schema": "pi.swarm.stale_evidence_renewal_queue.v1",
-  "cache_budget_schema": "pi.swarm.evidence_cache_budget.v1",
+  "schema": "ra.swarm.stale_evidence_renewal_queue_contract.v1",
+  "queue_schema": "ra.swarm.stale_evidence_renewal_queue.v1",
+  "cache_budget_schema": "ra.swarm.evidence_cache_budget.v1",
   "purpose": "operator_guidance_not_auto_regeneration",
   "description": "Contract for a read-only stale-evidence renewal queue. The queue may recommend bounded operator commands for stale, missing, contract-drifted, or RCH-blocked evidence, but it must not regenerate artifacts, overwrite evidence, run heavy validation, mutate coordination state, or weaken drop-in release gates.",
   "allowed_statuses": [

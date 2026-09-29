@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "schema": "pi.perf.variance_gating.contract.v1",
-  "contract_id": "pi.contract.variance_gating.v1",
+  "schema": "ra.perf.variance_gating.contract.v1",
+  "contract_id": "ra.contract.variance_gating.v1",
   "title": "Performance Benchmark Variance Gating & Host Topology Fingerprint Contract",
   "version": "1.0.0",
   "bead_id": "bd-sog97.21",
@@ -15,7 +15,7 @@
     "rejection_status": "NO_DATA",
     "forbid_averaging_noisy_runs": true,
     "require_host_topology_fingerprint": true,
-    "host_topology_schema": "pi.perf.host_topology_fingerprint.v1"
+    "host_topology_schema": "ra.perf.host_topology_fingerprint.v1"
   },
   "noise_scoring_weights": {
     "governor_not_performance": 3,

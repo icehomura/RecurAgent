@@ -1,5 +1,5 @@
 {
-  "schema": "pi.readme.claim_bindings.v1",
+  "schema": "ra.readme.claim_bindings.v1",
   "generated_at": "2026-08-24T01:35:00.000Z",
   "description": "Binds README numeric claims to artifact fields: each bound field's current value must appear verbatim on a README line citing that artifact. Enforced by scripts/check_readme_evidence_freshness.py; when an artifact regenerates, update the README numbers (never hand-patch the artifact).",
   "bindings": [

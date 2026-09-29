@@ -1,4 +1,4 @@
-# Plan: Complete pi_agent_rust Port
+# Plan: Complete recur_agent Port
 
 > **Goal:** 100% feature/functionality coverage with clear conformance harness and benchmarking, fully leveraging asupersync, rich_rust, and charmed_rust.
 
@@ -38,7 +38,7 @@
 
 ### 1.1 asupersync Integration
 
-**Status (today):** `pi_agent_rust` runs on `asupersync` for runtime + HTTP/TLS and provider streaming (see `src/http/client.rs` + `src/sse.rs`).
+**Status (today):** `recur_agent` runs on `asupersync` for runtime + HTTP/TLS and provider streaming (see `src/http/client.rs` + `src/sse.rs`).
 
 **Remaining:** Capability wrapper (`AgentCx`) and deeper context wiring are tracked in `bd-3i7u` and `bd-1xf`.
 
@@ -192,13 +192,13 @@ glamour = { path = "../charmed_rust/crates/glamour" }
 
 **2.2 Create Wrapper Types**
 - 🔶 `AgentCx` - Capability context for agent operations (tracked in `bd-3i7u`)
-- [x] `RichConsole` - Wrapper for rich_rust Console with Pi-specific methods (`PiConsole`)
+- [x] `RichConsole` - Wrapper for rich_rust Console with Pi-specific methods (`RaConsole`)
 - [x] `TuiApp` - bubbletea Model implementation (`src/interactive.rs`)
 
 ### Phase 3: Interactive TUI ✅ COMPLETE
 
 **3.1 Core TUI Structure**
-- [x] `src/interactive.rs` - Main Model implementation (PiApp)
+- [x] `src/interactive.rs` - Main Model implementation (RaApp)
 - [x] TextInput with history navigation (up/down)
 - [x] Message display with markdown rendering (glamour)
 - [x] Status footer with token counts and cost
@@ -238,7 +238,7 @@ glamour = { path = "../charmed_rust/crates/glamour" }
 - [x] Status message for slash commands
 
 **3.6 Agent Integration** ✅ COMPLETE
-- [x] PiMsg enum for async agent events
+- [x] RaMsg enum for async agent events
 - [x] Wire up agent execution from submit_message()
 - [x] Handle streaming events via channel
 - [x] Session persistence after each turn

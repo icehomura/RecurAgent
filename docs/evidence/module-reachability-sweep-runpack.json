@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ci.module_reachability.v1",
+  "schema": "ra.ci.module_reachability.v1",
   "declared": 143,
   "reachable": [
     "acp",

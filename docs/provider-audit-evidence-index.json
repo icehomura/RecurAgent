@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.audit_evidence_index.v1",
+  "schema": "ra.qa.audit_evidence_index.v1",
   "bead_id": "bd-3uqg.12.2.1",
   "artifact_status": "historical_snapshot",
   "current_release_authority": false,

@@ -1,15 +1,15 @@
 {
-  "schema": "pi.swarm.predictive_telemetry_ledger.v1",
+  "schema": "ra.swarm.predictive_telemetry_ledger.v1",
   "generated_at": "2026-05-09T09:00:00+00:00",
   "status": "blocked",
   "purpose": "advisory_pressure_prediction_not_release_performance_claim",
-  "source_runpack_schema": "pi.swarm.operator_runpack.v1",
+  "source_runpack_schema": "ra.swarm.operator_runpack.v1",
   "source_freshness": [
     {
       "id": "cargo_admission",
       "path": "cargo.json",
       "status": "ok",
-      "schema": "pi.cargo_headroom.admission.v1",
+      "schema": "ra.cargo_headroom.admission.v1",
       "timestamp": "2026-05-09T09:00:00+00:00",
       "freshness_hours": 0,
       "freshness_classification": "fresh",
@@ -21,7 +21,7 @@
       "id": "agent_mail_status",
       "path": "agent-mail-status.json",
       "status": "ok",
-      "schema": "pi.agent_mail.robot_status.v1",
+      "schema": "ra.agent_mail.robot_status.v1",
       "timestamp": "2026-05-09T09:00:00+00:00",
       "freshness_hours": 0,
       "freshness_classification": "fresh",
@@ -56,7 +56,7 @@
           "id": "cargo_admission",
           "path": "cargo.json",
           "status": "ok",
-          "schema": "pi.cargo_headroom.admission.v1",
+          "schema": "ra.cargo_headroom.admission.v1",
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "freshness": "current",
           "timestamp": "2026-05-09T09:00:00+00:00"
@@ -156,7 +156,7 @@
           "id": "smoke_harness",
           "path": "smoke.json",
           "status": "ok",
-          "schema": "pi.swarm.smoke_harness.v1",
+          "schema": "ra.swarm.smoke_harness.v1",
           "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
           "freshness": "current",
           "timestamp": "2026-05-09T09:00:00+00:00"
@@ -222,7 +222,7 @@
           "id": "claim_readiness",
           "path": "claim.json",
           "status": "ok",
-          "schema": "pi.swarm.claim_readiness_report.v1",
+          "schema": "ra.swarm.claim_readiness_report.v1",
           "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
           "freshness": "current",
           "timestamp": "2026-05-09T09:00:00+00:00"

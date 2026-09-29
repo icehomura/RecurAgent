@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.benchmark_resource_gate_contract.v1",
+  "schema": "ra.frankennode.benchmark_resource_gate_contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-3ar8v.7.10",
   "support_bead_id": "bd-3ar8v.7.10.1",
@@ -38,7 +38,7 @@
       "tests/perf/reports/franken_node_resource_envelope_matrix.json"
     ],
     "require_reproducible_dataset_hash": true,
-    "dataset_schema": "pi.frankennode.benchmark_dataset.v1"
+    "dataset_schema": "ra.frankennode.benchmark_dataset.v1"
   },
   "metric_aggregator_contract": {
     "required_metrics": [

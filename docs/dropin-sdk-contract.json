@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.sdk_contract.v1",
+  "schema": "ra.dropin.sdk_contract.v1",
   "bead_id": "bd-1it6z",
   "version": "1.0.0",
   "generated_at_utc": "2026-02-14T20:00:00Z",
@@ -28,7 +28,7 @@
       "required_behavior": "Programmatic session creation with configurable model/tools/resources/session manager and deterministic defaults.",
       "rust_commitment": {
         "public_api_target": [
-          "pi::sdk::create_agent_session(...) -> Result<AgentSessionHandle>"
+          "ra::sdk::create_agent_session(...) -> Result<AgentSessionHandle>"
         ],
         "current_anchor": [
           "src/sdk.rs (stable export surface)",
@@ -266,7 +266,7 @@
       "required_behavior": "Public SDK-facing exports are curated and versioned; unstable internals stay out of contract.",
       "rust_commitment": {
         "public_api_target": [
-          "pi::sdk module as stable namespace",
+          "ra::sdk module as stable namespace",
           "Semver-governed compatibility for exported SDK symbols"
         ],
         "current_anchor": [

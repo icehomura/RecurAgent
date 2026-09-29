@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.provider_rpc_tui_backpressure_budget_contract_spec.v1",
-  "evidence_schema": "pi.swarm.provider_rpc_tui_backpressure_budget_contract.v1",
+  "schema": "ra.swarm.provider_rpc_tui_backpressure_budget_contract_spec.v1",
+  "evidence_schema": "ra.swarm.provider_rpc_tui_backpressure_budget_contract.v1",
   "purpose": "read_only_operator_backpressure_budget_contract_not_release_performance_claim",
   "allowed_statuses": [
     "pass",
@@ -36,7 +36,7 @@
     "latency_or_step",
     "verdict"
   ],
-  "fairness_stress_gate_schema": "pi.swarm.provider_rpc_tui_fairness_stress_gate.v1",
+  "fairness_stress_gate_schema": "ra.swarm.provider_rpc_tui_fairness_stress_gate.v1",
   "required_fairness_metrics": [
     "max_starvation_window",
     "per_stream_chunk_progress",

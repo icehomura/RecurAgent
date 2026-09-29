@@ -64,7 +64,7 @@ an error: narrow the request rather than treating a truncated JSON string as a
 complete semantic report.
 
 Protocol fixtures are not live-server certification. Native compilation and tests
-must be executed through `dsr quality --tool pi_agent_rust` before claiming native
+must be executed through `dsr quality --tool recur_agent` before claiming native
 validation.
 
 ## Inferred type and parameter hints

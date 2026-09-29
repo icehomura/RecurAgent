@@ -1,6 +1,6 @@
 {
-  "schema": "pi.ext.compatibility_closeout_gate_contract.v1",
-  "decision_gate_schema": "pi.ext.compatibility_closeout_gate.v1",
+  "schema": "ra.ext.compatibility_closeout_gate_contract.v1",
+  "decision_gate_schema": "ra.ext.compatibility_closeout_gate.v1",
   "purpose": "extension_compatibility_prompt_to_artifact_closeout_gate_not_source_of_truth",
   "required_top_level_keys": [
     "schema",

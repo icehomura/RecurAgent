@@ -28,31 +28,31 @@ entry is needed for basic usage.
 ```bash
 # Mistral
 export MISTRAL_API_KEY="your-key"
-pi --provider mistral --model mistral-large-latest -p "Say hello"
+ra --provider mistral --model mistral-large-latest -p "Say hello"
 
 # DeepInfra
 export DEEPINFRA_API_KEY="your-key"
-pi --provider deepinfra --model meta-llama/Meta-Llama-3.1-70B-Instruct -p "Say hello"
+ra --provider deepinfra --model meta-llama/Meta-Llama-3.1-70B-Instruct -p "Say hello"
 
 # Together AI
 export TOGETHER_API_KEY="your-key"
-pi --provider togetherai --model meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo -p "Say hello"
+ra --provider togetherai --model meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo -p "Say hello"
 
 # NVIDIA NIM
 export NVIDIA_API_KEY="your-key"
-pi --provider nvidia --model meta/llama-3.1-70b-instruct -p "Say hello"
+ra --provider nvidia --model meta/llama-3.1-70b-instruct -p "Say hello"
 
 # Hugging Face Inference
 export HF_TOKEN="your-key"
-pi --provider huggingface --model meta-llama/Meta-Llama-3.1-70B-Instruct -p "Say hello"
+ra --provider huggingface --model meta-llama/Meta-Llama-3.1-70B-Instruct -p "Say hello"
 
 # StackIT
 export STACKIT_API_KEY="your-key"
-pi --provider stackit --model stackit-chat -p "Say hello"
+ra --provider stackit --model stackit-chat -p "Say hello"
 
 # SiliconFlow
 export SILICONFLOW_API_KEY="your-key"
-pi --provider siliconflow --model Qwen/Qwen2.5-72B-Instruct -p "Say hello"
+ra --provider siliconflow --model Qwen/Qwen2.5-72B-Instruct -p "Say hello"
 ```
 
 ### Representative Test Coverage

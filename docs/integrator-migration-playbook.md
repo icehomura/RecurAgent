@@ -4,10 +4,10 @@ Generated: 2026-02-15
 
 ## Purpose
 
-This playbook gives downstream teams a practical, low-risk path to migrate from TypeScript Pi (`pi-mono`) to `pi_agent_rust` and verify compatibility without needing internal project context.
+This playbook gives downstream teams a practical, low-risk path to migrate from TypeScript Pi (`pi-mono`) to `recur_agent` and verify compatibility without needing internal project context.
 
 Use this when you need to:
-- replace an existing `pi` integration with Rust Pi,
+- replace an existing `ra` integration with Rust Pi,
 - validate that automation/scripts still behave correctly,
 - document a go/no-go decision with reproducible evidence.
 
@@ -29,7 +29,7 @@ If `docs/evidence/dropin-certification-verdict.json` is missing or not `overall_
 
 A migration is complete only when all are true:
 
-1. Rust Pi is installed and callable through the intended command (`pi` or `pi-rust`).
+1. Rust Pi is installed and callable through the intended command (`ra` or `pi-rust`).
 2. Required execution surfaces pass validation (interactive, print, JSON mode, RPC, SDK where used).
 3. Provider/auth/config behavior matches your production expectations.
 4. Evidence artifacts are stored so another engineer can reproduce the same result.
@@ -64,15 +64,15 @@ Session storage expectations:
 
 Use one of these rollout options:
 
-1. Canonical replacement (preferred): Rust Pi becomes `pi`, legacy preserved as `legacy-pi`.
-2. Side-by-side canary: keep TypeScript `pi`, install Rust as `pi-rust`.
+1. Canonical replacement (preferred): Rust Pi becomes `ra`, legacy preserved as `legacy-pi`.
+2. Side-by-side canary: keep TypeScript `ra`, install Rust as `pi-rust`.
 
 Verification commands:
 
 ```bash
 command -v pi
-pi --version
-pi --help >/dev/null
+ra --version
+ra --help >/dev/null
 
 # If side-by-side migration is used
 command -v legacy-pi || true
@@ -86,8 +86,8 @@ Move settings and secrets deliberately; do not rely on implicit defaults.
 ### 2.1 Settings
 
 Review and reconcile:
-- `~/.pi/agent/settings.json`
-- project-level `.pi/settings.json`
+- `~/.ra/agent/settings.json`
+- project-level `.ra/settings.json`
 
 Key parity-sensitive areas:
 - default provider/model/thinking level
@@ -111,9 +111,9 @@ Run only the checks relevant to your integration footprint.
 ### 3.1 CLI and Interactive
 
 ```bash
-pi --list-models >/dev/null
-pi config >/dev/null
-pi --model claude-sonnet-4-20250514 -p "ping"
+ra --list-models >/dev/null
+ra config >/dev/null
+ra --model claude-sonnet-4-20250514 -p "ping"
 ```
 
 Validate:
@@ -125,7 +125,7 @@ Validate:
 
 ```bash
 printf 'Hello\n' | pi -p
-printf 'Hello\n' | pi --mode json
+printf 'Hello\n' | ra --mode json
 ```
 
 Validate:
@@ -138,7 +138,7 @@ Validate:
 Smoke-check line-delimited JSON protocol:
 
 ```bash
-pi --mode rpc
+ra --mode rpc
 ```
 
 Then send at least:
@@ -169,8 +169,8 @@ Do not claim SDK drop-in compatibility unless your usage scenario passes those c
 Validate behavior for your actual session workflows:
 
 ```bash
-pi --continue
-pi --session <path-to-known-session>
+ra --continue
+ra --session <path-to-known-session>
 ```
 
 Checks:
@@ -214,7 +214,7 @@ Recommended gate policy:
 
 If compatibility fails in canary or production:
 
-1. Switch command aliasing back to legacy (`legacy-pi` or TypeScript `pi`).
+1. Switch command aliasing back to legacy (`legacy-pi` or TypeScript `ra`).
 2. Restore prior config snapshot.
 3. Record failing command/event transcript.
 4. Map failure to a parity gap entry (or create one) before retrying migration.

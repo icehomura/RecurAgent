@@ -4,7 +4,7 @@ This document defines Pi's test suite boundaries, classification criteria, and e
 
 ## Parity Test + Logging Contract (DROPIN-171)
 
-This policy document is the normative home of `pi.parity.test_logging_contract.v1`.
+This policy document is the normative home of `ra.parity.test_logging_contract.v1`.
 
 The contract binds three things together:
 - test suite taxonomy (`unit`, `vcr`, `e2e`)
@@ -15,20 +15,20 @@ The contract binds three things together:
 
 | Domain | Schema ID | Source |
 |--------|-----------|--------|
-| Test log JSONL records | `pi.test.log.v2` | `tests/common/logging.rs` |
-| Artifact index JSONL records | `pi.test.artifact.v1` | `tests/common/logging.rs` |
-| Evidence contract bundle | `pi.qa.evidence_contract.v1` | `docs/evidence-contract-schema.json` |
+| Test log JSONL records | `ra.test.log.v2` | `tests/common/logging.rs` |
+| Artifact index JSONL records | `ra.test.artifact.v1` | `tests/common/logging.rs` |
+| Evidence contract bundle | `ra.qa.evidence_contract.v1` | `docs/evidence-contract-schema.json` |
 | Per-suite failure digest | `pi.e2e.failure_digest.v1` | `docs/evidence-contract-schema.json` |
 | Replay bundle | `pi.e2e.replay_bundle.v1` | `tests/e2e_replay_bundles.rs` + run artifacts |
-| Extension remediation backlog | `pi.qa.extension_remediation_backlog.v1` | `tests/qa_certification_dossier.rs` + `tests/full_suite_gate/extension_remediation_backlog.json` |
-| User-perceived SLI + UX matrix | `pi.perf.sli_ux_matrix.v1` | `docs/perf_sli_matrix.json` |
+| Extension remediation backlog | `ra.qa.extension_remediation_backlog.v1` | `tests/qa_certification_dossier.rs` + `tests/full_suite_gate/extension_remediation_backlog.json` |
+| User-perceived SLI + UX matrix | `ra.perf.sli_ux_matrix.v1` | `docs/perf_sli_matrix.json` |
 
 ### Correlation Model
 
 | Field | Scope | Requirement |
 |-------|-------|-------------|
 | `correlation_id` | Run-level aggregate artifacts | Required in evidence/replay summaries |
-| `trace_id` | Per-suite/per-test log stream | Required in `pi.test.log.v2` records |
+| `trace_id` | Per-suite/per-test log stream | Required in `ra.test.log.v2` records |
 | `span_id` | Nested operation traces | Optional but must be string when present |
 | `parent_span_id` | Span hierarchy | Optional but must be string when present |
 | `ci_correlation_id` | Cross-shard CI linkage | Optional but must be string when present |
@@ -52,11 +52,11 @@ For every failed suite entry in evidence artifacts:
 
 ### Schema Evolution Policy
 
-`pi.parity.test_logging_contract.v1` uses additive, versioned evolution with strict fail-closed validation:
+`ra.parity.test_logging_contract.v1` uses additive, versioned evolution with strict fail-closed validation:
 
-- `pi.test.log.v2` is the current required log schema for new test output.
-- `pi.test.log.v1` remains readable only for historical/backfill validation and is rejected by `validate_jsonl_v2_only`.
-- `pi.test.artifact.v1` remains the canonical artifact-index schema until a successor is explicitly ratified.
+- `ra.test.log.v2` is the current required log schema for new test output.
+- `ra.test.log.v1` remains readable only for historical/backfill validation and is rejected by `validate_jsonl_v2_only`.
+- `ra.test.artifact.v1` remains the canonical artifact-index schema until a successor is explicitly ratified.
 - New schema versions must ship with:
   - validator updates in `tests/common/logging.rs`
   - regression tests covering old/new acceptance and rejection boundaries
@@ -117,7 +117,7 @@ VCR_MODE=playback cargo test --all-targets        # force playback (CI default)
 ```
 
 **Identifying tests:** Files listed in `[suite.vcr]` of `tests/suite_classification.toml`, or any
-test file that imports from `pi::vcr` / references `cassette_root()` / loads JSON fixtures.
+test file that imports from `ra::vcr` / references `cassette_root()` / loads JSON fixtures.
 
 ### Suite 3: Live E2E
 
@@ -132,7 +132,7 @@ test file that imports from `pi::vcr` / references `cassette_root()` / loads JSO
 **How to run:**
 ```bash
 # With live providers (requires API keys)
-PI_E2E=1 cargo test --test e2e_cli --test e2e_tui --test e2e_tools
+RECUR_AGENT_E2E=1 cargo test --test e2e_cli --test e2e_tui --test e2e_tools
 
 # VCR-backed E2E (deterministic, no API keys needed)
 VCR_MODE=playback cargo test --test e2e_provider_streaming --test agent_loop_vcr
@@ -144,7 +144,7 @@ test file prefixed with `e2e_`.
 Canonical scenario coverage mapping for this suite lives in:
 
 - `docs/e2e_scenario_matrix.json` (schema `pi.e2e.scenario_matrix.v2`)
-- `docs/perf_sli_matrix.json` (schema `pi.perf.sli_ux_matrix.v1`)
+- `docs/perf_sli_matrix.json` (schema `ra.perf.sli_ux_matrix.v1`)
 - Drift and schema enforcement: `python3 scripts/check_traceability_matrix.py`
 
 PERF-3X phase-validation and diagnostics flows must consume SLI outputs keyed by
@@ -359,9 +359,9 @@ Operational incident response for parity regressions is documented in
 `docs/ci-operator-runbook.md` under **Parity Incident Response (DROPIN-162)**.
 
 Artifacts:
-- `tests/full_suite_gate/preflight_verdict.json` (schema `pi.ci.preflight_lane.v1`)
-- `tests/full_suite_gate/certification_verdict.json` (schema `pi.ci.certification_lane.v1`)
-- `tests/full_suite_gate/waiver_audit.json` (schema `pi.ci.waiver_audit.v1`)
+- `tests/full_suite_gate/preflight_verdict.json` (schema `ra.ci.preflight_lane.v1`)
+- `tests/full_suite_gate/certification_verdict.json` (schema `ra.ci.certification_lane.v1`)
+- `tests/full_suite_gate/waiver_audit.json` (schema `ra.ci.waiver_audit.v1`)
 - `tests/full_suite_gate/replay_bundle.json` (schema `pi.e2e.replay_bundle.v1`)
 
 ### Waiver Policy (bd-1f42.8.8.1)
@@ -398,7 +398,7 @@ contract:
 
 - JSON artifact: `tests/e2e_results/**/claim_integrity_evidence_adjudication_matrix.json`
 - Markdown companion: `tests/e2e_results/**/claim_integrity_evidence_adjudication_matrix.md`
-- Required schema id: `pi.claim_integrity.evidence_adjudication_matrix.v1`
+- Required schema id: `ra.claim_integrity.evidence_adjudication_matrix.v1`
 
 Fail-closed summary invariants (must hold together):
 
@@ -480,23 +480,23 @@ Normative rules:
 
 #### Release-budget measurement negative controls
 
-`pi.perf.budget_summary.v2` admits a numeric release-budget input only when its
+`ra.perf.budget_summary.v2` admits a numeric release-budget input only when its
 measurement-specific negative control verifies. A present number without the
 control is `NO_DATA`; strict CI may additionally fail because required data is
 missing, but it must never compare the unproven number with a threshold.
 
-- `binary_size_release` requires a `pi.perf.binary_size_measurement.v1` record
+- `binary_size_release` requires a `ra.perf.binary_size_measurement.v1` record
   that binds the exact binary path, SHA-256, and byte length to Cargo profile
   `release`, profile family `release`, `opt-level = "z"`, and `strip = true`.
-- `idle_memory_rss` requires a `pi.perf.idle_rss_measurement.v1` record with the
+- `idle_memory_rss` requires a `ra.perf.idle_rss_measurement.v1` record with the
   Cargo release build command, allocator (`system` or `jemalloc`), measured
-  executable path and SHA-256, and at least five distinct interactive `pi`
+  executable path and SHA-256, and at least five distinct interactive `ra`
   process samples after the declared idle settle interval. The control reports
   the conservative maximum RSS and exact max-minus-min spread, identifies the
   PID carrying that maximum, and hash-binds the `benches/bench_env.rs`
   fingerprint used during sampling.
 - `ext_cold_load_simple_p95` and `ext_cold_load_complex_p95` require a
-  `pi.perf.cold_load_measurement.v1` record that hashes each Criterion estimate
+  `ra.perf.cold_load_measurement.v1` record that hashes each Criterion estimate
   and embeds the `benches/bench_env.rs` governor, ASLR, THP, and noise-score
   fingerprint. The release gate admits only `noise_score = 0`.
 
@@ -519,10 +519,10 @@ Release/certification decisions must apply a docs-last contract before final rep
 Required evidence artifacts for this policy:
 
 - `tests/full_suite_gate/practical_finish_checkpoint.json` (`pi.perf3x.practical_finish_checkpoint.v1`)
-- `tests/perf/reports/parameter_sweeps.json` (`pi.perf.parameter_sweeps.v1`)
-- `tests/full_suite_gate/extension_remediation_backlog.json` (`pi.qa.extension_remediation_backlog.v1`)
-- `tests/perf/reports/stress_triage.json` (`pi.ext.stress_triage.v1` with `run_id`, `correlation_id`)
-- `tests/ext_conformance/reports/conformance_summary.json` (`pi.ext.conformance_summary.v2` with `run_id`, `correlation_id`)
+- `tests/perf/reports/parameter_sweeps.json` (`ra.perf.parameter_sweeps.v1`)
+- `tests/full_suite_gate/extension_remediation_backlog.json` (`ra.qa.extension_remediation_backlog.v1`)
+- `tests/perf/reports/stress_triage.json` (`ra.ext.stress_triage.v1` with `run_id`, `correlation_id`)
+- `tests/ext_conformance/reports/conformance_summary.json` (`ra.ext.conformance_summary.v2` with `run_id`, `correlation_id`)
 
 Primary enforcement surfaces:
 
@@ -655,7 +655,7 @@ waiting for full CI. The smoke suite targets under 60 seconds on a development m
 
 **Structured output:**
 - `smoke_log.jsonl`: Per-event JSONL log (schema `pi.smoke.*.v1`)
-- `smoke_summary.json`: Machine-readable pass/fail summary (schema `pi.smoke.summary.v1`)
+- `smoke_summary.json`: Machine-readable pass/fail summary (schema `ra.smoke.summary.v1`)
 - `<target>/output.log`: Per-target verbose output
 
 **Design rationale:**
@@ -682,7 +682,7 @@ For tests currently in Suite 2 that should migrate to Suite 1:
 For VCR-heavy tests claiming "live" coverage:
 
 1. [ ] Verify the test actually exercises the code path (not just replaying a canned response).
-2. [ ] Add a live E2E variant that runs against real providers (gated on `PI_E2E=1`).
+2. [ ] Add a live E2E variant that runs against real providers (gated on `RECUR_AGENT_E2E=1`).
 3. [ ] Ensure VCR cassettes are regenerated periodically to catch API changes.
 4. [ ] Document the cassette regeneration process in the test file header.
 
@@ -815,9 +815,9 @@ The quarantine guard runs as part of CI (`.github/workflows/ci.yml`) and:
 5. Validates `evidence`, `repro`, and `remove_when` are non-empty.
 6. Fails if any entry has expired (current date > `expires`).
 7. Emits structured artifacts:
-   - `tests/quarantine_report.json` (schema `pi.test.quarantine_report.v2`): active count,
+   - `tests/quarantine_report.json` (schema `ra.test.quarantine_report.v2`): active count,
      expiring-soon count, expired count, category breakdown, escalation actions.
-   - `tests/quarantine_audit.jsonl` (schema `pi.test.quarantine_audit_entry.v1`): one line
+   - `tests/quarantine_audit.jsonl` (schema `ra.test.quarantine_audit_entry.v1`): one line
      per quarantine entry for append-only audit trail.
 
 ### Escalation Workflow
@@ -903,8 +903,8 @@ Release-integrity performance budgets must not be evaluated on single test runs 
 
 ### Enforced Contracts & Artifacts
 
-- **Contract**: `docs/contracts/nrun-evidence-protocol-contract.json` (`pi.nrun.evidence_protocol.contract.v1`)
-- **Evaluation Evidence**: `docs/evidence/nrun-budget-evaluation.json` (`pi.nrun.budget_evaluation.v1`)
+- **Contract**: `docs/contracts/nrun-evidence-protocol-contract.json` (`ra.nrun.evidence_protocol.contract.v1`)
+- **Evaluation Evidence**: `docs/evidence/nrun-budget-evaluation.json` (`ra.nrun.budget_evaluation.v1`)
 - **Evaluator Tool**: `examples/nrun_evidence_evaluator.rs`
 - **Verification Gate**: `tests/nrun_evidence_protocol.rs`
 
@@ -930,8 +930,8 @@ For each sample $X_i$ with standardized relative margin $z_i = \frac{T - X_i}{\s
 
 ### Enforced Contracts & Artifacts
 
-- **Contract**: `docs/contracts/sequential-budget-gate-contract.json` (`pi.sequential_gate.contract.v1`)
-- **Evaluation Evidence**: `docs/evidence/sequential-budget-gate-evaluations.json` (`pi.sequential_gate.evaluation.v1`)
+- **Contract**: `docs/contracts/sequential-budget-gate-contract.json` (`ra.sequential_gate.contract.v1`)
+- **Evaluation Evidence**: `docs/evidence/sequential-budget-gate-evaluations.json` (`ra.sequential_gate.evaluation.v1`)
 - **Evaluator Tool**: `examples/sequential_budget_gate.rs`
 - **Verification Gate**: `tests/sequential_budget_gate.rs`
 
@@ -953,12 +953,12 @@ Performance regressions rarely appear instantly without warning; they often exhi
    - Alarms when $P(r_t = 0) \ge 0.5$, detecting immediate step-function regime shifts.
 
 3. **Zero Mutation & Advisory Status**:
-   - The detector is purely read-only and advisory, outputting `pi.perf.drift_watch.v1` artifacts consumed by preflight and runpack tools with zero side effects on scheduler, git, or beads state.
+   - The detector is purely read-only and advisory, outputting `ra.perf.drift_watch.v1` artifacts consumed by preflight and runpack tools with zero side effects on scheduler, git, or beads state.
 
 ### Enforced Contracts & Artifacts
 
-- **Contract**: `docs/contracts/drift-watch-contract.json` (`pi.perf.drift_watch.contract.v1`)
-- **Evaluation Evidence**: `docs/evidence/perf-drift-watch.json` (`pi.perf.drift_watch.v1`)
+- **Contract**: `docs/contracts/drift-watch-contract.json` (`ra.perf.drift_watch.contract.v1`)
+- **Evaluation Evidence**: `docs/evidence/perf-drift-watch.json` (`ra.perf.drift_watch.v1`)
 - **Evaluator Tool**: `examples/perf_drift_watch.rs`
 - **Verification Gate**: `tests/perf_drift_watch.rs`
 
@@ -1003,9 +1003,9 @@ or strict replacement claims.
 
 ### Enforced Contracts & Artifacts
 
-- **Contract**: `docs/contracts/conformal-budget-calibration-contract.json` (`pi.conformal_calibration.contract.v1`)
-- **Evaluation Evidence**: `docs/evidence/conformal-budget-calibration.json` (`pi.conformal_calibration.v1`)
-- **Approved Amendment**: `docs/evidence/ext-cold-load-budget-amendment.json` (`pi.conformal_budget_amendment.v1`)
+- **Contract**: `docs/contracts/conformal-budget-calibration-contract.json` (`ra.conformal_calibration.contract.v1`)
+- **Evaluation Evidence**: `docs/evidence/conformal-budget-calibration.json` (`ra.conformal_calibration.v1`)
+- **Approved Amendment**: `docs/evidence/ext-cold-load-budget-amendment.json` (`ra.conformal_budget_amendment.v1`)
 - **Evaluator Tool**: `examples/conformal_budget_calibration.rs`
 - **Verification Gate**: `tests/conformal_budget_calibration.rs`
 
@@ -1015,9 +1015,9 @@ or strict replacement claims.
 
 To ensure shipping releases satisfy performance claims without regression or measurement gap:
 1. **Startup Latency ($N \ge 10$)**:
-   - `pi --version`: Minimal fast-path startup (<100ms p95, typically ~5-7ms).
-   - `pi --help`: Full argument parser and help formatting path (<150ms p95, typically ~12-15ms).
-   - `pi --list-models`: Provider catalog and model registry resolution path (<200ms p95, typically ~20-25ms).
+   - `ra --version`: Minimal fast-path startup (<100ms p95, typically ~5-7ms).
+   - `ra --help`: Full argument parser and help formatting path (<150ms p95, typically ~12-15ms).
+   - `ra --list-models`: Provider catalog and model registry resolution path (<200ms p95, typically ~20-25ms).
 2. **Release Binary Size**:
    - Release profile artifacts are budgeted at $\le 48\text{ MiB}$ (enforced across Darwin and Linux release binaries).
 3. **Environment & Provenance Fingerprinting**:
@@ -1025,8 +1025,8 @@ To ensure shipping releases satisfy performance claims without regression or mea
 
 ### Enforced Contracts & Artifacts
 
-- **Contract**: `docs/contracts/startup-benchmark-contract.json` (`pi.perf.startup_benchmark.contract.v1`)
-- **Evaluation Evidence**: `docs/evidence/startup-benchmark-report.json` (`pi.perf.startup_benchmark.v1`)
+- **Contract**: `docs/contracts/startup-benchmark-contract.json` (`ra.perf.startup_benchmark.contract.v1`)
+- **Evaluation Evidence**: `docs/evidence/startup-benchmark-report.json` (`ra.perf.startup_benchmark.v1`)
 - **Evaluator Tool**: `examples/startup_benchmark_runner.rs`
 - **Verification Gate**: `tests/startup_benchmark.rs`
 
@@ -1042,12 +1042,12 @@ To ensure benchmark integrity and prevent noisy host environments from producing
    - Inputs with `noise_score > max_admissible_noise_score` (default $\le 0$ for strict CI, $\le 3$ for developer runs) are **rejected as `NO_DATA`**.
    - **Forbid Averaging into Compliance**: Noisy runs are strictly forbidden from being averaged with clean runs to satisfy budgets.
 3. **Host Topology Fingerprint**:
-   - Mandates embedding `pi.perf.host_topology_fingerprint.v1` alongside all performance measurement artifacts.
+   - Mandates embedding `ra.perf.host_topology_fingerprint.v1` alongside all performance measurement artifacts.
 
 ### Enforced Contracts & Artifacts
 
-- **Contract**: `docs/contracts/variance-gating-contract.json` (`pi.perf.variance_gating.contract.v1`)
-- **Evaluation Evidence**: `docs/evidence/variance-gate-evaluations.json` (`pi.perf.variance_gate_report.v1`)
+- **Contract**: `docs/contracts/variance-gating-contract.json` (`ra.perf.variance_gating.contract.v1`)
+- **Evaluation Evidence**: `docs/evidence/variance-gate-evaluations.json` (`ra.perf.variance_gate_report.v1`)
 - **Evaluator Tool**: `examples/variance_gate.rs`
 - **Verification Gate**: `tests/variance_gating.rs`
 

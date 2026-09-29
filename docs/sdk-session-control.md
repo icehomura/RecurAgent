@@ -13,8 +13,8 @@ in the default FTUI frontend or change the existing subprocess RPC protocol.
 
 ```rust
 use std::sync::atomic::{AtomicBool, Ordering};
-use pi::sdk::{AgentEvent, AgentSessionHandle, AssistantMessage, Result};
-use pi::session_control::PendingInput;
+use ra::sdk::{AgentEvent, AgentSessionHandle, AssistantMessage, Result};
+use ra::session_control::PendingInput;
 
 async fn inspect(
     handle: AgentSessionHandle,

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.perf.drift_watch.v1",
+  "schema": "ra.perf.drift_watch.v1",
   "generated_at": "2026-08-24T09:41:40.071766+00:00",
   "contract_path": "docs/contracts/drift-watch-contract.json",
   "config": {

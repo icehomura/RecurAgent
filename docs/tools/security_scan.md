@@ -52,7 +52,7 @@ therefore do not become an unbounded model-facing message.
 
 The implementation adds pure parser/identity/limit tests and real temporary-file
 confinement tests. Existing source scanner tests are retained unchanged. The
-required quality entry point is `dsr quality --tool pi_agent_rust`; no direct
+required quality entry point is `dsr quality --tool recur_agent`; no direct
 Cargo or GitHub Actions lane substitutes for it. No Rust test or compile pass
 is claimed until that gate has run.
 
@@ -164,7 +164,7 @@ tests exercise real temporary files, existing destinations, symlinks and elapsed
 deadlines. These are canned OSV protocol responses, not evidence of live OSV
 availability or accuracy. **The Rust tests were not executed.**
 
-`dsr quality --tool pi_agent_rust` returned `dsr: command not found` (127) in the
+`dsr quality --tool recur_agent` returned `dsr: command not found` (127) in the
 implementation runtime. No Rust compiler was installed, and compilation,
 formatting, Clippy and DSR remain unverified. No Bead is closed by these source
 changes and no release/cross-platform or live-service validation is claimed.

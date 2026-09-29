@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.multi_tier_execution_contract.v1",
+  "schema": "ra.frankennode.multi_tier_execution_contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-3ar8v.7.6",
   "support_bead_id": "bd-3ar8v.7.6.3",

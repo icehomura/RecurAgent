@@ -28,7 +28,7 @@ Configure the existing opt-in flags in the application's settings:
 Include the desired tools in the selected tool list, for example:
 
 ```sh
-pi --tools read,write,edit,bash,inspect_image,generate_image,tts,read_media
+ra --tools read,write,edit,bash,inspect_image,generate_image,tts,read_media
 ```
 
 Native media requests use the selected provider's API key. They do not borrow
@@ -45,17 +45,17 @@ provider has a key.
 SDK callers can supply `with_api_key(Some(key))`; an explicit empty key fails
 instead of falling back to the environment. `with_client` retains the caller's
 HTTP/VCR configuration. The endpoints can be overridden using `with_base_url`
-or `PI_MEDIA_OPENAI_BASE_URL`, `PI_MEDIA_ANTHROPIC_BASE_URL`,
-`PI_MEDIA_GEMINI_BASE_URL`, and `PI_MEDIA_XAI_BASE_URL`. An override receives the
+or `RECUR_AGENT_MEDIA_OPENAI_BASE_URL`, `RECUR_AGENT_MEDIA_ANTHROPIC_BASE_URL`,
+`RECUR_AGENT_MEDIA_GEMINI_BASE_URL`, and `RECUR_AGENT_MEDIA_XAI_BASE_URL`. An override receives the
 credential, so use only a trusted gateway. HTTPS is required except for loopback
 HTTP. URL credentials, query strings, fragments, and response redirects are
 rejected; model-facing tool arguments cannot set the API base URL.
 
 Tool arguments take precedence over constructor defaults, which take precedence
 over the environment. Operation defaults can be selected through
-`PI_VISION_PROVIDER` / `PI_VISION_MODEL`,
-`PI_IMAGE_GEN_PROVIDER` / `PI_IMAGE_GEN_MODEL`, and
-`PI_TTS_PROVIDER` / `PI_TTS_VOICE`.
+`RECUR_AGENT_VISION_PROVIDER` / `RECUR_AGENT_VISION_MODEL`,
+`RECUR_AGENT_IMAGE_GEN_PROVIDER` / `RECUR_AGENT_IMAGE_GEN_MODEL`, and
+`RECUR_AGENT_TTS_PROVIDER` / `RECUR_AGENT_TTS_VOICE`.
 
 The default registry forwards all provider/model/voice defaults from `media`:
 `vision_provider`, `vision_model`, `image_gen_provider`,
@@ -259,7 +259,7 @@ not publish a success artifact. Image checks are basic container checks, not a
 full decoder or decompression-bomb guard. No claim of decoded visual or acoustic
 correctness is made merely because a container passes these checks.
 
-`with_mock(true)` or `PI_MEDIA_MOCK=1` explicitly selects deterministic fixture
+`with_mock(true)` or `RECUR_AGENT_MEDIA_MOCK=1` explicitly selects deterministic fixture
 behavior, marked `mock: true`. `with_mock(false)` overrides the environment.
 Speech fixtures support WAV only; they never stand in for a native response.
 
@@ -270,13 +270,13 @@ ordered image references, masks, and one Unix-only path-serialization case.
 These are protocol fixtures, not live-provider validation.
 
 **Validation status of the implementation session:** no Rust compiler or DSR
-runner was available. `dsr quality --tool pi_agent_rust` failed with
+runner was available. `dsr quality --tool recur_agent` failed with
 `dsr: command not found`. The Rust tests were authored but not executed, and
 neither a passing build nor live provider success was established. The
 required authoritative check remains:
 
 ```sh
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 ```
 
 Protocol references consulted: [OpenAI image edits](https://developers.openai.com/api/reference/resources/images/methods/edit),

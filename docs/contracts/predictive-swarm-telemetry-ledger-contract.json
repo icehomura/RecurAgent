@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.predictive_telemetry_ledger_contract.v1",
-  "ledger_schema": "pi.swarm.predictive_telemetry_ledger.v1",
+  "schema": "ra.swarm.predictive_telemetry_ledger_contract.v1",
+  "ledger_schema": "ra.swarm.predictive_telemetry_ledger.v1",
   "purpose": "advisory_pressure_prediction_not_release_performance_claim",
   "required_top_level_keys": [
     "schema",

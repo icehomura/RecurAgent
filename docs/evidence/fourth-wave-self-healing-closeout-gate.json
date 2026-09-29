@@ -14,13 +14,13 @@
             "bd-63x3v.7.8": "closed"
           },
           "close_reasons": {
-            "bd-63x3v.7.1": "Completed: added pi.swarm.action_plan.v1 dry-run projection, contract, CLI output, replay scenario assertions for ready/empty/deferred/dirty/degraded/RCH/stale/validation-failure cases, and command safety classes.",
-            "bd-63x3v.7.2": "Completed: added fail-closed pi.swarm.work_admission_gate.v1 projection, contract, CLI output, and E2E replay assertions for ready/open/deferred, degraded Mail/RCH, dirty worktree, stale evidence, malformed source, and validation failure cases.",
+            "bd-63x3v.7.1": "Completed: added ra.swarm.action_plan.v1 dry-run projection, contract, CLI output, replay scenario assertions for ready/empty/deferred/dirty/degraded/RCH/stale/validation-failure cases, and command safety classes.",
+            "bd-63x3v.7.2": "Completed: added fail-closed ra.swarm.work_admission_gate.v1 projection, contract, CLI output, and E2E replay assertions for ready/open/deferred, degraded Mail/RCH, dirty worktree, stale evidence, malformed source, and validation failure cases.",
             "bd-63x3v.7.3": "Completed: added dry-run per-agent budget lease simulator, contract, and fixture-backed stable JSON self-tests for fair allocation, over-commit rejection, stale lease expiry, mixed-priority allocation, RCH saturation, and provider budget exhaustion.",
-            "bd-63x3v.7.4": "Completed: added deterministic pi.swarm.turn_pressure_ledger.v1 runpack section, contract, markdown/next-action integration, and golden-backed self-test coverage for normal turns, large tool artifact spillover, compaction admission pressure, provider reroute, TUI frame pressure, and session write backpressure.",
+            "bd-63x3v.7.4": "Completed: added deterministic ra.swarm.turn_pressure_ledger.v1 runpack section, contract, markdown/next-action integration, and golden-backed self-test coverage for normal turns, large tool artifact spillover, compaction admission pressure, provider reroute, TUI frame pressure, and session write backpressure.",
             "bd-63x3v.7.5": "Completed: added no-network extension quarantine and rollback rehearsal CLI, contract, and fixture self-tests covering startup/runtime crash quarantine, permission escalation rejection, stale provenance, trusted rollback selection, action-plan projection, and fail-closed missing policy/provenance.",
             "bd-63x3v.7.6": "Completed: added deterministic operator handoff summary CLI, contract, and fixture self-tests covering clean handoff, dirty worktree, unpushed commits, expired reservations, stale evidence, failed validation, redaction, and JSON/Markdown output.",
-            "bd-63x3v.7.7": "Completed: added deterministic pi.swarm.stale_evidence_renewal_queue.v1 scanner, contract, fixture self-tests for fresh/expired/missing-source/contract-drift/RCH-blocked/safe-command scenarios, and optional runpack/action-plan integration that recommends renew_stale_evidence without mutating evidence or weakening drop-in gates.",
+            "bd-63x3v.7.7": "Completed: added deterministic ra.swarm.stale_evidence_renewal_queue.v1 scanner, contract, fixture self-tests for fresh/expired/missing-source/contract-drift/RCH-blocked/safe-command scenarios, and optional runpack/action-plan integration that recommends renew_stale_evidence without mutating evidence or weakening drop-in gates.",
             "bd-63x3v.7.8": "Completed: documented the fourth-wave self-healing operator workflow in the swarm runbook and README, including dry-run action planner, work-admission stop gate, budget leases, turn pressure ledger, extension quarantine rehearsal, handoff summaries, stale-evidence renewal, claim boundaries, and safe handoff wording that preserves human confirmation and release-claim gates."
           },
           "path": ".beads/issues.jsonl"
@@ -39,7 +39,7 @@
             {
               "bead_id": "bd-63x3v.7.1",
               "claim_boundary_text": "Dry-run action planning does not claim Beads, mutate source artifacts, run commands, or replace operator judgment.",
-              "close_reason": "Completed: added pi.swarm.action_plan.v1 dry-run projection, contract, CLI output, replay scenario assertions for ready/empty/deferred/dirty/degraded/RCH/stale/validation-failure cases, and command safety classes.",
+              "close_reason": "Completed: added ra.swarm.action_plan.v1 dry-run projection, contract, CLI output, replay scenario assertions for ready/empty/deferred/dirty/degraded/RCH/stale/validation-failure cases, and command safety classes.",
               "code_paths": [
                 "scripts/build_swarm_operator_runpack.py"
               ],
@@ -57,7 +57,7 @@
             {
               "bead_id": "bd-63x3v.7.2",
               "claim_boundary_text": "The work admission gate is fail-closed advisory evidence and does not enforce runtime throttles or start implementation work.",
-              "close_reason": "Completed: added fail-closed pi.swarm.work_admission_gate.v1 projection, contract, CLI output, and E2E replay assertions for ready/open/deferred, degraded Mail/RCH, dirty worktree, stale evidence, malformed source, and validation failure cases.",
+              "close_reason": "Completed: added fail-closed ra.swarm.work_admission_gate.v1 projection, contract, CLI output, and E2E replay assertions for ready/open/deferred, degraded Mail/RCH, dirty worktree, stale evidence, malformed source, and validation failure cases.",
               "code_paths": [
                 "scripts/build_swarm_operator_runpack.py"
               ],
@@ -95,7 +95,7 @@
             {
               "bead_id": "bd-63x3v.7.4",
               "claim_boundary_text": "The turn pressure ledger is diagnostic operator evidence only and does not support benchmark, capacity, or release claims.",
-              "close_reason": "Completed: added deterministic pi.swarm.turn_pressure_ledger.v1 runpack section, contract, markdown/next-action integration, and golden-backed self-test coverage for normal turns, large tool artifact spillover, compaction admission pressure, provider reroute, TUI frame pressure, and session write backpressure.",
+              "close_reason": "Completed: added deterministic ra.swarm.turn_pressure_ledger.v1 runpack section, contract, markdown/next-action integration, and golden-backed self-test coverage for normal turns, large tool artifact spillover, compaction admission pressure, provider reroute, TUI frame pressure, and session write backpressure.",
               "code_paths": [
                 "scripts/build_swarm_operator_runpack.py"
               ],
@@ -153,7 +153,7 @@
             {
               "bead_id": "bd-63x3v.7.7",
               "claim_boundary_text": "The stale-evidence renewal queue does not regenerate evidence, overwrite artifacts, or weaken the drop-in claim gate.",
-              "close_reason": "Completed: added deterministic pi.swarm.stale_evidence_renewal_queue.v1 scanner, contract, fixture self-tests for fresh/expired/missing-source/contract-drift/RCH-blocked/safe-command scenarios, and optional runpack/action-plan integration that recommends renew_stale_evidence without mutating evidence or weakening drop-in gates.",
+              "close_reason": "Completed: added deterministic ra.swarm.stale_evidence_renewal_queue.v1 scanner, contract, fixture self-tests for fresh/expired/missing-source/contract-drift/RCH-blocked/safe-command scenarios, and optional runpack/action-plan integration that recommends renew_stale_evidence without mutating evidence or weakening drop-in gates.",
               "code_paths": [
                 "scripts/build_stale_evidence_renewal_queue.py"
               ],
@@ -498,12 +498,12 @@
               "status": "pass"
             },
             {
-              "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo check --all-targets",
+              "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo check --all-targets",
               "id": "cargo_check_all_targets_rch",
               "status": "pass"
             },
             {
-              "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
+              "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
               "id": "cargo_clippy_all_targets_rch",
               "status": "pass"
             },
@@ -543,7 +543,7 @@
     {
       "bead_id": "bd-63x3v.7.1",
       "claim_boundary_text": "Dry-run action planning does not claim Beads, mutate source artifacts, run commands, or replace operator judgment.",
-      "close_reason": "Completed: added pi.swarm.action_plan.v1 dry-run projection, contract, CLI output, replay scenario assertions for ready/empty/deferred/dirty/degraded/RCH/stale/validation-failure cases, and command safety classes.",
+      "close_reason": "Completed: added ra.swarm.action_plan.v1 dry-run projection, contract, CLI output, replay scenario assertions for ready/empty/deferred/dirty/degraded/RCH/stale/validation-failure cases, and command safety classes.",
       "code_paths": [
         "scripts/build_swarm_operator_runpack.py"
       ],
@@ -561,7 +561,7 @@
     {
       "bead_id": "bd-63x3v.7.2",
       "claim_boundary_text": "The work admission gate is fail-closed advisory evidence and does not enforce runtime throttles or start implementation work.",
-      "close_reason": "Completed: added fail-closed pi.swarm.work_admission_gate.v1 projection, contract, CLI output, and E2E replay assertions for ready/open/deferred, degraded Mail/RCH, dirty worktree, stale evidence, malformed source, and validation failure cases.",
+      "close_reason": "Completed: added fail-closed ra.swarm.work_admission_gate.v1 projection, contract, CLI output, and E2E replay assertions for ready/open/deferred, degraded Mail/RCH, dirty worktree, stale evidence, malformed source, and validation failure cases.",
       "code_paths": [
         "scripts/build_swarm_operator_runpack.py"
       ],
@@ -599,7 +599,7 @@
     {
       "bead_id": "bd-63x3v.7.4",
       "claim_boundary_text": "The turn pressure ledger is diagnostic operator evidence only and does not support benchmark, capacity, or release claims.",
-      "close_reason": "Completed: added deterministic pi.swarm.turn_pressure_ledger.v1 runpack section, contract, markdown/next-action integration, and golden-backed self-test coverage for normal turns, large tool artifact spillover, compaction admission pressure, provider reroute, TUI frame pressure, and session write backpressure.",
+      "close_reason": "Completed: added deterministic ra.swarm.turn_pressure_ledger.v1 runpack section, contract, markdown/next-action integration, and golden-backed self-test coverage for normal turns, large tool artifact spillover, compaction admission pressure, provider reroute, TUI frame pressure, and session write backpressure.",
       "code_paths": [
         "scripts/build_swarm_operator_runpack.py"
       ],
@@ -657,7 +657,7 @@
     {
       "bead_id": "bd-63x3v.7.7",
       "claim_boundary_text": "The stale-evidence renewal queue does not regenerate evidence, overwrite artifacts, or weaken the drop-in claim gate.",
-      "close_reason": "Completed: added deterministic pi.swarm.stale_evidence_renewal_queue.v1 scanner, contract, fixture self-tests for fresh/expired/missing-source/contract-drift/RCH-blocked/safe-command scenarios, and optional runpack/action-plan integration that recommends renew_stale_evidence without mutating evidence or weakening drop-in gates.",
+      "close_reason": "Completed: added deterministic ra.swarm.stale_evidence_renewal_queue.v1 scanner, contract, fixture self-tests for fresh/expired/missing-source/contract-drift/RCH-blocked/safe-command scenarios, and optional runpack/action-plan integration that recommends renew_stale_evidence without mutating evidence or weakening drop-in gates.",
       "code_paths": [
         "scripts/build_stale_evidence_renewal_queue.py"
       ],
@@ -761,12 +761,12 @@
       "status": "pass"
     },
     {
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo check --all-targets",
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo check --all-targets",
       "id": "cargo_check_all_targets_rch",
       "status": "pass"
     },
     {
-      "command": "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
+      "command": "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey_bd_63x3v_7_9/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
       "id": "cargo_clippy_all_targets_rch",
       "status": "pass"
     },
@@ -797,7 +797,7 @@
     "pushed_commits",
     "quality_gates"
   ],
-  "schema": "pi.swarm.fourth_wave_self_healing.closeout_gate.v1",
+  "schema": "ra.swarm.fourth_wave_self_healing.closeout_gate.v1",
   "source_boundary_checks": [
     {
       "boundary": "Beads issue state and comments remain the work ledger.",

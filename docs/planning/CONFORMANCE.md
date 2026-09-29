@@ -1,10 +1,10 @@
 # Conformance Testing Strategy
 
-> **Purpose:** Document how pi_agent_rust validates behavioral compatibility with Pi Agent (TypeScript).
+> **Purpose:** Document how recur_agent validates behavioral compatibility with Recur Agent (TypeScript).
 
 ## Overview
 
-pi_agent_rust must behave identically to the TypeScript reference implementation for all observable behaviors. This document describes the conformance testing approach used to verify this compatibility.
+recur_agent must behave identically to the TypeScript reference implementation for all observable behaviors. This document describes the conformance testing approach used to verify this compatibility.
 
 ## Testing Architecture
 
@@ -158,7 +158,7 @@ coverage**.
 
 | Extension Shape | Entrypoint / Config | Required Capabilities / I/O | Expected Behaviors (Pass/Fail) | Coverage (Current / Planned) |
 |---|---|---|---|---|
-| **PiJS (JS/TS)** | `extension.json` (`pi.ext.manifest.v1`) or package manifest; entry `.ts/.js` | `tool` (→ `read/write/exec`), `http`, `session`, `ui`, `log` | **PASS** if: registrations match (tools/commands/flags/shortcuts/providers); derived capability matches hostcall method (see `EXTENSIONS.md` §3.2A); deterministic event ordering per scheduler contract; mock outputs deterministic under fixed spec; errors map to taxonomy (`timeout/denied/io/invalid_request/internal`). | **Current:** `tests/e2e_extension_registration.rs`, `tests/extensions_registration.rs`, `tests/ext_conformance.rs`, `tests/event_loop_conformance.rs`, `tests/ext_conformance/event_payloads/event_payloads.json`, `tests/ext_conformance/mock_specs/*`, `tests/ext_conformance_fixture_schema.rs`. **Planned:** differential TS↔Rust runner (`bd-21dv`). |
+| **PiJS (JS/TS)** | `extension.json` (`ra.ext.manifest.v1`) or package manifest; entry `.ts/.js` | `tool` (→ `read/write/exec`), `http`, `session`, `ui`, `log` | **PASS** if: registrations match (tools/commands/flags/shortcuts/providers); derived capability matches hostcall method (see `EXTENSIONS.md` §3.2A); deterministic event ordering per scheduler contract; mock outputs deterministic under fixed spec; errors map to taxonomy (`timeout/denied/io/invalid_request/internal`). | **Current:** `tests/e2e_extension_registration.rs`, `tests/extensions_registration.rs`, `tests/ext_conformance.rs`, `tests/event_loop_conformance.rs`, `tests/ext_conformance/event_payloads/event_payloads.json`, `tests/ext_conformance/mock_specs/*`, `tests/ext_conformance_fixture_schema.rs`. **Planned:** differential TS↔Rust runner (`bd-21dv`). |
 | **WASM Component** | `extension.json` with `runtime="wasm"`; entry `.wasm` component | WIT hostcalls → same capability set as PiJS | **PASS** if: registration + hostcall behavior matches PiJS contract; capability derivation identical to JS; deterministic logs; error taxonomy identical. | **Planned:** WASM host conformance + parity suite (`bd-nom`, `bd-320`). |
 | **MCP Server** | MCP config or CLI args (stdio/http/sse) | MCP protocol (tools list + tool call/response); policy-gated connectors | **PASS** if: tool schemas discoverable; tool calls execute with deterministic mocks; policy denials surfaced as MCP errors; timeouts handled. | **Current:** scenario harness in `tests/ext_conformance_scenarios.rs` + fixture `tests/ext_conformance/fixtures/minimal_mcp.json`. |
 | **Skill Pack** | `SKILL.md` + assets | File load only (no hostcalls) | **PASS** if: frontmatter valid; name/description parsed; injected into system prompt; skill resolution precedence correct. | **Current:** `tests/resource_loader.rs`, `tests/e2e_cli.rs` (skill discovery paths). |
@@ -212,8 +212,8 @@ All extension-related logs must conform to the **ext.log.v1** schema
 
 **Deterministic runtime controls (TS oracle + Rust PiJS):**
 - Patched globals: `Date`/`Date.now`, `Math.random`, `process.cwd`, `process.env.HOME`, `pi.time.nowMs`.
-- Env vars: `PI_DETERMINISTIC_TIME_MS`, `PI_DETERMINISTIC_TIME_STEP_MS`, `PI_DETERMINISTIC_RANDOM`,
-  `PI_DETERMINISTIC_RANDOM_SEED`, `PI_DETERMINISTIC_CWD`, `PI_DETERMINISTIC_HOME`.
+- Env vars: `RECUR_AGENT_DETERMINISTIC_TIME_MS`, `RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS`, `RECUR_AGENT_DETERMINISTIC_RANDOM`,
+  `RECUR_AGENT_DETERMINISTIC_RANDOM_SEED`, `RECUR_AGENT_DETERMINISTIC_CWD`, `RECUR_AGENT_DETERMINISTIC_HOME`.
 
 **CI consumption:**
 - Archive `target/ext_conformance/logs/**` as CI artifacts.
@@ -282,13 +282,13 @@ To make E2E and integration tests auditable and diffable, tests emit **structure
 and a **JSONL artifact index**. These are intended for CI artifact capture and deterministic
 diffing alongside normalized fixtures.
 
-### Log Schema: `pi.test.log.v1`
+### Log Schema: `ra.test.log.v1`
 
 Each log entry is one JSON object per line:
 
 ```json
 {
-  "schema": "pi.test.log.v1",
+  "schema": "ra.test.log.v1",
   "type": "log",
   "test": "e2e_cli_help_flag",
   "seq": 1,
@@ -309,13 +309,13 @@ Each log entry is one JSON object per line:
 - `test` is optional; when present it is a single string.
 - `context` is a flat string map (redacted for sensitive keys).
 
-### Artifact Index Schema: `pi.test.artifact.v1`
+### Artifact Index Schema: `ra.test.artifact.v1`
 
 Each artifact entry is one JSON object per line:
 
 ```json
 {
-  "schema": "pi.test.artifact.v1",
+  "schema": "ra.test.artifact.v1",
   "type": "artifact",
   "test": "e2e_cli_help_flag",
   "seq": 1,
@@ -397,7 +397,7 @@ cd pi-mono
 node capture-fixtures.js --tool read --output fixtures/read_tool.json
 
 # Run Rust implementation against same fixtures
-cd ../pi_agent_rust
+cd ../recur_agent
 cargo test --test conformance_fixtures
 ```
 

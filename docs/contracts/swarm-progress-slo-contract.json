@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.progress_slo_contract.v1",
-  "progress_slo_schema": "pi.swarm.progress_slo.v1",
+  "schema": "ra.swarm.progress_slo_contract.v1",
+  "progress_slo_schema": "ra.swarm.progress_slo.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-wzri8.1",
   "parent_bead_id": "bd-wzri8",

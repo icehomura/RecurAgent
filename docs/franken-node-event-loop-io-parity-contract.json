@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.event_loop_io_parity_contract.v1",
+  "schema": "ra.frankennode.event_loop_io_parity_contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-3ar8v.7.7",
   "support_bead_ids": [],
@@ -7,7 +7,7 @@
   "effective_date_utc": "2026-02-17T09:00:00Z",
   "scope": {
     "target_project_root": "/dp/franken_node",
-    "source_project_root": "/data/projects/pi_agent_rust",
+    "source_project_root": "/data/projects/recur_agent",
     "objective": "Provide production-grade event-loop and IO semantics with compatibility toggles and deterministic fallback behavior under unsupported edge conditions."
   },
   "event_loop_model": {

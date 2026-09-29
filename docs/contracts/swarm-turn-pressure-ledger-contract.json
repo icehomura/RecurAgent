@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.turn_pressure_ledger_contract.v1",
-  "ledger_schema": "pi.swarm.turn_pressure_ledger.v1",
+  "schema": "ra.swarm.turn_pressure_ledger_contract.v1",
+  "ledger_schema": "ra.swarm.turn_pressure_ledger.v1",
   "purpose": "operator_diagnostic_not_release_performance_claim",
   "allowed_statuses": [
     "ok",

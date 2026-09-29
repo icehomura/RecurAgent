@@ -1,5 +1,5 @@
 {
-  "schema": "pi.nrun.budget_evaluation.v1",
+  "schema": "ra.nrun.budget_evaluation.v1",
   "generated_at": "2026-08-24T09:24:11.671553+00:00",
   "contract_path": "docs/contracts/nrun-evidence-protocol-contract.json",
   "min_repetitions_enforced": 10,

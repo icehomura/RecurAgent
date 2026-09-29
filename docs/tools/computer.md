@@ -177,7 +177,7 @@ latest 256 attempts, outcome and bounded metadata, not typed text, clipboard
 contents, raw titles or image bytes. Helper stderr is discarded at spawn to
 avoid private-text diagnostics and persistent-service pipe backpressure.
 
-`with_mock(true)` or `PI_COMPUTER_MOCK=1` explicitly selects deterministic test
+`with_mock(true)` or `RECUR_AGENT_COMPUTER_MOCK=1` explicitly selects deterministic test
 fixtures, marked `mock: true`. `with_mock(false)` overrides the environment.
 Fixture data is never used as a live failure fallback.
 
@@ -188,7 +188,7 @@ executed** in the implementation environment: neither a Rust compiler nor DSR
 was installed. The required entry point remains:
 
 ```sh
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 ```
 
 The attempted invocation failed with `dsr: command not found` (exit 127).

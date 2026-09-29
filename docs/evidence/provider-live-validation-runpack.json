@@ -6,57 +6,57 @@
     {
       "id": "anthropic",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "openai",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "openai_responses",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "gemini",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "cohere",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "azure",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "bedrock",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "vertex",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "copilot",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "gitlab",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     },
     {
       "id": "cursor",
       "status": "skipped_no_binary",
-      "reason": "target/release/pi not built"
+      "reason": "target/release/ra not built"
     }
   ]
 }

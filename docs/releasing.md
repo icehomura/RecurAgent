@@ -1,9 +1,9 @@
-# Releasing pi_agent_rust
+# Releasing recur_agent
 
 This repo ships:
-- A crates.io package: `pi_agent_rust` (Cargo `[package].name`)
-- A library crate: `pi` (Cargo `[lib].name`)
-- A binary: `pi` (Cargo `[[bin]].name`)
+- A crates.io package: `recur_agent` (Cargo `[package].name`)
+- A library crate: `ra` (Cargo `[lib].name`)
+- A binary: `ra` (Cargo `[[bin]].name`)
 
 ## Binding release authority
 
@@ -15,10 +15,10 @@ and must never be enabled, dispatched, rerun, cancelled, or cited as evidence.
 Any later description of an automated `.github/workflows/*` lane is retained
 only as historical design context. It is non-authoritative and must not be
 executed. The canonical operational path is the DSR lane in this document,
-using the registered `pi_agent_rust` recipe.
+using the registered `recur_agent` recipe.
 
 Repository enforcement: GitHub Actions was switched off at the repository
-level on 2026-09-01 (`gh api repos/Dicklesworthstone/pi_agent_rust/actions/permissions`
+level on 2026-09-01 (`gh api repos/Dicklesworthstone/recur_agent/actions/permissions`
 now reports `"enabled": false`), so the retained workflow files cannot run on
 push, tag, schedule, or dispatch even though their `on:` triggers are still
 written. Do not re-enable it.
@@ -26,7 +26,7 @@ written. Do not re-enable it.
 ### Registering the quality recipe on a new host
 
 `dsr quality` reads checks only from the registry file, so a host without the
-`pi_agent_rust` entry cannot run the gate. The registry subset of the recipe
+`recur_agent` entry cannot run the gate. The registry subset of the recipe
 is checked in at `.dsr/repos.yaml` (six checks: fmt, `cargo check`, Clippy,
 `cargo test`, installer regression, module reachability; Cargo runs through
 `rch` under `RCH_REQUIRE_REMOTE=1`, so a missing fleet fails the check instead
@@ -35,36 +35,36 @@ cold all-targets run). Either point DSR at it for a one-off run or merge it
 into the host registry once:
 
 ```bash
-DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool pi_agent_rust --dry-run   # expect 6 planned
-yq -i '.tools.pi_agent_rust = load(".dsr/repos.yaml").tools.pi_agent_rust' ~/.config/dsr/repos.yaml
-dsr quality --tool pi_agent_rust
+DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool recur_agent --dry-run   # expect 6 planned
+yq -i '.tools.recur_agent = load(".dsr/repos.yaml").tools.recur_agent' ~/.config/dsr/repos.yaml
+dsr quality --tool recur_agent
 ```
 
-Per-check logs land under `~/.local/state/dsr/quality-logs/pi_agent_rust/`.
+Per-check logs land under `~/.local/state/dsr/quality-logs/recur_agent/`.
 
 ### Registering the build authority on a new host
 
 `dsr quality` needs only the registry entry above. `dsr build` and
 `dsr release` read the cross-platform target inventory, per-host build
 routing, artifact naming, and the fail-closed release contract from a second
-file, `~/.config/dsr/repos.d/pi_agent_rust.yaml`, and from nowhere else. That
-file is checked in at `.dsr/repos.d/pi_agent_rust.yaml` (bd-ikl7j), so any
+file, `~/.config/dsr/repos.d/recur_agent.yaml`, and from nowhere else. That
+file is checked in at `.dsr/repos.d/recur_agent.yaml` (bd-ikl7j), so any
 host can validate and reproduce the cross-platform recipe:
 
 ```bash
 mkdir -p ~/.config/dsr/repos.d
-cp .dsr/repos.d/pi_agent_rust.yaml ~/.config/dsr/repos.d/pi_agent_rust.yaml
-dsr repos validate --repo pi_agent_rust
-dsr build pi_agent_rust --dry-run          # expect the five-target plan
+cp .dsr/repos.d/recur_agent.yaml ~/.config/dsr/repos.d/recur_agent.yaml
+dsr repos validate --repo recur_agent
+dsr build recur_agent --dry-run          # expect the five-target plan
 ```
 
 `dsr repos validate` compares the two files key by key and fails when they
-disagree, reporting `repos.yaml and repos.d/pi_agent_rust.yaml disagree on:
+disagree, reporting `repos.yaml and repos.d/recur_agent.yaml disagree on:
 <key> (repos.d wins for builds; align the two files)`. `local_path` is
 included in that comparison, so it is not a per-host escape hatch: both
-checked-in files ship `/data/projects/pi_agent_rust`, and a host whose
+checked-in files ship `/data/projects/recur_agent`, and a host whose
 checkout lives elsewhere must re-point **both** of them in one edit
-(`local_path` in the authority file, `tools.pi_agent_rust.local_path` in the
+(`local_path` in the authority file, `tools.recur_agent.local_path` in the
 registry). `host_paths` is the separate per-host map naming each SSH build
 host's checkout and does not need editing.
 
@@ -81,9 +81,9 @@ from a clean clone checked out at the tag rather than from the working tree.
 
 The Cargo source package also retains the internal `pi_legacy_capture`
 conformance utility because integration tests execute it through
-`CARGO_BIN_EXE_pi_legacy_capture`. It is gated by the non-default
+`CARGO_BIN_EXE_ra_legacy_capture`. It is gated by the non-default
 `internal-legacy-capture` feature and is not a supported release artifact.
-Ordinary `cargo install pi_agent_rust --locked` therefore installs only `pi`;
+Ordinary `cargo install recur_agent --locked` therefore installs only `ra`;
 repository gates that cover the utility explicitly enable its internal feature.
 
 ## Versioning + tags (source of truth)
@@ -91,7 +91,7 @@ repository gates that cover the utility explicitly enable its internal feature.
 
 - **Tag format:** `vX.Y.Z` (SemVer). Example: `v0.2.0`.
 - **Pre-releases:** `vX.Y.Z-rc.1` (or similar). Example: `v0.2.0-rc.1`.
-- **Coupling:** `pi_agent_rust` (crate), `pi` (lib), and `pi` (binary) are all built from the same package, so they share one version number.
+- **Coupling:** `recur_agent` (crate), `ra` (lib), and `ra` (binary) are all built from the same package, so they share one version number.
 - **Sibling repos:** `asupersync`, `rich_rust`, `charmed_rust`, `frankensqlite` are versioned independently in their own repos.
 
 ### Historical GitHub Actions publishing design (retired)
@@ -137,7 +137,7 @@ versions, registry sources, and checksums rather than unrelated repository HEADs
 ### Historical GitHub Actions binary-release design (retired)
 `.github/workflows/release.yml` records a former tag-triggered design that would:
 - run the full frozen-SHA format/check/clippy/test and release-evidence gates
-- build `pi` for Linux/macOS/Windows and reject every native binary whose raw
+- build `ra` for Linux/macOS/Windows and reject every native binary whose raw
   executable size is greater than or equal to 26 MiB (27,262,976 bytes)
 - attach platform archives, per-target build manifests, and `SHA256SUMS` to a
   verified draft, preserving matching assets and adding only missing ones on a
@@ -199,24 +199,24 @@ compatibility as a product or release gate.
   Direct Cargo/RCH builds are not an operator fallback.
 
 ### Executable compatibility path
-- Canonical command is `pi`.
-- If TypeScript `pi` already exists, installer supports in-place migration and preserves old command as `legacy-pi`.
+- Canonical command is `ra`.
+- If TypeScript `ra` already exists, installer supports in-place migration and preserves old command as `legacy-pi`.
 - If migration is declined (`--keep-existing-pi`), Rust Pi installs as `pi-rust` so both CLIs remain callable.
 - Pinned rollout is supported by `install.sh --version vX.Y.Z`.
 
 ### Representative validation matrix
 Run this matrix before declaring distribution parity complete for a release candidate:
 
-1. Fresh Linux/macOS install (no prior `pi`):
+1. Fresh Linux/macOS install (no prior `ra`):
    - `curl .../install.sh | bash`
-   - `command -v pi && pi --version && pi --help >/dev/null`
-2. Migration host with existing TypeScript `pi`:
+   - `command -v pi && ra --version && ra --help >/dev/null`
+2. Migration host with existing TypeScript `ra`:
    - `install.sh --adopt` (or interactive adopt path)
-   - `pi --version` returns Rust build
-   - `legacy-pi --version` still resolves to preserved TypeScript CLI
+   - `ra --version` returns Rust build
+   - `legacy-ra --version` still resolves to preserved TypeScript CLI
 3. Keep-existing path:
    - `install.sh --keep-existing-pi`
-   - `pi` remains TypeScript CLI, `pi-rust --version` resolves to Rust build
+   - `ra` remains TypeScript CLI, `pi-rust --version` resolves to Rust build
 4. Pinned managed rollout:
    - `install.sh --version vX.Y.Z`
    - binary checksum validation passes against the selected asset's `.sha256` sidecar
@@ -226,7 +226,7 @@ Run this matrix before declaring distribution parity complete for a release cand
 Release operations must keep benchmark evidence and shipping artifacts distinct.
 
 - **Shipping/distribution artifacts**: built, packaged, and published by DSR
-  using the Cargo `release` profile (exact `pi` archives + same-name `.sha256`
+  using the Cargo `release` profile (exact `ra` archives + same-name `.sha256`
   sidecars).
 - **Benchmark evidence artifacts**: produced by PERF-3X lanes (`scripts/perf/orchestrate.sh`,
   `scripts/bench_extension_workloads.sh`) using benchmark profile labeling (typically `perf`)
@@ -245,9 +245,9 @@ Before `tests/perf/reports/budget_summary.json` can authorize claims, each
 release-facing size, idle-RSS, and Criterion cold-load value must prove what was
 measured:
 
-- The size record hashes the exact `pi` file and records its byte length plus
+- The size record hashes the exact `ra` file and records its byte length plus
   Cargo `release` provenance (`opt-level = "z"`, `strip = true`).
-- The idle-RSS record names the measured PID, `pi` process, allocator, idle
+- The idle-RSS record names the measured PID, `ra` process, allocator, idle
   boundary, executable hash, and RSS byte count. The test runner's own RSS is
   never an admissible substitute.
 - The cold-load record hashes the exact Criterion estimate and embeds the
@@ -269,16 +269,16 @@ python3 scripts/report_swarm_claim_readiness.py --self-test
 python3 scripts/report_swarm_claim_readiness.py --json
 ```
 
-The report emits schema `pi.swarm.claim_readiness_report.v1` and groups artifacts by `perf`, `full_suite`, `dropin`, `extension`, and `activity_ledger`. Its stable top-level machine fields are `overall_status`, `overall_ready`, `blocking_issue_count`, and `blocking_count`; `overall_ready` is the boolean alias for `overall_status == "ready"`, and `blocking_count` is an exact alias of `blocking_issue_count` for operator jq ergonomics. It distinguishes `release_facing` artifacts from `historical_snapshot` or `release_policy` records so old planning snapshots remain visible without automatically authorizing current claims.
+The report emits schema `ra.swarm.claim_readiness_report.v1` and groups artifacts by `perf`, `full_suite`, `dropin`, `extension`, and `activity_ledger`. Its stable top-level machine fields are `overall_status`, `overall_ready`, `blocking_issue_count`, and `blocking_count`; `overall_ready` is the boolean alias for `overall_status == "ready"`, and `blocking_count` is an exact alias of `blocking_issue_count` for operator jq ergonomics. It distinguishes `release_facing` artifacts from `historical_snapshot` or `release_policy` records so old planning snapshots remain visible without automatically authorizing current claims.
 
 ```bash
 python3 scripts/report_swarm_claim_readiness.py --json \
   | jq '{overall_status, overall_ready, blocking_issue_count, blocking_count}'
 ```
 
-The same JSON also includes `stale_claims` with schema `pi.swarm.stale_claim_report.v1`. This section is report-only: it never reopens, reassigns, or edits Beads. It classifies `in_progress` beads from `.beads/issues.jsonl` using `--stale-claim-after-hours` and can treat fresher coordination evidence from `--stale-claim-activity-jsonl` rows as active owner evidence within `--stale-claim-activity-fresh-hours`. Each item names the bead ID, assignee, last update, evidence source, classification, and exact recommended operator action so operators can message the owner or manually reopen only after confirmation.
+The same JSON also includes `stale_claims` with schema `ra.swarm.stale_claim_report.v1`. This section is report-only: it never reopens, reassigns, or edits Beads. It classifies `in_progress` beads from `.beads/issues.jsonl` using `--stale-claim-after-hours` and can treat fresher coordination evidence from `--stale-claim-activity-jsonl` rows as active owner evidence within `--stale-claim-activity-fresh-hours`. Each item names the bead ID, assignee, last update, evidence source, classification, and exact recommended operator action so operators can message the owner or manually reopen only after confirmation.
 
-The JSON also includes `hostcall_queue_telemetry` with schema `pi.swarm.hostcall_queue_readiness.v1`. It reads hostcall queue evidence from `tests/perf/reports/stress_triage.json` and `docs/evidence/ext-stress-reactor-queue-coverage.json`, then reports stable counters for `s3fifo_fallback_transitions`, `s3fifo_fairness_rejected_total`, `s3fifo_lane_overflow_rejected_total`, `queue_overflow_rejected_total`, `safe_reclamation_fallback_transitions`, `bravo_transitions_total`, and `bravo_rollbacks_total`. Missing S3-FIFO or BRAVO telemetry is listed in `missing_required_fields` rather than treated as zero; non-zero fallback, fairness-rejection, lane-overflow, or BRAVO rollback totals make the section `fallback_heavy` so operators know not to present the run as contention-clean without more triage.
+The JSON also includes `hostcall_queue_telemetry` with schema `ra.swarm.hostcall_queue_readiness.v1`. It reads hostcall queue evidence from `tests/perf/reports/stress_triage.json` and `docs/evidence/ext-stress-reactor-queue-coverage.json`, then reports stable counters for `s3fifo_fallback_transitions`, `s3fifo_fairness_rejected_total`, `s3fifo_lane_overflow_rejected_total`, `queue_overflow_rejected_total`, `safe_reclamation_fallback_transitions`, `bravo_transitions_total`, and `bravo_rollbacks_total`. Missing S3-FIFO or BRAVO telemetry is listed in `missing_required_fields` rather than treated as zero; non-zero fallback, fairness-rejection, lane-overflow, or BRAVO rollback totals make the section `fallback_heavy` so operators know not to present the run as contention-clean without more triage.
 
 Use gate mode only when a release path must fail on stale or unsupported evidence:
 
@@ -312,7 +312,7 @@ release objective.
    - minor: new user-facing features
 2) **Update version** in `Cargo.toml` (`[package].version`).
 3) **Run the configured DSR quality gate**:
-   - `dsr quality --tool pi_agent_rust`
+   - `dsr quality --tool recur_agent`
 3b) **Check the Windows target, before the release commit exists** (bd-o6hte):
    - `scripts/check_windows_target.sh <commit>` — the commit must already be
      pushed; the Windows host fetches it.
@@ -345,10 +345,10 @@ committed. DSR is responsible for quality, native builds, packaging, signing,
 publication, and verification:
 
 ```bash
-dsr quality --tool pi_agent_rust
-dsr build pi_agent_rust --version X.Y.Z
-dsr release pi_agent_rust X.Y.Z --verify-tag --no-dispatch
-dsr release verify pi_agent_rust X.Y.Z
+dsr quality --tool recur_agent
+dsr build recur_agent --version X.Y.Z
+dsr release recur_agent X.Y.Z --verify-tag --no-dispatch
+dsr release verify recur_agent X.Y.Z
 ```
 
 `--no-dispatch` is mandatory: this repository never delegates any follow-up to
@@ -357,7 +357,7 @@ a completed release.
 
 Before the first real release, `dsr status` must report a configured signing
 key and every required native host healthy, and
-`dsr repos validate --repo pi_agent_rust` must pass. As of 2026-08-26, signing
+`dsr repos validate --repo recur_agent` must pass. As of 2026-08-26, signing
 is unconfigured, the required Windows host is unhealthy, and the registered
 recipe does not verify the live immutable-tag ruleset, so release is blocked.
 GitHub asset publication through DSR does not authorize a stable crates.io
@@ -503,9 +503,9 @@ release_crates_io_token="${CARGO_REGISTRY_TOKEN:-${CARGO_REGISTRIES_CRATES_IO_TO
 (( ${#release_crates_io_token} <= 4096 ))
 case "$release_crates_io_token" in *$'\n'*|*$'\r'*) exit 1 ;; esac
 builtin export -n release_crates_io_token
-[[ -z "${PI_CRATES_IO_RELEASE_TOKEN:-}" ]]
+[[ -z "${RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}" ]]
 builtin unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN \
-  PI_CRATES_IO_RELEASE_TOKEN
+  RECUR_AGENT_CRATES_IO_RELEASE_TOKEN
 release_cargo_entrypoint="$(builtin type -P -- cargo)"
 release_rustc_entrypoint="$(builtin type -P -- rustc)"
 release_rustup_entrypoint="$(builtin type -P -- rustup)"
@@ -541,7 +541,7 @@ export WINDOWS_AMD64_SMOKE_HOST="wlap"
 export RELEASE_TAG="v${RELEASE_VERSION}"
 test "$RELEASE_TAG" != "vX.Y.Z"
 release_source_checkout="$(builtin pwd -P)"
-test "$release_source_checkout" = /data/projects/pi_agent_rust
+test "$release_source_checkout" = /data/projects/recur_agent
 test -z "$(git status --porcelain=v2 --untracked-files=all)"
 source_commit="$(git rev-parse 'HEAD^{commit}')"
 case "$(git show -s --format=%s "$source_commit")" in
@@ -550,11 +550,11 @@ case "$(git show -s --format=%s "$source_commit")" in
 esac
 release_clone_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
 [[ "$release_clone_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]
-export MANUAL_RELEASE_ROOT="/data/tmp/pi_agent_rust-v${RELEASE_VERSION}-release-$release_clone_id"
+export MANUAL_RELEASE_ROOT="/data/tmp/recur_agent-v${RELEASE_VERSION}-release-$release_clone_id"
 export MANUAL_RELEASE_STATE_DIR="$MANUAL_RELEASE_ROOT/state"
 release_checkout="$MANUAL_RELEASE_ROOT/checkout"
 case "$MANUAL_RELEASE_ROOT" in
-  /data/tmp/pi_agent_rust-v"$RELEASE_VERSION"-release-"$release_clone_id") ;;
+  /data/tmp/recur_agent-v"$RELEASE_VERSION"-release-"$release_clone_id") ;;
   *) exit 1 ;;
 esac
 case "$MANUAL_RELEASE_ROOT" in
@@ -569,7 +569,7 @@ git clone --no-local --no-hardlinks --single-branch --branch main \
   "$release_source_checkout" "$release_checkout"
 test "$(git -C "$release_checkout" rev-parse 'HEAD^{commit}')" = "$source_commit"
 test -z "$(git -C "$release_checkout" status --porcelain=v2 --untracked-files=all)"
-release_remote_url="https://github.com/Dicklesworthstone/pi_agent_rust.git"
+release_remote_url="https://github.com/Dicklesworthstone/recur_agent.git"
 git -C "$release_checkout" remote set-url origin "$release_remote_url"
 git -C "$release_checkout" remote set-url --push origin \
   no-push://pi-agent-rust-v0.2.0-release-guard
@@ -608,7 +608,7 @@ test "$LINUX_ARM64_QEMU_SYSROOT" != "/operator/supplied/aarch64/sysroot"
 case "$LINUX_ARM64_QEMU_SYSROOT" in *'/../'*|*'/..'|*'//'*) exit 1 ;; esac
 test "$DARWIN_SMOKE_HOST" = mmini
 test "$WINDOWS_AMD64_SMOKE_HOST" = wlap
-test -z "${PI_CRATES_IO_RELEASE_TOKEN:-}"
+test -z "${RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}"
 test ! -e "$MANUAL_RELEASE_STATE_DIR"
 mkdir -m 700 "$MANUAL_RELEASE_STATE_DIR"
 release_rust_tool_receipt="$MANUAL_RELEASE_STATE_DIR/operator-rust-tools.txt"
@@ -825,7 +825,7 @@ release_build_env() {
 release_build_env cargo --version >/dev/null
 RELEASE_REPOSITORY="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
 export RELEASE_REPOSITORY
-test "$RELEASE_REPOSITORY" = "Dicklesworthstone/pi_agent_rust"
+test "$RELEASE_REPOSITORY" = "Dicklesworthstone/recur_agent"
 test -z "$(git status --porcelain=v2 --untracked-files=all)"
 
 # This lane intentionally has no GitHub Actions dependency. Every build,
@@ -986,7 +986,7 @@ proof is not proof of an empty bypass list.
      cargo test --locked --test extensions_policy_negative \
      negative_conformance_report -- --exact --nocapture
    release_build_env CI_RUN_ID="$CI_RUN_ID" CI_CORRELATION_ID="$CI_CORRELATION_ID" \
-     PI_GENERATE_CONFORMANCE_REPORT=1 \
+     RECUR_AGENT_GENERATE_CONFORMANCE_REPORT=1 \
      cargo test --locked --test conformance_report \
      generate_conformance_report -- --exact --nocapture
    release_build_env RELEASE_TAG="$RELEASE_TAG" python3 - <<'PY'
@@ -1010,7 +1010,7 @@ proof is not proof of an empty bypass list.
    if path.is_symlink() or not path.is_file():
        raise SystemExit("drop-in verdict must remain a regular tracked file")
    payload = {
-       "schema": "pi.dropin.certification_verdict.v1",
+       "schema": "ra.dropin.certification_verdict.v1",
        "git_commit": commit,
        "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0)
            .isoformat().replace("+00:00", "Z"),
@@ -1072,7 +1072,7 @@ proof is not proof of an empty bypass list.
        ./scripts/release_gate.sh --no-rch --report > "$release_gate_report"
    )
    jq -e '
-     .schema == "pi.release_gate.v1" and .verdict == "pass" and
+     .schema == "ra.release_gate.v1" and .verdict == "pass" and
      .thresholds.require_performance_claim_ready == 0 and
      .counts.fail == 0 and .counts.total == (.checks | length) and
      any(.checks[];
@@ -1129,17 +1129,17 @@ proof is not proof of an empty bypass list.
    set -euo pipefail
    verify_operator_tools
    release_build_env cargo package --locked
-   crate_path="${CARGO_TARGET_DIR:-target}/package/pi_agent_rust-${RELEASE_VERSION}.crate"
+   crate_path="${CARGO_TARGET_DIR:-target}/package/recur_agent-${RELEASE_VERSION}.crate"
    test -f "$crate_path" && test ! -L "$crate_path"
    source_commit="$(git rev-parse 'HEAD^{commit}')"
    test "$(tar -xOf "$crate_path" \
-     "pi_agent_rust-${RELEASE_VERSION}/.cargo_vcs_info.json" \
+     "recur_agent-${RELEASE_VERSION}/.cargo_vcs_info.json" \
      | jq -er --arg commit "$source_commit" \
        'select(.git.sha1 == $commit and (.git.dirty // false) == false) | .git.sha1')" \
      = "$source_commit"
    package_sha256="$(sha256sum "$crate_path" | awk '{print $1}')"
    package_size="$(wc -c < "$crate_path" | tr -d '[:space:]')"
-   proof_file="$MANUAL_RELEASE_STATE_DIR/pi_agent_rust-${RELEASE_VERSION}-crate.txt"
+   proof_file="$MANUAL_RELEASE_STATE_DIR/recur_agent-${RELEASE_VERSION}-crate.txt"
    test ! -e "$proof_file"
    umask 077
    (set -C; printf 'source_commit=%s\npackage_sha256=%s\npackage_size=%s\n' \
@@ -1148,7 +1148,7 @@ proof is not proof of an empty bypass list.
    release_build_env cargo publish --dry-run --locked
    test -f "$crate_path" && test ! -L "$crate_path"
    test "$(tar -xOf "$crate_path" \
-     "pi_agent_rust-${RELEASE_VERSION}/.cargo_vcs_info.json" \
+     "recur_agent-${RELEASE_VERSION}/.cargo_vcs_info.json" \
      | jq -er --arg commit "$source_commit" \
        'select(.git.sha1 == $commit and (.git.dirty // false) == false) | .git.sha1')" \
      = "$source_commit"
@@ -1212,7 +1212,7 @@ proof is not proof of an empty bypass list.
    # project path. Prove that a child-only bubblewrap mount presents this exact
    # private clone there without modifying, moving, or fast-forwarding the
    # shared checkout outside the namespace.
-   test "$release_source_checkout" = /data/projects/pi_agent_rust
+   test "$release_source_checkout" = /data/projects/recur_agent
    test "$release_checkout" != "$release_source_checkout"
    bwrap_source_receipt="$MANUAL_RELEASE_STATE_DIR/bwrap-source-preflight.txt"
    test ! -e "$bwrap_source_receipt"
@@ -1220,13 +1220,13 @@ proof is not proof of an empty bypass list.
      set -C
      "$release_bwrap_path" \
        --die-with-parent --new-session --bind / / --dev-bind /dev /dev \
-       --bind "$release_checkout" /data/projects/pi_agent_rust \
-       --chdir /data/projects/pi_agent_rust \
+       --bind "$release_checkout" /data/projects/recur_agent \
+       --chdir /data/projects/recur_agent \
        "$release_bash_path" --noprofile --norc -c '
          set -euo pipefail
          git_path="$1"
          expected_commit="$2"
-         test "$(builtin pwd -P)" = /data/projects/pi_agent_rust
+         test "$(builtin pwd -P)" = /data/projects/recur_agent
          test "$("$git_path" rev-parse "HEAD^{commit}")" = "$expected_commit"
          test "$("$git_path" rev-parse "main^{commit}")" = "$expected_commit"
          test -z "$("$git_path" status --porcelain=v2 --untracked-files=all)"
@@ -1423,7 +1423,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    }
 
    $Payload = [ordered]@{
-       schema = 'pi.release.windows_msvc_link_preflight.v1'
+       schema = 'ra.release.windows_msvc_link_preflight.v1'
        status = 'success'
        host = $env:COMPUTERNAME
        target = 'x86_64-pc-windows-msvc'
@@ -1480,7 +1480,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    test "$windows_preflight_status" -eq 0
 
    jq -e '
-     .schema == "pi.release.windows_msvc_link_preflight.v1" and
+     .schema == "ra.release.windows_msvc_link_preflight.v1" and
      .status == "success" and
      .target == "x86_64-pc-windows-msvc" and
      .compile_exit == 0 and .run_exit == 0 and
@@ -1525,8 +1525,8 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      "$release_bwrap_path" \
        --die-with-parent --new-session --bind / / --dev-bind /dev /dev \
        --ro-bind "$PRESERVED_DSR_LANE" "$PRESERVED_DSR_LANE" \
-       --bind "$release_checkout" /data/projects/pi_agent_rust \
-       --chdir /data/projects/pi_agent_rust \
+       --bind "$release_checkout" /data/projects/recur_agent \
+       --chdir /data/projects/recur_agent \
        "$release_bash_path" --noprofile --norc -c '
          set -euo pipefail
          sha256sum_path="$1"
@@ -1540,7 +1540,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        --run-id "$DSR_BUILD_RUN_ID" \
        --state-dir "$PRESERVED_DSR_STATE_DIR" \
        --output-dir "$RAW_RELEASE_DIR" -- \
-       build pi --version 0.2.0 \
+       build ra --version 0.2.0 \
        --targets linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64 \
        --only-native --jobs 1 > "$build_receipt"
    )
@@ -1659,8 +1659,8 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    output bytes are deterministic.
 
    The public per-target schema is deliberately
-   `pi.release.dsr_build_manifest.v1`, not the automated lane's
-   `pi.release.build_manifest.v1`: the latter requires compiler identity that
+   `ra.release.dsr_build_manifest.v1`, not the automated lane's
+   `ra.release.build_manifest.v1`: the latter requires compiler identity that
    this preserved build receipt does not record. Each manual manifest instead
    binds its raw artifact and opaque digest commitments for the build
    environment and aggregate DSR manifest to exact source blobs, locked
@@ -1922,27 +1922,27 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        "linux/amd64": {
            "raw": "pi_linux_amd64", "asset": "pi-linux-amd64",
            "triple": "x86_64-unknown-linux-gnu", "runner_os": "Linux",
-           "format": "tar.xz", "binary": "pi",
+           "format": "tar.xz", "binary": "ra",
        },
        "linux/arm64": {
            "raw": "pi_linux_arm64", "asset": "pi-linux-arm64",
            "triple": "aarch64-unknown-linux-gnu", "runner_os": "Linux",
-           "format": "tar.xz", "binary": "pi",
+           "format": "tar.xz", "binary": "ra",
        },
        "darwin/amd64": {
            "raw": "pi_darwin_amd64", "asset": "pi-darwin-amd64",
            "triple": "x86_64-apple-darwin", "runner_os": "macOS",
-           "format": "tar.xz", "binary": "pi",
+           "format": "tar.xz", "binary": "ra",
        },
        "darwin/arm64": {
            "raw": "pi_darwin_arm64", "asset": "pi-darwin-arm64",
            "triple": "aarch64-apple-darwin", "runner_os": "macOS",
-           "format": "tar.xz", "binary": "pi",
+           "format": "tar.xz", "binary": "ra",
        },
        "windows/amd64": {
            "raw": "pi_windows_amd64.exe", "asset": "pi-windows-amd64",
            "triple": "x86_64-pc-windows-msvc", "runner_os": "Windows",
-           "format": "zip", "binary": "pi.exe",
+           "format": "zip", "binary": "ra.exe",
        },
    }
    expected_raw = {item["raw"] for item in specs.values()} | {
@@ -2083,14 +2083,14 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
            environment, sort_keys=True, separators=(",", ":"), ensure_ascii=False
        ).encode("utf-8")
        manifest = {
-           "schema": "pi.release.dsr_build_manifest.v1",
+           "schema": "ra.release.dsr_build_manifest.v1",
            "tag": tag,
            "version": version,
            "target": spec["triple"],
            "dsr_target": dsr_target,
            "asset": spec["asset"],
            "runner_os": spec["runner_os"],
-           "pi_agent_rust": commit,
+           "recur_agent": commit,
            "source_blobs": source_blobs,
            "selected_locked_registry_packages": selected,
            "raw_build": {
@@ -2155,7 +2155,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
           for entry in public_entries):
        fail("public release inventory contains an invalid entry")
    receipt = {
-       "schema": "pi.release.deterministic_packaging_receipt.v1",
+       "schema": "ra.release.deterministic_packaging_receipt.v1",
        "tag": tag,
        "source_commit": commit,
        "source_date_epoch": source_epoch,
@@ -2213,9 +2213,9 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
          --arg wrapper "$preserved_wrapper_sha256" \
          --arg audit "$preserved_audit_sha256" \
          --arg preservation_manifest "$preservation_manifest_sha256" '
-         .schema == "pi.release.dsr_build_manifest.v1" and
+         .schema == "ra.release.dsr_build_manifest.v1" and
          .tag == $tag and .version == $version and
-         .pi_agent_rust == $commit and .raw_build.run_id == $run and
+         .recur_agent == $commit and .raw_build.run_id == $run and
          .raw_build.operator_retained_aggregate_manifest.sha256 == $aggregate and
          .raw_build.operator_retained_aggregate_manifest.schema_version == "1.0.0" and
          .raw_build.build_environment.dsr_method_label == "native" and
@@ -2243,7 +2243,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      --arg wrapper "$preserved_wrapper_sha256" \
      --arg audit "$preserved_audit_sha256" \
      --arg preservation_manifest "$preservation_manifest_sha256" '
-     .schema == "pi.release.deterministic_packaging_receipt.v1" and
+     .schema == "ra.release.deterministic_packaging_receipt.v1" and
      .tag == $tag and .source_commit == $commit and
      .raw_manifest_sha256 == $aggregate and
      .preservation_lane == {
@@ -2374,7 +2374,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    test -z "$(git status --porcelain=v2 --untracked-files=all)"
 
    verdict_source="$(jq -er '
-     select(.schema == "pi.dropin.certification_verdict.v1" and
+     select(.schema == "ra.dropin.certification_verdict.v1" and
             .overall_verdict == "NOT_CERTIFIED" and
             (.git_commit | test("^[0-9a-f]{40}$")) and
             (.blocking_reasons | type) == "array" and
@@ -2416,13 +2416,13 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      printf '%s\n' \
        "# ${RELEASE_TAG}" \
        "" \
-       "Manual DSR release of pi_agent_rust ${RELEASE_VERSION}." \
+       "Manual DSR release of recur_agent ${RELEASE_VERSION}." \
        "" \
        "### Drop-in certification status" \
        "" \
        "**NOT_CERTIFIED** — This release is not certified as a strict drop-in replacement and must not be described as one." \
        "" \
-       "Evidence: https://github.com/Dicklesworthstone/pi_agent_rust/blob/${RELEASE_TAG}/docs/evidence/dropin-certification-verdict.json" \
+       "Evidence: https://github.com/Dicklesworthstone/recur_agent/blob/${RELEASE_TAG}/docs/evidence/dropin-certification-verdict.json" \
        "" \
        "### Changelog" \
        ""
@@ -2535,7 +2535,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
          --argjson id "$release_id" \
          --arg tag "$RELEASE_TAG" \
          --arg target_commitish "$created_target_commitish" \
-         '{schema: "pi.release.github_identity.v1", id: $id,
+         '{schema: "ra.release.github_identity.v1", id: $id,
            tag: $tag, target_commitish: $target_commitish}' \
          > "$release_identity_receipt")
      fi
@@ -2544,7 +2544,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        --argjson id "$release_id" \
        --arg tag "$RELEASE_TAG" \
        --arg target_commitish "$created_target_commitish" '
-       .schema == "pi.release.github_identity.v1" and
+       .schema == "ra.release.github_identity.v1" and
        .id == $id and .tag == $tag and
        .target_commitish == $target_commitish
      ' "$release_identity_receipt" >/dev/null
@@ -2722,15 +2722,15 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      verify_operator_tools
      test -f "$release_identity_receipt" && test ! -L "$release_identity_receipt"
      expected_release_id="$(jq -er '
-       select(.schema == "pi.release.github_identity.v1") |
+       select(.schema == "ra.release.github_identity.v1") |
        .id | select(type == "number" and . > 0)
      ' "$release_identity_receipt")"
      recorded_target_commitish="$(jq -er '
-       select(.schema == "pi.release.github_identity.v1") |
+       select(.schema == "ra.release.github_identity.v1") |
        .target_commitish | select(type == "string" and length > 0)
      ' "$release_identity_receipt")"
      jq -e --arg tag "$RELEASE_TAG" '
-       .schema == "pi.release.github_identity.v1" and .tag == $tag
+       .schema == "ra.release.github_identity.v1" and .tag == $tag
      ' "$release_identity_receipt" >/dev/null
      test ! -e "$inventory" && test ! -e "$metadata"
      test ! -e "$download_dir"
@@ -2820,7 +2820,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      verify_operator_tools
      test -f "$release_identity_receipt" && test ! -L "$release_identity_receipt"
      release_id="$(jq -er '
-       select(.schema == "pi.release.github_identity.v1") |
+       select(.schema == "ra.release.github_identity.v1") |
        .id | select(type == "number" and . > 0)
      ' "$release_identity_receipt")"
      current_metadata="$attempt_dir/github-release-before-publication.json"
@@ -3087,7 +3087,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    """
    smoke = f"""$ErrorActionPreference = 'Stop'
    $RemoteDir = Join-Path $HOME '{remote_dir}'
-   $Binary = Join-Path $RemoteDir 'pi.exe'
+   $Binary = Join-Path $RemoteDir 'ra.exe'
    if (-not (Test-Path -LiteralPath $Binary -PathType Leaf)) {{ throw 'binary missing' }}
    $Item = Get-Item -LiteralPath $Binary -Force
    if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $Item.Length -le 0) {{
@@ -3098,10 +3098,10 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    $ActualSha = (Get-FileHash -LiteralPath $Binary -Algorithm SHA256).Hash.ToLowerInvariant()
    if ($ActualSha -ne '{expected_sha}') {{ throw 'Windows smoke digest mismatch' }}
    $VersionOutput = ((& $Binary --version 2>&1) -join "`n").Trim()
-   if ($LASTEXITCODE -ne 0) {{ throw 'pi --version failed' }}
-   if (-not $VersionOutput.StartsWith('pi {version} (')) {{ throw "unexpected version: $VersionOutput" }}
+   if ($LASTEXITCODE -ne 0) {{ throw 'ra --version failed' }}
+   if (-not $VersionOutput.StartsWith('ra {version} (')) {{ throw "unexpected version: $VersionOutput" }}
    & $Binary --help *> $null
-   if ($LASTEXITCODE -ne 0) {{ throw 'pi --help failed' }}
+   if ($LASTEXITCODE -ne 0) {{ throw 'ra --help failed' }}
    Write-Output 'status=success'
    Write-Output 'label=windows-amd64'
    Write-Output "os=$([System.Runtime.InteropServices.RuntimeInformation]::OSDescription)"
@@ -3124,7 +3124,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    test "$(tr -d '\r' < "$windows_setup_receipt" |
      grep -Fxc 'status=ready')" = 1
    scp -- "$windows_raw" \
-     "${WINDOWS_AMD64_SMOKE_HOST}:${windows_remote_dir}/pi.exe"
+     "${WINDOWS_AMD64_SMOKE_HOST}:${windows_remote_dir}/ra.exe"
    (set -C; ssh "$WINDOWS_AMD64_SMOKE_HOST" \
      powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
        -Command - < "$windows_smoke_ps" > "$windows_receipt" 2>&1)
@@ -3394,7 +3394,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    official = {"index-url": "sparse+https://index.crates.io/", "name": "crates-io"}
    publish = {
        "v": 1, "kind": "get", "operation": "publish",
-       "name": "pi_agent_rust", "vers": os.environ["PACKAGE_VERSION"],
+       "name": "recur_agent", "vers": os.environ["PACKAGE_VERSION"],
        "cksum": os.environ["CRATE_SHA256"], "registry": official, "args": [],
    }
 
@@ -3404,11 +3404,11 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
            raise SystemExit(f"self-test path already exists: {receipt}")
        env = {
            **os.environ,
-           "PI_CRATES_IO_RELEASE_TOKEN": "self-test-token",
-           "PI_EXPECTED_CRATE_NAME": "pi_agent_rust",
-           "PI_EXPECTED_CRATE_VERSION": os.environ["PACKAGE_VERSION"],
-           "PI_EXPECTED_CRATE_SHA256": os.environ["CRATE_SHA256"],
-           "PI_CREDENTIAL_RECEIPT": str(receipt),
+           "RECUR_AGENT_CRATES_IO_RELEASE_TOKEN": "self-test-token",
+           "RECUR_AGENT_EXPECTED_CRATE_NAME": "recur_agent",
+           "RECUR_AGENT_EXPECTED_CRATE_VERSION": os.environ["PACKAGE_VERSION"],
+           "RECUR_AGENT_EXPECTED_CRATE_SHA256": os.environ["CRATE_SHA256"],
+           "RECUR_AGENT_CREDENTIAL_RECEIPT": str(receipt),
        }
        process = subprocess.run(
            [provider, "--cargo-plugin"],
@@ -3431,8 +3431,8 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
    } or not receipt.is_file():
        raise SystemExit("exact publish allow self-test failed")
    expected_receipt = {
-       "schema": "pi.release.cargo_credential_receipt.v1",
-       "name": "pi_agent_rust", "version": os.environ["PACKAGE_VERSION"],
+       "schema": "ra.release.cargo_credential_receipt.v1",
+       "name": "recur_agent", "version": os.environ["PACKAGE_VERSION"],
        "crate_sha256": os.environ["CRATE_SHA256"],
        "registry_name": "crates-io", "registry_index_url": official["index-url"],
    }
@@ -3518,7 +3518,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      publisher_env cargo publish --manifest-path "$manifest_abs" \
        --dry-run --locked --registry crates-io
    )
-   publisher_crate="$publisher_target_dir/package/pi_agent_rust-${RELEASE_VERSION}.crate"
+   publisher_crate="$publisher_target_dir/package/recur_agent-${RELEASE_VERSION}.crate"
    test -f "$publisher_crate" && test ! -L "$publisher_crate"
    test "$(sha256sum "$publisher_crate" | awk '{print $1}')" = "$expected_crate_sha256"
    test "$(wc -c < "$publisher_crate" | tr -d '[:space:]')" = "$expected_crate_size"
@@ -3571,18 +3571,18 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      # cannot consume credential bytes, and then execs the no-verify upload.
      builtin printf '%s\n' "$controller_token" |
        publisher_env \
-         PI_EXPECTED_CRATE_NAME=pi_agent_rust \
-         PI_EXPECTED_CRATE_VERSION="$RELEASE_VERSION" \
-         PI_EXPECTED_CRATE_SHA256="$expected_crate_sha256" \
-         PI_CREDENTIAL_RECEIPT="$credential_receipt" \
+         RECUR_AGENT_EXPECTED_CRATE_NAME=recur_agent \
+         RECUR_AGENT_EXPECTED_CRATE_VERSION="$RELEASE_VERSION" \
+         RECUR_AGENT_EXPECTED_CRATE_SHA256="$expected_crate_sha256" \
+         RECUR_AGENT_CREDENTIAL_RECEIPT="$credential_receipt" \
          "$release_bash_path" --noprofile --norc -c '
            set -euo pipefail
-           [[ -z "${PI_CRATES_IO_RELEASE_TOKEN:-}" ]]
+           [[ -z "${RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}" ]]
            IFS= read -r scoped_release_token
            [[ -n "$scoped_release_token" ]]
            (( ${#scoped_release_token} <= 4096 ))
            case "$scoped_release_token" in *$'"'"'\n'"'"'*|*$'"'"'\r'"'"'*) exit 2 ;; esac
-           export PI_CRATES_IO_RELEASE_TOKEN="$scoped_release_token"
+           export RECUR_AGENT_CRATES_IO_RELEASE_TOKEN="$scoped_release_token"
            unset scoped_release_token
            exec 0</dev/null
            cd "$1"
@@ -3638,7 +3638,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        return result
 
    endpoint = (
-       "https://crates.io/api/v1/crates/pi_agent_rust/"
+       "https://crates.io/api/v1/crates/recur_agent/"
        + urllib.parse.quote(os.environ["PACKAGE_VERSION"], safe="")
    )
    max_attempts = int(os.environ["MAX_ATTEMPTS"])
@@ -3663,7 +3663,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
            payload = json.loads(body, object_pairs_hook=strict_object)
            version = payload.get("version") if isinstance(payload, dict) else None
            if not isinstance(version, dict) \
-               or version.get("crate") != "pi_agent_rust" \
+               or version.get("crate") != "recur_agent" \
                or version.get("num") != os.environ["PACKAGE_VERSION"] \
                or version.get("yanked") is not False \
                or version.get("checksum") != os.environ["CRATE_SHA256"] \
@@ -3676,10 +3676,10 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        if attempt != max_attempts:
            time.sleep(5)
    receipt = {
-       "schema": "pi.release.crates_reconciliation.v1",
+       "schema": "ra.release.crates_reconciliation.v1",
        "state": state,
        "attempts": attempt,
-       "name": "pi_agent_rust",
+       "name": "recur_agent",
        "version": os.environ["PACKAGE_VERSION"],
        "expected_checksum": os.environ["CRATE_SHA256"],
    }
@@ -3717,7 +3717,7 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        jq -e '.state == "absent"' "$before_state" >/dev/null
        actual_receipt="$attempt_dir/pi-crates-credential-receipt.json"
        test ! -e "$actual_receipt"
-       test -z "${PI_CRATES_IO_RELEASE_TOKEN:-}"
+       test -z "${RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}"
        test -n "${release_crates_io_token:-}"
        set +e
        (
@@ -3731,8 +3731,8 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
          jq -e \
            --arg version "$RELEASE_VERSION" \
            --arg sha "$expected_crate_sha256" '
-           .schema == "pi.release.cargo_credential_receipt.v1" and
-           .name == "pi_agent_rust" and .version == $version and
+           .schema == "ra.release.cargo_credential_receipt.v1" and
+           .name == "recur_agent" and .version == $version and
            .crate_sha256 == $sha and .registry_name == "crates-io" and
            (.registry_index_url == "sparse+https://index.crates.io/" or
             .registry_index_url == "https://github.com/rust-lang/crates.io-index")
@@ -3860,18 +3860,18 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
      ' "$prepublic_ruleset" >/dev/null
 
      registry_checksum="$(curl -fsS -A 'pi-agent-rust-manual-release' \
-       "https://crates.io/api/v1/crates/pi_agent_rust/${RELEASE_VERSION}" \
+       "https://crates.io/api/v1/crates/recur_agent/${RELEASE_VERSION}" \
        | jq -er --arg version "$RELEASE_VERSION" '
-         select(.version.crate == "pi_agent_rust" and
+         select(.version.crate == "recur_agent" and
                 .version.num == $version and .version.yanked == false and
                 (.version.checksum | test("^[0-9a-f]{64}$"))) |
          .version.checksum')"
      test "$registry_checksum" = "$expected_crate_sha256"
      reconcile_exact_github_publication "$attempt_id" "$attempt_dir"
      post_registry_checksum="$(curl -fsS -A 'pi-agent-rust-manual-release' \
-       "https://crates.io/api/v1/crates/pi_agent_rust/${RELEASE_VERSION}" \
+       "https://crates.io/api/v1/crates/recur_agent/${RELEASE_VERSION}" \
        | jq -er --arg version "$RELEASE_VERSION" '
-         select(.version.crate == "pi_agent_rust" and
+         select(.version.crate == "recur_agent" and
                 .version.num == $version and .version.yanked == false and
                 (.version.checksum | test("^[0-9a-f]{64}$"))) |
          .version.checksum')"
@@ -3977,8 +3977,8 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
       HOME="$installer_root/home" \
       XDG_STATE_HOME="$installer_root/state" \
       TMPDIR="$installer_root/tmp" \
-      PI_INSTALLER_RETAIN_TEMP=1 \
-      PI_INSTALLER_LOCK_DIR="$installer_lock" \
+      RECUR_AGENT_INSTALLER_RETAIN_TEMP=1 \
+      RECUR_AGENT_INSTALLER_LOCK_DIR="$installer_lock" \
       AGENT_SKILLS_ENABLED=0 \
       bash "$public_installer" \
         --yes --version "$RELEASE_TAG" --dest "$installer_root/bin" \
@@ -4018,11 +4018,11 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
     grep -Fx 'post_public_installer_status=success' "$installer_receipt" >/dev/null
 
     curl -fsS -A 'pi-agent-rust-manual-release' \
-      "https://crates.io/api/v1/crates/pi_agent_rust/${RELEASE_VERSION}" \
+      "https://crates.io/api/v1/crates/recur_agent/${RELEASE_VERSION}" \
       | jq -e \
         --arg version "$RELEASE_VERSION" \
         --arg checksum "$expected_crate_sha256" '
-        .version.crate == "pi_agent_rust" and
+        .version.crate == "recur_agent" and
         .version.num == $version and .version.yanked == false and
         .version.checksum == $checksum
       ' >/dev/null
@@ -4051,13 +4051,13 @@ For branches opened before this gate was introduced:
 2. Replace the PR body with `.github/pull_request_template.md`.
 3. Backfill links to current evidence artifacts.
 4. Include exact rerun commands used to validate fixes for the most recent failing path.
-5. Re-run `dsr quality --tool pi_agent_rust` and merge only after the DoD evidence guard passes.
+5. Re-run `dsr quality --tool recur_agent` and merge only after the DoD evidence guard passes.
 
 ## Pre-release checklist
 - The single DSR publication lane has complete quality, native-build,
   packaging, signing, publication, and verification receipts.
 - No workflow was queried, dispatched, rerun, canceled, or used as evidence.
-- `dsr quality --tool pi_agent_rust` is green for the frozen source commit.
+- `dsr quality --tool recur_agent` is green for the frozen source commit.
 - `python3 scripts/check_readme_evidence_freshness.py` exits 0 for the frozen
   source commit. It is not part of the code quality recipe; it validates every
   README evidence citation, including the full v2 contract of
@@ -4075,24 +4075,24 @@ For branches opened before this gate was introduced:
 ### Background & Existing Host State
 
 In developer and owner environments:
-- The TypeScript Pi CLI (`~/.bun/bin/pi` or `/opt/homebrew/bin/pi`) may historically occupy the canonical `pi` command name.
+- The TypeScript Pi CLI (`~/.bun/bin/pi` or `/opt/homebrew/bin/pi`) may historically occupy the canonical `ra` command name.
 - The Rust Pi port is installed and managed via `install.sh` with the compatibility alias `rpi` (`~/.local/bin/rpi`) or legacy `pi-rust` (`~/.local/bin/pi-rust`).
 
 ### Coexistence Policy
 
-When another tool already owns the `pi` command name:
+When another tool already owns the `ra` command name:
 1. **Non-Destructive Coexistence**:
    - The installer creates and manages the `rpi -> pi` symlink/launcher to allow instant side-by-side evaluation without displacing the TypeScript CLI.
-   - When `install.sh` detects an existing `pi` binary from another toolchain, it preserves the existing binary and informs the operator:
+   - When `install.sh` detects an existing `ra` binary from another toolchain, it preserves the existing binary and informs the operator:
      ```text
      Existing pi command detected; managed rpi alias installed for side-by-side execution.
      ```
 2. **Subagent & Child Process Delegation**:
-   - Pi Rust subagent delegation inspects `PI_SUBAGENT_PI_BINARY` or defaults to the current executable path, ensuring child processes invoke the matching Rust binary regardless of canonical PATH priority.
+   - Pi Rust subagent delegation inspects `RECUR_AGENT_SUBAGENT_PI_BINARY` or defaults to the current executable path, ensuring child processes invoke the matching Rust binary regardless of canonical PATH priority.
 
 ### Optional Canonical Migration Procedure
 
-When an operator intentionally chooses Pi Rust as their canonical `pi` command:
+When an operator intentionally chooses Pi Rust as their canonical `ra` command:
 1. **Preserve Legacy Binary**:
    ```bash
    # Move legacy TypeScript binary to an explicit compatibility name
@@ -4108,7 +4108,7 @@ When an operator intentionally chooses Pi Rust as their canonical `pi` command:
 3. **Verify Resolution**:
    ```bash
    which pi        # Resolves to $HOME/.local/bin/pi
-   pi --version    # Reports pi 0.3.x (Rust)
+   ra --version    # Reports pi 0.3.x (Rust)
    pi-legacy-ts --version # Confirms legacy fallback remains operational
    ```
 
@@ -4126,4 +4126,4 @@ Cargo build for the DSR artifact:
 - GitHub Release exists and includes expected artifacts for each platform.
 - Every downloaded archive matches its same-name `.sha256` sidecar.
 - Crates.io publish succeeded (if configured) and the version matches the tag.
-- Smoke test install paths (download binary + run `pi --version`).
+- Smoke test install paths (download binary + run `ra --version`).

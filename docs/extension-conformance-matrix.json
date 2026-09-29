@@ -81,7 +81,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -137,7 +137,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -198,7 +198,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -298,7 +298,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -340,7 +340,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -402,7 +402,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -514,7 +514,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }
@@ -648,7 +648,7 @@
       "behaviors": [
         {
           "description": "Extension load emits structured log",
-          "protocol_surface": "pi.ext.log.v1",
+          "protocol_surface": "ra.ext.log.v1",
           "pass_criteria": "Load event logged with correct extension_id and schema",
           "fail_criteria": "Missing load log or wrong extension_id"
         }

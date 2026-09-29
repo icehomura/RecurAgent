@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.gate_triage_matrix.v1",
+  "schema": "ra.qa.gate_triage_matrix.v1",
   "bead_id": "bd-3uqg.10.2.5",
   "generated_at_utc": "2026-02-14T02:45:00Z",
   "generated_by": "CyanRobin (Claude Opus 4.6)",

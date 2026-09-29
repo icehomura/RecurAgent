@@ -84,7 +84,7 @@
       "type": "object",
       "required": ["schema", "capabilities"],
       "properties": {
-        "schema": { "type": "string", "enum": ["pi.ext.cap.v1"] },
+        "schema": { "type": "string", "enum": ["ra.ext.cap.v1"] },
         "capabilities": {
           "type": "array",
           "items": { "$ref": "#/$defs/capability_requirement" }
@@ -220,7 +220,7 @@
       "type": "object",
       "required": ["schema", "ts", "level", "event", "message", "correlation"],
       "properties": {
-        "schema": { "type": "string", "enum": ["pi.ext.log.v1"] },
+        "schema": { "type": "string", "enum": ["ra.ext.log.v1"] },
         "ts": { "type": "string", "format": "date-time" },
         "level": { "type": "string", "enum": ["debug", "info", "warn", "error"] },
         "event": { "type": "string" },

@@ -30,10 +30,10 @@ Pi is an AI coding agent platform with these core components:
 
 | Component | TypeScript Package | Rust Equivalent |
 |-----------|-------------------|-----------------|
-| LLM Provider Abstraction | `@mariozechner/pi-ai` | `pi::provider` module |
-| Agent Runtime | `@mariozechner/pi-agent` | `pi::agent` module |
-| CLI Application | `@mariozechner/pi-coding-agent` | `pi` binary |
-| Terminal UI | `@mariozechner/pi-tui` | `pi::tui` module |
+| LLM Provider Abstraction | `@mariozechner/pi-ai` | `ra::provider` module |
+| Agent Runtime | `@mariozechner/pi-agent` | `ra::agent` module |
+| CLI Application | `@mariozechner/pi-coding-agent` | `ra` binary |
+| Terminal UI | `@mariozechner/pi-tui` | `ra::tui` module |
 
 ### Key Statistics (TypeScript)
 - **Core legacy tool set**: read, bash, edit, write, grep, find, ls
@@ -627,7 +627,7 @@ pub const GREP_MAX_LINE_LENGTH: usize = 500;
 ### 6.1 File Organization
 
 ```
-~/.pi/agent/sessions/
+~/.ra/agent/sessions/
 └── --{encoded-cwd}--/
     └── {timestamp}_{session-id}.jsonl
 ```
@@ -794,11 +794,11 @@ pub struct SessionInfoEntry {
 
 | Type | Path |
 |------|------|
-| Global settings | `~/.pi/agent/settings.json` |
-| Project settings | `./.pi/settings.json` |
-| Auth | `~/.pi/agent/auth.json` |
-| Models | `~/.pi/agent/models.json` |
-| Sessions | `~/.pi/agent/sessions/` |
+| Global settings | `~/.ra/agent/settings.json` |
+| Project settings | `./.ra/settings.json` |
+| Auth | `~/.ra/agent/auth.json` |
+| Models | `~/.ra/agent/models.json` |
+| Sessions | `~/.ra/agent/sessions/` |
 
 ### 7.2 Settings Structure
 
@@ -885,16 +885,16 @@ pub struct TerminalSettings {
 
 1. CLI flags (highest)
 2. Environment variables
-3. Project settings (`./.pi/settings.json`)
-4. Global settings (`~/.pi/agent/settings.json`)
+3. Project settings (`./.ra/settings.json`)
+4. Global settings (`~/.ra/agent/settings.json`)
 5. Built-in defaults (lowest)
 
 ### 7.4 Environment Variables
 
 ```rust
 // Config paths
-PI_CODING_AGENT_DIR     // Override ~/.pi/agent
-PI_PACKAGE_DIR          // Override package assets
+RECUR_AGENT_DIR     // Override ~/.ra/agent
+RECUR_AGENT_PACKAGE_DIR          // Override package assets
 
 // API Keys (per provider)
 ANTHROPIC_API_KEY
@@ -916,7 +916,7 @@ MISTRAL_API_KEY
 
 ### 8.1 Auth File
 
-- **Path:** `~/.pi/agent/auth.json`
+- **Path:** `~/.ra/agent/auth.json`
 - **Permissions:** `0o600` (read-write owner only)
 - **Locking:** File lock with 30-second stale timeout
 
@@ -1034,11 +1034,11 @@ The refreshed credentials overwrite the stored entry in `auth.json` and are pers
 
 | Command | Syntax | Description |
 |---------|--------|-------------|
-| `install` | `pi install <source> [-l\|--local]` | Install extension/skill/prompt/theme |
-| `remove` | `pi remove <source> [-l\|--local]` | Remove from settings |
-| `update` | `pi update [source]` | Update all or specific source |
-| `list` | `pi list` | List global + project packages |
-| `config` | `pi config` | Open TUI config selector |
+| `install` | `ra install <source> [-l\|--local]` | Install extension/skill/prompt/theme |
+| `remove` | `ra remove <source> [-l\|--local]` | Remove from settings |
+| `update` | `ra update [source]` | Update all or specific source |
+| `list` | `ra list` | List global + project packages |
+| `config` | `ra config` | Open TUI config selector |
 
 ### 9.2 Flags (Complete List)
 
@@ -1197,7 +1197,7 @@ pi [options] [@files...] [messages...]
 ### 11.1 Start RPC Mode
 
 ```bash
-pi --mode rpc [options]
+ra --mode rpc [options]
 ```
 
 Common options:
@@ -1699,7 +1699,7 @@ interface Logger {
 }
 ```
 
-Logs are emitted as structured JSON (schema: `pi.ext.log.v1`).
+Logs are emitted as structured JSON (schema: `ra.ext.log.v1`).
 
 ---
 
@@ -1729,7 +1729,7 @@ Resources are loaded from multiple locations in priority order:
 }
 ```
 
-If `pi` field is absent, defaults apply:
+If `ra` field is absent, defaults apply:
 - `extensions`: `[]`
 - `skills`: `["./skills/"]` if directory exists
 - `prompts`: `["./prompts/"]` if directory exists
@@ -1740,8 +1740,8 @@ If `pi` field is absent, defaults apply:
 Skills are markdown files with YAML frontmatter defining agent capabilities.
 
 **File locations:**
-- Global: `~/.pi/agent/skills/*.md`
-- Project: `./.pi/skills/*.md`
+- Global: `~/.ra/agent/skills/*.md`
+- Project: `./.ra/skills/*.md`
 - Package: `<package>/skills/*.md`
 
 **Frontmatter schema:**
@@ -1778,8 +1778,8 @@ allowed_tools:             # Optional, restrict to specific tools
 Prompt templates are markdown files for reusable user prompts.
 
 **File locations:**
-- Global: `~/.pi/agent/prompts/*.md`
-- Project: `./.pi/prompts/*.md`
+- Global: `~/.ra/agent/prompts/*.md`
+- Project: `./.ra/prompts/*.md`
 - Package: `<package>/prompts/*.md`
 
 **Command format:** `/template-name arg1 arg2 ...`
@@ -1799,8 +1799,8 @@ Prompt templates are markdown files for reusable user prompts.
 Themes are JSON files defining terminal color schemes.
 
 **File locations:**
-- Global: `~/.pi/agent/themes/*.json`
-- Project: `./.pi/themes/*.json`
+- Global: `~/.ra/agent/themes/*.json`
+- Project: `./.ra/themes/*.json`
 - Package: `<package>/themes/*.json`
 
 **Schema:**

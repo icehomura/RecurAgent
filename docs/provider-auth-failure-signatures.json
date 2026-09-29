@@ -1,5 +1,5 @@
 {
-  "schema": "pi.docs.provider_auth_failure_signatures.v1",
+  "schema": "ra.docs.provider_auth_failure_signatures.v1",
   "bead_id": "bd-3uqg.9.3.1",
   "generated_at_utc": "2026-02-14T00:35:00Z",
   "generated_by": "LilacCat (Claude Opus 4.6)",

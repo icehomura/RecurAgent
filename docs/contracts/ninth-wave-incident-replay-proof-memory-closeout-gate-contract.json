@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.incident_replay_proof_memory.closeout_gate_contract.v1",
-  "decision_gate_schema": "pi.swarm.incident_replay_proof_memory.closeout_gate.v1",
+  "schema": "ra.swarm.incident_replay_proof_memory.closeout_gate_contract.v1",
+  "decision_gate_schema": "ra.swarm.incident_replay_proof_memory.closeout_gate.v1",
   "purpose": "prompt_to_artifact_ninth_wave_incident_replay_proof_memory_closeout_gate_not_source_of_truth",
   "allowed_statuses": [
     "pass",

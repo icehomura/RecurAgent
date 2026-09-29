@@ -7,11 +7,11 @@ responses, and managing sessions.
 
 | Invocation | Stack | Notes |
 |---|---|---|
-| `pi` | FrankenTUI (`ftui`, default since v0.4.0) | Alternate screen; markdown render cache; busy spinner chain; inline ask cards |
-| `pi --inline` | FrankenTUI, inline | UI drawn at the bottom of the terminal; shell scrollback preserved |
-| `pi --classic` | charmed_rust / bubbletea (`src/interactive.rs`) | Previous stack, kept until removal; aliases `--classic-tui`, `--charmed`, `--bubbletea` |
+| `ra` | FrankenTUI (`ftui`, default since v0.4.0) | Alternate screen; markdown render cache; busy spinner chain; inline ask cards |
+| `ra --inline` | FrankenTUI, inline | UI drawn at the bottom of the terminal; shell scrollback preserved |
+| `ra --classic` | charmed_rust / bubbletea (`src/interactive.rs`) | Previous stack, kept until removal; aliases `--classic-tui`, `--charmed`, `--bubbletea` |
 
-Both stacks share the agent-event vocabulary (`PiMsg`), keybinding catalog,
+Both stacks share the agent-event vocabulary (`RaMsg`), keybinding catalog,
 slash commands, autocomplete, overlays, and session persistence.
 
 ## Layout
@@ -48,13 +48,13 @@ Displays session statistics and status.
 
 ## Operator Telemetry
 
-Setting `PI_PERF_TELEMETRY=1` enables bounded in-process timing samples for
+Setting `RECUR_AGENT_PERF_TELEMETRY=1` enables bounded in-process timing samples for
 operator diagnosis during long swarm runs. The samples are timing-only: they do
 not include prompts, tool arguments, provider payloads, transcript text, or
-credentials. Runtime summaries use the `pi.operator_tail_latency.v1` schema and
+credentials. Runtime summaries use the `ra.operator_tail_latency.v1` schema and
 include p95, p99, and p999 windows for provider streaming, local tools,
 extension hostcalls, session append/index work, and TUI render phases.
-Frame-budget snapshots use the `pi.tui.frame_budget.v1` schema for large
+Frame-budget snapshots use the `ra.tui.frame_budget.v1` schema for large
 conversation, tool preview, model selector, branch picker, and tree selector
 surfaces. The deterministic regression evidence for those snapshots is recorded
 in `docs/evidence/large-session-tui-frame-budget.json`.
@@ -67,7 +67,7 @@ gates under `tests/perf/reports/`, `docs/evidence/`, and the perf SLI contract.
 
 ### Keyboard shortcuts (`/hotkeys`)
 Use `/hotkeys` to see the current shortcut list (including any user overrides
-from `~/.pi/agent/keybindings.json`).
+from `~/.ra/agent/keybindings.json`).
 
 ## Slash commands
 

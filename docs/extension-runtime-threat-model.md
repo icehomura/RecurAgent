@@ -9,7 +9,7 @@ This document models realistic abuse paths against the extension runtime and map
 ## 1. System Scope
 
 In-scope components:
-- `PiJsRuntime` host bridge (`src/extensions_js.rs`)
+- `RaJsRuntime` host bridge (`src/extensions_js.rs`)
 - hostcall capability policy (`src/extensions.rs`, `src/extensions/protocol.rs`, `src/extensions/extension_manager_impl.rs`, `src/config.rs`, `src/extension_dispatcher.rs`)
 - JS compatibility shims (`node:fs`, `node:child_process`, `node:http`, etc.)
 - extension event dispatch and registration surfaces

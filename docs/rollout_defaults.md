@@ -2,7 +2,7 @@
 
 > **Program:** `OMP-ADOPT` Tool Port Program  
 > **Bead ID:** `bd-cv653.8.2`  
-> **Schema:** `pi.rollout.defaults.v1`
+> **Schema:** `ra.rollout.defaults.v1`
 
 ---
 
@@ -42,7 +42,7 @@ Tools are partitioned into two architectural tiers per `xdev` load mode principl
 
 ## 2. Configuration Schema Updates (`docs/settings.md`)
 
-Each opt-in tool family is governed by structured configuration blocks in `~/.config/pi/config.toml` or `.pi/config.toml`:
+Each opt-in tool family is governed by structured configuration blocks in `~/.config/pi/config.toml` or `.ra/config.toml`:
 
 - `[media]`: Configures TTS voice, provider, image generation models, and media artifact directories.
 - `[computer]`: Controls desktop automation permissions, screenshot directories, and interactive approval gates.

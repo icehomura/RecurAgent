@@ -35,9 +35,9 @@ maintenance cadence for the Pi extension platform.
 
 | Gate | Threshold | Enforcement |
 |------|-----------|-------------|
-| `cargo fmt` | Zero diff | `dsr quality --tool pi_agent_rust` |
-| `cargo clippy -D warnings` | Zero warnings | `dsr quality --tool pi_agent_rust` |
-| Unit tests | 100% pass | `dsr quality --tool pi_agent_rust` |
+| `cargo fmt` | Zero diff | `dsr quality --tool recur_agent` |
+| `cargo clippy -D warnings` | Zero warnings | `dsr quality --tool recur_agent` |
+| Unit tests | 100% pass | `dsr quality --tool recur_agent` |
 | VCR/fixture tests | 100% pass | DSR quality recipe |
 | No-mock dependency guard | Zero violations | DSR quality recipe |
 | Suite classification guard | All files classified | DSR quality recipe |
@@ -227,7 +227,7 @@ Next provider rollup checkpoint: `2026-02-13` (UTC), focused on `bd-3uqg.3.8.4` 
 
 ### Adding New Extensions
 
-1. Extension passes `pi doctor` with PASS verdict.
+1. Extension passes `ra doctor` with PASS verdict.
 2. License is permissive (MIT, Apache-2.0, BSD).
 3. Provenance is pinnable (git commit hash or npm version).
 4. No per-extension patches required (unmodified compatibility).
@@ -314,7 +314,7 @@ normal governance.
 
 1. Rebase on latest `main` and keep the patch scoped to the emergency.
 2. Run the mandatory DSR gate from [AGENTS.md](../AGENTS.md):
-   `dsr quality --tool pi_agent_rust`. The retired strict drop-in ledger is not
+   `dsr quality --tool recur_agent`. The retired strict drop-in ledger is not
    an emergency-release gate.
 3. Cut a pre-release tag first when time allows: `vX.Y.Z-rc.N`.
 4. Complete the DSR build/release/verify sequence in
@@ -354,7 +354,7 @@ Run this review quarterly or after any release-process change:
    do not rotate unless there is a real incident, but verify the owner and
    storage location are known.
 4. Inspect a non-publishing DSR rehearsal with
-   `dsr build pi_agent_rust --dry-run`; do not dispatch any workflow.
+   `dsr build recur_agent --dry-run`; do not dispatch any workflow.
 5. Confirm the installer path verifies the selected asset's exact `.sha256`
    sidecar and published install
    commands never pass the installer's testing-only `--no-verify` flag. This is

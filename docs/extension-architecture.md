@@ -1,6 +1,6 @@
 # Extension Runtime Architecture
 
-This document describes the extension runtime architecture for `pi_agent_rust`,
+This document describes the extension runtime architecture for `recur_agent`,
 covering the runtime model, hostcall dispatch, capability policy, trust
 boundaries, and structured concurrency.
 
@@ -292,9 +292,9 @@ Key security properties:
 
 ### Loading
 
-1. Discovery: scan `~/.pi/agent/extensions/` for `extension.json` manifests
+1. Discovery: scan `~/.ra/agent/extensions/` for `extension.json` manifests
 2. Parse: `JsExtensionLoadSpec::from_entry_path(path)` validates manifest
-3. QuickJS init: `PiJsRuntime` created with virtual modules + policy
+3. QuickJS init: `RaJsRuntime` created with virtual modules + policy
 4. Execute: extension's entry point runs, calls `pi.register(payload)`
 5. Registration: `RegisterPayload` stored in `ExtensionManagerInner`
 

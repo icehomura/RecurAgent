@@ -1,5 +1,5 @@
 {
-  "schema": "pi.waiver.ledger.v1",
+  "schema": "ra.waiver.ledger.v1",
   "generated_at": "2026-08-24T08:43:18.255422+00:00",
   "contract_path": "docs/contracts/waiver-ledger-contract.json",
   "waivers": [],

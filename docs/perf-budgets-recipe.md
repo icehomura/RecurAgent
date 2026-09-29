@@ -23,19 +23,19 @@ works.
 
 ```bash
 DSR=/Users/jemanuel/projects/doodlestein_self_releaser/dsr
-"$DSR" quality --tool pi_agent_rust --dry-run \
-  --work-dir /Users/jemanuel/projects/pi_agent_rust
+"$DSR" quality --tool recur_agent --dry-run \
+  --work-dir /Users/jemanuel/projects/recur_agent
 ```
 
 ## 2. The DSR quality recipe (8 checks, registered in `~/.config/dsr/repos.yaml`)
 
-For `pi_agent_rust`, the recipe is, as reported by
-`dsr quality --tool pi_agent_rust --dry-run` on 2026-09-22:
+For `recur_agent`, the recipe is, as reported by
+`dsr quality --tool recur_agent --dry-run` on 2026-09-22:
 
 1. `cargo fmt --check`
 2. `RCH_REQUIRE_REMOTE=1 RCH_BUILD_TIMEOUT_SEC=3600 CARGO_BUILD_JOBS=2 rch exec -- cargo check --locked --all-targets --keep-going`
 3. `RCH_REQUIRE_REMOTE=1 RCH_BUILD_TIMEOUT_SEC=3600 CARGO_BUILD_JOBS=2 rch exec -- cargo clippy --locked --all-targets --keep-going -- -D warnings`
-4. `RCH_REQUIRE_REMOTE=1 RCH_BUILD_TIMEOUT_SEC=3600 RCH_TEST_TIMEOUT_SEC=7200 CARGO_BUILD_JOBS=2 rch exec -- env TMPDIR=/tmp CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 PI_PROVIDER_REPLAY_GIT_COMMIT="$(git rev-parse HEAD)" cargo test --locked --all-targets --no-fail-fast`
+4. `RCH_REQUIRE_REMOTE=1 RCH_BUILD_TIMEOUT_SEC=3600 RCH_TEST_TIMEOUT_SEC=7200 CARGO_BUILD_JOBS=2 rch exec -- env TMPDIR=/tmp CARGO_INCREMENTAL=0 CARGO_PROFILE_TEST_DEBUG=0 RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT="$(git rev-parse HEAD)" cargo test --locked --all-targets --no-fail-fast`
 5. `bash tests/installer_regression.sh`
 6. `python3 scripts/check_module_reachability.py`
 7. `python3 scripts/check_fixture_read_patience.py`
@@ -91,7 +91,7 @@ outside this repository, so it is not versioned with the tree it runs
 against, and `--structural-only` only exists in the script from 49ee4cb11
 onwards. Run the gate against a checkout older than that and check 8 exits 2
 with `unrecognized arguments: --structural-only` — an error, not a verdict.
-On 2026-09-22 the shared checkout at `/Users/jemanuel/projects/pi_agent_rust`
+On 2026-09-22 the shared checkout at `/Users/jemanuel/projects/recur_agent`
 was 24 commits behind `origin/main` and did exactly that. Point `-w` at a
 worktree that is current (see the DSR isolation notes in section 1), which is
 the recommended practice anyway because a shared tree moves during a run and
@@ -142,7 +142,7 @@ registry):
   300 s / 1800 s defaults, which a cold all-targets check or test of this
   crate exceeds.
 
-Run the recipe from the primary checkout path (`/data/projects/pi_agent_rust`
+Run the recipe from the primary checkout path (`/data/projects/recur_agent`
 on the swarm host), not from a temporary worktree, and do not edit the tree
 while it runs: DSR snapshots `HEAD`, the porcelain status, and `Cargo.lock`
 before and after and marks the run `invalidated-moving-source` on any change.
@@ -165,21 +165,21 @@ required `legacy_pi_mono_code/pi-mono/node_modules/` exclusion
 
 `tests/perf/reports/budget_summary.json` may consume cached
 evidence from `$CARGO_TARGET_DIR/perf/evidence_cache` (default)
-with schema `pi.perf.evidence_cache.v1` and TTL controlled by
-`PI_PERF_EVIDENCE_CACHE_TTL_HOURS` (default 168h).
+with schema `ra.perf.evidence_cache.v1` and TTL controlled by
+`RECUR_AGENT_PERF_EVIDENCE_CACHE_TTL_HOURS` (default 168h).
 
 For a *strict* run (the one that backs README claims), the
 operator must:
 
-- `unset PERF_EVIDENCE_DIR PERF_EVIDENCE_DIRS PI_PERF_POST_GENERATION`
-  before the run, OR explicitly set `PI_PERF_STRICT=1`.
+- `unset PERF_EVIDENCE_DIR PERF_EVIDENCE_DIRS RECUR_AGENT_PERF_POST_GENERATION`
+  before the run, OR explicitly set `RECUR_AGENT_PERF_STRICT=1`.
 - Ensure the cache does not have a `pass` entry with
   `correlation_id` that the harness would accept as fresh.
 
 ## 7. Hidden contract: env_fingerprint.json
 
 The `tests/perf/reports/env_fingerprint.json` artifact
-(schema `pi.perf.host_topology_fingerprint.v1`) records
+(schema `ra.perf.host_topology_fingerprint.v1`) records
 cgroup v2 CPU quota, cpuset size, NUMA topology, memory limits.
 For the run to be reproducible:
 
@@ -204,7 +204,7 @@ budget summary is allowed to flip `claim_readiness`.
 
 The `scripts/perf/preflight_budget_inputs.py` script (already
 present, well-documented, schema
-`pi.perf.budget_preflight.v1`) lists missing budget inputs
+`ra.perf.budget_preflight.v1`) lists missing budget inputs
 and expected artifact paths. The recipe requires this script
 to exit 0 before the orchestrator (`scripts/perf/orchestrate.sh`)
 is allowed to proceed.
@@ -233,7 +233,7 @@ failure.
 ```bash
 bash scripts/perf/preflight_dsr_recipe.sh \
   --dsr /Users/jemanuel/projects/doodlestein_self_releaser/dsr \
-  --work-dir /Users/jemanuel/projects/pi_agent_rust \
+  --work-dir /Users/jemanuel/projects/recur_agent \
   --out docs/evidence/ri-phase1-recipe-audit-runpack.json
 ```
 
@@ -245,8 +245,8 @@ which one.
 
 ```bash
 DSR=/Users/jemanuel/projects/doodlestein_self_releaser/dsr
-"$DSR" quality --tool pi_agent_rust \
-  --work-dir /Users/jemanuel/projects/pi_agent_rust
+"$DSR" quality --tool recur_agent \
+  --work-dir /Users/jemanuel/projects/recur_agent
 ```
 
 The output is the orchestrator run; the budget_summary is

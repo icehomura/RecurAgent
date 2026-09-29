@@ -1,5 +1,5 @@
 {
-  "schema": "pi.sequential_gate.evaluation.v1",
+  "schema": "ra.sequential_gate.evaluation.v1",
   "generated_at": "2026-08-24T09:32:53.002940+00:00",
   "contract_path": "docs/contracts/sequential-budget-gate-contract.json",
   "alpha": 0.05,

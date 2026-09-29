@@ -1,5 +1,5 @@
 {
-  "schema": "pi.provider_setup_guide.v1",
+  "schema": "ra.provider_setup_guide.v1",
   "bead_id": "bd-3uqg.11.9.7",
   "provider_id": "alibaba",
   "canonical_provider_id": "alibaba",
@@ -14,7 +14,7 @@
       "steps": [
         "1. Get an API key from https://dashscope.console.aliyun.com/apiKey",
         "2. Export: export DASHSCOPE_API_KEY=sk-...",
-        "3. Run: pi --provider alibaba --model qwen-plus"
+        "3. Run: ra --provider alibaba --model qwen-plus"
       ],
       "example_env": {
         "DASHSCOPE_API_KEY": "sk-your_api_key_here"
@@ -27,10 +27,10 @@
         "QWEN_API_KEY": "sk-alternate_key"
       },
       "example_cli_options": [
-        "pi --provider alibaba --model qwen-max          # Most capable general model",
-        "pi --provider alibaba --model qwen3-coder-plus  # Specialized for code",
-        "pi --provider alibaba-us --model qwen-plus      # US/Virginia endpoint",
-        "pi --provider alibaba-cn --model qwen-plus      # China endpoint"
+        "ra --provider alibaba --model qwen-max          # Most capable general model",
+        "ra --provider alibaba --model qwen3-coder-plus  # Specialized for code",
+        "ra --provider alibaba-us --model qwen-plus      # US/Virginia endpoint",
+        "ra --provider alibaba-cn --model qwen-plus      # China endpoint"
       ],
       "notes": [
         "QWEN_API_KEY is only used as fallback for alibaba and alibaba-us; not for alibaba-cn.",
@@ -120,7 +120,7 @@
     {
       "symptom": "Provider not found for 'qwen'",
       "cause": "Provider ID is 'alibaba', not 'qwen'",
-      "fix": "Use: pi --provider alibaba --model qwen-plus (or alibaba-us for US endpoint, alibaba-cn for China endpoint).",
+      "fix": "Use: ra --provider alibaba --model qwen-plus (or alibaba-us for US endpoint, alibaba-cn for China endpoint).",
       "test_evidence": "src/provider_metadata.rs canonical_provider_id mapping"
     }
   ],

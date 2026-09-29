@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.practical_finish_contract.v1",
+  "schema": "ra.frankennode.practical_finish_contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-3ar8v.7.12",
   "support_bead_ids": [],
@@ -7,7 +7,7 @@
   "effective_date_utc": "2026-02-17T10:00:00Z",
   "scope": {
     "target_project_root": "/dp/franken_node",
-    "source_project_root": "/data/projects/pi_agent_rust",
+    "source_project_root": "/data/projects/recur_agent",
     "objective": "Define completion criteria for FrankenNode Phase 6, emit practical-finish signal, and defer non-critical documentation to wrap-up stage."
   },
   "completion_criteria": {

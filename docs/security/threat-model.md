@@ -6,7 +6,7 @@ Last updated: 2026-02-14
 
 ## 1. Purpose and Scope
 
-This threat model defines the security boundaries for the `pi_agent_rust` extension subsystem and related policy/risk controls.
+This threat model defines the security boundaries for the `recur_agent` extension subsystem and related policy/risk controls.
 
 Goals:
 - Identify realistic attacker paths for install-time and runtime extension abuse.
@@ -39,7 +39,7 @@ Untrusted Extension JS/TS
         |
         |  (compat scanner + runtime bridge)
         v
-QuickJS Runtime (PiJsRuntime)
+QuickJS Runtime (RaJsRuntime)
         |
         | HostcallRequest {method, capability, params_hash}
         v
@@ -335,7 +335,7 @@ Vector:
 - Extension updates change behavior without clear provenance controls.
 
 Controls (current + planned):
-- Current: deterministic package lockfile, fail-closed digest/provenance verification, and trust-transition audit ledger (`.pi/packages.lock.json`, `.pi/package-trust-audit.jsonl`).
+- Current: deterministic package lockfile, fail-closed digest/provenance verification, and trust-transition audit ledger (`.ra/packages.lock.json`, `.ra/package-trust-audit.jsonl`).
 - Current: extension scanner/ledger evidence path in runtime.
 - Planned: quarantine-to-trust promotion workflow (SEC-2.4).
 

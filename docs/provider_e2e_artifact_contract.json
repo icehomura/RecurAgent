@@ -4,7 +4,7 @@
   "generated_at": "2026-02-13",
   "description": "Defines enforceable structured logging and artifact requirements for provider e2e workflows. Each claim must be backed by executable validation in tests/validate_e2e_artifact_schema.rs.",
   "jsonl_schemas": {
-    "pi.test.log.v1": {
+    "ra.test.log.v1": {
       "required_fields": ["schema", "type", "seq", "ts", "t_ms", "level", "category", "message"],
       "field_types": {
         "schema": "string",
@@ -17,9 +17,9 @@
         "message": "string"
       },
       "status": "deprecated",
-      "migration_note": "All new tests must use pi.test.log.v2. V1 accepted for backward compat only."
+      "migration_note": "All new tests must use ra.test.log.v2. V1 accepted for backward compat only."
     },
-    "pi.test.log.v2": {
+    "ra.test.log.v2": {
       "required_fields": ["schema", "type", "trace_id", "seq", "ts", "t_ms", "level", "category", "message"],
       "optional_fields": ["span_id", "parent_span_id", "context"],
       "field_types": {
@@ -39,7 +39,7 @@
       "status": "current",
       "validation": "tests/common/logging.rs::validate_jsonl_line()"
     },
-    "pi.test.artifact.v1": {
+    "ra.test.artifact.v1": {
       "required_fields": ["schema", "type", "seq", "ts", "t_ms", "name", "path"],
       "optional_fields": ["size_bytes", "sha256"],
       "field_types": {
@@ -130,13 +130,13 @@
       {
         "name": "test-log.jsonl",
         "format": "jsonl",
-        "schema": "pi.test.log.v2",
+        "schema": "ra.test.log.v2",
         "content": "Structured test log with trace_id correlation"
       },
       {
         "name": "artifact-index.jsonl",
         "format": "jsonl",
-        "schema": "pi.test.artifact.v1",
+        "schema": "ra.test.artifact.v1",
         "content": "Index of all artifacts produced, with SHA256 and size"
       }
     ],
@@ -248,9 +248,9 @@
       "severity": "low",
       "status": "resolved",
       "resolved_by": "bd-2w6ts",
-      "resolution": "Added ci_correlation_id as optional field in pi.test.log.v2 schema. TestLogger reads CI_CORRELATION_ID env var and injects into every JSONL record. Validation in tests/common/logging.rs.",
+      "resolution": "Added ci_correlation_id as optional field in ra.test.log.v2 schema. TestLogger reads CI_CORRELATION_ID env var and injects into every JSONL record. Validation in tests/common/logging.rs.",
       "description": "CI_CORRELATION_ID is accepted by run_all.sh but not injected into TestLogger trace context. Cross-run correlation requires manual matching.",
-      "recommendation": "Add optional ci_correlation_id field to pi.test.log.v2 context"
+      "recommendation": "Add optional ci_correlation_id field to ra.test.log.v2 context"
     },
     {
       "id": "GAP-2",
@@ -278,9 +278,9 @@
       "severity": "low",
       "status": "resolved",
       "resolved_by": "bd-7rs2j",
-      "resolution": "Created docs/evidence-contract-schema.json defining pi.qa.evidence_contract.v1 with required/optional fields, suite_entry/failure_digest definitions, and cross-reference validation tests.",
+      "resolution": "Created docs/evidence-contract-schema.json defining ra.qa.evidence_contract.v1 with required/optional fields, suite_entry/failure_digest definitions, and cross-reference validation tests.",
       "description": "evidence_contract.json is referenced in ci_policy but has no formal schema defining required fields.",
-      "recommendation": "Define pi.qa.evidence_contract.v1 schema with required fields"
+      "recommendation": "Define ra.qa.evidence_contract.v1 schema with required fields"
     },
     {
       "id": "GAP-5",
@@ -288,8 +288,8 @@
       "severity": "low",
       "status": "resolved",
       "resolved_by": "bd-38m8w",
-      "resolution": "Added validate_jsonl_line_v2_only() and validate_jsonl_v2_only() in tests/common/logging.rs that reject pi.test.log.v1 records. 5 unit tests and 6 integration tests enforce v2-only for new test code.",
-      "description": "pi.test.log.v1 is accepted by validator but all new tests should use v2. No enforcement prevents v1 usage in new tests.",
+      "resolution": "Added validate_jsonl_line_v2_only() and validate_jsonl_v2_only() in tests/common/logging.rs that reject ra.test.log.v1 records. 5 unit tests and 6 integration tests enforce v2-only for new test code.",
+      "description": "ra.test.log.v1 is accepted by validator but all new tests should use v2. No enforcement prevents v1 usage in new tests.",
       "recommendation": "Add lint or CI check that new test files emit v2 only"
     }
   ]

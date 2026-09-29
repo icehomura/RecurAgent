@@ -1,4 +1,4 @@
-# Reality Check — pi_agent_rust — 2026-09-01
+# Reality Check — recur_agent — 2026-09-01
 
 Reality check performed against README.md, AGENTS.md, docs/program-governance.md,
 docs/releasing.md, docs/perf-budgets-recipe.md, the Beads database, the GitHub
@@ -58,19 +58,19 @@ Status key: WORKING / PARTIAL / UNPROVEN / STUB / NOT_STARTED / NO_BEAD.
 
 | # | Goal | Source | Status | Bead coverage | Evidence |
 |---|------|--------|--------|---------------|----------|
-| 1 | Single native `pi` binary, installable from DSR-published releases via `install.sh` | README Quick Start, Installation | **PARTIAL** | none for v0.4.0 publish | v0.3.0 published 2026-08-22, DSR-built on operator hosts (build manifest: `dsr 0.1.2`, "no GitHub Actions"). v0.4.0 tag exists, Cargo=0.4.0, CHANGELOG says Release, `gh release view v0.4.0` = not found. v0.3.0 assets have `SHA256SUMS` only, not the per-asset `.sha256` sidecars README promises. |
+| 1 | Single native `ra` binary, installable from DSR-published releases via `install.sh` | README Quick Start, Installation | **PARTIAL** | none for v0.4.0 publish | v0.3.0 published 2026-08-22, DSR-built on operator hosts (build manifest: `dsr 0.1.2`, "no GitHub Actions"). v0.4.0 tag exists, Cargo=0.4.0, CHANGELOG says Release, `gh release view v0.4.0` = not found. v0.3.0 assets have `SHA256SUMS` only, not the per-asset `.sha256` sidecars README promises. |
 | 2 | Streaming responses with extended thinking; custom SSE parser | README Features | **WORKING** (unproven live at HEAD) | bd-fouvy (streams ending before completion markers) | `src/sse.rs`, `src/http/`. RPC smoke on v0.3.0 works. No live-provider run recorded at HEAD. |
-| 3 | 11 native provider modules + OpenAI-compatible presets, case-insensitive aliases, `--list-providers`, `--fetch-models` | README Providers/FAQ | **WORKING** structurally, **UNPROVEN** live | bd-x23nj (GitLab wire), bd-1cun1 (OAuth metadata), bd-sa57e P0 (models.json identity), bd-rchdj/bd-gm481 (failover primary) | 11 modules present in `src/providers/`. `pi --list-providers` lists 50+ providers, `--list-models` 211. bd-provider-live-validation-11-xme9d closed 08-28 with "initial run with no creds set" — no fresh live evidence. |
+| 3 | 11 native provider modules + OpenAI-compatible presets, case-insensitive aliases, `--list-providers`, `--fetch-models` | README Providers/FAQ | **WORKING** structurally, **UNPROVEN** live | bd-x23nj (GitLab wire), bd-1cun1 (OAuth metadata), bd-sa57e P0 (models.json identity), bd-rchdj/bd-gm481 (failover primary) | 11 modules present in `src/providers/`. `ra --list-providers` lists 50+ providers, `--list-models` 211. bd-provider-live-validation-11-xme9d closed 08-28 with "initial run with no creds set" — no fresh live evidence. |
 | 4 | Tiered built-in tool surface (13 essential in schema, discoverable via `xdev`, 18 in a default session) | README "28 Built-in Tools" | **WORKING**, docs drift | bd-4i212 (README out-of-scope FAQ) | `src/xdev.rs` tier table matches; CLI default list = 18 tools. Code also ships `browser`, `computer`, `inspect_image`, `generate_image`, `tts` (opt-in) that README never lists; README count "28" vs its own enumeration (29) vs real (~34). |
 | 5 | Native `subagent` tool (single/parallel/chain) and `/tan` background children | README Subagents | **WORKING** | bd-f7tr4 (/tan card scoping) | `src/subagents.rs` uses `current_exe()`; `/tan` wired through hub roster. |
-| 6 | Session persistence: JSONL v3 tree, SQLite index, v2 sidecar, `pi migrate`, BPE-aware compaction, checkpoints/retry | README Sessions, Deep Dive | **WORKING**, hardening unproven | bd-qxdfd P0 (fail closed on corrupt JSONL), bd-pwqrr (index refresh fail-closed), bd-35xad, bd-m83oo, bd-yn7ud, bd-afvdt | Modules present and wired; P0/P1 hardening fixes are "statically implemented" with no recorded test run. |
+| 6 | Session persistence: JSONL v3 tree, SQLite index, v2 sidecar, `ra migrate`, BPE-aware compaction, checkpoints/retry | README Sessions, Deep Dive | **WORKING**, hardening unproven | bd-qxdfd P0 (fail closed on corrupt JSONL), bd-pwqrr (index refresh fail-closed), bd-35xad, bd-m83oo, bd-yn7ud, bd-afvdt | Modules present and wired; P0/P1 hardening fixes are "statically implemented" with no recorded test run. |
 | 7 | Four execution modes: interactive (FTUI default), print, RPC, ACP | README Four Execution Modes | **WORKING**, TUI defects open | bd-2crrf (duplicate AgentSession init), bd-q66i1, bd-uio4v, bd-5jfkl (ACP transitions), bd-dexy7 | `main.rs:1881` selects FTUI unless `--classic`. RPC verified on v0.3.0. Open GH: #195 (heading colors/table alignment), #198 (ask hang; fix in 402ff9cd, unreleased). |
 | 8 | Extension runtime: QuickJS + native descriptors, capability policy, exec mediation, trust lifecycle, kill switch, workspace TOFU, 223-corpus conformance | README Extensions | **WORKING**, gate red | bd-4t6oz P1 (split tool registry bypasses undo/workspace policy), bd-yllbn, bd-2ojzi, bd-8m21l, bd-sog97.28/.29 | must-pass gate: 206/208 pass, 2 marckrenn-pi-sub failures (triaged 08-28); stretch 10/19. Hermetic clean-checkout run reportedly yields 143/208 (bd-sog97.29). |
 | 9 | MCP client (stdio + streamable HTTP) with trust gating | README tools table, CHANGELOG v0.4.0 | **WORKING**, 6 P0 bugs in flight | bd-c6cy9, bd-b2xdr, bd-qv95g, bd-ubjal, bd-z847t (all P0), bd-8alfn | `src/mcp/` 4 modules, 456 KB. All six P0s have "static implementation complete" notes and no executable proof. |
 | 10 | LSP (14 ops), DAP (29 ops), eval kernels, github, security_scan, jobs, hub | README tools table | **WORKING** | bd-9zmyf P0 (job session scoping), bd-mg6s5, bd-y84fr, bd-aehbm, bd-wfcu7 | Modules present (`src/lsp/`, `src/debug/dap.rs`, `src/eval/`, `src/security_scan.rs`, `src/jobs.rs`). |
 | 11 | Security: exec mediation, secret filtering, SSH URL router, package-subcommand trust gate | README Security | **UNPROVEN** | bd-t2360 P0 (SSH injection), bd-c1do1 P0 (package trust), bd-rgz8b, bd-gawl8 | Fix notes say "confirmed and statically fixed"; no gate run. |
 | 12 | Performance targets: startup <100 ms, binary <48 MiB, idle RSS <50 MB, 60 fps | AGENTS.md targets, README Why Pi | **PARTIAL** (claims correctly withheld) | bd-sog97.5 (cold-load), bd-sog97.4 (tool-call data), bd-sog97.19/.27/.20 | Per-budget: 16 PASS, 3 FAIL (`ext_cold_load_simple_p95` 11.9 ms vs 5 ms; `tool_call_latency_mean`, `tool_call_throughput_min` no real data). Source commit e178a73d (Aug 27), not v0.4.0. |
-| 13 | DSR is the exclusive quality/build/release authority; Actions permanently disabled | AGENTS.md, README, docs/releasing.md | **PARTIAL** | bd-csywa, bd-yj126, bd-5by7n | v0.3.0 was DSR-built. But: recipe lives only in the maintainer's `~/.config/dsr/repos.yaml` (this host's DSR registry has no pi_agent_rust entry, "no runs recorded", no signing keypair); GitHub Actions is still **enabled** at repo level with live `on: push`/tag triggers; no minisign in `install.sh`; crates.io publish on HOLD; immutable-tag ruleset check missing. |
+| 13 | DSR is the exclusive quality/build/release authority; Actions permanently disabled | AGENTS.md, README, docs/releasing.md | **PARTIAL** | bd-csywa, bd-yj126, bd-5by7n | v0.3.0 was DSR-built. But: recipe lives only in the maintainer's `~/.config/dsr/repos.yaml` (this host's DSR registry has no recur_agent entry, "no runs recorded", no signing keypair); GitHub Actions is still **enabled** at repo level with live `on: push`/tag triggers; no minisign in `install.sh`; crates.io publish on HOLD; immutable-tag ruleset check missing. |
 | 14 | Release-integrity evidence system reaching `claim_ready` (bd-sog97) | README Claim-Integrity, epic | **PARTIAL** | bd-sog97 (27 closed / 3 in_progress / 4 open) | RI-AUTH not reached; RI-PHASE1 open; several children closed as "blocked on RCH". |
 | 15 | README/docs describe the shipped product accurately | README citation convention, program-governance | **PARTIAL** (drift) | bd-4i212 only | See §6. |
 | 16 | Quality recipe runs green (fmt, clippy, tests, conformance, installer, reachability) | AGENTS.md Compiler and Test Checks | **UNPROVEN at HEAD** | none owns "run it and record it" | No repository artifact records a passing gate after 2026-08-21. Last GitHub CI runs (Aug 19-20) all failed; those lanes are retired anyway. |
@@ -152,7 +152,7 @@ the entire evidence trail.
 - Host load and RCH posture: the load-admission rule (1-minute load < 10) has
   been unmet on the swarm host; RCH is `degraded`; no build hosts cached in
   DSR here. Every gate-dependent bead is waiting on that.
-- DSR recipe locality: `dsr quality --tool pi_agent_rust` only works on one
+- DSR recipe locality: `dsr quality --tool recur_agent` only works on one
   machine. There is no in-repo recipe file, so no other host or agent can run
   the authoritative gate.
 - No owner for "run the gate, record it, and adjudicate the 43 beads". RI-AUTH
@@ -182,7 +182,7 @@ perf-evidence gap (bd-sog97), but it would leave:
 |---|---|
 | Run the DSR quality recipe against v0.4.0 source, record the artifact, and adjudicate the 43 in-progress beads (close, reopen, or waive each with proof) | Critical |
 | Publish v0.4.0 through DSR (5 targets, per-asset `.sha256`, `.minisig`) or retitle CHANGELOG to "Tag-only" until it is | Critical |
-| Make the pi_agent_rust DSR recipe a checked-in, portable file (repos.d entry + install step + preflight) so any host can run the gate | Critical |
+| Make the recur_agent DSR recipe a checked-in, portable file (repos.d entry + install step + preflight) so any host can run the gate | Critical |
 | Disable GitHub Actions at repository level (settings) and neutralize `on:` triggers in retained workflow files, per AGENTS.md | Major |
 | README: FTUI as default, `--classic`, tool inventory incl. 5 opt-in tools, FAQ scope line, TUI architecture section, dev docs consistent with DSR-only | Major |
 | Fix `budget_summary.json` header/results inconsistency (partly bd-sog97.20) and rebind to the v0.4.0 source SHA | Major |
@@ -227,9 +227,9 @@ the evidence.
 
 ### Gap A — Restore executable truth (Critical)
 **Current:** no gate run recorded after v0.3.0; recipe only on one Mac; 43 beads parked.
-**Target:** `dsr quality --tool pi_agent_rust` runnable from a checked-in recipe on any registered host; a run recorded against the v0.4.0 source SHA; each of the 43 in-progress beads closed with the run id, reopened with a failing test, or formally waived.
+**Target:** `dsr quality --tool recur_agent` runnable from a checked-in recipe on any registered host; a run recorded against the v0.4.0 source SHA; each of the 43 in-progress beads closed with the run id, reopened with a failing test, or formally waived.
 **Plan:**
-1. Add `dsr/pi_agent_rust.yaml` (or `.dsr/repos.d/`) to the repo mirroring the maintainer's registry entry (6 checks, 5 targets, target-dir override per docs/perf-budgets-recipe.md §3) plus a one-line `dsr repos add` install step in docs/releasing.md.
+1. Add `dsr/recur_agent.yaml` (or `.dsr/repos.d/`) to the repo mirroring the maintainer's registry entry (6 checks, 5 targets, target-dir override per docs/perf-budgets-recipe.md §3) plus a one-line `dsr repos add` install step in docs/releasing.md.
 2. Extend `scripts/perf/preflight_dsr_recipe.sh` to accept a non-Mac DSR path and to assert the recipe file and registry agree.
 3. Run the recipe on a host with headroom (or wait for load < 10); store the run summary under `docs/evidence/` with schema + SHA binding.
 4. Adjudicate the 43 beads against that run. Any bead whose acceptance tests are absent gets a companion test bead.
@@ -265,7 +265,7 @@ A → (B, C, D in parallel) → E (docs written against gated reality) → F.
 
 ## 8. Verification plan after bridge work
 
-- `dsr quality --tool pi_agent_rust` recorded green at the release SHA.
+- `dsr quality --tool recur_agent` recorded green at the release SHA.
 - `gh release view v0.4.0` lists 5 archives + `.sha256` + `.minisig`; `install.sh` verifies a signature on a clean host.
 - `budget_summary.json`: `claim_readiness.status != blocked` or an explicit waiver ledger entry per failing budget; header counts equal `budget_results` histogram.
 - `must_pass_gate_verdict.json`: `status = pass` at the release SHA.
@@ -362,9 +362,9 @@ Principles that shape every item below:
 - **Proof beats prose.** A gap is closed by a recorded run bound to a SHA
   (DSR run dir, artifact with `git_commit`), never by a note that says
   "implemented statically".
-- **One lane, fail-closed.** `dsr quality --tool pi_agent_rust` from
+- **One lane, fail-closed.** `dsr quality --tool recur_agent` from
   `.dsr/repos.yaml`, Cargo through `RCH_REQUIRE_REMOTE=1 rch exec`, run from
-  `/data/projects/pi_agent_rust` (or another normalizable checkout), tree
+  `/data/projects/recur_agent` (or another normalizable checkout), tree
   not edited while it runs.
 - **No ceremony.** No new certificates, ledgers, or dashboards. Where a check
   is needed, it is a test in the gate or a line in an existing artifact.
@@ -391,12 +391,12 @@ been executed through the gate at any post-v0.3.0 SHA, so their state is
 unknown. `tests/installer_regression.sh` and
 `scripts/check_module_reachability.py` pass individually.
 
-**Target state.** `dsr quality --tool pi_agent_rust` reports `passed` (6/6
+**Target state.** `dsr quality --tool recur_agent` reports `passed` (6/6
 checks executed) at a named SHA on origin/main, with the run dir retained,
 and the same SHA is what v0.4.x ships from.
 
 **Success criteria.**
-- [ ] `~/.local/state/dsr/quality-logs/pi_agent_rust/<run>/` shows
+- [ ] `~/.local/state/dsr/quality-logs/recur_agent/<run>/` shows
       `check-1..6` all `exit_code: 0` and the run JSON `status: "passed"`,
       `snapshot_before == snapshot_after`.
 - [ ] `check-4.log` contains a `test result: ok` line for the lib binary and
@@ -445,7 +445,7 @@ heading says "Release", `gh release view v0.4.0` → not found. v0.3.0 is the
 only published release; it was DSR-built on operator hosts but ships an
 aggregate `SHA256SUMS`, no per-asset `.sha256`, no `.minisig`. `install.sh`
 has cosign support and no minisign support; DSR on hetzner2 has no signing
-keypair; the build authority file `~/.config/dsr/repos.d/pi_agent_rust.yaml`
+keypair; the build authority file `~/.config/dsr/repos.d/recur_agent.yaml`
 exists only on the release operator's machine. bd-ghfu4 tracks publish-or-
 relabel; bd-yj126 tracks minisign; bd-5by7n tracks the immutable-tag ruleset
 check; crates.io publication is HOLD by policy.
@@ -459,7 +459,7 @@ signature, CHANGELOG heading truthful at every moment.
 - [ ] `gh release view v0.4.x --json assets` lists exactly the strict
       inventory; `dsr verify` (public release verification) exits 0.
 - [ ] Clean-host `curl … install.sh | bash -s -- --version v0.4.x` installs a
-      binary whose `pi --version` prints that version, with the installer
+      binary whose `ra --version` prints that version, with the installer
       log showing signature verification, not just checksum.
 - [ ] `git show <tag>:CHANGELOG.md` heading matches the published state
       (Release) and no unpublished tag carries "Release".
@@ -474,7 +474,7 @@ signature, CHANGELOG heading truthful at every moment.
    regressions (missing/swapped/wrong-key/bad-signature) to
    `tests/installer_regression.sh`.
 3. Check the build authority file into the repo next to `.dsr/repos.yaml`
-   (`.dsr/repos.d/pi_agent_rust.yaml`) so `dsr repos validate` can run on any
+   (`.dsr/repos.d/recur_agent.yaml`) so `dsr repos validate` can run on any
    host; keep host-specific paths under `host_paths`.
 4. Cut v0.4.1 (not v0.4.0: the tag is already public and immutable by
    ruleset) from the first gate-green SHA; run `dsr build`, `dsr release`,
@@ -769,7 +769,7 @@ changes alone. **Complexity.** S. **Beads.** None → new.
   point at it) and carries the in-file copy as dead code with live unit
   tests. Removing either is a code deletion inside a tracked file, not a
   file deletion, but the choice is a product decision.
-- `/data/projects/pi_agent_rust_baseline`: throwaway clone at 08485a20 used
+- `/data/projects/recur_agent_baseline`: throwaway clone at 08485a20 used
   for the baseline classification; delete.
 - `<scratchpad>/gate-wt`: git worktree (registered in `git worktree list`);
   `git worktree remove`.
@@ -975,7 +975,7 @@ auto-compaction path holds the agent-session lock across the provider call
 and the test swapped the session through that same lock); swapping through
 the shared inner handle makes it pass in under two seconds, and the watchdog
 comment now states the real cause. The three `/share` tmux tests write
-`.pi/settings.json` into the tmux working directory, which is a
+`.ra/settings.json` into the tmux working directory, which is a
 workspace-trust surface, so the classic TUI showed the trust prompt instead of
 the welcome banner; they now set the documented automation override. The RPC
 plan-mode e2e test approved the plan as soon as the mock server had seen the
@@ -1082,7 +1082,7 @@ The feature-free test in `tests/mcp.rs` registers a late definition the way
 the hostcall does and checks: registered once, extension provenance, pending
 trust (nothing mounts), second sync registers nothing. The FrankenTUI and
 SDK paths got it first; the classic TUI's three turn tasks now run the same
-shared implementation (`pi::mcp::sync_extension_registrations`) right after
+shared implementation (`ra::mcp::sync_extension_registrations`) right after
 locking the agent, and only the RPC loop, which owns no MCP manager, still
 lacks it. Run17 (099c4b43, run dir `20260902T182315-3052505`, valid
 receipt) is the evidence for the registry work: five of six gates green and
@@ -1124,7 +1124,7 @@ fence and validator contracts (bd-b3yao.1/.2/.4: semantic_context estimates,
 the Criterion-produced pijs comparison contract, invocation-keyed drift,
 suite-level lineage refusal, captured consumer stdout); the three drop-in
 parity tests are ignored with their reason (bd-werhk). Found on the way:
-nothing in the repo produces `pi.perf.cross_runtime_comparison.v1`, so a real
+nothing in the repo produces `ra.perf.cross_runtime_comparison.v1`, so a real
 full orchestration can never pass Phase 5g until a producer exists
 (bd-ri-phase1-full-refresh-rndeg.1, now blocking the refresh). The
 concurrent sweeper session committed five intermediate states of this work
@@ -1133,7 +1133,7 @@ bd-0x31m. Run19 evidence for all of the above is recorded on the beads.
 
 ### 10.6 Verification plan (what "done" looks like, re-executable)
 
-1. `DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool pi_agent_rust` → 6/6
+1. `DSR_REPOS_FILE=.dsr/repos.yaml dsr quality --tool recur_agent` → 6/6
    executed, passed, at SHA S.
 2. `gh release view v0.4.1 --json assets,tagName` → strict inventory; `dsr
    verify` green; clean-host install prints 0.4.1 and verifies a signature.

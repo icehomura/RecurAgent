@@ -75,8 +75,8 @@ Skip this phase for `OpenAICompatiblePreset` providers.
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo fmt --check`
 - [ ] `cargo test --lib` (all 3269+ tests pass)
-- [ ] Provider appears in `pi --list-models` (with API key set)
-- [ ] `pi --provider {id} --model {model} -p "test"` works (if live key available)
+- [ ] Provider appears in `ra --list-models` (with API key set)
+- [ ] `ra --provider {id} --model {model} -p "test"` works (if live key available)
 
 ## Scope and source of truth
 
@@ -134,10 +134,10 @@ export OPENAI_API_KEY="..."
 export GOOGLE_API_KEY="..."
 export COHERE_API_KEY="..."
 
-pi --provider anthropic --model claude-sonnet-4-5 -p "Say hello"
-pi --provider openai --model gpt-4o-mini -p "Say hello"
-pi --provider google --model gemini-2.5-flash -p "Say hello"
-pi --provider cohere --model command-r-plus -p "Say hello"
+ra --provider anthropic --model claude-sonnet-4-5 -p "Say hello"
+ra --provider openai --model gpt-4o-mini -p "Say hello"
+ra --provider google --model gemini-2.5-flash -p "Say hello"
+ra --provider cohere --model command-r-plus -p "Say hello"
 ```
 
 Expected check:
@@ -149,7 +149,7 @@ OpenRouter minimal path (env-only):
 
 ```bash
 export OPENROUTER_API_KEY="..."
-pi --provider openrouter --model openai/gpt-4o-mini -p "Say hello"
+ra --provider openrouter --model openai/gpt-4o-mini -p "Say hello"
 ```
 
 OpenRouter advanced path (explicit config + routing metadata + attribution overrides):
@@ -185,10 +185,10 @@ OpenRouter advanced path (explicit config + routing metadata + attribution overr
 export OPENROUTER_API_KEY="..."
 # Optional attribution overrides (defaults are injected if absent)
 export OPENROUTER_HTTP_REFERER="https://example.com/pi-agent-rust"
-export OPENROUTER_X_TITLE="Pi Agent Rust (Docs Example)"
+export OPENROUTER_X_TITLE="Recur Agent (Docs Example)"
 
 # Provider alias and model alias are both supported:
-pi --provider open-router --model claude-3.5-sonnet -p "Say hello"
+ra --provider open-router --model claude-3.5-sonnet -p "Say hello"
 ```
 
 Expected OpenRouter checks:
@@ -222,7 +222,7 @@ Other preset explicit config example (Cloudflare AI Gateway):
 
 ```bash
 export CLOUDFLARE_API_TOKEN="..."
-pi --provider cloudflare-ai-gateway --model gpt-4o-mini -p "Say hello"
+ra --provider cloudflare-ai-gateway --model gpt-4o-mini -p "Say hello"
 ```
 
 Expected check:
@@ -500,7 +500,7 @@ export AZURE_OPENAI_API_KEY="..."
 # export AZURE_OPENAI_DEPLOYMENT="<deployment>"
 # export AZURE_OPENAI_API_VERSION="2024-08-01-preview"
 
-pi --provider azure-openai --model gpt-4o -p "Say hello"
+ra --provider azure-openai --model gpt-4o -p "Say hello"
 ```
 
 Expected check:
@@ -529,7 +529,7 @@ export GOOGLE_CLOUD_API_KEY="..."   # or VERTEX_API_KEY
 export GOOGLE_CLOUD_PROJECT="<project>"   # optional if embedded in baseUrl
 export GOOGLE_CLOUD_LOCATION="us-central1" # optional if embedded in baseUrl
 
-pi --provider google-vertex --model gemini-2.0-flash -p "Say hello"
+ra --provider google-vertex --model gemini-2.0-flash -p "Say hello"
 ```
 
 Expected check:
@@ -553,7 +553,7 @@ Expected check:
 
 ```bash
 export GITHUB_TOKEN="..."   # or GITHUB_COPILOT_API_KEY
-pi --provider github-copilot --model gpt-4o -p "Say hello"
+ra --provider github-copilot --model gpt-4o -p "Say hello"
 ```
 
 Expected check:
@@ -577,7 +577,7 @@ Expected check:
 
 ```bash
 export GITLAB_TOKEN="..."   # or GITLAB_API_KEY
-pi --provider gitlab --model gitlab-duo-chat -p "Say hello"
+ra --provider gitlab --model gitlab-duo-chat -p "Say hello"
 ```
 
 Expected check:
@@ -703,11 +703,11 @@ Contract tests (`provider_native_contract.rs`) for native adapters additionally 
 
 All provider tests that use `TestHarness` must emit JSONL logs conforming to these schemas:
 
-**Log schema (`pi.test.log.v2`)** — mandatory fields:
+**Log schema (`ra.test.log.v2`)** — mandatory fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema` | string | Must be `"pi.test.log.v2"` |
+| `schema` | string | Must be `"ra.test.log.v2"` |
 | `type` | string | Must be `"log"` |
 | `trace_id` | string | Trace correlation ID (required in v2) |
 | `seq` | integer | Monotonically increasing sequence number |
@@ -719,11 +719,11 @@ All provider tests that use `TestHarness` must emit JSONL logs conforming to the
 
 Optional fields: `span_id`, `parent_span_id`, `test`, `context` (key-value map).
 
-**Artifact schema (`pi.test.artifact.v1`)** — mandatory fields:
+**Artifact schema (`ra.test.artifact.v1`)** — mandatory fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema` | string | Must be `"pi.test.artifact.v1"` |
+| `schema` | string | Must be `"ra.test.artifact.v1"` |
 | `type` | string | Must be `"artifact"` |
 | `seq` | integer | Sequence number |
 | `ts` | string | ISO-8601 timestamp |
@@ -870,8 +870,8 @@ Source of truth: `docs/provider_e2e_artifact_contract.json`
 Per-suite artifacts (required):
 - `output.log`
 - `result.json`
-- `test-log.jsonl` (`pi.test.log.v2`)
-- `artifact-index.jsonl` (`pi.test.artifact.v1`)
+- `test-log.jsonl` (`ra.test.log.v2`)
+- `artifact-index.jsonl` (`ra.test.artifact.v1`)
 
 Per-run artifacts (required):
 - `summary.json`
@@ -1024,7 +1024,7 @@ Rollback steps:
 7. Update provider documentation:
    - `providers.md` — matrix/status row.
    - This playbook — config example and troubleshooting entry.
-   - For gap providers (groq, cerebras, openrouter, moonshotai, alibaba class): create a dedicated setup doc `docs/provider-<name>-setup.json` following schema `pi.provider_setup_guide.v1`.
+   - For gap providers (groq, cerebras, openrouter, moonshotai, alibaba class): create a dedicated setup doc `docs/provider-<name>-setup.json` following schema `ra.provider_setup_guide.v1`.
    - Update `docs/provider-config-examples.json` with env vars, CLI examples, and caveats.
    - Update `docs/provider-migration-guide.md` if the provider has non-standard behavior.
    - Update `docs/provider-auth-troubleshooting.md` with auth failure modes.

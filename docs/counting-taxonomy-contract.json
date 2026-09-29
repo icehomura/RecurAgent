@@ -1,6 +1,6 @@
 {
-  "schema": "pi.qa.counting_taxonomy_contract.v1",
-  "taxonomy_schema": "pi.qa.counting_taxonomy.v1",
+  "schema": "ra.qa.counting_taxonomy_contract.v1",
+  "taxonomy_schema": "ra.qa.counting_taxonomy.v1",
   "contract_version": "1.0.0",
   "description": "Mandatory counting taxonomy for performance and parity claims. Every reported count must include explicit granularity labels and tool provenance so comparisons are auditable and side-by-side.",
   "required_dimensions": {

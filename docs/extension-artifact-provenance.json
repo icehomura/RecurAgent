@@ -1,5 +1,5 @@
 {
-  "$schema": "pi.ext.artifact_provenance.v1",
+  "$schema": "ra.ext.artifact_provenance.v1",
   "generated": "2026-02-05",
   "artifact_root": "tests/ext_conformance/artifacts",
   "items": [

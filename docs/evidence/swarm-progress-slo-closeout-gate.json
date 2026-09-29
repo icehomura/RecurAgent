@@ -1,5 +1,5 @@
 {
-  "schema": "pi.swarm.progress_slo.closeout_gate.v1",
+  "schema": "ra.swarm.progress_slo.closeout_gate.v1",
   "generated_at": "2026-05-15T07:15:35Z",
   "status": "pass",
   "purpose": "prompt_to_artifact_swarm_progress_slo_closeout_gate_not_source_of_truth",
@@ -32,7 +32,7 @@
       "bead_id": "bd-wzri8.1",
       "status": "closed",
       "title": "SPROG-T1: Define swarm progress SLO contract and source inventory",
-      "close_reason": "Completed: added pi.swarm.progress_slo.v1 contract and focused contract tests covering source inventory, authority boundaries, fail-closed degraded behavior, redaction, and read-only/no-replacement guards. Verified with jq, cargo fmt --check, RCH focused test, RCH cargo check --all-targets, and RCH cargo clippy --all-targets -- -D warnings.",
+      "close_reason": "Completed: added ra.swarm.progress_slo.v1 contract and focused contract tests covering source inventory, authority boundaries, fail-closed degraded behavior, redaction, and read-only/no-replacement guards. Verified with jq, cargo fmt --check, RCH focused test, RCH cargo check --all-targets, and RCH cargo clippy --all-targets -- -D warnings.",
       "commit": "083c3c8e67e49ad3a2fa109bc32c329bdb2aaa5c",
       "code_paths": [
         "docs/contracts/swarm-progress-slo-contract.json"
@@ -70,8 +70,8 @@
     {
       "bead_id": "bd-wzri8.3",
       "status": "closed",
-      "title": "SPROG-T3: Expose read-only pi swarm-progress CLI",
-      "close_reason": "Implemented read-only pi swarm-progress CLI with JSON/text output, overwrite refusal, malformed-input failures, advisory authority boundaries, and focused CLI coverage.",
+      "title": "SPROG-T3: Expose read-only ra swarm-progress CLI",
+      "close_reason": "Implemented read-only ra swarm-progress CLI with JSON/text output, overwrite refusal, malformed-input failures, advisory authority boundaries, and focused CLI coverage.",
       "commit": "44aa72036ed0f098492025290be6a6197f626b8f",
       "code_paths": [
         "src/cli.rs",
@@ -190,7 +190,7 @@
       "id": "normalized_sources_only",
       "status": "pass",
       "evidence": [
-        "pi swarm-progress consumes normalized ProgressSloEvaluationInput snapshots and does not scrape live Beads, Agent Mail, RCH, git, Doctor, runpack, or source files."
+        "ra swarm-progress consumes normalized ProgressSloEvaluationInput snapshots and does not scrape live Beads, Agent Mail, RCH, git, Doctor, runpack, or source files."
       ]
     },
     {
@@ -218,7 +218,7 @@
       "id": "cargo_headroom",
       "status": "pass",
       "evidence": [
-        "Validation commands use /data/tmp/pi_agent_rust_cargo/amberosprey target and tmp directories instead of repo-local target output."
+        "Validation commands use /data/tmp/recur_agent_cargo/amberosprey target and tmp directories instead of repo-local target output."
       ]
     },
     {
@@ -283,42 +283,42 @@
     {
       "id": "progress_slo_contract_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo test --test swarm_progress_slo_contract -- --nocapture"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo test --test swarm_progress_slo_contract -- --nocapture"
     },
     {
       "id": "progress_slo_cli_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo test --test swarm_progress_cli -- --nocapture"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo test --test swarm_progress_cli -- --nocapture"
     },
     {
       "id": "progress_slo_doctor_runpack_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo test --test doctor_swarm_temp_dir_json -- --nocapture"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo test --test doctor_swarm_temp_dir_json -- --nocapture"
     },
     {
       "id": "progress_slo_e2e_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo test --test swarm_progress_slo_e2e -- --nocapture"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo test --test swarm_progress_slo_e2e -- --nocapture"
     },
     {
       "id": "progress_slo_stress_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo test swarm_progress_slo::tests --lib -- --nocapture"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo test swarm_progress_slo::tests --lib -- --nocapture"
     },
     {
       "id": "progress_slo_closeout_gate_contract_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo test --test swarm_progress_slo_closeout_gate_contract -- --nocapture"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo test --test swarm_progress_slo_closeout_gate_contract -- --nocapture"
     },
     {
       "id": "cargo_check_all_targets_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo check --all-targets"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo check --all-targets"
     },
     {
       "id": "cargo_clippy_all_targets_rch",
       "status": "pass",
-      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/amberosprey/target TMPDIR=/data/tmp/pi_agent_rust_cargo/amberosprey/tmp cargo clippy --all-targets -- -D warnings"
+      "command": "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/amberosprey/target TMPDIR=/data/tmp/recur_agent_cargo/amberosprey/tmp cargo clippy --all-targets -- -D warnings"
     },
     {
       "id": "staged_ubs",
@@ -390,7 +390,7 @@
     {
       "id": "cli_surface",
       "status": "pass",
-      "requirement": "pi swarm-progress exposes JSON/text output, malformed-input failure, output overwrite refusal, and no live Beads/git mutation.",
+      "requirement": "ra swarm-progress exposes JSON/text output, malformed-input failure, output overwrite refusal, and no live Beads/git mutation.",
       "issue": null,
       "evidence": [
         {
@@ -437,7 +437,7 @@
       "evidence": [
         {
           "path": "src/swarm_progress_slo.rs",
-          "schema": "pi.swarm.progress_slo.stress_budget.v1",
+          "schema": "ra.swarm.progress_slo.stress_budget.v1",
           "caveat": "synthetic_engineering_signal_not_release_performance_evidence"
         }
       ]

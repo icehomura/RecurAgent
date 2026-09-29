@@ -6,7 +6,7 @@ Pi supports a headless RPC mode for integration with IDEs and other tools.
 
 Start Pi in RPC mode:
 ```bash
-pi --mode rpc
+ra --mode rpc
 ```
 
 Communication is via **JSON Lines** over stdin/stdout. Each line must be a valid JSON object.
@@ -104,7 +104,16 @@ Communication is via **JSON Lines** over stdin/stdout. Each line must be a valid
 - `text_delta`: Assistant text output chunk.
 - `thinking_delta`: Assistant thinking output chunk.
 - `tool_execution_start`: Tool execution started.
-- `tool_execution_update`: Streaming tool output.
+- `tool_execution_update`: Streaming tool output. `partialResult.details`
+  carries structured per-update payloads when a tool provides them; the
+  opt-in `dag` tool publishes its three progress schemas there —
+  `ra.dag.topology.v1` (graph shape, first frame), `ra.dag.node_state.v1`
+  (per-node state transitions with a monotonic `seq`), and
+  `ra.dag.node_output.v1` (node output deltas with `seq`) — all keyed by
+  `graphId` (the dag tool call id). On the ACP transport the same details
+  are forwarded as `tool_call_update._meta["ra.dev/dag"]`; only `ra.dag.*`
+  schemas are forwarded so approval/cancellation details never enter the
+  DAG namespace.
 - `tool_execution_end`: Tool execution finished.
 - `extension_ui_request`: Extension requested host UI interaction
   (confirm/select/input/editor/notify/etc.). Response-bearing events carry a

@@ -16,7 +16,7 @@ Enable the browser tool through the existing setting or selected tool list:
 ```
 
 ```sh
-pi --tools read,write,edit,bash,browser
+ra --tools read,write,edit,bash,browser
 ```
 
 The default native connection now lazily launches an installed Chromium/Chrome
@@ -31,13 +31,13 @@ and Windows installation locations.
 Host environment controls:
 
 ```sh
-PI_BROWSER_EXECUTABLE=/usr/bin/chromium \
-PI_BROWSER_HEADLESS=false \
-PI_BROWSER_USER_AGENT='Pi browser automation' \
-  pi --tools read,write,edit,bash,browser
+RECUR_AGENT_BROWSER_EXECUTABLE=/usr/bin/chromium \
+RECUR_AGENT_BROWSER_HEADLESS=false \
+RECUR_AGENT_BROWSER_USER_AGENT='Pi browser automation' \
+  ra --tools read,write,edit,bash,browser
 ```
 
-`PI_BROWSER_HEADLESS` defaults to true and accepts `true`, `false`, `1` or `0`.
+`RECUR_AGENT_BROWSER_HEADLESS` defaults to true and accepts `true`, `false`, `1` or `0`.
 A headed browser can be used for an interactive login in the temporary profile.
 Cookies and login state survive between calls in that same tool session, not
 across stopping or dropping the owned browser. Running Chromium as root without
@@ -82,8 +82,8 @@ IDs are not reused across restarts.
 To attach to an already-running dedicated browser:
 
 ```sh
-PI_BROWSER_CDP_URL=http://127.0.0.1:9222 \
-  pi --tools read,write,edit,bash,browser
+RECUR_AGENT_BROWSER_CDP_URL=http://127.0.0.1:9222 \
+  ra --tools read,write,edit,bash,browser
 ```
 
 SDK callers use `with_cdp_endpoint`. An explicitly configured endpoint disables
@@ -249,7 +249,7 @@ navigation/access guard, not network isolation. Page scripts, subresources and
 `evaluate` can generate traffic; use an OS/container network policy for strict
 isolation. The tool declares read, write, network and process effects.
 
-Mock mode requires `with_mock(true)` or `PI_BROWSER_MOCK=1`;
+Mock mode requires `with_mock(true)` or `RECUR_AGENT_BROWSER_MOCK=1`;
 `with_mock(false)` overrides the environment. New lifecycle, upload, full-page
 capture and PDF operations deliberately reject mock mode rather than inventing
 successful process or transfer results.
@@ -261,7 +261,7 @@ implementation environment: neither Rust nor DSR was installed. The required
 command failed with `dsr: command not found`, exit 127:
 
 ```sh
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 ```
 
 An independent Chromium 144 probe passed 13 protocol/helper checks: file-input

@@ -1,13 +1,13 @@
 # Swarm Flight Recorder
 
-The swarm flight recorder is a deterministic E2E evidence harness for multi-agent runs. It records redacted runtime events from real `AgentSession` execution, built-in tool calls, JS extension hooks, session persistence snapshots, and external coordination markers into JSONL rows with schema `pi.swarm.flight_recorder.event.v1`.
+The swarm flight recorder is a deterministic E2E evidence harness for multi-agent runs. It records redacted runtime events from real `AgentSession` execution, built-in tool calls, JS extension hooks, session persistence snapshots, and external coordination markers into JSONL rows with schema `ra.swarm.flight_recorder.event.v1`.
 
 The harness is designed for replay without live provider credentials. Tests use deterministic in-process providers and real Pi runtime components, so operators can inspect timing and coordination behavior without depending on OpenAI, Anthropic, or other provider accounts.
 
 ## Artifacts
 
 - `swarm_flight_recorder.jsonl`: append-only event rows with `correlationId`, `agentName`, `component`, `eventKind`, redaction summary, and redacted payload.
-- `swarm_flight_recorder_report.json`: summary report with schema `pi.swarm.flight_recorder.report.v1`, replay command, dominant latency components, component counts, and coordination failures.
+- `swarm_flight_recorder_report.json`: summary report with schema `ra.swarm.flight_recorder.report.v1`, replay command, dominant latency components, component counts, and coordination failures.
 
 Every JSONL row is validated by `validate_swarm_flight_recorder_jsonl` for current schema, monotonic sequence numbers, and required identity fields. Sensitive payload keys such as tokens, prompts, API keys, cookies, secrets, transcripts, and message content are replaced with `[REDACTED]`, and the row records which keys were redacted.
 

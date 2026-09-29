@@ -90,9 +90,9 @@
       "repo": "EthanAlgoX/MarketBot",
       "path": "src/agents/pi-extensions/context-pruning/extension.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/prompt-url-widget.ts",
-        ".pi/extensions/redraws.ts",
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/prompt-url-widget.ts",
+        ".ra/extensions/redraws.ts",
         "src/agents/pi-extensions/context-pruning/extension.ts",
         "src/agents/session-tool-result-guard.tool-result-persist-hook.test.ts"
       ],
@@ -176,13 +176,13 @@
     },
     {
       "repo": "Mic92/dotfiles",
-      "path": "home/.pi/agent/extensions/custom-footer.ts",
+      "path": "home/.ra/agent/extensions/custom-footer.ts",
       "all_paths": [
-        "home/.pi/agent/extensions/custom-footer.ts",
-        "home/.pi/agent/extensions/custom-instructions.ts",
-        "home/.pi/agent/extensions/permission-gate.ts",
-        "home/.pi/agent/extensions/stable-settings.ts",
-        "home/.pi/agent/extensions/workmux-status.ts"
+        "home/.ra/agent/extensions/custom-footer.ts",
+        "home/.ra/agent/extensions/custom-instructions.ts",
+        "home/.ra/agent/extensions/permission-gate.ts",
+        "home/.ra/agent/extensions/stable-settings.ts",
+        "home/.ra/agent/extensions/workmux-status.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -271,13 +271,13 @@
     },
     {
       "repo": "aadishv/dotfiles",
-      "path": "manifests/files/common/.pi/agent/extensions/clean-startup.ts",
+      "path": "manifests/files/common/.ra/agent/extensions/clean-startup.ts",
       "all_paths": [
-        "manifests/files/common/.pi/agent/extensions/clean-startup.ts",
-        "manifests/files/common/.pi/agent/extensions/discord.ts",
-        "manifests/files/common/.pi/agent/extensions/fps-counter.ts",
-        "manifests/files/common/.pi/agent/extensions/pricing.ts",
-        "manifests/files/common/.pi/agent/extensions/todo.ts"
+        "manifests/files/common/.ra/agent/extensions/clean-startup.ts",
+        "manifests/files/common/.ra/agent/extensions/discord.ts",
+        "manifests/files/common/.ra/agent/extensions/fps-counter.ts",
+        "manifests/files/common/.ra/agent/extensions/pricing.ts",
+        "manifests/files/common/.ra/agent/extensions/todo.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -460,8 +460,8 @@
       "repo": "charlie-818/CLAWD",
       "path": "src/agents/pi-extensions/context-pruning/extension.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/files.ts",
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/files.ts",
         "src/agents/pi-extensions/context-pruning/extension.ts"
       ],
       "is_valid_extension": true,
@@ -591,12 +591,12 @@
     },
     {
       "repo": "deybhayden/bendows",
-      "path": ".pi/agent/extensions/answer.ts",
+      "path": ".ra/agent/extensions/answer.ts",
       "all_paths": [
-        ".pi/agent/extensions/answer.ts",
-        ".pi/agent/extensions/bitbucket.ts",
-        ".pi/agent/extensions/github.ts",
-        ".pi/agent/extensions/todos.ts"
+        ".ra/agent/extensions/answer.ts",
+        ".ra/agent/extensions/bitbucket.ts",
+        ".ra/agent/extensions/github.ts",
+        ".ra/agent/extensions/todos.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -609,15 +609,15 @@
     },
     {
       "repo": "deybhayden/dotfiles",
-      "path": ".pi/agent/extensions/answer.ts",
+      "path": ".ra/agent/extensions/answer.ts",
       "all_paths": [
-        ".pi/agent/extensions/answer.ts",
-        ".pi/agent/extensions/bitbucket.ts",
-        ".pi/agent/extensions/github.ts",
-        ".pi/agent/extensions/session-breakdown.ts",
-        ".pi/agent/extensions/super-review.ts",
-        ".pi/agent/extensions/todos.ts",
-        ".pi/agent/extensions/uv.ts"
+        ".ra/agent/extensions/answer.ts",
+        ".ra/agent/extensions/bitbucket.ts",
+        ".ra/agent/extensions/github.ts",
+        ".ra/agent/extensions/session-breakdown.ts",
+        ".ra/agent/extensions/super-review.ts",
+        ".ra/agent/extensions/todos.ts",
+        ".ra/agent/extensions/uv.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -658,10 +658,10 @@
     },
     {
       "repo": "ehtbanton/controlocal",
-      "path": "packages/openclaw/.pi/extensions/prompt-url-widget.ts",
+      "path": "packages/openclaw/.ra/extensions/prompt-url-widget.ts",
       "all_paths": [
-        "packages/openclaw/.pi/extensions/prompt-url-widget.ts",
-        "packages/openclaw/.pi/extensions/redraws.ts"
+        "packages/openclaw/.ra/extensions/prompt-url-widget.ts",
+        "packages/openclaw/.ra/extensions/redraws.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -760,10 +760,10 @@
     },
     {
       "repo": "haider-patanwala/clawdbot",
-      "path": ".pi/extensions/diff.ts",
+      "path": ".ra/extensions/diff.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/files.ts"
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/files.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -813,15 +813,15 @@
     },
     {
       "repo": "jbuckmccready/dotfiles",
-      "path": "pi/.pi/agent/extensions/sandbox/index.ts",
+      "path": "pi/.ra/agent/extensions/sandbox/index.ts",
       "all_paths": [
-        "pi/.pi/agent/extensions/answer.ts",
-        "pi/.pi/agent/extensions/custom-compaction.ts",
-        "pi/.pi/agent/extensions/handoff.ts",
-        "pi/.pi/agent/extensions/notify.ts",
-        "pi/.pi/agent/extensions/quick-commit.ts",
-        "pi/.pi/agent/extensions/sandbox/index.ts",
-        "pi/.pi/agent/extensions/todo.ts"
+        "pi/.ra/agent/extensions/answer.ts",
+        "pi/.ra/agent/extensions/custom-compaction.ts",
+        "pi/.ra/agent/extensions/handoff.ts",
+        "pi/.ra/agent/extensions/notify.ts",
+        "pi/.ra/agent/extensions/quick-commit.ts",
+        "pi/.ra/agent/extensions/sandbox/index.ts",
+        "pi/.ra/agent/extensions/todo.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -835,11 +835,11 @@
     },
     {
       "repo": "jcolano/openclaw",
-      "path": ".pi/extensions/diff.ts",
+      "path": ".ra/extensions/diff.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/files.ts",
-        ".pi/extensions/redraws.ts"
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/files.ts",
+        ".ra/extensions/redraws.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -920,10 +920,10 @@
     },
     {
       "repo": "kaofelix/dotfiles",
-      "path": "pi/.pi/agent/extensions/auto-exit.ts",
+      "path": "pi/.ra/agent/extensions/auto-exit.ts",
       "all_paths": [
-        "pi/.pi/agent/extensions/auto-exit.ts",
-        "pi/.pi/agent/extensions/titlebar-spinner.ts"
+        "pi/.ra/agent/extensions/auto-exit.ts",
+        "pi/.ra/agent/extensions/titlebar-spinner.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -937,7 +937,7 @@
       "repo": "kavia-common/moltbot-311196",
       "path": "src/agents/pi-extensions/context-pruning/extension.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
+        ".ra/extensions/diff.ts",
         "src/agents/pi-extensions/context-pruning/extension.ts"
       ],
       "is_valid_extension": true,
@@ -979,13 +979,13 @@
     },
     {
       "repo": "l-lin/dotfiles",
-      "path": "home-manager/modules/share/ai/pi/.pi/agent/extensions/ask-user-question.ts",
+      "path": "home-manager/modules/share/ai/pi/.ra/agent/extensions/ask-user-question.ts",
       "all_paths": [
-        "home-manager/modules/share/ai/pi/.pi/agent/extensions/ask-user-question.ts",
-        "home-manager/modules/share/ai/pi/.pi/agent/extensions/copilot-usage.ts",
-        "home-manager/modules/share/ai/pi/.pi/agent/extensions/handoff.ts",
-        "home-manager/modules/share/ai/pi/.pi/agent/extensions/pre-tool-safety.ts",
-        "home-manager/modules/share/ai/pi/.pi/agent/extensions/review.ts"
+        "home-manager/modules/share/ai/pi/.ra/agent/extensions/ask-user-question.ts",
+        "home-manager/modules/share/ai/pi/.ra/agent/extensions/copilot-usage.ts",
+        "home-manager/modules/share/ai/pi/.ra/agent/extensions/handoff.ts",
+        "home-manager/modules/share/ai/pi/.ra/agent/extensions/pre-tool-safety.ts",
+        "home-manager/modules/share/ai/pi/.ra/agent/extensions/review.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -997,17 +997,17 @@
     },
     {
       "repo": "laulauland/dotfiles",
-      "path": "shared/.pi/agent/extensions/mcp/index.ts",
+      "path": "shared/.ra/agent/extensions/mcp/index.ts",
       "all_paths": [
-        "shared/.pi/agent/extensions/jj-footer.ts",
-        "shared/.pi/agent/extensions/jj-workflow.ts",
-        "shared/.pi/agent/extensions/mcp/index.ts",
-        "shared/.pi/agent/extensions/orc-mode.ts",
-        "shared/.pi/agent/extensions/shell-completions/index.ts",
-        "shared/.pi/agent/extensions/threads/index.ts",
-        "shared/.pi/agent/extensions/tmux-reference.ts",
-        "shared/.pi/agent/extensions/update.ts",
-        "shared/.pi/agent/extensions/web-tools/index.ts"
+        "shared/.ra/agent/extensions/jj-footer.ts",
+        "shared/.ra/agent/extensions/jj-workflow.ts",
+        "shared/.ra/agent/extensions/mcp/index.ts",
+        "shared/.ra/agent/extensions/orc-mode.ts",
+        "shared/.ra/agent/extensions/shell-completions/index.ts",
+        "shared/.ra/agent/extensions/threads/index.ts",
+        "shared/.ra/agent/extensions/tmux-reference.ts",
+        "shared/.ra/agent/extensions/update.ts",
+        "shared/.ra/agent/extensions/web-tools/index.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1038,9 +1038,9 @@
       "repo": "leopechnicki/AI-Assistant",
       "path": "src/agents/pi-extensions/context-pruning/extension.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/files.ts",
-        ".pi/extensions/redraws.ts",
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/files.ts",
+        ".ra/extensions/redraws.ts",
         "src/agents/pi-extensions/context-pruning/extension.ts",
         "src/agents/session-tool-result-guard.tool-result-persist-hook.test.ts"
       ],
@@ -1233,11 +1233,11 @@
     },
     {
       "repo": "neonspectra/dotfiles",
-      "path": ".pi/agent/extensions/commands.ts",
+      "path": ".ra/agent/extensions/commands.ts",
       "all_paths": [
-        ".pi/agent/extensions/commands.ts",
-        ".pi/agent/extensions/pi-self.ts",
-        ".pi/agent/extensions/web-search.ts"
+        ".ra/agent/extensions/commands.ts",
+        ".ra/agent/extensions/pi-self.ts",
+        ".ra/agent/extensions/web-search.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1334,7 +1334,7 @@
       "repo": "openclaw/openclaw",
       "path": "src/agents/pi-extensions/context-pruning/extension.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
+        ".ra/extensions/diff.ts",
         "src/agents/pi-extensions/context-pruning/extension.ts"
       ],
       "is_valid_extension": true,
@@ -1383,11 +1383,11 @@
     },
     {
       "repo": "richard-devbot/Computer-Agent",
-      "path": ".pi/extensions/diff.ts",
+      "path": ".ra/extensions/diff.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/prompt-url-widget.ts",
-        ".pi/extensions/redraws.ts"
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/prompt-url-widget.ts",
+        ".ra/extensions/redraws.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1432,11 +1432,11 @@
     },
     {
       "repo": "sbattywolf/GAIA",
-      "path": "external/openclaw/.pi/extensions/files.ts",
+      "path": "external/openclaw/.ra/extensions/files.ts",
       "all_paths": [
-        "external/openclaw/.pi/extensions/files.ts",
-        "external/openclaw/.pi/extensions/prompt-url-widget.ts",
-        "external/openclaw/.pi/extensions/redraws.ts"
+        "external/openclaw/.ra/extensions/files.ts",
+        "external/openclaw/.ra/extensions/prompt-url-widget.ts",
+        "external/openclaw/.ra/extensions/redraws.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1525,7 +1525,7 @@
       "path": "packages/pi-agentkernel/index.ts",
       "all_paths": [
         "packages/pi-agentkernel/index.ts",
-        "plugins/pi/.pi/extensions/agentkernel/index.ts"
+        "plugins/pi/.ra/extensions/agentkernel/index.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1570,17 +1570,17 @@
     },
     {
       "repo": "tudoroancea/dotfiles",
-      "path": ".pi/agent/extensions/claude-style.ts",
+      "path": ".ra/agent/extensions/claude-style.ts",
       "all_paths": [
-        ".pi/agent/extensions/claude-style.ts",
-        ".pi/agent/extensions/custom-header.ts",
-        ".pi/agent/extensions/double-escape.ts",
-        ".pi/agent/extensions/mac-system-theme.ts",
-        ".pi/agent/extensions/minimalist-tools.ts",
-        ".pi/agent/extensions/question.ts",
-        ".pi/agent/extensions/questionnaire.ts",
-        ".pi/agent/extensions/todo.ts",
-        ".pi/agent/extensions/working-word.ts"
+        ".ra/agent/extensions/claude-style.ts",
+        ".ra/agent/extensions/custom-header.ts",
+        ".ra/agent/extensions/double-escape.ts",
+        ".ra/agent/extensions/mac-system-theme.ts",
+        ".ra/agent/extensions/minimalist-tools.ts",
+        ".ra/agent/extensions/question.ts",
+        ".ra/agent/extensions/questionnaire.ts",
+        ".ra/agent/extensions/todo.ts",
+        ".ra/agent/extensions/working-word.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1608,10 +1608,10 @@
     },
     {
       "repo": "vrslev/dotfiles",
-      "path": "home/.pi/agent/extensions/mac-system-theme.ts",
+      "path": "home/.ra/agent/extensions/mac-system-theme.ts",
       "all_paths": [
-        "home/.pi/agent/extensions/mac-system-theme.ts",
-        "home/.pi/agent/extensions/todo.ts"
+        "home/.ra/agent/extensions/mac-system-theme.ts",
+        "home/.ra/agent/extensions/todo.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1680,9 +1680,9 @@
     },
     {
       "repo": "whodaniel/fuse",
-      "path": "apps/openclaw/.pi/extensions/prompt-url-widget.ts",
+      "path": "apps/openclaw/.ra/extensions/prompt-url-widget.ts",
       "all_paths": [
-        "apps/openclaw/.pi/extensions/prompt-url-widget.ts",
+        "apps/openclaw/.ra/extensions/prompt-url-widget.ts",
         "apps/openclaw/src/agents/pi-extensions/compaction-safeguard.ts",
         "apps/openclaw/src/agents/session-tool-result-guard.tool-result-persist-hook.test.ts"
       ],
@@ -1694,10 +1694,10 @@
     },
     {
       "repo": "willem4130/Android",
-      "path": "Kotlin/android/01-openclaw-production-app/.pi/extensions/prompt-url-widget.ts",
+      "path": "Kotlin/android/01-openclaw-production-app/.ra/extensions/prompt-url-widget.ts",
       "all_paths": [
-        "Kotlin/android/01-openclaw-production-app/.pi/extensions/prompt-url-widget.ts",
-        "Kotlin/android/01-openclaw-production-app/.pi/extensions/redraws.ts"
+        "Kotlin/android/01-openclaw-production-app/.ra/extensions/prompt-url-widget.ts",
+        "Kotlin/android/01-openclaw-production-app/.ra/extensions/redraws.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1724,9 +1724,9 @@
     },
     {
       "repo": "ATONCAP/monorepo",
-      "path": "packages/self/.pi/extensions/files.ts",
+      "path": "packages/self/.ra/extensions/files.ts",
       "all_paths": [
-        "packages/self/.pi/extensions/files.ts"
+        "packages/self/.ra/extensions/files.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1776,9 +1776,9 @@
     },
     {
       "repo": "M-Dev-Lab/ultimate-agent",
-      "path": "Sampling- Resources/openclaw-main/.pi/extensions/prompt-url-widget.ts",
+      "path": "Sampling- Resources/openclaw-main/.ra/extensions/prompt-url-widget.ts",
       "all_paths": [
-        "Sampling- Resources/openclaw-main/.pi/extensions/prompt-url-widget.ts"
+        "Sampling- Resources/openclaw-main/.ra/extensions/prompt-url-widget.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -1829,9 +1829,9 @@
     },
     {
       "repo": "Tiberriver256/mcp-server-azure-devops",
-      "path": ".pi/extensions/test-watch.ts",
+      "path": ".ra/extensions/test-watch.ts",
       "all_paths": [
-        ".pi/extensions/test-watch.ts"
+        ".ra/extensions/test-watch.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -2090,10 +2090,10 @@
       "repo": "9cog/pi-cogno",
       "path": "packages/coding-agent/examples/extensions/custom-provider-anthropic/index.ts",
       "all_paths": [
-        ".pi/extensions/diff.ts",
-        ".pi/extensions/files.ts",
-        ".pi/extensions/prompt-url-widget.ts",
-        ".pi/extensions/redraws.ts",
+        ".ra/extensions/diff.ts",
+        ".ra/extensions/files.ts",
+        ".ra/extensions/prompt-url-widget.ts",
+        ".ra/extensions/redraws.ts",
         "packages/coding-agent/examples/extensions/antigravity-image-gen.ts",
         "packages/coding-agent/examples/extensions/auto-commit-on-exit.ts",
         "packages/coding-agent/examples/extensions/bookmark.ts",
@@ -2668,9 +2668,9 @@
     },
     {
       "repo": "mrexodia/agent-viewer",
-      "path": ".pi/hooks/devdocs-commands.ts",
+      "path": ".ra/hooks/devdocs-commands.ts",
       "all_paths": [
-        ".pi/hooks/devdocs-commands.ts"
+        ".ra/hooks/devdocs-commands.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -2928,9 +2928,9 @@
     },
     {
       "repo": "pauldthomson/dotfiles",
-      "path": ".pi/extensions/web-fetch.ts",
+      "path": ".ra/extensions/web-fetch.ts",
       "all_paths": [
-        ".pi/extensions/web-fetch.ts"
+        ".ra/extensions/web-fetch.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -3029,9 +3029,9 @@
     },
     {
       "repo": "samuelstevens/dotfiles",
-      "path": "pi/.pi/agent/extensions/questions.ts",
+      "path": "pi/.ra/agent/extensions/questions.ts",
       "all_paths": [
-        "pi/.pi/agent/extensions/questions.ts"
+        "pi/.ra/agent/extensions/questions.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -3103,9 +3103,9 @@
     },
     {
       "repo": "sigtom/wow-ocp",
-      "path": ".pi/extensions/homelab-tools.ts",
+      "path": ".ra/extensions/homelab-tools.ts",
       "all_paths": [
-        ".pi/extensions/homelab-tools.ts"
+        ".ra/extensions/homelab-tools.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,
@@ -3204,10 +3204,10 @@
     },
     {
       "repo": "xxrenzhe/autobb",
-      "path": "openclaw/.pi/extensions/prompt-url-widget.ts",
+      "path": "openclaw/.ra/extensions/prompt-url-widget.ts",
       "all_paths": [
-        "openclaw/.pi/extensions/prompt-url-widget.ts",
-        "openclaw/.pi/extensions/redraws.ts"
+        "openclaw/.ra/extensions/prompt-url-widget.ts",
+        "openclaw/.ra/extensions/redraws.ts"
       ],
       "is_valid_extension": true,
       "has_api_import": true,

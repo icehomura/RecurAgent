@@ -1,7 +1,7 @@
 # Extension Capture Scenario Suite (bd-2qd)
 
 This document defines a **scenario specification** for the frozen extension sample set in `docs/extension-sample.json`.
-It is intended to drive capture + conformance harness work (legacy `pi-mono` → Rust `pi_agent_rust`) with **deterministic**, **auditable** expectations.
+It is intended to drive capture + conformance harness work (legacy `pi-mono` → Rust `recur_agent`) with **deterministic**, **auditable** expectations.
 
 Artifacts for the sample set are vendored under `tests/ext_conformance/artifacts/<id>/` (copied from the pinned legacy snapshot; see `docs/EXTENSION_SAMPLE.md`).
 
@@ -397,7 +397,7 @@ Scenarios:
 ### subagent
 
 **Source:** `tests/ext_conformance/artifacts/subagent/index.ts`  
-**Feature categories:** tool, UI integration (confirm), external process (spawns `pi` subprocess), filesystem (temp prompt files)
+**Feature categories:** tool, UI integration (confirm), external process (spawns `ra` subprocess), filesystem (temp prompt files)
 **Tool:** `subagent(...)`
 
 Scenarios (deterministic-first):
@@ -417,7 +417,7 @@ Scenarios (deterministic-first):
 
 - `subagent/ui_integration/deny_project_agents` (interactive)
   - Setup:
-    - have a project agent in `.pi/agents/`
+    - have a project agent in `.ra/agents/`
     - call subagent with `agentScope: "project"` and `confirmProjectAgents: true`
     - scripted confirm returns `false`
   - Expected:
@@ -445,7 +445,7 @@ Deterministic scenarios:
   - Expected: stable error message containing `Missing Google Antigravity OAuth credentials`
 
 - `antigravity-image-gen/tool/save_mode_custom_without_dir` (headless)
-  - Steps: invoke `generate_image { prompt: "a cat", save: "custom" }` with no `PI_IMAGE_SAVE_DIR`
+  - Steps: invoke `generate_image { prompt: "a cat", save: "custom" }` with no `RECUR_AGENT_IMAGE_SAVE_DIR`
   - Expected: deterministic error or saveError surfaced (exact message may differ; assert presence of `save`/`custom` and missing dir indicator)
 
 VCR-backed (future):

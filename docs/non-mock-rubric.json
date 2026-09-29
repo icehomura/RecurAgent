@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.non_mock_rubric.v1",
+  "schema": "ra.qa.non_mock_rubric.v1",
   "bead_id": "bd-1f42.2.8",
   "created_at": "2026-02-12T20:00:00Z",
   "owner": "OrangeHeron",
@@ -286,7 +286,7 @@
 
   "failure_log_schema": {
     "_doc": "Mandatory schema for unit/integration test failure diagnostics. Every test failure must emit structured data following this schema.",
-    "schema_id": "pi.test.failure_log.v1",
+    "schema_id": "ra.test.failure_log.v1",
     "fields": [
       {
         "field": "correlation_id",
@@ -340,7 +340,7 @@
         "redaction_rules": [
           "Values matching *_KEY, *_SECRET, *_TOKEN, *_PASSWORD are replaced with [REDACTED].",
           "Values matching *_API_KEY are replaced with [REDACTED].",
-          "Only test-relevant env vars are included (VCR_MODE, RUST_LOG, PI_E2E, CARGO_TARGET_DIR)."
+          "Only test-relevant env vars are included (VCR_MODE, RUST_LOG, RECUR_AGENT_E2E, CARGO_TARGET_DIR)."
         ]
       },
       {

@@ -8,31 +8,31 @@ Pi loads settings from (up to) two files:
 
 | Location | Scope |
 |----------|-------|
-| `~/.pi/agent/settings.json` | Global (all projects) |
-| `.pi/settings.json` | Project (current directory) |
+| `~/.ra/agent/settings.json` | Global (all projects) |
+| `.ra/settings.json` | Project (current directory) |
 
-You can override the path entirely with `PI_CONFIG_PATH` (see below).
+You can override the path entirely with `RECUR_AGENT_CONFIG_PATH` (see below).
 
-Run `pi config` to print the effective paths and precedence.
+Run `ra config` to print the effective paths and precedence.
 
 ## Precedence (highest → lowest)
 
 1. CLI flags
 2. Environment variables
-3. Project settings (`.pi/settings.json`)
-4. Global settings (`~/.pi/agent/settings.json`)
+3. Project settings (`.ra/settings.json`)
+4. Global settings (`~/.ra/agent/settings.json`)
 5. Built-in defaults
 
-## `PI_CONFIG_PATH` (single-file mode)
+## `RECUR_AGENT_CONFIG_PATH` (single-file mode)
 
-If `PI_CONFIG_PATH` is set, Pi loads *only* that file and skips the global/project merge.
+If `RECUR_AGENT_CONFIG_PATH` is set, Pi loads *only* that file and skips the global/project merge.
 
 ## Merge behavior (global vs project)
 
 Project settings override global settings on a per-field basis.
 
 Important detail: nested objects like `compaction`, `retry`, `images`, `terminal`, `branch_summary`,
-and `thinking_budgets` are treated as *single* fields. If `.pi/settings.json` contains a
+and `thinking_budgets` are treated as *single* fields. If `.ra/settings.json` contains a
 `compaction` object, it replaces the entire global `compaction` object.
 
 Within a single file, missing nested keys fall back to built-in defaults when accessed (see
@@ -41,12 +41,12 @@ Within a single file, missing nested keys fall back to built-in defaults when ac
 Example:
 
 ```json
-// ~/.pi/agent/settings.json (global)
+// ~/.ra/agent/settings.json (global)
 { "compaction": { "enabled": false, "reserve_tokens": 16384 } }
 ```
 
 ```json
-// .pi/settings.json (project)
+// .ra/settings.json (project)
 { "compaction": { "reserve_tokens": 8192 } }
 ```
 
@@ -65,7 +65,7 @@ Resulting behavior:
   the same way.
 - `hide_thinking_block` (bool): Hide thinking blocks in interactive output. Default `false`.
 - `show_hardware_cursor` (bool): Show terminal hardware cursor. Default `false` unless
-  `PI_HARDWARE_CURSOR=1`.
+  `RECUR_AGENT_HARDWARE_CURSOR=1`.
 
 ### Model selection
 
@@ -196,7 +196,7 @@ Accessor defaults:
   When `true`, the `subagent` tool appends a machine-readable
   `<subagent-structured-result>` block to its result text: a compact JSON array
   with one entry per child (`agent`, `step`, `status`, `exitCode`, `output`,
-  `error` — the same field names as the `pi.subagent.result.v1` details
+  `error` — the same field names as the `ra.subagent.result.v1` details
   schema). `output`/`error` are truncated to 2 KiB each and the whole block is
   capped at 16 KiB; when entries must be dropped, the final array element is
   `{"truncated": true, "omittedResults": N}`. Default `false` keeps the tool
@@ -267,7 +267,7 @@ Accessor defaults:
 
 ### Web Remote & Collab
 
-- `web.port` (integer): Port for `pi web` WebSocket server (default `8080`).
+- `web.port` (integer): Port for `ra web` WebSocket server (default `8080`).
 - `web.bind_mode` (string): `"loopback"`, `"tailscale"`, `"lan"`.
 - `web.view_only` (bool): Restricts all remote clients to view-only mode.
 - `web.max_viewers` (integer): Max concurrent viewer connections (default `4`).

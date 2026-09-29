@@ -1,7 +1,7 @@
 # Dependency Upgrade Log
 
 **Date:** 2026-02-14
-**Project:** pi_agent_rust
+**Project:** recur_agent
 **Language:** Rust
 **Manifests:** `Cargo.toml`, `fuzz/Cargo.toml`
 
@@ -88,8 +88,8 @@ To keep the project green on the upgraded toolchain/dependency set, additional c
 Executed (with build dirs on `/var/tmp` due shared `/dev/shm` and `/tmp` exhaustion):
 
 ```bash
-export CARGO_TARGET_DIR="/var/tmp/pi_agent_rust/${USER:-agent}/target"
-export TMPDIR="/var/tmp/pi_agent_rust/${USER:-agent}/tmp"
+export CARGO_TARGET_DIR="/var/tmp/recur_agent/${USER:-agent}/target"
+export TMPDIR="/var/tmp/recur_agent/${USER:-agent}/tmp"
 mkdir -p "$TMPDIR"
 
 rch exec -- cargo check --all-targets

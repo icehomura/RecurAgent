@@ -1,4 +1,4 @@
-# Extension Lockfile Format (`pi.package_lock.v1`)
+# Extension Lockfile Format (`ra.package_lock.v1`)
 
 This document specifies the deterministic extension lockfile format used by Pi
 to verify package integrity and track trust state across install, update, and
@@ -8,7 +8,7 @@ load operations.
 
 ```json
 {
-  "schema": "pi.package_lock.v1",
+  "schema": "ra.package_lock.v1",
   "entries": [
     {
       "identity": "npm:my-extension",
@@ -35,7 +35,7 @@ load operations.
 
 | Field     | Type   | Description                          |
 |-----------|--------|--------------------------------------|
-| `schema`  | string | Always `"pi.package_lock.v1"`        |
+| `schema`  | string | Always `"ra.package_lock.v1"`        |
 | `entries` | array  | Ordered list of `PackageLockEntry`   |
 
 ### `PackageLockEntry`
@@ -108,9 +108,9 @@ If a lockfile entry already exists:
 
 - **Digest match + provenance match**: Passes with reason code `verified`.
 - **Digest mismatch**: **Fails closed** with code `digest_mismatch`.
-  Remediation: `pi remove <source> && pi install <source>`.
+  Remediation: `ra remove <source> && ra install <source>`.
 - **Provenance mismatch**: **Fails closed** with code `provenance_mismatch`.
-  Remediation: `pi remove <source> && pi install <source>`.
+  Remediation: `ra remove <source> && ra install <source>`.
 
 ### Update
 
@@ -132,14 +132,14 @@ For unpinned sources (non-exact semver for NPM, non-commit-SHA for Git):
 Every lockfile transition (success or failure) is appended to
 `package-trust-audit.jsonl` in the appropriate scope directory:
 
-- **Project**: `.pi/package-trust-audit.jsonl`
-- **User (global)**: `~/.pi/package-trust-audit.jsonl`
+- **Project**: `.ra/package-trust-audit.jsonl`
+- **User (global)**: `~/.ra/package-trust-audit.jsonl`
 
-### Audit Event Schema (`pi.package_trust_audit.v1`)
+### Audit Event Schema (`ra.package_trust_audit.v1`)
 
 ```json
 {
-  "schema": "pi.package_trust_audit.v1",
+  "schema": "ra.package_trust_audit.v1",
   "timestamp": "2026-02-14T08:00:00.000Z",
   "action": "install",
   "scope": "project",
@@ -174,8 +174,8 @@ JSON output.
 
 | Scope     | Lockfile path                | Audit log path                           |
 |-----------|------------------------------|------------------------------------------|
-| Project   | `.pi/packages.lock.json`     | `.pi/package-trust-audit.jsonl`          |
-| User      | `~/.pi/packages.lock.json`   | `~/.pi/package-trust-audit.jsonl`        |
+| Project   | `.ra/packages.lock.json`     | `.ra/package-trust-audit.jsonl`          |
+| User      | `~/.ra/packages.lock.json`   | `~/.ra/package-trust-audit.jsonl`        |
 | Temporary | *(no lockfile)*              | *(no audit log)*                         |
 
 ## Determinism Guarantee

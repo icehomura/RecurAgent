@@ -1,6 +1,6 @@
 {
-  "schema": "pi.validation_broker.stress_budget_report.v1",
-  "entry_schema": "pi.validation_broker.stress_evidence.v1",
+  "schema": "ra.validation_broker.stress_budget_report.v1",
+  "entry_schema": "ra.validation_broker.stress_evidence.v1",
   "bead_id": "bd-gusp4.9",
   "parent_bead_id": "bd-gusp4",
   "generated_at_utc": "2026-05-14T17:05:00Z",
@@ -28,7 +28,7 @@
   ],
   "scenarios": [
     {
-      "schema": "pi.validation_broker.stress_evidence.v1",
+      "schema": "ra.validation_broker.stress_evidence.v1",
       "generated_at_utc": "2026-05-14T17:05:00Z",
       "profile": {
         "profile_id": "synthetic_64c_256gb_nominal",
@@ -69,7 +69,7 @@
         "does_not_replace_rch_doctor_cargo_headroom_ci_or_required_repo_gates"
       ],
       "provenance": {
-        "schema": "pi.validation_broker.source_provenance.v1",
+        "schema": "ra.validation_broker.source_provenance.v1",
         "source": "validation_broker_stress",
         "command": [
           "cargo",
@@ -78,7 +78,7 @@
           "validation_broker_store",
           "validation_broker_large_host_stress_budget_evidence_is_fail_closed"
         ],
-        "cwd": "/data/projects/pi_agent_rust",
+        "cwd": "/data/projects/recur_agent",
         "captured_at_utc": "2026-05-14T17:05:00Z",
         "artifact_path": "docs/evidence/validation-broker-stress-budgets.json"
       },
@@ -111,7 +111,7 @@
       ]
     },
     {
-      "schema": "pi.validation_broker.stress_evidence.v1",
+      "schema": "ra.validation_broker.stress_evidence.v1",
       "generated_at_utc": "2026-05-14T17:05:00Z",
       "profile": {
         "profile_id": "synthetic_64c_256gb_saturated",
@@ -158,7 +158,7 @@
         "does_not_replace_rch_doctor_cargo_headroom_ci_or_required_repo_gates"
       ],
       "provenance": {
-        "schema": "pi.validation_broker.source_provenance.v1",
+        "schema": "ra.validation_broker.source_provenance.v1",
         "source": "validation_broker_stress",
         "command": [
           "cargo",
@@ -167,7 +167,7 @@
           "validation_broker_store",
           "validation_broker_large_host_stress_budget_evidence_is_fail_closed"
         ],
-        "cwd": "/data/projects/pi_agent_rust",
+        "cwd": "/data/projects/recur_agent",
         "captured_at_utc": "2026-05-14T17:05:00Z",
         "artifact_path": "docs/evidence/validation-broker-stress-budgets.json"
       },
@@ -200,7 +200,7 @@
       ]
     },
     {
-      "schema": "pi.validation_broker.stress_evidence.v1",
+      "schema": "ra.validation_broker.stress_evidence.v1",
       "generated_at_utc": "2026-05-14T17:05:00Z",
       "profile": {
         "profile_id": "synthetic_64c_256gb_missing_store_bytes",
@@ -243,7 +243,7 @@
         "does_not_replace_rch_doctor_cargo_headroom_ci_or_required_repo_gates"
       ],
       "provenance": {
-        "schema": "pi.validation_broker.source_provenance.v1",
+        "schema": "ra.validation_broker.source_provenance.v1",
         "source": "validation_broker_stress",
         "command": [
           "cargo",
@@ -252,7 +252,7 @@
           "validation_broker_store",
           "validation_broker_large_host_stress_budget_evidence_is_fail_closed"
         ],
-        "cwd": "/data/projects/pi_agent_rust",
+        "cwd": "/data/projects/recur_agent",
         "captured_at_utc": "2026-05-14T17:05:00Z",
         "artifact_path": "docs/evidence/validation-broker-stress-budgets.json"
       },

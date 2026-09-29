@@ -1,7 +1,7 @@
 # BENCHMARK_COMPARISON_BETWEEN_RUST_VERSION_AND_ORIGINAL__GPT
 
 Generated: 2026-02-19
-Workspace: `/data/projects/pi_agent_rust`
+Workspace: `/data/projects/recur_agent`
 
 ## 0) Historical Post-Hardening Status Update (2026-02-17)
 
@@ -58,14 +58,14 @@ Older `224/224` compatibility checkpoints remain useful historical evidence, but
   - run: `release-e2e-20260219T033502Z`
   - provider/model: `ollama` / `qwen2.5:0.5b`
   - result: `224/224` pass (`0` fail, `0` timeout)
-- This lane is compatibility-focused (real `pi` binary + live provider path) rather than paid-provider throughput benchmarking.
+- This lane is compatibility-focused (real `ra` binary + live provider path) rather than paid-provider throughput benchmarking.
 
 ## 0.3) Full Perf Orchestrator Checkpoint (2026-02-19)
 
 - Full-suite orchestration run:
-  - command: `./scripts/perf/orchestrate.sh --profile full --skip-build --no-rch --output-dir /data/tmp/pi_agent_rust/codex/perf/full_local_skipbuild_retry_20260219T0650Z`
+  - command: `./scripts/perf/orchestrate.sh --profile full --skip-build --no-rch --output-dir /data/tmp/recur_agent/codex/perf/full_local_skipbuild_retry_20260219T0650Z`
   - correlation: `fullbench-local-skipbuild-retry-20260219T0650Z`
-  - manifest: `/data/tmp/pi_agent_rust/codex/perf/full_local_skipbuild_retry_20260219T0650Z/manifest.json`
+  - manifest: `/data/tmp/recur_agent/codex/perf/full_local_skipbuild_retry_20260219T0650Z/manifest.json`
 - Run summary:
   - suites: `11` total, `9` pass, `2` fail, `0` skip
   - duration: `1,601,650ms`
@@ -81,7 +81,7 @@ Older `224/224` compatibility checkpoints remain useful historical evidence, but
     - `criterion_extensions`
   - failing suites:
     - `perf_budgets` (`exit=101`): strict fail-closed budget contract due missing/stale evidence artifacts at expected canonical paths (criterion/pijs/release-binary inputs).
-    - `perf_regression` (`exit=101`): `binary_size_check` failed because release binary path was not present for strict mode (`/data/tmp/pi_agent_rust/codex/perf/release/pi`).
+    - `perf_regression` (`exit=101`): `binary_size_check` failed because release binary path was not present for strict mode (`/data/tmp/recur_agent/codex/perf/release/ra`).
 - Interpretation:
   - The two failures are evidence-path/precondition failures, not a demonstrated runtime-latency regression.
   - In the same run, the measured startup guards in `perf_regression` remained green (`--help` P95 `3.8ms`, `--version` P95 `3.6ms`).
@@ -113,7 +113,7 @@ Freshly re-measured in this run:
 
 Reused (existing in-repo evidence, unchanged methodology):
 - LOC and callable inventory (Rust + legacy scopes)
-- CLI diff (`pi --help` vs legacy `dist/cli.js --help`)
+- CLI diff (`ra --help` vs legacy `dist/cli.js --help`)
 - provider ID diff (Rust canonical table vs legacy runtime provider registry)
 - cross-runtime startup compare tables (Node/Bun) from prior validated run
 - one-shot startup footprint snapshots (`/usr/bin/time` RSS/user/sys)
@@ -124,7 +124,7 @@ Reused (existing in-repo evidence, unchanged methodology):
 - historical 223-extension vendored conformance + failure taxonomy (kept for baseline context; superseded by later checkpoint evidence and the current 2026-05-01 certification split above)
 
 Build/regeneration note:
-- `cargo build --release --bin pi` succeeds in this run and was used for fresh Rust startup numbers.
+- `cargo build --release --bin ra` succeeds in this run and was used for fresh Rust startup numbers.
 - Direct legacy Node/Bun reruns in this workspace are currently blocked by missing dependency surfaces in `legacy_pi_mono_code/pi-mono`:
   - Node startup: `ERR_MODULE_NOT_FOUND` for `chalk`
   - Bun startup: missing `node_modules/chalk`
@@ -137,7 +137,7 @@ Build/regeneration note:
 ## 2) Scope and Comparison Modes
 
 ### 2.1 Apples-to-Apples Scope
-- Rust target: this repo (`pi_agent_rust`)
+- Rust target: this repo (`recur_agent`)
 - Legacy target: `legacy_pi_mono_code/pi-mono/packages/coding-agent`
 
 ### 2.2 Apples-to-Oranges Scope (Full Legacy Runtime Context)
@@ -654,7 +654,7 @@ Results:
   - process_error: `0`
 
 Interpretation:
-- The extension compatibility claim now has both harness-level conformance evidence and real `target/release/pi` live-provider execution evidence.
+- The extension compatibility claim now has both harness-level conformance evidence and real `target/release/ra` live-provider execution evidence.
 - This is strong runtime compatibility validation; it is not a throughput/latency benchmark for provider quality.
 
 ## 7.4 Historical Baseline (2026-02-14, Superseded)

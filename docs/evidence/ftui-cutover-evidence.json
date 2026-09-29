@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ftui.cutover_evidence.v1",
+  "schema": "ra.ftui.cutover_evidence.v1",
   "generated_at": "2026-08-25T08:10:00Z",
   "bead": "bd-ti0tq",
   "purpose": "Verify ftui default cutover, e2e and unit test suite coverage in default build, binary size headroom delta, and charmed stack retirement disposition.",

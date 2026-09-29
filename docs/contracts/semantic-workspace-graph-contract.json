@@ -1,9 +1,9 @@
 {
-  "schema": "pi.semantic_workspace_graph.contract.v1",
+  "schema": "ra.semantic_workspace_graph.contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-ircr3.1",
   "parent_bead_id": "bd-ircr3",
-  "graph_schema": "pi.semantic_workspace_graph.v1",
+  "graph_schema": "ra.semantic_workspace_graph.v1",
   "purpose": "evidence_aware_context_intelligence_contract_not_source_of_truth",
   "summary": "Defines the node, edge, freshness, redaction, and authority boundaries for a future semantic workspace graph that can assemble task-specific context without replacing existing project sources of truth.",
   "required_node_types": [
@@ -789,7 +789,7 @@
     "path_classes_requiring_redaction": [
       "tests/fixtures/vcr/**",
       "tests/e2e_results/**",
-      ".pi/sessions/**",
+      ".ra/sessions/**",
       "docs/evidence/**",
       "tests/perf/reports/**"
     ],
@@ -859,7 +859,7 @@
       "input": {
         "node_type": "evidence_artifact",
         "path": "docs/evidence/dropin-certification-verdict.json",
-        "artifact_schema": "pi.dropin_certification.verdict.v1",
+        "artifact_schema": "ra.dropin_certification.verdict.v1",
         "generated_at": "2026-01-01T00:00:00Z",
         "claim_surface": "release_facing",
         "citation_value": "strict replacement wording"
@@ -875,7 +875,7 @@
       "input": {
         "node_type": "evidence_artifact",
         "path": "docs/planning/old-benchmark-snapshot.json",
-        "artifact_schema": "pi.perf.budget_summary.v1",
+        "artifact_schema": "ra.perf.budget_summary.v1",
         "generated_at": "2026-05-13T00:00:00Z",
         "claim_surface": "historical_snapshot"
       },

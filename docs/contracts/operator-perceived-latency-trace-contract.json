@@ -1,6 +1,6 @@
 {
-  "schema": "pi.operator.perceived_latency_trace_contract.v1",
-  "evidence_schema": "pi.operator.perceived_latency_trace.v1",
+  "schema": "ra.operator.perceived_latency_trace_contract.v1",
+  "evidence_schema": "ra.operator.perceived_latency_trace.v1",
   "description": "Fail-closed contract for deterministic operator-perceived semantic visibility traces across provider stream, RPC output, TUI frame, tool update, and operator-visible surfaces.",
   "required_top_level_keys": [
     "schema",

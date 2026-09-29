@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.executable_conformance_harness_contract.v1",
+  "schema": "ra.frankennode.executable_conformance_harness_contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-3ar8v.7.3",
   "support_bead_id": "bd-1ec8w",

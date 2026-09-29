@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.package_interop_contract.v1",
+  "schema": "ra.frankennode.package_interop_contract.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-3ar8v.7.4",
   "support_bead_id": "bd-3ar8v.7.4.1",

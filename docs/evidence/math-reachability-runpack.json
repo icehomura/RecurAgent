@@ -1,5 +1,5 @@
 {
-  "schema": "pi.evidence.math_reachability_runpack.v1",
+  "schema": "ra.evidence.math_reachability_runpack.v1",
   "generated_at": "2026-08-28T07:46:39.576743Z",
   "bead": "bd-math-reachability-evidence-k0ap2",
   "git_commit": "c4bcd9c65a4c95a6bfd566576b807b3dcf27f641",
@@ -95,7 +95,7 @@
         "ope_is_stable_across_input_order",
         "ope_fails_closed_when_wis_effects_overflow"
       ],
-      "telemetry_target": "pi.runtime.ope_evaluator.v1 (proposed)",
+      "telemetry_target": "ra.runtime.ope_evaluator.v1 (proposed)",
       "static_reachable": true,
       "dynamic_fire_evidence": "CORRECTION 2026-08-28: prior runpack reported static_reachable=False and a NO_BEAD claim. That was wrong. The full OPE/IPS/WIS/DR module IS implemented in src/extension_scoring.rs (lines 1505-1900): OpeTraceSample struct (action, behavior_propensity, target_propensity, outcome, baseline_outcome, direct_method_prediction, context_lineage), OpeEvaluatorConfig (max_importance_weight, min_effective_sample_size, max_standard_error, confidence_z, max_regret_delta), evaluate_off_policy() which computes IPS, WIS, and DR estimators plus ESS, plus a fail-closed gate decision (OpeGateReason: Approved / InsufficientSupport / ExcessiveVariance / ExcessiveRegret / NoValidSamples). 6+ unit tests in src/extension_scoring.rs cover ground truth, propensity skew, no valid samples, overflow, and input-order stability. The function names do not literally start with ips_/wis_/dr_/ess_ but the math produces all three estimators + ESS + regret gate as the README claims."
     }
@@ -103,10 +103,10 @@
   "summary": {
     "static_reachability_passed": 7,
     "static_reachability_failed": 0,
-    "dynamic_fire_evidence_paths": "All 7 techniques are reachable in code AND have unit tests. 5 of 7 are wired to existing tracing targets (regime_shift, math_technique_fire for pac_bayes/conformal/voi); CUSUM+BOCPD share pi.extensions.regime_shift; OCO is exercised in the reactor tests but does not yet emit a dedicated tracing event; OPE/IPS/WIS/DR has no production tracing event yet \u2014 adding pi.runtime.ope_evaluator.v1 is the natural follow-up.",
+    "dynamic_fire_evidence_paths": "All 7 techniques are reachable in code AND have unit tests. 5 of 7 are wired to existing tracing targets (regime_shift, math_technique_fire for pac_bayes/conformal/voi); CUSUM+BOCPD share pi.extensions.regime_shift; OCO is exercised in the reactor tests but does not yet emit a dedicated tracing event; OPE/IPS/WIS/DR has no production tracing event yet \u2014 adding ra.runtime.ope_evaluator.v1 is the natural follow-up.",
     "next_actions": [
-      "Add a `pi.runtime.ope_evaluator.v1` tracing event at the call site of evaluate_off_policy() so production traffic can be observed.",
-      "Re-run the math-reachability validation end-to-end once the DSR perf lane recovers and a v0.3.0 target/release/pi is built.",
+      "Add a `ra.runtime.ope_evaluator.v1` tracing event at the call site of evaluate_off_policy() so production traffic can be observed.",
+      "Re-run the math-reachability validation end-to-end once the DSR perf lane recovers and a v0.3.0 target/release/ra is built.",
       "Cross-check the OPE unit tests against the README math at L1231-1250."
     ]
   },

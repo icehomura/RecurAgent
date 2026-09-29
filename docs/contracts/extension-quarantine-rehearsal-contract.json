@@ -1,7 +1,7 @@
 {
-  "schema": "pi.extension.quarantine_rehearsal_contract.v1",
-  "output_schema": "pi.extension.quarantine_rehearsal.v1",
-  "input_schema": "pi.extension.quarantine_rehearsal_input.v1",
+  "schema": "ra.extension.quarantine_rehearsal_contract.v1",
+  "output_schema": "ra.extension.quarantine_rehearsal.v1",
+  "input_schema": "ra.extension.quarantine_rehearsal_input.v1",
   "purpose": "no_network_extension_quarantine_and_rollback_rehearsal",
   "description": "Contract for deterministic extension crash quarantine and rollback rehearsal output. The artifact can recommend quarantine, rollback, permission rejection, or pause/escalation, but it must not mutate extension files, configuration, Beads, Agent Mail, git, or network state.",
   "allowed_statuses": [

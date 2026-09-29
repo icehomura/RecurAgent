@@ -1,5 +1,5 @@
 {
-  "schema": "pi.franken_node.mission_contract.v1",
+  "schema": "ra.franken_node.mission_contract.v1",
   "bead_id": "bd-3ar8v.7.1",
   "contract_version": "1.0.0",
   "effective_date_utc": "2026-02-17T00:00:00Z",

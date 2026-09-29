@@ -46,13 +46,13 @@
     "docs/perf-budgets-recipe.md (13 sections documenting every hidden contract)"
   ],
   "what_remains_to_flip_claim_readiness": [
-    "Build target/release/pi (currently blocked on RCH E410 + build-dir lock)",
+    "Build target/release/ra (currently blocked on RCH E410 + build-dir lock)",
     "Run scripts/perf/measure_idle_memory.py to populate tests/perf/reports/release_evidence/idle_memory_rss.json",
     "Run scripts/perf/measure_binary_size.py to populate tests/perf/reports/release_evidence/binary_size.json",
     "Run scripts/perf/run_ext_cold_load_complex.py and run_event_dispatch_scenario.py to produce the criterion data",
     "Run scripts/perf/run_provider_live_e2e.py with at least one provider credential set",
     "Wire the new artifacts into the budget harness (the harness currently expects different file names; bridge is in scripts/perf/rebuild_evidence_bundle.py pattern)",
-    "Re-run the full DSR perf lane: dsr quality --tool pi_agent_rust",
+    "Re-run the full DSR perf lane: dsr quality --tool recur_agent",
     "Verify claim_readiness flips from blocked to ready (or ready_with_advisories)"
   ],
   "rch_state": {

@@ -1,6 +1,6 @@
 {
-  "schema": "pi.swarm.validation_scheduler_plan_contract.v1",
-  "plan_schema": "pi.swarm.validation_scheduler_plan.v1",
+  "schema": "ra.swarm.validation_scheduler_plan_contract.v1",
+  "plan_schema": "ra.swarm.validation_scheduler_plan.v1",
   "purpose": "read_only_validation_scheduler_not_execution_or_rch_authority",
   "required_top_level_keys": [
     "schema",

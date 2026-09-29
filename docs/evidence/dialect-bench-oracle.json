@@ -62,7 +62,7 @@
       "verdict": "tn"
     }
   ],
-  "schema": "pi.dialect_bench.v1",
+  "schema": "ra.dialect_bench.v1",
   "totals": {
     "cases": 10,
     "false_positive_rate": 0.0,

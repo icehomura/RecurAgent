@@ -1,10 +1,10 @@
 # Performance Benchmarks
 
-> **Purpose:** Track and validate performance budgets for pi_agent_rust.
+> **Purpose:** Track and validate performance budgets for recur_agent.
 
 ## User-Perceived SLI Contract
 
-Phase-0 canonical UX/SLI contract lives in `docs/perf_sli_matrix.json` (`schema: pi.perf.sli_matrix.v1`).
+Phase-0 canonical UX/SLI contract lives in `docs/perf_sli_matrix.json` (`schema: ra.perf.sli_matrix.v1`).
 
 - Primary release-deciding metrics are user-visible E2E/responsiveness SLIs.
 - Micro-benchmarks in this file are diagnostic/supporting metrics.
@@ -179,7 +179,7 @@ fn bench_new_operation(c: &mut Criterion) {
             BenchmarkId::new("name", size),
             &input,
             |b, input| {
-                b.iter(|| pi::module::function(black_box(input)));
+                b.iter(|| ra::module::function(black_box(input)));
             },
         );
     }
@@ -223,7 +223,7 @@ jobs:
 
       - name: Check binary size budget
         run: |
-          SIZE_MB=$(stat --printf="%s" target/release/pi | awk '{printf "%.2f", $1/1024/1024}')
+          SIZE_MB=$(stat --printf="%s" target/release/ra | awk '{printf "%.2f", $1/1024/1024}')
           echo "Binary size: ${SIZE_MB}MB"
           # Historical snippet: 20MB was the pre-v0.3.0 budget. The governed
           # release budget lives in tests/perf_budgets.rs (binary_size_release,
@@ -348,7 +348,7 @@ This workstream uses a strict **baseline → profile → prove → implement →
 - Use `hyperfine` for end-to-end CLI paths (if installed):
 
 ```bash
-hyperfine --warmup 3 --runs 10 'target/release/pi --version'
+hyperfine --warmup 3 --runs 10 'target/release/ra --version'
 ```
 
 - Use the PiJS workload harness for deterministic extension roundtrips:
@@ -384,8 +384,8 @@ JSONL logs (hyperfine + workload):
 ```jsonl
 {"tool":"hyperfine","scenario":"pijs_workload_200x1","command":"target/perf/pijs_workload --iterations 200 --tool-calls 1","mean_ms":16.96,"stddev_ms":0.98,"min_ms":15.78,"max_ms":19.00}
 {"tool":"hyperfine","scenario":"pijs_workload_200x10","command":"target/perf/pijs_workload --iterations 200 --tool-calls 10","mean_ms":97.09,"stddev_ms":4.27,"min_ms":93.08,"max_ms":105.57}
-{"schema":"pi.perf.workload.v1","tool":"pijs_workload","scenario":"tool_call_roundtrip","iterations":200,"tool_calls_per_iteration":1,"total_calls":200,"elapsed_ms":8,"per_call_us":44,"calls_per_sec":22716,"build_profile":"perf"}
-{"schema":"pi.perf.workload.v1","tool":"pijs_workload","scenario":"tool_call_roundtrip","iterations":200,"tool_calls_per_iteration":10,"total_calls":2000,"elapsed_ms":87,"per_call_us":43,"calls_per_sec":22883,"build_profile":"perf"}
+{"schema":"ra.perf.workload.v1","tool":"pijs_workload","scenario":"tool_call_roundtrip","iterations":200,"tool_calls_per_iteration":1,"total_calls":200,"elapsed_ms":8,"per_call_us":44,"calls_per_sec":22716,"build_profile":"perf"}
+{"schema":"ra.perf.workload.v1","tool":"pijs_workload","scenario":"tool_call_roundtrip","iterations":200,"tool_calls_per_iteration":10,"total_calls":2000,"elapsed_ms":87,"per_call_us":43,"calls_per_sec":22883,"build_profile":"perf"}
 ```
 
 Raw artifacts (local):
@@ -498,13 +498,13 @@ scenarios with per-extension timeouts, budget checks, and full environment finge
 
 ```bash
 # PR mode — diverse 10-extension subset, 10 iterations, ~3-4s in debug
-PI_BENCH_MODE=pr cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
+RECUR_AGENT_BENCH_MODE=pr cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 
 # Nightly mode — full safe corpus, 50 iterations
-PI_BENCH_MODE=nightly cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
+RECUR_AGENT_BENCH_MODE=nightly cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 
 # Custom mode — tune all parameters
-PI_BENCH_MODE=custom PI_BENCH_MAX=25 PI_BENCH_ITERATIONS=20 PI_BENCH_EVENT_COUNT=100 \
+RECUR_AGENT_BENCH_MODE=custom RECUR_AGENT_BENCH_MAX=25 RECUR_AGENT_BENCH_ITERATIONS=20 RECUR_AGENT_BENCH_EVENT_COUNT=100 \
   cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 ```
 
@@ -512,11 +512,11 @@ PI_BENCH_MODE=custom PI_BENCH_MAX=25 PI_BENCH_ITERATIONS=20 PI_BENCH_EVENT_COUNT
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PI_BENCH_MODE` | `pr` | Mode: `pr`, `nightly`, or `custom` |
-| `PI_BENCH_MAX` | 10 (pr) / 200 (nightly) / 20 (custom) | Max extensions to benchmark |
-| `PI_BENCH_ITERATIONS` | 10 (pr) / 50 (nightly) / 20 (custom) | Iterations per extension per scenario |
-| `PI_BENCH_EVENT_COUNT` | 50 (pr) / 200 (nightly) / 100 (custom) | Event dispatch iterations |
-| `PI_BENCH_TIMEOUT_SECS` | 30 | Per-extension timeout (skips slow extensions) |
+| `RECUR_AGENT_BENCH_MODE` | `pr` | Mode: `pr`, `nightly`, or `custom` |
+| `RECUR_AGENT_BENCH_MAX` | 10 (pr) / 200 (nightly) / 20 (custom) | Max extensions to benchmark |
+| `RECUR_AGENT_BENCH_ITERATIONS` | 10 (pr) / 50 (nightly) / 20 (custom) | Iterations per extension per scenario |
+| `RECUR_AGENT_BENCH_EVENT_COUNT` | 50 (pr) / 200 (nightly) / 100 (custom) | Event dispatch iterations |
+| `RECUR_AGENT_BENCH_TIMEOUT_SECS` | 30 | Per-extension timeout (skips slow extensions) |
 
 ### PR Subset Selection Policy
 
@@ -552,7 +552,7 @@ All outputs go to `target/perf/`:
 
 | File | Format | Content |
 |------|--------|---------|
-| `ext_bench_harness.jsonl` | JSONL | One `pi.ext.rust_bench.v1` record per extension per scenario |
+| `ext_bench_harness.jsonl` | JSONL | One `ra.ext.rust_bench.v1` record per extension per scenario |
 | `ext_bench_harness_report.json` | JSON | Full report with env, config, summaries, budget checks |
 | `BENCH_HARNESS_REPORT.md` | Markdown | Human-readable summary with tables |
 

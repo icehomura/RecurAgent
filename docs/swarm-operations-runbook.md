@@ -2,7 +2,7 @@
 
 Practical workflow for launching, monitoring, throttling, recovering, and handing off large Pi agent swarms.
 
-This runbook is operator guidance. It does not replace Beads as the work ledger, Agent Mail as the reservation/message ledger, `pi doctor` as the live diagnostic surface, or the release evidence gates as claim authority.
+This runbook is operator guidance. It does not replace Beads as the work ledger, Agent Mail as the reservation/message ledger, `ra doctor` as the live diagnostic surface, or the release evidence gates as claim authority.
 
 ## Source Of Truth
 
@@ -10,17 +10,17 @@ This runbook is operator guidance. It does not replace Beads as the work ledger,
 |---------|-----------|---------------------|
 | Work ownership | Beads issue state and comments | `br ready --json`, `br show <id>`, `br update <id> --claim --actor "$AGENT_NAME"` |
 | Cross-agent coordination | Agent Mail messages, reservations, and build slots | MCP Agent Mail `macro_start_session`, `file_reservation_paths`, `fetch_inbox` |
-| Live swarm readiness | Doctor swarm diagnostics | `pi doctor --only swarm --format json` |
+| Live swarm readiness | Doctor swarm diagnostics | `ra doctor --only swarm --format json` |
 | Cargo/RCH admission | Cargo headroom preflight | `scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets` |
 | Remote build status | RCH queue and worker state | `rch status`, `rch queue`, `rch doctor` |
 | Handoff bundle | Operator runpack | `python3 scripts/build_swarm_operator_runpack.py --capture-current ...` |
-| Progress posture | Read-only progress SLO report | `pi swarm-progress --input <progress-slo-input.json> --out-json <progress-slo.json>` |
+| Progress posture | Read-only progress SLO report | `ra swarm-progress --input <progress-slo-input.json> --out-json <progress-slo.json>` |
 | Queue convergence | Read-only empty-queue convergence report | `python3 scripts/report_empty_queue_convergence.py --json` |
 | Dry-run self-healing guidance | Runpack action plan and work admission gate | `python3 scripts/build_swarm_operator_runpack.py --out-action-plan-json ... --out-work-admission-gate-json ...` |
 | Evidence renewal posture | Stale evidence renewal queue | `python3 scripts/build_stale_evidence_renewal_queue.py --out-json ...` |
-| Saturation and timeline evidence | Redacted swarm activity ledger | `docs/swarm-activity-ledger.md`, schema `pi.swarm.activity_digest.v1` |
-| Deterministic replay evidence | Swarm flight recorder | `docs/swarm-flight-recorder.md`, schema `pi.swarm.flight_recorder.report.v1` |
-| Offline replay policy comparison | Swarm replay operator workflow | `docs/swarm-replay-operator-workflow.md`, `pi swarm-replay-preview --trace <trace.json>` |
+| Saturation and timeline evidence | Redacted swarm activity ledger | `docs/swarm-activity-ledger.md`, schema `ra.swarm.activity_digest.v1` |
+| Deterministic replay evidence | Swarm flight recorder | `docs/swarm-flight-recorder.md`, schema `ra.swarm.flight_recorder.report.v1` |
+| Offline replay policy comparison | Swarm replay operator workflow | `docs/swarm-replay-operator-workflow.md`, `ra swarm-replay-preview --trace <trace.json>` |
 
 ## Startup Checklist
 
@@ -28,10 +28,10 @@ Run these before claiming work in a multi-agent session:
 
 ```bash
 export AGENT_NAME="${AGENT_NAME:-$(whoami)}"
-export PI_CARGO_AGENT_SUFFIX="$AGENT_NAME"
-export CARGO_TARGET_DIR="/data/tmp/pi_agent_rust_cargo/${AGENT_NAME}/target"
-export TMPDIR="/data/tmp/pi_agent_rust_cargo/${AGENT_NAME}/tmp"
-capture_dir="${PI_SWARM_CAPTURE_DIR:-/data/tmp/pi_swarm_runpack/${AGENT_NAME}}"
+export RECUR_AGENT_CARGO_AGENT_SUFFIX="$AGENT_NAME"
+export CARGO_TARGET_DIR="/data/tmp/recur_agent_cargo/${AGENT_NAME}/target"
+export TMPDIR="/data/tmp/recur_agent_cargo/${AGENT_NAME}/tmp"
+capture_dir="${RECUR_AGENT_SWARM_CAPTURE_DIR:-/data/tmp/pi_swarm_runpack/${AGENT_NAME}}"
 mkdir -p "$CARGO_TARGET_DIR" "$TMPDIR" "$capture_dir"
 
 git status --short --branch
@@ -47,7 +47,7 @@ python3 scripts/report_empty_queue_convergence.py --json \
   "${agent_mail_arg[@]}"
 # When available, add:
 #   --validation-broker-json <validation-broker-status-or-plan.json>
-pi doctor --only swarm --format json > "$capture_dir/doctor.json"
+ra doctor --only swarm --format json > "$capture_dir/doctor.json"
 scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets \
   --decision-json "$capture_dir/cargo-admission.json"
 rch status
@@ -73,7 +73,7 @@ Green startup means:
   action, while ready Beads work remains visible. If health capture fails, keep
   the report's `agent_mail_status=unavailable` warning and use the Beads claim
   as the soft lock.
-- `pi doctor --only swarm --format json` has no red finding that says new swarm work must stop.
+- `ra doctor --only swarm --format json` has no red finding that says new swarm work must stop.
 - `scripts/cargo_headroom.sh --runner rch --admit-only ...` returns
   `decision=allow` with `admission_action=allow`. `admission_action=defer`
   means the gate must wait, and `admission_action=fallback` means the command
@@ -99,7 +99,7 @@ Before editing, reserve the narrowest practical file set in Agent Mail:
 
 ```text
 file_reservation_paths(
-  project_key="/data/projects/pi_agent_rust",
+  project_key="/data/projects/recur_agent",
   agent_name="$AGENT_NAME",
   paths=["src/module.rs", "tests/module_tests.rs"],
   ttl_seconds=3600,
@@ -147,7 +147,7 @@ editing the hook.
 
 Remote validation proof is governed by
 `docs/contracts/remote-validation-proof-ledger-contract.json` with ledger schema
-`pi.remote_validation.proof_ledger.v1`. The ledger is operator evidence only;
+`ra.remote_validation.proof_ledger.v1`. The ledger is operator evidence only;
 it is not release performance evidence, benchmark support, strict drop-in
 certification evidence, or a replacement for RCH, `cargo_headroom.sh`, CI, UBS,
 Beads, Agent Mail, or claim-integrity gates.
@@ -206,7 +206,7 @@ warning.
 
 The proof reuse gate is governed by
 `docs/contracts/remote-validation-proof-reuse-gate-contract.json` and emits
-`pi.validation.proof_reuse_gate.v1`. It is a read-only admission aid for
+`ra.validation.proof_reuse_gate.v1`. It is a read-only admission aid for
 deciding whether an existing remote validation proof can cover the exact current
 command, git head, staged paths, runner requirement, `CARGO_TARGET_DIR`, and
 `TMPDIR` context.
@@ -234,7 +234,7 @@ Mail, RCH workers, source files, or temp artifacts.
 
 The validation proof-memory index is governed by
 `docs/contracts/validation-proof-memory-index-contract.json` and emits
-`pi.validation.proof_memory_index.v1`. It is a read-only index over checked
+`ra.validation.proof_memory_index.v1`. It is a read-only index over checked
 remote-validation proof fixtures and proof-reuse decisions for the current
 command, git head, staged paths, RCH provenance, `CARGO_TARGET_DIR`, `TMPDIR`,
 and artifact retrieval context.
@@ -263,7 +263,7 @@ performance, benchmark, capacity, or strict drop-in claims.
 
 The operator work recommender is governed by
 `docs/contracts/operator-work-recommendation-contract.json` and emits
-`pi.swarm.operator_work_recommendation.v1`. It consumes the incident replay and
+`ra.swarm.operator_work_recommendation.v1`. It consumes the incident replay and
 validation proof-memory artifacts, then ranks advisory next-work decisions for
 healthy ready Beads, no ready work, Agent Mail corruption, RCH saturation, stale
 proof refresh, duplicate-work risk, and dirty-worktree admission denial.
@@ -292,7 +292,7 @@ Beads, Agent Mail, RCH, git, and validation workflows.
 
 The operator smoothness SLO is governed by
 `docs/contracts/operator-smoothness-slo-contract.json` and emits
-`pi.operator.smoothness_slo.v1`. It uses deterministic high-volume fixtures for
+`ra.operator.smoothness_slo.v1`. It uses deterministic high-volume fixtures for
 provider stream deltas, RPC output pressure, TUI frame rendering, tool-update
 coalescing, and session-write pressure.
 
@@ -317,15 +317,15 @@ claims.
 
 The extension resource firewall matrix is governed by
 `docs/contracts/extension-resource-firewall-matrix-contract.json` and emits
-`pi.ext.resource_firewall_matrix.v1` from the deterministic extension stress
+`ra.ext.resource_firewall_matrix.v1` from the deterministic extension stress
 fixture. It covers cheap-read floods, large payload emission, denied capability
 churn, slow hostcalls, repeated failure, and steady-peer progress.
 
 Use the focused stress-test slice to produce the target/perf evidence:
 
 ```bash
-export CARGO_TARGET_DIR="/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target"
-export TMPDIR="/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp"
+export CARGO_TARGET_DIR="/data/tmp/recur_agent_cargo/${USER:-agent}/target"
+export TMPDIR="/data/tmp/recur_agent_cargo/${USER:-agent}/tmp"
 mkdir -p "$CARGO_TARGET_DIR" "$TMPDIR"
 rch exec -- env CARGO_TARGET_DIR="$CARGO_TARGET_DIR" TMPDIR="$TMPDIR" cargo test --test extensions_stress resource_firewall_matrix -- --nocapture
 ```
@@ -343,7 +343,7 @@ Beads, UBS, CI, or benchmark/capacity/release claims.
 ## Temp Artifact Inventory
 
 Swarm runpacks include `temp_artifact_inventory` with schema
-`pi.swarm.temp_artifact_inventory.v1`. This is a read-only inventory of scratch
+`ra.swarm.temp_artifact_inventory.v1`. This is a read-only inventory of scratch
 and evidence paths observed through cargo admission, RCH proof entries, smoke
 harness artifacts, validation output captures, and capture-manifest temp
 artifacts.
@@ -370,7 +370,7 @@ br list --status=in_progress --json
 br ready --json
 rch status
 rch queue
-pi doctor --only swarm --format json
+ra doctor --only swarm --format json
 ```
 
 Watch for:
@@ -378,14 +378,14 @@ Watch for:
 - Multiple agents editing the same file without Agent Mail reservations or Beads comments.
 - `br list --status=in_progress --json` entries with old `updated_at` timestamps and no recent comments.
 - `rch queue` entries with stale progress, repeated artifact retrieval failures, or slot pressure.
-- `pi doctor --only swarm --format json` findings for Agent Mail build slots, reservation conflicts, cgroup memory pressure, target/TMPDIR headroom, or RCH classifier failures.
+- `ra doctor --only swarm --format json` findings for Agent Mail build slots, reservation conflicts, cgroup memory pressure, target/TMPDIR headroom, or RCH classifier failures.
 - Dirty worktree entries outside your claimed file set.
 
 Do not revert unrelated dirty files. Treat them as another agent's work unless the owning bead or the user explicitly says otherwise.
 
 ## Progress SLO Operator Workflow
 
-`pi swarm-progress` classifies whether a swarm is making progress from a
+`ra swarm-progress` classifies whether a swarm is making progress from a
 normalized `ProgressSloEvaluationInput` snapshot. It is read-only advisory
 evidence. It does not read live Beads, send Agent Mail, reserve files, start or
 cancel RCH jobs, mutate git, close beads, waive validation gates, or support
@@ -404,15 +404,15 @@ br list --status=in_progress --json > "$capture_dir/beads-in-progress.json"
 git status --short --branch > "$capture_dir/git-status.txt"
 rch status > "$capture_dir/rch-status.txt"
 rch queue > "$capture_dir/rch-queue.txt"
-PI_SWARM_PROGRESS_SLO_JSON="$capture_dir/progress-slo.json" \
-  pi doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
+RECUR_AGENT_SWARM_PROGRESS_SLO_JSON="$capture_dir/progress-slo.json" \
+  ra doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
 ```
 
 Evaluate a prepared normalized input and keep both machine and human-readable
 artifacts:
 
 ```bash
-pi swarm-progress \
+ra swarm-progress \
   --input "$capture_dir/progress-slo-input.json" \
   --since HEAD~1 \
   --out-json "$capture_dir/progress-slo.json" \
@@ -471,14 +471,14 @@ When the report should appear in Doctor or an operator runpack, pass the JSON
 explicitly:
 
 ```bash
-PI_SWARM_PROGRESS_SLO_JSON="$capture_dir/progress-slo.json" \
-  pi doctor --only swarm --format json \
+RECUR_AGENT_SWARM_PROGRESS_SLO_JSON="$capture_dir/progress-slo.json" \
+  ra doctor --only swarm --format json \
   | jq '.findings[] | select(.id == "progress_slo_current_posture")'
 
 python3 scripts/build_swarm_operator_runpack.py \
   --capture-current \
   --capture-dir "$capture_dir/runpack" \
-  --project-root /data/projects/pi_agent_rust \
+  --project-root /data/projects/recur_agent \
   --agent-name "${AGENT_NAME:-agent}" \
   --progress-slo-json "$capture_dir/progress-slo.json" \
   --out-json "$capture_dir/operator-runpack.json" \
@@ -531,14 +531,14 @@ mkdir -p "$capture_dir"
 br ready --json > "$capture_dir/beads-ready.json"
 br list --status=in_progress --json > "$capture_dir/beads-in-progress.json"
 git status --short --branch > "$capture_dir/git-status.txt"
-pi doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
+ra doctor --only swarm --format json > "$capture_dir/doctor-swarm.json"
 scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets \
   --decision-json "$capture_dir/cargo-admission.json"
 rch status > "$capture_dir/rch-status.txt"
 rch queue > "$capture_dir/rch-queue.txt"
 
 python3 scripts/build_stale_evidence_renewal_queue.py \
-  --source-root /data/projects/pi_agent_rust \
+  --source-root /data/projects/recur_agent \
   --freshness-hours 336 \
   --max-items 25 \
   --out-json "$capture_dir/stale-evidence-renewal.json"
@@ -546,7 +546,7 @@ python3 scripts/build_stale_evidence_renewal_queue.py \
 python3 scripts/build_swarm_operator_runpack.py \
   --capture-current \
   --capture-dir "$capture_dir/runpack-sources" \
-  --project-root /data/projects/pi_agent_rust \
+  --project-root /data/projects/recur_agent \
   --agent-name "$AGENT_NAME" \
   --stale-evidence-renewal-json "$capture_dir/stale-evidence-renewal.json" \
   --out-json "$capture_dir/operator-runpack.json" \
@@ -617,7 +617,7 @@ evidence files, RCH jobs, or release claims were mutated by these artifacts.
 ```
 
 The fourth-wave closeout gate emits
-`pi.swarm.fourth_wave_self_healing.closeout_gate.v1`, governed by
+`ra.swarm.fourth_wave_self_healing.closeout_gate.v1`, governed by
 `docs/contracts/fourth-wave-self-healing-closeout-gate-contract.json`; the
 current artifact is
 `docs/evidence/fourth-wave-self-healing-closeout-gate.json`. The gate maps each
@@ -634,7 +634,7 @@ Back off new claims when any of these are true:
 | RCH admission denies or backs off | `scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets` | Stop starting heavy cargo jobs. Continue docs, source inspection, or small non-cargo fixes. |
 | Local cargo/rustc process pressure is high | `scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets` | Wait for local process pressure to fall, or use `--force-admit` only for an explicitly approved override. |
 | Queue pressure is high | `rch queue` | Wait for active jobs to finish before launching more cargo. |
-| Agent Mail reservations conflict | `pi doctor --only swarm --format json` or Agent Mail reservation response | Narrow the file set, choose a different bead, or coordinate with the holder. |
+| Agent Mail reservations conflict | `ra doctor --only swarm --format json` or Agent Mail reservation response | Narrow the file set, choose a different bead, or coordinate with the holder. |
 | Beads has stale in-progress work | `br list --status=in_progress --json` | Comment on the stale issue, verify no recent owner activity, then reopen only if it is clearly abandoned. |
 | Drop-in or release evidence is stale | `scripts/report_swarm_claim_readiness.py` | Do not make release-facing claims. File or work the evidence gap. |
 | Worktree is dirty outside your scope | `git status --short --branch` | Ignore unrelated changes and keep your commit narrowly staged. |
@@ -658,7 +658,7 @@ Do not reopen an in-progress bead just because Agent Mail is degraded. A current
 
 ### Agent Mail Degraded
 
-1. Run `pi doctor --only swarm --format json` and save the finding.
+1. Run `ra doctor --only swarm --format json` and save the finding.
 2. Try the MCP registration/read path: `macro_start_session` or
    `register_agent`, then `fetch_inbox` or `list_agents`. Keep the exact
    health error, for example `database schema missing required tables`.
@@ -692,7 +692,7 @@ for this bead.`
 
 1. Run `rch status` and `rch queue`.
 2. Run `scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets`.
-3. If the classifier points at local target/TMPDIR headroom, move `CARGO_TARGET_DIR` and `TMPDIR` under `/data/tmp/pi_agent_rust_cargo/$AGENT_NAME`.
+3. If the classifier points at local target/TMPDIR headroom, move `CARGO_TARGET_DIR` and `TMPDIR` under `/data/tmp/recur_agent_cargo/$AGENT_NAME`.
 4. If the remote command failed, treat it as a code or remote-build failure only after the raw RCH output identifies that class.
 
 ### Dirty Worktree
@@ -725,7 +725,7 @@ python3 scripts/plan_semantic_validation_route.py \
 python3 scripts/build_swarm_operator_runpack.py \
   --capture-current \
   --capture-dir "$capture_dir" \
-  --project-root /data/projects/pi_agent_rust \
+  --project-root /data/projects/recur_agent \
   --agent-name "$AGENT_NAME" \
   --semantic-route-plan-json "$capture_dir/semantic-route-plan.json" \
   --progress-slo-json "$capture_dir/progress-slo.json" \
@@ -738,37 +738,37 @@ python3 scripts/build_swarm_operator_runpack.py \
 ```
 
 The runpack schema is governed by `docs/contracts/swarm-operator-runpack-contract.json`. The runpack is a redacted index over existing evidence, not a release performance claim and not a replacement for the source artifacts.
-The semantic route plan schema is `pi.validation.semantic_route_plan.v1`. Generate it with `scripts/plan_semantic_validation_route.py --from-git --source-bead <issue-id> --out "$capture_dir/semantic-route-plan.json"` and pass it to the runpack with `--semantic-route-plan-json`. The route is advisory only: it summarizes changed-path buckets, proof-memory/cache heat, RCH-backed command templates, coordination admission, and coalescing order, but operators must still claim through Beads, reserve through Agent Mail when healthy, and run heavyweight Cargo validation through RCH. It must not execute commands, launch RCH, mutate Beads, mutate Agent Mail, mutate git, delete files, skip validation, or support release, benchmark, capacity, performance, strict drop-in, or claim-readiness assertions.
+The semantic route plan schema is `ra.validation.semantic_route_plan.v1`. Generate it with `scripts/plan_semantic_validation_route.py --from-git --source-bead <issue-id> --out "$capture_dir/semantic-route-plan.json"` and pass it to the runpack with `--semantic-route-plan-json`. The route is advisory only: it summarizes changed-path buckets, proof-memory/cache heat, RCH-backed command templates, coordination admission, and coalescing order, but operators must still claim through Beads, reserve through Agent Mail when healthy, and run heavyweight Cargo validation through RCH. It must not execute commands, launch RCH, mutate Beads, mutate Agent Mail, mutate git, delete files, skip validation, or support release, benchmark, capacity, performance, strict drop-in, or claim-readiness assertions.
 The predictive telemetry ledger schema is governed by `docs/contracts/predictive-swarm-telemetry-ledger-contract.json`; checked-in advisory fixture evidence lives at `docs/evidence/predictive-swarm-telemetry-ledger.json`. It ranks validation, coordination, work-queue, turn-context, bottleneck-source, and evidence-freshness pressure from existing runpack signals only, and it must not be used as release performance, capacity, Agent Mail, RCH, scheduler, Beads, git, or claim-readiness authority.
 The validation scheduler plan schema is governed by `docs/contracts/validation-scheduler-plan-contract.json`; checked-in advisory fixture evidence lives at `docs/evidence/validation-scheduler-plan.json`. It ranks exact script and RCH-backed cargo command strings from the runpack's git, predictive telemetry, RCH admission, remote proof, and target-cache signals. It is read-only: it does not execute cargo, reserve workers, mutate Agent Mail or Beads, delete temp artifacts, or permit heavy cargo to fall back to local execution when RCH is unavailable.
 The autopilot input pack schema is governed by `docs/contracts/swarm-autopilot-input-pack-contract.json`. It normalizes source statuses for the dry-run planner, but it is still advisory and never replaces Doctor, Beads, Agent Mail, RCH, git, or the source artifacts themselves.
 The autopilot plan schema is governed by `docs/contracts/swarm-autopilot-plan-contract.json`. It maps the input pack to ordered dry-run actions such as `claim_ready_bead`, `wait_for_rch`, `adjust_swarm_budget`, `use_beads_soft_lock`, `reopen_stale_bead_candidate`, `run_docs_only_work`, `capture_handoff`, or `stop_and_surface_blocker`.
-When the command emits the companion input pack and plan, the runpack also includes `autopilot_handoff` with schema `pi.swarm.autopilot_handoff.v1`. That section names the input-pack and plan schemas, artifact paths, selected advisory action, and source provenance so a new agent can inspect one handoff bundle without treating the runpack as a new source of truth.
-Before relying on a handoff bundle, run `python3 scripts/check_swarm_runpack_freshness.py "$capture_dir/operator-runpack.json" --source-root /data/projects/pi_agent_rust`. The freshness guard is read-only and fails closed when the runpack or closeout-style evidence cites missing, placeholder, hash-mismatched, newer, or stale source artifacts.
+When the command emits the companion input pack and plan, the runpack also includes `autopilot_handoff` with schema `ra.swarm.autopilot_handoff.v1`. That section names the input-pack and plan schemas, artifact paths, selected advisory action, and source provenance so a new agent can inspect one handoff bundle without treating the runpack as a new source of truth.
+Before relying on a handoff bundle, run `python3 scripts/check_swarm_runpack_freshness.py "$capture_dir/operator-runpack.json" --source-root /data/projects/recur_agent`. The freshness guard is read-only and fails closed when the runpack or closeout-style evidence cites missing, placeholder, hash-mismatched, newer, or stale source artifacts.
 For closeout evidence triage, run `python3 scripts/check_closeout_gate_freshness.py --operator-summary markdown` after the freshness audit exists. The summary groups current-artifact, missing-contract, stale-source, missing-commit, hash-drift, README-drift, and malformed-source failures, then ranks read-only inspection commands and Beads-only refresh ownership guidance. It is advisory operator context only; it does not replace the freshness JSON, Beads, Agent Mail, RCH, git, source artifacts, UBS, or claim-integrity gates.
 The plan also includes `work_partitions` for ready Beads. Those entries recommend reservation globs, likely collision surfaces to avoid, alternate file families, confidence, and degraded caveats. They are diagnostic only; operators still claim through Beads and reserve through Agent Mail when it is healthy.
-The input pack and plan also carry `budget_drift` evidence with schema `pi.swarm.budget_drift.v1`. It compares the last accepted swarm resource preflight profile with live cgroup, memory, scratch-path, RCH queue, and active-owner observations. Status `stable` keeps the current ceiling, `degraded` recommends reduced fanout with hysteresis, and `deny_new_work` recommends admitting no new agents or heavyweight RCH verification until the live signals recover.
+The input pack and plan also carry `budget_drift` evidence with schema `ra.swarm.budget_drift.v1`. It compares the last accepted swarm resource preflight profile with live cgroup, memory, scratch-path, RCH queue, and active-owner observations. Status `stable` keeps the current ceiling, `degraded` recommends reduced fanout with hysteresis, and `deny_new_work` recommends admitting no new agents or heavyweight RCH verification until the live signals recover.
 The plan also includes `failure_actions` for common operational blockers. Those entries use stable catalog IDs for RCH artifact retrieval, local Cargo target/TMPDIR pressure, remote compiler failures, Agent Mail schema/read-only degradation, Beads JSONL drift, stale Beads ownership, and unknown operational failures. Unknown entries fail closed with a redacted raw excerpt and safe inspection commands instead of guessing a root cause.
-The work-admission gate includes `dry_run_executor` with schema `pi.swarm.work_admission_dry_run_executor.v1`. It consumes the autopilot plan plus Beads/RCH/Agent Mail/git/headroom signals, classifies read-only probes as `would_execute`, routes source-of-truth mutations to `requires_operator`, blocks unsafe admission with explicit reasons, and permanently rejects deletion requests, Agent Mail mutation, RCH execution/mutation, local heavyweight Cargo, and Beads ownership bypasses as `never_execute`.
+The work-admission gate includes `dry_run_executor` with schema `ra.swarm.work_admission_dry_run_executor.v1`. It consumes the autopilot plan plus Beads/RCH/Agent Mail/git/headroom signals, classifies read-only probes as `would_execute`, routes source-of-truth mutations to `requires_operator`, blocks unsafe admission with explicit reasons, and permanently rejects deletion requests, Agent Mail mutation, RCH execution/mutation, local heavyweight Cargo, and Beads ownership bypasses as `never_execute`.
 The no-mock autopilot E2E harness emits `pi.swarm.autopilot_e2e.v1` plus `pi.swarm.autopilot_e2e.event.v1` JSONL events. It uses temp Beads and temp git workspaces where safe, fixture-captured degraded Agent Mail and RCH inputs where live mutation would be unsafe, and verifies healthy claim, empty queue, deletion-request rejection, Beads soft-lock fallback, saturated RCH, stale bead review, unrelated dirty worktree, and malformed-source fail-closed scenarios. This is operator admission evidence only; it is not a release speed, drop-in, or benchmark claim.
-The final closeout gate emits `pi.swarm.autopilot_decision_gate.v1`, governed by `docs/contracts/swarm-autopilot-decision-gate-contract.json`. It compares the shipped input pack, planner, work partitions, failure-action catalog, budget drift watcher, E2E/logging evidence, runpack handoff, safety guards, pushed commits, and quality gates to the prompt-to-artifact checklist. A failed gate emits `follow_up_beads` and `decision=file_follow_up_beads_before_closing_epic`; a passing gate is still only closeout evidence over Beads, git, RCH, Doctor, Agent Mail, and source artifacts, not a new source of truth.
-The adaptive-execution closeout gate emits `pi.swarm.adaptive_execution.closeout_gate.v1`, governed by `docs/contracts/adaptive-execution-closeout-gate-contract.json`; the current artifact is `docs/evidence/adaptive-execution-closeout-gate.json`. It is advisory closeout evidence only and does not replace Beads, git, RCH, Agent Mail, CI, UBS, release certification, or source files.
-The extension-compatibility closeout gate emits `pi.ext.compatibility_closeout_gate.v1`, governed by `docs/contracts/extension-compatibility-closeout-gate-contract.json`; the current artifact is `docs/evidence/extension-compatibility-closeout-gate.json`. It is advisory closeout evidence only and does not replace extension conformance runs, Beads, git, RCH, Agent Mail, CI, UBS, release certification, or source files.
-The swarm-replay closeout gate emits `pi.swarm.replay_closeout_gate.v1`, governed by `docs/contracts/swarm-replay-closeout-gate-contract.json`; the current artifact is `docs/evidence/swarm-replay-closeout-gate.json`. It is advisory closeout evidence only and does not replace replay fixtures, Beads, git, RCH, Agent Mail, CI, UBS, release certification, or source files.
-The context-intelligence closeout gate emits `pi.context_intelligence.closeout_gate.v1`, governed by `docs/contracts/context-intelligence-closeout-gate-contract.json`. It maps each `bd-ircr3` child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks graph contracts, graph builder, freshness and claim gates, bundle planner, redaction and invalidation, preview surface, prompt injection, no-mock E2E, performance budgets, Doctor/runpack posture, operator docs, README freshness, pushed commits, staged UBS, and Beads ledger reconciliation. A passing context gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, or source files.
-The validation-broker closeout gate emits `pi.validation_broker.closeout_gate.v1`, governed by `docs/contracts/validation-broker-closeout-gate-contract.json`; the current artifact is `docs/evidence/validation-broker-closeout-gate.json`. It maps each `bd-gusp4` implementation child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks source-boundary contracts, lease storage, source normalization, admission policy, CLI lease flow, fault corpus, Doctor/runpack projection, no-mock E2E coverage, stress-budget evidence, operator docs, README freshness, pushed commits, staged UBS, and Beads ledger reconciliation. A passing validation-broker gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, Agent Mail, CI, UBS, `cargo_headroom.sh`, or source files.
-The progress-SLO closeout gate emits `pi.swarm.progress_slo.closeout_gate.v1`, governed by `docs/contracts/swarm-progress-slo-closeout-gate-contract.json`; the current artifact is `docs/evidence/swarm-progress-slo-closeout-gate.json`. It maps each `bd-wzri8` implementation child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks the progress-SLO contract, deterministic evaluator, read-only CLI, Doctor/runpack projection, no-mock E2E evidence, synthetic stress budgets, operator docs, README freshness, pushed commits, staged UBS, Beads ledger reconciliation, and source-boundary checks. A passing progress-SLO gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, Agent Mail, CI, UBS, claim-integrity gates, or source files.
-The runtime-intelligence closeout gate emits `pi.runtime_intelligence.closeout_gate.v1`, governed by `docs/contracts/runtime-intelligence-closeout-gate-contract.json`; the current artifact is `docs/evidence/runtime-intelligence-closeout-gate.json`. It maps each `bd-h66tp` implementation child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks compaction admission, tool-output artifacts, provider routing, scheduler fairness, frame-budget telemetry, cancellation cleanup, extension safety provenance, docs/evidence, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and RCH-backed quality gates. A passing runtime-intelligence gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, Agent Mail, CI, UBS, claim-integrity gates, or source files.
-The proof-carrying swarm test-fabric closeout gate emits `pi.swarm.proof_carrying_test_fabric.closeout_gate.v1`, governed by `docs/contracts/proof-carrying-swarm-test-fabric-closeout-gate-contract.json`; the current artifact is `docs/evidence/proof-carrying-swarm-test-fabric-closeout-gate.json`. It maps each `bd-zeccr` implementation child bead to source paths, tests or fixtures, evidence artifacts, validation commands, close reasons, pushed commits, and negative controls; then it checks no-mock lifecycle E2E, cross-surface conformance, operator evidence goldens, structure-aware fuzz/property coverage, metamorphic replay equivalence, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and RCH-backed quality gates. A passing proof-carrying test-fabric gate is closeout evidence only and does not replace Beads, git, RCH, Agent Mail, UBS, CI, claim-integrity gates, child evidence, or source files.
-The predictive-operations closeout gate emits `pi.swarm.predictive_operations.closeout_gate.v1`, governed by `docs/contracts/predictive-operations-closeout-gate-contract.json`; the current artifact is `docs/evidence/predictive-operations-closeout-gate.json`. It maps each `bd-63x3v.11` implementation child bead to source paths, tests or fixtures, evidence artifacts, validation commands, close reasons, pushed commits, and claim-boundary text; then it checks predictive telemetry fusion, validation scheduling, semantic compaction quality, hostcall cost attribution, operator-perceived latency, redundant-agent-work detection, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and untracked follow-ups. A passing predictive-operations gate is closeout evidence only and does not replace Beads, git, RCH, Agent Mail, UBS, CI, claim-integrity gates, child evidence, generated target/perf outputs, or source files.
-The ninth-wave incident replay and proof-memory closeout gate emits `pi.swarm.incident_replay_proof_memory.closeout_gate.v1`, governed by `docs/contracts/ninth-wave-incident-replay-proof-memory-closeout-gate-contract.json`; the current artifact is `docs/evidence/ninth-wave-incident-replay-proof-memory-closeout-gate.json`. It maps each `bd-9yq7i` child bead to source paths, tests or fixtures, evidence artifacts, validation commands, close reasons, pushed commits, negative controls, and claim-boundary text; then it checks incident corpus, incident replay, validation proof memory, operator work recommendation, operator smoothness SLO, extension resource firewall matrix, incident replay E2E, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and untracked follow-ups. A passing ninth-wave gate is closeout evidence only and does not replace Beads, git, RCH, Agent Mail, UBS, CI, claim-integrity gates, child evidence, generated target/perf outputs, prior-wave evidence, or source files.
-The operator-perceived latency trace emits `pi.operator.perceived_latency_trace.v1`, governed by `docs/contracts/operator-perceived-latency-trace-contract.json`; the current fixture artifact is `docs/evidence/operator-perceived-latency-trace.json`. It joins provider-stream, RPC-output, TUI-frame, tool-update, and operator-visible semantic milestones while proving low-value coalescing does not hide semantic output. The trace is advisory fixture evidence only and does not replace provider/RPC/TUI backpressure evidence or authorize benchmark, capacity, release performance, or strict drop-in claims.
-The operator smoothness SLO emits `pi.operator.smoothness_slo.v1`, governed by `docs/contracts/operator-smoothness-slo-contract.json`; the current fixture artifact is `docs/evidence/operator-smoothness-slo.json`. It covers provider stream deltas, RPC output pressure, TUI frame rendering, tool-update coalescing, and session-write pressure with deterministic p50/p95/p99 visibility counters, semantic milestone counts, backlog budgets, failure logs, and fail-closed controls for delayed visibility, non-monotonic timelines, runaway frame backlog, and missing surface coverage. The SLO is advisory engineering fixture evidence only and does not replace focused surface tests or authorize benchmark, capacity, release performance, strict drop-in, runtime mutation, RCH, cargo, git, or Beads claims.
-The extension resource firewall matrix emits `pi.ext.resource_firewall_matrix.v1`, governed by `docs/contracts/extension-resource-firewall-matrix-contract.json`; focused `extensions_stress` runs write `resource_firewall_matrix.json` under target/perf. It covers cheap-read flood, large payload emission, denied capability churn, slow hostcall, repeated failure, and steady-peer progress rows with budgets, observed counters, admission decisions, denial modes, fallback behavior, payload redaction, capability-boundary preservation, and fail-closed negative controls for missing counters, missing peer progress, and unredacted payload bodies. The matrix is advisory stress evidence only and does not replace runtime enforcement, hostcall cost attribution, RCH validation, Agent Mail, Beads, UBS, CI, or benchmark/capacity/release claims.
-The swarm incident corpus emits `pi.swarm.incident_corpus.v1`, governed by `docs/contracts/swarm-incident-corpus-contract.json`; the current fixture artifact is `docs/evidence/swarm-incident-corpus.json`. It captures deterministic operator incidents for Agent Mail schema corruption, RCH saturation/local-fallback denial, stale evidence, duplicate work risk, dirty worktree admission denial, malformed source artifacts, and deletion or live-mutation rejection, plus fail-closed negative controls for missing sources, unsafe unredacted bodies, contradictory status, and unsafe authorization attempts. The corpus is advisory fixture evidence only and does not replace release performance, drop-in certification, Agent Mail, RCH, Beads, git, source artifacts, or destructive-action authority.
-The swarm incident replay harness emits `pi.swarm.incident_replay.v1`, governed by `docs/contracts/swarm-incident-replay-contract.json`; the current fixture artifact is `docs/evidence/swarm-incident-replay.json`. It consumes the incident corpus and reconstructs source capture, Agent Mail degradation, RCH admission, Beads ownership, dirty worktree state, validation outcome, and final recommendation phases with per-step assertions and redacted excerpts. Negative controls fail closed for out-of-order events, missing sources, unredacted sensitive content, and replay output being treated as source-of-truth authority. Replay is advisory fixture evidence only and does not replace live Agent Mail, RCH, Beads, git, source artifacts, or destructive-action authority.
+The final closeout gate emits `ra.swarm.autopilot_decision_gate.v1`, governed by `docs/contracts/swarm-autopilot-decision-gate-contract.json`. It compares the shipped input pack, planner, work partitions, failure-action catalog, budget drift watcher, E2E/logging evidence, runpack handoff, safety guards, pushed commits, and quality gates to the prompt-to-artifact checklist. A failed gate emits `follow_up_beads` and `decision=file_follow_up_beads_before_closing_epic`; a passing gate is still only closeout evidence over Beads, git, RCH, Doctor, Agent Mail, and source artifacts, not a new source of truth.
+The adaptive-execution closeout gate emits `ra.swarm.adaptive_execution.closeout_gate.v1`, governed by `docs/contracts/adaptive-execution-closeout-gate-contract.json`; the current artifact is `docs/evidence/adaptive-execution-closeout-gate.json`. It is advisory closeout evidence only and does not replace Beads, git, RCH, Agent Mail, CI, UBS, release certification, or source files.
+The extension-compatibility closeout gate emits `ra.ext.compatibility_closeout_gate.v1`, governed by `docs/contracts/extension-compatibility-closeout-gate-contract.json`; the current artifact is `docs/evidence/extension-compatibility-closeout-gate.json`. It is advisory closeout evidence only and does not replace extension conformance runs, Beads, git, RCH, Agent Mail, CI, UBS, release certification, or source files.
+The swarm-replay closeout gate emits `ra.swarm.replay_closeout_gate.v1`, governed by `docs/contracts/swarm-replay-closeout-gate-contract.json`; the current artifact is `docs/evidence/swarm-replay-closeout-gate.json`. It is advisory closeout evidence only and does not replace replay fixtures, Beads, git, RCH, Agent Mail, CI, UBS, release certification, or source files.
+The context-intelligence closeout gate emits `ra.context_intelligence.closeout_gate.v1`, governed by `docs/contracts/context-intelligence-closeout-gate-contract.json`. It maps each `bd-ircr3` child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks graph contracts, graph builder, freshness and claim gates, bundle planner, redaction and invalidation, preview surface, prompt injection, no-mock E2E, performance budgets, Doctor/runpack posture, operator docs, README freshness, pushed commits, staged UBS, and Beads ledger reconciliation. A passing context gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, or source files.
+The validation-broker closeout gate emits `ra.validation_broker.closeout_gate.v1`, governed by `docs/contracts/validation-broker-closeout-gate-contract.json`; the current artifact is `docs/evidence/validation-broker-closeout-gate.json`. It maps each `bd-gusp4` implementation child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks source-boundary contracts, lease storage, source normalization, admission policy, CLI lease flow, fault corpus, Doctor/runpack projection, no-mock E2E coverage, stress-budget evidence, operator docs, README freshness, pushed commits, staged UBS, and Beads ledger reconciliation. A passing validation-broker gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, Agent Mail, CI, UBS, `cargo_headroom.sh`, or source files.
+The progress-SLO closeout gate emits `ra.swarm.progress_slo.closeout_gate.v1`, governed by `docs/contracts/swarm-progress-slo-closeout-gate-contract.json`; the current artifact is `docs/evidence/swarm-progress-slo-closeout-gate.json`. It maps each `bd-wzri8` implementation child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks the progress-SLO contract, deterministic evaluator, read-only CLI, Doctor/runpack projection, no-mock E2E evidence, synthetic stress budgets, operator docs, README freshness, pushed commits, staged UBS, Beads ledger reconciliation, and source-boundary checks. A passing progress-SLO gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, Agent Mail, CI, UBS, claim-integrity gates, or source files.
+The runtime-intelligence closeout gate emits `ra.runtime_intelligence.closeout_gate.v1`, governed by `docs/contracts/runtime-intelligence-closeout-gate-contract.json`; the current artifact is `docs/evidence/runtime-intelligence-closeout-gate.json`. It maps each `bd-h66tp` implementation child bead to code, tests, docs or evidence, commands, close reasons, and commit hashes; then it checks compaction admission, tool-output artifacts, provider routing, scheduler fairness, frame-budget telemetry, cancellation cleanup, extension safety provenance, docs/evidence, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and RCH-backed quality gates. A passing runtime-intelligence gate is closeout evidence only and does not replace Beads, git, RCH, Doctor, runpacks, Agent Mail, CI, UBS, claim-integrity gates, or source files.
+The proof-carrying swarm test-fabric closeout gate emits `ra.swarm.proof_carrying_test_fabric.closeout_gate.v1`, governed by `docs/contracts/proof-carrying-swarm-test-fabric-closeout-gate-contract.json`; the current artifact is `docs/evidence/proof-carrying-swarm-test-fabric-closeout-gate.json`. It maps each `bd-zeccr` implementation child bead to source paths, tests or fixtures, evidence artifacts, validation commands, close reasons, pushed commits, and negative controls; then it checks no-mock lifecycle E2E, cross-surface conformance, operator evidence goldens, structure-aware fuzz/property coverage, metamorphic replay equivalence, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and RCH-backed quality gates. A passing proof-carrying test-fabric gate is closeout evidence only and does not replace Beads, git, RCH, Agent Mail, UBS, CI, claim-integrity gates, child evidence, or source files.
+The predictive-operations closeout gate emits `ra.swarm.predictive_operations.closeout_gate.v1`, governed by `docs/contracts/predictive-operations-closeout-gate-contract.json`; the current artifact is `docs/evidence/predictive-operations-closeout-gate.json`. It maps each `bd-63x3v.11` implementation child bead to source paths, tests or fixtures, evidence artifacts, validation commands, close reasons, pushed commits, and claim-boundary text; then it checks predictive telemetry fusion, validation scheduling, semantic compaction quality, hostcall cost attribution, operator-perceived latency, redundant-agent-work detection, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and untracked follow-ups. A passing predictive-operations gate is closeout evidence only and does not replace Beads, git, RCH, Agent Mail, UBS, CI, claim-integrity gates, child evidence, generated target/perf outputs, or source files.
+The ninth-wave incident replay and proof-memory closeout gate emits `ra.swarm.incident_replay_proof_memory.closeout_gate.v1`, governed by `docs/contracts/ninth-wave-incident-replay-proof-memory-closeout-gate-contract.json`; the current artifact is `docs/evidence/ninth-wave-incident-replay-proof-memory-closeout-gate.json`. It maps each `bd-9yq7i` child bead to source paths, tests or fixtures, evidence artifacts, validation commands, close reasons, pushed commits, negative controls, and claim-boundary text; then it checks incident corpus, incident replay, validation proof memory, operator work recommendation, operator smoothness SLO, extension resource firewall matrix, incident replay E2E, source boundaries, pushed refs, staged UBS, Beads ledger reconciliation, and untracked follow-ups. A passing ninth-wave gate is closeout evidence only and does not replace Beads, git, RCH, Agent Mail, UBS, CI, claim-integrity gates, child evidence, generated target/perf outputs, prior-wave evidence, or source files.
+The operator-perceived latency trace emits `ra.operator.perceived_latency_trace.v1`, governed by `docs/contracts/operator-perceived-latency-trace-contract.json`; the current fixture artifact is `docs/evidence/operator-perceived-latency-trace.json`. It joins provider-stream, RPC-output, TUI-frame, tool-update, and operator-visible semantic milestones while proving low-value coalescing does not hide semantic output. The trace is advisory fixture evidence only and does not replace provider/RPC/TUI backpressure evidence or authorize benchmark, capacity, release performance, or strict drop-in claims.
+The operator smoothness SLO emits `ra.operator.smoothness_slo.v1`, governed by `docs/contracts/operator-smoothness-slo-contract.json`; the current fixture artifact is `docs/evidence/operator-smoothness-slo.json`. It covers provider stream deltas, RPC output pressure, TUI frame rendering, tool-update coalescing, and session-write pressure with deterministic p50/p95/p99 visibility counters, semantic milestone counts, backlog budgets, failure logs, and fail-closed controls for delayed visibility, non-monotonic timelines, runaway frame backlog, and missing surface coverage. The SLO is advisory engineering fixture evidence only and does not replace focused surface tests or authorize benchmark, capacity, release performance, strict drop-in, runtime mutation, RCH, cargo, git, or Beads claims.
+The extension resource firewall matrix emits `ra.ext.resource_firewall_matrix.v1`, governed by `docs/contracts/extension-resource-firewall-matrix-contract.json`; focused `extensions_stress` runs write `resource_firewall_matrix.json` under target/perf. It covers cheap-read flood, large payload emission, denied capability churn, slow hostcall, repeated failure, and steady-peer progress rows with budgets, observed counters, admission decisions, denial modes, fallback behavior, payload redaction, capability-boundary preservation, and fail-closed negative controls for missing counters, missing peer progress, and unredacted payload bodies. The matrix is advisory stress evidence only and does not replace runtime enforcement, hostcall cost attribution, RCH validation, Agent Mail, Beads, UBS, CI, or benchmark/capacity/release claims.
+The swarm incident corpus emits `ra.swarm.incident_corpus.v1`, governed by `docs/contracts/swarm-incident-corpus-contract.json`; the current fixture artifact is `docs/evidence/swarm-incident-corpus.json`. It captures deterministic operator incidents for Agent Mail schema corruption, RCH saturation/local-fallback denial, stale evidence, duplicate work risk, dirty worktree admission denial, malformed source artifacts, and deletion or live-mutation rejection, plus fail-closed negative controls for missing sources, unsafe unredacted bodies, contradictory status, and unsafe authorization attempts. The corpus is advisory fixture evidence only and does not replace release performance, drop-in certification, Agent Mail, RCH, Beads, git, source artifacts, or destructive-action authority.
+The swarm incident replay harness emits `ra.swarm.incident_replay.v1`, governed by `docs/contracts/swarm-incident-replay-contract.json`; the current fixture artifact is `docs/evidence/swarm-incident-replay.json`. It consumes the incident corpus and reconstructs source capture, Agent Mail degradation, RCH admission, Beads ownership, dirty worktree state, validation outcome, and final recommendation phases with per-step assertions and redacted excerpts. Negative controls fail closed for out-of-order events, missing sources, unredacted sensitive content, and replay output being treated as source-of-truth authority. Replay is advisory fixture evidence only and does not replace live Agent Mail, RCH, Beads, git, source artifacts, or destructive-action authority.
 The swarm incident replay E2E harness emits `pi.swarm.incident_replay_e2e.v1`, governed by `docs/contracts/swarm-incident-replay-e2e-contract.json`; the current fixture artifact is `docs/evidence/swarm-incident-replay-e2e.json` with JSONL events in `docs/evidence/swarm-incident-replay-e2e-events.jsonl`. It combines real temporary Beads and git workspaces with fixture-captured degraded Agent Mail/RCH inputs to exercise healthy replay, Beads soft-lock fallback, RCH proof refresh backoff, duplicate-work risk, dirty-worktree denial, stale proof-memory refresh, extension resource firewall failure, and smoothness SLO failure. The E2E artifact is advisory operator evidence only and does not authorize live source mutation, local heavyweight Cargo fallback, release, benchmark, capacity, or drop-in claims.
-The validation proof-memory index emits `pi.validation.proof_memory_index.v1`, governed by `docs/contracts/validation-proof-memory-index-contract.json`; the current fixture artifact is `docs/evidence/validation-proof-memory-index.json`. It classifies reusable, stale, missing-artifact, local-fallback, dirty-worktree mismatch, command-mismatch, path-coverage mismatch, and non-authoritative validation proof entries from checked remote-validation proof fixtures. Proof memory is advisory fixture evidence only and does not skip validation or replace RCH, Agent Mail, Beads, git, source artifacts, or claim-integrity gates.
+The validation proof-memory index emits `ra.validation.proof_memory_index.v1`, governed by `docs/contracts/validation-proof-memory-index-contract.json`; the current fixture artifact is `docs/evidence/validation-proof-memory-index.json`. It classifies reusable, stale, missing-artifact, local-fallback, dirty-worktree mismatch, command-mismatch, path-coverage mismatch, and non-authoritative validation proof entries from checked remote-validation proof fixtures. Proof memory is advisory fixture evidence only and does not skip validation or replace RCH, Agent Mail, Beads, git, source artifacts, or claim-integrity gates.
 
 ### Validation Broker Operator Workflow
 
@@ -787,7 +787,7 @@ Use the broker only after the normal ownership checks are visible:
 2. Reserve files through Agent Mail when the Mail DB is healthy. If Mail is
    red, read-only, or schema-corrupt, use the Beads assignee as the soft lock
    and record the Mail blocker in the bead or handoff.
-3. Run `pi doctor --only swarm --format json` and
+3. Run `ra doctor --only swarm --format json` and
    `scripts/cargo_headroom.sh --admit-only ...` before heavyweight gates so
    scratch-space, cgroup, CPU, memory, and RCH posture remain explicit.
 4. Ask the broker for a plan before launching duplicate or broad validation
@@ -796,8 +796,8 @@ Use the broker only after the normal ownership checks are visible:
 Typical read-only status capture:
 
 ```bash
-pi validation-broker status \
-  --store "$PI_VALIDATION_BROKER_STORE" \
+ra validation-broker status \
+  --store "$RECUR_AGENT_VALIDATION_BROKER_STORE" \
   --format json \
   --out-json "$capture_dir/validation-broker-status.json"
 ```
@@ -805,10 +805,10 @@ pi validation-broker status \
 Typical plan request:
 
 ```bash
-pi validation-broker plan \
+ra validation-broker plan \
   --request "$capture_dir/validation-request.json" \
   --inputs "$capture_dir/validation-inputs.json" \
-  --store "$PI_VALIDATION_BROKER_STORE" \
+  --store "$RECUR_AGENT_VALIDATION_BROKER_STORE" \
   --policy "$capture_dir/validation-policy.json" \
   --format json \
   --out-json "$capture_dir/validation-broker-plan.json"
@@ -829,21 +829,21 @@ Interpret decisions conservatively:
 Acquire, renew, and release mutate only the append-only slot store:
 
 ```bash
-pi validation-broker acquire \
+ra validation-broker acquire \
   --request "$capture_dir/validation-request.json" \
-  --store "$PI_VALIDATION_BROKER_STORE" \
+  --store "$RECUR_AGENT_VALIDATION_BROKER_STORE" \
   --started-at "$started_at_utc" \
   --expires-at "$expires_at_utc"
 
-pi validation-broker renew \
-  --store "$PI_VALIDATION_BROKER_STORE" \
+ra validation-broker renew \
+  --store "$RECUR_AGENT_VALIDATION_BROKER_STORE" \
   --slot-id "$slot_id" \
   --owner "$AGENT_NAME" \
   --heartbeat-at "$heartbeat_at_utc" \
   --expires-at "$expires_at_utc"
 
-pi validation-broker release \
-  --store "$PI_VALIDATION_BROKER_STORE" \
+ra validation-broker release \
+  --store "$RECUR_AGENT_VALIDATION_BROKER_STORE" \
   --slot-id "$slot_id" \
   --owner "$AGENT_NAME" \
   --at "$released_at_utc" \
@@ -995,7 +995,7 @@ Doctor swarm preflight evidence:
 
 ```json
 {
-  "schema": "pi.doctor.swarm_resource_preflight.v1",
+  "schema": "ra.doctor.swarm_resource_preflight.v1",
   "status": "pass",
   "effective_cpu_cores": 64,
   "memory_limit_bytes": 274877906944,
@@ -1010,13 +1010,13 @@ Cargo/RCH admission evidence:
 
 ```json
 {
-  "schema": "pi.cargo_headroom.admission.v1",
+  "schema": "ra.cargo_headroom.admission.v1",
   "decision": "admit",
   "requested_runner": "rch",
   "resolved_runner": "rch",
   "cargo_command": "cargo check --all-targets",
   "rch_queue_forecast": {
-    "schema": "pi.cargo_headroom.rch_queue_forecast.v1",
+    "schema": "ra.cargo_headroom.rch_queue_forecast.v1",
     "recommended_action": "proceed"
   }
 }
@@ -1026,18 +1026,18 @@ Operator runpack evidence:
 
 ```json
 {
-  "schema": "pi.swarm.operator_runpack.v1",
+  "schema": "ra.swarm.operator_runpack.v1",
   "purpose": "operator_handoff_not_release_performance_claim",
   "status": "ready",
   "autopilot_handoff": {
-    "schema": "pi.swarm.autopilot_handoff.v1",
+    "schema": "ra.swarm.autopilot_handoff.v1",
     "status": "ready",
     "input_pack": {
-      "schema": "pi.swarm.autopilot_input_pack.v1",
+      "schema": "ra.swarm.autopilot_input_pack.v1",
       "artifact_path": "/data/tmp/pi_swarm_runpack/<run>/autopilot-input-pack.json"
     },
     "plan": {
-      "schema": "pi.swarm.autopilot_plan.v1",
+      "schema": "ra.swarm.autopilot_plan.v1",
       "selected_action": "claim_ready_bead",
       "artifact_path": "/data/tmp/pi_swarm_runpack/<run>/autopilot-plan.json"
     },
@@ -1052,7 +1052,7 @@ Operator runpack evidence:
     }
   },
   "swarm_scale_safety_scorecard": {
-    "schema": "pi.swarm.safety_scorecard.v1",
+    "schema": "ra.swarm.safety_scorecard.v1",
     "overall_status": "ready"
   }
 }
@@ -1062,7 +1062,7 @@ Autopilot input-pack evidence:
 
 ```json
 {
-  "schema": "pi.swarm.autopilot_input_pack.v1",
+  "schema": "ra.swarm.autopilot_input_pack.v1",
   "purpose": "dry_run_swarm_autopilot_input_not_source_of_truth",
   "status": "degraded",
   "normalized_inputs": {
@@ -1071,7 +1071,7 @@ Autopilot input-pack evidence:
       "fallback_action": "use_beads_soft_lock"
     },
     "budget_drift": {
-      "schema": "pi.swarm.budget_drift.v1",
+      "schema": "ra.swarm.budget_drift.v1",
       "status": "deny_new_work",
       "signals": [
         {
@@ -1098,7 +1098,7 @@ Autopilot plan evidence:
 
 ```json
 {
-  "schema": "pi.swarm.autopilot_plan.v1",
+  "schema": "ra.swarm.autopilot_plan.v1",
   "purpose": "dry_run_swarm_autopilot_plan_not_source_of_truth",
   "status": "ready",
   "actions": [
@@ -1128,11 +1128,11 @@ Degraded autopilot plan evidence:
 
 ```json
 {
-  "schema": "pi.swarm.autopilot_plan.v1",
+  "schema": "ra.swarm.autopilot_plan.v1",
   "purpose": "dry_run_swarm_autopilot_plan_not_source_of_truth",
   "status": "degraded",
   "budget_drift": {
-    "schema": "pi.swarm.budget_drift.v1",
+    "schema": "ra.swarm.budget_drift.v1",
     "status": "deny_new_work",
     "profile_status": "ok",
     "recommended_adjustments": {
@@ -1159,7 +1159,7 @@ Degraded autopilot plan evidence:
   "failure_actions": [
     {
       "id": "FAIL-AGENT-MAIL-SCHEMA",
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "agent_mail",
       "title": "Agent Mail database schema is missing required tables",
       "match_confidence": "high",
@@ -1193,7 +1193,7 @@ Degraded autopilot plan evidence:
       "commands": [
         {
           "purpose": "Refresh swarm resource preflight",
-          "command": "pi doctor --only swarm --format json"
+          "command": "ra doctor --only swarm --format json"
         }
       ]
     },
@@ -1284,7 +1284,7 @@ Autopilot final decision-gate evidence:
 
 ```json
 {
-  "schema": "pi.swarm.autopilot_decision_gate.v1",
+  "schema": "ra.swarm.autopilot_decision_gate.v1",
   "purpose": "prompt_to_artifact_autopilot_epic_close_gate_not_source_of_truth",
   "status": "pass",
   "required_checks": [
@@ -1312,7 +1312,7 @@ Context-intelligence final closeout-gate evidence:
 
 ```json
 {
-  "schema": "pi.context_intelligence.closeout_gate.v1",
+  "schema": "ra.context_intelligence.closeout_gate.v1",
   "purpose": "prompt_to_artifact_context_intelligence_closeout_gate_not_source_of_truth",
   "status": "pass",
   "required_checks": [
@@ -1344,7 +1344,7 @@ Validation-broker final closeout-gate evidence:
 
 ```json
 {
-  "schema": "pi.validation_broker.closeout_gate.v1",
+  "schema": "ra.validation_broker.closeout_gate.v1",
   "purpose": "prompt_to_artifact_validation_broker_closeout_gate_not_source_of_truth",
   "status": "pass",
   "required_checks": [
@@ -1377,7 +1377,7 @@ Progress-SLO final closeout-gate evidence:
 
 ```json
 {
-  "schema": "pi.swarm.progress_slo.closeout_gate.v1",
+  "schema": "ra.swarm.progress_slo.closeout_gate.v1",
   "purpose": "prompt_to_artifact_swarm_progress_slo_closeout_gate_not_source_of_truth",
   "status": "pass",
   "required_checks": [
@@ -1407,7 +1407,7 @@ Swarm flight-recorder report evidence:
 
 ```json
 {
-  "schema": "pi.swarm.flight_recorder.report.v1",
+  "schema": "ra.swarm.flight_recorder.report.v1",
   "event_count": 12,
   "coordination_failures": [],
   "replay_command": "cargo test --test e2e_swarm_flight_recorder -- --exact multi_agent_flight_recorder_bundle_replays_without_credentials --nocapture"
