@@ -616,7 +616,7 @@ pub async fn sync_extension_registrations(
     }
     if registered > 0 {
         tracing::info!(
-            event = "pi.mcp.extension_registrations_synced",
+            event = "ra.mcp.extension_registrations_synced",
             registered,
             "registered extension MCP servers contributed after startup"
         );

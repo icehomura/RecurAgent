@@ -1363,11 +1363,11 @@ impl TrustStore {
         match trust_parent_identity_matches(&self.path, &guard.directory) {
             Ok(true) => {}
             Ok(false) => tracing::warn!(
-                event = "pi.mcp.trust_parent_displaced_after_commit",
+                event = "ra.mcp.trust_parent_displaced_after_commit",
                 "MCP trust transition committed to the pinned directory after its path moved"
             ),
             Err(_) => tracing::warn!(
-                event = "pi.mcp.trust_parent_revalidation_failed_after_commit",
+                event = "ra.mcp.trust_parent_revalidation_failed_after_commit",
                 "MCP trust transition committed but its directory path could not be revalidated"
             ),
         }
@@ -1415,7 +1415,7 @@ impl TrustStore {
             .map_err(|err| Error::tool("mcp", format!("[MCP_TRUST_IO] persist: {}", err.error)))?;
         if validate_windows_trust_directory_guards(&guard.directories).is_err() {
             tracing::warn!(
-                event = "pi.mcp.trust_parent_revalidation_failed_after_commit",
+                event = "ra.mcp.trust_parent_revalidation_failed_after_commit",
                 "MCP trust transition committed but its Windows parent handles could not be revalidated"
             );
         }

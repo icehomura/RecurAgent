@@ -1514,7 +1514,7 @@ impl McpManager {
                         transport.abort();
                     }
                     tracing::debug!(
-                        event = "pi.mcp.startup_cleanup_superseded",
+                        event = "ra.mcp.startup_cleanup_superseded",
                         server = %entry.config.name,
                         "another connection attempt owns the lane; timeout cleanup will not mutate its state"
                     );
@@ -1522,14 +1522,14 @@ impl McpManager {
                 };
                 if !Self::fail_timed_out_startup_attempt(&entry, observed_transport) {
                     tracing::debug!(
-                        event = "pi.mcp.startup_cleanup_superseded",
+                        event = "ra.mcp.startup_cleanup_superseded",
                         server = %entry.config.name,
                         "a replacement transport superseded the timed-out startup attempt"
                     );
                 }
             }
             tracing::info!(
-                event = "pi.mcp.startup_budget_exhausted",
+                event = "ra.mcp.startup_budget_exhausted",
                 "MCP startup connects exceeded the global budget; stragglers stay Unhealthy"
             );
         }
@@ -1543,7 +1543,7 @@ impl McpManager {
     pub fn register_extension_server(&self, name: &str, spec: &Value) {
         if let Err(reason) = super::config::validate_server_name(name) {
             tracing::warn!(
-                event = "pi.mcp.extension_config_rejected",
+                event = "ra.mcp.extension_config_rejected",
                 server = name,
                 %reason,
                 "extension MCP server configuration rejected"
@@ -1552,7 +1552,7 @@ impl McpManager {
         }
         if !spec.is_object() {
             tracing::warn!(
-                event = "pi.mcp.extension_config_rejected",
+                event = "ra.mcp.extension_config_rejected",
                 server = name,
                 reason = "server specification must be an object",
                 "extension MCP server configuration rejected"
@@ -1591,7 +1591,7 @@ impl McpManager {
             Ok(config) => config,
             Err(reason) => {
                 tracing::warn!(
-                    event = "pi.mcp.extension_config_rejected",
+                    event = "ra.mcp.extension_config_rejected",
                     server = name,
                     %reason,
                     "extension MCP server configuration rejected"
@@ -1603,7 +1603,7 @@ impl McpManager {
             Ok(env) => env,
             Err(reason) => {
                 tracing::warn!(
-                    event = "pi.mcp.extension_config_rejected",
+                    event = "ra.mcp.extension_config_rejected",
                     server = name,
                     %reason,
                     "extension MCP server configuration rejected"
@@ -1615,7 +1615,7 @@ impl McpManager {
             Ok(headers) => headers,
             Err(reason) => {
                 tracing::warn!(
-                    event = "pi.mcp.extension_config_rejected",
+                    event = "ra.mcp.extension_config_rejected",
                     server = name,
                     %reason,
                     "extension MCP server configuration rejected"
@@ -1625,7 +1625,7 @@ impl McpManager {
         };
         if let Err(reason) = super::config::validate_transport_shape(&config) {
             tracing::warn!(
-                event = "pi.mcp.extension_config_rejected",
+                event = "ra.mcp.extension_config_rejected",
                 server = name,
                 %reason,
                 "extension MCP server configuration rejected"
@@ -1648,7 +1648,7 @@ impl McpManager {
             Ok(None) => None,
             Err(reason) => {
                 tracing::warn!(
-                    event = "pi.mcp.extension_config_rejected",
+                    event = "ra.mcp.extension_config_rejected",
                     server = name,
                     %reason,
                     "extension MCP server configuration rejected"
