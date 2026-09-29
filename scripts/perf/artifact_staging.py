@@ -576,7 +576,7 @@ def write_fixture(root: Path, include_policy: bool) -> None:
     (root / "target/perf/results/phase1_matrix_validation.json").write_text(
         json.dumps(
             {
-                "schema": "pi.perf.phase1_matrix_validation.v1",
+                "schema": "ra.perf.phase1_matrix_validation.v1",
                 "generated_at": generated_at,
                 "source_commit": "test-commit",
                 "source_dirty": False,
@@ -697,7 +697,7 @@ def run_self_test() -> int:
     stale_phase1.write_text(
         json.dumps(
             {
-                "schema": "pi.perf.phase1_matrix_validation.v1",
+                "schema": "ra.perf.phase1_matrix_validation.v1",
                 "generated_at": "2000-01-01T00:00:00Z",
                 "run_id": "self-test-run",
                 "correlation_id": "self-test-run",
@@ -734,7 +734,7 @@ def run_self_test() -> int:
     fresh_phase1.write_text(
         json.dumps(
             {
-                "schema": "pi.perf.phase1_matrix_validation.v1",
+                "schema": "ra.perf.phase1_matrix_validation.v1",
                 "generated_at": iso_now(),
                 "source_commit": "test-commit",
                 "source_dirty": False,

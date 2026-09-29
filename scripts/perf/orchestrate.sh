@@ -3314,7 +3314,7 @@ cat > "$OUTPUT_DIR/manifest.json" <<EOF
     "pgo_pipeline": "ra.perf.pgo_pipeline_summary.v1",
     "extension_stratification": "ra.perf.extension_benchmark_stratification.v1",
     "cross_env_variance_diagnosis": "ra.perf.cross_env_variance_diagnosis.v1",
-    "phase1_matrix_validation": "pi.perf.phase1_matrix_validation.v1",
+    "phase1_matrix_validation": "ra.perf.phase1_matrix_validation.v1",
     "parameter_sweeps": "ra.perf.parameter_sweeps.v1",
     "opportunity_matrix": "ra.perf.opportunity_matrix.v1"
   },
@@ -5319,7 +5319,7 @@ def compute_weighted_bottleneck_attribution(
 
     if not valid_cells:
         return {
-            "schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+            "schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
             "status": "missing",
             "weighting_policy": "session_messages",
             "confidence_method": "weighted_normal_approx_95",
@@ -5471,7 +5471,7 @@ def compute_weighted_bottleneck_attribution(
     )
 
     return {
-        "schema": "pi.perf.phase1_weighted_bottleneck_attribution.v1",
+        "schema": "ra.perf.phase1_weighted_bottleneck_attribution.v1",
         "status": "computed",
         "weighting_policy": "session_messages",
         "confidence_method": "weighted_normal_approx_95",
@@ -6758,7 +6758,7 @@ phase5_ready = (
 )
 
 payload = {
-    "schema": "pi.perf.phase1_matrix_validation.v1",
+    "schema": "ra.perf.phase1_matrix_validation.v1",
     "bead_id": "bd-3ar8v.2.8",
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "source_commit": source_commit,
@@ -6930,7 +6930,7 @@ opportunity_matrix_path.write_text(
 )
 
 manifest["phase1_matrix_validation"] = {
-    "schema": "pi.perf.phase1_matrix_validation.v1",
+    "schema": "ra.perf.phase1_matrix_validation.v1",
     "path": str(phase1_matrix_path),
     "required_cell_count": required_cell_count,
     "covered_cell_count": covered_cells,
@@ -7152,7 +7152,7 @@ def validate_source_datasets(path: Path, payload, expected_basenames):
             )
 
 
-phase1 = load_artifact(phase1_path, "pi.perf.phase1_matrix_validation.v1")
+phase1 = load_artifact(phase1_path, "ra.perf.phase1_matrix_validation.v1")
 validate_source_datasets(
     phase1_path,
     phase1,

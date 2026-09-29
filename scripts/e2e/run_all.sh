@@ -8435,7 +8435,7 @@ if isinstance(perf_sli_matrix, dict):
     require_condition(
         "claim_integrity.perf_sli_matrix_schema",
         path=perf_sli_matrix_path,
-        ok=str(perf_sli_matrix.get("schema", "")).startswith("pi.perf.sli_ux_matrix."),
+        ok=str(perf_sli_matrix.get("schema", "")).startswith("ra.perf.sli_ux_matrix.""),
         ok_msg="perf SLI matrix schema is versioned",
         fail_msg=(
             "perf SLI matrix schema must start with "
@@ -9436,11 +9436,11 @@ if isinstance(phase1_matrix_validation, dict) and perf_phase1_matrix_validation_
     require_condition(
         "claim_integrity.phase1_matrix_validation_schema",
         path=perf_phase1_matrix_validation_path,
-        ok=phase1_matrix_validation.get("schema") == "pi.perf.phase1_matrix_validation.v1",
+        ok=phase1_matrix_validation.get("schema") == "ra.perf.phase1_matrix_validation.v1",
         ok_msg="phase-1 matrix validation schema matches",
         fail_msg=(
             "phase-1 matrix validation schema mismatch: expected "
-            "'pi.perf.phase1_matrix_validation.v1'"
+            "'ra.perf.phase1_matrix_validation.v1'"
         ),
         strict=claim_integrity_required,
     )
@@ -10074,7 +10074,7 @@ if isinstance(phase1_matrix_validation, dict) and perf_phase1_matrix_validation_
         else ""
     )
     weighted_bottleneck_schema_ok = (
-        weighted_bottleneck_schema == "pi.perf.phase1_weighted_bottleneck_attribution.v1"
+        weighted_bottleneck_schema == "ra.perf.phase1_weighted_bottleneck_attribution.v1"
     )
     require_condition(
         "claim_integrity.phase1_matrix_weighted_bottleneck_schema",
@@ -10088,7 +10088,7 @@ if isinstance(phase1_matrix_validation, dict) and perf_phase1_matrix_validation_
         strict=claim_integrity_required,
         remediation=(
             "Set weighted_bottleneck_attribution.schema to "
-            "pi.perf.phase1_weighted_bottleneck_attribution.v1 in "
+            "ra.perf.phase1_weighted_bottleneck_attribution.v1 in "
             "scripts/perf/orchestrate.sh."
         ),
     )

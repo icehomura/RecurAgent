@@ -62,7 +62,7 @@ def main() -> int:
 
     if not args.binary.exists():
         runpack = {
-            "schema": "pi.perf.provider_live_e2e.v1",
+            "schema": "ra.perf.provider_live_e2e.v1",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "verdict": "binary_missing",
             "providers": [
@@ -126,7 +126,7 @@ def main() -> int:
             fail_count += 1
 
     runpack = {
-        "schema": "pi.perf.provider_live_e2e.v1",
+        "schema": "ra.perf.provider_live_e2e.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "verdict": "complete" if skip_count == 0 else "partial",
         "pass_count": pass_count,

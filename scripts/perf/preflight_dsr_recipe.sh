@@ -213,7 +213,7 @@ SCHEMAS_NEEDED=(
   "ra.perf.budget_summary.v1"
   "ra.perf.budget_preflight.v1"
   "ra.perf.evidence_cache.v1"
-  "pi.perf.phase1_matrix_validation.v1"
+  "ra.perf.phase1_matrix_validation.v1"
   "ra.perf.host_topology_fingerprint.v1"
 )
 missing_schemas=()
@@ -291,7 +291,7 @@ if [[ -n "$GIT_DIRTY" ]]; then GIT_DIRTY=true; else GIT_DIRTY=false; fi
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
 
 jq -n \
-  --arg schema "pi.evidence.ri_phase1_recipe_audit_runpack.v1" \
+  --arg schema "ra.evidence.ri_phase1_recipe_audit_runpack.v1" \
   --arg generated_at "$TIMESTAMP" \
   --arg workdir "$WORKDIR" \
   --arg dsr "$DSR" \

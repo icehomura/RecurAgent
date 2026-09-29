@@ -65,7 +65,7 @@ ARTIFACT_SOURCES = [
      "ra.perf.budget_summary.v1"),
     ("perf_phase1_matrix", "Phase-1 matrix validation", "performance",
      "tests/perf/reports/phase1_matrix_validation.json", False,
-     "pi.perf.phase1_matrix_validation.v1"),
+     "ra.perf.phase1_matrix_validation.v1"),
     ("perf_idle_rss", "Idle RSS release evidence", "performance",
      "tests/perf/reports/release_evidence/idle_memory_rss.json", False,
      "ra.perf.idle_memory_rss.v1"),

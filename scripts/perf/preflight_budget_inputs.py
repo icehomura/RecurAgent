@@ -58,7 +58,7 @@ EMBEDDED_PROVENANCE_REQUIREMENTS = {
         "run_id",
         "correlation_id",
     ),
-    "pi.perf.phase1_matrix_validation.v1": (
+    "ra.perf.phase1_matrix_validation.v1": (
         "embedded_timestamp",
         "source_commit",
         "source_dirty",
@@ -1873,7 +1873,7 @@ def run_self_test() -> int:
         (root / "target/perf/results/phase1_matrix_validation.json").write_text(
             json.dumps(
                 {
-                    "schema": "pi.perf.phase1_matrix_validation.v1",
+                    "schema": "ra.perf.phase1_matrix_validation.v1",
                     "generated_at": generated_at,
                     "source_commit": "test-commit",
                     "source_dirty": False,
@@ -1956,7 +1956,7 @@ def run_self_test() -> int:
     stale_embedded.write_text(
         json.dumps(
             {
-                "schema": "pi.perf.phase1_matrix_validation.v1",
+                "schema": "ra.perf.phase1_matrix_validation.v1",
                 "generated_at": "2000-01-01T00:00:00Z",
                 "run_id": expected_correlation,
                 "correlation_id": expected_correlation,
@@ -1981,7 +1981,7 @@ def run_self_test() -> int:
     fresh_embedded.write_text(
         json.dumps(
             {
-                "schema": "pi.perf.phase1_matrix_validation.v1",
+                "schema": "ra.perf.phase1_matrix_validation.v1",
                 "generated_at": fresh_timestamp,
                 "source_commit": expected_commit,
                 "source_dirty": False,

@@ -58,7 +58,7 @@ VALIDATION_BROKER_CLI_PLAN_SCHEMA = "ra.validation_broker.cli_plan.v1"
 VALIDATION_BROKER_STORE_ENV = "RECUR_AGENT_VALIDATION_BROKER_STORE"
 HOSTCALL_SWARM_PROFILE_SCHEMA = "ra.ext.hostcall_admission_swarm_profile.v1"
 SESSION_RECOVERY_SWARM_PROFILE_SCHEMA = "pi.session_store_v2.recovery_swarm_profile.v1"
-RPC_SWARM_E2E_SCHEMA = "pi.rpc.concurrent_swarm_e2e.v1"
+RPC_SWARM_E2E_SCHEMA = "ra.rpc.concurrent_swarm_e2e.v1"
 RCH_ARTIFACT_SYNC_SCHEMA = "ra.rch.artifact_sync_preflight.v1"
 REMOTE_VALIDATION_LEDGER_SCHEMA = "ra.remote_validation.proof_ledger.v1"
 REMOTE_VALIDATION_ENTRY_SCHEMA = "ra.remote_validation.proof_entry.v1"
@@ -111,20 +111,20 @@ WORK_ADMISSION_DRY_RUN_EXECUTOR_SCHEMA = (
 STRUCTURED_INPUT_FUZZ_SCHEMA = "ra.swarm.structured_input_fuzz_harness.v1"
 BUDGET_DRIFT_SCHEMA = "ra.swarm.budget_drift.v1"
 AUTOPILOT_HANDOFF_SCHEMA = "ra.swarm.autopilot_handoff.v1"
-AUTOPILOT_E2E_SCHEMA = "pi.swarm.autopilot_e2e.v1"
-AUTOPILOT_E2E_EVENT_SCHEMA = "pi.swarm.autopilot_e2e.event.v1"
+AUTOPILOT_E2E_SCHEMA = "ra.swarm.autopilot_e2e.v1"
+AUTOPILOT_E2E_EVENT_SCHEMA = "ra.swarm.autopilot_e2e.event.v1"
 DEGRADED_COORDINATION_RUNPACK_E2E_SCHEMA = (
-    "pi.swarm.degraded_coordination_runpack_e2e.v1"
+    "ra.swarm.degraded_coordination_runpack_e2e.v1"
 )
 DEGRADED_COORDINATION_RUNPACK_E2E_EVENT_SCHEMA = (
-    "pi.swarm.degraded_coordination_runpack_e2e.event.v1"
+    "ra.swarm.degraded_coordination_runpack_e2e.event.v1"
 )
-SWARM_INCIDENT_REPLAY_E2E_SCHEMA = "pi.swarm.incident_replay_e2e.v1"
+SWARM_INCIDENT_REPLAY_E2E_SCHEMA = "ra.swarm.incident_replay_e2e.v1"
 SWARM_INCIDENT_REPLAY_E2E_EVENT_SCHEMA = (
-    "pi.swarm.incident_replay_e2e.event.v1"
+    "ra.swarm.incident_replay_e2e.event.v1"
 )
 SWARM_INCIDENT_REPLAY_E2E_CONTRACT_SCHEMA = (
-    "pi.swarm.incident_replay_e2e_contract.v1"
+    "ra.swarm.incident_replay_e2e_contract.v1"
 )
 AUTOPILOT_DECISION_GATE_SCHEMA = "ra.swarm.autopilot_decision_gate.v1"
 AUTOPILOT_DECISION_GATE_CONTRACT_SCHEMA = (
@@ -15961,7 +15961,7 @@ def build_structured_swarm_input_fuzz_harness(
 
     unsupported_path = write_json(
         workspace / "structured-fuzz-unsupported-schema.json",
-        {"schema": "pi.rpc.concurrent_swarm_e2e.v0", "generated_at": generated_at},
+        {"schema": "ra.rpc.concurrent_swarm_e2e.v0", "generated_at": generated_at},
     )
     unsupported_failure = expect_runpack_error(
         "unsupported_schema_fail_closed",
@@ -39846,7 +39846,7 @@ def run_self_test() -> int:
         ]["historical_snapshot"] >= 1
         bad_rpc_schema_path = write_json(
             workspace / "bad-rpc-swarm-e2e.json",
-            {"schema": "pi.rpc.concurrent_swarm_e2e.v0", "generated_at": generated_at},
+            {"schema": "ra.rpc.concurrent_swarm_e2e.v0", "generated_at": generated_at},
         )
         bad_rpc_schema_args = argparse.Namespace(
             **{**vars(args), "rpc_swarm_e2e_json": bad_rpc_schema_path}
@@ -39951,7 +39951,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rpc-swarm-e2e-json",
         type=Path,
-        help="pi.rpc.concurrent_swarm_e2e.v1 JSON",
+        help="ra.rpc.concurrent_swarm_e2e.v1 JSON",
     )
     parser.add_argument(
         "--rch-artifact-sync-json",
@@ -40057,12 +40057,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-autopilot-e2e-json",
         type=Path,
-        help="write pi.swarm.autopilot_e2e.v1 summary JSON; refuses to overwrite",
+        help="write ra.swarm.autopilot_e2e.v1 summary JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-autopilot-e2e-events-jsonl",
         type=Path,
-        help="write pi.swarm.autopilot_e2e.event.v1 JSONL; refuses to overwrite",
+        help="write ra.swarm.autopilot_e2e.event.v1 JSONL; refuses to overwrite",
     )
     parser.add_argument(
         "--print-autopilot-e2e",
@@ -40078,7 +40078,7 @@ def parse_args() -> argparse.Namespace:
         "--out-degraded-coordination-e2e-json",
         type=Path,
         help=(
-            "write pi.swarm.degraded_coordination_runpack_e2e.v1 summary JSON; "
+            "write ra.swarm.degraded_coordination_runpack_e2e.v1 summary JSON; "
             "refuses to overwrite"
         ),
     )
@@ -40086,7 +40086,7 @@ def parse_args() -> argparse.Namespace:
         "--out-degraded-coordination-e2e-events-jsonl",
         type=Path,
         help=(
-            "write pi.swarm.degraded_coordination_runpack_e2e.event.v1 JSONL; "
+            "write ra.swarm.degraded_coordination_runpack_e2e.event.v1 JSONL; "
             "refuses to overwrite"
         ),
     )
@@ -40334,12 +40334,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-swarm-incident-replay-e2e-json",
         type=Path,
-        help="write pi.swarm.incident_replay_e2e.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.incident_replay_e2e.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-swarm-incident-replay-e2e-events-jsonl",
         type=Path,
-        help="write pi.swarm.incident_replay_e2e.event.v1 JSONL; refuses to overwrite",
+        help="write ra.swarm.incident_replay_e2e.event.v1 JSONL; refuses to overwrite",
     )
     parser.add_argument(
         "--print-swarm-incident-replay-e2e",
