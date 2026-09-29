@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 mod cdp;
+mod console;
 mod dialog;
 mod download;
 mod exports;

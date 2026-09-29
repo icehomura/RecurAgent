@@ -2,8 +2,8 @@
 //! cancellation drops it instead of reusing a possibly partially written frame.
 
 use super::{
-    BrowserLaunchOptions, BrowserTabInfo, dialog, download, exports, interaction, launch, output,
-    policy, required, storage,
+    BrowserLaunchOptions, BrowserTabInfo, console, dialog, download, exports, interaction, launch,
+    output, policy, required, storage,
 };
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
@@ -19,6 +19,91 @@ use std::time::Duration;
 const MAX_MESSAGE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_EVENTS: usize = 8192;
 const MAX_DOWNLOAD_RECORDS: usize = 128;
+/// Console entries retained per connection. The buffer is a diagnostic aid, not
+/// a log sink: it exists so a page's `console.error` is still readable after the
+/// call that triggered it returned, not to keep a full session transcript.
+const MAX_CONSOLE_ENTRIES: usize = 512;
+/// Longest console argument string kept verbatim; longer values are clipped so
+/// one runaway `console.log` cannot displace the rest of the buffer.
+const MAX_CONSOLE_VALUE_CHARS: usize = 2000;
+
+/// One captured `Runtime.consoleAPICalled` or `Runtime.exceptionThrown` event.
+#[derive(Debug, Clone)]
+pub(super) struct ConsoleEntry {
+    /// `log`, `warn`, `error`, `exception`, ...
+    pub(super) level: String,
+    /// One line per argument, already reduced to a string.
+    pub(super) text: String,
+}
+
+/// Reduce one console argument to display text.
+///
+/// A CDP argument is a `RemoteObject`, and which field carries the readable
+/// form depends on the value's kind — this is the protocol's shape, not a local
+/// fallback chain:
+/// - `value` for JSON-serializable values (the common case),
+/// - `description` for objects and functions, and it is where a thrown
+///   `Error#stack` lives, so reading it is what turns an exception into
+///   something a model can act on,
+/// - `unserializableValue` for `NaN`/`Infinity`/`-0`, which have no JSON form,
+/// - `type` as the last resort, so a value is never silently dropped.
+fn console_arg_text(arg: &Value) -> String {
+    let text = arg
+        .get("value")
+        .map(std::string::ToString::to_string)
+        .or_else(|| arg.get("description").and_then(Value::as_str).map(str::to_string))
+        .or_else(|| arg.get("unserializableValue").and_then(Value::as_str).map(str::to_string))
+        .unwrap_or_else(|| arg.get("type").and_then(Value::as_str).unwrap_or("?").to_string());
+    if text.chars().count() <= MAX_CONSOLE_VALUE_CHARS {
+        return text;
+    }
+    let clipped: String = text.chars().take(MAX_CONSOLE_VALUE_CHARS).collect();
+    format!("{clipped}… (truncated)")
+}
+
+/// Apply one `Runtime.*` console event to a bounded buffer.
+///
+/// Free function for the same reason as [`record_download_event_into`]: it
+/// touches nothing but the buffer, so the test can drive a bare `Vec` instead of
+/// standing up a socket.
+fn record_console_event_into(entries: &mut Vec<ConsoleEntry>, value: &Value) -> bool {
+    let method = value["method"].as_str().unwrap_or_default();
+    let params = &value["params"];
+    let entry = match method {
+        "Runtime.consoleAPICalled" => {
+            let level = params["type"].as_str().unwrap_or("log").to_string();
+            let text = params["args"]
+                .as_array()
+                .map(|args| {
+                    args.iter()
+                        .map(console_arg_text)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            ConsoleEntry { level, text }
+        }
+        "Runtime.exceptionThrown" => {
+            let details = &params["exceptionDetails"];
+            let text = details["exception"]
+                .get("description")
+                .and_then(Value::as_str)
+                .or_else(|| details["text"].as_str())
+                .unwrap_or("uncaught exception")
+                .to_string();
+            ConsoleEntry {
+                level: "exception".to_string(),
+                text,
+            }
+        }
+        _ => return false,
+    };
+    if entries.len() >= MAX_CONSOLE_ENTRIES {
+        entries.remove(0);
+    }
+    entries.push(entry);
+    true
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct DownloadRecord {
@@ -142,6 +227,7 @@ fn validate(args: &Value, allowlist: Option<&[String]>) -> Result<u64> {
         "download" => download::validate(args)?,
         "screenshot" | "print_pdf" => exports::validate(args)?,
         "cookies" | "storage" => storage::validate(args)?,
+        "console" => console::validate(args)?,
         "open" | "goto" => policy::check_navigation(required(args, "url")?, allowlist)?,
         "evaluate" => {
             required(args, "script")?;
@@ -285,6 +371,7 @@ pub(super) struct Cdp {
     session_id: Option<String>,
     loaded: BTreeSet<(String, String)>,
     downloads: BTreeMap<String, DownloadRecord>,
+    console: Vec<ConsoleEntry>,
     timeout_ms: u64,
     dialog: dialog::State,
 }
@@ -337,6 +424,7 @@ impl Cdp {
             session_id: None,
             loaded: BTreeSet::new(),
             downloads: BTreeMap::new(),
+            console: Vec::new(),
             timeout_ms: 30_000,
             dialog: dialog::State::default(),
         })
@@ -372,6 +460,7 @@ impl Cdp {
                         self.loaded.insert((frame.into(), loader.into()));
                     }
                     self.record_download_event(&value)?;
+                    record_console_event_into(&mut self.console, &value);
                     if value["method"] == "Inspector.targetCrashed" {
                         return Err(Error::tool("browser", "browser target crashed"));
                     }
@@ -551,6 +640,26 @@ impl Cdp {
 
     fn record_download_event(&mut self, value: &Value) -> Result<()> {
         record_download_event_into(&mut self.downloads, value)
+    }
+
+    /// Subscribe to console and exception events for this session.
+    ///
+    /// Idempotent: `Runtime.enable` re-sends no backlog, and calling it twice is
+    /// cheaper than tracking whether it was already called per target. Events
+    /// are buffered by [`record_console_event_into`] on the receive path, so this
+    /// only has to turn the tap on.
+    pub(super) async fn enable_console(&mut self, owner: &AgentCx) -> Result<()> {
+        self.command(owner, "Runtime.enable", json!({})).await?;
+        Ok(())
+    }
+
+    /// Drain the buffered console entries, optionally clearing them.
+    pub(super) fn take_console(&mut self, clear: bool) -> Vec<ConsoleEntry> {
+        let entries = self.console.clone();
+        if clear {
+            self.console.clear();
+        }
+        entries
     }
 
     pub(super) async fn evaluate(&mut self, owner: &AgentCx, expression: &str) -> Result<Value> {
@@ -947,6 +1056,7 @@ impl Session {
             }
             "screenshot" | "print_pdf" => exports::execute(owner, cdp, cwd, &tab, args).await,
             "cookies" | "storage" => storage::execute(owner, cdp, &tab, args).await,
+            "console" => console::execute(owner, cdp, &tab, args).await,
             "evaluate" => {
                 let value = cdp.evaluate(owner, required(args, "script")?).await?;
                 Ok(output(
