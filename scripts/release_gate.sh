@@ -795,7 +795,7 @@ decision_inputs = [
     (summary_path, summary_bytes),
 ]
 
-if contract.get("schema") != "pi.evidence.contract.v1":
+if contract.get("schema") != "ra.evidence.contract.v1":
     finish("fail", f"unsupported evidence contract schema: {contract.get('schema')!r}")
 if environment.get("schema") != "pi.e2e.environment.v1":
     finish("fail", f"unsupported E2E environment schema: {environment.get('schema')!r}")
@@ -2134,7 +2134,7 @@ except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
     raise ValueError(f"unable to parse conformance summary: {exc}") from exc
 if not isinstance(data, dict):
     raise ValueError("summary root must be an object")
-if data.get("schema") != "pi.ext.conformance_summary.v2":
+if data.get("schema") != "ra.ext.conformance_summary.v2":
     raise ValueError(f"unsupported conformance summary schema: {data.get('schema')!r}")
 expected_summary_fields = {
     "schema",
@@ -2404,7 +2404,7 @@ load_relative = "tests/ext_conformance/reports/load_time_benchmark.json"
 load_report = parse_json_document(
     capture_decision_input(load_relative, "load-time benchmark"), "load-time benchmark"
 )
-if load_report.get("schema") != "pi.ext.load_time_benchmark.v1":
+if load_report.get("schema") != "ra.ext.load_time_benchmark.v1":
     raise ValueError("load-time benchmark has an unsupported schema")
 validate_input_timestamp(load_report.get("generated_at"), "load-time benchmark generated_at")
 load_results = load_report.get("results")
@@ -2492,7 +2492,7 @@ scenario_relative = "tests/ext_conformance/reports/scenario_conformance.json"
 scenario_report = parse_json_document(
     capture_decision_input(scenario_relative, "scenario conformance"), "scenario conformance"
 )
-if scenario_report.get("schema") != "pi.ext.scenario_conformance.v1":
+if scenario_report.get("schema") != "ra.ext.scenario_conformance.v1":
     raise ValueError("scenario conformance report has an unsupported schema")
 validate_input_timestamp(scenario_report.get("generated_at"), "scenario conformance generated_at")
 scenario_results = scenario_report.get("results")
@@ -2544,7 +2544,7 @@ validate_rate(
 
 
 def validate_smoke_report(report, relative):
-    if report.get("schema") != "pi.ext.smoke_triage.v1":
+    if report.get("schema") != "ra.ext.smoke_triage.v1":
         raise ValueError(f"{relative} has an unsupported schema")
     timestamp = validate_input_timestamp(report.get("generated_at"), f"{relative} generated_at")
     extensions = report.get("extensions")
@@ -2626,7 +2626,7 @@ parity_main_fields = {
     "skip_reason",
 }
 for index, event in enumerate(parity_events):
-    if set(event) != parity_main_fields or event.get("schema") != "pi.ext.parity.v1":
+    if set(event) != parity_main_fields or event.get("schema") != "ra.ext.parity.v1":
         raise ValueError(f"parity event[{index}] has an invalid canonical schema")
     extension_id = event.get("extension_id")
     if not isinstance(extension_id, str) or not extension_id:
@@ -2689,7 +2689,7 @@ negative_triage = parse_json_document(
 )
 if set(negative_triage) != {"schema", "generated_at", "counts", "pass_rate_pct"} or negative_triage.get(
     "schema"
-) != "pi.ext.negative_triage.v1":
+) != "ra.ext.negative_triage.v1":
     raise ValueError("negative conformance triage has an invalid canonical schema")
 negative_generated = validate_input_timestamp(
     negative_triage.get("generated_at"), "negative conformance triage generated_at"
@@ -2713,7 +2713,7 @@ negative_event_fields = {
 }
 seen_negative_tests = set()
 for index, event in enumerate(negative_events):
-    if set(event) != negative_event_fields or event.get("schema") != "pi.ext.negative_conformance.v1":
+    if set(event) != negative_event_fields or event.get("schema") != "ra.ext.negative_conformance.v1":
         raise ValueError(f"negative conformance event[{index}] has an invalid canonical schema")
     for field in ("test_name", "mode", "reason", "expected_decision", "actual_decision"):
         if not isinstance(event.get(field), str) or not event[field]:
@@ -2996,7 +2996,7 @@ events = parse_jsonl_document(raw_events, "conformance events")
 if len(events) != len(expected_extension_ids):
     raise ValueError("conformance event inventory does not exactly cover the source manifest")
 for index, event in enumerate(events):
-    if set(event) != event_fields or event.get("schema") != "pi.ext.conformance_report.v2":
+    if set(event) != event_fields or event.get("schema") != "ra.ext.conformance_report.v2":
         raise ValueError(f"conformance event line {index + 1} has an invalid schema")
     extension_id = expected_extension_ids[index]
     expected = expected_extensions[extension_id]
@@ -3401,7 +3401,7 @@ MEASUREMENT_CONTROL_SOURCE_PATTERNS = {
     ),
     "idle_memory_rss": re.compile(
         r".+#control=idle_rss_v1;control_sha256=(?P<control_sha256>[0-9a-f]{64});"
-        r"pid=(?P<pid>[1-9][0-9]*);process=pi;allocator=(?P<allocator>system|jemalloc);"
+        r"pid=(?P<pid>[1-9][0-9]*);process=ra;allocator=(?P<allocator>system|jemalloc);"
         r"binary_sha256=(?P<binary_sha256>[0-9a-f]{64});rss_bytes=(?P<rss_bytes>[1-9][0-9]*)"
     ),
     "ext_cold_load_simple_p95": re.compile(
@@ -3437,7 +3437,7 @@ MEASUREMENT_CONTROL_FAILURE_IDS = {
         "noisy_cold_load_measurement_control",
     },
 }
-CANONICAL_BUDGET_INVENTORY_SHA256 = "85ea5705c7472c3e7b85b6e31552ee57f245406e5b8c636b6555f3bbda7f6cc6"
+CANONICAL_BUDGET_INVENTORY_SHA256 = "c32cf02d430e733aacbade9fe029c0558c6105043e36f009ade060ae9147de8a"
 
 
 class ContractError(ValueError):
@@ -3745,7 +3745,7 @@ try:
     raw = artifact_bytes.decode("utf-8", "strict")
     data = json.loads(raw, object_pairs_hook=reject_duplicate_keys)
     exact_fields(data, TOP_LEVEL_FIELDS, "performance summary")
-    if data["schema"] != "pi.perf.budget_summary.v2":
+    if data["schema"] != "ra.perf.budget_summary.v2":
         fail(f"unsupported performance summary schema: {data['schema']!r}")
 
     generated_at_raw = data["generated_at"]
@@ -4079,7 +4079,7 @@ case "$PERFORMANCE_STATUS" in
             fi
         fi
         if [[ "$CANONICAL_PERF_LIST_VALID" -eq 1 ]] && CANONICAL_PERF_RUN_OUTPUT=$(
-            PI_PERF_STRICT=1 CARGO_TERM_COLOR=never \
+            RECUR_AGENT_PERF_STRICT=1 CARGO_TERM_COLOR=never \
                 run_cargo_gate test --locked --test perf_budgets \
                 "$CANONICAL_PERF_TEST" -- --exact --nocapture --test-threads=1 2>&1
         ); then
@@ -4211,7 +4211,7 @@ if missing:
     print("missing:" + ",".join(missing))
     raise SystemExit(0)
 
-if data.get("schema") != "pi.dropin.certification_contract.v1":
+if data.get("schema") != "ra.dropin.certification_contract.v1":
     print(f"schema_mismatch:{data.get('schema')}")
     raise SystemExit(0)
 
@@ -4263,7 +4263,7 @@ ledger_path = Path(sys.argv[3])
 try:
     with open(contract_path, "r", encoding="utf-8") as f:
         contract = json.load(f)
-    if contract.get("schema") != "pi.waiver.ledger.contract.v1":
+    if contract.get("schema") != "ra.waiver.ledger.contract.v1":
         print(f"invalid:unexpected contract schema {contract.get('schema')!r}")
         sys.exit(1)
     if contract.get("bead_id") != "bd-sog97.12":
@@ -4272,7 +4272,7 @@ try:
         
     with open(ledger_path, "r", encoding="utf-8") as f:
         ledger = json.load(f)
-    if ledger.get("schema") != "pi.waiver.ledger.v1":
+    if ledger.get("schema") != "ra.waiver.ledger.v1":
         print(f"invalid:unexpected ledger schema {ledger.get('schema')!r}")
         sys.exit(1)
     if ledger.get("contract_path") != "docs/contracts/waiver-ledger-contract.json":
@@ -4375,11 +4375,11 @@ except Exception as e:
     print(f"invalid:{e}")
     sys.exit(0)
 
-if contract.get("schema") != "pi.nrun.evidence_protocol.contract.v1":
+if contract.get("schema") != "ra.nrun.evidence_protocol.contract.v1":
     print("invalid:contract schema mismatch")
     sys.exit(0)
 
-if evidence.get("schema") != "pi.nrun.budget_evaluation.v1":
+if evidence.get("schema") != "ra.nrun.budget_evaluation.v1":
     print("invalid:evidence schema mismatch")
     sys.exit(0)
 
@@ -4441,11 +4441,11 @@ except Exception as e:
     print(f"invalid:{e}")
     sys.exit(0)
 
-if contract.get("schema") != "pi.sequential_gate.contract.v1":
+if contract.get("schema") != "ra.sequential_gate.contract.v1":
     print("invalid:contract schema mismatch")
     sys.exit(0)
 
-if evidence.get("schema") != "pi.sequential_gate.evaluation.v1":
+if evidence.get("schema") != "ra.sequential_gate.evaluation.v1":
     print("invalid:evidence schema mismatch")
     sys.exit(0)
 
@@ -4507,11 +4507,11 @@ except Exception as e:
     print(f"invalid:{e}")
     sys.exit(0)
 
-if contract.get("schema") != "pi.perf.drift_watch.contract.v1":
+if contract.get("schema") != "ra.perf.drift_watch.contract.v1":
     print("invalid:contract schema mismatch")
     sys.exit(0)
 
-if evidence.get("schema") != "pi.perf.drift_watch.v1":
+if evidence.get("schema") != "ra.perf.drift_watch.v1":
     print("invalid:evidence schema mismatch")
     sys.exit(0)
 
@@ -4582,11 +4582,11 @@ except Exception as e:
     print(f"invalid:{e}")
     sys.exit(0)
 
-if contract.get("schema") != "pi.conformal_calibration.contract.v1":
+if contract.get("schema") != "ra.conformal_calibration.contract.v1":
     print("invalid:contract schema mismatch")
     sys.exit(0)
 
-if evidence.get("schema") != "pi.conformal_calibration.v1":
+if evidence.get("schema") != "ra.conformal_calibration.v1":
     print("invalid:evidence schema mismatch")
     sys.exit(0)
 
@@ -4618,7 +4618,7 @@ if contract.get("formal_amendment_path") != expected_amendment_path:
     print("invalid:contract formal_amendment_path mismatch")
     sys.exit(0)
 
-if amendment.get("schema") != "pi.conformal_budget_amendment.v1":
+if amendment.get("schema") != "ra.conformal_budget_amendment.v1":
     print("invalid:formal amendment schema mismatch")
     sys.exit(0)
 if amendment.get("bead_id") != "bd-sog97.5":
@@ -4823,11 +4823,11 @@ except Exception as e:
     print(f"invalid:{e}")
     sys.exit(0)
 
-if contract.get("schema") != "pi.perf.startup_benchmark.contract.v1":
+if contract.get("schema") != "ra.perf.startup_benchmark.contract.v1":
     print("invalid:contract schema mismatch")
     sys.exit(0)
 
-if evidence.get("schema") != "pi.perf.startup_benchmark.v1":
+if evidence.get("schema") != "ra.perf.startup_benchmark.v1":
     print("invalid:evidence schema mismatch")
     sys.exit(0)
 
@@ -4900,11 +4900,11 @@ except Exception as e:
     print(f"invalid:{e}")
     sys.exit(0)
 
-if contract.get("schema") != "pi.perf.variance_gating.contract.v1":
+if contract.get("schema") != "ra.perf.variance_gating.contract.v1":
     print("invalid:contract schema mismatch")
     sys.exit(0)
 
-if evidence.get("schema") != "pi.perf.variance_gate_report.v1":
+if evidence.get("schema") != "ra.perf.variance_gate_report.v1":
     print("invalid:evidence schema mismatch")
     sys.exit(0)
 
@@ -4917,7 +4917,7 @@ max_noise = evidence.get("max_admissible_noise_score", 0)
 
 for r in results:
     env = r.get("environment", {})
-    if env.get("schema") != "pi.perf.host_topology_fingerprint.v1":
+    if env.get("schema") != "ra.perf.host_topology_fingerprint.v1":
         print(f"invalid:budget {r.get('budget_name')} missing valid host topology schema")
         sys.exit(0)
     
@@ -5250,7 +5250,7 @@ spec = enforcement.get("verdict_artifact_contract")
 if not isinstance(spec, dict):
     finish("fail", "contract verdict_artifact_contract must be an object")
 required_fields = spec.get("required_fields", [])
-expected_schema = spec.get("schema", "pi.dropin.certification_verdict.v1")
+expected_schema = spec.get("schema", "ra.dropin.certification_verdict.v1")
 expected_verdict_path = spec.get("path")
 if (
     not isinstance(required_fields, list)
@@ -5261,7 +5261,7 @@ if (
     finish("fail", "contract verdict required_fields must be a non-empty array of unique strings")
 if not isinstance(expected_schema, str) or not expected_schema:
     finish("fail", "contract verdict schema must be a non-empty string")
-if expected_schema != "pi.dropin.certification_verdict.v1":
+if expected_schema != "ra.dropin.certification_verdict.v1":
     finish("fail", f"contract names an unsupported verdict schema: {expected_schema}")
 if expected_verdict_path != "docs/evidence/dropin-certification-verdict.json":
     finish("fail", "contract verdict path does not name docs/evidence/dropin-certification-verdict.json")
@@ -5500,8 +5500,8 @@ if strict_required or certification_claimed:
         finish("fail", "source must be an object in strict mode")
     if source.get("certification_lane_artifact") != "tests/full_suite_gate/certification_verdict.json":
         finish("fail", "source.certification_lane_artifact is not the canonical certification lane artifact")
-    if source.get("lane_schema") != "pi.ci.certification_lane.v1":
-        finish("fail", f"source.lane_schema={source.get('lane_schema')!r} (expected 'pi.ci.certification_lane.v1')")
+    if source.get("lane_schema") != "ra.ci.certification_lane.v1":
+        finish("fail", f"source.lane_schema={source.get('lane_schema')!r} (expected 'ra.ci.certification_lane.v1')")
     if source.get("lane_verdict") != "pass":
         finish("fail", f"source.lane_verdict={source.get('lane_verdict')!r} (expected 'pass')")
 
@@ -5514,11 +5514,11 @@ if strict_required or certification_claimed:
     decision_inputs.append(
         (lane_path, DROPIN_LANE_RELATIVE, "drop-in certification lane", lane_bytes)
     )
-    if lane.get("schema") != "pi.ci.certification_lane.v1":
+    if lane.get("schema") != "ra.ci.certification_lane.v1":
         finish(
             "fail",
             f"actual certification lane schema={lane.get('schema')!r} "
-            "(expected 'pi.ci.certification_lane.v1')",
+            "(expected 'ra.ci.certification_lane.v1')",
         )
     expected_lane_fields = {
         "schema",
@@ -5624,7 +5624,7 @@ if strict_required or certification_claimed:
         finish("fail", "actual certification lane waiver_audit fields are invalid")
     waiver_generated_raw = waiver_audit.get("generated_at")
     if (
-        waiver_audit.get("schema") != "pi.ci.waiver_audit.v1"
+        waiver_audit.get("schema") != "ra.ci.waiver_audit.v1"
         or not isinstance(waiver_generated_raw, str)
         or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z", waiver_generated_raw) is None
     ):
@@ -5891,7 +5891,7 @@ if [[ "$REPORT_JSON" -eq 1 ]]; then
 
     cat <<EOF
 {
-  "schema": "pi.release_gate.v1",
+  "schema": "ra.release_gate.v1",
   "verdict": "$VERDICT",
   "thresholds": {
     "min_pass_rate": $MIN_PASS_RATE,

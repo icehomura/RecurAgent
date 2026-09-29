@@ -11,10 +11,10 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
 /// Environment variable that overrides benchmark build-profile metadata.
-pub const BENCH_BUILD_PROFILE_ENV: &str = "PI_BENCH_BUILD_PROFILE";
+pub const BENCH_BUILD_PROFILE_ENV: &str = "RECUR_AGENT_BENCH_BUILD_PROFILE";
 
 /// Environment variable that requests an allocator label for benchmark runs.
-pub const BENCH_ALLOCATOR_ENV: &str = "PI_BENCH_ALLOCATOR";
+pub const BENCH_ALLOCATOR_ENV: &str = "RECUR_AGENT_BENCH_ALLOCATOR";
 
 /// Release binary-size budget (MB) shared by perf regression and budget gates.
 ///
@@ -25,20 +25,24 @@ pub const BENCH_ALLOCATOR_ENV: &str = "PI_BENCH_ALLOCATOR";
 /// Raised 26.0 → 48.0 on 2026-08-21 for the v0.3.0 capability wave (BPE
 /// token tables, LSP/DAP bridges, MCP client, eval kernels, web tools);
 /// bd tracker holds the re-trim investigation.
-pub const BINARY_SIZE_RELEASE_BUDGET_MB: f64 = 48.0;
+/// Raised 48.0 → 96.0 on 2026-09-29 by owner decision: the hard cap was
+/// lifted to "under 100 MB" so integration candidates are judged on merit
+/// rather than on binary size alone. 96.0 (not 100.0) keeps headroom below
+/// the stated ceiling so the gate does not trip on boundary noise.
+pub const BINARY_SIZE_RELEASE_BUDGET_MB: f64 = 96.0;
 
 /// Cargo profile family embedded by `build.rs` (`PROFILE`; custom release-derived
 /// profiles are reported by Cargo as `release`).
-pub const COMPILED_PROFILE_FAMILY: &str = env!("PI_BUILD_PROFILE_FAMILY");
+pub const COMPILED_PROFILE_FAMILY: &str = env!("RECUR_AGENT_BUILD_PROFILE_FAMILY");
 
 /// Cargo optimization level embedded by `build.rs` (`OPT_LEVEL`).
-pub const COMPILED_OPT_LEVEL: &str = env!("PI_BUILD_OPT_LEVEL");
+pub const COMPILED_OPT_LEVEL: &str = env!("RECUR_AGENT_BUILD_OPT_LEVEL");
 
 /// Cargo debug-info switch embedded by `build.rs` (`DEBUG`).
-pub const COMPILED_DEBUG: &str = env!("PI_BUILD_DEBUG");
+pub const COMPILED_DEBUG: &str = env!("RECUR_AGENT_BUILD_DEBUG");
 
 /// Sorted, comma-separated package feature set embedded by `build.rs`.
-pub const COMPILED_FEATURES_CSV: &str = env!("PI_BUILD_FEATURES");
+pub const COMPILED_FEATURES_CSV: &str = env!("RECUR_AGENT_BUILD_FEATURES");
 
 /// Exact package feature set for the canonical shipping/system PiJS perf lane.
 pub const CANONICAL_PIJS_PERF_FEATURES: &[&str] = &[
@@ -53,13 +57,13 @@ pub const CANONICAL_PIJS_PERF_FEATURES: &[&str] = &[
 pub const BUILD_FINGERPRINT_CONTRACT: &str = "cargo_build_fingerprint.v1";
 
 /// Release-binary size measurement control emitted by the perf orchestrator.
-pub const BINARY_SIZE_MEASUREMENT_SCHEMA: &str = "pi.perf.binary_size_measurement.v1";
+pub const BINARY_SIZE_MEASUREMENT_SCHEMA: &str = "ra.perf.binary_size_measurement.v1";
 
 /// Idle-process RSS measurement control consumed by the release budget gate.
-pub const IDLE_RSS_MEASUREMENT_SCHEMA: &str = "pi.perf.idle_rss_measurement.v1";
+pub const IDLE_RSS_MEASUREMENT_SCHEMA: &str = "ra.perf.idle_rss_measurement.v1";
 
 /// Criterion cold-load measurement control emitted by the perf orchestrator.
-pub const COLD_LOAD_MEASUREMENT_SCHEMA: &str = "pi.perf.cold_load_measurement.v1";
+pub const COLD_LOAD_MEASUREMENT_SCHEMA: &str = "ra.perf.cold_load_measurement.v1";
 
 /// A measurement control can be absent, malformed, or valid-but-too-noisy.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -707,7 +711,7 @@ pub fn verify_binary_size_measurement_control_with_relocated_artifact(
         || control.compiled_opt_level != "z"
         || !control.strip
         || control.profile_source != "Cargo.toml#profile.release"
-        || control.build_command != "cargo build --bin pi --release"
+        || control.build_command != "cargo build --bin ra --release"
     {
         return Err(MeasurementControlError::Invalid(
             "release binary must prove profile=release, opt-level=z, strip=true, and the canonical build command"
@@ -718,7 +722,7 @@ pub fn verify_binary_size_measurement_control_with_relocated_artifact(
     let binary_path = measurement_artifact_path(
         &control.binary_path,
         relocated_binary_path,
-        Path::new("release/pi"),
+        Path::new("release/ra"),
         "binary_path",
     )?;
     let metadata = std::fs::metadata(&binary_path).map_err(|error| {
@@ -914,12 +918,12 @@ fn verify_idle_rss_samples(
     let mut max_rss_bytes = 0u64;
     for sample in &control.samples {
         if sample.pid == 0
-            || sample.process_name != "pi"
+            || sample.process_name != "ra"
             || sample.rss_bytes == 0
             || !unique_pids.insert(sample.pid)
         {
             return Err(MeasurementControlError::Invalid(
-                "idle RSS samples require unique pid>0, process_name=pi, and rss_bytes>0"
+                "idle RSS samples require unique pid>0, process_name=ra, and rss_bytes>0"
                     .to_string(),
             ));
         }
@@ -942,7 +946,7 @@ fn verify_idle_rss_samples(
     Ok(())
 }
 
-/// Verify that idle RSS was sampled from a real `pi` process and remains
+/// Verify that idle RSS was sampled from a real `ra` process and remains
 /// bound to the exact measured executable and allocator.
 pub fn verify_idle_rss_measurement_control(
     control_path: &Path,
@@ -971,15 +975,15 @@ pub fn verify_idle_rss_measurement_control_with_relocated_artifact(
         control.source_dirty,
     )?;
     if control.pid == 0
-        || control.process_name != "pi"
+        || control.process_name != "ra"
         || !matches!(control.allocator.as_str(), "system" | "jemalloc")
         || control.rss_bytes == 0
         || control.idle_state != "startup_before_user_input"
         || control.cargo_profile != "release"
-        || control.build_command != "cargo build --bin pi --release"
+        || control.build_command != "cargo build --bin ra --release"
     {
         return Err(MeasurementControlError::Invalid(
-            "idle RSS control requires a release-built pi process, a known allocator, rss_bytes>0, and the startup_before_user_input boundary"
+            "idle RSS control requires a release-built ra process, a known allocator, rss_bytes>0, and the startup_before_user_input boundary"
                 .to_string(),
         ));
     }
@@ -995,12 +999,12 @@ pub fn verify_idle_rss_measurement_control_with_relocated_artifact(
     let binary_path = measurement_artifact_path(
         &control.binary_path,
         relocated_binary_path,
-        Path::new("release/pi"),
+        Path::new("release/ra"),
         "binary_path",
     )?;
-    if binary_path.file_name().and_then(|name| name.to_str()) != Some("pi") {
+    if binary_path.file_name().and_then(|name| name.to_str()) != Some("ra") {
         return Err(MeasurementControlError::Invalid(
-            "idle RSS binary_path must identify the pi executable".to_string(),
+            "idle RSS binary_path must identify the ra executable".to_string(),
         ));
     }
     let observed_binary_sha256 = sha256_file(&binary_path).map_err(|error| {
@@ -1202,8 +1206,8 @@ mod tests {
     #[test]
     fn binary_size_control_binds_exact_release_binary_and_profile() {
         let temp = tempfile::tempdir().expect("create test directory");
-        // The verifier binds controls to the producer path `release/pi`.
-        let binary_path = temp.path().join("release").join("pi");
+        // The verifier binds controls to the producer path `release/ra`.
+        let binary_path = temp.path().join("release").join("ra");
         std::fs::create_dir_all(binary_path.parent().expect("release dir"))
             .expect("create release dir");
         std::fs::write(&binary_path, b"shipping release binary").expect("write release binary");
@@ -1225,7 +1229,7 @@ mod tests {
             "compiled_opt_level": "z",
             "strip": true,
             "profile_source": "Cargo.toml#profile.release",
-            "build_command": "cargo build --bin pi --release"
+            "build_command": "cargo build --bin ra --release"
         });
         write_json(&control_path, &control);
 
@@ -1233,7 +1237,7 @@ mod tests {
             .expect("valid release-binary control");
         assert_eq!(verified.size_bytes, 23);
 
-        let relocated_binary_path = temp.path().join("relocated/pi");
+        let relocated_binary_path = temp.path().join("relocated/ra");
         std::fs::create_dir_all(relocated_binary_path.parent().expect("relocated parent"))
             .expect("create relocated binary directory");
         std::fs::write(&relocated_binary_path, b"shipping release binary")
@@ -1242,7 +1246,7 @@ mod tests {
             .expect("canonicalize relocated release binary");
         let mut relocated_control = control;
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/release/pi");
+            serde_json::json!("/unavailable/producer/target/release/ra");
         let relocated_control_path = temp.path().join("binary-size-relocated.json");
         write_json(&relocated_control_path, &relocated_control);
         assert!(verify_binary_size_measurement_control(&relocated_control_path).is_err());
@@ -1254,7 +1258,7 @@ mod tests {
         assert_eq!(relocated.binary_path, relocated_binary_path);
 
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/debug/pi");
+            serde_json::json!("/unavailable/producer/target/debug/ra");
         write_json(&relocated_control_path, &relocated_control);
         let wrong_suffix = verify_binary_size_measurement_control_with_relocated_artifact(
             &relocated_control_path,
@@ -1264,7 +1268,7 @@ mod tests {
         assert!(
             wrong_suffix
                 .to_string()
-                .contains("binary_path must end with the required producer path release/pi")
+                .contains("binary_path must end with the required producer path release/ra")
         );
 
         std::fs::write(&binary_path, b"tampered release binary").expect("tamper release binary");
@@ -1403,10 +1407,10 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn idle_rss_control_binds_pi_process_allocator_and_executable() {
+    fn idle_rss_control_binds_ra_process_allocator_and_executable() {
         let temp = tempfile::tempdir().expect("create test directory");
-        // The verifier binds controls to the producer path `release/pi`.
-        let binary_path = temp.path().join("release").join("pi");
+        // The verifier binds controls to the producer path `release/ra`.
+        let binary_path = temp.path().join("release").join("ra");
         std::fs::create_dir_all(binary_path.parent().expect("release dir"))
             .expect("create release dir");
         std::fs::write(&binary_path, b"measured pi executable").expect("write Pi executable");
@@ -1442,21 +1446,21 @@ mod tests {
             "source_commit": TEST_SOURCE_COMMIT,
             "source_dirty": false,
             "pid": 4242,
-            "process_name": "pi",
+            "process_name": "ra",
             "allocator": "system",
             "binary_path": binary_path,
             "binary_sha256": binary_sha256,
             "rss_bytes": 1_572_864,
             "idle_state": "startup_before_user_input",
             "cargo_profile": "release",
-            "build_command": "cargo build --bin pi --release",
+            "build_command": "cargo build --bin ra --release",
             "sample_count": 5,
             "samples": [
-                {"pid": 4240, "process_name": "pi", "rss_bytes": 1_048_576},
-                {"pid": 4241, "process_name": "pi", "rss_bytes": 1_179_648},
-                {"pid": 4242, "process_name": "pi", "rss_bytes": 1_572_864},
-                {"pid": 4243, "process_name": "pi", "rss_bytes": 1_310_720},
-                {"pid": 4244, "process_name": "pi", "rss_bytes": 1_441_792}
+                {"pid": 4240, "process_name": "ra", "rss_bytes": 1_048_576},
+                {"pid": 4241, "process_name": "ra", "rss_bytes": 1_179_648},
+                {"pid": 4242, "process_name": "ra", "rss_bytes": 1_572_864},
+                {"pid": 4243, "process_name": "ra", "rss_bytes": 1_310_720},
+                {"pid": 4244, "process_name": "ra", "rss_bytes": 1_441_792}
             ],
             "rss_spread_bytes": 524_288,
             "settle_ms": 1_000,
@@ -1472,7 +1476,7 @@ mod tests {
         assert_eq!(verified.sample_count, 5);
         assert_eq!(verified.rss_spread_bytes, 524_288);
 
-        let relocated_binary_path = temp.path().join("relocated/pi");
+        let relocated_binary_path = temp.path().join("relocated/ra");
         std::fs::create_dir_all(relocated_binary_path.parent().expect("relocated parent"))
             .expect("create relocated idle-RSS binary directory");
         std::fs::write(&relocated_binary_path, b"measured pi executable")
@@ -1481,7 +1485,7 @@ mod tests {
             .expect("canonicalize relocated idle-RSS binary");
         let mut relocated_control = control.clone();
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/release/pi");
+            serde_json::json!("/unavailable/producer/target/release/ra");
         let relocated_control_path = temp.path().join("idle-rss-relocated.json");
         write_json(&relocated_control_path, &relocated_control);
         assert!(verify_idle_rss_measurement_control(&relocated_control_path).is_err());
@@ -1493,7 +1497,7 @@ mod tests {
         assert_eq!(relocated.binary_path, relocated_binary_path);
 
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/debug/pi");
+            serde_json::json!("/unavailable/producer/target/debug/ra");
         write_json(&relocated_control_path, &relocated_control);
         let wrong_suffix = verify_idle_rss_measurement_control_with_relocated_artifact(
             &relocated_control_path,
@@ -1503,7 +1507,7 @@ mod tests {
         assert!(
             wrong_suffix
                 .to_string()
-                .contains("binary_path must end with the required producer path release/pi")
+                .contains("binary_path must end with the required producer path release/ra")
         );
 
         control["process_name"] = serde_json::json!("cargo-test");
@@ -1513,13 +1517,13 @@ mod tests {
             Err(MeasurementControlError::Invalid(_))
         ));
 
-        control["process_name"] = serde_json::json!("pi");
+        control["process_name"] = serde_json::json!("ra");
         control["sample_count"] = serde_json::json!(4);
         control["samples"] = serde_json::json!([
-            {"pid": 4240, "process_name": "pi", "rss_bytes": 1_048_576},
-            {"pid": 4241, "process_name": "pi", "rss_bytes": 1_179_648},
-            {"pid": 4242, "process_name": "pi", "rss_bytes": 1_572_864},
-            {"pid": 4243, "process_name": "pi", "rss_bytes": 1_310_720}
+            {"pid": 4240, "process_name": "ra", "rss_bytes": 1_048_576},
+            {"pid": 4241, "process_name": "ra", "rss_bytes": 1_179_648},
+            {"pid": 4242, "process_name": "ra", "rss_bytes": 1_572_864},
+            {"pid": 4243, "process_name": "ra", "rss_bytes": 1_310_720}
         ]);
         write_json(&control_path, &control);
         assert!(matches!(
@@ -1529,11 +1533,11 @@ mod tests {
 
         control["sample_count"] = serde_json::json!(5);
         control["samples"] = serde_json::json!([
-            {"pid": 4240, "process_name": "pi", "rss_bytes": 1_048_576},
-            {"pid": 4241, "process_name": "pi", "rss_bytes": 1_179_648},
-            {"pid": 4242, "process_name": "pi", "rss_bytes": 1_572_864},
-            {"pid": 4243, "process_name": "pi", "rss_bytes": 1_310_720},
-            {"pid": 4244, "process_name": "pi", "rss_bytes": 1_441_792}
+            {"pid": 4240, "process_name": "ra", "rss_bytes": 1_048_576},
+            {"pid": 4241, "process_name": "ra", "rss_bytes": 1_179_648},
+            {"pid": 4242, "process_name": "ra", "rss_bytes": 1_572_864},
+            {"pid": 4243, "process_name": "ra", "rss_bytes": 1_310_720},
+            {"pid": 4244, "process_name": "ra", "rss_bytes": 1_441_792}
         ]);
         control["bench_env_sha256"] = serde_json::json!("0".repeat(64));
         write_json(&control_path, &control);

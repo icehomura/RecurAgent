@@ -195,7 +195,7 @@
       "comparison": "maximum",
       "source": "not evaluated: authoritative benchmark lineage is incomplete",
       "status": "NO_DATA",
-      "threshold": 48.0,
+      "threshold": 96.0,
       "unit": "MB"
     },
     {
@@ -215,7 +215,7 @@
       "category": "startup",
       "ci_enforced": true,
       "comparison": "maximum",
-      "methodology": "hyperfine: `pi --version` (10 runs, 3 warmup)",
+      "methodology": "hyperfine: `ra --version` (10 runs, 3 warmup)",
       "metric": "p95 latency",
       "name": "startup_version_p95",
       "threshold": 100.0,
@@ -225,7 +225,7 @@
       "category": "startup",
       "ci_enforced": false,
       "comparison": "maximum",
-      "methodology": "hyperfine: `pi --print '.'` with full init (10 runs, 3 warmup)",
+      "methodology": "hyperfine: `ra --print '.'` with full init (10 runs, 3 warmup)",
       "metric": "p95 latency",
       "name": "startup_full_agent_p95",
       "threshold": 200.0,
@@ -388,7 +388,7 @@
       "methodology": "ls -la target/release/pi (stripped)",
       "metric": "release binary size",
       "name": "binary_size_release",
-      "threshold": 48.0,
+      "threshold": 96.0,
       "unit": "MB"
     },
     {
@@ -451,7 +451,7 @@
   "no_data": 19,
   "pass": 0,
   "run_id": null,
-  "schema": "pi.perf.budget_summary.v2",
+  "schema": "ra.perf.budget_summary.v2",
   "source_commit": "9c887d33ca894318f18a1dbabac5e51f4dc07aba",
   "strict_mode": false,
   "total_budgets": 19

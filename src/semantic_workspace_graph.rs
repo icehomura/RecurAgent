@@ -21,15 +21,15 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::UNIX_EPOCH;
 
-pub const SEMANTIC_WORKSPACE_GRAPH_SCHEMA: &str = "pi.semantic_workspace_graph.v1";
-pub const GRAPH_BUILDER_SCHEMA: &str = "pi.semantic_workspace_graph.builder_trace.v1";
-pub const SEMANTIC_CONTEXT_BUNDLE_SCHEMA: &str = "pi.semantic_context_bundle.v1";
+pub const SEMANTIC_WORKSPACE_GRAPH_SCHEMA: &str = "ra.semantic_workspace_graph.v1";
+pub const GRAPH_BUILDER_SCHEMA: &str = "ra.semantic_workspace_graph.builder_trace.v1";
+pub const SEMANTIC_CONTEXT_BUNDLE_SCHEMA: &str = "ra.semantic_context_bundle.v1";
 
 const DEFAULT_STALE_AFTER_DAYS: i64 = 1;
 const RELEASE_FACING_EVIDENCE_STALE_AFTER_DAYS: i64 = 14;
 const DEFAULT_CACHE_TTL_SECONDS: u64 = 6 * 60 * 60;
 const DEFAULT_CONTEXT_CACHE_TTL_SECONDS: u64 = 15 * 60;
-const CONTEXT_PRIVACY_POLICY_VERSION: &str = "pi.context_privacy.v1";
+const CONTEXT_PRIVACY_POLICY_VERSION: &str = "ra.context_privacy.v1";
 
 struct DuplicateRejectingJsonValue(Value);
 
@@ -2049,15 +2049,15 @@ fn classify_in_progress_bead(
     }
 }
 
-const PERF_BUDGET_SUMMARY_SCHEMA: &str = "pi.perf.budget_summary.v2";
+const PERF_BUDGET_SUMMARY_SCHEMA: &str = "ra.perf.budget_summary.v2";
 const PERF_BUDGET_SUMMARY_PATH: &str = "tests/perf/reports/budget_summary.json";
 const DROPIN_CERTIFICATION_CONTRACT_PATH: &str =
     "docs/contracts/dropin-certification-contract.json";
-const DROPIN_CERTIFICATION_CONTRACT_SCHEMA: &str = "pi.dropin.certification_contract.v1";
+const DROPIN_CERTIFICATION_CONTRACT_SCHEMA: &str = "ra.dropin.certification_contract.v1";
 const DROPIN_CERTIFICATION_VERDICT_PATH: &str = "docs/evidence/dropin-certification-verdict.json";
-const DROPIN_CERTIFICATION_VERDICT_SCHEMA: &str = "pi.dropin.certification_verdict.v1";
+const DROPIN_CERTIFICATION_VERDICT_SCHEMA: &str = "ra.dropin.certification_verdict.v1";
 const DROPIN_CERTIFICATION_LANE_PATH: &str = "tests/full_suite_gate/certification_verdict.json";
-const DROPIN_CERTIFICATION_LANE_SCHEMA: &str = "pi.ci.certification_lane.v1";
+const DROPIN_CERTIFICATION_LANE_SCHEMA: &str = "ra.ci.certification_lane.v1";
 const DROPIN_MAX_EVIDENCE_AGE_HOURS: i64 = 168;
 const DROPIN_CERTIFICATION_LANE_POLICY: &str = "Full certification: all blocking gates must pass for release. Waived gates are tracked but do not block. Expired waivers fail the waiver_lifecycle gate.";
 const DROPIN_LANE_TOP_LEVEL_FIELDS: &[&str] = &[
@@ -2296,7 +2296,7 @@ const DROPIN_VERDICT_REQUIRED_FIELDS: &[&str] = &[
 /// disagree with the table, which also means it cannot notice someone editing
 /// the table carelessly.
 pub const PERF_CANONICAL_BUDGET_INVENTORY_SHA256: &str =
-    "85ea5705c7472c3e7b85b6e31552ee57f245406e5b8c636b6555f3bbda7f6cc6";
+    "c32cf02d430e733aacbade9fe029c0558c6105043e36f009ade060ae9147de8a";
 const PERF_TOP_LEVEL_FIELDS: &[&str] = &[
     "schema",
     "generated_at",
@@ -2923,7 +2923,7 @@ fn classify_performance_budget_claim(
     canonical_path: bool,
 ) -> Option<(EvidenceFreshnessStatus, bool, String)> {
     let schema = value.get("schema").and_then(Value::as_str);
-    if schema == Some("pi.perf.budget_summary.v1") {
+    if schema == Some("ra.perf.budget_summary.v1") {
         return Some((
             EvidenceFreshnessStatus::Malformed,
             false,
@@ -4401,7 +4401,7 @@ fn dropin_lane_waiver_audit(
     ];
     let audit = performance_exact_object(value, FIELDS, &[], "certification lane waiver_audit")
         .map_err(|_| DropinClaimFailure::Invalid("dropin_verdict_source_lane_invalid"))?;
-    if audit.get("schema").and_then(Value::as_str) != Some("pi.ci.waiver_audit.v1") {
+    if audit.get("schema").and_then(Value::as_str) != Some("ra.ci.waiver_audit.v1") {
         return Err(DropinClaimFailure::Invalid(
             "dropin_verdict_source_lane_invalid",
         ));

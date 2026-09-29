@@ -1,6 +1,6 @@
 //! Performance budget definitions and enforcement tests (bd-1fc4).
 //!
-//! Centralizes all performance budgets for the Pi Agent Rust runtime. Each budget
+//! Centralizes all performance budgets for the Recur Agent runtime. Each budget
 //! has an explicit threshold, measurement methodology, and CI enforcement path.
 //!
 //! Budgets are validated against actual benchmark data when available.
@@ -18,7 +18,7 @@
     clippy::suboptimal_flops
 )]
 
-use pi::perf_build::{
+use ra::perf_build::{
     BINARY_SIZE_RELEASE_BUDGET_MB, BUILD_FINGERPRINT_CONTRACT, BenchmarkBuildVerification,
     BenchmarkProvenance, CANONICAL_PIJS_PERF_FEATURES, MeasurementControlError,
     VerifiedBinarySizeMeasurement, VerifiedColdLoadMeasurement, VerifiedIdleRssMeasurement,
@@ -92,7 +92,7 @@ struct Budget {
     ci_enforced: bool,
 }
 
-/// All performance budgets for the Pi Agent Rust runtime.
+/// All performance budgets for the Recur Agent runtime.
 const BUDGETS: &[Budget] = &[
     // ── Startup ──────────────────────────────────────────────────────────
     Budget {
@@ -102,7 +102,7 @@ const BUDGETS: &[Budget] = &[
         unit: "ms",
         threshold: 100.0,
         comparison: BudgetComparison::Maximum,
-        methodology: "hyperfine: `pi --version` (10 runs, 3 warmup)",
+        methodology: "hyperfine: `ra --version` (10 runs, 3 warmup)",
         ci_enforced: true,
     },
     Budget {
@@ -112,7 +112,7 @@ const BUDGETS: &[Budget] = &[
         unit: "ms",
         threshold: 200.0,
         comparison: BudgetComparison::Maximum,
-        methodology: "hyperfine: `pi --print '.'` with full init (10 runs, 3 warmup)",
+        methodology: "hyperfine: `ra --print '.'` with full init (10 runs, 3 warmup)",
         ci_enforced: false, // Requires API key or VCR
     },
     // ── Extension Loading ────────────────────────────────────────────────
@@ -325,13 +325,13 @@ fn budget_inventory_canonical_json() -> String {
 
 fn budget_inventory_sha256() -> String {
     let digest = Sha256::digest(budget_inventory_canonical_json().as_bytes());
-    pi::package_manager::hex_encode(&digest)
+    ra::package_manager::hex_encode(&digest)
 }
 
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS: f64 = 24.0;
 const BUN_KILLER_MAX_RUST_VS_BUN_RATIO: f64 = 0.33;
 const CONTEXT_BENCH_CASE: &str = "large_workspace";
-const CONTEXT_INTELLIGENCE_PERF_SCHEMA: &str = "pi.semantic_context.performance_budget.v1";
+const CONTEXT_INTELLIGENCE_PERF_SCHEMA: &str = "ra.semantic_context.performance_budget.v1";
 const CONTEXT_INTELLIGENCE_BUDGET_METRICS: &[(&str, &str)] = &[
     (
         "context_graph_build_cold_p95",
@@ -361,8 +361,8 @@ const PIJS_REGRESSION_GATE_ITERATIONS: u64 = 2_000;
 const BINARY_SIZE_CONTROL_FILE: &str = "binary_size_measurement.json";
 const COLD_LOAD_CONTROL_FILE: &str = "cold_load_measurement.json";
 const IDLE_RSS_CONTROL_FILE: &str = "idle_memory_rss.json";
-const POST_GENERATION_MODE_ENV: &str = "PI_PERF_POST_GENERATION";
-const POST_GENERATION_EXPECTED_COMMIT_ENV: &str = "PI_PERF_EXPECTED_SOURCE_COMMIT";
+const POST_GENERATION_MODE_ENV: &str = "RECUR_AGENT_PERF_POST_GENERATION";
+const POST_GENERATION_EXPECTED_COMMIT_ENV: &str = "RECUR_AGENT_PERF_EXPECTED_SOURCE_COMMIT";
 const POST_GENERATION_INVENTORY_FILE: &str = "post_generation_evidence_inventory.json";
 const POST_GENERATION_REQUIRED_INPUT_PATHS: &[&str] = &[
     "context_intelligence/perf_budget.json",
@@ -389,7 +389,7 @@ const POST_GENERATION_REQUIRED_INPUT_PATHS: &[&str] = &[
     "phase1_matrix_validation.json",
     "pijs_workload.jsonl",
     "post_generation_producer_admission.json",
-    "release/pi",
+    "release/ra",
     "release_evidence/binary_size_measurement.json",
     "release_evidence/cold_load_measurement.json",
     "release_evidence/idle_memory_rss.json",
@@ -763,7 +763,7 @@ fn validate_post_generation_producer_admission(
         .and_then(OsStr::to_str)
         .ok_or_else(|| "post-generation evidence root has no run-instance component".to_string())?;
     for (field, expected) in [
-        ("schema", "pi.perf.post_generation_producer_admission.v1"),
+        ("schema", "ra.perf.post_generation_producer_admission.v1"),
         ("source_commit", policy.expected_source_commit.as_str()),
         ("correlation_id", policy.correlation_id.as_str()),
         ("run_instance_id", staged_run_instance_id),
@@ -840,7 +840,7 @@ fn validate_post_generation_evidence_inventory(
         .map_err(|error| format!("cannot read post-generation evidence inventory: {error}"))?;
     let inventory: PostGenerationEvidenceInventory = serde_json::from_slice(&bytes)
         .map_err(|error| format!("invalid post-generation evidence inventory: {error}"))?;
-    if inventory.schema != "pi.perf.post_generation_evidence_inventory.v1" {
+    if inventory.schema != "ra.perf.post_generation_evidence_inventory.v1" {
         return Err("post-generation evidence inventory has the wrong schema".to_string());
     }
     if inventory.source_commit != policy.expected_source_commit {
@@ -1199,7 +1199,7 @@ struct DataContractFailure {
 }
 
 fn perf_strict_mode() -> bool {
-    std::env::var("PI_PERF_STRICT").is_ok_and(|v| v == "1")
+    std::env::var("RECUR_AGENT_PERF_STRICT").is_ok_and(|v| v == "1")
 }
 
 fn budget_report_generation_enabled(raw: Option<&str>) -> bool {
@@ -1208,14 +1208,14 @@ fn budget_report_generation_enabled(raw: Option<&str>) -> bool {
 
 fn budget_report_generation_requested() -> bool {
     budget_report_generation_enabled(
-        std::env::var("PI_GENERATE_PERF_BUDGET_REPORT")
+        std::env::var("RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT")
             .ok()
             .as_deref(),
     )
 }
 
 fn max_artifact_age_hours() -> f64 {
-    std::env::var("PI_PERF_MAX_ARTIFACT_AGE_HOURS")
+    std::env::var("RECUR_AGENT_PERF_MAX_ARTIFACT_AGE_HOURS")
         .ok()
         .and_then(|raw| raw.parse::<f64>().ok())
         .filter(|hours| *hours > 0.0)
@@ -1226,7 +1226,7 @@ fn perf_run_id() -> Option<String> {
     [
         "PERF_CLAIM_CORRELATION_ID",
         "CI_CORRELATION_ID",
-        "PI_PERF_CORRELATION_ID",
+        "RECUR_AGENT_PERF_CORRELATION_ID",
     ]
     .into_iter()
     .find_map(|key| {
@@ -1539,7 +1539,7 @@ fn budget_summary_value(
     let claims_authorized = readiness_blockers.is_empty();
 
     json!({
-        "schema": "pi.perf.budget_summary.v2",
+        "schema": "ra.perf.budget_summary.v2",
         "generated_at": lineage.generated_at,
         "source_commit": lineage.source_commit,
         "run_id": lineage.run_id,
@@ -1767,7 +1767,7 @@ fn build_binary_size_candidate_paths(
     if let Some(path) = release_binary_override {
         paths.push(path);
     }
-    paths.push(target_dir.join("release/pi"));
+    paths.push(target_dir.join("release/ra"));
 
     let mut dedup = std::collections::HashSet::new();
     paths.retain(|path| dedup.insert(path.clone()));
@@ -1775,7 +1775,7 @@ fn build_binary_size_candidate_paths(
 }
 
 fn binary_size_candidate_paths(root: &Path) -> Vec<PathBuf> {
-    let detected_profile = pi::perf_build::detect_build_profile();
+    let detected_profile = ra::perf_build::detect_build_profile();
     let release_binary_override = if post_generation_mode_is_active() {
         None
     } else {
@@ -1889,7 +1889,7 @@ fn verify_binary_size_control_for_root(
 ) -> Result<VerifiedBinarySizeMeasurement, MeasurementControlError> {
     let policy = post_generation_measurement_policy(root)?;
     let candidates = binary_size_control_candidates(root);
-    let relocated_binary_path = policy.as_ref().map(|policy| policy.root.join("release/pi"));
+    let relocated_binary_path = policy.as_ref().map(|policy| policy.root.join("release/ra"));
     let verified = verify_binary_size_measurement_control_with_relocated_artifact(
         first_existing_control_path(&candidates)?,
         relocated_binary_path.as_deref(),
@@ -1905,7 +1905,7 @@ fn verify_binary_size_control_for_root(
         .any(|path| path == verified.binary_path);
     if !admissible_binary {
         return Err(MeasurementControlError::Invalid(
-            "binary_path is not the configured release/pi artifact".to_string(),
+            "binary_path is not the configured release/ra artifact".to_string(),
         ));
     }
     Ok(verified)
@@ -1946,7 +1946,7 @@ fn verify_idle_rss_control_for_root(
 ) -> Result<VerifiedIdleRssMeasurement, MeasurementControlError> {
     let policy = post_generation_measurement_policy(root)?;
     let candidates = idle_rss_control_candidates(root);
-    let relocated_binary_path = policy.as_ref().map(|policy| policy.root.join("release/pi"));
+    let relocated_binary_path = policy.as_ref().map(|policy| policy.root.join("release/ra"));
     let verified = verify_idle_rss_measurement_control_with_relocated_artifact(
         first_existing_control_path(&candidates)?,
         relocated_binary_path.as_deref(),
@@ -2338,7 +2338,7 @@ fn cross_runtime_comparison_contract_failure(
 
     let valid = exact_layers_valid
         && declared_layers_valid
-        && contract_schema == Some("pi.perf.cross_runtime_comparison.v1")
+        && contract_schema == Some("ra.perf.cross_runtime_comparison.v1")
         && legacy_required == Some(true)
         && exact_contract_required == Some(true)
         && portable_shim_record_count == Some(0)
@@ -3585,7 +3585,7 @@ fn require_pijs_perf_binary_path(record: &Value) -> Result<(), String> {
 
 fn validate_pijs_gate_classification(record: &Value) -> Result<(), String> {
     for (field, expected) in [
-        ("schema", "pi.perf.workload.v1"),
+        ("schema", "ra.perf.workload.v1"),
         ("tool", "pijs_workload"),
         ("scenario", "tool_call_roundtrip"),
         ("runtime_engine", "quickjs"),
@@ -4537,7 +4537,7 @@ fn read_criterion_protocol_parse(root: &Path) -> (Option<f64>, String) {
 
 #[test]
 fn target_dir_resolution_honors_cargo_target_dir_shape() {
-    let root = Path::new("/workspace/pi_agent_rust");
+    let root = Path::new("/workspace/recur_agent");
 
     assert_eq!(resolve_target_dir(root, None), root.join("target"));
     assert_eq!(
@@ -4548,16 +4548,16 @@ fn target_dir_resolution_honors_cargo_target_dir_shape() {
         resolve_target_dir(
             root,
             Some(std::ffi::OsStr::new(
-                "/data/tmp/pi_agent_rust_cargo/sunnybeacon/target"
+                "/data/tmp/recur_agent_cargo/sunnybeacon/target"
             ))
         ),
-        PathBuf::from("/data/tmp/pi_agent_rust_cargo/sunnybeacon/target")
+        PathBuf::from("/data/tmp/recur_agent_cargo/sunnybeacon/target")
     );
 }
 
 #[test]
 fn explicit_target_dir_is_authoritative_and_fixture_roots_are_hermetic() {
-    let project = Path::new("/workspace/pi_agent_rust");
+    let project = Path::new("/workspace/recur_agent");
     let explicit = std::ffi::OsStr::new("/data/tmp/pi-release-target");
     assert_eq!(
         target_dir_candidates_for(project, project, Some(explicit)),
@@ -4575,7 +4575,7 @@ fn explicit_target_dir_is_authoritative_and_fixture_roots_are_hermetic() {
 
 #[test]
 fn pijs_workload_candidates_follow_resolved_target_dir() {
-    let root = Path::new("/workspace/pi_agent_rust");
+    let root = Path::new("/workspace/recur_agent");
     let candidates = pijs_workload_candidate_paths_in_target_dir(&resolve_target_dir(root, None));
 
     assert_eq!(
@@ -4591,7 +4591,7 @@ fn pijs_workload_candidates_follow_resolved_target_dir() {
 
 #[test]
 fn pijs_workload_candidates_accept_staged_evidence_dir_layout() {
-    let evidence_dir = Path::new("/workspace/pi_agent_rust/tests/perf/reports/staged");
+    let evidence_dir = Path::new("/workspace/recur_agent/tests/perf/reports/staged");
     let candidates = pijs_workload_candidate_paths_in_evidence_dir(evidence_dir);
 
     assert_eq!(candidates[0], evidence_dir.join("pijs_workload_perf.jsonl"));
@@ -4604,7 +4604,7 @@ fn pijs_workload_candidates_accept_staged_evidence_dir_layout() {
 
 #[test]
 fn context_intelligence_budget_artifacts_follow_resolved_target_dir() {
-    let root = Path::new("/workspace/pi_agent_rust");
+    let root = Path::new("/workspace/recur_agent");
     let candidates = budget_artifact_candidates(root, "context_graph_build_cold_p95");
     let machine_candidates = context_intelligence_budget_candidate_paths(root);
 
@@ -4621,10 +4621,10 @@ fn context_intelligence_budget_artifacts_follow_resolved_target_dir() {
     );
     assert!(
         context_intelligence_budget_candidate_paths_in_evidence_dir(Path::new(
-            "/workspace/pi_agent_rust/docs/evidence/perf"
+            "/workspace/recur_agent/docs/evidence/perf"
         ))
         .contains(&PathBuf::from(
-            "/workspace/pi_agent_rust/docs/evidence/perf/perf/results/context_intelligence_planner_budget.json"
+            "/workspace/recur_agent/docs/evidence/perf/perf/results/context_intelligence_planner_budget.json"
         )),
         "staged perf evidence dirs must support nested perf/results artifacts"
     );
@@ -4713,7 +4713,7 @@ fn budget_inventory_has_stable_cross_language_serialization() {
     ));
     assert_eq!(
         budget_inventory_sha256(),
-        "85ea5705c7472c3e7b85b6e31552ee57f245406e5b8c636b6555f3bbda7f6cc6",
+        "c32cf02d430e733aacbade9fe029c0558c6105043e36f009ade060ae9147de8a",
         "canonical budget inventory drifted"
     );
 }
@@ -4991,7 +4991,7 @@ fn valid_pijs_gate_record(root: &Path, tool_calls_per_iteration: u64) -> Value {
         debug_assertions: false,
     });
     let mut record = json!({
-        "schema": "pi.perf.workload.v1",
+        "schema": "ra.perf.workload.v1",
         "timestamp": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         "run_id": "pijs-test-run",
         "correlation_id": "pijs-test-run",
@@ -5411,15 +5411,15 @@ fn pijs_gate_reader_requires_nonempty_binary_path() {
 fn pijs_gate_reader_derives_perf_profile_from_binary_path() {
     let cases = [
         (
-            "/tmp/pi_agent_rust/target/release/examples/pijs_workload",
+            "/tmp/recur_agent/target/release/examples/pijs_workload",
             "derived_profile=Some(\"release\")",
         ),
         (
-            "/tmp/pi_agent_rust/bin/pijs_workload",
+            "/tmp/recur_agent/bin/pijs_workload",
             "derived_profile=Some(\"bin\")",
         ),
         (
-            "/tmp/pi_agent_rust/target/perf/examples",
+            "/tmp/recur_agent/target/perf/examples",
             "must identify the pijs_workload executable",
         ),
     ];
@@ -5921,7 +5921,7 @@ fn checked_in_budget_summary_matches_fresh_canonical_evaluation_exactly() {
         serde_json::from_str(&summary_text).expect("checked-in budget summary must be valid JSON");
     assert_eq!(
         checked_in.get("schema").and_then(Value::as_str),
-        Some("pi.perf.budget_summary.v2")
+        Some("ra.perf.budget_summary.v2")
     );
 
     let generated_at = checked_in
@@ -6019,7 +6019,7 @@ fn checked_in_budget_summary_matches_fresh_canonical_evaluation_exactly() {
 fn generate_budget_report() {
     if !budget_report_generation_requested() {
         eprintln!(
-            "[budget] Report generation skipped; set PI_GENERATE_PERF_BUDGET_REPORT=1 to write tracked reports"
+            "[budget] Report generation skipped; set RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 to write tracked reports"
         );
         return;
     }
@@ -6235,7 +6235,7 @@ fn generate_budget_report() {
     md.push_str("# Run budget checks\n");
     md.push_str("cargo test --test perf_budgets -- --nocapture\n\n");
     md.push_str("# Generate full budget report\n");
-    md.push_str("PI_GENERATE_PERF_BUDGET_REPORT=1 cargo test --test perf_budgets generate_budget_report -- --nocapture\n");
+    md.push_str("RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 cargo test --test perf_budgets generate_budget_report -- --nocapture\n");
     md.push_str("```\n");
 
     let md_path = reports_dir.join("PERF_BUDGETS.md");
@@ -6290,7 +6290,7 @@ fn write_post_generation_inventory_fixture(
     entries: Vec<Value>,
 ) {
     let inventory = json!({
-        "schema": "pi.perf.post_generation_evidence_inventory.v1",
+        "schema": "ra.perf.post_generation_evidence_inventory.v1",
         "source_commit": source_commit,
         "source_dirty": false,
         "correlation_id": correlation_id,
@@ -6383,7 +6383,7 @@ fn write_complete_post_generation_input_fixture(evidence_root: &Path) -> Vec<Val
                 })
                 .collect::<Vec<_>>();
                 let payload = json!({
-                    "schema": "pi.perf.post_generation_producer_admission.v1",
+                    "schema": "ra.perf.post_generation_producer_admission.v1",
                     "generated_at": "2026-08-26T00:00:00Z",
                     "source_commit": "1234567890abcdef1234567890abcdef12345678",
                     "source_dirty": false,
@@ -6796,7 +6796,7 @@ struct IdleRssFixtureBenchEnv {
 }
 
 fn write_idle_rss_control_fixture(root: &Path) -> PathBuf {
-    let binary_path = root.join("target/release/pi");
+    let binary_path = root.join("target/release/ra");
     std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
         .expect("create binary directory");
     std::fs::write(&binary_path, b"fixture release pi").expect("write fixture release binary");
@@ -6817,35 +6817,35 @@ fn write_idle_rss_control_fixture(root: &Path) -> PathBuf {
         noise_score: 1,
         config_hash: "a".repeat(64),
     };
-    let bench_env_sha256 = pi::package_manager::hex_encode(&Sha256::digest(
+    let bench_env_sha256 = ra::package_manager::hex_encode(&Sha256::digest(
         serde_json::to_vec(
             &serde_json::to_value(&bench_env).expect("normalize fixture benchmark environment"),
         )
         .expect("serialize fixture benchmark environment"),
     ));
     let control = json!({
-        "schema": "pi.perf.idle_rss_measurement.v1",
+        "schema": "ra.perf.idle_rss_measurement.v1",
         "generated_at": "2026-08-24T00:00:00Z",
         "run_id": "fixture-run",
         "correlation_id": "fixture-run",
         "source_commit": "1234567890abcdef1234567890abcdef12345678",
         "source_dirty": false,
         "pid": 5004,
-        "process_name": "pi",
+        "process_name": "ra",
         "allocator": "system",
         "binary_path": binary_path,
         "binary_sha256": sha256_file(&binary_path).expect("hash fixture binary"),
         "rss_bytes": 24_117_248,
         "idle_state": "startup_before_user_input",
         "cargo_profile": "release",
-        "build_command": "cargo build --bin pi --release",
+        "build_command": "cargo build --bin ra --release",
         "sample_count": 5,
         "samples": [
-            {"pid": 5000, "process_name": "pi", "rss_bytes": 20_971_520},
-            {"pid": 5001, "process_name": "pi", "rss_bytes": 22_020_096},
-            {"pid": 5002, "process_name": "pi", "rss_bytes": 23_068_672},
-            {"pid": 5003, "process_name": "pi", "rss_bytes": 22_544_384},
-            {"pid": 5004, "process_name": "pi", "rss_bytes": 24_117_248}
+            {"pid": 5000, "process_name": "ra", "rss_bytes": 20_971_520},
+            {"pid": 5001, "process_name": "ra", "rss_bytes": 22_020_096},
+            {"pid": 5002, "process_name": "ra", "rss_bytes": 23_068_672},
+            {"pid": 5003, "process_name": "ra", "rss_bytes": 22_544_384},
+            {"pid": 5004, "process_name": "ra", "rss_bytes": 24_117_248}
         ],
         "rss_spread_bytes": 3_145_728,
         "settle_ms": 1_000,
@@ -6876,10 +6876,10 @@ fn idle_memory_budget_consumes_multi_sample_release_control() {
     )
     .expect("parse idle RSS fixture control");
     control["samples"] = json!([
-        {"pid": 5000, "process_name": "pi", "rss_bytes": 20_971_520},
-        {"pid": 5001, "process_name": "pi", "rss_bytes": 22_020_096},
-        {"pid": 5002, "process_name": "pi", "rss_bytes": 23_068_672},
-        {"pid": 5003, "process_name": "pi", "rss_bytes": 22_544_384}
+        {"pid": 5000, "process_name": "ra", "rss_bytes": 20_971_520},
+        {"pid": 5001, "process_name": "ra", "rss_bytes": 22_020_096},
+        {"pid": 5002, "process_name": "ra", "rss_bytes": 23_068_672},
+        {"pid": 5003, "process_name": "ra", "rss_bytes": 22_544_384}
     ]);
     control["sample_count"] = json!(4);
     std::fs::write(
@@ -6908,7 +6908,7 @@ fn artifact_contract_flags_stale_evidence() {
 }
 
 fn write_binary_size_control_fixture(root: &Path, source_dirty: bool) -> PathBuf {
-    let binary_path = root.join("target/release/pi");
+    let binary_path = root.join("target/release/ra");
     std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
         .expect("create binary directory");
     std::fs::write(&binary_path, b"fixture release pi").expect("write fixture release binary");
@@ -6917,7 +6917,7 @@ fn write_binary_size_control_fixture(root: &Path, source_dirty: bool) -> PathBuf
     std::fs::create_dir_all(control_path.parent().expect("control parent"))
         .expect("create control directory");
     let control = json!({
-        "schema": "pi.perf.binary_size_measurement.v1",
+        "schema": "ra.perf.binary_size_measurement.v1",
         "generated_at": "2026-08-24T00:00:00Z",
         "run_id": "fixture-run",
         "correlation_id": "fixture-run",
@@ -6931,7 +6931,7 @@ fn write_binary_size_control_fixture(root: &Path, source_dirty: bool) -> PathBuf
         "compiled_opt_level": "z",
         "strip": true,
         "profile_source": "Cargo.toml#profile.release",
-        "build_command": "cargo build --bin pi --release"
+        "build_command": "cargo build --bin ra --release"
     });
     std::fs::write(
         &control_path,
@@ -6966,17 +6966,17 @@ fn binary_size_budget_requires_hash_bound_release_control() {
 fn binary_size_candidate_builder_is_release_only() {
     let target_dir = Path::new("/tmp/pi-agent-target");
     let candidates = build_binary_size_candidate_paths(target_dir, None, "");
-    assert_eq!(candidates, vec![target_dir.join("release/pi")]);
+    assert_eq!(candidates, vec![target_dir.join("release/ra")]);
 }
 
 #[test]
 fn binary_size_candidate_builder_prefers_override_then_release() {
     let target_dir = Path::new("/tmp/pi-agent-target");
-    let override_path = target_dir.join("custom-release/pi");
+    let override_path = target_dir.join("custom-release/ra");
     let candidates = build_binary_size_candidate_paths(target_dir, Some(override_path.clone()), "");
     assert_eq!(
         candidates,
-        vec![override_path, target_dir.join("release/pi")]
+        vec![override_path, target_dir.join("release/ra")]
     );
 }
 
@@ -7000,7 +7000,7 @@ fn binary_size_candidate_builder_never_falls_back_to_perf_or_profile_binaries() 
         let candidates = build_binary_size_candidate_paths(target_dir, None, profile);
         assert_eq!(
             candidates,
-            vec![target_dir.join("release/pi")],
+            vec![target_dir.join("release/ra")],
             "profile={profile:?} must not add non-release candidates"
         );
     }
@@ -7009,7 +7009,7 @@ fn binary_size_candidate_builder_never_falls_back_to_perf_or_profile_binaries() 
 #[test]
 fn binary_size_candidate_builder_dedups_override_matching_release() {
     let target_dir = Path::new("/tmp/pi-agent-target");
-    let release = target_dir.join("release/pi");
+    let release = target_dir.join("release/ra");
     let candidates =
         build_binary_size_candidate_paths(target_dir, Some(release.clone()), "release");
     assert_eq!(candidates, vec![release]);
@@ -7022,8 +7022,8 @@ fn valid_context_intelligence_budget_artifact_fixture() -> Value {
         "run_id": "context-budget-test",
         "correlation_id": "context-budget-test",
         "environment": {
-            "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/test/target",
-            "tmpdir": "/data/tmp/pi_agent_rust_cargo/test/tmp"
+            "cargo_target_dir": "/data/tmp/recur_agent_cargo/test/target",
+            "tmpdir": "/data/tmp/recur_agent_cargo/test/tmp"
         },
         "host": {
             "os": "linux",
@@ -7374,12 +7374,12 @@ fn write_stratification_artifact_with_claim_guard(
     }
 
     let payload = json!({
-        "schema": "pi.perf.extension_benchmark_stratification.v1",
+        "schema": "ra.perf.extension_benchmark_stratification.v1",
         "generated_at": chrono::Utc::now().to_rfc3339(),
         "layers": layers,
         "claim_integrity": {
             "cross_runtime_comparison": {
-                "contract_schema": "pi.perf.cross_runtime_comparison.v1",
+                "contract_schema": "ra.perf.cross_runtime_comparison.v1",
                 "legacy_pi_mono_executed_required": true,
                 "exact_workload_and_host_contract_required": true,
                 "portable_shim_record_count": 0,
@@ -8092,7 +8092,7 @@ fn perf_sli_matrix_defines_evidence_adjudication_contract() {
 
     assert_eq!(
         contract.get("schema").and_then(Value::as_str),
-        Some("pi.perf.evidence_adjudication_contract.v1"),
+        Some("ra.perf.evidence_adjudication_contract.v1"),
         "evidence_adjudication_contract.schema must be versioned"
     );
 
@@ -8170,7 +8170,7 @@ fn artifact_age_hours_uses_embedded_generated_at_and_ignores_fresh_mtime() {
     let artifact_path = tmp.path().join("test_artifact.json");
     let stale_time = chrono::Utc::now() - chrono::TimeDelta::hours(48);
     let payload = json!({
-        "schema": "pi.perf.test.v1",
+        "schema": "ra.perf.test.v1",
         "generated_at": stale_time.to_rfc3339(),
         "source_commit": "1234567890abcdef1234567890abcdef12345678",
     });
@@ -8205,7 +8205,7 @@ fn artifact_age_hours_uses_embedded_jsonl_timestamp_and_ignores_fresh_mtime() {
     let artifact_path = tmp.path().join("test_workload.jsonl");
     let stale_time = chrono::Utc::now() - chrono::TimeDelta::hours(72);
     let record = json!({
-        "schema": "pi.perf.workload.v1",
+        "schema": "ra.perf.workload.v1",
         "timestamp": stale_time.to_rfc3339(),
         "source_commit": "1234567890abcdef1234567890abcdef12345678",
         "iterations": 2000,
@@ -8236,7 +8236,7 @@ fn artifact_age_hours_accepts_fresh_embedded_timestamp_with_old_mtime() {
     let artifact_path = tmp.path().join("test_fresh.json");
     let fresh_time = chrono::Utc::now();
     let payload = json!({
-        "schema": "pi.perf.test.v1",
+        "schema": "ra.perf.test.v1",
         "generated_at": fresh_time.to_rfc3339(),
         "source_commit": "1234567890abcdef1234567890abcdef12345678",
     });

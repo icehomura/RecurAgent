@@ -41,9 +41,9 @@ from tempfile import TemporaryDirectory
 from typing import NamedTuple
 
 
-PERF_BUDGET_SUMMARY_SCHEMA = "pi.perf.budget_summary.v2"
+PERF_BUDGET_SUMMARY_SCHEMA = "ra.perf.budget_summary.v2"
 PERF_BUDGET_INVENTORY_SHA256 = (
-    "85ea5705c7472c3e7b85b6e31552ee57f245406e5b8c636b6555f3bbda7f6cc6"
+    "c32cf02d430e733aacbade9fe029c0558c6105043e36f009ade060ae9147de8a"
 )
 # `--self-test` points this at the hash of its own fixture inventory so the
 # validator's logic can be exercised regardless of whether the repository's
@@ -1786,7 +1786,7 @@ def check_artifact_content(
     return tuple(errors)
 
 
-CLAIM_BINDINGS_SCHEMA = "pi.readme.claim_bindings.v1"
+CLAIM_BINDINGS_SCHEMA = "ra.readme.claim_bindings.v1"
 DEFAULT_CLAIM_BINDINGS_PATH = "docs/evidence/readme-claim-bindings.json"
 
 
@@ -3327,7 +3327,7 @@ def _run_self_test_cases() -> int:
 
         legacy = cloned(valid_payload)
         assert isinstance(legacy, dict)
-        legacy["schema"] = "pi.perf.budget_summary.v1"
+        legacy["schema"] = "ra.perf.budget_summary.v1"
         errors = performance_budget_claim_errors(
             valid_root,
             legacy,
