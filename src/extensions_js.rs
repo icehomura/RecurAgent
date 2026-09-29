@@ -2,7 +2,7 @@
 //!
 //! This module implements the PiJS runtime with Promise-based hostcall bridge:
 //! - Async QuickJS runtime + context creation
-//! - `pi` global object with Promise-returning hostcall methods
+//! - `ra` global object with Promise-returning hostcall methods
 //! - Deterministic event loop scheduler integration
 //! - call_id → Promise resolver mapping for hostcall completions
 //! - Microtask draining after each macrotask
@@ -140,11 +140,11 @@ fn parse_truthy_flag(value: &str) -> bool {
 
 fn is_global_compat_scan_mode() -> bool {
     cfg!(feature = "ext-conformance")
-        || std::env::var("PI_EXT_COMPAT_SCAN").is_ok_and(|value| parse_truthy_flag(&value))
+        || std::env::var("RECUR_AGENT_EXT_COMPAT_SCAN").is_ok_and(|value| parse_truthy_flag(&value))
 }
 
 fn is_compat_scan_mode(env: &HashMap<String, String>) -> bool {
-    env.get("PI_EXT_COMPAT_SCAN")
+    env.get("RECUR_AGENT_EXT_COMPAT_SCAN")
         .map_or_else(is_global_compat_scan_mode, |value| parse_truthy_flag(value))
 }
 
@@ -161,7 +161,7 @@ fn compat_env_fallback_value(key: &str, env: &HashMap<String, String>) -> Option
     if upper.ends_with("_API_KEY") {
         return Some(format!("pi-compat-{}", upper.to_ascii_lowercase()));
     }
-    if upper == "PI_SEMANTIC_LEGACY" {
+    if upper == "RECUR_AGENT_SEMANTIC_LEGACY" {
         return Some("1".to_string());
     }
 
@@ -727,7 +727,7 @@ pub struct TickResult {
     pub microtasks_drained: usize,
 }
 
-pub struct PiEventLoop {
+pub struct RaEventLoop {
     clock: ClockHandle,
     seq: u64,
     next_timer_id: u64,
@@ -737,7 +737,7 @@ pub struct PiEventLoop {
     cancelled_timers: HashSet<u64>,
 }
 
-impl PiEventLoop {
+impl RaEventLoop {
     pub fn new(clock: ClockHandle) -> Self {
         Self {
             clock,
@@ -2536,7 +2536,7 @@ fn build_reason_codes(
 
 /// Statistics from a tick execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct PiJsTickStats {
+pub struct RaJsTickStats {
     /// Whether a macrotask was executed.
     pub ran_macrotask: bool,
     /// Number of microtask drain iterations.
@@ -2572,14 +2572,14 @@ pub struct PiJsTickStats {
 }
 
 #[derive(Debug, Clone)]
-pub struct PiJsRuntimeLimits {
+pub struct RaJsRuntimeLimits {
     /// Limit runtime heap usage (QuickJS allocator). `None` means unlimited.
     pub memory_limit_bytes: Option<usize>,
     /// Limit in-memory compiled/transpiled module cache bytes.
     ///
     /// This prevents a realm's source cache from growing without bound. `None`
     /// disables the in-memory cache byte cap; persistent cross-realm disk cache
-    /// remains controlled by `PiJsRuntimeConfig::disk_cache_dir`.
+    /// remains controlled by `RaJsRuntimeConfig::disk_cache_dir`.
     pub module_cache_limit_bytes: Option<usize>,
     /// Limit runtime stack usage. `None` uses QuickJS default.
     pub max_stack_bytes: Option<usize>,
@@ -2600,7 +2600,7 @@ pub struct PiJsRuntimeLimits {
     pub hostcall_overflow_queue_capacity: usize,
 }
 
-impl Default for PiJsRuntimeLimits {
+impl Default for RaJsRuntimeLimits {
     fn default() -> Self {
         Self {
             memory_limit_bytes: None,
@@ -2617,7 +2617,7 @@ impl Default for PiJsRuntimeLimits {
 /// Controls how the auto-repair pipeline behaves at extension load time.
 ///
 /// Precedence (highest to lowest): CLI flag → environment variable
-/// `PI_REPAIR_MODE` → config file → default (`AutoSafe`).
+/// `RECUR_AGENT_REPAIR_MODE` → config file → default (`AutoSafe`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RepairMode {
     /// No repairs are attempted; extensions that fail to load fail normally.
@@ -4587,11 +4587,11 @@ pub fn run_governance_checklist() -> GovernanceReport {
 }
 
 #[derive(Debug, Clone)]
-pub struct PiJsRuntimeConfig {
+pub struct RaJsRuntimeConfig {
     pub cwd: String,
     pub args: Vec<String>,
     pub env: HashMap<String, String>,
-    pub limits: PiJsRuntimeLimits,
+    pub limits: RaJsRuntimeLimits,
     /// Controls the auto-repair pipeline behavior. Default: `AutoSafe`.
     pub repair_mode: RepairMode,
     /// UNSAFE escape hatch: enable synchronous process execution used by
@@ -4607,12 +4607,12 @@ pub struct PiJsRuntimeConfig {
     ///
     /// When set, transpiled module sources are cached on disk keyed by a
     /// content-aware hash so that SWC transpilation is skipped across process
-    /// restarts. Defaults to `~/.pi/agent/cache/modules/` (overridden by
+    /// restarts. Defaults to `~/.ra/agent/cache/modules/` (overridden by
     /// `PIJS_MODULE_CACHE_DIR`). Set to `None` to disable.
     pub disk_cache_dir: Option<PathBuf>,
 }
 
-impl PiJsRuntimeConfig {
+impl RaJsRuntimeConfig {
     /// Convenience: check if repairs should be applied.
     pub const fn auto_repair_enabled(&self) -> bool {
         self.repair_mode.should_apply()
@@ -4627,13 +4627,13 @@ impl PiJsRuntimeConfig {
     }
 }
 
-impl Default for PiJsRuntimeConfig {
+impl Default for RaJsRuntimeConfig {
     fn default() -> Self {
         Self {
             cwd: ".".to_string(),
             args: Vec::new(),
             env: HashMap::new(),
-            limits: PiJsRuntimeLimits::default(),
+            limits: RaJsRuntimeLimits::default(),
             repair_mode: RepairMode::default(),
             allow_unsafe_sync_exec: false,
             deny_env: true,
@@ -4644,7 +4644,7 @@ impl Default for PiJsRuntimeConfig {
 
 /// Resolve the persistent module disk cache directory.
 ///
-/// Priority: `PIJS_MODULE_CACHE_DIR` env var > `~/.pi/agent/cache/modules/`.
+/// Priority: `PIJS_MODULE_CACHE_DIR` env var > `~/.ra/agent/cache/modules/`.
 /// Set `PIJS_MODULE_CACHE_DIR=""` to explicitly disable the disk cache.
 fn runtime_disk_cache_dir() -> Option<PathBuf> {
     if let Some(raw) = std::env::var_os("PIJS_MODULE_CACHE_DIR") {
@@ -4654,7 +4654,7 @@ fn runtime_disk_cache_dir() -> Option<PathBuf> {
             Some(PathBuf::from(raw))
         };
     }
-    dirs::home_dir().map(|home| home.join(".pi").join("agent").join("cache").join("modules"))
+    dirs::home_dir().map(|home| home.join(".ra").join("agent").join("cache").join("modules"))
 }
 
 #[derive(Debug)]
@@ -4925,7 +4925,7 @@ fn enqueue_hostcall_request_with_backpressure<C: SchedulerClock>(
 // ============================================================================
 
 #[derive(Debug)]
-struct PiJsModuleState {
+struct RaJsModuleState {
     /// Immutable built-in virtual modules shared across runtimes.
     static_virtual_modules: Arc<HashMap<String, String>>,
     /// Runtime-local virtual modules generated by repairs / dynamic stubs.
@@ -4934,16 +4934,16 @@ struct PiJsModuleState {
     dynamic_virtual_named_exports: HashMap<String, BTreeSet<String>>,
     compiled_sources: HashMap<String, CompiledModuleCacheEntry>,
     module_cache_counters: ModuleCacheCounters,
-    /// Repair mode propagated from `PiJsRuntimeConfig` so the resolver can
+    /// Repair mode propagated from `RaJsRuntimeConfig` so the resolver can
     /// gate fallback patterns without executing any broken code.
     repair_mode: RepairMode,
     /// Whether conformance-only compatibility fallbacks are enabled for this
-    /// runtime. A per-runtime `PI_EXT_COMPAT_SCAN` value takes precedence over
+    /// runtime. A per-runtime `RECUR_AGENT_EXT_COMPAT_SCAN` value takes precedence over
     /// the compile-time feature so strict tests and callers remain strict even
     /// in an all-features build.
     compat_scan_mode: bool,
     /// Extension root directories used to detect monorepo escape (Pattern 3).
-    /// Populated as extensions are loaded via [`PiJsRuntime::add_extension_root`].
+    /// Populated as extensions are loaded via [`RaJsRuntime::add_extension_root`].
     extension_roots: Vec<PathBuf>,
     /// Pre-canonicalized extension roots to avoid doing filesystem IO during import resolution.
     canonical_extension_roots: Vec<PathBuf>,
@@ -4999,7 +4999,7 @@ struct ModuleCacheCounters {
     disk_hits: u64,
 }
 
-impl PiJsModuleState {
+impl RaJsModuleState {
     fn new() -> Self {
         Self {
             static_virtual_modules: default_virtual_modules_shared(),
@@ -5058,7 +5058,7 @@ fn compiled_source_len(entry: &CompiledModuleCacheEntry) -> usize {
 }
 
 fn remove_compiled_source(
-    state: &mut PiJsModuleState,
+    state: &mut RaJsModuleState,
     name: &str,
 ) -> Option<CompiledModuleCacheEntry> {
     let removed = state.compiled_sources.remove(name);
@@ -5071,13 +5071,13 @@ fn remove_compiled_source(
     removed
 }
 
-fn record_compiled_source_access(state: &mut PiJsModuleState, name: &str) {
+fn record_compiled_source_access(state: &mut RaJsModuleState, name: &str) {
     state.compiled_source_lru.retain(|key| key != name);
     state.compiled_source_lru.push_back(name.to_string());
 }
 
 fn insert_compiled_source(
-    state: &mut PiJsModuleState,
+    state: &mut RaJsModuleState,
     name: &str,
     entry: CompiledModuleCacheEntry,
 ) {
@@ -5133,7 +5133,7 @@ fn current_extension_id(ctx: &Ctx<'_>) -> Option<String> {
 fn path_is_in_allowed_extension_root(
     path: &Path,
     extension_id: Option<&str>,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
     fallback_roots: &Arc<std::sync::Mutex<Vec<PathBuf>>>,
 ) -> bool {
     if extension_id.is_none() {
@@ -5160,7 +5160,7 @@ fn log_host_fs_decision(
     checked_path: &Path,
     workspace_root: &Path,
     allowed_read_roots: &std::sync::Mutex<Vec<PathBuf>>,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
 ) {
     let read_roots = allowed_read_roots
         .lock()
@@ -5208,7 +5208,7 @@ fn log_host_fs_decision(
 fn path_is_in_owned_extension_root(
     path: &Path,
     extension_id: Option<&str>,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
 ) -> bool {
     let state = module_state.borrow();
     let mut deepest_depth = None;
@@ -5257,7 +5257,7 @@ fn path_is_in_owned_extension_root(
 
 fn path_is_in_registered_extension_root(
     path: &Path,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
 ) -> bool {
     let state = module_state.borrow();
     state
@@ -5274,7 +5274,7 @@ fn path_is_in_registered_extension_root(
 fn path_is_in_workspace_or_registered_extension_root(
     path: &Path,
     workspace_root: &Path,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
 ) -> bool {
     let checked_path = crate::extensions::safe_canonicalize(path);
     checked_path.starts_with(workspace_root)
@@ -5284,7 +5284,7 @@ fn path_is_in_workspace_or_registered_extension_root(
 fn path_is_in_leaf_allowed_extension_root(
     path: &Path,
     extension_id: Option<&str>,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
     fallback_roots: &Arc<std::sync::Mutex<Vec<PathBuf>>>,
 ) -> bool {
     if extension_id.is_some() {
@@ -5306,7 +5306,7 @@ fn path_is_allowed_extension_fs_path(
     path: &Path,
     workspace_root: &Path,
     extension_id: Option<&str>,
-    module_state: &Rc<RefCell<PiJsModuleState>>,
+    module_state: &Rc<RefCell<RaJsModuleState>>,
     fallback_roots: &Arc<std::sync::Mutex<Vec<PathBuf>>>,
 ) -> bool {
     let in_owned_root =
@@ -5318,8 +5318,8 @@ fn path_is_allowed_extension_fs_path(
 }
 
 #[derive(Clone, Debug)]
-struct PiJsResolver {
-    state: Rc<RefCell<PiJsModuleState>>,
+struct RaJsResolver {
+    state: Rc<RefCell<RaJsModuleState>>,
 }
 
 fn canonical_node_builtin(spec: &str) -> Option<&'static str> {
@@ -5780,7 +5780,7 @@ fn read_source_for_import_extraction(path: &str) -> Option<String> {
 }
 
 fn maybe_register_builtin_compat_overlay(
-    state: &mut PiJsModuleState,
+    state: &mut RaJsModuleState,
     base: &str,
     spec: &str,
     canonical: &str,
@@ -5819,7 +5819,7 @@ fn maybe_register_builtin_compat_overlay(
     Some(overlay_key)
 }
 
-impl JsModuleResolver for PiJsResolver {
+impl JsModuleResolver for RaJsResolver {
     #[allow(clippy::too_many_lines)]
     fn resolve<'js>(
         &mut self,
@@ -5959,7 +5959,7 @@ impl JsModuleResolver for PiJsResolver {
 
         // Pattern 4 (bd-k5q5.8.5): proxy-based stubs for allowlisted npm deps.
         // This fires in aggressive mode, and also in compatibility-scan mode
-        // (ext-conformance / PI_EXT_COMPAT_SCAN) so corpus runs can continue
+        // (ext-conformance / RECUR_AGENT_EXT_COMPAT_SCAN) so corpus runs can continue
         // past optional or non-essential package holes deterministically.
         // Blocklisted/system packages are never stubbed. Existing hand-written
         // virtual modules continue to win because we only reach this branch
@@ -6051,11 +6051,11 @@ impl JsModuleResolver for PiJsResolver {
 }
 
 #[derive(Clone, Debug)]
-struct PiJsLoader {
-    state: Rc<RefCell<PiJsModuleState>>,
+struct RaJsLoader {
+    state: Rc<RefCell<RaJsModuleState>>,
 }
 
-impl JsModuleLoader for PiJsLoader {
+impl JsModuleLoader for RaJsLoader {
     fn load<'js>(
         &mut self,
         ctx: &Ctx<'js>,
@@ -6235,7 +6235,7 @@ fn store_to_disk_cache(cache_dir: &Path, cache_key: &str, source: &[u8]) {
 }
 
 fn load_compiled_module_source(
-    state: &mut PiJsModuleState,
+    state: &mut RaJsModuleState,
     name: &str,
 ) -> rquickjs::Result<Vec<u8>> {
     let cache_key = module_cache_key(
@@ -6311,9 +6311,9 @@ fn load_compiled_module_source(
 /// Configuration holder and factory for cold JS extension runtimes that may
 /// share immutable/transpiled cache configuration.
 ///
-/// Since `PiJsRuntime` uses `Rc` internally and cannot cross thread
+/// Since `RaJsRuntime` uses `Rc` internally and cannot cross thread
 /// boundaries, the pool does not hold live runtime instances. Instead, it
-/// produces pre-configured `PiJsRuntimeConfig` values. Live realms are never
+/// produces pre-configured `RaJsRuntimeConfig` values. Live realms are never
 /// reused after arbitrary extension code has run; only compiled/disk cache
 /// artifacts may be shared with a newly created realm.
 ///
@@ -6322,11 +6322,11 @@ fn load_compiled_module_source(
 /// 1. Create pool with desired config via [`WarmIsolatePool::new`].
 /// 2. Call [`make_config`](WarmIsolatePool::make_config) for each cold realm.
 /// 3. Before dropping a realm, optionally call
-///    [`PiJsRuntime::scrub_for_cold_drop`] for hygiene evidence.
+///    [`RaJsRuntime::scrub_for_cold_drop`] for hygiene evidence.
 #[derive(Debug, Clone)]
 pub struct WarmIsolatePool {
     /// Template configuration for new runtimes.
-    template: PiJsRuntimeConfig,
+    template: RaJsRuntimeConfig,
     /// Number of runtimes created from this pool.
     created_count: Arc<AtomicU64>,
     /// Number of resets performed.
@@ -6335,7 +6335,7 @@ pub struct WarmIsolatePool {
 
 impl WarmIsolatePool {
     /// Create a new warm isolate pool with the given template config.
-    pub fn new(template: PiJsRuntimeConfig) -> Self {
+    pub fn new(template: RaJsRuntimeConfig) -> Self {
         Self {
             template,
             created_count: Arc::new(AtomicU64::new(0)),
@@ -6343,8 +6343,8 @@ impl WarmIsolatePool {
         }
     }
 
-    /// Create a pre-configured `PiJsRuntimeConfig` with shared pool state.
-    pub fn make_config(&self) -> PiJsRuntimeConfig {
+    /// Create a pre-configured `RaJsRuntimeConfig` with shared pool state.
+    pub fn make_config(&self) -> RaJsRuntimeConfig {
         self.created_count.fetch_add(1, AtomicOrdering::Relaxed);
         self.template.clone()
     }
@@ -6367,7 +6367,7 @@ impl WarmIsolatePool {
 
 impl Default for WarmIsolatePool {
     fn default() -> Self {
-        Self::new(PiJsRuntimeConfig::default())
+        Self::new(RaJsRuntimeConfig::default())
     }
 }
 
@@ -7876,15 +7876,15 @@ for (let i = 0; i < _numCpus; i++) _cpus.push({{ model: "cpu", speed: 2400, time
 
 export function homedir() {{
   const env_home =
-    globalThis.pi && globalThis.pi.env && typeof globalThis.pi.env.get === "function"
-      ? globalThis.pi.env.get("HOME")
+    globalThis.ra && globalThis.ra.env && typeof globalThis.ra.env.get === "function"
+      ? globalThis.ra.env.get("HOME")
       : undefined;
   return env_home || _homedir;
 }}
 export function tmpdir() {{
   const env_tmp =
-    globalThis.pi && globalThis.pi.env && typeof globalThis.pi.env.get === "function"
-      ? globalThis.pi.env.get("TMPDIR")
+    globalThis.ra && globalThis.ra.env && typeof globalThis.ra.env.get === "function"
+      ? globalThis.ra.env.get("TMPDIR")
       : undefined;
   const process_tmp =
     globalThis.process && globalThis.process.env
@@ -8237,8 +8237,8 @@ export function calculateCost(model, usage) {
 }
 
 function getEnvValue(name) {
-  if (globalThis.pi && globalThis.pi.env && typeof globalThis.pi.env.get === "function") {
-    const value = globalThis.pi.env.get(name);
+  if (globalThis.ra && globalThis.ra.env && typeof globalThis.ra.env.get === "function") {
+    const value = globalThis.ra.env.get(name);
     if (value !== undefined && value !== null) {
       return String(value);
     }
@@ -8415,11 +8415,11 @@ function modelsForProvider(provider) {
 }
 
 async function callProviderBridge(name, op, payload = {}) {
-  if (!globalThis.pi || typeof globalThis.pi.events !== "function") {
+  if (!globalThis.ra || typeof globalThis.ra.events !== "function") {
     failClosedBridge(name);
   }
   try {
-    return await globalThis.pi.events(op, payload);
+    return await globalThis.ra.events(op, payload);
   } catch (error) {
     const message = String((error && error.message) || error || "");
     failClosedBridge(name, message);
@@ -9796,10 +9796,10 @@ export function copyToClipboard(_text) {
 
 export function getAgentDir() {
   const home =
-    globalThis.pi && globalThis.pi.env && typeof globalThis.pi.env.get === "function"
-      ? globalThis.pi.env.get("HOME")
+    globalThis.ra && globalThis.ra.env && typeof globalThis.ra.env.get === "function"
+      ? globalThis.ra.env.get("HOME")
       : undefined;
-  return home ? `${home}/.pi/agent` : "/home/unknown/.pi/agent";
+  return home ? `${home}/.ra/agent` : "/home/unknown/.ra/agent";
 }
 
 // Canonical upstream action IDs used by extension-facing key hints. Keep the
@@ -9864,7 +9864,7 @@ export async function compact(preparation, modelOrOptions, _apiKey, _customInstr
     aborted.name = "AbortError";
     throw aborted;
   }
-  if (!globalThis.pi || typeof globalThis.pi.events !== "function") {
+  if (!globalThis.ra || typeof globalThis.ra.events !== "function") {
     throw new Error("compact() host bridge is unavailable in this runtime");
   }
   if (
@@ -9872,13 +9872,13 @@ export async function compact(preparation, modelOrOptions, _apiKey, _customInstr
     typeof modelOrOptions === "object" &&
     typeof modelOrOptions.strategy === "string"
   ) {
-    return await globalThis.pi.events("compact", {
+    return await globalThis.ra.events("compact", {
       preparation: preparation ?? null,
       strategy: modelOrOptions.strategy,
       request: modelOrOptions.request ?? null,
     });
   }
-  return await globalThis.pi.events("compact", { preparation: preparation ?? null });
+  return await globalThis.ra.events("compact", { preparation: preparation ?? null });
 }
 
 /// Stub: AssistantMessageComponent for rendering assistant messages
@@ -10012,7 +10012,7 @@ export class DefaultPackageManager {
     const target = source ? ` '${String(source)}'` : "";
     return new Error(
       `DefaultPackageManager.${action}()${target} is not available to extensions in this host: ` +
-      "package installation is owned by the pi binary. Use `pi install` from the shell, " +
+      "package installation is owned by the pi binary. Use `ra install` from the shell, " +
       "or declare the package in settings.json."
     );
   }
@@ -10865,8 +10865,8 @@ export function dirname(p) {
 
 export function resolve(...parts) {
   const base =
-    globalThis.pi && globalThis.pi.process && typeof globalThis.pi.process.cwd === "string"
-      ? globalThis.pi.process.cwd
+    globalThis.ra && globalThis.ra.process && typeof globalThis.ra.process.cwd === "string"
+      ? globalThis.ra.process.cwd
       : "/";
   const cleaned = parts
     .map((p) => String(p ?? "").replace(/\\/g, "/"))
@@ -11215,7 +11215,7 @@ export function spawn(command, args = [], options = {}) {
   };
   const onChunk = execOptions.onChunk;
   delete execOptions.onChunk;
-  const hostPromise = globalThis.pi.exec(cmd, argv, {
+  const hostPromise = globalThis.ra.exec(cmd, argv, {
     ...execOptions,
     stream: true,
     onChunk,
@@ -13187,16 +13187,36 @@ export function futimesSync(fd, _atime, _mtime) {
   }
   __pi_vfs.authorizeFdWrite(entry);
 }
+// node:fs.watch / watchFile are NOT backed by a real file watcher. The host has
+// no OS-level watch infrastructure (there is no `notify` dependency), so these
+// return an inert watcher that NEVER emits a change event. The shim is kept so
+// modules that import it still load, but it now warns once per API so extension
+// authors are not silently misled into waiting for events that never arrive.
+// If a real watcher is ever wired up, replace this shim (and the chokidar one).
+function __warnWatchUnavailable(api) {
+  const seen = globalThis.__pi_watch_warned || (globalThis.__pi_watch_warned = {});
+  if (seen[api]) return;
+  seen[api] = true;
+  // Never let the diagnostic itself break watch(): console may be absent or
+  // unbacked in some harnesses.
+  try {
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+      console.warn(api + " is not implemented in PiJS: file watching is a no-op and no change events will ever be delivered (this is not a bug in your extension).");
+    }
+  } catch (_) {}
+}
 function __fakeWatcher() {
   const w = { close() {}, unref() { return w; }, ref() { return w; }, on() { return w; }, once() { return w; }, removeListener() { return w; }, removeAllListeners() { return w; } };
   return w;
 }
 export function watch(path, _optsOrListener, _listener) {
   accessSync(path);
+  __warnWatchUnavailable("fs.watch");
   return __fakeWatcher();
 }
 export function watchFile(path, _optsOrListener, _listener) {
   accessSync(path);
+  __warnWatchUnavailable("fs.watchFile");
   return __fakeWatcher();
 }
 export function unwatchFile(path, _listener) { accessSync(path); }
@@ -13824,7 +13844,7 @@ export default { inspect, promisify, stripVTControlCharacters, deprecate, inheri
 
 function __pi_readline_prompt(query) {
   const message = String(query === undefined || query === null ? '' : query);
-  const piRef = globalThis.pi;
+  const piRef = globalThis.ra;
   if (piRef && typeof piRef.ui === 'function') {
     try {
       return Promise.resolve(
@@ -13846,7 +13866,7 @@ export function createInterface(_opts) {
         void __pi_readline_prompt(query);
         return;
       }
-      if (!globalThis.pi || typeof globalThis.pi.ui !== 'function') {
+      if (!globalThis.ra || typeof globalThis.ra.ui !== 'function') {
         cb('');
         return;
       }
@@ -15950,7 +15970,25 @@ function makeWatcher() {
     };
     return w;
 }
-export function watch(paths, options) { return makeWatcher(); }
+// chokidar.watch is a no-op shim: no OS-level file watcher is attached, so the
+// returned watcher NEVER emits 'add'/'change'/'unlink' events. Warn once so
+// extension authors are not silently misled (see the node:fs watcher shim too).
+function __warnChokidarUnavailable() {
+    const seen = globalThis.__pi_watch_warned || (globalThis.__pi_watch_warned = {});
+    if (seen['chokidar.watch']) return;
+    seen['chokidar.watch'] = true;
+    // Never let the diagnostic itself break watch(): console may be absent or
+    // unbacked in some harnesses.
+    try {
+        if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+            console.warn('chokidar.watch is not implemented in PiJS: file watching is a no-op and no change events will ever be delivered (this is not a bug in your extension).');
+        }
+    } catch (_) {}
+}
+export function watch(paths, options) {
+    __warnChokidarUnavailable();
+    return makeWatcher();
+}
 export default { watch };
 "
         )
@@ -17137,7 +17175,7 @@ const UNBOUNDED_MEMORY_USAGE_SAMPLE_EVERY_TICKS: u64 = 32;
 ///
 /// ```ignore
 /// // Create runtime
-/// let runtime = PiJsRuntime::new().await?;
+/// let runtime = RaJsRuntime::new().await?;
 ///
 /// // Evaluate extension code
 /// runtime.eval("
@@ -17157,7 +17195,7 @@ const UNBOUNDED_MEMORY_USAGE_SAMPLE_EVERY_TICKS: u64 = 32;
 /// // Tick the event loop to deliver completions
 /// let stats = runtime.tick().await?;
 /// ```
-pub struct PiJsRuntime<C: SchedulerClock = WallClock> {
+pub struct RaJsRuntime<C: SchedulerClock = WallClock> {
     runtime: AsyncRuntime,
     context: AsyncContext,
     scheduler: Rc<RefCell<Scheduler<C>>>,
@@ -17172,7 +17210,7 @@ pub struct PiJsRuntime<C: SchedulerClock = WallClock> {
     peak_memory_used_bytes: Arc<AtomicU64>,
     tick_counter: Arc<AtomicU64>,
     interrupt_budget: Rc<InterruptBudget>,
-    config: PiJsRuntimeConfig,
+    config: RaJsRuntimeConfig,
     /// Additional filesystem roots that `readFileSync` may access (e.g.
     /// extension directories).  Populated lazily as extensions are loaded.
     allowed_read_roots: Arc<std::sync::Mutex<Vec<PathBuf>>>,
@@ -17182,7 +17220,7 @@ pub struct PiJsRuntime<C: SchedulerClock = WallClock> {
     /// Shared module state used by the resolver and loader.  Stored here so
     /// that [`Self::add_extension_root`] can push extension roots into the
     /// resolver after construction.
-    module_state: Rc<RefCell<PiJsModuleState>>,
+    module_state: Rc<RefCell<RaJsModuleState>>,
     /// Extension policy for synchronous capability checks.
     policy: Option<ExtensionPolicy>,
     /// Per-runtime capability used to authenticate Rust-only bridge entrypoints.
@@ -17230,7 +17268,7 @@ struct JsRuntimeResetPayload {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PiJsRealmScrubReport {
+pub struct RaJsRealmScrubReport {
     pub inventoried_state_cleared: bool,
     pub reason_code: Option<String>,
     pub rust_pending_hostcalls: u64,
@@ -17250,7 +17288,7 @@ pub struct PiJsRealmScrubReport {
 }
 
 #[allow(clippy::future_not_send)]
-impl PiJsRuntime<WallClock> {
+impl RaJsRuntime<WallClock> {
     /// Create a new PiJS runtime with the default wall clock.
     #[allow(clippy::future_not_send)]
     pub async fn new() -> Result<Self> {
@@ -17259,16 +17297,16 @@ impl PiJsRuntime<WallClock> {
 }
 
 #[allow(clippy::future_not_send)]
-impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
+impl<C: SchedulerClock + 'static> RaJsRuntime<C> {
     /// Create a new PiJS runtime with a custom clock.
     #[allow(clippy::future_not_send)]
     pub async fn with_clock(clock: C) -> Result<Self> {
-        Self::with_clock_and_config(clock, PiJsRuntimeConfig::default()).await
+        Self::with_clock_and_config(clock, RaJsRuntimeConfig::default()).await
     }
 
     /// Create a new PiJS runtime with a custom clock and runtime config.
     #[allow(clippy::future_not_send)]
-    pub async fn with_clock_and_config(clock: C, config: PiJsRuntimeConfig) -> Result<Self> {
+    pub async fn with_clock_and_config(clock: C, config: RaJsRuntimeConfig) -> Result<Self> {
         Self::with_clock_and_config_with_policy(clock, config, None).await
     }
 
@@ -17276,7 +17314,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
     #[allow(clippy::future_not_send, clippy::too_many_lines)]
     pub async fn with_clock_and_config_with_policy(
         clock: C,
-        config: PiJsRuntimeConfig,
+        config: RaJsRuntimeConfig,
         policy: Option<ExtensionPolicy>,
     ) -> Result<Self> {
         Self::with_clock_config_policy_and_owner(clock, config, policy, None).await
@@ -17288,7 +17326,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
     #[allow(clippy::future_not_send)]
     pub async fn with_clock_and_config_with_policy_for_extension(
         clock: C,
-        config: PiJsRuntimeConfig,
+        config: RaJsRuntimeConfig,
         policy: Option<ExtensionPolicy>,
         extension_id: String,
     ) -> Result<Self> {
@@ -17310,7 +17348,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
     #[allow(clippy::future_not_send, clippy::too_many_lines)]
     async fn with_clock_config_policy_and_owner(
         clock: C,
-        mut config: PiJsRuntimeConfig,
+        mut config: RaJsRuntimeConfig,
         policy: Option<ExtensionPolicy>,
         owner_extension_id: Option<Arc<str>>,
     ) -> Result<Self> {
@@ -17318,17 +17356,17 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
         #[cfg(target_arch = "x86_64")]
         config
             .env
-            .entry("PI_TARGET_ARCH".to_string())
+            .entry("RECUR_AGENT_TARGET_ARCH".to_string())
             .or_insert_with(|| "x64".to_string());
         #[cfg(target_arch = "aarch64")]
         config
             .env
-            .entry("PI_TARGET_ARCH".to_string())
+            .entry("RECUR_AGENT_TARGET_ARCH".to_string())
             .or_insert_with(|| "arm64".to_string());
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         config
             .env
-            .entry("PI_TARGET_ARCH".to_string())
+            .entry("RECUR_AGENT_TARGET_ARCH".to_string())
             .or_insert_with(|| "x64".to_string());
 
         // Inject target platform so JS process.platform matches os.platform().
@@ -17341,7 +17379,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
             };
             config
                 .env
-                .entry("PI_PLATFORM".to_string())
+                .entry("RECUR_AGENT_PLATFORM".to_string())
                 .or_insert_with(|| platform.to_string());
         }
 
@@ -17366,7 +17404,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
         let compiled_cache_limit_bytes = config.limits.module_cache_limit_bytes;
         let compat_scan_mode = is_compat_scan_mode(&config.env);
         let module_state = Rc::new(RefCell::new(
-            PiJsModuleState::new()
+            RaJsModuleState::new()
                 .with_repair_mode(config.repair_mode)
                 .with_compat_scan_mode(compat_scan_mode)
                 .with_repair_events(Arc::clone(&repair_events))
@@ -17375,10 +17413,10 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
         ));
         runtime
             .set_loader(
-                PiJsResolver {
+                RaJsResolver {
                     state: Rc::clone(&module_state),
                 },
-                PiJsLoader {
+                RaJsLoader {
                     state: Rc::clone(&module_state),
                 },
             )
@@ -17509,18 +17547,18 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
     /// JavaScript can mutate singleton/module/global state beyond any finite
     /// registry inventory, so callers must cold-create the next realm even
     /// after a clean scrub.
-    pub async fn scrub_for_cold_drop(&self) -> Result<PiJsRealmScrubReport> {
+    pub async fn scrub_for_cold_drop(&self) -> Result<RaJsRealmScrubReport> {
         let rust_pending_hostcalls =
             u64::try_from(self.hostcall_tracker.borrow().pending_count()).unwrap_or(u64::MAX);
         let rust_pending_hostcall_queue =
             u64::try_from(self.hostcall_queue.borrow().len()).unwrap_or(u64::MAX);
         let rust_scheduler_pending = self.scheduler.borrow().has_pending();
 
-        let mut report = PiJsRealmScrubReport {
+        let mut report = RaJsRealmScrubReport {
             rust_pending_hostcalls,
             rust_pending_hostcall_queue,
             rust_scheduler_pending,
-            ..PiJsRealmScrubReport::default()
+            ..RaJsRealmScrubReport::default()
         };
 
         if rust_pending_hostcalls > 0 || rust_pending_hostcall_queue > 0 || rust_scheduler_pending {
@@ -17781,7 +17819,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
         Ok(())
     }
 
-    /// Run a closure inside the JS context and map QuickJS errors into `pi::Error`.
+    /// Run a closure inside the JS context and map QuickJS errors into `ra::Error`.
     ///
     /// This is intentionally `pub(crate)` so the extensions runtime can call JS helper
     /// functions without exposing raw rquickjs types as part of the public API.
@@ -18053,11 +18091,11 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
     /// 3. Drain all pending QuickJS jobs (microtasks)
     ///
     /// Returns statistics about what was executed.
-    pub async fn tick(&self) -> Result<PiJsTickStats> {
+    pub async fn tick(&self) -> Result<RaJsTickStats> {
         // Get the next macrotask from scheduler
         let macrotask = self.scheduler.borrow_mut().tick();
 
-        let mut stats = PiJsTickStats::default();
+        let mut stats = RaJsTickStats::default();
 
         if let Some(task) = macrotask {
             stats.ran_macrotask = true;
@@ -19051,7 +19089,7 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
                             // Compat fallback runs BEFORE deny_env so conformance
                             // scanning can inject deterministic dummy keys even when
                             // the policy denies env access (ext-conformance feature
-                            // or PI_EXT_COMPAT_SCAN=1 guard this path).
+                            // or RECUR_AGENT_EXT_COMPAT_SCAN=1 guard this path).
                             if let Some(value) = compat_env_fallback_value(&key, &env) {
                                 tracing::debug!(
                                     event = "pijs.env.get.compat",
@@ -20183,12 +20221,12 @@ impl<C: SchedulerClock + 'static> PiJsRuntime<C> {
                 }
 
                 // Install the JS bridge that creates Promises and wraps the native functions
-                match ctx.eval::<(), _>(pi_bridge_js()) {
+                match ctx.eval::<(), _>(ra_bridge_js()) {
                     Ok(()) => {}
                     Err(rquickjs::Error::Exception) => {
                         let detail = format_quickjs_exception(&ctx, ctx.catch());
                         return Err(rquickjs::Error::new_into_js_message(
-                            "PI_BRIDGE_JS",
+                            "RECUR_AGENT_BRIDGE_JS",
                             "eval",
                             detail,
                         ));
@@ -20255,15 +20293,15 @@ fn random_bytes(len: usize) -> std::result::Result<Vec<u8>, getrandom::Error> {
 
 /// JavaScript bridge code for managing pending hostcalls and timer callbacks.
 ///
-/// This code creates the `pi` global object with Promise-returning methods.
+/// This code creates the `ra` global object with Promise-returning methods.
 /// Each method wraps a native Rust function (`__pi_*_native`) that returns a call_id.
 #[expect(
     clippy::too_many_lines,
     reason = "this function owns one indivisible embedded JavaScript bridge source"
 )]
-fn pi_bridge_js() -> &'static str {
-    static PI_BRIDGE_JS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    PI_BRIDGE_JS.get_or_init(|| {
+fn ra_bridge_js() -> &'static str {
+    static RECUR_AGENT_BRIDGE_JS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    RECUR_AGENT_BRIDGE_JS.get_or_init(|| {
         [
             compressed_js_literal!(r"
 (() => {
@@ -22205,7 +22243,7 @@ function __pi_make_extension_ctx(ctx_payload) {
 }
 
 // Whitelisted fields for model objects handed to extensions. Mirrors the
-// host-side `pi_ai_model_entry_value` projection; anything outside this list
+// host-side `ra_ai_model_entry_value` projection; anything outside this list
 // (api keys, headers, nested secrets in unexpected fields) is dropped.
 const __pi_model_entry_whitelist = [
     'id',
@@ -23097,7 +23135,7 @@ pi.process = {
     args: __pi_process_args_native(),
 };
 
-const __pi_det_cwd = __pi_env_get('PI_DETERMINISTIC_CWD');
+const __pi_det_cwd = __pi_env_get('RECUR_AGENT_DETERMINISTIC_CWD');
 if (__pi_det_cwd) {
     try { pi.process.cwd = __pi_det_cwd; } catch (_) {}
 }
@@ -23159,13 +23197,19 @@ pi.time = {
     sleep: __pi_sleep,
 };
 
-// Make pi available globally
+// Make the runtime object available globally under BOTH names: `ra` is
+// Recur Agent's canonical/product name, `pi` is the RETAINED COMPATIBILITY
+// ALIAS for extension authors. Do NOT remove, rename, deprecate or feature-gate
+// `globalThis.pi`: published extension scripts are written against `pi.tool(...)`
+// and would break. Both names must keep resolving to this one shared object
+// (never diverge into copies), so no call site needs rewriting.
+globalThis.ra = pi;
 globalThis.pi = pi;
 
-const __pi_det_time_raw = __pi_env_get('PI_DETERMINISTIC_TIME_MS');
-const __pi_det_time_step_raw = __pi_env_get('PI_DETERMINISTIC_TIME_STEP_MS');
-const __pi_det_random_raw = __pi_env_get('PI_DETERMINISTIC_RANDOM');
-const __pi_det_random_seed_raw = __pi_env_get('PI_DETERMINISTIC_RANDOM_SEED');
+const __pi_det_time_raw = __pi_env_get('RECUR_AGENT_DETERMINISTIC_TIME_MS');
+const __pi_det_time_step_raw = __pi_env_get('RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS');
+const __pi_det_random_raw = __pi_env_get('RECUR_AGENT_DETERMINISTIC_RANDOM');
+const __pi_det_random_seed_raw = __pi_env_get('RECUR_AGENT_DETERMINISTIC_RANDOM_SEED');
 
 if (__pi_det_time_raw !== undefined) {
     const __pi_det_base = Number(__pi_det_time_raw);
@@ -24238,7 +24282,7 @@ if (typeof globalThis.crypto.randomUUID !== 'function') {
 
 if (typeof globalThis.process === 'undefined') {
     const rawPlatform =
-        __pi_env_get_native('PI_PLATFORM') ||
+        __pi_env_get_native('RECUR_AGENT_PLATFORM') ||
         __pi_env_get_native('OSTYPE') ||
         __pi_env_get_native('OS') ||
         'linux';
@@ -24250,8 +24294,8 @@ if (typeof globalThis.process === 'undefined') {
         if (s === 'msys' || s === 'cygwin' || s === 'windows_nt') return 'win32';
         return s || 'linux';
     })();
-    const detHome = __pi_env_get_native('PI_DETERMINISTIC_HOME');
-    const detCwd = __pi_env_get_native('PI_DETERMINISTIC_CWD');
+    const detHome = __pi_env_get_native('RECUR_AGENT_DETERMINISTIC_HOME');
+    const detCwd = __pi_env_get_native('RECUR_AGENT_DETERMINISTIC_CWD');
 
     const envProxy = new Proxy(
         {},
@@ -24328,7 +24372,7 @@ if (typeof globalThis.process === 'undefined') {
         argv: __pi_process_args_native(),
         cwd: () => detCwd || __pi_process_cwd_native(),
         platform: String(platform).split('-')[0],
-        arch: __pi_env_get_native('PI_TARGET_ARCH') || 'x64',
+        arch: __pi_env_get_native('RECUR_AGENT_TARGET_ARCH') || 'x64',
         version: 'v20.0.0',
         versions: { node: '20.0.0', v8: '0.0.0', modules: '0' },
         pid: 1,
@@ -25426,7 +25470,7 @@ mod tests {
         assert_eq!(stamped.timestamp, 1_758_556_800_123);
     }
 
-    /// Receipt name for `pi_bridge_js()`, which is not a virtual module.
+    /// Receipt name for `ra_bridge_js()`, which is not a virtual module.
     const BRIDGE_RECEIPT: &str = "<bridge>";
 
     /// Golden receipts for the compile-time-compressed JavaScript sources:
@@ -25465,8 +25509,8 @@ mod tests {
     const JS_SOURCE_RECEIPTS: &[(&str, usize, &str)] = &[
         (
             BRIDGE_RECEIPT,
-            205_300,
-            "0da93a4217162f652a4f99960a7393c241112a4f230a63feb354ac030cd6f9bb",
+            205_743,
+            "d6e8f792cc3d6db785d1f3426a8c0b3b21308a5ee849b01ca1ed7b7adc79dbba",
         ),
         (
             "node:fs",
@@ -25476,12 +25520,12 @@ mod tests {
         (
             "@mariozechner/pi-ai",
             24_612,
-            "33423d306e358a879c8b9e763dfc7e9fddf628ea275855aa2a89d1e52411547a",
+            "42f22ecd4995d47ddbfbb774af93e8ec4bd509a26aabe36c39d91384a6d59745",
         ),
         (
             "node:child_process",
             20_034,
-            "4c32a5b1b6fbf1754d7b3f6baf6a6bb67532ad42c20c7a942ea8c73a6f4a3908",
+            "29305b5d027565020899594b1bf0e9b7c976407e07044757a3bf3f1a3b6c4701",
         ),
         (
             "node:stream",
@@ -25490,8 +25534,8 @@ mod tests {
         ),
         (
             "@mariozechner/pi-coding-agent",
-            27_280,
-            "61463384323e22fac7f3a736c03346cbc177c70177f131190688c8a65773ce65",
+            27_870,
+            "7f0cbde51dedf8ecd928322f6c75811ddcbed1fb4a66fa689bd6e2c35f5d483d",
         ),
         (
             "@mariozechner/pi-tui",
@@ -25544,7 +25588,7 @@ mod tests {
     /// receipts do and do not prove, and how to re-pin them.
     #[test]
     fn compressed_javascript_sources_preserve_exact_bytes() {
-        let bridge = pi_bridge_js();
+        let bridge = ra_bridge_js();
         let modules = default_virtual_modules();
 
         let mut regenerated = Vec::with_capacity(JS_SOURCE_RECEIPTS.len());
@@ -25589,16 +25633,17 @@ mod tests {
 
     #[test]
     fn per_runtime_compat_scan_flag_overrides_global_default() {
-        let disabled = HashMap::from([("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string())]);
+        let disabled =
+            HashMap::from([("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string())]);
         assert!(!is_compat_scan_mode(&disabled));
 
-        let enabled = HashMap::from([("PI_EXT_COMPAT_SCAN".to_string(), "1".to_string())]);
+        let enabled = HashMap::from([("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "1".to_string())]);
         assert!(is_compat_scan_mode(&enabled));
     }
 
     #[allow(clippy::future_not_send)]
     async fn get_global_json<C: SchedulerClock + 'static>(
-        runtime: &PiJsRuntime<C>,
+        runtime: &RaJsRuntime<C>,
         name: &str,
     ) -> serde_json::Value {
         runtime
@@ -25614,7 +25659,7 @@ mod tests {
 
     #[allow(clippy::future_not_send)]
     async fn call_global_fn_json<C: SchedulerClock + 'static>(
-        runtime: &PiJsRuntime<C>,
+        runtime: &RaJsRuntime<C>,
         name: &str,
     ) -> serde_json::Value {
         let bridge_secret = runtime.bridge_secret().to_string();
@@ -25631,7 +25676,7 @@ mod tests {
     }
 
     fn privileged_test_script<C: SchedulerClock + 'static>(
-        runtime: &PiJsRuntime<C>,
+        runtime: &RaJsRuntime<C>,
         source: &str,
     ) -> String {
         let bridge_secret = serde_json::to_string(runtime.bridge_secret())
@@ -25645,19 +25690,19 @@ mod tests {
     #[allow(clippy::future_not_send)]
     async fn runtime_with_sync_exec_enabled(
         clock: Arc<DeterministicClock>,
-    ) -> PiJsRuntime<Arc<DeterministicClock>> {
-        let config = PiJsRuntimeConfig {
+    ) -> RaJsRuntime<Arc<DeterministicClock>> {
+        let config = RaJsRuntimeConfig {
             allow_unsafe_sync_exec: true,
-            ..PiJsRuntimeConfig::default()
+            ..RaJsRuntimeConfig::default()
         };
-        PiJsRuntime::with_clock_and_config_with_policy(clock, config, None)
+        RaJsRuntime::with_clock_and_config_with_policy(clock, config, None)
             .await
             .expect("create runtime")
     }
 
     #[allow(clippy::future_not_send)]
     async fn drain_until_idle(
-        runtime: &PiJsRuntime<Arc<DeterministicClock>>,
+        runtime: &RaJsRuntime<Arc<DeterministicClock>>,
         clock: &Arc<DeterministicClock>,
     ) {
         for _ in 0..10_000 {
@@ -25781,7 +25826,7 @@ mod tests {
     fn extension_ctx_exposes_model_system_prompt_and_session_identity() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -25864,7 +25909,7 @@ mod tests {
     fn extension_ctx_prefers_top_level_model_over_session_state() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -25918,10 +25963,10 @@ mod tests {
     /// or the legacy fifth argument, rejects `compact()` with the abort reason
     /// before any host compaction is requested.
     #[test]
-    fn pi_coding_agent_compact_rejects_a_pre_aborted_signal_without_host_work() {
+    fn ra_coding_agent_compact_rejects_a_pre_aborted_signal_without_host_work() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -25976,10 +26021,10 @@ mod tests {
     /// supplied model/apiKey are dropped host-side by design) and resolves
     /// with the bridged compaction result shape.
     #[test]
-    fn pi_coding_agent_compact_bridges_to_host_compaction_op() {
+    fn ra_coding_agent_compact_bridges_to_host_compaction_op() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26054,10 +26099,10 @@ mod tests {
     /// compact op (still never a model/apiKey) and resolves with the bridged
     /// native result shape.
     #[test]
-    fn pi_coding_agent_compact_native_strategy_bridges_request() {
+    fn ra_coding_agent_compact_native_strategy_bridges_request() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26150,10 +26195,10 @@ mod tests {
     /// bridge, provider failure) the compact() Promise rejects cleanly and
     /// never resolves with placeholder data.
     #[test]
-    fn pi_coding_agent_compact_rejects_cleanly_on_host_error() {
+    fn ra_coding_agent_compact_rejects_cleanly_on_host_error() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26220,7 +26265,7 @@ mod tests {
     fn extension_ctx_sessionless_payload_keeps_last_known_identity() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26305,7 +26350,7 @@ mod tests {
     fn extension_ctx_model_registry_find_is_sync_and_whitelisted() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26395,7 +26440,7 @@ mod tests {
     fn extension_ctx_system_prompt_seeds_from_payload_without_clobbering() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26452,10 +26497,10 @@ mod tests {
     // ── gh #167 / bd-9wkml: convertToLlm + buildSessionContext ports ─────
 
     #[test]
-    fn pi_coding_agent_convert_to_llm_ports_upstream_role_transforms() {
+    fn ra_coding_agent_convert_to_llm_ports_upstream_role_transforms() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26557,10 +26602,10 @@ mod tests {
     }
 
     #[test]
-    fn pi_coding_agent_build_session_context_ports_upstream_walk() {
+    fn ra_coding_agent_build_session_context_ports_upstream_walk() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26648,7 +26693,7 @@ mod tests {
     fn default_package_manager_shim_exports_and_behavior() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -26739,12 +26784,12 @@ mod tests {
 
     #[allow(clippy::future_not_send)]
     async fn reject_pi_ai_hostcalls_until_done(
-        runtime: &PiJsRuntime<Arc<DeterministicClock>>,
+        runtime: &RaJsRuntime<Arc<DeterministicClock>>,
         clock: &Arc<DeterministicClock>,
     ) {
         for _ in 0..64 {
             drain_until_idle(runtime, clock).await;
-            let state = get_global_json(runtime, "piAiFailClosed").await;
+            let state = get_global_json(runtime, "raAiFailClosed").await;
             if state.get("done").and_then(serde_json::Value::as_bool) == Some(true) {
                 return;
             }
@@ -26996,7 +27041,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
         std::fs::write(&base_a, r#"import { isIP } from "net";"#).expect("write a");
         std::fs::write(&base_b, r#"import { isIPv6 } from "node:net";"#).expect("write b");
 
-        let mut state = PiJsModuleState::new();
+        let mut state = RaJsModuleState::new();
         let overlay_a = maybe_register_builtin_compat_overlay(
             &mut state,
             base_a.to_string_lossy().as_ref(),
@@ -27048,7 +27093,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn hostcall_completions_run_before_due_timers() {
         let clock = Arc::new(ManualClock::new(1_000));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock));
 
         let _timer = loop_state.set_timeout(0);
         loop_state.enqueue_hostcall_completion("call-1");
@@ -27069,7 +27114,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     fn timer_callback_hostcalls_retain_the_timer_origin() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
             let source = SessionActionOriginSource::default();
@@ -27114,7 +27159,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     fn promise_continuation_hostcalls_retain_the_completed_call_origin() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
             let source = SessionActionOriginSource::default();
@@ -27244,7 +27289,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn timers_order_by_deadline_then_schedule_seq() {
         let clock = Arc::new(ManualClock::new(0));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock.clone()));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock.clone()));
 
         let t1 = loop_state.set_timeout(10);
         let t2 = loop_state.set_timeout(10);
@@ -27269,7 +27314,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn clear_timeout_prevents_fire() {
         let clock = Arc::new(ManualClock::new(0));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock.clone()));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock.clone()));
 
         let timer_id = loop_state.set_timeout(5);
         assert!(loop_state.clear_timeout(timer_id));
@@ -27292,7 +27337,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn clear_timeout_nonexistent_returns_false_and_does_not_pollute_cancelled_set() {
         let clock = Arc::new(ManualClock::new(0));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock));
 
         assert!(!loop_state.clear_timeout(42));
         assert!(
@@ -27304,7 +27349,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn clear_timeout_double_cancel_returns_false() {
         let clock = Arc::new(ManualClock::new(0));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock));
 
         let timer_id = loop_state.set_timeout(10);
         assert!(loop_state.clear_timeout(timer_id));
@@ -27312,9 +27357,9 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     }
 
     #[test]
-    fn pi_event_loop_timer_id_saturates_at_u64_max() {
+    fn ra_event_loop_timer_id_saturates_at_u64_max() {
         let clock = Arc::new(ManualClock::new(0));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock));
         loop_state.next_timer_id = u64::MAX;
 
         let first = loop_state.set_timeout(10);
@@ -27352,7 +27397,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn microtasks_drain_to_fixpoint_after_macrotask() {
         let clock = Arc::new(ManualClock::new(0));
-        let mut loop_state = PiEventLoop::new(ClockHandle::new(clock));
+        let mut loop_state = RaEventLoop::new(ClockHandle::new(clock));
 
         loop_state.enqueue_inbound_event("evt-1");
 
@@ -27465,7 +27510,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
         std::fs::write(&module_path, "export const x = 1;\n").expect("write module");
         let name = module_path.to_string_lossy().to_string();
 
-        let mut state = PiJsModuleState::new();
+        let mut state = RaJsModuleState::new();
 
         let _first = load_compiled_module_source(&mut state, &name).expect("first compile");
         assert_eq!(state.module_cache_counters.hits, 0);
@@ -27493,7 +27538,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
         std::fs::write(&module_path, "export const x = 1;\n").expect("write module");
         let name = module_path.to_string_lossy().to_string();
 
-        let mut first_state = PiJsModuleState::new().with_disk_cache_dir(Some(cache_dir.clone()));
+        let mut first_state = RaJsModuleState::new().with_disk_cache_dir(Some(cache_dir.clone()));
         let first = load_compiled_module_source(&mut first_state, &name).expect("first compile");
         assert_eq!(first_state.module_cache_counters.misses, 1);
         assert_eq!(first_state.module_cache_counters.disk_hits, 0);
@@ -27505,7 +27550,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
             "expected persisted cache at {cache_path:?}"
         );
 
-        let mut second_state = PiJsModuleState::new().with_disk_cache_dir(Some(cache_dir));
+        let mut second_state = RaJsModuleState::new().with_disk_cache_dir(Some(cache_dir));
         let second =
             load_compiled_module_source(&mut second_state, &name).expect("load from disk cache");
         assert_eq!(second_state.module_cache_counters.disk_hits, 1);
@@ -27522,7 +27567,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
         std::fs::write(&module_path, "export const x = 1;\n").expect("write module");
         let name = module_path.to_string_lossy().to_string();
 
-        let mut prime_state = PiJsModuleState::new().with_disk_cache_dir(Some(cache_dir.clone()));
+        let mut prime_state = RaJsModuleState::new().with_disk_cache_dir(Some(cache_dir.clone()));
         let first = load_compiled_module_source(&mut prime_state, &name).expect("first compile");
         let first_key = module_cache_key(&HashMap::new(), &HashMap::new(), &name).expect("key");
 
@@ -27534,7 +27579,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
         let second_key = module_cache_key(&HashMap::new(), &HashMap::new(), &name).expect("key");
         assert_ne!(first_key, second_key);
 
-        let mut second_state = PiJsModuleState::new().with_disk_cache_dir(Some(cache_dir));
+        let mut second_state = RaJsModuleState::new().with_disk_cache_dir(Some(cache_dir));
         let second = load_compiled_module_source(&mut second_state, &name).expect("recompile");
         assert_eq!(second_state.module_cache_counters.disk_hits, 0);
         assert_eq!(second_state.module_cache_counters.misses, 1);
@@ -27543,7 +27588,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
 
     #[test]
     fn compiled_source_cache_enforces_hard_byte_cap() {
-        let mut state = PiJsModuleState::new().with_compiled_cache_limit_bytes(Some(8));
+        let mut state = RaJsModuleState::new().with_compiled_cache_limit_bytes(Some(8));
         insert_compiled_source(
             &mut state,
             "a",
@@ -27572,7 +27617,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
 
     #[test]
     fn compiled_source_cache_rejects_single_entry_over_cap() {
-        let mut state = PiJsModuleState::new().with_compiled_cache_limit_bytes(Some(4));
+        let mut state = RaJsModuleState::new().with_compiled_cache_limit_bytes(Some(4));
         insert_compiled_source(
             &mut state,
             "oversized",
@@ -27807,7 +27852,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_reset_clears_extension_registry_state() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
             runtime.register_foreign_extension_root_boundary(
@@ -27896,7 +27941,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_reset_never_reuses_stale_vfs_file_descriptors() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -27945,7 +27990,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_reset_rejects_runtime_with_poisoned_collection_intrinsics() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -27981,7 +28026,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_reset_reports_pending_rust_work() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
             let _timer = runtime.set_timeout(10);
@@ -27998,7 +28043,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_reset_reports_pending_js_work() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28028,7 +28073,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[allow(clippy::too_many_lines)]
     fn reset_transient_state_preserves_compiled_cache_and_clears_transient_state() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28157,13 +28202,13 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_isolate_pool_tracks_created_and_reset_counts() {
         let cache_dir = tempfile::tempdir().expect("tempdir");
-        let template = PiJsRuntimeConfig {
+        let template = RaJsRuntimeConfig {
             cwd: "/tmp/warm-pool".to_string(),
             args: vec!["--flag".to_string()],
-            env: HashMap::from([("PI_POOL".to_string(), "yes".to_string())]),
+            env: HashMap::from([("RECUR_AGENT_POOL".to_string(), "yes".to_string())]),
             deny_env: false,
             disk_cache_dir: Some(cache_dir.path().join("module-cache")),
-            ..PiJsRuntimeConfig::default()
+            ..RaJsRuntimeConfig::default()
         };
         let expected_disk_cache_dir = template.disk_cache_dir.clone();
 
@@ -28177,7 +28222,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
         assert_eq!(cfg_a.cwd, template.cwd);
         assert_eq!(cfg_b.cwd, template.cwd);
         assert_eq!(cfg_a.args, template.args);
-        assert_eq!(cfg_a.env.get("PI_POOL"), Some(&"yes".to_string()));
+        assert_eq!(cfg_a.env.get("RECUR_AGENT_POOL"), Some(&"yes".to_string()));
         assert_eq!(cfg_a.deny_env, template.deny_env);
         assert_eq!(cfg_a.disk_cache_dir, expected_disk_cache_dir);
 
@@ -28189,7 +28234,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn warm_reset_clears_canonical_and_per_extension_roots() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28390,7 +28435,7 @@ import { isIPv4 as netIsIpv4 } from "node:net";
     #[test]
     fn pijs_dynamic_import_reports_deterministic_package_error() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28527,11 +28572,11 @@ export default dep;
             )
             .expect("write extension module");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 repair_mode: RepairMode::AutoStrict,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -28588,11 +28633,11 @@ export default dep;
             )
             .expect("write extension module");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 repair_mode: RepairMode::AutoSafe,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -28648,11 +28693,11 @@ export default ConfigLoader;
             )
             .expect("write extension module");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 repair_mode: RepairMode::AutoStrict,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -28719,11 +28764,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             )
             .expect("write extension module");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 repair_mode: RepairMode::AutoStrict,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -28770,11 +28815,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let entry = ext_dir.join("wad-finder.ts");
             assert!(entry.is_file(), "missing doom wad-finder at {entry:?}");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 repair_mode: RepairMode::AutoStrict,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -28816,11 +28861,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let entry = ext_dir.join("index.ts");
             assert!(entry.is_file(), "missing doom entry at {entry:?}");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 repair_mode: RepairMode::AutoStrict,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -28860,7 +28905,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_dynamic_import_reports_deterministic_network_error() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28899,7 +28944,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_creates_hostcall_request() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28922,7 +28967,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_hostcall_request_captures_extension_id() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28947,7 +28992,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_log_hostcall_request_shape() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28979,7 +29024,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_get_registered_tools_empty() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -28991,7 +29036,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_get_registered_tools_single_tool() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29035,7 +29080,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_get_registered_tools_sorts_by_name() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29066,7 +29111,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_allows_null_when_schema_allows_null() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29089,7 +29134,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_rejects_missing_required_object() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29114,7 +29159,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_rejects_non_object_when_schema_is_object() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29138,7 +29183,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_allows_non_object_when_schema_allows_string() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29161,7 +29206,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_rejects_null_when_schema_disallows_null() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29185,7 +29230,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_rejects_number_when_schema_only_string() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29209,7 +29254,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_validate_tool_input_allows_undefined_when_no_required() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29524,7 +29569,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_multiple_hostcalls() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29556,7 +29601,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_fetch_binary_body_uses_body_bytes_hostcall() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29602,7 +29647,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_hostcall_completion_resolves_promise() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29655,7 +29700,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_hostcall_error_rejects_promise() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29706,11 +29751,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_queue_overload_rejects_promise_exactly_once() {
         futures::executor::block_on(async {
-            let mut config = PiJsRuntimeConfig::default();
+            let mut config = RaJsRuntimeConfig::default();
             config.limits.hostcall_fast_queue_capacity = 1;
             config.limits.hostcall_overflow_queue_capacity = 1;
             config.limits.hostcall_timeout_ms = Some(1_000);
-            let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+            let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
                 .await
                 .expect("create bounded-queue runtime");
 
@@ -29758,7 +29803,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_runtime_tick_stats() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -29789,7 +29834,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_custom_ui_width_updates_trigger_reflow() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -29925,11 +29970,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_hostcall_timeout_rejects_promise() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let mut config = PiJsRuntimeConfig::default();
+            let mut config = RaJsRuntimeConfig::default();
             config.limits.hostcall_timeout_ms = Some(50);
 
             let runtime =
-                PiJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
+                RaJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
                     .await
                     .expect("create runtime");
 
@@ -30012,9 +30057,9 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_process_exit_hostcall_is_attributed_to_runtime_owner() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy_for_extension(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy_for_extension(
                 DeterministicClock::new(0),
-                PiJsRuntimeConfig::default(),
+                RaJsRuntimeConfig::default(),
                 None,
                 "ext.process-owner".to_string(),
             )
@@ -30055,10 +30100,10 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_interrupt_budget_aborts_eval() {
         futures::executor::block_on(async {
-            let mut config = PiJsRuntimeConfig::default();
+            let mut config = RaJsRuntimeConfig::default();
             config.limits.interrupt_budget = Some(0);
 
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -30084,7 +30129,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_microtasks_drain_before_next_macrotask() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -30153,7 +30198,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_clear_timeout_prevents_timer_callback() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -30187,23 +30232,23 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let clock = Arc::new(DeterministicClock::new(0));
             let mut env = HashMap::new();
             env.insert("HOME".to_string(), "/virtual/home".to_string());
-            env.insert("PI_IMAGE_SAVE_MODE".to_string(), "tmp".to_string());
+            env.insert("RECUR_AGENT_IMAGE_SAVE_MODE".to_string(), "tmp".to_string());
             env.insert(
                 "AWS_SECRET_ACCESS_KEY".to_string(),
                 "nope-do-not-expose".to_string(),
             );
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: "/virtual/cwd".to_string(),
                 args: vec!["--flag".to_string()],
                 env,
-                limits: PiJsRuntimeLimits::default(),
+                limits: RaJsRuntimeLimits::default(),
                 repair_mode: RepairMode::default(),
                 allow_unsafe_sync_exec: false,
                 deny_env: false,
                 disk_cache_dir: None,
             };
             let runtime =
-                PiJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
+                RaJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
                     .await
                     .expect("create runtime");
 
@@ -30211,7 +30256,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                 .eval(
                     r#"
                     globalThis.home = pi.env.get("HOME");
-                    globalThis.mode = pi.env.get("PI_IMAGE_SAVE_MODE");
+                    globalThis.mode = pi.env.get("RECUR_AGENT_IMAGE_SAVE_MODE");
                     globalThis.missing_is_undefined = (pi.env.get("NOPE") === undefined);
                     globalThis.secret_is_undefined = (pi.env.get("AWS_SECRET_ACCESS_KEY") === undefined);
                     globalThis.process_secret_is_undefined = (process.env.AWS_SECRET_ACCESS_KEY === undefined);
@@ -30252,18 +30297,18 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_process_path_crypto_time_apis_smoke() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(123));
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: "/virtual/cwd".to_string(),
                 args: vec!["a".to_string(), "b".to_string()],
                 env: HashMap::new(),
-                limits: PiJsRuntimeLimits::default(),
+                limits: RaJsRuntimeLimits::default(),
                 repair_mode: RepairMode::default(),
                 allow_unsafe_sync_exec: false,
                 deny_env: false,
                 disk_cache_dir: None,
             };
             let runtime =
-                PiJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
+                RaJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
                     .await
                     .expect("create runtime");
 
@@ -30272,8 +30317,8 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                     r#"
                     globalThis.cwd = pi.process.cwd;
                     globalThis.args = pi.process.args;
-                    globalThis.pi_process_is_frozen = Object.isFrozen(pi.process);
-                    globalThis.pi_args_is_frozen = Object.isFrozen(pi.process.args);
+                    globalThis.ra_process_is_frozen = Object.isFrozen(pi.process);
+                    globalThis.ra_args_is_frozen = Object.isFrozen(pi.process.args);
                     try { pi.process.cwd = "/hacked"; } catch (_) {}
                     try { pi.process.args.push("c"); } catch (_) {}
                     globalThis.cwd_after_mut = pi.process.cwd;
@@ -30296,8 +30341,8 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             for (key, expected) in [
                 ("cwd", serde_json::json!("/virtual/cwd")),
                 ("args", serde_json::json!(["a", "b"])),
-                ("pi_process_is_frozen", serde_json::json!(true)),
-                ("pi_args_is_frozen", serde_json::json!(true)),
+                ("ra_process_is_frozen", serde_json::json!(true)),
+                ("ra_args_is_frozen", serde_json::json!(true)),
                 ("cwd_after_mut", serde_json::json!("/virtual/cwd")),
                 ("args_after_mut", serde_json::json!(["a", "b"])),
                 ("joined", serde_json::json!("/a/c")),
@@ -30345,7 +30390,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_crypto_random_bytes_are_not_uuid_patterned() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -30379,7 +30424,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_inbound_event_fifo_and_microtask_fixpoint() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -30447,7 +30492,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[allow(clippy::future_not_send)]
     async fn run_seeded_runtime_trace(seed: u64) -> serde_json::Value {
         let clock = Arc::new(DeterministicClock::new(0));
-        let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+        let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
             .await
             .expect("create runtime");
 
@@ -30543,7 +30588,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_events_on_returns_unsubscribe_and_removes_handler() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -30584,7 +30629,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_event_dispatch_continues_after_handler_error() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -30628,7 +30673,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_crash_register_throw_host_continues() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -30693,7 +30738,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_crash_handler_throw_other_handlers_run() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -30762,7 +30807,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_crash_invalid_hostcall_returns_error_not_panic() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -30808,7 +30853,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_crash_after_crash_new_extensions_load() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -30895,7 +30940,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_crash_no_cross_contamination_between_extensions() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -31013,9 +31058,9 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
         }
 
         let read_roots = StdMutex::new(vec![PathBuf::from("/tmp/registered-root")]);
-        let runtime = futures::executor::block_on(PiJsRuntime::with_clock_and_config_with_policy(
+        let runtime = futures::executor::block_on(RaJsRuntime::with_clock_and_config_with_policy(
             DeterministicClock::new(0),
-            PiJsRuntimeConfig::default(),
+            RaJsRuntimeConfig::default(),
             None,
         ))
         .expect("create diagnostic runtime");
@@ -31101,11 +31146,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let secret_path = ext_a.join("secret.txt");
             std::fs::write(&secret_path, "top-secret").expect("write secret");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31162,11 +31207,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let asset_path = ext_root.join("asset.txt");
             std::fs::write(&asset_path, "legacy-root-access").expect("write asset");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31219,11 +31264,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             std::fs::create_dir_all(&ext_b).expect("mkdir ext-b");
             let target_path = ext_a.join("owned.txt");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31288,11 +31333,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             ));
             let generic_path = generic_dir.join("asset.txt");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31521,11 +31566,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let workspace_target = workspace.join("link-target.txt");
             std::fs::write(&workspace_target, "workspace-value").expect("write workspace target");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31566,11 +31611,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             std::fs::create_dir_all(&ext_b).expect("mkdir ext-b");
             let fd_path = ext_a.join("fd-secret.txt");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31651,15 +31696,15 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_crash_interrupt_budget_stops_infinite_loop() {
         futures::executor::block_on(async {
-            let config = PiJsRuntimeConfig {
-                limits: PiJsRuntimeLimits {
+            let config = RaJsRuntimeConfig {
+                limits: RaJsRuntimeLimits {
                     // Use a small interrupt budget to catch infinite loops quickly
                     interrupt_budget: Some(1000),
                     ..Default::default()
                 },
                 ..Default::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -31700,7 +31745,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_events_emit_queues_events_hostcall() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -31737,7 +31782,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_console_global_is_defined_and_callable() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -31826,11 +31871,52 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
         });
     }
 
+    /// Regression guard for the retained compatibility alias: extension authors
+    /// are written against `globalThis.pi`, so it must exist and must be the
+    /// SAME object as the canonical `globalThis.ra`. If a refactor ever drops,
+    /// renames or copies the alias, this test fails.
+    #[test]
+    fn pijs_pi_and_ra_globals_are_the_same_object() {
+        futures::executor::block_on(async {
+            let clock = Arc::new(DeterministicClock::new(0));
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
+                .await
+                .expect("create runtime");
+
+            runtime
+                .eval(
+                    r"
+                    globalThis.pi_alias_exists = typeof globalThis.pi !== 'undefined';
+                    globalThis.ra_alias_exists = typeof globalThis.ra !== 'undefined';
+                    globalThis.aliases_are_identical = globalThis.pi === globalThis.ra;
+                    globalThis.pi_tool_is_fn = typeof globalThis.pi.tool === 'function';
+                    globalThis.ra_tool_is_fn = typeof globalThis.ra.tool === 'function';
+                    ",
+                )
+                .await
+                .expect("eval");
+
+            for key in [
+                "pi_alias_exists",
+                "ra_alias_exists",
+                "aliases_are_identical",
+                "pi_tool_is_fn",
+                "ra_tool_is_fn",
+            ] {
+                assert_eq!(
+                    get_global_json(&runtime, key).await,
+                    serde_json::json!(true),
+                    "expected `{key}` to be true"
+                );
+            }
+        });
+    }
+
     #[test]
     fn pijs_node_events_module_provides_event_emitter() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -31884,7 +31970,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_bare_module_aliases_resolve_correctly() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -31915,14 +32001,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
         // Contract pinned to pi-subagents@0.34.0, npm integrity
         // sha512-JGgSYaieZ/2QtsW6BwSV1SX6zMz+YpV0JXUjSTtgphpk+z5OOJVJ4D/tWnCxIURXKcgsam+1vQkQgQ5fhrasFA==.
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r#"
-                    globalThis.piSubagentsContract = { done: false, error: "" };
+                    globalThis.raSubagentsContract = { done: false, error: "" };
                     Promise.all([
                       import("@earendil-works/pi-coding-agent"),
                       import("@earendil-works/pi-tui"),
@@ -31969,7 +32055,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
 
                       tui.setCellDimensions({ widthPx: 10, heightPx: 20 });
                       const errors = validator.Errors({ concurrency: 0, extra: true });
-                      globalThis.piSubagentsContract = {
+                      globalThis.raSubagentsContract = {
                         done: true,
                         error: "",
                         packageVersion: "0.34.0",
@@ -32001,15 +32087,15 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                         ].every((name) => typeof tui[name] === "function"),
                       };
                     }).catch((error) => {
-                      globalThis.piSubagentsContract.done = true;
-                      globalThis.piSubagentsContract.error = String(error?.message || error || "");
+                      globalThis.raSubagentsContract.done = true;
+                      globalThis.raSubagentsContract.error = String(error?.message || error || "");
                     });
                     "#,
                 )
                 .await
                 .expect("evaluate pinned pi-subagents import contract");
 
-            let result = get_global_json(&runtime, "piSubagentsContract").await;
+            let result = get_global_json(&runtime, "raSubagentsContract").await;
             assert_eq!(result["done"], serde_json::json!(true));
             assert_eq!(result["error"], serde_json::json!(""));
             assert_eq!(result["packageVersion"], serde_json::json!("0.34.0"));
@@ -32042,7 +32128,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_path_extended_functions() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32093,7 +32179,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_fs_callback_apis() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32152,11 +32238,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let peer_file = peer_root.join("asset.txt");
             std::fs::write(&peer_file, "peer data").expect("write peer file");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy_for_extension(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy_for_extension(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -32200,7 +32286,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_fs_sync_roundtrip_and_dirents() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32267,11 +32353,11 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             let host_file = workspace.join("shadowed.txt");
             std::fs::write(&host_file, "host-value").expect("write host fixture");
 
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy_for_extension(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy_for_extension(
                 DeterministicClock::new(0),
                 config,
                 None,
@@ -32330,7 +32416,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                 .expect("system time")
                 .as_nanos();
             let workspace = std::env::temp_dir().join(format!("pijs-host-readdir-{unique}"));
-            let prompt_dir = workspace.join(".pi").join("prompts");
+            let prompt_dir = workspace.join(".ra").join("prompts");
             std::fs::create_dir_all(&prompt_dir).expect("mkdir prompt dir");
             std::fs::write(
                 prompt_dir.join("model-mode.md"),
@@ -32339,12 +32425,12 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             .expect("write prompt");
             std::fs::create_dir_all(prompt_dir.join("nested")).expect("mkdir nested");
             let clock = Arc::new(DeterministicClock::new(0));
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: workspace.display().to_string(),
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
             let runtime =
-                PiJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
+                RaJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
                     .await
                     .expect("create runtime");
 
@@ -32354,7 +32440,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                     globalThis.hostReaddir = {};
                     import('node:fs').then((fs) => {
                         try {
-                            const dir = `${process.cwd()}/.pi/prompts`;
+                            const dir = `${process.cwd()}/.ra/prompts`;
                             const entries = fs.readdirSync(dir, { withFileTypes: true });
                             const names = entries.map((entry) => entry.name);
                             const prompt = entries.find((entry) => entry.name === 'model-mode.md');
@@ -32396,7 +32482,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_create_require_supports_node_builtins() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32451,7 +32537,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_fs_promises_delegates_to_node_fs_promises_api() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32488,7 +32574,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_spawn_emits_data_and_close() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32614,7 +32700,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_spawn_forwards_timeout_option_to_hostcall() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32682,7 +32768,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_exec_returns_child_and_forwards_timeout() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32774,7 +32860,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_exec_max_buffer_counts_utf8_bytes() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32867,7 +32953,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_exec_file_returns_child_and_forwards_timeout() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32943,7 +33029,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_process_kill_targets_spawned_pid() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -32999,7 +33085,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_denied_exec_emits_error_and_close() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33059,7 +33145,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_child_process_rejects_unsupported_shell_option() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33101,7 +33187,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_bun_spawn_fallback_kill_cancels_streaming_exec() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33196,7 +33282,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_cancel_hostcall_without_timer_is_single_use() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33246,7 +33332,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_stream_iterator_return_cancels_underlying_hostcall() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33309,7 +33395,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_provider_stream_simple_error_cleans_up_registry() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -33395,7 +33481,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_os_module_exports() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33479,7 +33565,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_os_native_values_cpus_and_userinfo() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33537,7 +33623,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_os_bare_import_alias() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33565,7 +33651,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_url_module_exports() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33611,7 +33697,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_crypto_create_hash_and_uuid() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33669,7 +33755,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_web_crypto_get_random_values_smoke() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33697,7 +33783,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_zlib_gzip_gunzip_roundtrip() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33770,7 +33856,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_buffer_global_operations() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33810,7 +33896,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_fs_promises_async_roundtrip() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33863,18 +33949,18 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_process_module_exports() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: "/test/project".to_string(),
                 args: vec!["arg1".to_string(), "arg2".to_string()],
                 env: HashMap::new(),
-                limits: PiJsRuntimeLimits::default(),
+                limits: RaJsRuntimeLimits::default(),
                 repair_mode: RepairMode::default(),
                 allow_unsafe_sync_exec: false,
                 deny_env: false,
                 disk_cache_dir: None,
             };
             let runtime =
-                PiJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
+                RaJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
                     .await
                     .expect("create runtime");
 
@@ -33940,7 +34026,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_path_join_behavior() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -33972,18 +34058,18 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_path_relative_resolve_format() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 cwd: "/home/user/project".to_string(),
                 args: Vec::new(),
                 env: HashMap::new(),
-                limits: PiJsRuntimeLimits::default(),
+                limits: RaJsRuntimeLimits::default(),
                 repair_mode: RepairMode::default(),
                 allow_unsafe_sync_exec: false,
                 deny_env: false,
                 disk_cache_dir: None,
             };
             let runtime =
-                PiJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
+                RaJsRuntime::with_clock_and_config_with_policy(Arc::clone(&clock), config, None)
                     .await
                     .expect("create runtime");
 
@@ -34049,7 +34135,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_util_module_exports() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -34081,7 +34167,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_assert_module_pass_and_fail() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -34125,7 +34211,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_fs_sync_edge_cases() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -34201,7 +34287,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_net_and_http_stubs_throw() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -34258,7 +34344,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_glob_sync_matches_vfs() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -34302,7 +34388,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_calculate_cost_updates_usage() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -34348,14 +34434,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_ai_unsupported_helpers_fail_closed() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r#"
-                    globalThis.piAiFailClosed = {};
+                    globalThis.raAiFailClosed = {};
                     (async () => {
                         const ai = await import('@mariozechner/pi-ai');
                         const checks = [
@@ -34375,15 +34461,15 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                         for (const [name, call] of checks) {
                             try {
                                 await call();
-                                globalThis.piAiFailClosed[name] = { ok: true };
+                                globalThis.raAiFailClosed[name] = { ok: true };
                             } catch (e) {
-                                globalThis.piAiFailClosed[name] = {
+                                globalThis.raAiFailClosed[name] = {
                                     ok: false,
                                     message: String((e && e.message) || e || ""),
                                 };
                             }
                         }
-                        globalThis.piAiFailClosed.done = true;
+                        globalThis.raAiFailClosed.done = true;
                     })();
                     "#,
                 )
@@ -34393,7 +34479,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             reject_pi_ai_hostcalls_until_done(&runtime, &clock).await;
             drain_until_idle(&runtime, &clock).await;
 
-            let r = get_global_json(&runtime, "piAiFailClosed").await;
+            let r = get_global_json(&runtime, "raAiFailClosed").await;
             assert_eq!(r["done"], serde_json::json!(true));
 
             for name in [
@@ -34460,37 +34546,37 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
 
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(&format!(
                     r#"
-                    globalThis.piAiOverflow = {{}};
+                    globalThis.raAiOverflow = {{}};
                     (async () => {{
                         const ai = await import('@mariozechner/pi-ai');
                         const messages = {messages};
-                        globalThis.piAiOverflow.fromString = messages.map((m) => ai.isContextOverflow(m));
-                        globalThis.piAiOverflow.fromError = messages.map((m) =>
+                        globalThis.raAiOverflow.fromString = messages.map((m) => ai.isContextOverflow(m));
+                        globalThis.raAiOverflow.fromError = messages.map((m) =>
                             ai.isContextOverflow({{ role: "assistant", stopReason: "error", errorMessage: m, usage: {{ input: 10, output: 1, cacheRead: 0 }} }}, 200000));
                         // A clean stop never classifies on text alone.
-                        globalThis.piAiOverflow.stopText = ai.isContextOverflow({{ stopReason: "stop", errorMessage: "prompt is too long" }}, 200000);
+                        globalThis.raAiOverflow.stopText = ai.isContextOverflow({{ stopReason: "stop", errorMessage: "prompt is too long" }}, 200000);
                         // Silent overflow: reported input (+ cache reads) above the window.
-                        globalThis.piAiOverflow.silent = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
-                        globalThis.piAiOverflow.silentUnderWindow = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 150000, cacheRead: 40000, output: 5 }} }}, 200000);
-                        globalThis.piAiOverflow.silentNoWindow = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 999999 }} }});
+                        globalThis.raAiOverflow.silent = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
+                        globalThis.raAiOverflow.silentUnderWindow = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 150000, cacheRead: 40000, output: 5 }} }}, 200000);
+                        globalThis.raAiOverflow.silentNoWindow = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 999999 }} }});
                         // bd-5tuh8: non-stop reasons never classify, even
                         // when usage blows far past the window or the error
                         // text matches an overflow pattern.
-                        globalThis.piAiOverflow.toolUseOverWindow = ai.isContextOverflow({{ stopReason: "toolUse", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
-                        globalThis.piAiOverflow.lengthOverWindow = ai.isContextOverflow({{ stopReason: "length", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
-                        globalThis.piAiOverflow.abortedWithText = ai.isContextOverflow({{ stopReason: "aborted", errorMessage: "prompt is too long" }}, 200000);
-                        globalThis.piAiOverflow.noReasonOverWindow = ai.isContextOverflow({{ usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
-                        globalThis.piAiOverflow.stopWindowZeroEdge = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 0);
-                        globalThis.piAiOverflow.garbage = [ai.isContextOverflow(null), ai.isContextOverflow(undefined), ai.isContextOverflow(42), ai.isContextOverflow({{}})];
-                        globalThis.piAiOverflow.defaultExport = typeof ai.default.isContextOverflow;
-                        globalThis.piAiOverflow.done = true;
+                        globalThis.raAiOverflow.toolUseOverWindow = ai.isContextOverflow({{ stopReason: "toolUse", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
+                        globalThis.raAiOverflow.lengthOverWindow = ai.isContextOverflow({{ stopReason: "length", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
+                        globalThis.raAiOverflow.abortedWithText = ai.isContextOverflow({{ stopReason: "aborted", errorMessage: "prompt is too long" }}, 200000);
+                        globalThis.raAiOverflow.noReasonOverWindow = ai.isContextOverflow({{ usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 200000);
+                        globalThis.raAiOverflow.stopWindowZeroEdge = ai.isContextOverflow({{ stopReason: "stop", usage: {{ input: 150000, cacheRead: 60000, output: 5 }} }}, 0);
+                        globalThis.raAiOverflow.garbage = [ai.isContextOverflow(null), ai.isContextOverflow(undefined), ai.isContextOverflow(42), ai.isContextOverflow({{}})];
+                        globalThis.raAiOverflow.defaultExport = typeof ai.default.isContextOverflow;
+                        globalThis.raAiOverflow.done = true;
                     }})();
                     "#,
                     messages = serde_json::to_string(MESSAGES).expect("json messages"),
@@ -34500,7 +34586,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
 
             drain_until_idle(&runtime, &clock).await;
 
-            let r = get_global_json(&runtime, "piAiOverflow").await;
+            let r = get_global_json(&runtime, "raAiOverflow").await;
             assert_eq!(r["done"], serde_json::json!(true));
             assert_eq!(r["defaultExport"], serde_json::json!("function"));
             for (idx, message) in MESSAGES.iter().enumerate() {
@@ -34545,14 +34631,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_ai_codex_registry_helpers_are_sync() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r#"
-                    globalThis.piAiCodexRegistry = {};
+                    globalThis.raAiCodexRegistry = {};
                     (async () => {
                         const ai = await import('@mariozechner/pi-ai');
                         const providers = ai.getProviders();
@@ -34560,7 +34646,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                         const first = models[0];
                         const model = ai.getModel("openai-codex", first.id);
                         const apiProvider = ai.getApiProvider("openai-codex-responses");
-                        globalThis.piAiCodexRegistry = {
+                        globalThis.raAiCodexRegistry = {
                             done: true,
                             providers,
                             modelsIsArray: Array.isArray(models),
@@ -34574,8 +34660,8 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                             streamSimpleType: typeof (apiProvider && apiProvider.streamSimple),
                         };
                     })().catch((e) => {
-                        globalThis.piAiCodexRegistry.error = String((e && e.message) || e || "");
-                        globalThis.piAiCodexRegistry.done = true;
+                        globalThis.raAiCodexRegistry.error = String((e && e.message) || e || "");
+                        globalThis.raAiCodexRegistry.done = true;
                     });
                     "#,
                 )
@@ -34588,7 +34674,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                 "synchronous registry helpers should not require hostcalls"
             );
 
-            let r = get_global_json(&runtime, "piAiCodexRegistry").await;
+            let r = get_global_json(&runtime, "raAiCodexRegistry").await;
             assert_eq!(r["done"], json!(true));
             assert_eq!(r["error"], serde_json::Value::Null);
             assert_eq!(r["providers"][0], json!("openai-codex"));
@@ -34610,14 +34696,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_pi_ai_aliases_share_one_immutable_module_identity() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r"
-                    globalThis.piAiAliasIdentity = {};
+                    globalThis.raAiAliasIdentity = {};
                     Promise.all([
                         import('@mariozechner/pi-ai'),
                         import('@earendil-works/pi-ai'),
@@ -34630,7 +34716,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                             stream: async function* () {},
                             streamSimple: async function* () {},
                         }, 'alias-source');
-                        globalThis.piAiAliasIdentity = {
+                        globalThis.raAiAliasIdentity = {
                             sameRegister:
                                 canonical.registerApiProvider === current.registerApiProvider &&
                                 current.registerApiProvider === compat.registerApiProvider &&
@@ -34644,7 +34730,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                             done: true,
                         };
                     }).catch((error) => {
-                        globalThis.piAiAliasIdentity = {
+                        globalThis.raAiAliasIdentity = {
                             error: String((error && error.stack) || error),
                             done: false,
                         };
@@ -34654,7 +34740,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                 .await
                 .expect("load mixed pi-ai aliases");
 
-            let result = get_global_json(&runtime, "piAiAliasIdentity").await;
+            let result = get_global_json(&runtime, "raAiAliasIdentity").await;
             assert_eq!(result["done"], serde_json::json!(true), "{result}");
             assert_eq!(result["sameRegister"], serde_json::json!(true));
             assert_eq!(result["canonicalCount"], serde_json::json!(1));
@@ -34669,14 +34755,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_ai_register_api_provider_dispatches_and_unregisters() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r"
-                    globalThis.piAiRegisteredApiProvider = {};
+                    globalThis.raAiRegisteredApiProvider = {};
                     (async () => {
                         const ai = await import('@earendil-works/pi-ai/compat');
                         const makeStream = (model, text) => {
@@ -34714,7 +34800,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                         } catch (error) {
                             mismatched = String((error && error.message) || error || '');
                         }
-                        globalThis.piAiRegisteredApiProvider = {
+                        globalThis.raAiRegisteredApiProvider = {
                             providerApi: provider && provider.api,
                             providerStream: typeof (provider && provider.stream),
                             providerStreamSimple: typeof (provider && provider.streamSimple),
@@ -34724,9 +34810,9 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                             mismatched,
                         };
                         ai.unregisterApiProviders('fixture-source');
-                        globalThis.piAiRegisteredApiProvider.providersAfterUnregister = ai.getApiProviders().length;
+                        globalThis.raAiRegisteredApiProvider.providersAfterUnregister = ai.getApiProviders().length;
                     })().catch((error) => {
-                        globalThis.piAiRegisteredApiProvider.error = String((error && error.message) || error || '');
+                        globalThis.raAiRegisteredApiProvider.error = String((error && error.message) || error || '');
                     });
                     ",
                 )
@@ -34735,7 +34821,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
 
             drain_until_idle(&runtime, &clock).await;
 
-            let result = get_global_json(&runtime, "piAiRegisteredApiProvider").await;
+            let result = get_global_json(&runtime, "raAiRegisteredApiProvider").await;
             assert_eq!(
                 result["error"],
                 serde_json::Value::Null,
@@ -34761,14 +34847,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_ai_assistant_message_event_stream_iterates_events() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r#"
-                    globalThis.piAiEventStream = {};
+                    globalThis.raAiEventStream = {};
                     (async () => {
                         const ai = await import('@mariozechner/pi-ai');
                         const stream = ai.createAssistantMessageEventStream();
@@ -34807,14 +34893,14 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                         });
                         await consumer;
                         const result = await stream.result();
-                        globalThis.piAiEventStream = {
+                        globalThis.raAiEventStream = {
                             done: true,
                             seen,
                             resultModel: result.model,
                         };
                     })().catch((e) => {
-                        globalThis.piAiEventStream.error = String((e && e.message) || e || "");
-                        globalThis.piAiEventStream.done = true;
+                        globalThis.raAiEventStream.error = String((e && e.message) || e || "");
+                        globalThis.raAiEventStream.done = true;
                     });
                     "#,
                 )
@@ -34822,7 +34908,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
                 .expect("eval pi-ai assistant message event stream");
 
             drain_until_idle(&runtime, &clock).await;
-            let r = get_global_json(&runtime, "piAiEventStream").await;
+            let r = get_global_json(&runtime, "raAiEventStream").await;
             assert_eq!(r["done"], json!(true));
             assert_eq!(r["error"], serde_json::Value::Null);
             assert_eq!(r["seen"], json!(["text_delta", "done"]));
@@ -34830,27 +34916,27 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
         });
     }
 
-    const PI_AI_BRIDGE_HELPER_SCRIPT: &str = r#"
-                    globalThis.piAiBridge = {};
+    const RECUR_AGENT_AI_BRIDGE_HELPER_SCRIPT: &str = r#"
+                    globalThis.raAiBridge = {};
                     (async () => {
                         const ai = await import('@mariozechner/pi-ai');
-                        globalThis.piAiBridge.complete = await ai.complete(
+                        globalThis.raAiBridge.complete = await ai.complete(
                             { id: "mock-model" },
                             [{ role: "user", content: "hello" }],
                             { maxTokens: 12 }
                         );
-                        globalThis.piAiBridge.simple = await ai.completeSimple("mock-model", "hello", { maxTokens: 4 });
-                        globalThis.piAiBridge.model = await ai.getModel();
-                        globalThis.piAiBridge.provider = await ai.getApiProvider();
-                        globalThis.piAiBridge.models = await ai.getModels();
-                        globalThis.piAiBridge.stream = [];
+                        globalThis.raAiBridge.simple = await ai.completeSimple("mock-model", "hello", { maxTokens: 4 });
+                        globalThis.raAiBridge.model = await ai.getModel();
+                        globalThis.raAiBridge.provider = await ai.getApiProvider();
+                        globalThis.raAiBridge.models = await ai.getModels();
+                        globalThis.raAiBridge.stream = [];
                         for await (const chunk of ai.streamSimpleOpenAIResponses("mock-model", "stream")) {
-                            globalThis.piAiBridge.stream.push(chunk);
+                            globalThis.raAiBridge.stream.push(chunk);
                         }
-                        globalThis.piAiBridge.done = true;
+                        globalThis.raAiBridge.done = true;
                     })().catch((e) => {
-                        globalThis.piAiBridge.error = String((e && e.message) || e || "");
-                        globalThis.piAiBridge.done = true;
+                        globalThis.raAiBridge.error = String((e && e.message) || e || "");
+                        globalThis.raAiBridge.done = true;
                     });
                     "#;
 
@@ -34858,18 +34944,18 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_ai_provider_helpers_route_through_host_events() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
             runtime
-                .eval(PI_AI_BRIDGE_HELPER_SCRIPT)
+                .eval(RECUR_AGENT_AI_BRIDGE_HELPER_SCRIPT)
                 .await
                 .expect("eval pi-ai host bridge helpers");
 
             for _ in 0..32 {
                 drain_until_idle(&runtime, &clock).await;
-                let state = get_global_json(&runtime, "piAiBridge").await;
+                let state = get_global_json(&runtime, "raAiBridge").await;
                 if state.get("done").and_then(serde_json::Value::as_bool) == Some(true) {
                     break;
                 }
@@ -34937,7 +35023,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
             }
 
             drain_until_idle(&runtime, &clock).await;
-            let r = get_global_json(&runtime, "piAiBridge").await;
+            let r = get_global_json(&runtime, "raAiBridge").await;
             assert_eq!(r["done"], json!(true));
             assert_eq!(r["error"], serde_json::Value::Null);
             assert_eq!(r["complete"]["text"], json!("bridge-complete"));
@@ -34953,32 +35039,32 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_pi_ai_exports_env_and_oauth_helpers() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let mut config = PiJsRuntimeConfig::default();
+            let mut config = RaJsRuntimeConfig::default();
             config.env.insert(
                 "OPENAI_API_KEY".to_string(),
                 "sk-test-pi-ai-export".to_string(),
             );
             config
                 .env
-                .insert("PI_EXT_COMPAT_SCAN".to_string(), "1".to_string());
+                .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "1".to_string());
             config.deny_env = false;
-            let runtime = PiJsRuntime::with_clock_and_config(Arc::clone(&clock), config)
+            let runtime = RaJsRuntime::with_clock_and_config(Arc::clone(&clock), config)
                 .await
                 .expect("create runtime");
 
             runtime
                 .eval(
                     r#"
-                    globalThis.piAiExports = {};
+                    globalThis.raAiExports = {};
                     (async () => {
                         const ai = await import('@mariozechner/pi-ai');
                         const named = await import('@mariozechner/pi-ai');
-                        globalThis.piAiExports.namedEnv = typeof named.getEnvApiKey;
-                        globalThis.piAiExports.namedOauth = typeof named.getOAuthApiKey;
-                        globalThis.piAiExports.defaultEnv = typeof ai.default.getEnvApiKey;
-                        globalThis.piAiExports.defaultOauth = typeof ai.default.getOAuthApiKey;
-                        globalThis.piAiExports.envValue = named.getEnvApiKey("openai");
-                        globalThis.piAiExports.done = true;
+                        globalThis.raAiExports.namedEnv = typeof named.getEnvApiKey;
+                        globalThis.raAiExports.namedOauth = typeof named.getOAuthApiKey;
+                        globalThis.raAiExports.defaultEnv = typeof ai.default.getEnvApiKey;
+                        globalThis.raAiExports.defaultOauth = typeof ai.default.getOAuthApiKey;
+                        globalThis.raAiExports.envValue = named.getEnvApiKey("openai");
+                        globalThis.raAiExports.done = true;
                     })();
                     "#,
                 )
@@ -34987,7 +35073,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
 
             drain_until_idle(&runtime, &clock).await;
 
-            let r = get_global_json(&runtime, "piAiExports").await;
+            let r = get_global_json(&runtime, "raAiExports").await;
             assert_eq!(r["done"], serde_json::json!(true));
             assert_eq!(r["namedEnv"], serde_json::json!("function"));
             assert_eq!(r["namedOauth"], serde_json::json!("function"));
@@ -35001,7 +35087,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_readline_stub_exports() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35028,7 +35114,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_test_stub_describe_it_flags() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35068,7 +35154,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_test_runs_basic_cases() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35126,7 +35212,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_stream_promises_pipeline_pass_through() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35172,7 +35258,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_fs_create_stream_pipeline_copies_content() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35216,7 +35302,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_fs_create_write_stream_releases_fd_after_write_error() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35305,7 +35391,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_node_stream_web_stream_bridge_roundtrip() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35380,7 +35466,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_stream_chunks_delivered_via_async_iterator() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -35466,7 +35552,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_stream_error_rejects_async_iterator() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -35530,7 +35616,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_stream_http_returns_async_iterator() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -35594,7 +35680,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[allow(clippy::too_many_lines)]
     fn pijs_stream_concurrent_exec_calls_have_independent_lifecycle() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -35719,7 +35805,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     #[test]
     fn pijs_stream_chunk_ignored_after_hostcall_completed() {
         futures::executor::block_on(async {
-            let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+            let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
                 .await
                 .expect("create runtime");
 
@@ -35769,7 +35855,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_exec_sync_denied_by_default_security_policy() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -35810,12 +35896,12 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_exec_sync_enforces_exec_mediation_for_critical_commands() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let config = PiJsRuntimeConfig {
+            let config = RaJsRuntimeConfig {
                 allow_unsafe_sync_exec: true,
-                ..PiJsRuntimeConfig::default()
+                ..RaJsRuntimeConfig::default()
             };
             let policy = crate::extensions::PolicyProfile::Permissive.to_policy();
-            let runtime = PiJsRuntime::with_clock_and_config_with_policy(
+            let runtime = RaJsRuntime::with_clock_and_config_with_policy(
                 Arc::clone(&clock),
                 config,
                 Some(policy),
@@ -36311,7 +36397,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_os_expanded_apis() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
@@ -36402,7 +36488,7 @@ export const bundled = globalThis.__doomWadFinderProbe.bundled;
     fn pijs_buffer_expanded_apis() {
         futures::executor::block_on(async {
             let clock = Arc::new(DeterministicClock::new(0));
-            let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+            let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
                 .await
                 .expect("create runtime");
 
