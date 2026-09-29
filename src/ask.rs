@@ -836,7 +836,7 @@ impl crate::tools::Tool for AskTool {
 
         if auto {
             tracing::info!(
-                event = "pi.ask.auto_answered",
+                event = "ra.ask.auto_answered",
                 questions = request.questions.len(),
                 "ask auto-answered with recommended options (non-interactive session)"
             );

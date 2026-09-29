@@ -2233,7 +2233,7 @@ impl Agent {
             }
         }
         tracing::info!(
-            event = "pi.dialect.repair",
+            event = "ra.dialect.repair",
             tools = ?candidates.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
             remaining_text_bytes = remaining.len(),
             "Repaired text-emitted tool call into structured call"
@@ -2338,7 +2338,7 @@ impl Agent {
                 rule.content.trim()
             );
             tracing::info!(
-                event = "pi.context_files.scoped_rule_activated",
+                event = "ra.context_files.scoped_rule_activated",
                 source = %rule.source,
                 format = rule.format.label(),
                 "imported scoped rule activated"
@@ -2878,7 +2878,7 @@ impl Agent {
         }
         if total > 0 {
             tracing::info!(
-                event = "pi.secrets.outbound",
+                event = "ra.secrets.outbound",
                 detections = total,
                 rules = ?labels,
                 "secrets obfuscated in outbound context (redacted)"
@@ -12552,7 +12552,7 @@ impl AgentSession {
         let runtime =
             JsExtensionRuntimeHandle::start_with_policy(config, tools, manager, policy).await?;
         tracing::info!(
-            event = "pi.extension_runtime.engine_decision",
+            event = "ra.extension_runtime.engine_decision",
             stage,
             requested = "quickjs",
             selected = "quickjs",
@@ -12574,7 +12574,7 @@ impl AgentSession {
     ) -> Result<ExtensionRuntimeHandle> {
         let runtime = NativeRustExtensionRuntimeHandle::start().await?;
         tracing::info!(
-            event = "pi.extension_runtime.engine_decision",
+            event = "ra.extension_runtime.engine_decision",
             stage,
             requested = "native-rust",
             selected = "native-rust",
@@ -14878,7 +14878,7 @@ impl AgentSession {
                 ExtensionRuntimeHandle::NativeRust(runtime) => {
                     if wants_js_runtime {
                         tracing::warn!(
-                            event = "pi.extension_runtime.prewarm.mismatch",
+                            event = "ra.extension_runtime.prewarm.mismatch",
                             expected = "quickjs",
                             got = "native-rust",
                             "Pre-warmed runtime mismatched requested JS mode; creating quickjs runtime"
@@ -14895,7 +14895,7 @@ impl AgentSession {
                         .await?
                     } else {
                         tracing::info!(
-                            event = "pi.extension_runtime.engine_decision",
+                            event = "ra.extension_runtime.engine_decision",
                             stage = "agent_enable_extensions_prewarmed",
                             requested = "native-rust",
                             selected = "native-rust",
@@ -14908,7 +14908,7 @@ impl AgentSession {
                 ExtensionRuntimeHandle::Js(runtime) => {
                     if wants_js_runtime {
                         tracing::info!(
-                            event = "pi.extension_runtime.engine_decision",
+                            event = "ra.extension_runtime.engine_decision",
                             stage = "agent_enable_extensions_prewarmed",
                             requested = "quickjs",
                             selected = "quickjs",
@@ -14918,7 +14918,7 @@ impl AgentSession {
                         ExtensionRuntimeHandle::Js(runtime)
                     } else {
                         tracing::warn!(
-                            event = "pi.extension_runtime.prewarm.mismatch",
+                            event = "ra.extension_runtime.prewarm.mismatch",
                             expected = "native-rust",
                             got = "quickjs",
                             "Pre-warmed runtime mismatched requested native mode; creating native-rust runtime"
@@ -14955,7 +14955,7 @@ impl AgentSession {
             if let Some(cfg) = config {
                 let resolved_risk = cfg.resolve_extension_risk_with_metadata();
                 tracing::info!(
-                    event = "pi.extension_runtime_risk.config",
+                    event = "ra.extension_runtime_risk.config",
                     source = resolved_risk.source,
                     enabled = resolved_risk.settings.enabled,
                     alpha = resolved_risk.settings.alpha,
@@ -15680,7 +15680,7 @@ impl AgentSession {
             render_semantic_context_prompt(&injection.bundle, injection, budget, &revision);
         if prompt.trim().is_empty() {
             tracing::warn!(
-                event = "pi.semantic_context.prompt.skipped",
+                event = "ra.semantic_context.prompt.skipped",
                 provider = provider.name(),
                 api = provider.api(),
                 model = provider.model_id(),
@@ -15692,7 +15692,7 @@ impl AgentSession {
         }
 
         tracing::info!(
-            event = "pi.semantic_context.prompt.injected",
+            event = "ra.semantic_context.prompt.injected",
             provider = provider.name(),
             api = provider.api(),
             model = provider.model_id(),

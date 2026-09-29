@@ -1040,7 +1040,7 @@ fn acquire_auth_read_lock<L>(
         Ok(lock) => Ok(Some(lock)),
         Err(error) if lock_denied_by_read_only_store(&error) => {
             tracing::warn!(
-                event = "pi.auth.read_only_store",
+                event = "ra.auth.read_only_store",
                 path = %path.display(),
                 error = %error,
                 "credential directory is not writable; reading auth.json without a lock (credentials cannot be persisted or refreshed on disk)"
@@ -1216,7 +1216,7 @@ fn parse_auth_entries(path: &Path, read: &GuardedAuthRead) -> HashMap<String, Au
                 Ok(()) => true,
                 Err(backup_error) => {
                     tracing::error!(
-                        event = "pi.auth.backup_failed",
+                        event = "ra.auth.backup_failed",
                         error = %backup_error,
                         backup = %backup_path.display(),
                         "Failed to backup corrupted auth.json"
@@ -1226,14 +1226,14 @@ fn parse_auth_entries(path: &Path, read: &GuardedAuthRead) -> HashMap<String, Au
             };
             if backup_succeeded {
                 tracing::warn!(
-                    event = "pi.auth.parse_error",
+                    event = "ra.auth.parse_error",
                     error = %error,
                     backup = %backup_path.display(),
                     "auth.json is corrupted; backed up and starting with empty credentials"
                 );
             } else {
                 tracing::warn!(
-                    event = "pi.auth.parse_error",
+                    event = "ra.auth.parse_error",
                     error = %error,
                     backup = %backup_path.display(),
                     "auth.json is corrupted; backup failed; starting with empty credentials"
@@ -2050,7 +2050,7 @@ impl AuthStorage {
 
         if !refreshes.is_empty() {
             tracing::info!(
-                event = "pi.auth.extension_oauth_refresh.start",
+                event = "ra.auth.extension_oauth_refresh.start",
                 count = refreshes.len(),
                 "Refreshing expired extension OAuth tokens"
             );
@@ -2063,7 +2063,7 @@ impl AuthStorage {
             match refresh_extension_oauth_token(client, &config, &refresh_token).await {
                 Ok(refreshed) => {
                     tracing::info!(
-                        event = "pi.auth.extension_oauth_refresh.ok",
+                        event = "ra.auth.extension_oauth_refresh.ok",
                         provider = %provider,
                         elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                         "Extension OAuth token refreshed"
@@ -2073,7 +2073,7 @@ impl AuthStorage {
                 }
                 Err(e) => {
                     tracing::warn!(
-                        event = "pi.auth.extension_oauth_refresh.error",
+                        event = "ra.auth.extension_oauth_refresh.error",
                         provider = %provider,
                         error = %e,
                         elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -2120,7 +2120,7 @@ impl AuthStorage {
                 // self-contained refresh metadata.
                 if *expires < cutoff && token_url.is_none() && client_id.is_none() {
                     tracing::info!(
-                        event = "pi.auth.prune_stale",
+                        event = "ra.auth.prune_stale",
                         provider = %provider,
                         expired_at = expires,
                         "Pruning stale OAuth credential"
@@ -2197,7 +2197,7 @@ where
             Some(value) if !value.trim().is_empty() => Ok(Some(value.trim().to_string())),
             Some(_) => {
                 tracing::warn!(
-                    event = "pi.auth.env_var_empty",
+                    event = "ra.auth.env_var_empty",
                     var = var_name,
                     "API key env var is set but empty"
                 );
@@ -2205,7 +2205,7 @@ where
             }
             None => {
                 tracing::warn!(
-                    event = "pi.auth.env_var_missing",
+                    event = "ra.auth.env_var_missing",
                     var = var_name,
                     "API key env var is not set"
                 );
@@ -2305,7 +2305,7 @@ impl CappedCapture {
                     }
                     if kept.len() >= cap && !self.overflowed.swap(true, Ordering::Relaxed) {
                         tracing::warn!(
-                            event = "pi.auth.secret_cmd_output_overflow",
+                            event = "ra.auth.secret_cmd_output_overflow",
                             "secret helper output exceeded its bounded cap; \
                              draining to EOF then failing closed"
                         );
@@ -2426,7 +2426,7 @@ fn run_bounded_secret_command(
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
         tracing::warn!(
-            event = "pi.auth.key_command_empty",
+            event = "ra.auth.key_command_empty",
             "API key command succeeded but produced empty output"
         );
         return Ok(None);
@@ -2465,7 +2465,7 @@ fn api_key_from_credential(credential: &AuthCredential) -> Option<String> {
             Ok(resolved) => resolved,
             Err(err) => {
                 tracing::warn!(
-                    event = "pi.auth.key_resolve_error",
+                    event = "ra.auth.key_resolve_error",
                     error = %err,
                     "Failed to resolve API key source"
                 );
@@ -2971,7 +2971,7 @@ where
         }
         if include_stored_credentials {
             tracing::warn!(
-                event = "pi.auth.aws_profile_missing",
+                event = "ra.auth.aws_profile_missing",
                 profile = %profile,
                 "AWS_PROFILE set but no credentials found in ~/.aws/credentials"
             );
@@ -3017,7 +3017,7 @@ fn resolve_stored_aws_credentials(
                 Ok(None) => None,
                 Err(err) => {
                     tracing::warn!(
-                        event = "pi.auth.key_resolve_error",
+                        event = "ra.auth.key_resolve_error",
                         error = %err,
                         "Failed to resolve API key source for bedrock"
                     );
@@ -3602,7 +3602,7 @@ fn load_aws_sso_token_cache(cache_dir: &Path, cache_key: &str, profile: &str) ->
                 }
                 Err(err) => {
                     tracing::warn!(
-                        event = "pi.auth.aws_sso_expires_at_unparseable",
+                        event = "ra.auth.aws_sso_expires_at_unparseable",
                         expires_at = %expires_at,
                         error = %err,
                         "Could not parse SSO expiresAt; trusting cache"
