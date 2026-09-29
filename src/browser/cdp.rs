@@ -3,7 +3,7 @@
 
 use super::{
     BrowserLaunchOptions, BrowserTabInfo, console, dialog, download, drag, emulation, exports,
-    interaction, launch, output, policy, required, storage, tracing,
+    interaction, launch, network, output, policy, required, storage, tracing,
 };
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
@@ -128,6 +128,38 @@ fn record_trace_event_into(events: &mut Vec<Value>, value: &Value) -> bool {
         events.push(event.clone());
     }
     true
+}
+
+/// What to do with a request that matches a route.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RouteAction {
+    /// Let it through unchanged.
+    Continue,
+    /// Fail it as if the network dropped it.
+    Abort,
+    /// Answer it locally with a synthetic response.
+    Fulfill {
+        status: u16,
+        body: String,
+        content_type: String,
+    },
+}
+
+/// One network interception rule.
+///
+/// Matching is a plain substring test on the URL, not a glob: the caller sees
+/// exactly what will match, and a rule that does not match fails visibly rather
+/// than by a subtly different pattern dialect than the one CDP uses for its own
+/// `urlPattern`.
+#[derive(Debug, Clone)]
+pub(super) struct NetworkRoute {
+    pub(super) pattern: String,
+    pub(super) action: RouteAction,
+}
+
+/// The first route whose pattern appears in `url`.
+fn match_route<'a>(routes: &'a [NetworkRoute], url: &str) -> Option<&'a NetworkRoute> {
+    routes.iter().find(|route| url.contains(&route.pattern))
 }
 
 #[derive(Debug, Clone)]
@@ -256,6 +288,7 @@ fn validate(args: &Value, allowlist: Option<&[String]>) -> Result<u64> {
         "emulate" | "reset_emulation" => emulation::validate(args)?,
         "drag" => drag::validate(args)?,
         "trace" => tracing::validate(args)?,
+        "network" => network::validate(args)?,
         "open" | "goto" => policy::check_navigation(required(args, "url")?, allowlist)?,
         "evaluate" => {
             required(args, "script")?;
@@ -401,6 +434,7 @@ pub(super) struct Cdp {
     downloads: BTreeMap<String, DownloadRecord>,
     console: Vec<ConsoleEntry>,
     trace: Vec<Value>,
+    routes: Vec<NetworkRoute>,
     timeout_ms: u64,
     dialog: dialog::State,
 }
@@ -455,6 +489,7 @@ impl Cdp {
             downloads: BTreeMap::new(),
             console: Vec::new(),
             trace: Vec::new(),
+            routes: Vec::new(),
             timeout_ms: 30_000,
             dialog: dialog::State::default(),
         })
@@ -540,6 +575,81 @@ impl Cdp {
 
     /// Handle only this connection's expected dialog. Never recurse through
     /// call(): the original command can reply before the dialog acknowledgement.
+    /// Answer one paused request from the route table.
+    ///
+    /// Returns `true` when `value` was a `Fetch.requestPaused` this call
+    /// answered. A paused request **must** be answered or the page hangs, so an
+    /// unmatched URL is continued rather than left parked; only an explicit
+    /// matching route changes behaviour.
+    async fn process_paused_request(&mut self, owner: &AgentCx, value: &Value) -> Result<bool> {
+        if value["method"] != "Fetch.requestPaused" {
+            return Ok(false);
+        }
+        let params = &value["params"];
+        let request_id = required(params, "requestId")?.to_string();
+        // The URL lives on the request object, not on the params themselves.
+        let url = params["request"]["url"].as_str().unwrap_or_default();
+
+        let matched = match_route(&self.routes, url).map(|route| route.action.clone());
+        let (method, params) = match matched {
+            Some(RouteAction::Abort) => (
+                "Fetch.failRequest",
+                json!({"requestId": request_id, "errorReason": "Aborted"}),
+            ),
+            Some(RouteAction::Fulfill {
+                status,
+                body,
+                content_type,
+            }) => (
+                "Fetch.fulfillRequest",
+                json!({
+                    "requestId": request_id,
+                    "responseCode": status,
+                    "responseHeaders": [{"name": "Content-Type", "value": content_type}],
+                    "body": base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        body.as_bytes()
+                    ),
+                }),
+            ),
+            // No route, or an explicit continue: let it reach the network.
+            Some(RouteAction::Continue) | None => (
+                "Fetch.continueRequest",
+                json!({"requestId": request_id}),
+            ),
+        };
+        self.send_request(owner, method, params, true).await?;
+        Ok(true)
+    }
+
+    /// Replace the route table, enabling or disabling interception accordingly.
+    pub(super) async fn set_routes(&mut self, owner: &AgentCx, routes: Vec<NetworkRoute>) -> Result<()> {
+        let had = !self.routes.is_empty();
+        self.routes = routes;
+        match (had, self.routes.is_empty()) {
+            // Turning interception on: pause every request and decide locally.
+            (false, false) => {
+                self.command(
+                    owner,
+                    "Fetch.enable",
+                    json!({"patterns": [{"urlPattern": "*", "requestStage": "Request"}]}),
+                )
+                .await?;
+            }
+            // Turning it off: stop pausing, or the page stalls with no handler.
+            (true, true) => {
+                self.command(owner, "Fetch.disable", json!({})).await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// The active route count, for status output.
+    pub(super) fn route_count(&self) -> usize {
+        self.routes.len()
+    }
+
     async fn process_dialog(
         &mut self,
         owner: &AgentCx,
@@ -576,10 +686,13 @@ impl Cdp {
         let mut primary = None;
         for _ in 0..MAX_EVENTS {
             let response = self.receive(owner).await?;
-            if !self
+            // Both handlers must run: a paused request or a dialog left
+            // unanswered hangs the page, and neither is the response we await.
+            let handled_dialog = self
                 .process_dialog(owner, &response, method == "Page.handleJavaScriptDialog")
-                .await?
-                && response["id"].as_u64() == Some(id)
+                .await?;
+            let handled_paused = self.process_paused_request(owner, &response).await?;
+            if !handled_dialog && !handled_paused && response["id"].as_u64() == Some(id)
             {
                 if primary.is_some() {
                     return Err(Error::tool("browser", "duplicate CDP command response"));
@@ -625,6 +738,7 @@ impl Cdp {
             }
             let value = self.receive(owner).await?;
             self.process_dialog(owner, &value, false).await?;
+            self.process_paused_request(owner, &value).await?;
         }
         if self.dialog.completed() {
             return Ok(());
@@ -1102,6 +1216,7 @@ impl Session {
             "emulate" | "reset_emulation" => emulation::execute(owner, cdp, &tab, args).await,
             "drag" => drag::execute(owner, cdp, &tab, self.references.get(&target), args).await,
             "trace" => tracing::execute(owner, cdp, cwd, &tab, args).await,
+            "network" => network::execute(owner, cdp, &tab, args).await,
             "evaluate" => {
                 let value = cdp.evaluate(owner, required(args, "script")?).await?;
                 Ok(output(

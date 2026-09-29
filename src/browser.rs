@@ -24,6 +24,7 @@ mod exports;
 mod interaction;
 mod launch;
 mod mock;
+mod network;
 mod policy;
 mod storage;
 mod tracing;
