@@ -1,6 +1,6 @@
 # Dependency Upgrade Log
 
-**Date:** 2026-08-14  |  **Project:** pi_agent_rust  |  **Language:** Rust (nightly-2026-07-05)
+**Date:** 2026-08-14  |  **Project:** recur_agent  |  **Language:** Rust (nightly-2026-07-05)
 
 ## Summary
 
@@ -119,7 +119,7 @@ inside sqlmodel is gone; single asupersync 0.4.4 remains).
 ## Binary size: budget raised 22 → 26 MiB
 
 The pure-Rust engine costs ~5.6 MiB of compiled core that LTO cannot remove
-(parser/planner/VDBE/MVCC/pager): release `pi` on darwin-arm64 measured
+(parser/planner/VDBE/MVCC/pager): release `ra` on darwin-arm64 measured
 **24.48 MiB** (25,667,648 bytes) vs 18.85 MiB before the cutover. Disabling
 fsqlite's default `json`/`fts5`/`rtree` extension features changed nothing
 (LTO had already stripped them; they stay disabled anyway). All budget
@@ -151,7 +151,7 @@ serde_json's `preserve_order` to fsqlite-ext-json, so pi's
   HOST/build-dep universe via tree-sitter's build script; resolver v2 keeps
   that out of the shipped artifact.) The order-agnostic golden normalizer
   from 14a57a4e stays, as it is correct under either ordering.
-- **Size: no reclaim.** Release `pi` measured 24.56 MiB (25,751,280 bytes)
+- **Size: no reclaim.** Release `ra` measured 24.56 MiB (25,751,280 bytes)
   vs 24.48 MiB on 0.3.4 — confirming LTO had already stripped the unused
   extension vtab code and the ~5.6 MiB cutover cost is the engine core
   (VDBE/btree/pager/planner/parser). The 26 MiB budget stands; any future

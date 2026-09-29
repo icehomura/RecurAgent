@@ -1,4 +1,4 @@
-# AGENTS.md — pi_agent_rust (Pi CLI Coding Agent)
+# AGENTS.md — recur_agent (Recur CLI Coding Agent)
 
 > Guidelines for AI coding agents working in this Rust codebase.
 
@@ -161,8 +161,8 @@ non-authoritative and must stay disabled.
 
 - Doodlestein Self-Releaser (`dsr`) is the exclusive quality, cross-platform
   build, packaging, signing, and release authority.
-- Use `dsr quality --tool pi_agent_rust`, `dsr build pi_agent_rust`, and
-  `dsr release pi_agent_rust <version>` (or the corresponding fail-closed DSR
+- Use `dsr quality --tool recur_agent`, `dsr build recur_agent`, and
+  `dsr release recur_agent <version>` (or the corresponding fail-closed DSR
   operation) instead of any Actions workflow or ad hoc release upload.
 - RCH is an implementation detail that DSR may use to offload compilation.
   Agents must not invoke Cargo or RCH directly as an alternate quality path.
@@ -178,7 +178,7 @@ non-authoritative and must stay disabled.
 point:**
 
 ```bash
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 ```
 
 The registered DSR recipe owns formatting, compiler checks, Clippy, unit,
@@ -238,9 +238,9 @@ DSR with direct Cargo commands.
 
 ---
 
-## Pi Agent — This Project
+## Recur Agent — This Project
 
-**This is the project you're working on.** Pi is a high-performance AI coding agent CLI, a Rust port of the Pi Agent TypeScript CLI. It provides an interactive terminal interface for AI-assisted coding with streaming responses, tool execution, and session persistence.
+**This is the project you're working on.** Pi is a high-performance AI coding agent CLI, a Rust port of the Recur Agent TypeScript CLI. It provides an interactive terminal interface for AI-assisted coding with streaming responses, tool execution, and session persistence.
 
 ### Architecture
 
@@ -270,7 +270,7 @@ Session persistence + index (JSONL, default-enabled SQLite backend support)
 | `src/providers/cohere.rs` | Cohere API implementation |
 | `src/providers/azure.rs` | Azure OpenAI API implementation |
 | `src/providers/mod.rs` | Provider factory and extension stream-simple bridge |
-| `src/tools.rs` | Tool trait, registry, and the core file/shell/search tools; other built-ins live in their own modules (36 total, tiered in `src/xdev.rs`; `subagent` is opt-in) |
+| `src/tools.rs` | Tool trait, registry, and the core file/shell/search tools; other built-ins live in their own modules (42 total, tiered in `src/xdev.rs`; `subagent` is opt-in) |
 | `src/interactive_ftui.rs` | Default FrankenTUI interactive stack (feature `ftui`, on by default) |
 | `src/interactive.rs` | Classic charmed_rust TUI application state and event loop (`--classic`) |
 | `src/rpc.rs` | RPC/stdin server mode |
@@ -299,13 +299,15 @@ Session persistence + index (JSONL, default-enabled SQLite backend support)
 - Extension-provided providers via stream-simple bridge
 - Tool definitions with JSON Schema
 
-**Built-in Tools** (36 total; the tier table is `ESSENTIAL_DEFAULTS` / `OPT_IN_ONLY` in `src/xdev.rs`, the default `--tools` list is in `src/cli.rs`, and README "36 Built-in Tools" is the user-facing inventory — keep all three in sync):
+**Built-in Tools** (42 total; the tier table is `ESSENTIAL_DEFAULTS` / `OPT_IN_ONLY` in `src/xdev.rs`, the default `--tools` list is in `src/cli.rs`, and README "42 Built-in Tools" is the user-facing inventory — keep all three in sync):
 - Essential, always in the schema: `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`, `web_search`, `submit_plan`, `current_time`, `xdev`
 - Discoverable behind `xdev`: `ast_grep`, `ast_edit`, `lsp`, `debug`, `manage_skill`, plus the memory bank (`retain`, `recall`, `reflect`, `memory_edit`, `learn`) when `memory.backend` is `local`
-- Default-enabled: `jobs`, `hub`
+- Default-enabled: `jobs`, `hub`, `run_code`
+- Skills: `skills_list`, `skill_view` (always registered, read-only progressive disclosure); `skill_hub_search`, `skill_hub_install` (opt-in via `skillHub.enable`)
 - `--tools` opt-in: `eval`, `github`, `security_scan`
 - Settings-gated: `browser`, `computer`, `inspect_image`, `generate_image`, `tts`, `read_media`
 - `subagent` - Native isolated Rust Pi child-agent delegation (opt-in only via `--tools ...subagent`)
+- `dag` - One-call parallel execution of a dependency DAG inside the current session (opt-in via `--tools ...dag`)
 
 **Session Management:**
 - JSONL format (version 3)
@@ -341,7 +343,7 @@ This port uses two key libraries from sibling projects:
 | Metric | Target | Notes |
 |--------|--------|-------|
 | Startup time | <100ms | No heavy initialization |
-| Binary size (release) | <48 MiB | DSR release-size budget with LTO + strip enabled (raised from 26 MiB for the v0.3.0 capability wave: BPE tables, LSP/DAP, MCP, eval kernels) |
+| Binary size (release) | <96 MiB | DSR release-size budget with LTO + strip enabled (raised 26 → 48 MiB for the v0.3.0 capability wave, then 48 → 96 MiB on 2026-09-29 by owner decision to judge integration candidates on merit rather than size). Gate constant: `src/perf_build.rs` `BINARY_SIZE_RELEASE_BUDGET_MB` |
 | TUI framerate | 60fps | Differential rendering |
 | Memory (idle) | <50MB | No leaks on long sessions |
 
@@ -375,7 +377,7 @@ The port uses fixture-based conformance tests to validate behavior matches expec
 ### Running Conformance Tests
 
 ```bash
-dsr quality --tool pi_agent_rust
+dsr quality --tool recur_agent
 ```
 
 Conformance is part of that fail-closed recipe. Do not substitute a hand-picked
@@ -483,7 +485,7 @@ work five times in one day (last: `5d3eb35a`).
   prints
 
       WARNING: mcp-agent-mail: no agent-mail archive matches project
-      '/Users/jemanuel/projects/pi_agent_rust'; nothing to guard, allowing
+      '/Users/jemanuel/projects/recur_agent'; nothing to guard, allowing
 
   that does not mean the project is unregistered. It may mean the mailbox
   database is unreadable, and the guard allows the commit either way. Nothing
@@ -825,7 +827,7 @@ rg -l -t rust 'unwrap\(' | xargs ast-grep run -l Rust -p '$X.unwrap()' --json
 
 ```
 mcp__morph-mcp__warp_grep(
-  repoPath: "/path/to/pi_agent_rust",
+  repoPath: "/path/to/recur_agent",
   query: "How does the SSE parser handle streaming events?"
 )
 ```
@@ -980,7 +982,7 @@ Next steps (pick one)
 
 1. Decide how to handle the unrelated modified files above so we can resume cleanly.
 2. Triage beads_rust-orko (clippy/cargo warnings) and beads_rust-ydqr (rustfmt failures).
-3. If you want a full suite run later, fix the reported blockers and re-run `dsr quality --tool pi_agent_rust`.
+3. If you want a full suite run later, fix the reported blockers and re-run `dsr quality --tool recur_agent`.
 ```
 
 NEVER EVER DO THAT AGAIN. The answer is literally ALWAYS the same: those are changes created by the potentially dozen of other agents working on the project at the same time. This is not only a common occurence, it happens multiple times PER MINUTE. The way to deal with it is simple: you NEVER, under ANY CIRCUMSTANCE, stash, revert, overwrite, or otherwise disturb in ANY way the work of other agents. Just treat those changes identically to changes that you yourself made. Just fool yourself into thinking YOU made the changes and simply don't recall it for some reason.
