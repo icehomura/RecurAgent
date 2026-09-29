@@ -196,7 +196,7 @@ pub(super) async fn snapshot(
     Ok((output(summary, details), refs))
 }
 
-async fn resolve(
+pub(super) async fn resolve(
     owner: &AgentCx,
     cdp: &mut Cdp,
     selector: &str,
@@ -250,7 +250,7 @@ async fn resolve(
     }
 }
 
-async fn element_call(
+pub(super) async fn element_call(
     owner: &AgentCx,
     cdp: &mut Cdp,
     backend_id: u64,

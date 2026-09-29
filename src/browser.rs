@@ -18,6 +18,7 @@ mod cdp;
 mod console;
 mod dialog;
 mod download;
+mod drag;
 mod emulation;
 mod exports;
 mod interaction;
