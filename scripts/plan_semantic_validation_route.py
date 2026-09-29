@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROUTE_PLAN_SCHEMA = "pi.validation.semantic_route_plan.v1"
+ROUTE_PLAN_SCHEMA = "ra.validation.semantic_route_plan.v1"
 PURPOSE = "read_only_semantic_validation_route_planning"
 DEFAULT_SOURCE_BEAD = "bd-4w2mw.2"
 DEFAULT_SCHEDULER_PATH = Path("docs/evidence/validation-scheduler-plan.json")
@@ -33,9 +33,9 @@ ROUTE_PLAN_GOLDEN = "route_plan_projection.json"
 NO_MOCK_GOLDEN = "no_mock_git_beads_projection.json"
 UPDATE_GOLDEN_ENV = "UPDATE_SEMANTIC_ROUTE_GOLDEN"
 SEMANTIC_ROUTE_CLOSEOUT_CONTRACT_SCHEMA = (
-    "pi.validation.semantic_route_plan.closeout_gate_contract.v1"
+    "ra.validation.semantic_route_plan.closeout_gate_contract.v1"
 )
-SEMANTIC_ROUTE_CLOSEOUT_SCHEMA = "pi.validation.semantic_route_plan.closeout_gate.v1"
+SEMANTIC_ROUTE_CLOSEOUT_SCHEMA = "ra.validation.semantic_route_plan.closeout_gate.v1"
 SEMANTIC_ROUTE_CLOSEOUT_CONTRACT_PATH = Path(
     "docs/contracts/semantic-validation-route-closeout-gate-contract.json"
 )
@@ -66,8 +66,8 @@ REQUIRED_TOP_LEVEL_KEYS = (
 )
 
 RCH_ENV = {
-    "CARGO_TARGET_DIR": "/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target",
-    "TMPDIR": "/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp",
+    "CARGO_TARGET_DIR": "/data/tmp/recur_agent_cargo/${USER:-agent}/target",
+    "TMPDIR": "/data/tmp/recur_agent_cargo/${USER:-agent}/tmp",
 }
 
 BUCKETS: tuple[dict[str, Any], ...] = (
@@ -202,7 +202,7 @@ FALLBACK_GROUPS: tuple[dict[str, Any], ...] = (
         "requires_rch": True,
         "no_local_fallback": True,
         "exact_commands": [
-            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo test <focused-target>"
+            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo test <focused-target>"
         ],
         "action": "would_run",
         "backoff_reasons": [],
@@ -218,8 +218,8 @@ FALLBACK_GROUPS: tuple[dict[str, Any], ...] = (
         "requires_rch": True,
         "no_local_fallback": True,
         "exact_commands": [
-            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo test conformance",
-            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo test e2e",
+            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo test conformance",
+            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo test e2e",
         ],
         "action": "would_run",
         "backoff_reasons": [],
@@ -235,7 +235,7 @@ FALLBACK_GROUPS: tuple[dict[str, Any], ...] = (
         "requires_rch": True,
         "no_local_fallback": True,
         "exact_commands": [
-            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo check --all-targets"
+            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo check --all-targets"
         ],
         "action": "would_run",
         "backoff_reasons": [],
@@ -251,7 +251,7 @@ FALLBACK_GROUPS: tuple[dict[str, Any], ...] = (
         "requires_rch": True,
         "no_local_fallback": True,
         "exact_commands": [
-            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
+            "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
         ],
         "action": "would_run",
         "backoff_reasons": [],
@@ -1752,7 +1752,7 @@ def run_no_mock_git_beads_smoke() -> dict[str, Any]:
         source_bead="bd-no-mock",
     )
     return {
-        "schema": "pi.validation.semantic_route_plan.no_mock_git_beads.v1",
+        "schema": "ra.validation.semantic_route_plan.no_mock_git_beads.v1",
         "status": "pass" if plan["status"] == "degraded" else "fail",
         "workspace_kind": "temporary_git_repo_with_beads_jsonl",
         "workspace_path_redacted": "[TMP]/pi_semantic_route_no_mock_*",
@@ -1799,7 +1799,7 @@ def fixture_scheduler(*, heavy_allowed: bool = True) -> dict[str, Any]:
             item["backoff_reasons"] = ["slot_pressure=saturated"]
         groups.append(item)
     return {
-        "schema": "pi.swarm.validation_scheduler_plan.v1",
+        "schema": "ra.swarm.validation_scheduler_plan.v1",
         "status": "ready" if heavy_allowed else "degraded",
         "command_groups": groups,
         "rch_posture": {"heavy_validation_allowed": heavy_allowed},
@@ -1809,7 +1809,7 @@ def fixture_scheduler(*, heavy_allowed: bool = True) -> dict[str, Any]:
 def fixture_proof_memory(*, reusable: bool = True) -> dict[str, Any]:
     classification = "reusable" if reusable else "stale"
     return {
-        "schema": "pi.validation.proof_memory_index.v1",
+        "schema": "ra.validation.proof_memory_index.v1",
         "status": "pass",
         "decision": "proof_memory_index_ready",
         "entries": [
@@ -2024,7 +2024,7 @@ def run_self_test() -> dict[str, Any]:
     ]
     results: list[dict[str, Any]] = []
     route_projection: dict[str, Any] = {
-        "schema": "pi.validation.semantic_route_plan.golden_projection.v1",
+        "schema": "ra.validation.semantic_route_plan.golden_projection.v1",
         "golden_confidence": {
             "deterministic": True,
             "platform_dependent": False,
@@ -2145,7 +2145,7 @@ def run_self_test() -> dict[str, Any]:
         else "fail"
     )
     return {
-        "schema": "pi.validation.semantic_route_plan.self_test.v1",
+        "schema": "ra.validation.semantic_route_plan.self_test.v1",
         "generated_at": utc_now_iso(),
         "status": status,
         "case_count": len(results),

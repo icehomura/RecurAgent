@@ -27,7 +27,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA_RECORD = "pi.perf.pijs_workload.v1"
+SCHEMA_RECORD = "ra.perf.pijs_workload.v1"
 REQUIRED_RECORD_FIELDS = (
     "embedded_timestamp", "source_commit", "source_dirty",
     "run_id", "correlation_id", "iteration", "tool_name",

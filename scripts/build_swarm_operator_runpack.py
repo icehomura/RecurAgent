@@ -30,51 +30,51 @@ from pathlib import Path
 from typing import Any
 
 
-RUNPACK_SCHEMA = "pi.swarm.operator_runpack.v1"
-RUNPACK_CONTRACT_SCHEMA = "pi.swarm.operator_runpack_contract.v1"
-SAFETY_SCORECARD_SCHEMA = "pi.swarm.safety_scorecard.v1"
-TAIL_LATENCY_SCHEMA = "pi.operator_tail_latency.v1"
-BOTTLENECK_ATTRIBUTION_SCHEMA = "pi.swarm.bottleneck_attribution_dashboard.v1"
-TURN_PRESSURE_LEDGER_SCHEMA = "pi.swarm.turn_pressure_ledger.v1"
-TURN_PRESSURE_LEDGER_CONTRACT_SCHEMA = "pi.swarm.turn_pressure_ledger_contract.v1"
-PREDICTIVE_TELEMETRY_LEDGER_SCHEMA = "pi.swarm.predictive_telemetry_ledger.v1"
+RUNPACK_SCHEMA = "ra.swarm.operator_runpack.v1"
+RUNPACK_CONTRACT_SCHEMA = "ra.swarm.operator_runpack_contract.v1"
+SAFETY_SCORECARD_SCHEMA = "ra.swarm.safety_scorecard.v1"
+TAIL_LATENCY_SCHEMA = "ra.operator_tail_latency.v1"
+BOTTLENECK_ATTRIBUTION_SCHEMA = "ra.swarm.bottleneck_attribution_dashboard.v1"
+TURN_PRESSURE_LEDGER_SCHEMA = "ra.swarm.turn_pressure_ledger.v1"
+TURN_PRESSURE_LEDGER_CONTRACT_SCHEMA = "ra.swarm.turn_pressure_ledger_contract.v1"
+PREDICTIVE_TELEMETRY_LEDGER_SCHEMA = "ra.swarm.predictive_telemetry_ledger.v1"
 PREDICTIVE_TELEMETRY_LEDGER_CONTRACT_SCHEMA = (
-    "pi.swarm.predictive_telemetry_ledger_contract.v1"
+    "ra.swarm.predictive_telemetry_ledger_contract.v1"
 )
-VALIDATION_SCHEDULER_PLAN_SCHEMA = "pi.swarm.validation_scheduler_plan.v1"
+VALIDATION_SCHEDULER_PLAN_SCHEMA = "ra.swarm.validation_scheduler_plan.v1"
 VALIDATION_SCHEDULER_PLAN_CONTRACT_SCHEMA = (
-    "pi.swarm.validation_scheduler_plan_contract.v1"
+    "ra.swarm.validation_scheduler_plan_contract.v1"
 )
-TEMP_ARTIFACT_INVENTORY_SCHEMA = "pi.swarm.temp_artifact_inventory.v1"
-STALE_EVIDENCE_RENEWAL_QUEUE_SCHEMA = "pi.swarm.stale_evidence_renewal_queue.v1"
-FLIGHT_RECORDER_REPORT_SCHEMA = "pi.swarm.flight_recorder.report.v1"
-HOST_PREFLIGHT_SCHEMA = "pi.doctor.swarm_resource_preflight.v1"
-CONTEXT_INTELLIGENCE_SCHEMA = "pi.doctor.context_intelligence_posture.v1"
-VALIDATION_BROKER_DOCTOR_SCHEMA = "pi.doctor.validation_broker_posture.v1"
-PROGRESS_SLO_DOCTOR_SCHEMA = "pi.doctor.swarm_progress_slo_posture.v1"
-PROGRESS_SLO_SCHEMA = "pi.swarm.progress_slo.v1"
-VALIDATION_BROKER_CLI_STATUS_SCHEMA = "pi.validation_broker.cli_status.v1"
-VALIDATION_BROKER_CLI_PLAN_SCHEMA = "pi.validation_broker.cli_plan.v1"
-VALIDATION_BROKER_STORE_ENV = "PI_VALIDATION_BROKER_STORE"
-HOSTCALL_SWARM_PROFILE_SCHEMA = "pi.ext.hostcall_admission_swarm_profile.v1"
+TEMP_ARTIFACT_INVENTORY_SCHEMA = "ra.swarm.temp_artifact_inventory.v1"
+STALE_EVIDENCE_RENEWAL_QUEUE_SCHEMA = "ra.swarm.stale_evidence_renewal_queue.v1"
+FLIGHT_RECORDER_REPORT_SCHEMA = "ra.swarm.flight_recorder.report.v1"
+HOST_PREFLIGHT_SCHEMA = "ra.doctor.swarm_resource_preflight.v1"
+CONTEXT_INTELLIGENCE_SCHEMA = "ra.doctor.context_intelligence_posture.v1"
+VALIDATION_BROKER_DOCTOR_SCHEMA = "ra.doctor.validation_broker_posture.v1"
+PROGRESS_SLO_DOCTOR_SCHEMA = "ra.doctor.swarm_progress_slo_posture.v1"
+PROGRESS_SLO_SCHEMA = "ra.swarm.progress_slo.v1"
+VALIDATION_BROKER_CLI_STATUS_SCHEMA = "ra.validation_broker.cli_status.v1"
+VALIDATION_BROKER_CLI_PLAN_SCHEMA = "ra.validation_broker.cli_plan.v1"
+VALIDATION_BROKER_STORE_ENV = "RECUR_AGENT_VALIDATION_BROKER_STORE"
+HOSTCALL_SWARM_PROFILE_SCHEMA = "ra.ext.hostcall_admission_swarm_profile.v1"
 SESSION_RECOVERY_SWARM_PROFILE_SCHEMA = "pi.session_store_v2.recovery_swarm_profile.v1"
 RPC_SWARM_E2E_SCHEMA = "pi.rpc.concurrent_swarm_e2e.v1"
-RCH_ARTIFACT_SYNC_SCHEMA = "pi.rch.artifact_sync_preflight.v1"
-REMOTE_VALIDATION_LEDGER_SCHEMA = "pi.remote_validation.proof_ledger.v1"
-REMOTE_VALIDATION_ENTRY_SCHEMA = "pi.remote_validation.proof_entry.v1"
-REMOTE_VALIDATION_PROOF_REUSE_GATE_SCHEMA = "pi.validation.proof_reuse_gate.v1"
-REMOTE_VALIDATION_PROOF_REUSE_CONTEXT_SCHEMA = "pi.validation.proof_reuse_context.v1"
-VALIDATION_PROOF_MEMORY_INDEX_SCHEMA = "pi.validation.proof_memory_index.v1"
+RCH_ARTIFACT_SYNC_SCHEMA = "ra.rch.artifact_sync_preflight.v1"
+REMOTE_VALIDATION_LEDGER_SCHEMA = "ra.remote_validation.proof_ledger.v1"
+REMOTE_VALIDATION_ENTRY_SCHEMA = "ra.remote_validation.proof_entry.v1"
+REMOTE_VALIDATION_PROOF_REUSE_GATE_SCHEMA = "ra.validation.proof_reuse_gate.v1"
+REMOTE_VALIDATION_PROOF_REUSE_CONTEXT_SCHEMA = "ra.validation.proof_reuse_context.v1"
+VALIDATION_PROOF_MEMORY_INDEX_SCHEMA = "ra.validation.proof_memory_index.v1"
 VALIDATION_PROOF_MEMORY_INDEX_CONTRACT_SCHEMA = (
-    "pi.validation.proof_memory_index_contract.v1"
+    "ra.validation.proof_memory_index_contract.v1"
 )
-OPERATOR_WORK_RECOMMENDATION_SCHEMA = "pi.swarm.operator_work_recommendation.v1"
+OPERATOR_WORK_RECOMMENDATION_SCHEMA = "ra.swarm.operator_work_recommendation.v1"
 OPERATOR_WORK_RECOMMENDATION_CONTRACT_SCHEMA = (
-    "pi.swarm.operator_work_recommendation_contract.v1"
+    "ra.swarm.operator_work_recommendation_contract.v1"
 )
-SEMANTIC_ROUTE_PLAN_SCHEMA = "pi.validation.semantic_route_plan.v1"
+SEMANTIC_ROUTE_PLAN_SCHEMA = "ra.validation.semantic_route_plan.v1"
 REMOTE_VALIDATION_PROOF_REUSE_GATE_CONTRACT_SCHEMA = (
-    "pi.validation.proof_reuse_gate_contract.v1"
+    "ra.validation.proof_reuse_gate_contract.v1"
 )
 REMOTE_VALIDATION_CONTRACT_PATH = Path(
     "docs/contracts/remote-validation-proof-ledger-contract.json"
@@ -88,29 +88,29 @@ VALIDATION_PROOF_MEMORY_INDEX_CONTRACT_PATH = Path(
 OPERATOR_WORK_RECOMMENDATION_CONTRACT_PATH = Path(
     "docs/contracts/operator-work-recommendation-contract.json"
 )
-EXTENSION_RESOURCE_FIREWALL_MATRIX_SCHEMA = "pi.ext.resource_firewall_matrix.v1"
+EXTENSION_RESOURCE_FIREWALL_MATRIX_SCHEMA = "ra.ext.resource_firewall_matrix.v1"
 EXTENSION_RESOURCE_FIREWALL_MATRIX_CONTRACT_SCHEMA = (
-    "pi.ext.resource_firewall_matrix_contract.v1"
+    "ra.ext.resource_firewall_matrix_contract.v1"
 )
 EXTENSION_RESOURCE_FIREWALL_MATRIX_CONTRACT_PATH = Path(
     "docs/contracts/extension-resource-firewall-matrix-contract.json"
 )
-GIT_CONTEXT_SCHEMA = "pi.swarm.git_context.v1"
-RUNPACK_CAPTURE_SCHEMA = "pi.swarm.operator_runpack_capture.v1"
-AUTOPILOT_INPUT_PACK_SCHEMA = "pi.swarm.autopilot_input_pack.v1"
-AUTOPILOT_INPUT_PACK_CONTRACT_SCHEMA = "pi.swarm.autopilot_input_pack_contract.v1"
-AUTOPILOT_PLAN_SCHEMA = "pi.swarm.autopilot_plan.v1"
-AUTOPILOT_PLAN_CONTRACT_SCHEMA = "pi.swarm.autopilot_plan_contract.v1"
-ACTION_PLAN_SCHEMA = "pi.swarm.action_plan.v1"
-ACTION_PLAN_CONTRACT_SCHEMA = "pi.swarm.action_plan_contract.v1"
-WORK_ADMISSION_GATE_SCHEMA = "pi.swarm.work_admission_gate.v1"
-WORK_ADMISSION_GATE_CONTRACT_SCHEMA = "pi.swarm.work_admission_gate_contract.v1"
+GIT_CONTEXT_SCHEMA = "ra.swarm.git_context.v1"
+RUNPACK_CAPTURE_SCHEMA = "ra.swarm.operator_runpack_capture.v1"
+AUTOPILOT_INPUT_PACK_SCHEMA = "ra.swarm.autopilot_input_pack.v1"
+AUTOPILOT_INPUT_PACK_CONTRACT_SCHEMA = "ra.swarm.autopilot_input_pack_contract.v1"
+AUTOPILOT_PLAN_SCHEMA = "ra.swarm.autopilot_plan.v1"
+AUTOPILOT_PLAN_CONTRACT_SCHEMA = "ra.swarm.autopilot_plan_contract.v1"
+ACTION_PLAN_SCHEMA = "ra.swarm.action_plan.v1"
+ACTION_PLAN_CONTRACT_SCHEMA = "ra.swarm.action_plan_contract.v1"
+WORK_ADMISSION_GATE_SCHEMA = "ra.swarm.work_admission_gate.v1"
+WORK_ADMISSION_GATE_CONTRACT_SCHEMA = "ra.swarm.work_admission_gate_contract.v1"
 WORK_ADMISSION_DRY_RUN_EXECUTOR_SCHEMA = (
-    "pi.swarm.work_admission_dry_run_executor.v1"
+    "ra.swarm.work_admission_dry_run_executor.v1"
 )
-STRUCTURED_INPUT_FUZZ_SCHEMA = "pi.swarm.structured_input_fuzz_harness.v1"
-BUDGET_DRIFT_SCHEMA = "pi.swarm.budget_drift.v1"
-AUTOPILOT_HANDOFF_SCHEMA = "pi.swarm.autopilot_handoff.v1"
+STRUCTURED_INPUT_FUZZ_SCHEMA = "ra.swarm.structured_input_fuzz_harness.v1"
+BUDGET_DRIFT_SCHEMA = "ra.swarm.budget_drift.v1"
+AUTOPILOT_HANDOFF_SCHEMA = "ra.swarm.autopilot_handoff.v1"
 AUTOPILOT_E2E_SCHEMA = "pi.swarm.autopilot_e2e.v1"
 AUTOPILOT_E2E_EVENT_SCHEMA = "pi.swarm.autopilot_e2e.event.v1"
 DEGRADED_COORDINATION_RUNPACK_E2E_SCHEMA = (
@@ -126,81 +126,81 @@ SWARM_INCIDENT_REPLAY_E2E_EVENT_SCHEMA = (
 SWARM_INCIDENT_REPLAY_E2E_CONTRACT_SCHEMA = (
     "pi.swarm.incident_replay_e2e_contract.v1"
 )
-AUTOPILOT_DECISION_GATE_SCHEMA = "pi.swarm.autopilot_decision_gate.v1"
+AUTOPILOT_DECISION_GATE_SCHEMA = "ra.swarm.autopilot_decision_gate.v1"
 AUTOPILOT_DECISION_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.autopilot_decision_gate_contract.v1"
+    "ra.swarm.autopilot_decision_gate_contract.v1"
 )
-CONTEXT_INTELLIGENCE_CLOSEOUT_GATE_SCHEMA = "pi.context_intelligence.closeout_gate.v1"
+CONTEXT_INTELLIGENCE_CLOSEOUT_GATE_SCHEMA = "ra.context_intelligence.closeout_gate.v1"
 CONTEXT_INTELLIGENCE_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.context_intelligence.closeout_gate_contract.v1"
+    "ra.context_intelligence.closeout_gate_contract.v1"
 )
-RUNTIME_INTELLIGENCE_CLOSEOUT_GATE_SCHEMA = "pi.runtime_intelligence.closeout_gate.v1"
+RUNTIME_INTELLIGENCE_CLOSEOUT_GATE_SCHEMA = "ra.runtime_intelligence.closeout_gate.v1"
 RUNTIME_INTELLIGENCE_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.runtime_intelligence.closeout_gate_contract.v1"
+    "ra.runtime_intelligence.closeout_gate_contract.v1"
 )
-FOURTH_WAVE_CLOSEOUT_GATE_SCHEMA = "pi.swarm.fourth_wave_self_healing.closeout_gate.v1"
+FOURTH_WAVE_CLOSEOUT_GATE_SCHEMA = "ra.swarm.fourth_wave_self_healing.closeout_gate.v1"
 FOURTH_WAVE_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.fourth_wave_self_healing.closeout_gate_contract.v1"
+    "ra.swarm.fourth_wave_self_healing.closeout_gate_contract.v1"
 )
-SCRATCH_CLEANUP_PRESSURE_SCHEMA = "pi.cargo_headroom.scratch_cleanup_pressure.v1"
+SCRATCH_CLEANUP_PRESSURE_SCHEMA = "ra.cargo_headroom.scratch_cleanup_pressure.v1"
 ADAPTIVE_EXECUTION_CLOSEOUT_GATE_SCHEMA = (
-    "pi.swarm.adaptive_execution.closeout_gate.v1"
+    "ra.swarm.adaptive_execution.closeout_gate.v1"
 )
 ADAPTIVE_EXECUTION_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.adaptive_execution.closeout_gate_contract.v1"
+    "ra.swarm.adaptive_execution.closeout_gate_contract.v1"
 )
 SIXTH_WAVE_VALIDATION_CLOSEOUT_GATE_SCHEMA = (
-    "pi.swarm.validation_hardening.closeout_gate.v1"
+    "ra.swarm.validation_hardening.closeout_gate.v1"
 )
 SIXTH_WAVE_VALIDATION_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.validation_hardening.closeout_gate_contract.v1"
+    "ra.swarm.validation_hardening.closeout_gate_contract.v1"
 )
 SEVENTH_WAVE_RUNTIME_CLOSEOUT_GATE_SCHEMA = (
-    "pi.swarm.runtime_autonomy.closeout_gate.v1"
+    "ra.swarm.runtime_autonomy.closeout_gate.v1"
 )
 SEVENTH_WAVE_RUNTIME_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.runtime_autonomy.closeout_gate_contract.v1"
+    "ra.swarm.runtime_autonomy.closeout_gate_contract.v1"
 )
 EIGHTH_WAVE_TEST_FABRIC_CLOSEOUT_GATE_SCHEMA = (
-    "pi.swarm.proof_carrying_test_fabric.closeout_gate.v1"
+    "ra.swarm.proof_carrying_test_fabric.closeout_gate.v1"
 )
 EIGHTH_WAVE_TEST_FABRIC_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.proof_carrying_test_fabric.closeout_gate_contract.v1"
+    "ra.swarm.proof_carrying_test_fabric.closeout_gate_contract.v1"
 )
 PREDICTIVE_OPERATIONS_CLOSEOUT_GATE_SCHEMA = (
-    "pi.swarm.predictive_operations.closeout_gate.v1"
+    "ra.swarm.predictive_operations.closeout_gate.v1"
 )
 PREDICTIVE_OPERATIONS_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.predictive_operations.closeout_gate_contract.v1"
+    "ra.swarm.predictive_operations.closeout_gate_contract.v1"
 )
 NINTH_WAVE_CLOSEOUT_GATE_SCHEMA = (
-    "pi.swarm.incident_replay_proof_memory.closeout_gate.v1"
+    "ra.swarm.incident_replay_proof_memory.closeout_gate.v1"
 )
 NINTH_WAVE_CLOSEOUT_GATE_CONTRACT_SCHEMA = (
-    "pi.swarm.incident_replay_proof_memory.closeout_gate_contract.v1"
+    "ra.swarm.incident_replay_proof_memory.closeout_gate_contract.v1"
 )
 BACKPRESSURE_BUDGET_CONTRACT_SCHEMA = (
-    "pi.swarm.provider_rpc_tui_backpressure_budget_contract.v1"
+    "ra.swarm.provider_rpc_tui_backpressure_budget_contract.v1"
 )
 BACKPRESSURE_BUDGET_CONTRACT_SPEC_SCHEMA = (
-    "pi.swarm.provider_rpc_tui_backpressure_budget_contract_spec.v1"
+    "ra.swarm.provider_rpc_tui_backpressure_budget_contract_spec.v1"
 )
 BACKPRESSURE_FAIRNESS_STRESS_GATE_SCHEMA = (
-    "pi.swarm.provider_rpc_tui_fairness_stress_gate.v1"
+    "ra.swarm.provider_rpc_tui_fairness_stress_gate.v1"
 )
-OPERATOR_PERCEIVED_LATENCY_TRACE_SCHEMA = "pi.operator.perceived_latency_trace.v1"
+OPERATOR_PERCEIVED_LATENCY_TRACE_SCHEMA = "ra.operator.perceived_latency_trace.v1"
 OPERATOR_PERCEIVED_LATENCY_TRACE_CONTRACT_SCHEMA = (
-    "pi.operator.perceived_latency_trace_contract.v1"
+    "ra.operator.perceived_latency_trace_contract.v1"
 )
-OPERATOR_SMOOTHNESS_SLO_SCHEMA = "pi.operator.smoothness_slo.v1"
+OPERATOR_SMOOTHNESS_SLO_SCHEMA = "ra.operator.smoothness_slo.v1"
 OPERATOR_SMOOTHNESS_SLO_CONTRACT_SCHEMA = (
-    "pi.operator.smoothness_slo_contract.v1"
+    "ra.operator.smoothness_slo_contract.v1"
 )
-SWARM_INCIDENT_CORPUS_SCHEMA = "pi.swarm.incident_corpus.v1"
-SWARM_INCIDENT_CORPUS_CONTRACT_SCHEMA = "pi.swarm.incident_corpus_contract.v1"
-SWARM_INCIDENT_REPLAY_SCHEMA = "pi.swarm.incident_replay.v1"
-SWARM_INCIDENT_REPLAY_CONTRACT_SCHEMA = "pi.swarm.incident_replay_contract.v1"
-SWARM_REPLAY_PREVIEW_SCHEMA = "pi.swarm.replay_preview.v1"
+SWARM_INCIDENT_CORPUS_SCHEMA = "ra.swarm.incident_corpus.v1"
+SWARM_INCIDENT_CORPUS_CONTRACT_SCHEMA = "ra.swarm.incident_corpus_contract.v1"
+SWARM_INCIDENT_REPLAY_SCHEMA = "ra.swarm.incident_replay.v1"
+SWARM_INCIDENT_REPLAY_CONTRACT_SCHEMA = "ra.swarm.incident_replay_contract.v1"
+SWARM_REPLAY_PREVIEW_SCHEMA = "ra.swarm.replay_preview.v1"
 RUNPACK_CONTRACT_PATH = Path("docs/contracts/swarm-operator-runpack-contract.json")
 TURN_PRESSURE_LEDGER_CONTRACT_PATH = Path(
     "docs/contracts/swarm-turn-pressure-ledger-contract.json"
@@ -1396,7 +1396,7 @@ WORK_SURFACE_RULES: tuple[dict[str, Any], ...] = (
         ),
     },
 )
-FAILURE_ACTION_CATALOG_SCHEMA = "pi.swarm.failure_action_catalog.v1"
+FAILURE_ACTION_CATALOG_SCHEMA = "ra.swarm.failure_action_catalog.v1"
 FAILURE_ACTION_MAX_EXCERPT_CHARS = 520
 RCH_DRIFT_CATEGORY_METADATA: dict[str, dict[str, str]] = {
     "missing_remote_target_directory": {
@@ -1417,7 +1417,7 @@ RCH_DRIFT_CATEGORY_METADATA: dict[str, dict[str, str]] = {
     },
     "worker_workspace_shadow": {
         "drift_class": "infrastructure_drift",
-        "remediation": "Fix the RCH worker checkout/workdir so cargo resolves pi_agent_rust directly; do not treat parent-workspace manifest failures as local code regressions.",
+        "remediation": "Fix the RCH worker checkout/workdir so cargo resolves recur_agent directly; do not treat parent-workspace manifest failures as local code regressions.",
     },
     "artifact_retrieval_warning_after_success": {
         "drift_class": "evidence_retrieval_drift",
@@ -1469,7 +1469,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
             ("Inspect RCH queue", "rch queue"),
             (
                 "Retry with explicit scratch paths",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
             ),
         ),
         "escalation": RCH_DRIFT_CATEGORY_METADATA["missing_remote_target_directory"]["remediation"],
@@ -1494,7 +1494,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
             ("Inspect local scratch headroom", "df -h /data/tmp /tmp"),
             (
                 "Retry with explicit scratch paths",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
             ),
         ),
         "escalation": RCH_DRIFT_CATEGORY_METADATA["rsync_mkstemp_no_such_file"]["remediation"],
@@ -1554,7 +1554,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
             ("Inspect RCH worker health", "rch status --workers --jobs"),
             (
                 "Retry the focused validation after fixing dependency state",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
             ),
         ),
         "escalation": RCH_DRIFT_CATEGORY_METADATA["remote_dependency_preflight_blocked"]["remediation"],
@@ -1579,7 +1579,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
         ),
         "title": "RCH worker cargo resolved a stale parent workspace",
         "explanation": (
-            "Cargo failed before compiling pi_agent_rust because the RCH worker "
+            "Cargo failed before compiling recur_agent because the RCH worker "
             "resolved a parent or sibling workspace that is outside this repo. "
             "Treat this as worker/workdir drift, not as proof of a local Rust "
             "regression."
@@ -1589,7 +1589,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
             ("Inspect RCH queue", "rch queue"),
             (
                 "Retry after worker workspace repair with explicit manifest scope",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --manifest-path /data/projects/pi_agent_rust/Cargo.toml --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --manifest-path /data/projects/recur_agent/Cargo.toml --all-targets",
             ),
         ),
         "escalation": RCH_DRIFT_CATEGORY_METADATA["worker_workspace_shadow"]["remediation"],
@@ -1617,7 +1617,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
             ("Inspect RCH queue", "rch queue"),
             (
                 "Regenerate expected artifacts through RCH",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
             ),
         ),
         "escalation": RCH_DRIFT_CATEGORY_METADATA["artifact_retrieval_warning_after_success"]["remediation"],
@@ -1637,11 +1637,11 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
         "safe_commands": (
             (
                 "Create per-agent scratch directories",
-                "mkdir -p /data/tmp/pi_agent_rust_cargo/${USER:-agent}/target /data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp",
+                "mkdir -p /data/tmp/recur_agent_cargo/${USER:-agent}/target /data/tmp/recur_agent_cargo/${USER:-agent}/tmp",
             ),
             (
                 "Retry compiler check through RCH",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
             ),
         ),
         "escalation": (
@@ -1664,7 +1664,7 @@ FAILURE_ACTION_RULES: tuple[dict[str, Any], ...] = (
             ("Inspect RCH worker health", "rch status --workers --jobs"),
             (
                 "Re-run the focused compiler command through RCH",
-                "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
             ),
         ),
         "escalation": (
@@ -2223,17 +2223,17 @@ def source_payloads(args: argparse.Namespace) -> list[SourcePayload]:
         load_json_source(
             "claim_readiness",
             args.claim_readiness_json,
-            expected_schema="pi.swarm.claim_readiness_report.v1",
+            expected_schema="ra.swarm.claim_readiness_report.v1",
         ),
         load_json_source(
             "smoke_harness",
             args.smoke_summary_json,
-            expected_schema="pi.swarm.smoke_harness.v1",
+            expected_schema="ra.swarm.smoke_harness.v1",
         ),
         load_json_source(
             "activity_digest",
             args.activity_digest_json,
-            expected_schema="pi.swarm.activity_digest.v1",
+            expected_schema="ra.swarm.activity_digest.v1",
         ),
         load_cargo_admission(args.cargo_admission_json),
         load_json_source("beads", args.beads_json),
@@ -2357,7 +2357,7 @@ def autopilot_source_payloads(args: argparse.Namespace) -> list[SourcePayload]:
         load_json_source(
             "activity_digest",
             args.activity_digest_json,
-            expected_schema="pi.swarm.activity_digest.v1",
+            expected_schema="ra.swarm.activity_digest.v1",
         ),
         load_json_source(
             "operator_runpack",
@@ -2708,14 +2708,14 @@ def capture_current_sources(args: argparse.Namespace) -> None:
     elif args.cargo_admission_json is not None:
         generated_source_paths["cargo_admission"] = str(args.cargo_admission_json)
 
-    pi_path = shutil.which("pi")
-    if args.doctor_json is None and pi_path is not None:
+    ra_path = shutil.which("ra")
+    if args.doctor_json is None and ra_path is not None:
         maybe_capture_json_source(
             args=args,
             attr="doctor_json",
             source_id="doctor_swarm",
             command_id="doctor_swarm",
-            command=[pi_path, "doctor", "--only", "swarm", "--format", "json"],
+            command=[ra_path, "doctor", "--only", "swarm", "--format", "json"],
             output_path=capture_dir / "doctor-swarm.json",
             repo_root=repo_root,
             timeout_seconds=timeout_seconds,
@@ -2727,21 +2727,21 @@ def capture_current_sources(args: argparse.Namespace) -> None:
     else:
         result, _ = capture_unavailable(
             "doctor_swarm",
-            ["pi", "doctor", "--only", "swarm", "--format", "json"],
+            ["ra", "doctor", "--only", "swarm", "--format", "json"],
             cwd=repo_root,
-            reason="pi CLI was not found in PATH",
+            reason="ra CLI was not found in PATH",
         )
         commands.append(result)
 
     validation_broker_store = os.environ.get(VALIDATION_BROKER_STORE_ENV, "").strip()
-    if getattr(args, "validation_broker_json", None) is None and pi_path is not None and validation_broker_store:
+    if getattr(args, "validation_broker_json", None) is None and ra_path is not None and validation_broker_store:
         maybe_capture_json_source(
             args=args,
             attr="validation_broker_json",
             source_id="validation_broker",
             command_id="validation_broker_status",
             command=[
-                pi_path,
+                ra_path,
                 "validation-broker",
                 "status",
                 "--store",
@@ -3001,7 +3001,7 @@ def build_resume_commands(args: argparse.Namespace) -> list[dict[str, str]]:
         )
     else:
         capture_dir = "/data/tmp/pi_swarm_runpack/${USER:-agent}-$(date -u +%Y%m%dT%H%M%SZ)"
-    target_root = "/data/tmp/pi_agent_rust_cargo/${USER:-agent}"
+    target_root = "/data/tmp/recur_agent_cargo/${USER:-agent}"
     return [
         {
             "purpose": "Inspect branch and dirty files",
@@ -3563,7 +3563,7 @@ def summarize_doctor(source: SourcePayload, max_items: int) -> dict[str, Any]:
         data_schema = data.get("schema") if isinstance(data, dict) else None
         if "Agent Mail" in title or "reservation" in title:
             agent_mail_findings.append(item)
-        if data_schema == "pi.doctor.agent_mail_build_slots.v1" or "build slot" in title.lower():
+        if data_schema == "ra.doctor.agent_mail_build_slots.v1" or "build slot" in title.lower():
             build_slot_finding = item
         if data_schema == CONTEXT_INTELLIGENCE_SCHEMA:
             context_intelligence_finding = item
@@ -5205,8 +5205,8 @@ def validation_scheduler_predictive_summary(runpack: dict[str, Any]) -> dict[str
 
 def validation_scheduler_required_env() -> dict[str, str]:
     return {
-        "CARGO_TARGET_DIR": "/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target",
-        "TMPDIR": "/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp",
+        "CARGO_TARGET_DIR": "/data/tmp/recur_agent_cargo/${USER:-agent}/target",
+        "TMPDIR": "/data/tmp/recur_agent_cargo/${USER:-agent}/tmp",
     }
 
 
@@ -7854,7 +7854,7 @@ def load_validation_proof_memory_examples(path: Path) -> tuple[dict[str, Any], P
         raise RunpackError(
             f"malformed validation proof-memory examples JSON: {resolved}: {exc}"
         ) from exc
-    if payload.get("schema") != "pi.remote_validation.proof_ledger.example_corpus.v1":
+    if payload.get("schema") != "ra.remote_validation.proof_ledger.example_corpus.v1":
         raise RunpackError(
             f"unexpected validation proof-memory examples schema: {payload.get('schema')}"
         )
@@ -8482,7 +8482,7 @@ def validation_proof_memory_source_ledgers(
                 "ledger": payload,
             }
         ]
-    if schema == "pi.remote_validation.proof_ledger.example_corpus.v1":
+    if schema == "ra.remote_validation.proof_ledger.example_corpus.v1":
         ledgers: list[dict[str, Any]] = []
         for index, case in enumerate(proof_list(payload.get("cases"))):
             if not isinstance(case, dict):
@@ -8525,7 +8525,7 @@ def validation_proof_memory_source_ledgers(
         "proof memory source schema mismatch: "
         f"source_path={source.path} schema={schema} "
         f"expected={REMOTE_VALIDATION_LEDGER_SCHEMA}, "
-        "pi.remote_validation.proof_ledger.example_corpus.v1, or "
+        "ra.remote_validation.proof_ledger.example_corpus.v1, or "
         f"{RUNPACK_SCHEMA}"
     )
 
@@ -10429,7 +10429,7 @@ def build_temp_artifact_inventory(
         else "tracked",
         "purpose": "read_only_temp_artifact_inventory_not_cleanup_executor",
         "known_temp_roots": [
-            "/data/tmp/pi_agent_rust_cargo",
+            "/data/tmp/recur_agent_cargo",
             "/data/tmp",
             "/tmp",
             ".rch-target*",
@@ -10660,7 +10660,7 @@ def build_budget_drift_report(
             evidence_path="source_statuses.host_preflight",
             expected="last accepted budget profile",
             current="not_provided",
-            recommendation="capture pi doctor --only swarm --format json before raising fanout",
+            recommendation="capture ra doctor --only swarm --format json before raising fanout",
         )
 
     current_profile = current_profile or accepted_profile
@@ -12190,7 +12190,7 @@ def build_autopilot_plan(
                 ],
                 commands=[
                     plan_command("Inspect budget drift", "python3 -m json.tool <autopilot-input-pack.json>"),
-                    plan_command("Refresh swarm resource preflight", "pi doctor --only swarm --format json"),
+                    plan_command("Refresh swarm resource preflight", "ra doctor --only swarm --format json"),
                     plan_command("Refresh cargo admission", "./scripts/cargo_headroom.sh --runner rch --admit-only check --all-targets"),
                     plan_command("Inspect active ownership", "br list --status=in_progress --json"),
                 ],
@@ -12569,7 +12569,7 @@ def action_plan_command_safety_class(command: dict[str, Any]) -> str:
         or "cargo_headroom" in lower
     ):
         return "validation_probe"
-    if lower.startswith(("am ", "br ", "git ", "pi doctor")):
+    if lower.startswith(("am ", "br ", "git ", "ra doctor")):
         return "coordination_probe"
     return "read_only_probe"
 
@@ -12642,7 +12642,7 @@ def action_plan_validation_failure(
                     plan_command("Inspect failed validation", "git status --short --branch"),
                     plan_command(
                         "Rerun focused validation through RCH",
-                        "env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+                        "env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
                     ),
                 ],
             }
@@ -13913,7 +13913,7 @@ def operator_next_actions(runpack: dict[str, Any]) -> list[str]:
     if missing:
         actions.append("Capture missing source artifacts: " + ", ".join(sorted(missing)))
     if runpack["doctor_swarm"].get("severity_counts", {}).get("fail", 0):
-        actions.append("Resolve failing `pi doctor --only swarm --format json` findings")
+        actions.append("Resolve failing `ra doctor --only swarm --format json` findings")
     if runpack["beads"].get("stale"):
         actions.append("Review stale in-progress Beads before assigning more work")
     deferred_planning = runpack["beads"].get("deferred_planning")
@@ -15568,7 +15568,7 @@ def canonicalize_golden_string(value: str, workspace: Path) -> str:
     scrubbed = scrubbed.replace(repo_text, "[PROJECT_ROOT]")
     if home_text:
         scrubbed = scrubbed.replace(home_text, "[HOME]")
-    scrubbed = scrubbed.replace("/data/tmp/pi_agent_rust_cargo", "[PI_AGENT_CARGO_TMP]")
+    scrubbed = scrubbed.replace("/data/tmp/recur_agent_cargo", "[RECUR_AGENT_AGENT_CARGO_TMP]")
     scrubbed = scrubbed.replace("/data/tmp", "[DATA_TMP]")
     scrubbed = re.sub(r"(^|\s)/tmp(?=/|$)", r"\1[TMP]", scrubbed)
     scrubbed = SHA256_TEXT_RE.sub("[SHA256]", scrubbed)
@@ -15788,7 +15788,7 @@ def build_structured_swarm_input_fuzz_harness(
     )
 
     nested_payload = {
-        "schema": "pi.swarm.structured_fuzz.nested_tool_payload.v1",
+        "schema": "ra.swarm.structured_fuzz.nested_tool_payload.v1",
         "events": [
             {
                 "id": "tool-call-1",
@@ -15848,7 +15848,7 @@ def build_structured_swarm_input_fuzz_harness(
             Path(__file__).resolve().parent.parent / "scripts" / "build_swarm_operator_runpack.py"
         ),
         "home_path": str(Path.home() / ".config" / "pi" / "settings.json"),
-        "cargo_tmp_path": "/data/tmp/pi_agent_rust_cargo/test/target",
+        "cargo_tmp_path": "/data/tmp/recur_agent_cargo/test/target",
         "data_tmp_path": "/data/tmp/pi-agent/fuzz-artifact.json",
         "root_tmp_path": "/tmp/pi-agent/fuzz-artifact.json",
         "relative_tmp_word": "tests/tmp/fixtures remain literal",
@@ -15860,7 +15860,7 @@ def build_structured_swarm_input_fuzz_harness(
     assert canonical_paths["workspace_path"].startswith("[WORKSPACE]")
     assert canonical_paths["project_path"].startswith("[PROJECT_ROOT]")
     assert canonical_paths["home_path"].startswith("[HOME]")
-    assert canonical_paths["cargo_tmp_path"].startswith("[PI_AGENT_CARGO_TMP]")
+    assert canonical_paths["cargo_tmp_path"].startswith("[RECUR_AGENT_AGENT_CARGO_TMP]")
     assert canonical_paths["data_tmp_path"].startswith("[DATA_TMP]")
     assert canonical_paths["root_tmp_path"].startswith("[TMP]")
     assert canonical_paths["relative_tmp_word"] == "tests/tmp/fixtures remain literal"
@@ -16117,17 +16117,17 @@ def autopilot_e2e_capacity_preflight(
             "unlimited": False,
         },
         "tmpfs_headroom": {
-            "expected_root": "/data/tmp/pi_agent_rust_cargo",
+            "expected_root": "/data/tmp/recur_agent_cargo",
             "paths": [
                 {
                     "env_name": "CARGO_TARGET_DIR",
-                    "path": "/data/tmp/pi_agent_rust_cargo/e2e/target",
+                    "path": "/data/tmp/recur_agent_cargo/e2e/target",
                     "ready": True,
                     "available_kb": max(1, memory_gib * 1024 * 1024 // 2),
                 },
                 {
                     "env_name": "TMPDIR",
-                    "path": "/data/tmp/pi_agent_rust_cargo/e2e/tmp",
+                    "path": "/data/tmp/recur_agent_cargo/e2e/tmp",
                     "ready": True,
                     "available_kb": max(1, memory_gib * 1024 * 1024 // 2),
                 },
@@ -16176,7 +16176,7 @@ def autopilot_e2e_doctor_payload(
                 "title": "Agent Mail probe fixture",
                 "detail": "token=super-secret-value must be redacted",
                 "remediation": None,
-                "data": {"schema": "pi.doctor.agent_mail_build_slots.v1", "active": 0},
+                "data": {"schema": "ra.doctor.agent_mail_build_slots.v1", "active": 0},
                 "fixability": "not_fixable",
             },
             {
@@ -16205,17 +16205,17 @@ def autopilot_e2e_cargo_payload(
     reason: str = "autopilot_e2e_fixture",
 ) -> dict[str, Any]:
     return {
-        "schema": "pi.cargo_headroom.admission.v1",
+        "schema": "ra.cargo_headroom.admission.v1",
         "decision": decision,
         "reason": reason,
         "requested_runner": "rch",
         "resolved_runner": "rch" if decision == "admit" else "none",
         "command_class": "heavy",
         "allow_local_fallback": False,
-        "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/e2e/target",
-        "tmpdir": "/data/tmp/pi_agent_rust_cargo/e2e/tmp",
+        "cargo_target_dir": "/data/tmp/recur_agent_cargo/e2e/target",
+        "tmpdir": "/data/tmp/recur_agent_cargo/e2e/tmp",
         "rch_queue_forecast": {
-            "schema": "pi.cargo_headroom.rch_queue_forecast.v1",
+            "schema": "ra.cargo_headroom.rch_queue_forecast.v1",
             "status": "ok",
             "recommended_action": queue_action,
             "reason": f"e2e_{queue_action}",
@@ -16287,8 +16287,8 @@ def autopilot_e2e_remote_validation_cargo_payload(
             "stdout_excerpt": "Finished dev profile",
         },
         "paths": {
-            "remote_target_dir": "/data/projects/pi_agent_rust/.rch-target-autopilot-e2e",
-            "remote_tmpdir": "/data/projects/pi_agent_rust/.rch-tmp-autopilot-e2e",
+            "remote_target_dir": "/data/projects/recur_agent/.rch-target-autopilot-e2e",
+            "remote_tmpdir": "/data/projects/recur_agent/.rch-tmp-autopilot-e2e",
             "artifact_paths": ["target/debug/.fingerprint"],
         },
     }
@@ -16347,7 +16347,7 @@ def autopilot_e2e_agent_mail_status(
     recovery_mode: str | None = None,
 ) -> dict[str, Any]:
     payload = {
-        "schema": "pi.agent_mail.robot_status.v1",
+        "schema": "ra.agent_mail.robot_status.v1",
         "generated_at": generated_at,
         "status": status,
         "health_level": health_level,
@@ -16370,7 +16370,7 @@ def autopilot_e2e_agent_mail_status(
 
 def autopilot_e2e_agent_mail_reservations(generated_at: str) -> dict[str, Any]:
     return {
-        "schema": "pi.agent_mail.robot_reservations.v1",
+        "schema": "ra.agent_mail.robot_reservations.v1",
         "generated_at": generated_at,
         "status": "ok",
         "reservations": [],
@@ -19514,7 +19514,7 @@ def context_intelligence_child_artifact_map(
             ],
             "docs_or_evidence_paths": ["tests/e2e_agent_loop.rs"],
             "validation_commands": [
-                "rch exec -- cargo test -p pi --lib agent_semantic_context",
+                "rch exec -- cargo test -p ra --lib agent_semantic_context",
                 "rch exec -- cargo test --test semantic_workspace_graph_builder",
             ],
         },
@@ -19781,13 +19781,13 @@ def build_context_intelligence_closeout_gate_summary(
     checklist.append(
         gate_check(
             "preview_surface",
-            "`pi context-preview` exposes read-only JSON/text previews with query, Bead, changed-path, failing-command, and budget controls.",
+            "`ra context-preview` exposes read-only JSON/text previews with query, Bead, changed-path, failing-command, and budget controls.",
             all(
                 (
                     file_contains(cli_path, "ContextPreview"),
                     file_contains(cli_path, "changed-path"),
                     file_contains(main_path, "handle_context_preview_blocking"),
-                    file_contains(main_path, "pi.context_bundle_preview.v1"),
+                    file_contains(main_path, "ra.context_bundle_preview.v1"),
                     file_contains(main_path, "provider_calls: 0"),
                 )
             ),
@@ -19836,7 +19836,7 @@ def build_context_intelligence_closeout_gate_summary(
             "Large-workspace context planner performance budgets have schema, deterministic replay, cache, environment, and metric validation.",
             all(
                 (
-                    file_contains(perf_path, "pi.semantic_context.performance_budget.v1"),
+                    file_contains(perf_path, "ra.semantic_context.performance_budget.v1"),
                     file_contains(perf_path, "context_intelligence_budget_contract_accepts_valid_artifact"),
                     file_contains(perf_path, "context_intelligence_budget_contract_fails_closed_when_missing"),
                     file_contains(perf_path, "context_intelligence_budget_contract_requires_randomized_order_replay"),
@@ -20187,7 +20187,7 @@ def runtime_intelligence_child_artifact_map(
                 "docs/tui.md",
             ],
             "validation_commands": [
-                "rch exec -- cargo test -p pi_agent_rust --test tui_state frame_budget -- --nocapture",
+                "rch exec -- cargo test -p recur_agent --test tui_state frame_budget -- --nocapture",
                 "rch exec -- cargo check --all-targets",
                 "rch exec -- cargo clippy --all-targets -- -D warnings",
             ],
@@ -20387,7 +20387,7 @@ def build_runtime_intelligence_closeout_gate_summary(
                     file_contains(compaction_path, "compaction_admission_decision"),
                     file_contains(compaction_path, "CompactionAdmissionReason"),
                     file_contains(compaction_path, "memory_pressure"),
-                    file_contains(compaction_evidence_path, "pi.compaction.admission.v1"),
+                    file_contains(compaction_evidence_path, "ra.compaction.admission.v1"),
                 )
             ),
             [
@@ -20403,7 +20403,7 @@ def build_runtime_intelligence_closeout_gate_summary(
             all(
                 (
                     file_contains(tool_path, "Full tool output artifact"),
-                    file_contains(tool_path, "pi.tool_output_artifact.v1"),
+                    file_contains(tool_path, "ra.tool_output_artifact.v1"),
                     file_contains(session_path, "tool_result_artifact_metadata_round_trip"),
                     file_contains(agent_path, "artifact"),
                 )
@@ -20421,7 +20421,7 @@ def build_runtime_intelligence_closeout_gate_summary(
             "Provider/model routing evidence exposes latency, errors, staleness, cost hints, and user override posture without secrets.",
             all(
                 (
-                    file_contains(routing_path, "pi.provider_routing.evidence.v1"),
+                    file_contains(routing_path, "ra.provider_routing.evidence.v1"),
                     file_contains(routing_path, "ModelRoutingEvidence"),
                     file_contains(routing_path, "cost_hint_high"),
                     file_contains(selector_path, "routing_evidence_for"),
@@ -20442,7 +20442,7 @@ def build_runtime_intelligence_closeout_gate_summary(
             all(
                 (
                     file_contains(scheduler_path, "scheduler_fairness_replay_under_hostcall_timer_and_event_storms"),
-                    file_contains(scheduler_path, "pi.scheduler.fairness_replay.v1"),
+                    file_contains(scheduler_path, "ra.scheduler.fairness_replay.v1"),
                     file_contains(scheduler_path, "max_class_gap_ticks"),
                 )
             ),
@@ -20455,7 +20455,7 @@ def build_runtime_intelligence_closeout_gate_summary(
             "Large-session TUI frame-budget telemetry is redaction-safe and covers conversation, tool preview, model, branch, and tree surfaces.",
             all(
                 (
-                    file_contains(frame_perf_path, "pi.tui.frame_budget.v1"),
+                    file_contains(frame_perf_path, "ra.tui.frame_budget.v1"),
                     file_contains(frame_perf_path, "snapshot_json"),
                     file_contains(tui_state_path, "tui_frame_budget_snapshot_covers_large_session_surfaces"),
                     file_contains(frame_evidence_path, "large_session_tui_frame_budget.proof.v1"),
@@ -20474,9 +20474,9 @@ def build_runtime_intelligence_closeout_gate_summary(
             "Long-running tool and extension cancellation leaves structured evidence and avoids late-success records.",
             all(
                 (
-                    file_contains(tool_path, "pi.tool.bash.cancellation.v1"),
-                    file_contains(agent_path, "pi.tool.cancellation.v1"),
-                    file_contains(cancellation_evidence_path, "pi.cancellation.cleanup.proof.v1"),
+                    file_contains(tool_path, "ra.tool.bash.cancellation.v1"),
+                    file_contains(agent_path, "ra.tool.cancellation.v1"),
+                    file_contains(cancellation_evidence_path, "ra.cancellation.cleanup.proof.v1"),
                     file_contains(cancellation_evidence_path, "tool_result_recorded_no_success"),
                 )
             ),
@@ -21169,7 +21169,7 @@ def build_fourth_wave_closeout_gate_summary(
                 (
                     file_contains(budget_script_path, "budget lease simulator"),
                     file_contains(budget_script_path, "no_runtime_throttles_enforced"),
-                    file_contains(budget_contract_path, "pi.swarm.budget_lease_simulation.v1"),
+                    file_contains(budget_contract_path, "ra.swarm.budget_lease_simulation.v1"),
                     (root / "tests/fixtures/swarm_budget_leases/scenarios.json").exists(),
                     file_contains(runbook_path, "budget-lease-simulation.json"),
                 )
@@ -21207,7 +21207,7 @@ def build_fourth_wave_closeout_gate_summary(
             all(
                 (
                     file_contains(quarantine_script_path, "Rehearse extension quarantine"),
-                    file_contains(quarantine_contract_path, "pi.extension.quarantine_rehearsal.v1"),
+                    file_contains(quarantine_contract_path, "ra.extension.quarantine_rehearsal.v1"),
                     (root / "tests/fixtures/extension_quarantine_rehearsal/scenarios.json").exists(),
                     file_contains(runbook_path, "extension-quarantine-rehearsal.json"),
                     file_contains(runbook_path, "operator has approved"),
@@ -21227,7 +21227,7 @@ def build_fourth_wave_closeout_gate_summary(
             all(
                 (
                     file_contains(handoff_script_path, "handoff"),
-                    file_contains(handoff_contract_path, "pi.operator.handoff_summary.v1"),
+                    file_contains(handoff_contract_path, "ra.operator.handoff_summary.v1"),
                     (root / "tests/fixtures/operator_handoff_summary/scenarios.json").exists(),
                     file_contains(runbook_path, "Handoff summaries"),
                     file_contains(readme_path, "handoff summaries"),
@@ -21590,7 +21590,7 @@ def build_provider_backpressure_surface(root: Path) -> dict[str, Any]:
         path,
         (
             "BACKPRESSURE_SCHEMA",
-            "pi.test.provider_stream_backpressure.v1",
+            "ra.test.provider_stream_backpressure.v1",
             "event_count",
             "semantic_count",
             "coalesced_or_buffered_count",
@@ -21630,7 +21630,7 @@ def build_provider_backpressure_surface(root: Path) -> dict[str, Any]:
     status = (
         "pass"
         if path.exists()
-        and terms["pi.test.provider_stream_backpressure.v1"]
+        and terms["ra.test.provider_stream_backpressure.v1"]
         and mapping["status"] == "pass"
         and all(semantic_assertions.values())
         else "fail"
@@ -21638,7 +21638,7 @@ def build_provider_backpressure_surface(root: Path) -> dict[str, Any]:
     return {
         "id": "provider_streaming",
         "status": status,
-        "schema": "pi.test.provider_stream_backpressure.v1",
+        "schema": "ra.test.provider_stream_backpressure.v1",
         "evidence_path": "tests/provider_streaming.rs",
         "evidence_kind": "checked_in_test_evidence_source",
         "metric_compatibility": mapping,
@@ -21658,7 +21658,7 @@ def build_rpc_output_backpressure_surface(root: Path) -> dict[str, Any]:
     path = root / "docs/evidence/rpc-output-pressure.jsonl"
     rows = load_jsonl_objects(path)
     matching_rows = [
-        row for row in rows if row.get("schema") == "pi.rpc_output_pressure.v1"
+        row for row in rows if row.get("schema") == "ra.rpc_output_pressure.v1"
     ]
     coalesced_total = 0
     for row in matching_rows:
@@ -21717,7 +21717,7 @@ def build_rpc_output_backpressure_surface(root: Path) -> dict[str, Any]:
     return {
         "id": "rpc_output",
         "status": status,
-        "schema": "pi.rpc_output_pressure.v1",
+        "schema": "ra.rpc_output_pressure.v1",
         "evidence_path": "docs/evidence/rpc-output-pressure.jsonl",
         "evidence_kind": "checked_in_jsonl_evidence",
         "row_count": len(matching_rows),
@@ -21741,7 +21741,7 @@ def build_tui_degradation_backpressure_surface(root: Path) -> dict[str, Any]:
     terms = source_terms_present(
         path,
         (
-            "pi.tui.degradation_drill.v1",
+            "ra.tui.degradation_drill.v1",
             "event_count",
             "semantic_visible_count",
             "coalesced_count",
@@ -21781,7 +21781,7 @@ def build_tui_degradation_backpressure_surface(root: Path) -> dict[str, Any]:
     status = (
         "pass"
         if path.exists()
-        and terms["pi.tui.degradation_drill.v1"]
+        and terms["ra.tui.degradation_drill.v1"]
         and mapping["status"] == "pass"
         and all(semantic_assertions.values())
         else "fail"
@@ -21789,7 +21789,7 @@ def build_tui_degradation_backpressure_surface(root: Path) -> dict[str, Any]:
     return {
         "id": "tui_degradation",
         "status": status,
-        "schema": "pi.tui.degradation_drill.v1",
+        "schema": "ra.tui.degradation_drill.v1",
         "evidence_path": "src/interactive/tests.rs",
         "evidence_kind": "checked_in_test_evidence_source",
         "metric_compatibility": mapping,
@@ -27622,8 +27622,8 @@ def adaptive_execution_child_artifact_map(
             "test_paths": ["tests/provider_streaming.rs"],
             "docs_or_evidence_paths": ["tests/provider_streaming.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test provider_streaming -- --nocapture",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo check --all-targets",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test provider_streaming -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo check --all-targets",
             ],
             "claim_boundary_text": (
                 "Provider backpressure replay evidence does not cover RPC, TUI, "
@@ -27637,7 +27637,7 @@ def adaptive_execution_child_artifact_map(
             "test_paths": ["src/tools.rs"],
             "docs_or_evidence_paths": ["src/tools.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test tools::tests conformance::test_read conformance::test_grep conformance::test_bash",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test tools::tests conformance::test_read conformance::test_grep conformance::test_bash",
             ],
             "claim_boundary_text": (
                 "Tool artifact lifecycle evidence does not delete user files or "
@@ -27651,7 +27651,7 @@ def adaptive_execution_child_artifact_map(
             "test_paths": ["src/session.rs"],
             "docs_or_evidence_paths": ["src/session.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test session::tests session_index::tests",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test session::tests session_index::tests",
             ],
             "claim_boundary_text": (
                 "Branch-heavy replay minimization evidence does not replace "
@@ -27665,7 +27665,7 @@ def adaptive_execution_child_artifact_map(
             "test_paths": ["src/interactive/tests.rs"],
             "docs_or_evidence_paths": ["src/interactive/tests.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test interactive tui -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test interactive tui -- --nocapture",
             ],
             "claim_boundary_text": (
                 "TUI degradation drill evidence does not claim visual perfection "
@@ -27679,7 +27679,7 @@ def adaptive_execution_child_artifact_map(
             "test_paths": ["src/extensions.rs"],
             "docs_or_evidence_paths": ["src/extensions.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test extension_policy ext_conformance",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test extension_policy ext_conformance",
             ],
             "claim_boundary_text": (
                 "Permission drift detection does not mutate installed extensions, "
@@ -27909,7 +27909,7 @@ def build_adaptive_execution_closeout_gate_summary(
             "Branch-heavy session replay emits bounded selected-branch evidence and explicit fallback behavior.",
             all(
                 (
-                    file_contains(session_path, "pi.session.replay_minimization_trace.v1"),
+                    file_contains(session_path, "ra.session.replay_minimization_trace.v1"),
                     file_contains(session_path, "skipped_sibling_entries"),
                     file_contains(session_path, "bounded_selected_branch"),
                     file_contains(session_path, "cold_start_replay_minimization_bounds_branch_heavy"),
@@ -27924,7 +27924,7 @@ def build_adaptive_execution_closeout_gate_summary(
             "TUI degradation drill preserves semantic output and user input under sustained event pressure.",
             all(
                 (
-                    file_contains(interactive_tests_path, "pi.tui.degradation_drill.v1"),
+                    file_contains(interactive_tests_path, "ra.tui.degradation_drill.v1"),
                     file_contains(interactive_tests_path, "redraw_count"),
                     file_contains(interactive_tests_path, "coalesced_count"),
                     file_contains(interactive_tests_path, "preserved_input_count"),
@@ -27964,7 +27964,7 @@ def build_adaptive_execution_closeout_gate_summary(
             "Validation refresh scheduler ranks stale evidence by value, cost, duplicate coverage, headroom, and dirty state without running validation.",
             all(
                 (
-                    file_contains(refresh_scheduler_path, "pi.validation.refresh_scheduler.v1"),
+                    file_contains(refresh_scheduler_path, "ra.validation.refresh_scheduler.v1"),
                     file_contains(refresh_scheduler_path, "must-refresh"),
                     file_contains(refresh_scheduler_path, "duplicate-covered"),
                     file_contains(refresh_scheduler_path, "blocked-by-headroom"),
@@ -28233,7 +28233,7 @@ def sixth_wave_validation_child_artifact_map(
             ],
             "claim_boundary_text": (
                 "RCH workspace-shadow detection does not mutate workers, cancel jobs, "
-                "or claim pi_agent_rust failed to compile when worker checkout scope is wrong."
+                "or claim recur_agent failed to compile when worker checkout scope is wrong."
             ),
         },
         {
@@ -28344,9 +28344,9 @@ def sixth_wave_validation_child_artifact_map(
             "test_paths": ["src/doctor.rs", "tests/doctor_swarm_temp_dir_json.rs"],
             "docs_or_evidence_paths": ["README.md"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test swarm_resource_preflight -- --nocapture",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo check --all-targets",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo clippy --all-targets -- -D warnings",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test swarm_resource_preflight -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo check --all-targets",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo clippy --all-targets -- -D warnings",
             ],
             "claim_boundary_text": (
                 "Swarm resource budget recommendations are advisory and do not create "
@@ -28621,7 +28621,7 @@ def build_sixth_wave_validation_closeout_gate_summary(
                     file_contains(runbook_path, "remote_validation_proof_ledger"),
                     file_contains(
                         root / "docs/contracts/remote-validation-proof-ledger-contract.json",
-                        "pi.remote_validation.proof_ledger_contract.v1",
+                        "ra.remote_validation.proof_ledger_contract.v1",
                     ),
                 )
             ),
@@ -28990,7 +28990,7 @@ def seventh_wave_runtime_child_artifact_map(
             "test_paths": ["src/agent.rs"],
             "docs_or_evidence_paths": ["src/agent.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test compatible_tool_parallelism tool_effect",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test compatible_tool_parallelism tool_effect",
                 "cargo fmt --check",
                 "ubs --staged --only=rust .",
                 "./scripts/reconcile_beads_ledger.sh",
@@ -29028,7 +29028,7 @@ def seventh_wave_runtime_child_artifact_map(
             "test_paths": ["tests/doctor_swarm_temp_dir_json.rs", "src/doctor.rs"],
             "docs_or_evidence_paths": ["README.md"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test swarm_resource_preflight numa",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test swarm_resource_preflight numa",
                 "cargo fmt --check",
                 "ubs --staged --only=rust .",
                 "./scripts/reconcile_beads_ledger.sh",
@@ -29045,7 +29045,7 @@ def seventh_wave_runtime_child_artifact_map(
             "test_paths": ["src/session.rs", "src/session_index.rs"],
             "docs_or_evidence_paths": ["src/session.rs", "src/session_index.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test session replay index",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test session replay index",
                 "cargo fmt --check",
                 "ubs --staged --only=rust .",
                 "./scripts/reconcile_beads_ledger.sh",
@@ -29109,8 +29109,8 @@ def seventh_wave_runtime_child_artifact_map(
                 "scripts/report_swarm_claim_readiness.py",
             ],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test --test extensions_stress hostcall_qos_starvation_projection_preserves_non_flooding_progress",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test scheduler_fairness",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test --test extensions_stress hostcall_qos_starvation_projection_preserves_non_flooding_progress",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test scheduler_fairness",
                 "python3 scripts/report_swarm_claim_readiness.py --self-test",
                 "cargo fmt --check",
                 "ubs --staged --only=rust .",
@@ -29373,7 +29373,7 @@ def build_seventh_wave_runtime_closeout_gate_summary(
                     file_contains(doctor_path, "swarm_lane_placement_plan"),
                     file_contains(doctor_path, "swarm_resource_preflight_lane_placement_covers_large_host_fixture"),
                     file_contains(doctor_test_path, "require_lane_placement_shape"),
-                    file_contains(readme_path, "pi.doctor.swarm_lane_placement.v1"),
+                    file_contains(readme_path, "ra.doctor.swarm_lane_placement.v1"),
                 )
             ),
             [{"path": "src/doctor.rs"}, {"path": "tests/doctor_swarm_temp_dir_json.rs"}],
@@ -29439,7 +29439,7 @@ def build_seventh_wave_runtime_closeout_gate_summary(
             "Extension hostcall QoS regression evidence proves non-flooding progress, S3-FIFO fairness counters, safe fallback status, and BRAVO rollback visibility.",
             all(
                 (
-                    file_contains(extensions_stress_path, "pi.ext.hostcall_qos_starvation_regression.v1"),
+                    file_contains(extensions_stress_path, "ra.ext.hostcall_qos_starvation_regression.v1"),
                     file_contains(extensions_stress_path, "hostcall_qos_starvation_projection_preserves_non_flooding_progress"),
                     file_contains(extensions_stress_path, "s3fifo_fairness_rejected_total"),
                     file_contains(extensions_stress_path, "bravo.rollbacks"),
@@ -29730,7 +29730,7 @@ def eighth_wave_test_fabric_child_artifact_map(
             "test_paths": ["tests/e2e_swarm_flight_recorder.rs"],
             "docs_or_evidence_paths": [".beads/issues.jsonl"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test --test e2e_swarm_flight_recorder no_mock_swarm_lifecycle_e2e_emits_guarded_jsonl",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test --test e2e_swarm_flight_recorder no_mock_swarm_lifecycle_e2e_emits_guarded_jsonl",
                 "cargo fmt --check",
                 "rch exec -- env ... cargo check --all-targets",
                 "rch exec -- env ... cargo clippy --all-targets -- -D warnings",
@@ -29765,7 +29765,7 @@ def eighth_wave_test_fabric_child_artifact_map(
             ],
             "validation_commands": [
                 "python3 -m json.tool docs/evidence/cross-surface-swarm-conformance-matrix.json",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test --test cross_surface_swarm_conformance_matrix -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test --test cross_surface_swarm_conformance_matrix -- --nocapture",
                 "cargo fmt --check",
                 "git diff --check",
                 "rch exec -- env ... cargo check --all-targets",
@@ -29848,7 +29848,7 @@ def eighth_wave_test_fabric_child_artifact_map(
             "test_paths": ["tests/swarm_replay_ingestor.rs"],
             "docs_or_evidence_paths": [".beads/issues.jsonl"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test --test swarm_replay_ingestor metamorphic_swarm -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test --test swarm_replay_ingestor metamorphic_swarm -- --nocapture",
                 "cargo fmt --check",
                 "rch exec -- env ... cargo check --all-targets",
                 "rch exec -- env ... cargo clippy --all-targets -- -D warnings",
@@ -30533,10 +30533,10 @@ def _draft_predictive_operations_child_artifact_map(
                 "docs/evidence/semantic-compaction-quality.json",
             ],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_semantic/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_semantic/tmp cargo test semantic_compaction_quality -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_semantic/target TMPDIR=/data/tmp/recur_agent_cargo/codex_semantic/tmp cargo test semantic_compaction_quality -- --nocapture",
                 "cargo fmt --check",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo check --all-targets",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo clippy --all-targets -- -D warnings",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo check --all-targets",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo clippy --all-targets -- -D warnings",
                 "timeout 60s ubs --staged --only=rust .",
                 "./scripts/reconcile_beads_ledger.sh",
             ],
@@ -30553,10 +30553,10 @@ def _draft_predictive_operations_child_artifact_map(
             "test_paths": ["tests/extensions_stress.rs"],
             "docs_or_evidence_paths": ["tests/extensions_stress.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/tmp cargo test --test extensions_stress hostcall_cost_attribution -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/tmp cargo test --test extensions_stress hostcall_cost_attribution -- --nocapture",
                 "cargo fmt --check",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/tmp cargo check --all-targets",
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/tmp cargo clippy --all-targets -- -D warnings",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/tmp cargo check --all-targets",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/tmp cargo clippy --all-targets -- -D warnings",
                 "git diff --check",
                 "timeout 60s ubs --staged --only=rust .",
                 "./scripts/reconcile_beads_ledger.sh",
@@ -30910,7 +30910,7 @@ def _draft_build_predictive_operations_closeout_gate_summary(
             all(
                 (
                     file_contains(compaction_path, "SEMANTIC_COMPACTION_QUALITY_SCHEMA"),
-                    file_contains(semantic_contract_path, "pi.session.semantic_compaction_quality.v1"),
+                    file_contains(semantic_contract_path, "ra.session.semantic_compaction_quality.v1"),
                     file_contains(semantic_evidence_path, "semantic_compaction_quality_missing_file_reference_fails_closed"),
                     file_contains(compaction_test_path, "semantic_compaction_quality_wrong_branch_marker_fails_closed"),
                     file_contains(compaction_test_path, "semantic_compaction_quality_false_positive_controls_do_not_satisfy_missing_marker"),
@@ -30929,7 +30929,7 @@ def _draft_build_predictive_operations_closeout_gate_summary(
             "Hostcall cost-attribution ledger records abuse roles, hostcall-class rows, S3-FIFO/BRAVO counters, redaction, operator actions, and missing-counter negative controls.",
             all(
                 (
-                    file_contains(extensions_stress_path, "pi.ext.hostcall_cost_attribution.v1"),
+                    file_contains(extensions_stress_path, "ra.ext.hostcall_cost_attribution.v1"),
                     file_contains(extensions_stress_path, "hostcall_cost_attribution_ledger_records_abuse_roles_and_peer_progress"),
                     file_contains(extensions_stress_path, "hostcall_cost_attribution_ledger_rejects_missing_cost_counters"),
                     file_contains(extensions_stress_path, "payload_bodies_redacted"),
@@ -30967,7 +30967,7 @@ def _draft_build_predictive_operations_closeout_gate_summary(
             "Redundant-agent-work detector correlates Beads, Mail availability, git path overlap, stale ownership, and already-closed duplicate requests without mutation or revert/delete advice.",
             all(
                 (
-                    file_contains(claim_readiness_path, "pi.swarm.redundant_agent_work.v1"),
+                    file_contains(claim_readiness_path, "ra.swarm.redundant_agent_work.v1"),
                     file_contains(claim_readiness_path, "already_closed_duplicate_request"),
                     file_contains(claim_readiness_path, "stale_owner_overlap"),
                     file_contains(claim_readiness_path, "degraded_agent_mail"),
@@ -31339,7 +31339,7 @@ def predictive_operations_child_artifact_map(
                 "docs/evidence/semantic-compaction-quality.json",
             ],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_semantic/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_semantic/tmp cargo test semantic_compaction_quality -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_semantic/target TMPDIR=/data/tmp/recur_agent_cargo/codex_semantic/tmp cargo test semantic_compaction_quality -- --nocapture",
                 "cargo fmt --check",
                 "rch exec -- env ... cargo check --all-targets",
                 "rch exec -- env ... cargo clippy --all-targets -- -D warnings",
@@ -31366,7 +31366,7 @@ def predictive_operations_child_artifact_map(
             "test_paths": ["tests/extensions_stress.rs"],
             "docs_or_evidence_paths": ["tests/extensions_stress.rs"],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bd_63x3v_11_4/tmp cargo test --test extensions_stress hostcall_cost_attribution -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bd_63x3v_11_4/tmp cargo test --test extensions_stress hostcall_cost_attribution -- --nocapture",
                 "cargo fmt --check",
                 "rch exec -- env ... cargo check --all-targets",
                 "rch exec -- env ... cargo clippy --all-targets -- -D warnings",
@@ -31755,8 +31755,8 @@ def build_predictive_operations_closeout_gate_summary(
             "Semantic compaction quality evidence preserves structured markers and fail-closes missing file refs, wrong branch markers, stale Beads handoffs, large tool output loss, and false positives.",
             all(
                 (
-                    file_contains(semantic_contract_path, "pi.session.semantic_compaction_quality_contract.v1"),
-                    file_contains(semantic_evidence_path, "pi.session.semantic_compaction_quality.v1"),
+                    file_contains(semantic_contract_path, "ra.session.semantic_compaction_quality_contract.v1"),
+                    file_contains(semantic_evidence_path, "ra.session.semantic_compaction_quality.v1"),
                     file_contains(compaction_src_path, "SEMANTIC_COMPACTION_QUALITY_SCHEMA"),
                     file_contains(compaction_test_path, "semantic_compaction_quality_missing_file_reference_fails_closed"),
                     file_contains(compaction_test_path, "semantic_compaction_quality_wrong_branch_marker_fails_closed"),
@@ -31778,7 +31778,7 @@ def build_predictive_operations_closeout_gate_summary(
                 (
                     file_contains(
                         extensions_stress_path,
-                        "pi.ext.hostcall_cost_attribution.v1",
+                        "ra.ext.hostcall_cost_attribution.v1",
                     ),
                     file_contains(extensions_stress_path, "hostcall_cost_attribution_ledger_records_abuse_roles_and_peer_progress"),
                     file_contains(extensions_stress_path, "hostcall_cost_attribution_ledger_rejects_missing_cost_counters"),
@@ -31819,7 +31819,7 @@ def build_predictive_operations_closeout_gate_summary(
             "Redundant-agent-work detector classifies clean single-owner, overlapping, stale, Mail-unavailable, and already-closed duplicate work without mutating coordination state.",
             all(
                 (
-                    file_contains(claim_readiness_path, "pi.swarm.redundant_agent_work.v1"),
+                    file_contains(claim_readiness_path, "ra.swarm.redundant_agent_work.v1"),
                     file_contains(claim_readiness_path, "build_redundant_agent_work_report"),
                     file_contains(claim_readiness_path, "degraded_agent_mail"),
                     file_contains(claim_readiness_path, "already_closed"),
@@ -32277,7 +32277,7 @@ def ninth_wave_closeout_child_artifact_map(
                 "tests/extensions_stress.rs",
             ],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/<agent>/target TMPDIR=/data/tmp/pi_agent_rust_cargo/<agent>/tmp cargo test --test extensions_stress resource_firewall_matrix -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/<agent>/target TMPDIR=/data/tmp/recur_agent_cargo/<agent>/tmp cargo test --test extensions_stress resource_firewall_matrix -- --nocapture",
                 "cargo fmt --check",
                 "rch exec -- env ... cargo check --all-targets",
                 "rch exec -- env ... cargo clippy --all-targets -- -D warnings",
@@ -33286,7 +33286,7 @@ def ninth_wave_child_artifact_map(
                 "docs/swarm-operations-runbook.md",
             ],
             "validation_commands": [
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/codex_bd_9yq7i_6/target TMPDIR=/data/tmp/pi_agent_rust_cargo/codex_bd_9yq7i_6/tmp cargo test --test extensions_stress resource_firewall_matrix -- --nocapture",
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/codex_bd_9yq7i_6/target TMPDIR=/data/tmp/recur_agent_cargo/codex_bd_9yq7i_6/tmp cargo test --test extensions_stress resource_firewall_matrix -- --nocapture",
                 "cargo fmt --check",
                 "git diff --check",
                 "timeout 60s ubs --staged --only=rust .",
@@ -34159,17 +34159,17 @@ def run_self_test() -> int:
             "unlimited": False,
         },
         "tmpfs_headroom": {
-            "expected_root": "/data/tmp/pi_agent_rust_cargo",
+            "expected_root": "/data/tmp/recur_agent_cargo",
             "paths": [
                 {
                     "env_name": "CARGO_TARGET_DIR",
-                    "path": "/data/tmp/pi_agent_rust_cargo/test/target",
+                    "path": "/data/tmp/recur_agent_cargo/test/target",
                     "ready": True,
                     "available_kb": 52428800,
                 },
                 {
                     "env_name": "TMPDIR",
-                    "path": "/data/tmp/pi_agent_rust_cargo/test/tmp",
+                    "path": "/data/tmp/recur_agent_cargo/test/tmp",
                     "ready": True,
                     "available_kb": 52428800,
                 },
@@ -34199,7 +34199,7 @@ def run_self_test() -> int:
                     "title": "Agent Mail reservations expire soon",
                     "detail": "token=super-secret-value should be redacted",
                     "remediation": "Renew active reservations before long-running verification",
-                    "data": {"schema": "pi.doctor.agent_mail_build_slots.v1", "active": 1},
+                    "data": {"schema": "ra.doctor.agent_mail_build_slots.v1", "active": 1},
                     "fixability": "not_fixable",
                 },
                 {
@@ -34333,7 +34333,7 @@ def run_self_test() -> int:
     claim_path = write_json(
         workspace / "claim.json",
         {
-            "schema": "pi.swarm.claim_readiness_report.v1",
+            "schema": "ra.swarm.claim_readiness_report.v1",
             "overall_status": "ready",
             "max_age_days": 14,
             "artifact_statuses": [
@@ -34351,7 +34351,7 @@ def run_self_test() -> int:
     smoke_path = write_json(
         workspace / "smoke.json",
         {
-            "schema": "pi.swarm.smoke_harness.v1",
+            "schema": "ra.swarm.smoke_harness.v1",
             "status": "pass",
             "correlation_id": "selftest",
             "reservation_ids": [1],
@@ -34374,7 +34374,7 @@ def run_self_test() -> int:
     activity_path = write_json(
         workspace / "activity.json",
         {
-            "schema": "pi.swarm.activity_digest.v1",
+            "schema": "ra.swarm.activity_digest.v1",
             "saturation": {
                 "saturated": True,
                 "signals": ["high_chatter_low_throughput"],
@@ -34390,7 +34390,7 @@ def run_self_test() -> int:
             "schema": SWARM_REPLAY_PREVIEW_SCHEMA,
             "generated_at_utc": generated_at,
             "command": {
-                "invocation": "pi swarm-replay-preview",
+                "invocation": "ra swarm-replay-preview",
                 "cwd": str(workspace),
                 "read_only_replay": True,
                 "provider_calls": 0,
@@ -34399,7 +34399,7 @@ def run_self_test() -> int:
             },
             "trace": {
                 "path": "tests/golden_corpus/swarm_replay_trace/normalized_trace.json",
-                "schema": "pi.swarm.replay_trace.v1",
+                "schema": "ra.swarm.replay_trace.v1",
                 "trace_id": "fixture-preview",
                 "generated_at": generated_at,
                 "source_count": 7,
@@ -34410,7 +34410,7 @@ def run_self_test() -> int:
                 "uncertainty_state": "complete",
             },
             "replay": {
-                "schema": "pi.swarm.replay_report.v1",
+                "schema": "ra.swarm.replay_report.v1",
                 "replayed_event_count": 12,
                 "final_logical_clock": 12,
                 "snapshot_count": 12,
@@ -34441,7 +34441,7 @@ def run_self_test() -> int:
                 "first_saturation_reasons": ["rch_queue_saturated"],
             },
             "policies": {
-                "schema": "pi.swarm.policy_report.v1",
+                "schema": "ra.swarm.policy_report.v1",
                 "requested_policy_ids": [
                     "existing_autopilot",
                     "rch_fanout_limited",
@@ -34512,7 +34512,7 @@ def run_self_test() -> int:
     cargo_path = write_json(
         workspace / "cargo.json",
         {
-            "schema": "pi.cargo_headroom.admission.v1",
+            "schema": "ra.cargo_headroom.admission.v1",
             "decision": "backoff",
             "reason": "rch_queue_saturated",
             "requested_runner": "auto",
@@ -34520,16 +34520,16 @@ def run_self_test() -> int:
             "command_class": "heavy",
             "allow_local_fallback": False,
             "cargo_command": "check --all-targets",
-            "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/test/target",
-            "tmpdir": "/data/tmp/pi_agent_rust_cargo/test/tmp",
+            "cargo_target_dir": "/data/tmp/recur_agent_cargo/test/target",
+            "tmpdir": "/data/tmp/recur_agent_cargo/test/tmp",
             "scratch_cleanup_pressure": {
                 "schema": SCRATCH_CLEANUP_PRESSURE_SCHEMA,
                 "status": "ok",
                 "recommended_action": "manual_review",
                 "reason": "cleanup_candidates_need_approval",
                 "source_kind": "fixture",
-                "planner_schema": "pi.scratch_cleanup_plan.v1",
-                "owner_marker_schema": "pi.scratch_target_owner.v1",
+                "planner_schema": "ra.scratch_cleanup_plan.v1",
+                "owner_marker_schema": "ra.scratch_target_owner.v1",
                 "cleanup_command_authorized": False,
                 "destructive_actions_executed": False,
                 "delete_apply_mode_available": False,
@@ -34552,7 +34552,7 @@ def run_self_test() -> int:
                 ),
             },
             "rch_queue_forecast": {
-                "schema": "pi.cargo_headroom.rch_queue_forecast.v1",
+                "schema": "ra.cargo_headroom.rch_queue_forecast.v1",
                 "status": "ok",
                 "recommended_action": "backoff",
                 "reason": "queue_saturated",
@@ -34595,7 +34595,7 @@ def run_self_test() -> int:
     agent_mail_reservations_path = write_json(
         workspace / "agent-mail-reservations.json",
         {
-            "schema": "pi.agent_mail.robot_reservations.v1",
+            "schema": "ra.agent_mail.robot_reservations.v1",
             "generated_at": generated_at,
             "status": "ok",
             "reservations": [
@@ -34784,7 +34784,7 @@ def run_self_test() -> int:
             },
             "store": {
                 "path": str(workspace / "validation-slots.jsonl"),
-                "schema": "pi.validation_broker.slot_store.v1",
+                "schema": "ra.validation_broker.slot_store.v1",
                 "status": "available",
                 "total_records": 3,
                 "total_slots": 2,
@@ -34940,7 +34940,7 @@ def run_self_test() -> int:
             "temp_artifacts": [
                 {
                     "id": "active_target",
-                    "path": "/data/tmp/pi_agent_rust_cargo/test/target",
+                    "path": "/data/tmp/recur_agent_cargo/test/target",
                     "kind": "cargo_target_dir",
                     "owner": "Codex",
                     "bead_id": "bd-fixture",
@@ -34970,7 +34970,7 @@ def run_self_test() -> int:
                 },
                 {
                     "id": "stale_unknown_target",
-                    "path": "/data/tmp/pi_agent_rust_cargo/unknown/stale-target",
+                    "path": "/data/tmp/recur_agent_cargo/unknown/stale-target",
                     "kind": "cargo_target_dir",
                     "reason": "stale unknown-owner fixture",
                     "state": "stale_candidate",
@@ -35037,7 +35037,7 @@ def run_self_test() -> int:
                 "cargo_admission",
                 None,
                 "ok",
-                "pi.cargo_headroom.admission.v1",
+                "ra.cargo_headroom.admission.v1",
                 {
                     "scratch_cleanup_pressure": {
                         "schema": SCRATCH_CLEANUP_PRESSURE_SCHEMA,
@@ -35064,7 +35064,7 @@ def run_self_test() -> int:
                 "cargo_admission",
                 None,
                 "ok",
-                "pi.cargo_headroom.admission.v1",
+                "ra.cargo_headroom.admission.v1",
                 {
                     "scratch_cleanup_pressure": {
                         "schema": SCRATCH_CLEANUP_PRESSURE_SCHEMA,
@@ -35095,13 +35095,13 @@ def run_self_test() -> int:
         assert temp_inventory["summary"]["entry_count"] >= 4
         assert temp_inventory["summary"]["emitted_deletion_command_count"] == 0
         artifact_by_path = {entry["path"]: entry for entry in temp_inventory["entries"]}
-        assert artifact_by_path["/data/tmp/pi_agent_rust_cargo/test/target"][
+        assert artifact_by_path["/data/tmp/recur_agent_cargo/test/target"][
             "deletion_policy"
         ] == "retain_active"
-        assert artifact_by_path["/data/tmp/pi_agent_rust_cargo/test/target"][
+        assert artifact_by_path["/data/tmp/recur_agent_cargo/test/target"][
             "owner"
         ] == "Codex"
-        assert artifact_by_path["/data/tmp/pi_agent_rust_cargo/test/target"][
+        assert artifact_by_path["/data/tmp/recur_agent_cargo/test/target"][
             "bead_id"
         ] == "bd-fixture"
         assert artifact_by_path[str(workspace / "clean-worktree-validation")][
@@ -35111,7 +35111,7 @@ def run_self_test() -> int:
             "kind"
         ] == "ubs_shadow_workspace"
         stale_unknown = artifact_by_path[
-            "/data/tmp/pi_agent_rust_cargo/unknown/stale-target"
+            "/data/tmp/recur_agent_cargo/unknown/stale-target"
         ]
         assert stale_unknown["state"] == "stale_candidate"
         assert stale_unknown["deletion_policy"] == "deletion_protected_unknown_owner"
@@ -35249,7 +35249,7 @@ def run_self_test() -> int:
         remote_pass_cargo_path = write_json(
             workspace / "cargo-remote-pass.json",
             {
-                "schema": "pi.cargo_headroom.admission.v1",
+                "schema": "ra.cargo_headroom.admission.v1",
                 "decision": "admit",
                 "reason": "rch_available",
                 "requested_runner": "rch",
@@ -35257,10 +35257,10 @@ def run_self_test() -> int:
                 "command_class": "heavy",
                 "allow_local_fallback": False,
                 "cargo_command": "check --all-targets",
-                "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/test/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/test/tmp",
+                "cargo_target_dir": "/data/tmp/recur_agent_cargo/test/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/test/tmp",
                 "rch_queue_forecast": {
-                    "schema": "pi.cargo_headroom.rch_queue_forecast.v1",
+                    "schema": "ra.cargo_headroom.rch_queue_forecast.v1",
                     "status": "ok",
                     "recommended_action": "proceed",
                     "reason": "workers_available",
@@ -35308,8 +35308,8 @@ def run_self_test() -> int:
                         "stdout_excerpt": "Finished dev profile",
                     },
                     "paths": {
-                        "remote_target_dir": "/data/projects/pi_agent_rust/.rch-target-selftest",
-                        "remote_tmpdir": "/data/projects/pi_agent_rust/.rch-tmp-selftest",
+                        "remote_target_dir": "/data/projects/recur_agent/.rch-target-selftest",
+                        "remote_tmpdir": "/data/projects/recur_agent/.rch-tmp-selftest",
                         "artifact_paths": ["target/debug/.fingerprint"],
                     },
                 },
@@ -35391,7 +35391,7 @@ def run_self_test() -> int:
         )
         assert_proof(
             remote_pass_entry["paths"]["remote_target_dir"]
-            == "/data/projects/pi_agent_rust/.rch-target-selftest",
+            == "/data/projects/recur_agent/.rch-target-selftest",
             "remote RCH pass should retain remote target dir",
             remote_pass_entry,
         )
@@ -35895,7 +35895,7 @@ def run_self_test() -> int:
         local_refusal_cargo_path = write_json(
             workspace / "cargo-local-fallback-refusal.json",
             {
-                "schema": "pi.cargo_headroom.admission.v1",
+                "schema": "ra.cargo_headroom.admission.v1",
                 "decision": "deny",
                 "reason": "rch_unavailable_and_remote_required",
                 "requested_runner": "rch",
@@ -35903,8 +35903,8 @@ def run_self_test() -> int:
                 "command_class": "heavy",
                 "allow_local_fallback": False,
                 "cargo_command": "clippy --all-targets -- -D warnings",
-                "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/test/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/test/tmp",
+                "cargo_target_dir": "/data/tmp/recur_agent_cargo/test/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/test/tmp",
                 "remote_validation_proof": {
                     "bead_id": "bd-e5le6.2",
                     "runner": {
@@ -36583,8 +36583,8 @@ def run_self_test() -> int:
         assert rust_groups["all_targets_check"]["action"] == "would_run"
         assert rust_groups["clippy"]["exact_commands"][0] == (
             "rch exec -- env "
-            "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target "
-            "TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp "
+            "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target "
+            "TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp "
             "cargo clippy --all-targets -- -D warnings"
         )
 
@@ -36632,7 +36632,7 @@ def run_self_test() -> int:
             temp_entries=[
                 {
                     "kind": "cargo_target_dir",
-                    "path": "/data/tmp/pi_agent_rust_cargo/stale/target",
+                    "path": "/data/tmp/recur_agent_cargo/stale/target",
                     "state": "stale_candidate",
                     "deletion_policy": "manual_review",
                 }
@@ -36640,7 +36640,7 @@ def run_self_test() -> int:
         )
         assert scheduler_stale_cache["status"] == "degraded"
         assert any(
-            "stale_target_cache=/data/tmp/pi_agent_rust_cargo/stale/target"
+            "stale_target_cache=/data/tmp/recur_agent_cargo/stale/target"
             in group["backoff_reasons"]
             for group in scheduler_stale_cache["command_groups"]
             if group["requires_rch"]
@@ -36707,8 +36707,8 @@ def run_self_test() -> int:
         ) -> dict[str, Any]:
             requires_rch = route_heat_level != "low"
             command = (
-                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target "
-                "TMPDIR=/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp cargo check --all-targets"
+                "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/${USER:-agent}/target "
+                "TMPDIR=/data/tmp/recur_agent_cargo/${USER:-agent}/tmp cargo check --all-targets"
                 if requires_rch
                 else "python3 scripts/build_swarm_operator_runpack.py --self-test"
             )
@@ -36753,7 +36753,7 @@ def run_self_test() -> int:
                     "shared_rch_env": (
                         {
                             "CARGO_TARGET_DIR": (
-                                "/data/tmp/pi_agent_rust_cargo/"
+                                "/data/tmp/recur_agent_cargo/"
                                 "${USER:-agent}/target"
                             )
                         }
@@ -36876,7 +36876,7 @@ def run_self_test() -> int:
             }
 
         semantic_projection: dict[str, Any] = {
-            "schema": "pi.swarm.semantic_route_runpack_projection_golden.v1",
+            "schema": "ra.swarm.semantic_route_runpack_projection_golden.v1",
             "cases": {},
         }
         for semantic_case in (
@@ -36984,7 +36984,7 @@ def run_self_test() -> int:
                         "path": str(workspace / "validation-slots.jsonl"),
                         "configured": True,
                         "exists": True,
-                        "schema": "pi.validation_broker.slot_store.v1",
+                        "schema": "ra.validation_broker.slot_store.v1",
                         "status": "available",
                         "total_records": 1,
                         "total_slots": 1,
@@ -37164,8 +37164,8 @@ def run_self_test() -> int:
         assert_runpack_contract(handoff_runpack)
         handoff_markdown = render_markdown(handoff_runpack)
         assert "Autopilot Handoff" in handoff_markdown
-        assert "pi.swarm.autopilot_input_pack.v1" in handoff_markdown
-        assert "pi.swarm.autopilot_plan.v1" in handoff_markdown
+        assert "ra.swarm.autopilot_input_pack.v1" in handoff_markdown
+        assert "ra.swarm.autopilot_plan.v1" in handoff_markdown
         assert "adjust_swarm_budget" in handoff_markdown
         missing_agent_mail_args = argparse.Namespace(
             **{
@@ -37200,17 +37200,17 @@ def run_self_test() -> int:
         cargo_admit_path = write_json(
             workspace / "cargo-admit.json",
             {
-                "schema": "pi.cargo_headroom.admission.v1",
+                "schema": "ra.cargo_headroom.admission.v1",
                 "decision": "admit",
                 "reason": "healthy_fixture",
                 "requested_runner": "rch",
                 "resolved_runner": "rch",
                 "command_class": "heavy",
                 "allow_local_fallback": False,
-                "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/test/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/test/tmp",
+                "cargo_target_dir": "/data/tmp/recur_agent_cargo/test/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/test/tmp",
                 "rch_queue_forecast": {
-                    "schema": "pi.cargo_headroom.rch_queue_forecast.v1",
+                    "schema": "ra.cargo_headroom.rch_queue_forecast.v1",
                     "status": "ok",
                     "recommended_action": "proceed",
                     "slot_pressure": "available",
@@ -37228,7 +37228,7 @@ def run_self_test() -> int:
         agent_mail_ok_path = write_json(
             workspace / "agent-mail-status-ok.json",
             {
-                "schema": "pi.agent_mail.robot_status.v1",
+                "schema": "ra.agent_mail.robot_status.v1",
                 "generated_at": generated_at,
                 "status": "ok",
                 "health_level": "green",
@@ -37238,7 +37238,7 @@ def run_self_test() -> int:
         agent_mail_reservations_empty_path = write_json(
             workspace / "agent-mail-reservations-empty.json",
             {
-                "schema": "pi.agent_mail.robot_reservations.v1",
+                "schema": "ra.agent_mail.robot_reservations.v1",
                 "generated_at": generated_at,
                 "status": "ok",
                 "reservations": [],
@@ -37526,7 +37526,7 @@ def run_self_test() -> int:
         agent_mail_reservations_provider_path = write_json(
             workspace / "agent-mail-reservations-provider.json",
             {
-                "schema": "pi.agent_mail.robot_reservations.v1",
+                "schema": "ra.agent_mail.robot_reservations.v1",
                 "generated_at": generated_at,
                 "status": "ok",
                 "reservations": [
@@ -37863,7 +37863,7 @@ def run_self_test() -> int:
         agent_mail_readonly_plan = build_failure_fixture_plan(
             "failure-agent-mail-readonly",
             agent_mail_status_payload={
-                "schema": "pi.agent_mail.robot_status.v1",
+                "schema": "ra.agent_mail.robot_status.v1",
                 "generated_at": generated_at,
                 "status": "degraded_read_only",
                 "health_level": "yellow",
@@ -38277,9 +38277,9 @@ def run_self_test() -> int:
                 "id": "cargo_check_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "goldenglacier_bd_h3uv0_8/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "goldenglacier_bd_h3uv0_8/tmp "
                     "rch exec -- cargo check --all-targets"
                 ),
@@ -38288,9 +38288,9 @@ def run_self_test() -> int:
                 "id": "cargo_clippy_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "goldenglacier_bd_h3uv0_8/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "goldenglacier_bd_h3uv0_8/tmp "
                     "rch exec -- cargo clippy --all-targets -- -D warnings"
                 ),
@@ -38420,9 +38420,9 @@ def run_self_test() -> int:
                 "id": "cargo_check_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_ircr3_11/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_ircr3_11/tmp "
                     "rch exec -- cargo check --all-targets"
                 ),
@@ -38431,9 +38431,9 @@ def run_self_test() -> int:
                 "id": "cargo_clippy_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_ircr3_11/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_ircr3_11/tmp "
                     "rch exec -- cargo clippy --all-targets -- -D warnings"
                 ),
@@ -38533,9 +38533,9 @@ def run_self_test() -> int:
                 "id": "cargo_check_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_h66tp_8/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_h66tp_8/tmp "
                     "rch exec -- cargo check --all-targets"
                 ),
@@ -38544,9 +38544,9 @@ def run_self_test() -> int:
                 "id": "cargo_clippy_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_h66tp_8/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_h66tp_8/tmp "
                     "rch exec -- cargo clippy --all-targets -- -D warnings"
                 ),
@@ -38656,9 +38656,9 @@ def run_self_test() -> int:
                 "id": "cargo_check_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_63x3v_7_9/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_63x3v_7_9/tmp "
                     "rch exec -- cargo check --all-targets"
                 ),
@@ -38667,9 +38667,9 @@ def run_self_test() -> int:
                 "id": "cargo_clippy_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
+                    "CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_63x3v_7_9/target "
-                    "TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "TMPDIR=/data/tmp/recur_agent_cargo/"
                     "amberosprey_bd_63x3v_7_9/tmp "
                     "rch exec -- cargo clippy --all-targets -- -D warnings"
                 ),
@@ -39048,8 +39048,8 @@ def run_self_test() -> int:
                 "id": "proof_carrying_swarm_test_fabric_closeout_gate_contract_rch",
                 "status": "pass",
                 "command": (
-                    "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
-                    "codex_bd_zeccr_6/target TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
+                    "codex_bd_zeccr_6/target TMPDIR=/data/tmp/recur_agent_cargo/"
                     "codex_bd_zeccr_6/tmp cargo test --test "
                     "proof_carrying_swarm_test_fabric_closeout_gate_contract -- --nocapture"
                 ),
@@ -39063,8 +39063,8 @@ def run_self_test() -> int:
                 "id": "cargo_check_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
-                    "codex_bd_zeccr_6/target TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
+                    "codex_bd_zeccr_6/target TMPDIR=/data/tmp/recur_agent_cargo/"
                     "codex_bd_zeccr_6/tmp cargo check --all-targets"
                 ),
             },
@@ -39072,8 +39072,8 @@ def run_self_test() -> int:
                 "id": "cargo_clippy_all_targets_rch",
                 "status": "pass",
                 "command": (
-                    "rch exec -- env CARGO_TARGET_DIR=/data/tmp/pi_agent_rust_cargo/"
-                    "codex_bd_zeccr_6/target TMPDIR=/data/tmp/pi_agent_rust_cargo/"
+                    "rch exec -- env CARGO_TARGET_DIR=/data/tmp/recur_agent_cargo/"
+                    "codex_bd_zeccr_6/target TMPDIR=/data/tmp/recur_agent_cargo/"
                     "codex_bd_zeccr_6/tmp cargo clippy --all-targets -- -D warnings"
                 ),
             },
@@ -39871,7 +39871,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--doctor-json",
         type=Path,
-        help="JSON from `pi doctor --only swarm --format json`",
+        help="JSON from `ra doctor --only swarm --format json`",
     )
     parser.add_argument(
         "--claim-readiness-json",
@@ -39883,11 +39883,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="summary.json from run_swarm_smoke_harness.py",
     )
-    parser.add_argument("--activity-digest-json", type=Path, help="pi.swarm.activity_digest.v1 JSON")
+    parser.add_argument("--activity-digest-json", type=Path, help="ra.swarm.activity_digest.v1 JSON")
     parser.add_argument(
         "--swarm-replay-preview-json",
         type=Path,
-        help="optional pi.swarm.replay_preview.v1 JSON from `pi swarm-replay-preview`",
+        help="optional ra.swarm.replay_preview.v1 JSON from `ra swarm-replay-preview`",
     )
     parser.add_argument(
         "--cargo-admission-json",
@@ -39926,22 +39926,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tail-latency-json",
         type=Path,
-        help="pi.operator_tail_latency.v1 JSON from PI_PERF_TELEMETRY",
+        help="ra.operator_tail_latency.v1 JSON from RECUR_AGENT_PERF_TELEMETRY",
     )
     parser.add_argument(
         "--flight-recorder-report-json",
         type=Path,
-        help="pi.swarm.flight_recorder.report.v1 JSON",
+        help="ra.swarm.flight_recorder.report.v1 JSON",
     )
     parser.add_argument(
         "--host-preflight-json",
         type=Path,
-        help="pi.doctor.swarm_resource_preflight.v1 JSON",
+        help="ra.doctor.swarm_resource_preflight.v1 JSON",
     )
     parser.add_argument(
         "--hostcall-swarm-profile-json",
         type=Path,
-        help="pi.ext.hostcall_admission_swarm_profile.v1 JSON",
+        help="ra.ext.hostcall_admission_swarm_profile.v1 JSON",
     )
     parser.add_argument(
         "--session-recovery-swarm-profile-json",
@@ -39956,7 +39956,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rch-artifact-sync-json",
         type=Path,
-        help="pi.rch.artifact_sync_preflight.v1 JSON",
+        help="ra.rch.artifact_sync_preflight.v1 JSON",
     )
     parser.add_argument(
         "--validation-output",
@@ -39974,22 +39974,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--progress-slo-json",
         type=Path,
-        help="optional pi.swarm.progress_slo.v1 JSON to summarize as advisory progress posture",
+        help="optional ra.swarm.progress_slo.v1 JSON to summarize as advisory progress posture",
     )
     parser.add_argument(
         "--stale-evidence-renewal-json",
         type=Path,
-        help="optional pi.swarm.stale_evidence_renewal_queue.v1 JSON to summarize and feed the dry-run action plan",
+        help="optional ra.swarm.stale_evidence_renewal_queue.v1 JSON to summarize and feed the dry-run action plan",
     )
     parser.add_argument(
         "--semantic-route-plan-json",
         type=Path,
-        help="optional pi.validation.semantic_route_plan.v1 JSON to summarize in the operator runpack",
+        help="optional ra.validation.semantic_route_plan.v1 JSON to summarize in the operator runpack",
     )
     parser.add_argument(
         "--operator-runpack-json",
         type=Path,
-        help="optional pi.swarm.operator_runpack.v1 JSON to summarize in the autopilot input pack",
+        help="optional ra.swarm.operator_runpack.v1 JSON to summarize in the autopilot input pack",
     )
     parser.add_argument(
         "--capture-current",
@@ -40022,32 +40022,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-autopilot-input-pack-json",
         type=Path,
-        help="write pi.swarm.autopilot_input_pack.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.autopilot_input_pack.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-autopilot-plan-json",
         type=Path,
-        help="write pi.swarm.autopilot_plan.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.autopilot_plan.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-action-plan-json",
         type=Path,
-        help="write pi.swarm.action_plan.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.action_plan.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-work-admission-gate-json",
         type=Path,
-        help="write pi.swarm.work_admission_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.work_admission_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-predictive-telemetry-ledger-json",
         type=Path,
-        help="write pi.swarm.predictive_telemetry_ledger.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.predictive_telemetry_ledger.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--out-validation-scheduler-plan-json",
         type=Path,
-        help="write pi.swarm.validation_scheduler_plan.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.validation_scheduler_plan.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--run-autopilot-e2e",
@@ -40103,7 +40103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-autopilot-final-gate-json",
         type=Path,
-        help="write pi.swarm.autopilot_decision_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.autopilot_decision_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-autopilot-final-gate",
@@ -40118,7 +40118,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-context-intelligence-final-gate-json",
         type=Path,
-        help="write pi.context_intelligence.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.context_intelligence.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-context-intelligence-final-gate",
@@ -40133,7 +40133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-runtime-intelligence-final-gate-json",
         type=Path,
-        help="write pi.runtime_intelligence.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.runtime_intelligence.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-runtime-intelligence-final-gate",
@@ -40148,7 +40148,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-fourth-wave-final-gate-json",
         type=Path,
-        help="write pi.swarm.fourth_wave_self_healing.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.fourth_wave_self_healing.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-fourth-wave-final-gate",
@@ -40163,7 +40163,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-adaptive-execution-final-gate-json",
         type=Path,
-        help="write pi.swarm.adaptive_execution.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.adaptive_execution.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-adaptive-execution-final-gate",
@@ -40178,7 +40178,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-sixth-wave-final-gate-json",
         type=Path,
-        help="write pi.swarm.validation_hardening.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.validation_hardening.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-sixth-wave-final-gate",
@@ -40193,7 +40193,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-seventh-wave-final-gate-json",
         type=Path,
-        help="write pi.swarm.runtime_autonomy.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.runtime_autonomy.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-seventh-wave-final-gate",
@@ -40208,7 +40208,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-test-fabric-final-gate-json",
         type=Path,
-        help="write pi.swarm.proof_carrying_test_fabric.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.proof_carrying_test_fabric.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-test-fabric-final-gate",
@@ -40223,7 +40223,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-predictive-ops-final-gate-json",
         type=Path,
-        help="write pi.swarm.predictive_operations.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.predictive_operations.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-predictive-ops-final-gate",
@@ -40238,7 +40238,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-ninth-wave-final-gate-json",
         type=Path,
-        help="write pi.swarm.incident_replay_proof_memory.closeout_gate.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.incident_replay_proof_memory.closeout_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-ninth-wave-final-gate",
@@ -40253,7 +40253,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-backpressure-budget-contract-json",
         type=Path,
-        help="write pi.swarm.provider_rpc_tui_backpressure_budget_contract.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.provider_rpc_tui_backpressure_budget_contract.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-backpressure-budget-contract",
@@ -40268,7 +40268,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-operator-perceived-latency-trace-json",
         type=Path,
-        help="write pi.operator.perceived_latency_trace.v1 JSON; refuses to overwrite",
+        help="write ra.operator.perceived_latency_trace.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-operator-perceived-latency-trace",
@@ -40283,7 +40283,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-operator-smoothness-slo-json",
         type=Path,
-        help="write pi.operator.smoothness_slo.v1 JSON; refuses to overwrite",
+        help="write ra.operator.smoothness_slo.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-operator-smoothness-slo",
@@ -40298,7 +40298,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-swarm-incident-corpus-json",
         type=Path,
-        help="write pi.swarm.incident_corpus.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.incident_corpus.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-swarm-incident-corpus",
@@ -40314,12 +40314,12 @@ def parse_args() -> argparse.Namespace:
         "--incident-corpus-json",
         type=Path,
         default=SWARM_INCIDENT_REPLAY_DEFAULT_CORPUS_PATH,
-        help="pi.swarm.incident_corpus.v1 JSON to replay",
+        help="ra.swarm.incident_corpus.v1 JSON to replay",
     )
     parser.add_argument(
         "--out-swarm-incident-replay-json",
         type=Path,
-        help="write pi.swarm.incident_replay.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.incident_replay.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-swarm-incident-replay",
@@ -40365,7 +40365,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-validation-proof-memory-index-json",
         type=Path,
-        help="write pi.validation.proof_memory_index.v1 JSON; refuses to overwrite",
+        help="write ra.validation.proof_memory_index.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-validation-proof-memory-index",
@@ -40381,18 +40381,18 @@ def parse_args() -> argparse.Namespace:
         "--operator-work-incident-replay-json",
         type=Path,
         default=OPERATOR_WORK_RECOMMENDATION_DEFAULT_INCIDENT_REPLAY_PATH,
-        help="pi.swarm.incident_replay.v1 JSON for operator work recommendations",
+        help="ra.swarm.incident_replay.v1 JSON for operator work recommendations",
     )
     parser.add_argument(
         "--operator-work-proof-memory-index-json",
         type=Path,
         default=OPERATOR_WORK_RECOMMENDATION_DEFAULT_PROOF_MEMORY_INDEX_PATH,
-        help="pi.validation.proof_memory_index.v1 JSON for operator work recommendations",
+        help="ra.validation.proof_memory_index.v1 JSON for operator work recommendations",
     )
     parser.add_argument(
         "--out-operator-work-recommendation-json",
         type=Path,
-        help="write pi.swarm.operator_work_recommendation.v1 JSON; refuses to overwrite",
+        help="write ra.swarm.operator_work_recommendation.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-operator-work-recommendation",
@@ -40407,17 +40407,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--proof-ledger-json",
         type=Path,
-        help="pi.remote_validation.proof_ledger.v1 JSON to evaluate for reuse",
+        help="ra.remote_validation.proof_ledger.v1 JSON to evaluate for reuse",
     )
     parser.add_argument(
         "--proof-reuse-context-json",
         type=Path,
-        help="pi.validation.proof_reuse_context.v1 JSON describing the current validation context",
+        help="ra.validation.proof_reuse_context.v1 JSON describing the current validation context",
     )
     parser.add_argument(
         "--out-proof-reuse-gate-json",
         type=Path,
-        help="write pi.validation.proof_reuse_gate.v1 JSON; refuses to overwrite",
+        help="write ra.validation.proof_reuse_gate.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-proof-reuse-gate",
@@ -40438,7 +40438,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out-proof-memory-index-json",
         type=Path,
-        help="write pi.validation.proof_memory_index.v1 JSON; refuses to overwrite",
+        help="write ra.validation.proof_memory_index.v1 JSON; refuses to overwrite",
     )
     parser.add_argument(
         "--print-proof-memory-index",

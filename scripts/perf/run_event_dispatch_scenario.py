@@ -21,7 +21,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = "pi.perf.scenario_runner.v1"
+SCHEMA = "ra.perf.scenario_runner.v1"
 
 
 def project_root() -> Path:

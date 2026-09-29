@@ -18,10 +18,10 @@ from pathlib import Path
 from typing import Any
 
 
-INPUT_SCHEMA = "pi.operator.handoff_summary_input.v1"
-OUTPUT_SCHEMA = "pi.operator.handoff_summary.v1"
-CONTRACT_SCHEMA = "pi.operator.handoff_summary_contract.v1"
-FIXTURE_SCHEMA = "pi.operator.handoff_summary_fixtures.v1"
+INPUT_SCHEMA = "ra.operator.handoff_summary_input.v1"
+OUTPUT_SCHEMA = "ra.operator.handoff_summary.v1"
+CONTRACT_SCHEMA = "ra.operator.handoff_summary_contract.v1"
+FIXTURE_SCHEMA = "ra.operator.handoff_summary_fixtures.v1"
 CONTRACT_PATH = Path("docs/contracts/operator-handoff-summary-contract.json")
 FIXTURE_PATH = Path("tests/fixtures/operator_handoff_summary/scenarios.json")
 GOLDEN_DIR = Path("tests/fixtures/operator_handoff_summary/goldens")
@@ -137,8 +137,8 @@ def normalize_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str
         {
             "schema": INPUT_SCHEMA,
             "project": {
-                "name": str(project.get("name") or "pi_agent_rust"),
-                "root": str(project.get("root") or "/data/projects/pi_agent_rust"),
+                "name": str(project.get("name") or "recur_agent"),
+                "root": str(project.get("root") or "/data/projects/RecurAgent"),
             },
             "git": {
                 "branch": str(git.get("branch") or "unknown"),
@@ -758,7 +758,7 @@ def self_test(*, repo_root: Path, generated_at: str, update_goldens: bool = Fals
             }
         )
     return {
-        "schema": "pi.operator.handoff_summary_self_test.v1",
+        "schema": "ra.operator.handoff_summary_self_test.v1",
         "generated_at": generated_at,
         "status": "pass",
         "golden_mode": "update" if update_goldens else "check",

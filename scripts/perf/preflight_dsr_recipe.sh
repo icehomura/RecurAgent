@@ -14,7 +14,7 @@
 # Usage:
 #   bash scripts/perf/preflight_dsr_recipe.sh \
 #     --dsr /Users/jemanuel/projects/doodlestein_self_releaser/dsr \
-#     --work-dir /Users/jemanuel/projects/pi_agent_rust \
+#     --work-dir /Users/jemanuel/projects/recur_agent \
 #     --out docs/evidence/ri-phase1-recipe-audit-runpack.json
 #
 # Environment overrides:
@@ -88,37 +88,37 @@ if [[ -x "$DSR" ]]; then
   fi
 fi
 
-# ─── 3. Work dir is the pi_agent_rust repo ─────────────────────────
+# ─── 3. Work dir is the recur_agent repo ─────────────────────────
 if [[ -f "$WORKDIR/Cargo.toml" ]] && \
-   grep -q '^name = "pi_agent_rust"' "$WORKDIR/Cargo.toml" 2>/dev/null; then
+   grep -q '^name = "recur_agent"' "$WORKDIR/Cargo.toml" 2>/dev/null; then
   record pass "WORKDIR_IS_PI_AGENT_RUST" "$WORKDIR"
 else
   record fail "WORKDIR_IS_PI_AGENT_RUST" \
-    "$WORKDIR does not look like pi_agent_rust (no Cargo.toml or wrong name)"
+    "$WORKDIR does not look like recur_agent (no Cargo.toml or wrong name)"
 fi
 
 # ─── 4. AGENTS.md forbids direct cargo / RCH; DSR is the path ─────
 if [[ -f "$WORKDIR/AGENTS.md" ]] && \
-   grep -q "dsr quality --tool pi_agent_rust" "$WORKDIR/AGENTS.md"; then
+   grep -q "dsr quality --tool recur_agent" "$WORKDIR/AGENTS.md"; then
   record pass "AGENTS_DSR_GOVERNANCE_PRESENT" "AGENTS.md mandates dsr quality"
 else
   record fail "AGENTS_DSR_GOVERNANCE_PRESENT" \
-    "AGENTS.md does not mention dsr quality --tool pi_agent_rust"
+    "AGENTS.md does not mention dsr quality --tool recur_agent"
 fi
 
-# ─── 5. DSR repos.yaml has a pi_agent_rust entry with checks ──────
+# ─── 5. DSR repos.yaml has a recur_agent entry with checks ──────
 REPOS_YAML="${HOME}/.config/dsr/repos.yaml"
 if [[ -f "$REPOS_YAML" ]] && \
-   grep -q "pi_agent_rust" "$REPOS_YAML"; then
+   grep -q "recur_agent" "$REPOS_YAML"; then
   record pass "DSR_REPOS_YAML_HAS_PI_AGENT_RUST" "$REPOS_YAML"
 else
   record fail "DSR_REPOS_YAML_HAS_PI_AGENT_RUST" \
-    "$REPOS_YAML missing pi_agent_rust entry"
+    "$REPOS_YAML missing recur_agent entry"
 fi
 
 if [[ -x "$DSR" ]]; then
   set +e
-  DSR_DRY=$("$DSR" quality --tool pi_agent_rust --dry-run \
+  DSR_DRY=$("$DSR" quality --tool recur_agent --dry-run \
                --work-dir "$WORKDIR" 2>&1)
   DSR_DRY_RC=$?
   set -e
@@ -210,11 +210,11 @@ fi
 # ─── 13. evidence-contract-schema.json has the perf schemas ─────
 ECS="$WORKDIR/docs/evidence-contract-schema.json"
 SCHEMAS_NEEDED=(
-  "pi.perf.budget_summary.v1"
-  "pi.perf.budget_preflight.v1"
-  "pi.perf.evidence_cache.v1"
+  "ra.perf.budget_summary.v1"
+  "ra.perf.budget_preflight.v1"
+  "ra.perf.evidence_cache.v1"
   "pi.perf.phase1_matrix_validation.v1"
-  "pi.perf.host_topology_fingerprint.v1"
+  "ra.perf.host_topology_fingerprint.v1"
 )
 missing_schemas=()
 if [[ -f "$ECS" ]]; then

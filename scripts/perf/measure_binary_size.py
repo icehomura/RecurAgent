@@ -3,10 +3,10 @@
 
 Canonical binary-size measurement (bd-binary-size-canonical-recipe-zw2e4).
 
-Builds `pi` with the release profile, verifies the artifact is stripped,
+Builds `ra` with the release profile, verifies the artifact is stripped,
 and writes
 `tests/perf/reports/release_evidence/binary_size.json` with schema
-`pi.perf.binary_size.v1` and 17 required fields.
+`ra.perf.binary_size.v1` and 17 required fields.
 
 Exit 0 = artifact written, schema valid, binary stripped.
 Exit 1 = binary not stripped, build failed, or schema invalid.
@@ -24,7 +24,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = "pi.perf.binary_size.v1"
+SCHEMA = "ra.perf.binary_size.v1"
 REQUIRED_FIELDS = (
     "schema", "generated_at", "binary_path", "binary_sha256",
     "size_bytes", "cargo_profile", "compiled_profile_family",
@@ -70,7 +70,7 @@ def main() -> int:
     )
     ap.add_argument(
         "--binary", type=Path, default=None,
-        help="Override binary path (default: <workdir>/target/release/pi)",
+        help="Override binary path (default: <workdir>/target/release/ra)",
     )
     ap.add_argument(
         "--out", type=Path,
@@ -86,11 +86,11 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    binary = args.binary or (args.workdir / "target/release/pi")
+    binary = args.binary or (args.workdir / "target/release/ra")
     if not args.no_build:
         print(f"building {binary} with cargo build --release...", file=sys.stderr)
         proc = subprocess.run(
-            ["cargo", "build", "--release", "--bin", "pi"],
+            ["cargo", "build", "--release", "--bin", "ra"],
             cwd=args.workdir,
             capture_output=True,
             text=True,
@@ -102,7 +102,7 @@ def main() -> int:
                 "schema": SCHEMA,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "binary_path": str(binary),
-                "build_command": "cargo build --release --bin pi",
+                "build_command": "cargo build --release --bin ra",
                 "build_exit_code": proc.returncode,
                 "size_bytes": 0,
                 "size_mb": 0.0,
@@ -146,7 +146,7 @@ def main() -> int:
         "compiled_opt_level": "z",
         "strip": stripped,
         "profile_source": "scripts/perf/measure_binary_size.py",
-        "build_command": "cargo build --release --bin pi",
+        "build_command": "cargo build --release --bin ra",
         "build_exit_code": 0,
         "target_triple": target_triple,
         "binary_basename": binary.name,

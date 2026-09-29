@@ -18,11 +18,11 @@ from pathlib import Path
 from typing import Any
 
 
-INPUT_SCHEMA = "pi.extension.quarantine_rehearsal_input.v1"
-OUTPUT_SCHEMA = "pi.extension.quarantine_rehearsal.v1"
-CONTRACT_SCHEMA = "pi.extension.quarantine_rehearsal_contract.v1"
-FIXTURE_SCHEMA = "pi.extension.quarantine_rehearsal_fixtures.v1"
-ACTION_PLAN_SCHEMA = "pi.swarm.action_plan.v1"
+INPUT_SCHEMA = "ra.extension.quarantine_rehearsal_input.v1"
+OUTPUT_SCHEMA = "ra.extension.quarantine_rehearsal.v1"
+CONTRACT_SCHEMA = "ra.extension.quarantine_rehearsal_contract.v1"
+FIXTURE_SCHEMA = "ra.extension.quarantine_rehearsal_fixtures.v1"
+ACTION_PLAN_SCHEMA = "ra.swarm.action_plan.v1"
 CONTRACT_PATH = Path("docs/contracts/extension-quarantine-rehearsal-contract.json")
 FIXTURE_PATH = Path("tests/fixtures/extension_quarantine_rehearsal/scenarios.json")
 DEFAULT_FAILURE_THRESHOLD = 3
@@ -658,7 +658,7 @@ def self_test(*, repo_root: Path, generated_at: str) -> dict[str, Any]:
             }
         )
     return {
-        "schema": "pi.extension.quarantine_rehearsal_self_test.v1",
+        "schema": "ra.extension.quarantine_rehearsal_self_test.v1",
         "generated_at": generated_at,
         "status": "pass",
         "scenario_count": len(scenario_results),

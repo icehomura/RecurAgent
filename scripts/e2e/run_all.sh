@@ -1248,7 +1248,7 @@ write_shard_manifest() {
     local manifest_file="$ARTIFACT_DIR/ci_shard_manifest.json"
     cat > "$manifest_file" <<SHARDJSON
 {
-  "schema": "pi.verify.shard_manifest.v1",
+  "schema": "ra.verify.shard_manifest.v1",
   "generated_at": "$TIMESTAMP",
   "profile": "$PROFILE",
   "artifact_dir": "$ARTIFACT_DIR",
@@ -2631,7 +2631,7 @@ def explain_policy(profile: str) -> dict:
         "run",
         "--quiet",
         "--bin",
-        "pi",
+        "ra",
         "--",
         "--explain-extension-policy",
         "--extension-policy",
@@ -3433,7 +3433,7 @@ for elapsed, rss_kb in rss_points:
         {
             "schema": "pi.e2e.soak_longevity_event.v1",
             "source": "ext_memory_stress",
-            "event_type": "pi.ext.memory_stress.sample.v1",
+            "event_type": "ra.ext.memory_stress.sample.v1",
             "payload": {
                 "elapsed_secs": elapsed,
                 "rss_kb": rss_kb,
@@ -3447,7 +3447,7 @@ if reactor_compare_metrics["comparison_present"]:
         {
             "schema": "pi.e2e.soak_longevity_event.v1",
             "source": "ext_stress",
-            "event_type": "pi.ext.stress_comparison.v1",
+            "event_type": "ra.ext.stress_comparison.v1",
             "payload": reactor_compare_metrics,
         }
     )
@@ -3870,7 +3870,7 @@ for profile_name in profile_order:
             "profile": profile_name,
             "guidance": profile_recommendation_defaults[profile_name],
             "diagnostic_command": (
-                f"./target/debug/pi --explain-extension-policy --extension-policy {profile_name}"
+                f"./target/debug/ra --explain-extension-policy --extension-policy {profile_name}"
             ),
         }
     )
@@ -5734,7 +5734,7 @@ if profile == "full":
     )
 
 LOG_REQUIRED_FIELDS = {
-    "pi.test.log.v1": [
+    "ra.test.log.v1": [
         "schema",
         "type",
         "seq",
@@ -5744,7 +5744,7 @@ LOG_REQUIRED_FIELDS = {
         "category",
         "message",
     ],
-    "pi.test.log.v2": [
+    "ra.test.log.v2": [
         "schema",
         "type",
         "trace_id",
@@ -5990,7 +5990,7 @@ def parse_test_log_jsonl(check_prefix: str, path: Path) -> dict[str, set[str]]:
         schema = payload.get("schema")
         schema_text = str(schema)
         required = LOG_REQUIRED_FIELDS.get(schema_text)
-        is_artifact_record = schema_text == "pi.test.artifact.v1"
+        is_artifact_record = schema_text == "ra.test.artifact.v1"
         require_condition(
             f"{record_id}.schema_supported",
             path=path,
@@ -5999,8 +5999,8 @@ def parse_test_log_jsonl(check_prefix: str, path: Path) -> dict[str, set[str]]:
             fail_msg=f"unsupported test-log schema {schema!r}",
             strict=True,
             remediation=(
-                "Use pi.test.log.v2 (or v1 where legacy is explicitly required) "
-                "or pi.test.artifact.v1 for inline artifact records."
+                "Use ra.test.log.v2 (or v1 where legacy is explicitly required) "
+                "or ra.test.artifact.v1 for inline artifact records."
             ),
         )
         if is_artifact_record:
@@ -6013,7 +6013,7 @@ def parse_test_log_jsonl(check_prefix: str, path: Path) -> dict[str, set[str]]:
                 strict=True,
                 remediation=(
                     "Ensure inline artifact records in test-log.jsonl emit required "
-                    "pi.test.artifact.v1 fields."
+                    "ra.test.artifact.v1 fields."
                 ),
             )
             continue
@@ -6113,11 +6113,11 @@ def parse_artifact_index_jsonl(
         require_condition(
             f"{record_id}.schema",
             path=path,
-            ok=payload.get("schema") == "pi.test.artifact.v1",
+            ok=payload.get("schema") == "ra.test.artifact.v1",
             ok_msg="artifact-index schema matches",
             fail_msg=f"unexpected artifact schema {payload.get('schema')!r}",
             strict=True,
-            remediation="Emit artifact-index records with schema pi.test.artifact.v1.",
+            remediation="Emit artifact-index records with schema ra.test.artifact.v1.",
         )
         validate_jsonl_record_keys(
             check_id=record_id,
@@ -6793,14 +6793,14 @@ def validate_result_contract(
         check_prefix=f"{check_prefix}.test_log_jsonl.normalized_contract",
         raw_path=test_log_jsonl_path,
         normalized_path=normalized_test_log,
-        allowed_schemas=set(LOG_REQUIRED_FIELDS.keys()) | {"pi.test.artifact.v1"},
+        allowed_schemas=set(LOG_REQUIRED_FIELDS.keys()) | {"ra.test.artifact.v1"},
         enforce_path_placeholder=False,
     )
     validate_normalized_jsonl_pair(
         check_prefix=f"{check_prefix}.artifact_index_jsonl.normalized_contract",
         raw_path=artifact_index_jsonl_path,
         normalized_path=normalized_artifact_index,
-        allowed_schemas={"pi.test.artifact.v1"},
+        allowed_schemas={"ra.test.artifact.v1"},
         enforce_path_placeholder=True,
     )
     return result
@@ -7773,7 +7773,7 @@ if isinstance(summary_report, dict):
         )
 
     schema = summary_report.get("schema")
-    schema_ok = schema == "pi.ext.conformance_summary.v2"
+    schema_ok = schema == "ra.ext.conformance_summary.v2"
     add_check(
         "conformance.summary_schema",
         summary_report_path,
@@ -7782,7 +7782,7 @@ if isinstance(summary_report, dict):
     )
     if not schema_ok:
         message = (
-            f"conformance.summary_schema: expected 'pi.ext.conformance_summary.v2', got {schema!r}"
+            f"conformance.summary_schema: expected 'ra.ext.conformance_summary.v2', got {schema!r}"
         )
         if strict_conformance:
             errors.append(message)
@@ -9073,11 +9073,11 @@ if isinstance(extension_stratification, dict) and perf_extension_stratification_
     require_condition(
         "claim_integrity.extension_stratification_schema",
         path=perf_extension_stratification_path,
-        ok=extension_stratification.get("schema") == "pi.perf.extension_benchmark_stratification.v1",
+        ok=extension_stratification.get("schema") == "ra.perf.extension_benchmark_stratification.v1",
         ok_msg="extension stratification schema matches",
         fail_msg=(
             "extension stratification schema mismatch: expected "
-            "'pi.perf.extension_benchmark_stratification.v1'"
+            "'ra.perf.extension_benchmark_stratification.v1'"
         ),
         strict=claim_integrity_required,
     )
@@ -9251,11 +9251,11 @@ if isinstance(baseline_confidence, dict) and perf_baseline_confidence_path is no
     require_condition(
         "claim_integrity.baseline_confidence_schema",
         path=perf_baseline_confidence_path,
-        ok=baseline_confidence.get("schema") == "pi.perf.baseline_variance_confidence.v1",
+        ok=baseline_confidence.get("schema") == "ra.perf.baseline_variance_confidence.v1",
         ok_msg="baseline confidence schema matches",
         fail_msg=(
             "baseline confidence schema mismatch: expected "
-            "'pi.perf.baseline_variance_confidence.v1'"
+            "'ra.perf.baseline_variance_confidence.v1'"
         ),
         strict=claim_integrity_required,
     )
@@ -10737,23 +10737,23 @@ if isinstance(parameter_sweeps, dict) and perf_parameter_sweeps_path is not None
     require_condition(
         "claim_integrity.parameter_sweeps_schema",
         path=perf_parameter_sweeps_path,
-        ok=parameter_sweeps.get("schema") == "pi.perf.parameter_sweeps.v1",
+        ok=parameter_sweeps.get("schema") == "ra.perf.parameter_sweeps.v1",
         ok_msg="parameter_sweeps schema matches",
         fail_msg=(
-            "parameter_sweeps schema mismatch: expected 'pi.perf.parameter_sweeps.v1'"
+            "parameter_sweeps schema mismatch: expected 'ra.perf.parameter_sweeps.v1'"
         ),
         strict=claim_integrity_required,
         remediation=(
-            "Set parameter_sweeps.schema to pi.perf.parameter_sweeps.v1 in "
+            "Set parameter_sweeps.schema to ra.perf.parameter_sweeps.v1 in "
             "scripts/perf/orchestrate.sh."
         ),
     )
     if (
-        parameter_sweeps.get("schema") != "pi.perf.parameter_sweeps.v1"
+        parameter_sweeps.get("schema") != "ra.perf.parameter_sweeps.v1"
         and claim_integrity_gate_active
     ):
         evidence_missing_or_stale_reasons.append(
-            "parameter_sweeps schema mismatch (expected pi.perf.parameter_sweeps.v1)"
+            "parameter_sweeps schema mismatch (expected ra.perf.parameter_sweeps.v1)"
         )
 
     validate_generated_at_freshness(
@@ -11096,7 +11096,7 @@ if claim_integrity_gate_active:
                     "workload_partition": partition,
                     "status": "pass" if passed else "fail",
                     "present_in_records": passed,
-                    "source": "pi.perf.baseline_variance_confidence.v1.records",
+                    "source": "ra.perf.baseline_variance_confidence.v1.records",
                     "reason": (
                         "coverage present in baseline confidence records"
                         if passed
@@ -11109,7 +11109,7 @@ if claim_integrity_gate_active:
             )
 
     scenario_cell_status_payload = {
-        "schema": "pi.claim_integrity.scenario_cell_status.v1",
+        "schema": "ra.claim_integrity.scenario_cell_status.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "correlation_id": expected_claim_correlation_id,
         "artifact_dir": str(artifact_dir),
@@ -11725,7 +11725,7 @@ if claim_integrity_gate_active:
     }
 
     adjudication_matrix_payload = {
-        "schema": "pi.claim_integrity.evidence_adjudication_matrix.v1",
+        "schema": "ra.claim_integrity.evidence_adjudication_matrix.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "correlation_id": expected_claim_correlation_id,
         "artifact_dir": str(artifact_dir),
@@ -11791,11 +11791,11 @@ if claim_integrity_gate_active:
         "claim_integrity.evidence_adjudication_matrix_schema",
         path=adjudication_matrix_json_path,
         ok=adjudication_matrix_payload.get("schema")
-        == "pi.claim_integrity.evidence_adjudication_matrix.v1",
+        == "ra.claim_integrity.evidence_adjudication_matrix.v1",
         ok_msg="evidence-adjudication matrix schema matches",
         fail_msg=(
             "evidence-adjudication matrix schema mismatch: expected "
-            "'pi.claim_integrity.evidence_adjudication_matrix.v1'"
+            "'ra.claim_integrity.evidence_adjudication_matrix.v1'"
         ),
         strict=claim_integrity_required,
     )
@@ -11861,16 +11861,16 @@ if isinstance(franken_node_mission_contract, dict):
         "claim_integrity.franken_node_mission_contract_schema",
         path=franken_node_mission_contract_path,
         ok=str(franken_node_mission_contract.get("schema", "")).strip()
-        == "pi.franken_node.mission_contract.v1",
+        == "ra.franken_node.mission_contract.v1",
         ok_msg="FrankenNode mission contract schema matches",
         fail_msg=(
             "FrankenNode mission contract schema must be "
-            "'pi.franken_node.mission_contract.v1'"
+            "'ra.franken_node.mission_contract.v1'"
         ),
         strict=True,
         remediation=(
             "Set docs/franken-node-mission-contract.json schema to "
-            "pi.franken_node.mission_contract.v1."
+            "ra.franken_node.mission_contract.v1."
         ),
     )
     require_condition(
@@ -12097,7 +12097,7 @@ if isinstance(franken_node_mission_contract, dict):
     if isinstance(kernel_boundary_manifest, dict):
         kernel_boundary_schema = str(kernel_boundary_manifest.get("schema", "")).strip()
         kernel_boundary_schema_ok = (
-            kernel_boundary_schema == "pi.frankennode.kernel_extraction_boundary_manifest.v1"
+            kernel_boundary_schema == "ra.frankennode.kernel_extraction_boundary_manifest.v1"
         )
         require_condition(
             "claim_integrity.franken_node_kernel_boundary_manifest_schema",
@@ -12106,7 +12106,7 @@ if isinstance(franken_node_mission_contract, dict):
             ok_msg="kernel-boundary manifest schema matches expected contract",
             fail_msg=(
                 "kernel-boundary manifest schema must be "
-                "'pi.frankennode.kernel_extraction_boundary_manifest.v1'"
+                "'ra.frankennode.kernel_extraction_boundary_manifest.v1'"
             ),
             strict=claim_integrity_required,
         )
@@ -12275,7 +12275,7 @@ if isinstance(franken_node_mission_contract, dict):
     )
 
     franken_node_kernel_boundary_drift_report_payload = {
-        "schema": "pi.franken_node.kernel_boundary_drift_report.v1",
+        "schema": "ra.franken_node.kernel_boundary_drift_report.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "run_id": expected_claim_correlation_id,
         "correlation_id": expected_claim_correlation_id,
@@ -12322,12 +12322,12 @@ if isinstance(franken_node_mission_contract, dict):
         path=franken_node_kernel_boundary_drift_report_json_path,
         ok=(
             franken_node_kernel_boundary_drift_report_payload.get("schema")
-            == "pi.franken_node.kernel_boundary_drift_report.v1"
+            == "ra.franken_node.kernel_boundary_drift_report.v1"
         ),
         ok_msg="kernel-boundary drift report schema matches",
         fail_msg=(
             "kernel-boundary drift report schema must be "
-            "'pi.franken_node.kernel_boundary_drift_report.v1'"
+            "'ra.franken_node.kernel_boundary_drift_report.v1'"
         ),
         strict=claim_integrity_required,
     )
@@ -12489,7 +12489,7 @@ if isinstance(franken_node_mission_contract, dict):
     if isinstance(strict_verdict_payload, dict):
         strict_verdict_schema = str(strict_verdict_payload.get("schema", "")).strip()
         strict_verdict_schema_ok = (
-            strict_verdict_schema == "pi.dropin.certification_verdict.v1"
+            strict_verdict_schema == "ra.dropin.certification_verdict.v1"
         )
         strict_verdict_observed = str(
             strict_verdict_payload.get("overall_verdict", "")
@@ -12498,7 +12498,7 @@ if isinstance(franken_node_mission_contract, dict):
             strict_verdict_observed = str(strict_verdict_payload.get("verdict", "")).strip()
         if not strict_verdict_schema_ok:
             strict_replacement_blocking_reasons.append(
-                "strict replacement verdict schema must be pi.dropin.certification_verdict.v1"
+                "strict replacement verdict schema must be ra.dropin.certification_verdict.v1"
             )
         if strict_verdict_observed.upper() != strict_verdict_required:
             strict_replacement_blocking_reasons.append(
@@ -12589,7 +12589,7 @@ if isinstance(franken_node_mission_contract, dict):
     )
 
     franken_node_claim_gate_status_payload = {
-        "schema": "pi.franken_node.claim_gate_status.v1",
+        "schema": "ra.franken_node.claim_gate_status.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "correlation_id": expected_claim_correlation_id,
         "mission_contract": {
@@ -12837,7 +12837,7 @@ if isinstance(kernel_boundary_drift_report, dict):
         path=kernel_boundary_drift_report_path,
         ok=(
             kernel_boundary_drift_report.get("schema")
-            == "pi.franken_node.kernel_boundary_drift_report.v1"
+            == "ra.franken_node.kernel_boundary_drift_report.v1"
         ),
         ok_msg="kernel-boundary drift report schema is correct",
         fail_msg=(
@@ -12923,7 +12923,7 @@ if isinstance(baseline_payload, dict):
         )
 
         policy_schema = exception_policy.get("schema")
-        schema_ok = policy_schema == "pi.ext.exception_policy.v1"
+        schema_ok = policy_schema == "ra.ext.exception_policy.v1"
         add_check(
             "conformance.exception_policy.schema",
             baseline_path,
@@ -12935,7 +12935,7 @@ if isinstance(baseline_payload, dict):
         if not schema_ok:
             message = (
                 "conformance.exception_policy.schema: expected "
-                f"'pi.ext.exception_policy.v1', got {policy_schema!r}"
+                f"'ra.ext.exception_policy.v1', got {policy_schema!r}"
             )
             if strict_conformance:
                 errors.append(message)
@@ -13122,7 +13122,7 @@ require_condition(
 )
 status = "pass" if not errors else "fail"
 contract_payload = {
-    "schema": "pi.evidence.contract.v1",
+    "schema": "ra.evidence.contract.v1",
     "generated_at": generated_at,
     "profile": profile,
     "artifact_dir": str(artifact_dir),
@@ -13147,7 +13147,7 @@ contract_payload = {
     "remediation_hints": sorted(remediation_hints),
     "claim_integrity_scenario_cells": (
         {
-            "schema": "pi.claim_integrity.scenario_cell_status.v1",
+            "schema": "ra.claim_integrity.scenario_cell_status.v1",
             "path": str(scenario_cell_status_json_path),
             "markdown_path": str(scenario_cell_status_markdown_path)
             if scenario_cell_status_markdown_path is not None
@@ -13163,7 +13163,7 @@ contract_payload = {
     ),
     "claim_integrity_adjudication_matrix": (
         {
-            "schema": "pi.claim_integrity.evidence_adjudication_matrix.v1",
+            "schema": "ra.claim_integrity.evidence_adjudication_matrix.v1",
             "path": str(adjudication_matrix_json_path),
             "markdown_path": str(adjudication_matrix_markdown_path)
             if adjudication_matrix_markdown_path is not None
@@ -13179,7 +13179,7 @@ contract_payload = {
     ),
     "franken_node_claim_gate_status": (
         {
-            "schema": "pi.franken_node.claim_gate_status.v1",
+            "schema": "ra.franken_node.claim_gate_status.v1",
             "path": str(franken_node_claim_gate_status_json_path),
             "requested_claim_tier": (
                 franken_node_claim_gate_status_payload.get("requested_claim_tier")
@@ -13209,7 +13209,7 @@ contract_payload = {
     ),
     "franken_node_kernel_boundary_drift_report": (
         {
-            "schema": "pi.franken_node.kernel_boundary_drift_report.v1",
+            "schema": "ra.franken_node.kernel_boundary_drift_report.v1",
             "path": str(franken_node_kernel_boundary_drift_report_json_path),
             "summary": (
                 franken_node_kernel_boundary_drift_report_payload.get("summary", {})
@@ -13230,7 +13230,7 @@ if status != "pass":
 
 if isinstance(summary, dict):
     summary["evidence_contract"] = {
-        "schema": "pi.evidence.contract.v1",
+        "schema": "ra.evidence.contract.v1",
         "correlation_id": contract_correlation_id,
         "source_commit": source_commit,
         "source_snapshot": source_snapshot,
@@ -13244,7 +13244,7 @@ if isinstance(summary, dict):
         scenario_cell_status_payload, dict
     ):
         summary["claim_integrity_scenario_cells"] = {
-            "schema": "pi.claim_integrity.scenario_cell_status.v1",
+            "schema": "ra.claim_integrity.scenario_cell_status.v1",
             "path": str(scenario_cell_status_json_path),
             "markdown_path": str(scenario_cell_status_markdown_path)
             if scenario_cell_status_markdown_path is not None
@@ -13255,7 +13255,7 @@ if isinstance(summary, dict):
         adjudication_matrix_payload, dict
     ):
         summary["claim_integrity_adjudication_matrix"] = {
-            "schema": "pi.claim_integrity.evidence_adjudication_matrix.v1",
+            "schema": "ra.claim_integrity.evidence_adjudication_matrix.v1",
             "path": str(adjudication_matrix_json_path),
             "markdown_path": str(adjudication_matrix_markdown_path)
             if adjudication_matrix_markdown_path is not None
@@ -13266,7 +13266,7 @@ if isinstance(summary, dict):
         franken_node_claim_gate_status_payload, dict
     ):
         summary["franken_node_claim_gate_status"] = {
-            "schema": "pi.franken_node.claim_gate_status.v1",
+            "schema": "ra.franken_node.claim_gate_status.v1",
             "path": str(franken_node_claim_gate_status_json_path),
             "requested_claim_tier": franken_node_claim_gate_status_payload.get(
                 "requested_claim_tier"
@@ -13284,7 +13284,7 @@ if isinstance(summary, dict):
         franken_node_kernel_boundary_drift_report_payload, dict
     ):
         summary["franken_node_kernel_boundary_drift_report"] = {
-            "schema": "pi.franken_node.kernel_boundary_drift_report.v1",
+            "schema": "ra.franken_node.kernel_boundary_drift_report.v1",
             "path": str(franken_node_kernel_boundary_drift_report_json_path),
             "summary": franken_node_kernel_boundary_drift_report_payload.get(
                 "summary",
@@ -13330,7 +13330,7 @@ PY
 
 main() {
     echo "═══════════════════════════════════════════════════════════════"
-    echo " Pi Agent Rust — Unified Verification Runner"
+    echo " Recur Agent — Unified Verification Runner"
     echo " Timestamp: $TIMESTAMP"
     echo " Profile: $PROFILE"
     echo " Artifact dir: $ARTIFACT_DIR"

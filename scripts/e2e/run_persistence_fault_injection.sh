@@ -17,7 +17,7 @@ import stat
 import sys
 from pathlib import Path
 
-lock_path = Path("/tmp/pi_agent_rust-persistence-fault-injection-reports.lock")
+lock_path = Path("/tmp/recur_agent-persistence-fault-injection-reports.lock")
 try:
     if sys.argv[1] != "1":
         raise ValueError("lock-held flag is absent")
@@ -45,7 +45,7 @@ from pathlib import Path
 
 script = Path(sys.argv[1]).resolve()
 arguments = sys.argv[2:]
-lock_path = Path("/tmp/pi_agent_rust-persistence-fault-injection-reports.lock")
+lock_path = Path("/tmp/recur_agent-persistence-fault-injection-reports.lock")
 lock_path.parent.mkdir(parents=True, exist_ok=True)
 lock_flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
 lock_fd = os.open(lock_path, lock_flags, 0o600)
@@ -195,13 +195,13 @@ PY
 SOURCE_TREE_DIGEST="$(source_tree_digest)"
 
 default_build_root() {
-    local base="/data/tmp/pi_agent_rust"
+    local base="/data/tmp/recur_agent"
     local resolved=""
 
     if [[ -e "$base" ]] && resolved="$(cd "$base" && pwd -P 2>/dev/null)"; then
         case "$resolved" in
             "$PROJECT_ROOT"|"$PROJECT_ROOT"/*)
-                base="/data/tmp/pi_agent_rust_cargo"
+                base="/data/tmp/recur_agent_cargo"
                 ;;
         esac
     fi
@@ -705,7 +705,7 @@ def log_record_is_valid(record: dict, expected_test_name: str) -> bool:
     }
     if not required_fields.issubset(record):
         return False
-    if record.get("schema") != "pi.test.log.v2" or record.get("type") != "log":
+    if record.get("schema") != "ra.test.log.v2" or record.get("type") != "log":
         return False
     if record.get("test") != expected_test_name:
         return False
@@ -736,7 +736,7 @@ def artifact_envelope_is_valid(record: dict, expected_test_name: str) -> bool:
     required_fields = {"schema", "type", "seq", "ts", "t_ms", "name", "path"}
     if not required_fields.issubset(record):
         return False
-    if record.get("schema") != "pi.test.artifact.v1":
+    if record.get("schema") != "ra.test.artifact.v1":
         return False
     if record.get("type") != "artifact" or record.get("test") != expected_test_name:
         return False
@@ -786,7 +786,7 @@ def inline_summary_bytes_are_valid(
     payload_records = [
         record
         for record in diagnostic_records
-        if record.get("schema") == "pi.test.log.v2"
+        if record.get("schema") == "ra.test.log.v2"
         and record.get("type") == "log"
         and record.get("test") == expected_test_name
         and record.get("category") == "artifact_payload"
@@ -901,7 +901,7 @@ def case_checks(
     logs = [
         record
         for record in diagnostic_records
-        if record.get("schema") == "pi.test.log.v2" and record.get("type") == "log"
+        if record.get("schema") == "ra.test.log.v2" and record.get("type") == "log"
     ]
     artifacts = load_jsonl(case_dir / "artifact-index.jsonl")
     try:
@@ -952,7 +952,7 @@ def case_checks(
     )
     diagnostic_log_schema_valid = bool(logs) and all(
         log_record_is_valid(record, expected_test_name)
-        if record.get("schema") == "pi.test.log.v2"
+        if record.get("schema") == "ra.test.log.v2"
         else artifact_envelope_is_valid(record, expected_test_name)
         for record in diagnostic_records
     )

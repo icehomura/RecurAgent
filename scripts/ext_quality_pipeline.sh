@@ -226,7 +226,7 @@ run_step "cargo-fmt" cargo fmt --check
 
 # Stage 2: Clippy
 run_compile_step "clippy-lib" clippy --locked --lib -- -D warnings
-run_compile_step "clippy-bin" clippy --locked --bin pi -- -D warnings
+run_compile_step "clippy-bin" clippy --locked --bin ra -- -D warnings
 
 # Stage 3: Cargo check (catches compilation errors in test files). The
 # ext_conformance target executes the internal legacy-capture binary, so the
@@ -296,7 +296,7 @@ if [[ "$REPORT_JSON" -eq 1 ]]; then
 
     cat <<EOF
 {
-  "schema": "pi.ext_quality_pipeline.v1",
+  "schema": "ra.ext_quality_pipeline.v1",
   "mode": "$MODE",
   "cargo_runner_request": "$CARGO_RUNNER_REQUEST",
   "cargo_runner_mode": "$CARGO_RUNNER_MODE",

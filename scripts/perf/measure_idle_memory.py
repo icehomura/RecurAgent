@@ -3,11 +3,11 @@
 
 Canonical idle-memory measurement recipe (bd-idle-memory-canonical-recipe-vrk8m).
 
-Spawns the user-facing release binary `target/release/pi` in a steady
+Spawns the user-facing release binary `target/release/ra` in a steady
 idle mode, samples RSS over 5 seconds after a 5s settle window, and
 writes a canonical artifact at
 `tests/perf/reports/release_evidence/idle_memory_rss.json` with schema
-`pi.perf.idle_memory_rss.v1`.
+`ra.perf.idle_memory_rss.v1`.
 
 The five measurement taxonomies are:
   1. cold-start idle (just spawned, no model loaded)
@@ -36,7 +36,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = "pi.perf.idle_memory_rss.v1"
+SCHEMA = "ra.perf.idle_memory_rss.v1"
 SETTLE_SECONDS = 5.0
 SAMPLE_INTERVAL_SECONDS = 1.0
 SAMPLE_COUNT = 5
@@ -104,8 +104,8 @@ def main() -> int:
     ap.add_argument(
         "--binary",
         type=Path,
-        default=project_root() / "target/release/pi",
-        help="Path to the release binary (default: target/release/pi)",
+        default=project_root() / "target/release/ra",
+        help="Path to the release binary (default: target/release/ra)",
     )
     ap.add_argument(
         "--idle-state",

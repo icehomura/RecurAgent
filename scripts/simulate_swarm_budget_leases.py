@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import Any
 
 
-INPUT_SCHEMA = "pi.swarm.budget_lease_request.v1"
-OUTPUT_SCHEMA = "pi.swarm.budget_lease_simulation.v1"
-CONTRACT_SCHEMA = "pi.swarm.budget_lease_simulator_contract.v1"
-FIXTURE_SCHEMA = "pi.swarm.budget_lease_simulator_fixtures.v1"
+INPUT_SCHEMA = "ra.swarm.budget_lease_request.v1"
+OUTPUT_SCHEMA = "ra.swarm.budget_lease_simulation.v1"
+CONTRACT_SCHEMA = "ra.swarm.budget_lease_simulator_contract.v1"
+FIXTURE_SCHEMA = "ra.swarm.budget_lease_simulator_fixtures.v1"
 CONTRACT_PATH = Path("docs/contracts/swarm-budget-lease-simulator-contract.json")
 FIXTURE_PATH = Path("tests/fixtures/swarm_budget_leases/scenarios.json")
 DEFAULT_TTL_SECONDS = 3600
@@ -644,7 +644,7 @@ def run_self_test(repo_root: Path) -> int:
     print(
         json_dumps(
             {
-                "schema": "pi.swarm.budget_lease_simulator_self_test.v1",
+                "schema": "ra.swarm.budget_lease_simulator_self_test.v1",
                 "status": "pass",
                 "scenario_count": len(seen),
                 "scenarios": sorted(seen),

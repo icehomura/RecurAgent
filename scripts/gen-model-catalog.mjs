@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Model-catalog generator for pi_agent_rust (gh #117 — optional "source the
+// Model-catalog generator for recur_agent (gh #117 — optional "source the
 // catalog from the upstream generated @earendil-works/pi-ai artifact" path).
 //
 // WHAT

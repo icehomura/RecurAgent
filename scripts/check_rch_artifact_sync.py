@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "pi.rch.artifact_sync_preflight.v1"
+SCHEMA = "ra.rch.artifact_sync_preflight.v1"
 INVOCATION_IDENTITY_KEYS = frozenset(
     {"source_commit", "correlation_id", "command_digest"}
 )

@@ -43,7 +43,7 @@
 #   PERF_FAULT_INJECTION_ROOT Optional persistence-fault evidence root for hermetic runs
 #   PERF_MAX_BENCH_ENV_NOISE_SCORE  Maximum admissible benches/bench_env.rs score (default: 0)
 #   PERF_EVIDENCE_CACHE_DIR   Optional perf evidence cache directory (default: $CARGO_TARGET_DIR/perf/evidence_cache)
-#   PI_PERF_EVIDENCE_CACHE_TTL_HOURS
+#   RECUR_AGENT_PERF_EVIDENCE_CACHE_TTL_HOURS
 #                             Maximum reusable perf evidence cache TTL in hours (default: 168)
 #   PERF_QUICK                Set to 1 for PR-safe subset (same as --profile quick)
 #   PERF_SKIP_CRITERION       Set to 1 to skip criterion benchmarks
@@ -52,7 +52,7 @@
 #   BENCH_QUICK               Forwarded to perf_bench_harness (1 = fewer iterations)
 #   BENCH_ITERATIONS          Override iteration count for bench harness
 #   PERF_REGRESSION_FULL      Forwarded to perf_regression (1 = full mode)
-#   PI_PERF_STRICT            Set to 1 to fail CI-enforced budgets on NO_DATA (auto-set for ci/full profiles)
+#   RECUR_AGENT_PERF_STRICT            Set to 1 to fail CI-enforced budgets on NO_DATA (auto-set for ci/full profiles)
 #   PERF_CARGO_RUNNER         Cargo runner mode: rch | auto | local (default: rch)
 #   RCH_REQUIRE_REMOTE        RCH proof mode: fail closed instead of falling back locally
 
@@ -81,7 +81,7 @@ CROSS_ENV_BASELINES="${PERF_CROSS_ENV_BASELINES:-}"
 CROSS_ENV_VARIANCE_ALERT_PCT="${PERF_CROSS_ENV_VARIANCE_ALERT_PCT:-10.0}"
 CROSS_ENV_ENFORCE="${PERF_CROSS_ENV_ENFORCE:-0}"
 EVIDENCE_CACHE_DIR="${PERF_EVIDENCE_CACHE_DIR:-$TARGET_DIR/perf/evidence_cache}"
-EVIDENCE_CACHE_TTL_HOURS="${PI_PERF_EVIDENCE_CACHE_TTL_HOURS:-168}"
+EVIDENCE_CACHE_TTL_HOURS="${RECUR_AGENT_PERF_EVIDENCE_CACHE_TTL_HOURS:-168}"
 CORRELATION_ID="${CI_CORRELATION_ID:-}"
 PROFILE="full"
 SKIP_BUILD="${PERF_SKIP_BUILD:-0}"
@@ -416,11 +416,11 @@ if [[ "$CARGO_RUNNER_MODE" == "rch" ]]; then
     BENCH_OUTPUT_TARGET_SUBDIR \
     BENCH_QUICK \
     BENCH_ITERATIONS \
-    PI_BENCH_RUN_ID \
-    PI_BENCH_CORRELATION_ID \
-    PI_BENCH_ALLOCATOR \
-    PI_BENCH_MODE \
-    PI_BENCH_LEGACY_RUNTIMES \
+    RECUR_AGENT_BENCH_RUN_ID \
+    RECUR_AGENT_BENCH_CORRELATION_ID \
+    RECUR_AGENT_BENCH_ALLOCATOR \
+    RECUR_AGENT_BENCH_MODE \
+    RECUR_AGENT_BENCH_LEGACY_RUNTIMES \
     CARGO_BUILD_JOBS \
     PERF_REGRESSION_OUTPUT \
     PERF_REGRESSION_FULL \
@@ -429,13 +429,13 @@ if [[ "$CARGO_RUNNER_MODE" == "rch" ]]; then
     VERGEN_GIT_SHA \
     VERGEN_GIT_DIRTY \
     RUST_TEST_THREADS \
-    PI_IDLE_RSS_RAW_RELATIVE_PATH \
-    PI_IDLE_RSS_SOURCE_COMMIT \
-    PI_IDLE_RSS_SOURCE_DIRTY \
-    PI_IDLE_RSS_CORRELATION_ID \
-    PI_BENCH_BUILD_PROFILE \
-    PI_CRITERION_OUTPUT_SUBDIR \
-    PI_PERF_STRICT; do
+    RECUR_AGENT_IDLE_RSS_RAW_RELATIVE_PATH \
+    RECUR_AGENT_IDLE_RSS_SOURCE_COMMIT \
+    RECUR_AGENT_IDLE_RSS_SOURCE_DIRTY \
+    RECUR_AGENT_IDLE_RSS_CORRELATION_ID \
+    RECUR_AGENT_BENCH_BUILD_PROFILE \
+    RECUR_AGENT_CRITERION_OUTPUT_SUBDIR \
+    RECUR_AGENT_PERF_STRICT; do
     case ",${RCH_ENV_ALLOWLIST:-}," in
       *",$required_env,"*) ;;
       *) RCH_ENV_ALLOWLIST="${RCH_ENV_ALLOWLIST:+$RCH_ENV_ALLOWLIST,}$required_env" ;;
@@ -474,11 +474,11 @@ resolve_suites() {
 apply_profile_settings() {
   case "$PROFILE" in
     full)
-      export PI_PERF_STRICT=1
+      export RECUR_AGENT_PERF_STRICT=1
       export PERF_REGRESSION_FULL=1
       export BENCH_QUICK=0
       ;;
-    ci) export PI_PERF_STRICT=1 ;;
+    ci) export RECUR_AGENT_PERF_STRICT=1 ;;
     quick)
       SKIP_CRITERION=1
       export BENCH_QUICK=1
@@ -533,7 +533,7 @@ if exclusive_post_generation_suite_set_selected; then
   if [[ -n "${BENCH_ITERATIONS:-}" ]]; then
     die "The exclusive post-generation gate forbids BENCH_ITERATIONS overrides"
   fi
-  for ext_bench_override in PI_BENCH_MAX PI_BENCH_ITERATIONS PI_BENCH_EVENT_COUNT; do
+  for ext_bench_override in RECUR_AGENT_BENCH_MAX RECUR_AGENT_BENCH_ITERATIONS RECUR_AGENT_BENCH_EVENT_COUNT; do
     if [[ -v $ext_bench_override ]]; then
       die "The exclusive post-generation gate forbids $ext_bench_override overrides"
     fi
@@ -653,7 +653,7 @@ with binary_path.open("rb") as handle:
         digest.update(chunk)
 
 payload = {
-    "schema": "pi.perf.binary_size_measurement.v1",
+    "schema": "ra.perf.binary_size_measurement.v1",
     "generated_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
     "run_id": correlation_id,
     "correlation_id": correlation_id,
@@ -667,7 +667,7 @@ payload = {
     "compiled_opt_level": "z",
     "strip": True,
     "profile_source": "Cargo.toml#profile.release",
-    "build_command": "cargo build --bin pi --release",
+    "build_command": "cargo build --bin ra --release",
 }
 encoded = json.dumps(payload, indent=2, sort_keys=True) + "\n"
 temporary_path = control_path.with_name(control_path.name + ".tmp")
@@ -725,7 +725,7 @@ if stderr_path.is_file():
             banner_match = candidate
 
 payload = {
-    "schema": "pi.perf.cold_load_measurement.v1",
+    "schema": "ra.perf.cold_load_measurement.v1",
     "generated_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
     "run_id": correlation_id,
     "correlation_id": correlation_id,
@@ -860,17 +860,17 @@ if len(records) != 1:
         f"idle RSS producer log must contain exactly one transport record, found {len(records)}"
     )
 raw = json.loads(records[0])
-if raw.get("schema") != "pi.perf.idle_rss_measurement.v1":
+if raw.get("schema") != "ra.perf.idle_rss_measurement.v1":
     raise SystemExit("idle RSS raw artifact has the wrong schema")
 for field, expected in (
     ("run_id", correlation_id),
     ("correlation_id", correlation_id),
     ("source_commit", source_commit),
     ("source_dirty", False),
-    ("process_name", "pi"),
+    ("process_name", "ra"),
     ("idle_state", "startup_before_user_input"),
     ("cargo_profile", "release"),
-    ("build_command", "cargo build --bin pi --release"),
+    ("build_command", "cargo build --bin ra --release"),
     ("bench_env_source", "benches/bench_env.rs"),
 ):
     if raw.get(field) != expected:
@@ -897,11 +897,11 @@ for sample in samples:
         not isinstance(pid, int)
         or pid <= 0
         or pid in pids
-        or sample.get("process_name") != "pi"
+        or sample.get("process_name") != "ra"
         or not isinstance(rss_bytes, int)
         or rss_bytes <= 0
     ):
-        raise SystemExit("idle RSS samples require unique positive pi PIDs and RSS bytes")
+        raise SystemExit("idle RSS samples require unique positive ra PIDs and RSS bytes")
     pids.add(pid)
     rss_values.append(rss_bytes)
 max_rss = max(rss_values)
@@ -948,7 +948,7 @@ with binary_path.open("rb") as handle:
         binary_digest.update(chunk)
 binary_sha256 = binary_digest.hexdigest()
 if raw.get("binary_sha256") != binary_sha256:
-    raise SystemExit("idle RSS remote binary hash does not match the retrieved release pi")
+    raise SystemExit("idle RSS remote binary hash does not match the retrieved release ra")
 
 payload = dict(raw)
 payload["binary_path"] = str(binary_path)
@@ -1138,38 +1138,38 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
   fi
 
   if suite_selected "perf_budgets" || suite_selected "perf_regression"; then
-    release_pi_built=0
-    log_step "Building release pi binary for release-size gates..."
-    if "${PHASE2_RUNNER_ARGS[@]}" build --bin pi --release >"$OUTPUT_DIR/logs/build_release_pi.log" 2>&1; then
-      release_pi_built=1
-      log_ok "Release pi binary built: $TARGET_DIR/release/pi"
-      write_binary_size_measurement_control "$TARGET_DIR/release/pi"
-    elif [[ "${PI_PERF_STRICT:-0}" == "1" ]]; then
-      die "Failed to build release pi binary required for binary-size gates (see logs/build_release_pi.log)"
+    release_ra_built=0
+    log_step "Building release ra binary for release-size gates..."
+    if "${PHASE2_RUNNER_ARGS[@]}" build --bin ra --release >"$OUTPUT_DIR/logs/build_release_ra.log" 2>&1; then
+      release_ra_built=1
+      log_ok "Release ra binary built: $TARGET_DIR/release/ra"
+      write_binary_size_measurement_control "$TARGET_DIR/release/ra"
+    elif [[ "${RECUR_AGENT_PERF_STRICT:-0}" == "1" ]]; then
+      die "Failed to build release ra binary required for binary-size gates (see logs/build_release_ra.log)"
     else
-      log_warn "Failed to build release pi binary (see logs/build_release_pi.log); binary-size checks may return NO_DATA"
+      log_warn "Failed to build release ra binary (see logs/build_release_ra.log); binary-size checks may return NO_DATA"
     fi
 
-    if [[ "$release_pi_built" -eq 1 ]]; then
+    if [[ "$release_ra_built" -eq 1 ]]; then
       idle_rss_raw_relative="perf/release_evidence/idle_memory_rss.raw.json"
-      log_step "Sampling release pi interactive-idle RSS (N=5)..."
-      if PI_IDLE_RSS_RAW_RELATIVE_PATH="$idle_rss_raw_relative" \
-        PI_IDLE_RSS_SOURCE_COMMIT="$GIT_COMMIT_FULL" \
-        PI_IDLE_RSS_SOURCE_DIRTY="$GIT_DIRTY" \
-        PI_IDLE_RSS_CORRELATION_ID="$CORRELATION_ID" \
-        PI_BENCH_BUILD_PROFILE=release \
+      log_step "Sampling release ra interactive-idle RSS (N=5)..."
+      if RECUR_AGENT_IDLE_RSS_RAW_RELATIVE_PATH="$idle_rss_raw_relative" \
+        RECUR_AGENT_IDLE_RSS_SOURCE_COMMIT="$GIT_COMMIT_FULL" \
+        RECUR_AGENT_IDLE_RSS_SOURCE_DIRTY="$GIT_DIRTY" \
+        RECUR_AGENT_IDLE_RSS_CORRELATION_ID="$CORRELATION_ID" \
+        RECUR_AGENT_BENCH_BUILD_PROFILE=release \
         "${PHASE2_RUNNER_ARGS[@]}" bench --bench system --profile release -- __idle_rss_control__ \
         >"$OUTPUT_DIR/logs/idle_memory_rss.log" 2>&1; then
         write_idle_rss_measurement_control \
           "$OUTPUT_DIR/logs/idle_memory_rss.log" \
-          "$TARGET_DIR/release/pi"
-      elif [[ "${PI_PERF_STRICT:-0}" == "1" ]]; then
-        die "Failed to sample release pi idle RSS (see logs/idle_memory_rss.log)"
+          "$TARGET_DIR/release/ra"
+      elif [[ "${RECUR_AGENT_PERF_STRICT:-0}" == "1" ]]; then
+        die "Failed to sample release ra idle RSS (see logs/idle_memory_rss.log)"
       else
-        log_warn "Failed to sample release pi idle RSS (see logs/idle_memory_rss.log); idle-memory checks may return NO_DATA"
+        log_warn "Failed to sample release ra idle RSS (see logs/idle_memory_rss.log); idle-memory checks may return NO_DATA"
       fi
     else
-      log_warn "Skipping idle-RSS sampling because this run did not build its release pi binary"
+      log_warn "Skipping idle-RSS sampling because this run did not build its release ra binary"
     fi
   fi
 
@@ -1263,9 +1263,9 @@ for line_number, line in enumerate(artifact_path.read_text(encoding="utf-8").spl
         raise SystemExit(f"line {line_number}: invalid JSON: {exc}") from exc
     if not isinstance(record, dict):
         raise SystemExit(f"line {line_number}: record must be an object")
-    if record.get("schema") != "pi.ext.rust_bench.v1":
+    if record.get("schema") != "ra.ext.rust_bench.v1":
         raise SystemExit(f"line {line_number}: unexpected schema")
-    if record.get("runtime") != "pi_agent_rust":
+    if record.get("runtime") != "recur_agent":
         raise SystemExit(f"line {line_number}: unexpected runtime")
     if record.get("run_id") != expected_correlation_id:
         raise SystemExit(f"line {line_number}: run_id does not match current run")
@@ -1526,7 +1526,7 @@ if not records:
 
 if not isinstance(report, dict):
     raise SystemExit("extension benchmark harness report must be an object")
-if report.get("schema") != "pi.bench.harness_report.v1":
+if report.get("schema") != "ra.bench.harness_report.v1":
     raise SystemExit("extension benchmark harness report schema mismatch")
 if report.get("mode") != expected_mode:
     raise SystemExit(
@@ -1678,9 +1678,9 @@ report_env = validated_environment(report.get("env"), "extension benchmark repor
 observed = {}
 observed_env = None
 for index, record in enumerate(records):
-    if record.get("schema") != "pi.ext.rust_bench.v1":
+    if record.get("schema") != "ra.ext.rust_bench.v1":
         raise SystemExit(f"extension benchmark record {index} schema mismatch")
-    if record.get("runtime") != "pi_agent_rust" or record.get("success") is not True:
+    if record.get("runtime") != "recur_agent" or record.get("success") is not True:
         raise SystemExit(f"extension benchmark record {index} is not a successful Pi Rust result")
     record_env = validated_environment(
         record.get("env"), f"extension benchmark record {index}"
@@ -2034,7 +2034,7 @@ for line_number, line in enumerate(
         raise SystemExit(f"line {line_number}: invalid JSON: {error}") from error
     if not isinstance(record, dict):
         raise SystemExit(f"line {line_number}: benchmark record must be an object")
-    if record.get("schema") != "pi.ext.rust_bench.v1":
+    if record.get("schema") != "ra.ext.rust_bench.v1":
         raise SystemExit(f"line {line_number}: benchmark schema mismatch")
     if record.get("source_commit") != expected_commit:
         raise SystemExit(f"line {line_number}: source_commit mismatch")
@@ -2046,7 +2046,7 @@ for line_number, line in enumerate(
     if not isinstance(timestamp, str) or not timestamp.strip():
         raise SystemExit(f"line {line_number}: timestamp is missing")
     if producer_kind == "scenario":
-        if record.get("runtime") != "pi_agent_rust":
+        if record.get("runtime") != "recur_agent":
             raise SystemExit(f"line {line_number}: runtime mismatch")
         if record.get("orchestration_correlation_id") != expected_correlation_id:
             raise SystemExit(
@@ -2113,7 +2113,7 @@ for line_number, line in enumerate(
         raise SystemExit(f"line {line_number}: invalid JSON: {error}") from error
     if not isinstance(record, dict):
         raise SystemExit(f"line {line_number}: legacy benchmark record must be an object")
-    if record.get("schema") != "pi.ext.legacy_bench.v1":
+    if record.get("schema") != "ra.ext.legacy_bench.v1":
         raise SystemExit(f"line {line_number}: legacy benchmark schema mismatch")
     if record.get("source_commit") != expected_commit:
         raise SystemExit(f"line {line_number}: source_commit mismatch")
@@ -2248,15 +2248,15 @@ run_test_suite() {
       exit_code=95
     else
       BENCH_OUTPUT_TARGET_SUBDIR="$rch_target_subdir" \
-      PI_BENCH_RUN_ID="$benchmark_run_id" \
+      RECUR_AGENT_BENCH_RUN_ID="$benchmark_run_id" \
       PERF_REGRESSION_OUTPUT="$result_dir" \
-      PERF_RELEASE_BINARY_PATH="$TARGET_DIR/release/pi" \
+      PERF_RELEASE_BINARY_PATH="$TARGET_DIR/release/ra" \
       CI_CORRELATION_ID="$CORRELATION_ID" \
       VERGEN_GIT_SHA="$GIT_COMMIT_FULL" \
       VERGEN_GIT_DIRTY="$GIT_DIRTY" \
       RUST_TEST_THREADS="$PARALLELISM" \
       CARGO_BUILD_JOBS="$BUILD_JOBS" \
-      PI_BENCH_BUILD_PROFILE="$CARGO_PROFILE" \
+      RECUR_AGENT_BENCH_BUILD_PROFILE="$CARGO_PROFILE" \
       RCH_REQUIRE_REMOTE=1 \
       RCH_QUIET=0 \
       RCH_VISIBILITY=summary \
@@ -2392,9 +2392,9 @@ run_test_suite() {
       VERGEN_GIT_DIRTY="$GIT_DIRTY" \
       RUST_TEST_THREADS="$PARALLELISM" \
       CARGO_BUILD_JOBS="$BUILD_JOBS" \
-      PI_BENCH_BUILD_PROFILE="$CARGO_PROFILE" \
-      PI_BENCH_MODE="$producer_bench_mode" \
-      PI_BENCH_LEGACY_RUNTIMES="$producer_legacy_runtimes" \
+      RECUR_AGENT_BENCH_BUILD_PROFILE="$CARGO_PROFILE" \
+      RECUR_AGENT_BENCH_MODE="$producer_bench_mode" \
+      RECUR_AGENT_BENCH_LEGACY_RUNTIMES="$producer_legacy_runtimes" \
       RCH_REQUIRE_REMOTE=1 \
       RCH_QUIET=0 \
       RCH_VISIBILITY=summary \
@@ -2502,7 +2502,7 @@ run_test_suite() {
       controller_output_env=(
         "BENCH_OUTPUT_DIR=$result_dir"
         "PERF_REGRESSION_OUTPUT=$result_dir"
-        "PERF_RELEASE_BINARY_PATH=$TARGET_DIR/release/pi"
+        "PERF_RELEASE_BINARY_PATH=$TARGET_DIR/release/ra"
       )
     fi
     env \
@@ -2558,7 +2558,7 @@ run_test_suite() {
   mkdir -p "$result_dir"
   cat > "$result_dir/result.json" <<EOF
 {
-  "schema": "pi.perf.suite_result.v1",
+  "schema": "ra.perf.suite_result.v1",
   "suite_name": "$suite_name",
   "target": "$target_name",
   "kind": "cargo_test",
@@ -2650,7 +2650,7 @@ for index, record in enumerate(records, start=1):
     if not isinstance(record, dict):
         raise SystemExit(f"retrieved PiJS record {index} is not an object")
     expected = {
-        "schema": "pi.perf.workload.v1",
+        "schema": "ra.perf.workload.v1",
         "run_id": expected_correlation,
         "correlation_id": expected_correlation,
         "source_commit": expected_commit,
@@ -2774,11 +2774,11 @@ run_criterion_bench() {
     log_fail "Refusing preexisting Criterion run output: $criterion_dir"
     exit_code=88
   else
-    PI_CRITERION_OUTPUT_SUBDIR="$criterion_run_subdir" \
-    PI_BENCH_RUN_ID="$CORRELATION_ID" \
-    PI_BENCH_CORRELATION_ID="$CORRELATION_ID" \
-    PI_BENCH_ALLOCATOR=system \
-    PI_BENCH_BUILD_PROFILE="$CARGO_PROFILE" \
+    RECUR_AGENT_CRITERION_OUTPUT_SUBDIR="$criterion_run_subdir" \
+    RECUR_AGENT_BENCH_RUN_ID="$CORRELATION_ID" \
+    RECUR_AGENT_BENCH_CORRELATION_ID="$CORRELATION_ID" \
+    RECUR_AGENT_BENCH_ALLOCATOR=system \
+    RECUR_AGENT_BENCH_BUILD_PROFILE="$CARGO_PROFILE" \
     CI_CORRELATION_ID="$CORRELATION_ID" \
     VERGEN_GIT_SHA="$GIT_COMMIT_FULL" \
     VERGEN_GIT_DIRTY="$GIT_DIRTY" \
@@ -2866,7 +2866,7 @@ run_criterion_bench() {
 
   cat > "$result_dir/result.json" <<EOF
 {
-  "schema": "pi.perf.suite_result.v1",
+  "schema": "ra.perf.suite_result.v1",
   "suite_name": "$suite_name",
   "target": "$bench_name",
   "kind": "criterion",
@@ -3038,7 +3038,7 @@ def load_remote_proof(suite):
 
 def validate_common(suite, target, kind, result, admitted, extra_expected=None):
     expected = {
-        "schema": "pi.perf.suite_result.v1",
+        "schema": "ra.perf.suite_result.v1",
         "suite_name": suite,
         "target": target,
         "kind": kind,
@@ -3126,7 +3126,7 @@ for suite, target in required_criterion_suites.items():
     )
 
 report = {
-    "schema": "pi.perf.post_generation_producer_admission.v1",
+    "schema": "ra.perf.post_generation_producer_admission.v1",
     "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "source_commit": expected_commit,
     "source_dirty": False,
@@ -3273,7 +3273,7 @@ suite_results_json+="]"
 
 cat > "$OUTPUT_DIR/manifest.json" <<EOF
 {
-  "schema": "pi.perf.run_manifest.v1",
+  "schema": "ra.perf.run_manifest.v1",
   "version": "1.0.0",
   "bead_id": "bd-3ar8v.1.8",
   "correlation_id": "$CORRELATION_ID",
@@ -3294,7 +3294,7 @@ cat > "$OUTPUT_DIR/manifest.json" <<EOF
     "artifact_count": $artifact_count
   },
   "artifact_staging": {
-    "schema": "pi.perf.artifact_staging_manifest.v1",
+    "schema": "ra.perf.artifact_staging_manifest.v1",
     "manifest_path": "$STAGING_MANIFEST_PATH",
     "pre_refresh_report_path": "$PREFLIGHT_BEFORE_REFRESH_PATH",
     "post_run_report_path": "$PREFLIGHT_AFTER_RUN_PATH",
@@ -3307,16 +3307,16 @@ cat > "$OUTPUT_DIR/manifest.json" <<EOF
   },
   "suite_results": $suite_results_json,
   "contract_refs": {
-    "logging_contract": "pi.test.evidence_logging_contract.v1",
-    "evidence_contract": "pi.qa.evidence_contract.v1",
-    "bench_protocol": "pi.bench.protocol.v1",
-    "sli_matrix": "pi.perf.sli_ux_matrix.v1",
-    "pgo_pipeline": "pi.perf.pgo_pipeline_summary.v1",
-    "extension_stratification": "pi.perf.extension_benchmark_stratification.v1",
-    "cross_env_variance_diagnosis": "pi.perf.cross_env_variance_diagnosis.v1",
+    "logging_contract": "ra.test.evidence_logging_contract.v1",
+    "evidence_contract": "ra.qa.evidence_contract.v1",
+    "bench_protocol": "ra.bench.protocol.v1",
+    "sli_matrix": "ra.perf.sli_ux_matrix.v1",
+    "pgo_pipeline": "ra.perf.pgo_pipeline_summary.v1",
+    "extension_stratification": "ra.perf.extension_benchmark_stratification.v1",
+    "cross_env_variance_diagnosis": "ra.perf.cross_env_variance_diagnosis.v1",
     "phase1_matrix_validation": "pi.perf.phase1_matrix_validation.v1",
-    "parameter_sweeps": "pi.perf.parameter_sweeps.v1",
-    "opportunity_matrix": "pi.perf.opportunity_matrix.v1"
+    "parameter_sweeps": "ra.perf.parameter_sweeps.v1",
+    "opportunity_matrix": "ra.perf.opportunity_matrix.v1"
   },
   "output_dir": "$OUTPUT_DIR"
 }
@@ -3559,7 +3559,7 @@ for record in records:
     confidence_counts[label] = confidence_counts.get(label, 0) + 1
 
 payload = {
-    "schema": "pi.perf.baseline_variance_confidence.v1",
+    "schema": "ra.perf.baseline_variance_confidence.v1",
     "bead_id": "bd-3ar8v.1.5",
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "run_id": run_id,
@@ -3579,7 +3579,7 @@ baseline_confidence_path.parent.mkdir(parents=True, exist_ok=True)
 baseline_confidence_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 manifest["baseline_variance_confidence"] = {
-    "schema": "pi.perf.baseline_variance_confidence.v1",
+    "schema": "ra.perf.baseline_variance_confidence.v1",
     "path": str(baseline_confidence_path),
     "record_count": payload["summary"]["record_count"],
     "scenario_count": payload["summary"]["scenario_count"],
@@ -3702,7 +3702,7 @@ if pgo_mode_requested == "off":
 fallback_triggered = len(fallback_reasons) > 0 or latest_mode_effective == "baseline_fallback"
 
 summary = {
-    "schema": "pi.perf.pgo_pipeline_summary.v1",
+    "schema": "ra.perf.pgo_pipeline_summary.v1",
     "bead_id": "bd-3ar8v.5.2",
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "run_id": str(manifest.get("timestamp", timestamp)),
@@ -3729,7 +3729,7 @@ pgo_summary_path.parent.mkdir(parents=True, exist_ok=True)
 pgo_summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 manifest["pgo_pipeline_summary"] = {
-    "schema": "pi.perf.pgo_pipeline_summary.v1",
+    "schema": "ra.perf.pgo_pipeline_summary.v1",
     "path": str(pgo_summary_path),
     "event_count": len(events),
     "comparison_artifact_count": len(comparison_artifacts),
@@ -4119,7 +4119,7 @@ def validated_comparison_contract(record: dict, claim_scope: str):
     if not isinstance(contract, dict) or set(contract) != required_fields:
         return None
     if (
-        contract.get("schema") != "pi.perf.cross_runtime_comparison.v1"
+        contract.get("schema") != "ra.perf.cross_runtime_comparison.v1"
         or contract.get("claim_scope") != claim_scope
         or contract.get("measurement_boundary") != comparison_boundaries[claim_scope]
         or contract.get("release_claim_eligible") is not True
@@ -4456,7 +4456,7 @@ for layer_id, covered in layer_coverage.items():
 global_claim_valid = len(invalidity_reasons) == 0
 
 payload = {
-    "schema": "pi.perf.extension_benchmark_stratification.v1",
+    "schema": "ra.perf.extension_benchmark_stratification.v1",
     "bead_id": "bd-3ar8v.4.11",
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "source_commit": source_commit,
@@ -4484,7 +4484,7 @@ payload = {
             "full_e2e_is_release_facing_primary_signal": True,
         },
         "cross_runtime_comparison": {
-            "contract_schema": "pi.perf.cross_runtime_comparison.v1",
+            "contract_schema": "ra.perf.cross_runtime_comparison.v1",
             "legacy_pi_mono_executed_required": True,
             "exact_workload_and_host_contract_required": True,
             "portable_shim_record_count": portable_legacy_record_count,
@@ -4521,7 +4521,7 @@ stratification_path.parent.mkdir(parents=True, exist_ok=True)
 stratification_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 manifest["extension_benchmark_stratification"] = {
-    "schema": "pi.perf.extension_benchmark_stratification.v1",
+    "schema": "ra.perf.extension_benchmark_stratification.v1",
     "path": str(stratification_path),
     "layer_count": len(layers),
     "global_claim_valid": global_claim_valid,
@@ -4596,7 +4596,7 @@ manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 diag = json.loads(diag_path.read_text(encoding="utf-8"))
 summary = diag.get("summary", {})
 manifest["cross_env_variance_diagnosis"] = {
-    "schema": "pi.perf.cross_env_variance_diagnosis.v1",
+    "schema": "ra.perf.cross_env_variance_diagnosis.v1",
     "path": str(diag_path),
     "metric_count": int(summary.get("metric_count", 0)),
     "alert_count": int(summary.get("alert_count", 0)),
@@ -4640,7 +4640,7 @@ if OUTPUT_DIR="$OUTPUT_DIR" \
   CORRELATION_ID="$CORRELATION_ID" \
   GIT_COMMIT_FULL="$GIT_COMMIT_FULL" \
   GIT_DIRTY="$GIT_DIRTY" \
-  PI_PERF_STRICT="${PI_PERF_STRICT:-0}" \
+  RECUR_AGENT_PERF_STRICT="${RECUR_AGENT_PERF_STRICT:-0}" \
   TIMESTAMP="$TIMESTAMP" \
   PHASE1_MATRIX_PATH="$PHASE1_MATRIX_PATH" \
   PARAMETER_SWEEPS_PATH="$PARAMETER_SWEEPS_PATH" \
@@ -4662,7 +4662,7 @@ target_dir = Path(os.environ["TARGET_DIR"])
 correlation_id = os.environ["CORRELATION_ID"]
 source_commit = os.environ["GIT_COMMIT_FULL"]
 source_dirty = os.environ["GIT_DIRTY"] == "true"
-strict_mode = os.environ["PI_PERF_STRICT"] == "1"
+strict_mode = os.environ["RECUR_AGENT_PERF_STRICT"] == "1"
 timestamp = os.environ["TIMESTAMP"]
 run_started_at = datetime.strptime(timestamp, "%Y%m%dT%H%M%SZ").replace(
     tzinfo=timezone.utc
@@ -5658,7 +5658,7 @@ def compute_parameter_sweeps_artifact(
     readiness_status = "ready" if readiness_ok else "blocked"
 
     return {
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "bead_id": "bd-3ar8v.6.2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "run_id": run_id,
@@ -5928,7 +5928,7 @@ def compute_opportunity_matrix_artifact(
             ranked_opportunities.append({"rank": idx, **row})
 
     return {
-        "schema": "pi.perf.opportunity_matrix.v1",
+        "schema": "ra.perf.opportunity_matrix.v1",
         "bead_id": "bd-3ar8v.6.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "run_id": run_id,
@@ -6637,15 +6637,15 @@ def evaluate_idle_rss_control():
         evidence["failure_reasons"].append(f"invalid_control_json:{error}")
         return "missing", evidence
     for field, expected in (
-        ("schema", "pi.perf.idle_rss_measurement.v1"),
+        ("schema", "ra.perf.idle_rss_measurement.v1"),
         ("run_id", correlation_id),
         ("correlation_id", correlation_id),
         ("source_commit", source_commit),
         ("source_dirty", False),
-        ("process_name", "pi"),
+        ("process_name", "ra"),
         ("idle_state", "startup_before_user_input"),
         ("cargo_profile", "release"),
-        ("build_command", "cargo build --bin pi --release"),
+        ("build_command", "cargo build --bin ra --release"),
     ):
         if control.get(field) != expected:
             evidence["failure_reasons"].append(f"{field}_mismatch")
@@ -6666,7 +6666,7 @@ def evaluate_idle_rss_control():
             if isinstance(sample, dict)
             and type(sample.get("rss_bytes")) is int
             and sample.get("rss_bytes") > 0
-            and sample.get("process_name") == "pi"
+            and sample.get("process_name") == "ra"
         ]
         sample_pids = [
             sample.get("pid")
@@ -6684,7 +6684,7 @@ def evaluate_idle_rss_control():
             evidence["failure_reasons"].append("sample_aggregate_mismatch")
     binary_path_raw = control.get("binary_path")
     binary_sha256 = control.get("binary_sha256")
-    expected_binary_path = target_dir / "release" / "pi"
+    expected_binary_path = target_dir / "release" / "ra"
     if not isinstance(binary_path_raw, str) or not binary_path_raw:
         evidence["failure_reasons"].append("missing_binary_path")
     else:
@@ -6939,14 +6939,14 @@ manifest["phase1_matrix_validation"] = {
     "artifact_ready_for_phase5": phase5_ready,
 }
 manifest["parameter_sweeps"] = {
-    "schema": "pi.perf.parameter_sweeps.v1",
+    "schema": "ra.perf.parameter_sweeps.v1",
     "path": str(parameter_sweeps_path),
     "status": parameter_sweeps_artifact.get("readiness", {}).get("status"),
     "ready_for_phase5": parameter_sweeps_artifact.get("readiness", {}).get("ready_for_phase5"),
     "top_stage": parameter_sweeps_artifact.get("sensitivity_summary", {}).get("top_stage"),
 }
 manifest["opportunity_matrix"] = {
-    "schema": "pi.perf.opportunity_matrix.v1",
+    "schema": "ra.perf.opportunity_matrix.v1",
     "path": str(opportunity_matrix_path),
     "status": opportunity_matrix_artifact.get("readiness", {}).get("status"),
     "decision": opportunity_matrix_artifact.get("readiness", {}).get("decision"),
@@ -7558,7 +7558,7 @@ if isinstance(matrix_cells, list):
         )
 
 stratification = load_artifact(
-    stratification_path, "pi.perf.extension_benchmark_stratification.v1"
+    stratification_path, "ra.perf.extension_benchmark_stratification.v1"
 )
 validate_source_datasets(
     stratification_path,
@@ -7683,7 +7683,7 @@ portable_record_count = cross_runtime.get("portable_shim_record_count")
 true_legacy_record_count = cross_runtime.get("true_legacy_pi_mono_record_count")
 matched_layer_contracts = cross_runtime.get("matched_layer_contracts")
 cross_runtime_contract_valid = (
-    cross_runtime.get("contract_schema") == "pi.perf.cross_runtime_comparison.v1"
+    cross_runtime.get("contract_schema") == "ra.perf.cross_runtime_comparison.v1"
     and cross_runtime.get("legacy_pi_mono_executed_required") is True
     and cross_runtime.get("exact_workload_and_host_contract_required") is True
     and type(portable_record_count) is int
@@ -7783,7 +7783,7 @@ if expected_global_claim_valid is not True:
     )
 
 report = {
-    "schema": "pi.perf.post_generation_evidence_contract.v1",
+    "schema": "ra.perf.post_generation_evidence_contract.v1",
     "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "source_commit": expected_source_commit,
     "source_dirty": expected_source_dirty,
@@ -7957,8 +7957,8 @@ required_files = [
         "pijs_workload",
     ),
     (
-        target_dir / "release" / "pi",
-        PurePosixPath("release/pi"),
+        target_dir / "release" / "ra",
+        PurePosixPath("release/ra"),
         "release binary build",
     ),
     (
@@ -8257,7 +8257,7 @@ for suite in sorted(selected_suites.intersection(criterion_required_inputs)):
             f"Criterion producer {suite} has no parseable current suite result: {error}"
         ) from error
     if (
-        suite_result.get("schema") != "pi.perf.suite_result.v1"
+        suite_result.get("schema") != "ra.perf.suite_result.v1"
         or suite_result.get("suite_name") != suite
         or suite_result.get("target") != criterion_expected_targets[suite]
         or suite_result.get("kind") != "criterion"
@@ -8354,7 +8354,7 @@ if not entries:
 
 entries.sort(key=lambda entry: entry["path"])
 inventory = {
-    "schema": "pi.perf.post_generation_evidence_inventory.v1",
+    "schema": "ra.perf.post_generation_evidence_inventory.v1",
     "source_commit": os.environ["GIT_COMMIT_FULL"],
     "source_dirty": False,
     "correlation_id": os.environ["CORRELATION_ID"],
@@ -8385,7 +8385,7 @@ POST_GENERATION_EVIDENCE_DIR="$POST_GENERATION_STAGE_RELATIVE"
 log_ok "Post-generation evidence package retained for audit: $POST_GENERATION_STAGE_RELATIVE"
 
 if [[ "$CARGO_RUNNER_MODE" == "rch" ]]; then
-  for required_env in PERF_EVIDENCE_DIR PI_PERF_POST_GENERATION PI_PERF_EXPECTED_SOURCE_COMMIT CI_CORRELATION_ID PI_PERF_STRICT; do
+  for required_env in PERF_EVIDENCE_DIR RECUR_AGENT_PERF_POST_GENERATION RECUR_AGENT_PERF_EXPECTED_SOURCE_COMMIT CI_CORRELATION_ID RECUR_AGENT_PERF_STRICT; do
     case ",${RCH_ENV_ALLOWLIST:-}," in
       *",$required_env,"*) ;;
       *) RCH_ENV_ALLOWLIST="${RCH_ENV_ALLOWLIST:+$RCH_ENV_ALLOWLIST,}$required_env" ;;
@@ -8404,9 +8404,9 @@ if [[ "$CARGO_RUNNER_MODE" == "rch" ]]; then
 fi
 mkdir -p "$POST_GENERATION_BUDGET_DIR"
 PERF_EVIDENCE_DIR="$POST_GENERATION_EVIDENCE_DIR" \
-PI_PERF_POST_GENERATION=1 \
-PI_PERF_STRICT=1 \
-PI_PERF_EXPECTED_SOURCE_COMMIT="$GIT_COMMIT_FULL" \
+RECUR_AGENT_PERF_POST_GENERATION=1 \
+RECUR_AGENT_PERF_STRICT=1 \
+RECUR_AGENT_PERF_EXPECTED_SOURCE_COMMIT="$GIT_COMMIT_FULL" \
 CI_CORRELATION_ID="$CORRELATION_ID" \
 RCH_REQUIRE_REMOTE=1 \
 RCH_QUIET=0 \
@@ -8498,7 +8498,7 @@ try:
 except (UnicodeDecodeError, json.JSONDecodeError) as error:
     raise SystemExit(f"retained post-generation evidence inventory is invalid: {error}") from error
 expected_header = {
-    "schema": "pi.perf.post_generation_evidence_inventory.v1",
+    "schema": "ra.perf.post_generation_evidence_inventory.v1",
     "source_commit": os.environ["GIT_COMMIT_FULL"],
     "source_dirty": False,
     "correlation_id": os.environ["CORRELATION_ID"],
@@ -8881,7 +8881,7 @@ if [[ "$CREATE_BUNDLE" -eq 1 ]]; then
   # Write bundle metadata alongside the archive
   cat > "${bundle_path%.tar.gz}.meta.json" <<EOF
 {
-  "schema": "pi.perf.bundle_meta.v1",
+  "schema": "ra.perf.bundle_meta.v1",
   "bundle_name": "$bundle_name",
   "bundle_path": "$bundle_path",
   "bundle_sha256": "$bundle_sha",

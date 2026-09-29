@@ -3,7 +3,7 @@
 # Run the compile and lint halves of the quality gate against
 # x86_64-pc-windows-msvc on a Windows operator host (bd-o6hte).
 #
-# `dsr quality --tool pi_agent_rust` only ever builds the rch worker's own
+# `dsr quality --tool recur_agent` only ever builds the rch worker's own
 # triple, and this repository runs no CI, so nothing else notices when the
 # Windows target stops compiling. It stopped somewhere after v0.3.0 and was
 # not noticed until the v0.5.0 release build, by which point the release
@@ -16,10 +16,10 @@
 # the Windows host fetches it from `origin`, it does not receive a work tree.
 #
 # Environment:
-#   PI_WINDOWS_HOST   ssh host to drive (default: wsurf)
-#   PI_WINDOWS_ROOT   checkout on that host (default: C:/Users/jeffr/pi-win-gate)
-#   PI_WINDOWS_POLL   seconds between progress polls (default: 120)
-#   PI_WINDOWS_STALL  polls with no log growth before giving up (default: 15)
+#   RECUR_AGENT_WINDOWS_HOST   ssh host to drive (default: wsurf)
+#   RECUR_AGENT_WINDOWS_ROOT   checkout on that host (default: C:/Users/jeffr/pi-win-gate)
+#   RECUR_AGENT_WINDOWS_POLL   seconds between progress polls (default: 120)
+#   RECUR_AGENT_WINDOWS_STALL  polls with no log growth before giving up (default: 15)
 #
 # Exit status is the Windows cargo exit status: 0 only when both
 # `cargo check --all-targets` and `cargo clippy --all-targets -- -D warnings`
@@ -31,10 +31,10 @@
 
 set -euo pipefail
 
-HOST="${PI_WINDOWS_HOST:-wsurf}"
-REMOTE_ROOT="${PI_WINDOWS_ROOT:-C:/Users/jeffr/pi-win-gate}"
-POLL_SECONDS="${PI_WINDOWS_POLL:-120}"
-STALL_POLLS="${PI_WINDOWS_STALL:-15}"
+HOST="${RECUR_AGENT_WINDOWS_HOST:-wsurf}"
+REMOTE_ROOT="${RECUR_AGENT_WINDOWS_ROOT:-C:/Users/jeffr/pi-win-gate}"
+POLL_SECONDS="${RECUR_AGENT_WINDOWS_POLL:-120}"
+STALL_POLLS="${RECUR_AGENT_WINDOWS_STALL:-15}"
 TASK_NAME="pi-windows-target-gate"
 
 ref="${1:-HEAD}"
@@ -67,7 +67,7 @@ batch="$workdir/gate.cmd"
   printf 'set LOG=%s\r\n' "$remote_log_win"
   printf 'set COMMIT=%s\r\n' "$commit"
   printf 'echo === pi windows target gate %%DATE%% %%TIME%% > "%%LOG%%"\r\n'
-  printf 'if not exist "%%ROOT%%\\.git" git clone https://github.com/Dicklesworthstone/pi_agent_rust.git "%%ROOT%%" >> "%%LOG%%" 2>&1\r\n'
+  printf 'if not exist "%%ROOT%%\\.git" git clone https://github.com/Dicklesworthstone/recur_agent.git "%%ROOT%%" >> "%%LOG%%" 2>&1\r\n'
   printf 'cd /d "%%ROOT%%"\r\n'
   printf 'git fetch origin >> "%%LOG%%" 2>&1\r\n'
   printf 'git checkout -f %%COMMIT%% >> "%%LOG%%" 2>&1\r\n'

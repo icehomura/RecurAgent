@@ -2,17 +2,17 @@
 # scripts/e2e/run_snapcompact.sh — bd-cv653.7.6 snapcompact verification lanes.
 #
 # Lanes:
-#   unit (always): pi::compaction_snap determinism/PNG/details/budget tests.
+#   unit (always): ra::compaction_snap determinism/PNG/details/budget tests.
 #   vcr  (always): capture-stub provider replay (vision receives frames,
 #                  text-only model strips them with logged reason).
-#   eval (opt-in): live-model retention QA. Requires PI_SNAPCOMPACT_EVAL=1 and
+#   eval (opt-in): live-model retention QA. Requires RECUR_AGENT_SNAPCOMPACT_EVAL=1 and
 #                  a provider API key in env. Without it, the committed report
 #                  is regenerated with status=NO_DATA (fail-closed) — the
 #                  snapcompact mode stays default-off until a real eval lands.
 #
 # Usage:
 #   ./scripts/e2e/run_snapcompact.sh                 # unit + vcr + report refresh
-#   PI_SNAPCOMPACT_EVAL=1 ./scripts/e2e/run_snapcompact.sh --eval
+#   RECUR_AGENT_SNAPCOMPACT_EVAL=1 ./scripts/e2e/run_snapcompact.sh --eval
 #
 # Artifacts:
 #   tests/perf/reports/snapcompact_retention_eval.json
@@ -21,7 +21,7 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REPORT_PATH="$PROJECT_ROOT/tests/perf/reports/snapcompact_retention_eval.json"
-REPORT_SCHEMA="pi.compaction.snapcompact_eval.v1"
+REPORT_SCHEMA="ra.compaction.snapcompact_eval.v1"
 CORRELATION_ID="snapcompact-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
 RUN_EVAL=false

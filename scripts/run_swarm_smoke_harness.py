@@ -29,8 +29,8 @@ from pathlib import Path
 from typing import Any
 
 
-HARNESS_SCHEMA = "pi.swarm.smoke_harness.v1"
-EVENT_SCHEMA = "pi.swarm.smoke_harness.event.v1"
+HARNESS_SCHEMA = "ra.swarm.smoke_harness.v1"
+EVENT_SCHEMA = "ra.swarm.smoke_harness.event.v1"
 DEFAULT_AGENTS = ("BlueLake", "GreenStone", "PurpleBridge")
 DEFAULT_MCP_URL = "http://127.0.0.1:8765/mcp"
 FORBIDDEN_WORKTREE_COMMAND_FRAGMENTS = (

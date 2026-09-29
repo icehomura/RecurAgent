@@ -329,7 +329,7 @@ def build_regression_verdict(
 
     status = "pass" if not failures else ("warn" if mode == "warn" else "fail")
     verdict = {
-        "schema": "pi.conformance.regression_gate.v1",
+        "schema": "ra.conformance.regression_gate.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
         "status": status,

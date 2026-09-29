@@ -142,7 +142,7 @@ cmd_bundle() {
   # Write sidecar metadata
   cat > "${bundle_path}.meta.json" <<EOF
 {
-  "schema": "pi.perf.bundle_meta.v1",
+  "schema": "ra.perf.bundle_meta.v1",
   "bundle_name": "$bundle_name",
   "bundle_format": "$BUNDLE_FORMAT",
   "bundle_size_bytes": $bundle_size,
@@ -302,7 +302,7 @@ cmd_inventory() {
 
   cat > "$inventory_path" <<EOF
 {
-  "schema": "pi.perf.bundle_inventory.v1",
+  "schema": "ra.perf.bundle_inventory.v1",
   "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "source_dir": "$run_dir",
   "counts": {

@@ -23,7 +23,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-REPORT_SCHEMA = "pi.ext.conformance_failure_triage.v1"
+REPORT_SCHEMA = "ra.ext.conformance_failure_triage.v1"
 POLICY = "read_only_no_mutation"
 DEFAULT_STALE_DAYS = 45
 DEFAULT_BASELINE = (
@@ -1123,7 +1123,7 @@ def run_self_test() -> int:
             report_path,
             [
                 {
-                    "schema": "pi.ext.gate_event.v1",
+                    "schema": "ra.ext.gate_event.v1",
                     "id": "ext-new",
                     "status": "fail",
                     "set": "must_pass",
@@ -1132,7 +1132,7 @@ def run_self_test() -> int:
                     "run_id": "run-1",
                 },
                 {
-                    "schema": "pi.ext.gate_event.v1",
+                    "schema": "ra.ext.gate_event.v1",
                     "id": "ext-new",
                     "status": "fail",
                     "set": "must_pass",
@@ -1141,7 +1141,7 @@ def run_self_test() -> int:
                     "run_id": "run-1",
                 },
                 {
-                    "schema": "pi.ext.gate_event.v1",
+                    "schema": "ra.ext.gate_event.v1",
                     "id": "ext-known",
                     "status": "fail",
                     "set": "stretch",
@@ -1149,7 +1149,7 @@ def run_self_test() -> int:
                     "failure_reason": "Cannot find module 'openai'",
                 },
                 {
-                    "schema": "pi.ext.gate_event.v1",
+                    "schema": "ra.ext.gate_event.v1",
                     "id": "base_fixtures",
                     "status": "fail",
                     "set": "stretch",
@@ -1157,7 +1157,7 @@ def run_self_test() -> int:
                     "failure_reason": "registerTool: spec.name is required for tool",
                 },
                 {
-                    "schema": "pi.ext.gate_event.v1",
+                    "schema": "ra.ext.gate_event.v1",
                     "id": "ext-pass",
                     "status": "pass",
                     "set": "must_pass",
@@ -1168,7 +1168,7 @@ def run_self_test() -> int:
         write_json(
             baseline_path,
             {
-                "schema": "pi.ext.conformance_baseline.v2",
+                "schema": "ra.ext.conformance_baseline.v2",
                 "generated_at": "2026-01-01T00:00:00Z",
                 "failure_classification": {
                     "missing_npm_package": {
@@ -1230,7 +1230,7 @@ def run_self_test() -> int:
         write_json(
             fixture_path,
             {
-                "schema": "pi.ext.scenario_fixture.v1",
+                "schema": "ra.ext.scenario_fixture.v1",
                 "scenarios": [{"id": "scenario-1", "kind": "smoke"}],
             },
         )
@@ -1260,7 +1260,7 @@ def run_self_test() -> int:
         pass_report_path = root / "pass_events.jsonl"
         write_jsonl(
             pass_report_path,
-            [{"schema": "pi.ext.gate_event.v1", "id": "ext-pass", "status": "pass"}],
+            [{"schema": "ra.ext.gate_event.v1", "id": "ext-pass", "status": "pass"}],
         )
         no_fail_report = build_report(
             repo_root=root,

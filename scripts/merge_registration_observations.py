@@ -2,7 +2,7 @@
 """Merge runtime registration observations into VALIDATED_MANIFEST.json.
 
 Reads the JSONL oracle artifact emitted by conformance_must_pass_gate with
-PI_DUMP_REGISTRATION_OBSERVATIONS=1 (tests/ext_conformance_generated.rs::
+RECUR_AGENT_DUMP_REGISTRATION_OBSERVATIONS=1 (tests/ext_conformance_generated.rs::
 maybe_dump_registration_observation) and updates each referenced manifest
 entry's registrations.* identity sets plus the derived registers_* capability
 booleans so the manifest describes what the executed entry point actually

@@ -417,7 +417,7 @@ cmd_fingerprint() {
 
   cat <<FPJSON
 {
-  "schema": "pi.bench.env.v1",
+  "schema": "ra.bench.env.v1",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "os": "$(uname -s)",
   "os_version": "$os_version",

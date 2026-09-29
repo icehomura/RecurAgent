@@ -20,7 +20,7 @@ DEFAULT_OUTPUT_DIR = (
     REPO_ROOT / "tests" / "ext_conformance" / "reports" / "reproducers"
 )
 GENERATED_TESTS = REPO_ROOT / "tests" / "ext_conformance_generated.rs"
-SCHEMA = "pi.ext.conformance_reproducer.v1"
+SCHEMA = "ra.ext.conformance_reproducer.v1"
 REPORT_RECORD_KEYS = {
     "artifact_path",
     "conformance_tier",
@@ -224,11 +224,11 @@ def status_from_record(record: dict[str, Any]) -> str | None:
 
 def report_kind(record: dict[str, Any]) -> str:
     schema = record.get("schema")
-    if schema == "pi.ext.gate_event.v1":
+    if schema == "ra.ext.gate_event.v1":
         return "gate_event"
-    if schema == "pi.ext.conformance_report.v2":
+    if schema == "ra.ext.conformance_report.v2":
         return "conformance_report"
-    if schema == "pi.ext.conformance_result.v1":
+    if schema == "ra.ext.conformance_result.v1":
         return "conformance_result"
     if isinstance(schema, str) and schema:
         return schema
@@ -372,7 +372,7 @@ def build_commands(extension_id: str, include_ignored: bool) -> dict[str, Any]:
 
 def default_cargo_env() -> dict[str, str]:
     user = os.environ.get("USER", "agent")
-    base = Path("/data/tmp/pi_agent_rust_cargo") / user
+    base = Path("/data/tmp/recur_agent_cargo") / user
     return {
         "CARGO_TARGET_DIR": str(base / "target"),
         "TMPDIR": str(base / "tmp"),
@@ -544,7 +544,7 @@ def run_self_tests() -> int:
         with tempfile.TemporaryDirectory() as tmp:
             report = Path(tmp) / "events.jsonl"
             report.write_text(
-                json.dumps({"schema": "pi.ext.gate_event.v1", "id": "x", "status": "fail"})
+                json.dumps({"schema": "ra.ext.gate_event.v1", "id": "x", "status": "fail"})
                 + "\n",
                 encoding="utf-8",
             )

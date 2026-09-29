@@ -22,7 +22,7 @@ export RUST_LOG="${RUST_LOG:-info}"
 
 # Secret-marker for the strict env-allowlist proof: the ambient test process
 # has it; the spawned fixture server must NOT inherit it.
-export PI_MCP_SECRET_MARKER="mcp-secret-marker-$STAMP"
+export RECUR_AGENT_MCP_SECRET_MARKER="mcp-secret-marker-$STAMP"
 
 echo "[mcp] Running e2e mcp lanes (correlation: $CORRELATION_ID)"
 echo "[mcp] Artifacts: $ARTIFACT_DIR"

@@ -40,13 +40,13 @@ is_positive_int() {
 }
 
 resolve_shared_tmp_root() {
-    local root="/data/tmp/pi_agent_rust/${USER:-agent}"
+    local root="/data/tmp/recur_agent/${USER:-agent}"
     local resolved=""
 
-    if [ -e /data/tmp/pi_agent_rust ] && resolved="$(cd /data/tmp/pi_agent_rust && pwd -P 2>/dev/null)"; then
+    if [ -e /data/tmp/recur_agent ] && resolved="$(cd /data/tmp/recur_agent && pwd -P 2>/dev/null)"; then
         case "$resolved" in
             "$PROJECT_ROOT"|"$PROJECT_ROOT"/*)
-                root="/data/tmp/pi_agent_rust_cargo/${USER:-agent}"
+                root="/data/tmp/recur_agent_cargo/${USER:-agent}"
                 ;;
         esac
     fi

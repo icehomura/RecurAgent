@@ -299,7 +299,7 @@ async function scenarioLoadInitCold(extName, entryPath, { cwd, runs }) {
   }
 
   return {
-    schema: "pi.ext.legacy_bench.v1",
+    schema: "ra.ext.legacy_bench.v1",
     ...EVIDENCE_PROVENANCE,
     runtime: RUNTIME_LABEL,
     runtime_kind: RUNTIME_KIND,
@@ -337,7 +337,7 @@ async function scenarioToolCall(extName, entryPath, toolName, toolInput, { cwd, 
   const callsPerSec = (iterations * 1_000_000) / nsToUs(elapsedNs);
 
   return {
-    schema: "pi.ext.legacy_bench.v1",
+    schema: "ra.ext.legacy_bench.v1",
     ...EVIDENCE_PROVENANCE,
     runtime: "legacy_pi_mono",
     scenario: `ext_tool_call/${toolName}`,
@@ -387,7 +387,7 @@ async function scenarioEventHook(extName, entryPath, { cwd, iterations }) {
   const callsPerSec = (iterations * 1_000_000) / nsToUs(elapsedNs);
 
   return {
-    schema: "pi.ext.legacy_bench.v1",
+    schema: "ra.ext.legacy_bench.v1",
     ...EVIDENCE_PROVENANCE,
     runtime: "legacy_pi_mono",
     scenario: "ext_event_hook/before_agent_start",
@@ -458,7 +458,7 @@ async function scenarioFullE2ELongSession(helloEntry, pirateEntry, { cwd, iterat
   const elapsedMs = nsToMs(elapsedNs);
 
   return {
-    schema: "pi.ext.legacy_bench.v1",
+    schema: "ra.ext.legacy_bench.v1",
     ...EVIDENCE_PROVENANCE,
     runtime: RUNTIME_LABEL,
     runtime_kind: RUNTIME_KIND,

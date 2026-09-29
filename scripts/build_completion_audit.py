@@ -23,8 +23,8 @@ from pathlib import Path
 from typing import Any
 
 
-AUDIT_SCHEMA = "pi.completion_audit.v1"
-CLOSEOUT_ADMISSION_SCHEMA = "pi.completion_audit.closeout_admission_evidence.v1"
+AUDIT_SCHEMA = "ra.completion_audit.v1"
+CLOSEOUT_ADMISSION_SCHEMA = "ra.completion_audit.closeout_admission_evidence.v1"
 GOLDEN_REPORT_DIRECTORY = Path("tests/golden_corpus/completion_audit")
 COMPLETE_AUDIT_GOLDEN = "complete_audit_projection.json"
 CLOSEOUT_ADMISSION_GOLDEN = "closeout_admission_projection.json"
@@ -1632,7 +1632,7 @@ def no_mock_case_projection(name: str, bead_id: str, audit: dict[str, Any]) -> d
 
 def assert_no_mock_projection_golden(cases: list[dict[str, Any]]) -> None:
     projection = {
-        "schema": "pi.completion_audit.no_mock_closeout_projection.v1",
+        "schema": "ra.completion_audit.no_mock_closeout_projection.v1",
         "generated_at": "2026-01-02T03:04:05+00:00",
         "cases": cases,
     }

@@ -94,16 +94,16 @@ record_case() {
 declare -a GEN_INVOCATIONS=()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 1: PI_GENERATE_VALIDATED_MANIFEST against truncated corpus
+# Test 1: RECUR_AGENT_GENERATE_VALIDATED_MANIFEST against truncated corpus
 # ─────────────────────────────────────────────────────────────────────────────
 echo "" | tee -a "$LOG_FILE"
-echo "--- Case 1: PI_GENERATE_VALIDATED_MANIFEST on truncated corpus ---" | tee -a "$LOG_FILE"
+echo "--- Case 1: RECUR_AGENT_GENERATE_VALIDATED_MANIFEST on truncated corpus ---" | tee -a "$LOG_FILE"
 
 MANIFEST_TRUNCATED_OUT="$TMP_DIR/manifest_truncated.json"
 SET_EXIT=0
-GEN1_OUT=$(PI_TEST_ARTIFACTS_ROOT="$TRUNCATED_DIR" \
-     PI_TEST_MANIFEST_PATH="$MANIFEST_TRUNCATED_OUT" \
-     PI_GENERATE_VALIDATED_MANIFEST=1 \
+GEN1_OUT=$(RECUR_AGENT_TEST_ARTIFACTS_ROOT="$TRUNCATED_DIR" \
+     RECUR_AGENT_TEST_MANIFEST_PATH="$MANIFEST_TRUNCATED_OUT" \
+     RECUR_AGENT_GENERATE_VALIDATED_MANIFEST=1 \
      cargo test --test ext_conformance_artifacts test_generate_validated_manifest -- --exact 2>&1) || SET_EXIT=$?
 
 if [ "$SET_EXIT" -ne 0 ] && echo "$GEN1_OUT" | grep -q "$OMITTED_TRACKED"; then
@@ -117,19 +117,19 @@ else
 fi
 
 GEN1_MSG=$(echo "$GEN1_OUT" | grep -E "(Corpus tree is incomplete|panicked at)" | head -n 3 | tr '\n' ' ')
-GEN_INVOCATIONS+=("{\"generator\":\"PI_GENERATE_VALIDATED_MANIFEST\",\"mode\":\"truncated\",\"exit_code\":$SET_EXIT,\"named_missing_file\":true,\"output_summary\":\"$GEN1_MSG\"}")
+GEN_INVOCATIONS+=("{\"generator\":\"RECUR_AGENT_GENERATE_VALIDATED_MANIFEST\",\"mode\":\"truncated\",\"exit_code\":$SET_EXIT,\"named_missing_file\":true,\"output_summary\":\"$GEN1_MSG\"}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 2: PI_GENERATE_PROVENANCE_VERIFICATION against truncated corpus
+# Test 2: RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION against truncated corpus
 # ─────────────────────────────────────────────────────────────────────────────
 echo "" | tee -a "$LOG_FILE"
-echo "--- Case 2: PI_GENERATE_PROVENANCE_VERIFICATION on truncated corpus ---" | tee -a "$LOG_FILE"
+echo "--- Case 2: RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION on truncated corpus ---" | tee -a "$LOG_FILE"
 
 PROV_TRUNCATED_OUT="$TMP_DIR/prov_truncated.json"
 SET_EXIT=0
-GEN2_OUT=$(PI_TEST_ARTIFACTS_ROOT="$TRUNCATED_DIR" \
-     PI_TEST_PROVENANCE_OUTPUT_PATH="$PROV_TRUNCATED_OUT" \
-     PI_GENERATE_PROVENANCE_VERIFICATION=1 \
+GEN2_OUT=$(RECUR_AGENT_TEST_ARTIFACTS_ROOT="$TRUNCATED_DIR" \
+     RECUR_AGENT_TEST_PROVENANCE_OUTPUT_PATH="$PROV_TRUNCATED_OUT" \
+     RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION=1 \
      cargo test --test ext_provenance_verification provenance_verification_evidence_log -- --exact 2>&1) || SET_EXIT=$?
 
 if [ "$SET_EXIT" -ne 0 ] && echo "$GEN2_OUT" | grep -q "$OMITTED_TRACKED"; then
@@ -143,19 +143,19 @@ else
 fi
 
 GEN2_MSG=$(echo "$GEN2_OUT" | grep -E "(Corpus tree is incomplete|panicked at)" | head -n 3 | tr '\n' ' ')
-GEN_INVOCATIONS+=("{\"generator\":\"PI_GENERATE_PROVENANCE_VERIFICATION\",\"mode\":\"truncated\",\"exit_code\":$SET_EXIT,\"named_missing_file\":true,\"output_summary\":\"$GEN2_MSG\"}")
+GEN_INVOCATIONS+=("{\"generator\":\"RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION\",\"mode\":\"truncated\",\"exit_code\":$SET_EXIT,\"named_missing_file\":true,\"output_summary\":\"$GEN2_MSG\"}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 3: PI_GENERATE_EXT_ENTRY_SCAN against truncated corpus
+# Test 3: RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN against truncated corpus
 # ─────────────────────────────────────────────────────────────────────────────
 echo "" | tee -a "$LOG_FILE"
-echo "--- Case 3: PI_GENERATE_EXT_ENTRY_SCAN on truncated corpus ---" | tee -a "$LOG_FILE"
+echo "--- Case 3: RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN on truncated corpus ---" | tee -a "$LOG_FILE"
 
 SCAN_TRUNCATED_OUT="$TMP_DIR/scan_truncated.json"
 SET_EXIT=0
-GEN3_OUT=$(PI_TEST_ARTIFACTS_ROOT="$TRUNCATED_DIR" \
-     PI_TEST_ENTRY_SCAN_PATH="$SCAN_TRUNCATED_OUT" \
-     PI_GENERATE_EXT_ENTRY_SCAN=1 \
+GEN3_OUT=$(RECUR_AGENT_TEST_ARTIFACTS_ROOT="$TRUNCATED_DIR" \
+     RECUR_AGENT_TEST_ENTRY_SCAN_PATH="$SCAN_TRUNCATED_OUT" \
+     RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN=1 \
      cargo test --test ext_entry_scan scan_extension_entry_points -- --exact 2>&1) || SET_EXIT=$?
 
 if [ "$SET_EXIT" -ne 0 ] && echo "$GEN3_OUT" | grep -q "$OMITTED_TRACKED"; then
@@ -169,19 +169,19 @@ else
 fi
 
 GEN3_MSG=$(echo "$GEN3_OUT" | grep -E "(Corpus tree is incomplete|panicked at)" | head -n 3 | tr '\n' ' ')
-GEN_INVOCATIONS+=("{\"generator\":\"PI_GENERATE_EXT_ENTRY_SCAN\",\"mode\":\"truncated\",\"exit_code\":$SET_EXIT,\"named_missing_file\":true,\"output_summary\":\"$GEN3_MSG\"}")
+GEN_INVOCATIONS+=("{\"generator\":\"RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN\",\"mode\":\"truncated\",\"exit_code\":$SET_EXIT,\"named_missing_file\":true,\"output_summary\":\"$GEN3_MSG\"}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 4: PI_GENERATE_VALIDATED_MANIFEST against complete corpus
+# Test 4: RECUR_AGENT_GENERATE_VALIDATED_MANIFEST against complete corpus
 # ─────────────────────────────────────────────────────────────────────────────
 echo "" | tee -a "$LOG_FILE"
-echo "--- Case 4: PI_GENERATE_VALIDATED_MANIFEST on complete corpus ---" | tee -a "$LOG_FILE"
+echo "--- Case 4: RECUR_AGENT_GENERATE_VALIDATED_MANIFEST on complete corpus ---" | tee -a "$LOG_FILE"
 
 MANIFEST_COMPLETE_OUT="$TMP_DIR/manifest_complete.json"
 SET_EXIT=0
-GEN4_OUT=$(PI_TEST_ARTIFACTS_ROOT="$COMPLETE_DIR" \
-     PI_TEST_MANIFEST_PATH="$MANIFEST_COMPLETE_OUT" \
-     PI_GENERATE_VALIDATED_MANIFEST=1 \
+GEN4_OUT=$(RECUR_AGENT_TEST_ARTIFACTS_ROOT="$COMPLETE_DIR" \
+     RECUR_AGENT_TEST_MANIFEST_PATH="$MANIFEST_COMPLETE_OUT" \
+     RECUR_AGENT_GENERATE_VALIDATED_MANIFEST=1 \
      cargo test --test ext_conformance_artifacts test_generate_validated_manifest -- --exact 2>&1) || SET_EXIT=$?
 
 if [ "$SET_EXIT" -eq 0 ] && [ -f "$MANIFEST_COMPLETE_OUT" ]; then
@@ -195,19 +195,19 @@ else
     record_case "manifest_generator_succeeds_on_complete_tree" "FAIL" "generator failed on complete tree: exit=$SET_EXIT"
 fi
 
-GEN_INVOCATIONS+=("{\"generator\":\"PI_GENERATE_VALIDATED_MANIFEST\",\"mode\":\"complete\",\"exit_code\":$SET_EXIT,\"named_missing_file\":false,\"output_summary\":\"Success: written $MANIFEST_COMPLETE_OUT\"}")
+GEN_INVOCATIONS+=("{\"generator\":\"RECUR_AGENT_GENERATE_VALIDATED_MANIFEST\",\"mode\":\"complete\",\"exit_code\":$SET_EXIT,\"named_missing_file\":false,\"output_summary\":\"Success: written $MANIFEST_COMPLETE_OUT\"}")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 5: PI_GENERATE_PROVENANCE_VERIFICATION against complete corpus
+# Test 5: RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION against complete corpus
 # ─────────────────────────────────────────────────────────────────────────────
 echo "" | tee -a "$LOG_FILE"
-echo "--- Case 5: PI_GENERATE_PROVENANCE_VERIFICATION on complete corpus ---" | tee -a "$LOG_FILE"
+echo "--- Case 5: RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION on complete corpus ---" | tee -a "$LOG_FILE"
 
 PROV_COMPLETE_OUT="$TMP_DIR/prov_complete.json"
 SET_EXIT=0
-GEN5_OUT=$(PI_TEST_ARTIFACTS_ROOT="$COMPLETE_DIR" \
-     PI_TEST_PROVENANCE_OUTPUT_PATH="$PROV_COMPLETE_OUT" \
-     PI_GENERATE_PROVENANCE_VERIFICATION=1 \
+GEN5_OUT=$(RECUR_AGENT_TEST_ARTIFACTS_ROOT="$COMPLETE_DIR" \
+     RECUR_AGENT_TEST_PROVENANCE_OUTPUT_PATH="$PROV_COMPLETE_OUT" \
+     RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION=1 \
      cargo test --test ext_provenance_verification provenance_verification_evidence_log -- --exact 2>&1) || SET_EXIT=$?
 
 if [ "$SET_EXIT" -eq 0 ] && [ -f "$PROV_COMPLETE_OUT" ]; then
@@ -222,7 +222,7 @@ else
     record_case "provenance_generator_succeeds_on_complete_tree" "FAIL" "generator failed on complete tree: exit=$SET_EXIT"
 fi
 
-GEN_INVOCATIONS+=("{\"generator\":\"PI_GENERATE_PROVENANCE_VERIFICATION\",\"mode\":\"complete\",\"exit_code\":$SET_EXIT,\"named_missing_file\":false,\"output_summary\":\"Success: written $PROV_COMPLETE_OUT\"}")
+GEN_INVOCATIONS+=("{\"generator\":\"RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION\",\"mode\":\"complete\",\"exit_code\":$SET_EXIT,\"named_missing_file\":false,\"output_summary\":\"Success: written $PROV_COMPLETE_OUT\"}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Generate Structured JSON Evidence Artifact

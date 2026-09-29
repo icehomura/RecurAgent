@@ -39,8 +39,8 @@ from preflight_budget_inputs import (
 )
 
 
-STAGING_SCHEMA = "pi.perf.artifact_staging_manifest.v1"
-STAGING_ENTRY_SCHEMA = "pi.perf.artifact_staging_entry.v1"
+STAGING_SCHEMA = "ra.perf.artifact_staging_manifest.v1"
+STAGING_ENTRY_SCHEMA = "ra.perf.artifact_staging_entry.v1"
 
 
 def utc_now() -> datetime:
@@ -183,7 +183,7 @@ def artifact_entry(
 
 
 def run_id_from_env() -> str | None:
-    for key in ("PERF_CLAIM_CORRELATION_ID", "CI_CORRELATION_ID", "PI_PERF_CORRELATION_ID"):
+    for key in ("PERF_CLAIM_CORRELATION_ID", "CI_CORRELATION_ID", "RECUR_AGENT_PERF_CORRELATION_ID"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
@@ -547,7 +547,7 @@ def write_fixture(root: Path, include_policy: bool) -> None:
     (root / "target/perf/perf/pijs_workload_perf.jsonl").write_text(
         json.dumps(
             {
-                "schema": "pi.perf.workload.v1",
+                "schema": "ra.perf.workload.v1",
                 "timestamp": generated_at,
                 "source_commit": "test-commit",
                 "source_dirty": False,
@@ -559,11 +559,11 @@ def write_fixture(root: Path, include_policy: bool) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (root / "target/release/pi").write_bytes(b"binary")
+    (root / "target/release/ra").write_bytes(b"binary")
     (root / "tests/perf/reports/extension_benchmark_stratification.json").write_text(
         json.dumps(
             {
-                "schema": "pi.perf.extension_benchmark_stratification.v1",
+                "schema": "ra.perf.extension_benchmark_stratification.v1",
                 "generated_at": generated_at,
                 "source_commit": "test-commit",
                 "source_dirty": False,
@@ -591,7 +591,7 @@ def write_fixture(root: Path, include_policy: bool) -> None:
     context_budget_path.write_text(
         json.dumps(
             {
-                "schema": "pi.semantic_context.performance_budget.v1",
+                "schema": "ra.semantic_context.performance_budget.v1",
                 "environment": {
                     "cargo_target_dir": str(root / "target"),
                     "tmpdir": str(root / "tmp"),
@@ -839,13 +839,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--output", help="Manifest output path. Defaults to stdout.")
     parser.add_argument(
         "--evidence-cache-dir",
-        help="Perf evidence cache directory. Defaults to PI_PERF_EVIDENCE_CACHE_DIR or target/perf/evidence_cache.",
+        help="Perf evidence cache directory. Defaults to RECUR_AGENT_PERF_EVIDENCE_CACHE_DIR or target/perf/evidence_cache.",
     )
     parser.add_argument(
         "--cache-ttl-hours",
         type=float,
         default=float(
-            os.environ.get("PI_PERF_EVIDENCE_CACHE_TTL_HOURS", DEFAULT_EVIDENCE_CACHE_TTL_HOURS)
+            os.environ.get("RECUR_AGENT_PERF_EVIDENCE_CACHE_TTL_HOURS", DEFAULT_EVIDENCE_CACHE_TTL_HOURS)
         ),
         help="Maximum reusable cache TTL in hours.",
     )
@@ -855,7 +855,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--cache-git-commit",
-        help="Expected cached evidence git commit. Defaults to PI_PERF_GIT_COMMIT or current HEAD.",
+        help="Expected cached evidence git commit. Defaults to RECUR_AGENT_PERF_GIT_COMMIT or current HEAD.",
     )
     parser.add_argument("--run-id", help="Run/correlation ID to store when updating the evidence cache.")
     parser.add_argument(
@@ -871,7 +871,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--max-age-hours",
         type=float,
         default=float(
-            os.environ.get("PI_PERF_MAX_ARTIFACT_AGE_HOURS", DEFAULT_MAX_ARTIFACT_AGE_HOURS)
+            os.environ.get("RECUR_AGENT_PERF_MAX_ARTIFACT_AGE_HOURS", DEFAULT_MAX_ARTIFACT_AGE_HOURS)
         ),
         help="Maximum accepted artifact age in hours.",
     )
@@ -890,7 +890,7 @@ def main(argv: list[str]) -> int:
     remote_target_dir = Path(args.remote_target_dir).expanduser() if args.remote_target_dir else None
     cache_dir = resolve_cache_dir(
         target_dir,
-        args.evidence_cache_dir or os.environ.get("PI_PERF_EVIDENCE_CACHE_DIR"),
+        args.evidence_cache_dir or os.environ.get("RECUR_AGENT_PERF_EVIDENCE_CACHE_DIR"),
     )
     manifest = build_staging_manifest(
         repo_root=repo_root,
@@ -902,7 +902,7 @@ def main(argv: list[str]) -> int:
         runner_mode=args.runner_mode,
         cache_dir=cache_dir,
         cache_git_commit=args.cache_git_commit
-        or os.environ.get("PI_PERF_GIT_COMMIT")
+        or os.environ.get("RECUR_AGENT_PERF_GIT_COMMIT")
         or current_git_commit(repo_root),
         cache_profile=args.cache_profile
         or os.environ.get("PERF_PROFILE")
@@ -911,7 +911,7 @@ def main(argv: list[str]) -> int:
         cache_ttl_hours=args.cache_ttl_hours,
         run_id=args.run_id or run_id_from_env(),
         expected_correlation_id=args.expected_correlation_id
-        or os.environ.get("PI_PERF_EXPECTED_CORRELATION_ID"),
+        or os.environ.get("RECUR_AGENT_PERF_EXPECTED_CORRELATION_ID"),
         update_evidence_cache=args.update_evidence_cache,
     )
     text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"

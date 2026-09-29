@@ -26,12 +26,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Iterable
 
-SCHEMA = "pi.scratch_cleanup_plan.v1"
-OWNER_MARKER_SCHEMA = "pi.scratch_target_owner.v1"
-DEFAULT_CARGO_ROOT = "/data/tmp/pi_agent_rust_cargo"
+SCHEMA = "ra.scratch_cleanup_plan.v1"
+OWNER_MARKER_SCHEMA = "ra.scratch_target_owner.v1"
+DEFAULT_CARGO_ROOT = "/data/tmp/recur_agent_cargo"
 DEFAULT_ROOTS = ("/tmp", DEFAULT_CARGO_ROOT)
-DEFAULT_PATTERNS = ("franken*", "pi_agent_rust*", "pi-agent-rust*")
-OWNER_MARKER_FILES = (".pi-agent-target.json", ".pi_agent_rust_target_owner.json")
+DEFAULT_PATTERNS = ("franken*", "recur_agent*", "pi-agent-rust*")
+OWNER_MARKER_FILES = (".pi-agent-target.json", ".recur_agent_target_owner.json")
 OWNER_MARKER_MAX_BYTES = 64 * 1024
 
 
@@ -127,8 +127,8 @@ def classify_group(name: str) -> str:
         return "franken_engine"
     if lowered.startswith("franken_node") or lowered.startswith("franken-node"):
         return "franken_node"
-    if lowered.startswith("pi_agent_rust") or lowered.startswith("pi-agent-rust"):
-        return "pi_agent_rust"
+    if lowered.startswith("recur_agent") or lowered.startswith("pi-agent-rust"):
+        return "recur_agent"
     if lowered.startswith("franken"):
         return "franken_other"
     return "other"
@@ -139,7 +139,7 @@ def owner_hint(root: Path, path: Path) -> str:
         relative_parts = path.relative_to(root).parts
     except ValueError:
         relative_parts = path.parts
-    if str(root).rstrip("/") == "/data/tmp/pi_agent_rust_cargo" and relative_parts:
+    if str(root).rstrip("/") == "/data/tmp/recur_agent_cargo" and relative_parts:
         return relative_parts[0] or "unknown"
     name = path.name
     for marker in ("codex", "claude", "agent", "ubuntu"):
@@ -485,7 +485,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--root",
         action="append",
         dest="roots",
-        help="scratch root to scan; may be repeated; defaults to /tmp and /data/tmp/pi_agent_rust_cargo",
+        help="scratch root to scan; may be repeated; defaults to /tmp and /data/tmp/recur_agent_cargo",
     )
     parser.add_argument(
         "--pattern",
@@ -524,7 +524,7 @@ def run_self_test() -> int:
                 {
                     "schema": OWNER_MARKER_SCHEMA,
                     "agent_name": "VioletBear",
-                    "project_key": "/data/projects/pi_agent_rust",
+                    "project_key": "/data/projects/RecurAgent",
                     "purpose": "cargo target cache",
                     "created_at": utc_now_iso(),
                     "expires_at": future.isoformat(),
@@ -560,13 +560,13 @@ def run_self_test() -> int:
             encoding="utf-8",
         )
         (root / "franken_node_beta").write_text("beta", encoding="utf-8")
-        (root / "pi_agent_rust_gamma").mkdir()
+        (root / "recur_agent_gamma").mkdir()
         (root / "ignore_me").write_text("ignored", encoding="utf-8")
         os.symlink(root / "franken_node_beta", root / "franken_engine_link")
 
         plan = build_plan(
             roots=[root],
-            patterns=("franken*", "pi_agent_rust*"),
+            patterns=("franken*", "recur_agent*"),
             min_age_seconds=0,
             allowed_roots=(root,),
             entry_limit=10,
@@ -582,7 +582,7 @@ def run_self_test() -> int:
         assert plan["totals"]["matched_entries"] == 8
         assert plan["totals"]["by_group"]["franken_engine"] == 6
         assert plan["totals"]["by_group"]["franken_node"] == 1
-        assert plan["totals"]["by_group"]["pi_agent_rust"] == 1
+        assert plan["totals"]["by_group"]["recur_agent"] == 1
         assert plan["totals"]["by_owner_marker_status"]["active"] == 1
         assert plan["totals"]["by_owner_marker_status"]["expired"] == 1
         assert plan["totals"]["by_owner_marker_status"]["inactive"] == 1

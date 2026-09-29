@@ -16,8 +16,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = "pi.ci.parity_evidence.v1"
-COUNTING_TAXONOMY_SCHEMA = "pi.qa.counting_taxonomy.v1"
+SCHEMA = "ra.ci.parity_evidence.v1"
+COUNTING_TAXONOMY_SCHEMA = "ra.qa.counting_taxonomy.v1"
 COUNTING_TAXONOMY_CONTRACT_REL_PATH = "docs/counting-taxonomy-contract.json"
 PROVIDER_METADATA_REL_PATH = "src/provider_metadata.rs"
 EXTENSION_CATALOG_REL_PATH = "docs/extension-master-catalog.json"

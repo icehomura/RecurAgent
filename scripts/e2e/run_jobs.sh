@@ -5,7 +5,7 @@
 # Hermetic: runs the jobs:: unit suite (registry, tail ring, wait/cancel)
 # plus the jobs integration target (instant background start + completion
 # notice drain, tree-kill cancel with a child-spawning script, session-exit
-# kill_all with zero survivors, and the PI_JOBS_AT_CAPACITY ninth-job
+# kill_all with zero survivors, and the RECUR_AGENT_JOBS_AT_CAPACITY ninth-job
 # refusal). No network lanes.
 set -euo pipefail
 

@@ -26,7 +26,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = "pi.perf.criterion_estimate.v1"
+SCHEMA = "ra.perf.criterion_estimate.v1"
 
 
 def project_root() -> Path:

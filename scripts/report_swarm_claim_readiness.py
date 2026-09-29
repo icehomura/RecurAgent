@@ -33,12 +33,12 @@ from check_readme_evidence_freshness import (
 )
 
 
-REPORT_SCHEMA = "pi.swarm.claim_readiness_report.v1"
-PERF_BUDGET_SUMMARY_SCHEMA = "pi.perf.budget_summary.v2"
-STALE_CLAIM_REPORT_SCHEMA = "pi.swarm.stale_claim_report.v1"
-REDUNDANT_AGENT_WORK_SCHEMA = "pi.swarm.redundant_agent_work.v1"
-HOSTCALL_QUEUE_REPORT_SCHEMA = "pi.swarm.hostcall_queue_readiness.v1"
-OPERATOR_EXPLANATIONS_SCHEMA = "pi.swarm.operator_explanations.v1"
+REPORT_SCHEMA = "ra.swarm.claim_readiness_report.v1"
+PERF_BUDGET_SUMMARY_SCHEMA = "ra.perf.budget_summary.v2"
+STALE_CLAIM_REPORT_SCHEMA = "ra.swarm.stale_claim_report.v1"
+REDUNDANT_AGENT_WORK_SCHEMA = "ra.swarm.redundant_agent_work.v1"
+HOSTCALL_QUEUE_REPORT_SCHEMA = "ra.swarm.hostcall_queue_readiness.v1"
+OPERATOR_EXPLANATIONS_SCHEMA = "ra.swarm.operator_explanations.v1"
 GOLDEN_REPORT_DIRECTORY = Path("tests/golden_corpus/swarm_claim_readiness")
 COMPLETE_REPORT_GOLDEN = "complete_report_projection.json"
 UPDATE_GOLDEN_ENV = "UPDATE_SWARM_CLAIM_READINESS_GOLDEN"
@@ -385,7 +385,7 @@ EVIDENCE_SPECS = (
         path="tests/full_suite_gate/full_suite_verdict.json",
         description="Full-suite gate verdict.",
         claim_surface="release_facing",
-        required_schema="pi.ci.full_suite_gate.v1",
+        required_schema="ra.ci.full_suite_gate.v1",
         status_path="verdict",
         ok_values=("pass",),
         provenance_group="full_suite",
@@ -396,7 +396,7 @@ EVIDENCE_SPECS = (
         path="tests/full_suite_gate/certification_verdict.json",
         description="Certification lane verdict.",
         claim_surface="release_facing",
-        required_schema="pi.ci.certification_lane.v1",
+        required_schema="ra.ci.certification_lane.v1",
         status_path="verdict",
         ok_values=("pass",),
         provenance_group="full_suite",
@@ -407,7 +407,7 @@ EVIDENCE_SPECS = (
         path="tests/evidence_bundle/index.json",
         description="Indexed evidence bundle for release triage.",
         claim_surface="release_facing",
-        required_schema="pi.ci.evidence_bundle.v1",
+        required_schema="ra.ci.evidence_bundle.v1",
         provenance_group="full_suite",
     ),
     EvidenceSpec(
@@ -416,7 +416,7 @@ EVIDENCE_SPECS = (
         path="docs/evidence/dropin-certification-verdict.json",
         description="Strict drop-in release claim gate.",
         claim_surface="release_facing",
-        required_schema="pi.dropin.certification_verdict.v1",
+        required_schema="ra.dropin.certification_verdict.v1",
         status_path="overall_verdict",
         ok_values=("CERTIFIED",),
         provenance_group="dropin",
@@ -428,7 +428,7 @@ EVIDENCE_SPECS = (
         description="Normative drop-in claim policy contract.",
         claim_surface="release_policy",
         generated=False,
-        required_schema="pi.dropin.certification_contract.v1",
+        required_schema="ra.dropin.certification_contract.v1",
     ),
     EvidenceSpec(
         id="dropin_differential_suite",
@@ -436,7 +436,7 @@ EVIDENCE_SPECS = (
         path="docs/evidence/dropin-differential-evidence-suite.json",
         description="Differential evidence suite backing drop-in claims.",
         claim_surface="historical_snapshot",
-        required_schema="pi.dropin.differential_evidence_suite.v1",
+        required_schema="ra.dropin.differential_evidence_suite.v1",
         generated=False,
         timestamp_paths=(),
         provenance_paths=(),
@@ -447,7 +447,7 @@ EVIDENCE_SPECS = (
         path="docs/evidence/dropin-feature-inventory-matrix.json",
         description="Feature inventory matrix for drop-in parity.",
         claim_surface="historical_snapshot",
-        required_schema="pi.dropin.feature_inventory.v1",
+        required_schema="ra.dropin.feature_inventory.v1",
         generated=False,
         timestamp_paths=(),
         provenance_paths=(),
@@ -458,7 +458,7 @@ EVIDENCE_SPECS = (
         path="docs/evidence/dropin-parity-gap-ledger.json",
         description="Parity gap ledger used by release claim policy.",
         claim_surface="historical_snapshot",
-        required_schema="pi.dropin.parity_gap_ledger.v1",
+        required_schema="ra.dropin.parity_gap_ledger.v1",
         generated=False,
         timestamp_paths=(),
         provenance_paths=(),
@@ -469,7 +469,7 @@ EVIDENCE_SPECS = (
         path="tests/ext_conformance/reports/gate/must_pass_gate_verdict.json",
         description="Strict extension must-pass verdict.",
         claim_surface="release_facing",
-        required_schema="pi.ext.must_pass_gate.v1",
+        required_schema="ra.ext.must_pass_gate.v1",
         status_path="status",
         ok_values=("pass",),
         zero_paths=("observed.must_pass_failed", "observed.must_pass_skipped"),
@@ -481,7 +481,7 @@ EVIDENCE_SPECS = (
         path="tests/ext_conformance/reports/health_delta/health_delta_report.json",
         description="Extension health delta against baseline.",
         claim_surface="release_facing",
-        required_schema="pi.ext.health_delta.v1",
+        required_schema="ra.ext.health_delta.v1",
         zero_paths=("current_summary.skipped",),
         provenance_group="extension_conformance",
     ),
@@ -499,7 +499,7 @@ EVIDENCE_SPECS = (
         path="docs/evidence/ext-stress-reactor-queue-coverage.json",
         description="Reactor queue stress coverage evidence.",
         claim_surface="release_facing",
-        required_schema="pi.ext.reactor_queue_coverage_evidence.v1",
+        required_schema="ra.ext.reactor_queue_coverage_evidence.v1",
         status_path="status",
         ok_values=("PASS", "pass"),
         provenance_group="extension_reactor_queue",
@@ -518,7 +518,7 @@ EVIDENCE_SPECS = (
         path="tests/full_suite_gate/swarm_activity_digest.json",
         description="Generated bounded digest for the latest multi-agent run.",
         claim_surface="release_facing",
-        required_schema="pi.swarm.activity_digest.v1",
+        required_schema="ra.swarm.activity_digest.v1",
         provenance_group="activity_ledger",
     ),
 )
@@ -3877,12 +3877,12 @@ def run_self_test() -> int:
         make_complete_fixture(repo_root, now)
         payload = fixture_payload(EVIDENCE_SPECS[0], now, "fixture-run")
         assert payload is not None
-        payload["schema"] = "pi.perf.budget_summary.v1"
+        payload["schema"] = "ra.perf.budget_summary.v1"
         write_artifact(repo_root, budget_path, payload, mtime=now)
         report = build_report(repo_root, now=now)
         details = "\n".join(issue["detail"] for issue in report["blocking_issues"])
         assert_condition(
-            "expected schema 'pi.perf.budget_summary.v2'" in details,
+            "expected schema 'ra.perf.budget_summary.v2'" in details,
             "legacy v1 budget summary must not authorize current claims",
         )
 
@@ -3999,7 +3999,7 @@ def run_self_test() -> int:
                 repo_root,
                 "tests/perf/reports/report_head_advance.json",
                 {
-                    "schema": "pi.swarm.report_head_advance_fixture.v1",
+                    "schema": "ra.swarm.report_head_advance_fixture.v1",
                     "generated_at": format_datetime(now),
                 },
                 mtime=now,
@@ -4882,7 +4882,7 @@ def run_self_test() -> int:
             activity_path,
             [
                 {
-                    "schema": "pi.swarm.activity_ledger.v1",
+                    "schema": "ra.swarm.activity_ledger.v1",
                     "kind": "agent_mail",
                     "timestamp_ms": int((now - timedelta(hours=2)).timestamp() * 1000),
                     "ids": {

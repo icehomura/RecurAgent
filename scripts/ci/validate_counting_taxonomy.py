@@ -105,7 +105,7 @@ def validate_artifact(artifact: dict, contract: dict) -> list[str]:
 
 def fixture_contract() -> dict:
     return {
-        "taxonomy_schema": "pi.qa.counting_taxonomy.v1",
+        "taxonomy_schema": "ra.qa.counting_taxonomy.v1",
         "required_metric_fields": [
             "metric_key",
             "granularity_label",
@@ -141,7 +141,7 @@ def fixture_metric(label: str, value: int | float = 1) -> dict:
 def fixture_artifact() -> dict:
     return {
         "counting_taxonomy": {
-            "schema": "pi.qa.counting_taxonomy.v1",
+            "schema": "ra.qa.counting_taxonomy.v1",
             "dimensions": {
                 "providers": {
                     "metrics": [

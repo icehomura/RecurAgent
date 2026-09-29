@@ -23,8 +23,8 @@ from pathlib import Path
 from typing import Any
 
 
-REPORT_SCHEMA = "pi.swarm.runpack_freshness_report.v1"
-RUNPACK_SCHEMA = "pi.swarm.operator_runpack.v1"
+REPORT_SCHEMA = "ra.swarm.runpack_freshness_report.v1"
+RUNPACK_SCHEMA = "ra.swarm.operator_runpack.v1"
 DEFAULT_MAX_AGE_HOURS = 336
 MTIME_SKEW_SECONDS = 2.0
 PLACEHOLDER_PREFIXES = ("[", "<")
@@ -594,7 +594,7 @@ def fixture_runpack(
                 }
             ],
             "capture": {
-                "schema": "pi.swarm.operator_runpack_capture.v1",
+                "schema": "ra.swarm.operator_runpack_capture.v1",
                 "generated_at": generated_at.isoformat(),
                 "generated_source_paths": {
                     "doctor_swarm": path_text,
@@ -815,7 +815,7 @@ def run_self_test() -> int:
         closeout_artifact = write_json(
             root / "artifacts/closeout.json",
             {
-                "schema": "pi.swarm.progress_slo.closeout_gate.v1",
+                "schema": "ra.swarm.progress_slo.closeout_gate.v1",
                 "generated_at": generated_at.isoformat(),
                 "child_artifact_map": [
                     {

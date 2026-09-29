@@ -205,7 +205,7 @@ print(json.dumps(event, sort_keys=True))
 " "$@" >> "$LOG_FILE"
 }
 
-emit_event "pi.smoke.session_start.v1" \
+emit_event "ra.smoke.session_start.v1" \
     "artifact_dir=$ARTIFACT_DIR" \
     "timestamp=$TIMESTAMP" \
     "skip_lint=$SKIP_LINT" \
@@ -278,7 +278,7 @@ if [[ "$SKIP_LINT" == false ]]; then
 
     lint_end=$(date +%s)
     LINT_DURATION=$((lint_end - lint_start))
-    emit_event "pi.smoke.lint.v1" \
+    emit_event "ra.smoke.lint.v1" \
         "ok=$LINT_OK" \
         "duration_seconds=$LINT_DURATION"
 fi
@@ -307,7 +307,7 @@ fi
 build_end=$(date +%s)
 BUILD_DURATION=$((build_end - build_start))
 echo "  build:   ${BUILD_DURATION}s"
-emit_event "pi.smoke.build.v1" "duration_seconds=$BUILD_DURATION"
+emit_event "ra.smoke.build.v1" "duration_seconds=$BUILD_DURATION"
 
 # ─── Test phase ───────────────────────────────────────────────────────────────
 
@@ -332,7 +332,7 @@ for i in "${!TARGETS[@]}"; do
     if [[ ! -f "tests/${target}.rs" ]]; then
         echo "  $target: SKIP (file missing)"
         ((SKIPPED++)) || true
-        emit_event "pi.smoke.target.v1" \
+        emit_event "ra.smoke.target.v1" \
             "target=$target" "suite=$suite" "status=skip" \
             "reason=file_missing" "duration_seconds=0"
         TARGET_RESULTS+=("{\"target\":\"$target\",\"suite\":\"$suite\",\"status\":\"skip\",\"duration_seconds\":0}")
@@ -372,7 +372,7 @@ for i in "${!TARGETS[@]}"; do
         status="fail"
     fi
 
-    emit_event "pi.smoke.target.v1" \
+    emit_event "ra.smoke.target.v1" \
         "target=$target" "suite=$suite" "status=$status" \
         "exit_code=$exit_code" "duration_seconds=$target_duration"
 
@@ -413,7 +413,7 @@ failed_json+="]"
 
 cat > "$SUMMARY_FILE" <<ENDJSON
 {
-  "schema": "pi.smoke.summary.v1",
+  "schema": "ra.smoke.summary.v1",
   "timestamp": "$TIMESTAMP",
   "verdict": "$VERDICT",
   "cargo_runner_request": "$CARGO_RUNNER_REQUEST",
@@ -434,7 +434,7 @@ cat > "$SUMMARY_FILE" <<ENDJSON
 }
 ENDJSON
 
-emit_event "pi.smoke.session_end.v1" \
+emit_event "ra.smoke.session_end.v1" \
     "verdict=$VERDICT" \
     "passed=$PASSED" \
     "failed=$FAILED" \

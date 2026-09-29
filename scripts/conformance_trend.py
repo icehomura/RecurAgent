@@ -30,7 +30,7 @@ SUMMARY_PATH = REPORTS_DIR / "conformance_summary.json"
 TREND_PATH = REPORTS_DIR / "conformance_trend.jsonl"
 TREND_REPORT_PATH = REPORTS_DIR / "TREND_REPORT.md"
 
-SCHEMA_VERSION = "pi.ext.conformance_trend_entry.v1"
+SCHEMA_VERSION = "ra.ext.conformance_trend_entry.v1"
 
 
 def git_info() -> tuple[str, str]:

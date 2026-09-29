@@ -48,7 +48,7 @@ REQUIRED_ARTIFACT_INVENTORY_AREAS = {
     "perf_report_generators",
     "security_scenarios",
 }
-ARTIFACT_INVENTORY_SCHEMA = "pi.traceability.high_value_suite_artifact_inventory.v1"
+ARTIFACT_INVENTORY_SCHEMA = "ra.traceability.high_value_suite_artifact_inventory.v1"
 ALLOWED_E2E_ROW_STATUSES = {"covered", "waived", "planned"}
 ALLOWED_E2E_SCENARIO_MATRIX_SCHEMAS = {
     "pi.e2e.scenario_matrix.v1",

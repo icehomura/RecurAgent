@@ -98,10 +98,10 @@ if ! python3 -c "import socket; socket.create_connection(('127.0.0.1', $PORT), t
     exit 3
 fi
 
-export PI_SSH_E2E=1
-export PI_SSH_ALLOWED_HOSTS="127.0.0.1"
-export PI_SSH_CLIENT_CONFIG_FILE="$FIXTURE/client_config"
-export PI_SSH_E2E_WORK="$WORK"
+export RECUR_AGENT_SSH_E2E=1
+export RECUR_AGENT_SSH_ALLOWED_HOSTS="127.0.0.1"
+export RECUR_AGENT_SSH_CLIENT_CONFIG_FILE="$FIXTURE/client_config"
+export RECUR_AGENT_SSH_E2E_WORK="$WORK"
 
 echo "[ssh-e2e] running e2e_ssh_workspace (correlation: $CORRELATION_ID, work: $WORK)"
 cargo test --test e2e_ssh_workspace -- --nocapture 2>&1 | tee "$ARTIFACT_DIR/run.log"

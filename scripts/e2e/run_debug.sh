@@ -6,7 +6,7 @@
 # scopes / variables / step / evaluate → terminate with zero leftover
 # processes), the lldb-dap attach lane proves attach-by-pid, and the
 # lldb-dap launch quirk lane stays #[ignore]d pending an adapter upgrade.
-# PI_DEBUG_REQUIRE_LLDB=1 turns adapter-absence skips into loud failures.
+# RECUR_AGENT_DEBUG_REQUIRE_LLDB=1 turns adapter-absence skips into loud failures.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

@@ -35,11 +35,11 @@ from pathlib import Path
 from typing import Any
 
 
-AUDIT_SCHEMA = "pi.closeout_gate_freshness_audit.v1"
-OPERATOR_SUMMARY_SCHEMA = "pi.closeout_gate_freshness_operator_summary.v1"
+AUDIT_SCHEMA = "ra.closeout_gate_freshness_audit.v1"
+OPERATOR_SUMMARY_SCHEMA = "ra.closeout_gate_freshness_operator_summary.v1"
 CONTRACT_GLOB = "docs/contracts/*closeout-gate-contract.json"
 EVIDENCE_GLOB = "docs/evidence/*closeout-gate*.json"
-REGISTRY_SCHEMA = "pi.closeout_evidence_registry.v1"
+REGISTRY_SCHEMA = "ra.closeout_evidence_registry.v1"
 REGISTRY_PATH = Path("docs/contracts/closeout-evidence-registry.json")
 README_CLOSEOUT_ARTIFACT_RE = re.compile(
     r"docs/evidence/[A-Za-z0-9._/-]*closeout-gate[A-Za-z0-9._/-]*\.json"
@@ -886,7 +886,7 @@ def audit_closeout_registry(
             "fail",
             "registry_parse",
             f"failed to load closeout evidence registry: {exc}",
-            "Create or repair docs/contracts/closeout-evidence-registry.json with schema pi.closeout_evidence_registry.v1.",
+            "Create or repair docs/contracts/closeout-evidence-registry.json with schema ra.closeout_evidence_registry.v1.",
             path=REGISTRY_PATH.as_posix(),
         ))
         return {
@@ -905,7 +905,7 @@ def audit_closeout_registry(
             "fail",
             "registry_schema",
             f"registry schema is {schema!r}, expected {REGISTRY_SCHEMA}",
-            "Set the registry schema to pi.closeout_evidence_registry.v1.",
+            "Set the registry schema to ra.closeout_evidence_registry.v1.",
             path=REGISTRY_PATH.as_posix(),
         ))
 
@@ -1570,8 +1570,8 @@ def create_non_ancestor_commit(root: Path, now: datetime) -> str:
 def write_fixture(root: Path, now: datetime, commit: str, generated_at: datetime | None = None) -> None:
     generated_at = generated_at or now
     contract = {
-        "schema": "pi.demo.closeout_gate_contract.v1",
-        "decision_gate_schema": "pi.demo.closeout_gate.v1",
+        "schema": "ra.demo.closeout_gate_contract.v1",
+        "decision_gate_schema": "ra.demo.closeout_gate.v1",
         "required_top_level_keys": [
             "schema",
             "generated_at",
@@ -1584,7 +1584,7 @@ def write_fixture(root: Path, now: datetime, commit: str, generated_at: datetime
         "required_check_ids": ["child_beads_closed"],
     }
     evidence = {
-        "schema": "pi.demo.closeout_gate.v1",
+        "schema": "ra.demo.closeout_gate.v1",
         "generated_at": generated_at.isoformat().replace("+00:00", "Z"),
         "status": "pass",
         "required_checks": ["child_beads_closed"],
@@ -1629,7 +1629,7 @@ def write_fixture(root: Path, now: datetime, commit: str, generated_at: datetime
             registry_entry(
                 artifact_path="docs/evidence/demo-closeout-gate.json",
                 contract_path="docs/contracts/demo-closeout-gate-contract.json",
-                decision_gate_schema="pi.demo.closeout_gate.v1",
+                decision_gate_schema="ra.demo.closeout_gate.v1",
                 source_bead_or_epic="bd-demo",
                 reference_paths=["README.md"],
             )
@@ -1639,8 +1639,8 @@ def write_fixture(root: Path, now: datetime, commit: str, generated_at: datetime
 
 def write_legacy_shape_fixture(root: Path, now: datetime) -> None:
     contract = {
-        "schema": "pi.demo.legacy_closeout_gate_contract.v1",
-        "decision_gate_schema": "pi.demo.legacy_closeout_gate.v1",
+        "schema": "ra.demo.legacy_closeout_gate_contract.v1",
+        "decision_gate_schema": "ra.demo.legacy_closeout_gate.v1",
         "required_top_level_keys": [
             "schema",
             "generated_at",
@@ -1653,7 +1653,7 @@ def write_legacy_shape_fixture(root: Path, now: datetime) -> None:
         "required_check_ids": [],
     }
     evidence = {
-        "schema": "pi.demo.legacy_closeout_gate.v1",
+        "schema": "ra.demo.legacy_closeout_gate.v1",
         "generated_at": now.isoformat().replace("+00:00", "Z"),
         "child_closeout": [
             {
@@ -1682,7 +1682,7 @@ def write_legacy_shape_fixture(root: Path, now: datetime) -> None:
         registry_entry(
             artifact_path="docs/evidence/legacy-closeout-gate.json",
             contract_path="docs/contracts/legacy-closeout-gate-contract.json",
-            decision_gate_schema="pi.demo.legacy_closeout_gate.v1",
+            decision_gate_schema="ra.demo.legacy_closeout_gate.v1",
             source_bead_or_epic="bd-legacy",
             reference_paths=["README.md"],
         )
@@ -1795,7 +1795,7 @@ def run_self_test() -> int:
 
         write_fixture(root, now, commit)
         registry_schema = load_json_object(root / REGISTRY_PATH)
-        registry_schema["schema"] = "pi.demo.wrong_registry.v1"
+        registry_schema["schema"] = "ra.demo.wrong_registry.v1"
         write_json(root / REGISTRY_PATH, registry_schema)
         registry_schema_status, registry_schema_report = build_summary(root, now, max_age_days=14)
         if registry_schema_status != 1 or "registry_schema" not in json.dumps(registry_schema_report):
@@ -1870,7 +1870,7 @@ def run_self_test() -> int:
         write_json(
             root / "docs/evidence/uncontracted-closeout-gate.json",
             {
-                "schema": "pi.demo.uncontracted_closeout_gate.v1",
+                "schema": "ra.demo.uncontracted_closeout_gate.v1",
                 "generated_at": now.isoformat().replace("+00:00", "Z"),
                 "missing_checks": [],
             },
@@ -1887,15 +1887,15 @@ def run_self_test() -> int:
         write_json(
             root / "docs/contracts/wrong-schema-closeout-gate-contract.json",
             {
-                "schema": "pi.demo.wrong_schema_closeout_gate_contract.v1",
-                "decision_gate_schema": "pi.demo.some_other_closeout_gate.v1",
+                "schema": "ra.demo.wrong_schema_closeout_gate_contract.v1",
+                "decision_gate_schema": "ra.demo.some_other_closeout_gate.v1",
                 "required_top_level_keys": ["schema", "generated_at", "missing_checks"],
             },
         )
         write_json(
             root / "docs/evidence/wrong-schema-closeout-gate.json",
             {
-                "schema": "pi.demo.wrong_schema_closeout_gate.v1",
+                "schema": "ra.demo.wrong_schema_closeout_gate.v1",
                 "generated_at": now.isoformat().replace("+00:00", "Z"),
                 "missing_checks": [],
             },
@@ -1968,7 +1968,7 @@ def run_self_test() -> int:
             {
                 "artifact_path": "docs/evidence/demo-old-closeout-gate.json",
                 "contract_path": "docs/contracts/demo-closeout-gate-contract.json",
-                "decision_gate_schema": "pi.demo.closeout_gate.v1",
+                "decision_gate_schema": "ra.demo.closeout_gate.v1",
                 "source_bead_or_epic": "bd-demo",
                 "reference_paths": [],
                 "advisory_claim_boundary": (

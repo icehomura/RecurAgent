@@ -3,7 +3,7 @@
 
 Per-provider live E2E validation harness (bd-provider-live-validation-11).
 
-For each of the 11 native providers, spawns `target/release/pi` in
+For each of the 11 native providers, spawns `target/release/ra` in
 single-shot mode against a fixture prompt, captures stdout/stderr, and
 records per-provider pass / skip-with-reason / fail with measured
 latency.
@@ -49,7 +49,7 @@ PROVIDERS = [
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--binary", type=Path, default=ROOT / "target/release/pi")
+    ap.add_argument("--binary", type=Path, default=ROOT / "target/release/ra")
     ap.add_argument("--prompt", default="What is 2+2? Answer in one word.")
     ap.add_argument("--timeout", type=float, default=30.0)
     ap.add_argument(
@@ -66,14 +66,14 @@ def main() -> int:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "verdict": "binary_missing",
             "providers": [
-                {"id": p, "status": "skipped_no_binary", "reason": "target/release/pi not built"}
+                {"id": p, "status": "skipped_no_binary", "reason": "target/release/ra not built"}
                 for p, _, _ in PROVIDERS
             ],
         }
         with open(args.out, "w") as f:
             json.dump(runpack, f, indent=2)
         print(f"FAIL: binary not found at {args.binary}", file=sys.stderr)
-        print(f"  wrote {args.out} with verdict=binary_missing; rerun after `cargo build --release --bin pi`")
+        print(f"  wrote {args.out} with verdict=binary_missing; rerun after `cargo build --release --bin ra`")
         return 1
 
     results = []
@@ -93,7 +93,7 @@ def main() -> int:
 
         cmd = [str(args.binary), "--provider", prov_id, "--print", args.prompt]
         env = os.environ.copy()
-        env["PI_PROVIDER"] = prov_id
+        env["RECUR_AGENT_PROVIDER"] = prov_id
         t0 = time.monotonic()
         try:
             proc = subprocess.run(

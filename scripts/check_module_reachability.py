@@ -287,7 +287,7 @@ def main() -> int:
         print(
             json.dumps(
                 {
-                    "schema": "pi.ci.module_reachability.v1",
+                    "schema": "ra.ci.module_reachability.v1",
                     "declared": len(modules),
                     "reachable": reachable,
                     "allowlisted": {n: ALLOWLIST[n] for n in allowlisted},

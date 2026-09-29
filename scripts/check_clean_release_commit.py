@@ -47,7 +47,7 @@ def check_clean_release_commit(base_ref: str, target_ref: str = "HEAD") -> dict:
         res = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
         return {
-            "schema": "pi.release.clean_commit_check.v1",
+            "schema": "ra.release.clean_commit_check.v1",
             "base_ref": base_ref,
             "target_ref": target_ref,
             "error": f"git diff failed: {e.stderr}",
@@ -70,7 +70,7 @@ def check_clean_release_commit(base_ref: str, target_ref: str = "HEAD") -> dict:
     is_clean = len(violating) == 0
 
     return {
-        "schema": "pi.release.clean_commit_check.v1",
+        "schema": "ra.release.clean_commit_check.v1",
         "base_ref": base_ref,
         "target_ref": target_ref,
         "is_clean_release_commit": is_clean,

@@ -4,9 +4,9 @@
 #
 # Hermetic: runs the completions:: unit suite (script generation for all
 # shells, named error for unknown flags, case-insensitive model filter)
-# plus binary-level acceptance: `pi completions zsh|bash` parse (zsh -n /
-# bash -n when present), `pi __complete --model an` returns live-registry
-# models, `pi __complete --session ''` returns session-index paths, and the
+# plus binary-level acceptance: `ra completions zsh|bash` parse (zsh -n /
+# bash -n when present), `ra __complete --model an` returns live-registry
+# models, `ra __complete --session ''` returns session-index paths, and the
 # generated script contains a flag added in this build (no drift).
 set -euo pipefail
 
@@ -26,20 +26,20 @@ echo "[completions] Running completions:: unit suite (correlation: $CORRELATION_
 cargo test --lib completions:: -- --nocapture 2>&1 | tee "$ARTIFACT_DIR/units.log"
 
 echo "[completions] Binary-level acceptance (correlation: $CORRELATION_ID)"
-BIN="$(cargo run --bin pi --quiet -- completions bash 2>/dev/null >/dev/null; echo "./target/debug/pi")"
-cargo build --bin pi 2>&1 | tail -1 | tee "$ARTIFACT_DIR/build.log"
+BIN="$(cargo run --bin ra --quiet -- completions bash 2>/dev/null >/dev/null; echo "./target/debug/ra")"
+cargo build --bin ra 2>&1 | tail -1 | tee "$ARTIFACT_DIR/build.log"
 
 if command -v zsh >/dev/null 2>&1; then
-  ./target/debug/pi completions zsh > "$ARTIFACT_DIR/pi.zsh"
+  ./target/debug/ra completions zsh > "$ARTIFACT_DIR/pi.zsh"
   zsh -n "$ARTIFACT_DIR/pi.zsh" && echo "zsh -n OK" | tee -a "$ARTIFACT_DIR/build.log"
 fi
 if command -v bash >/dev/null 2>&1; then
-  ./target/debug/pi completions bash > "$ARTIFACT_DIR/pi.bash"
+  ./target/debug/ra completions bash > "$ARTIFACT_DIR/pi.bash"
   bash -n "$ARTIFACT_DIR/pi.bash" && echo "bash -n OK" | tee -a "$ARTIFACT_DIR/build.log"
 fi
 
-./target/debug/pi __complete --model an > "$ARTIFACT_DIR/model_candidates.txt" 2>&1 || true
-./target/debug/pi __complete --session "" > "$ARTIFACT_DIR/session_candidates.txt" 2>&1 || true
+./target/debug/ra __complete --model an > "$ARTIFACT_DIR/model_candidates.txt" 2>&1 || true
+./target/debug/ra __complete --session "" > "$ARTIFACT_DIR/session_candidates.txt" 2>&1 || true
 grep -c "max-time" "$ARTIFACT_DIR/pi.zsh" 2>/dev/null | tee -a "$ARTIFACT_DIR/build.log" || true
 
 echo "[completions] PASS (artifacts: $ARTIFACT_DIR)"

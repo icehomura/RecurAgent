@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEDULER_SCHEMA = "pi.validation.refresh_scheduler.v1"
-INPUT_SCHEMA = "pi.validation.refresh_scheduler_input.v1"
-SELF_TEST_SCHEMA = "pi.validation.refresh_scheduler_self_test.v1"
-STALE_QUEUE_SCHEMA = "pi.swarm.stale_evidence_renewal_queue.v1"
-INVENTORY_SCHEMA = "pi.traceability.high_value_suite_artifact_inventory.v1"
+SCHEDULER_SCHEMA = "ra.validation.refresh_scheduler.v1"
+INPUT_SCHEMA = "ra.validation.refresh_scheduler_input.v1"
+SELF_TEST_SCHEMA = "ra.validation.refresh_scheduler_self_test.v1"
+STALE_QUEUE_SCHEMA = "ra.swarm.stale_evidence_renewal_queue.v1"
+INVENTORY_SCHEMA = "ra.traceability.high_value_suite_artifact_inventory.v1"
 DEFAULT_RECENT_HOURS = 48
 DEFAULT_MAX_ITEMS = 50
 
@@ -828,7 +828,7 @@ def merge_payload_from_args(args: argparse.Namespace) -> tuple[dict[str, Any], d
 
 def allow_admission() -> dict[str, Any]:
     return {
-        "schema": "pi.cargo_headroom.admission.v1",
+        "schema": "ra.cargo_headroom.admission.v1",
         "decision": "allow",
         "admission_action": "allow",
         "reason": "rch_available",
@@ -840,7 +840,7 @@ def allow_admission() -> dict[str, Any]:
 
 def backoff_admission(reason: str) -> dict[str, Any]:
     return {
-        "schema": "pi.cargo_headroom.admission.v1",
+        "schema": "ra.cargo_headroom.admission.v1",
         "decision": "backoff",
         "admission_action": "defer",
         "reason": reason,
@@ -953,7 +953,7 @@ def run_self_test() -> int:
                         "freshness_reasons": ["high_value_inventory"],
                         "value": "high",
                         "selected_command": (
-                            "PI_PROVIDER_REPLAY_GIT_COMMIT=$(git rev-parse HEAD) "
+                            "RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT=$(git rev-parse HEAD) "
                             "rch exec -- cargo test --test provider_streaming"
                         ),
                         "changed_surfaces": ["tests/provider_streaming.rs"],

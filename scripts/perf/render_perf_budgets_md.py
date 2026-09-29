@@ -5,7 +5,7 @@ WARNING: DO NOT RUN THIS TO REGENERATE THE CHECKED-IN REPORT. See bd-o9qzt.
 
 Two things write tests/perf/reports/PERF_BUDGETS.md and they disagree. The
 file in the repository comes from `tests/perf_budgets.rs`, run as
-`PI_GENERATE_PERF_BUDGET_REPORT=1 ... generate_budget_report`; it carries a
+`RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 ... generate_budget_report`; it carries a
 summary table, claim readiness with blocking reason codes, per-category
 sections, per-budget measurement methodology, failing data contracts with
 remediation text, and a CI-enforcement section.

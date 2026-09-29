@@ -97,7 +97,7 @@ if [[ "$PROTECTION_JSON" == "NONE" ]]; then
 
     # Output early and exit.
     if [[ "$REPORT_JSON" -eq 1 ]]; then
-        echo '{"schema":"pi.branch_protection.v1","repo":"'"$REPO"'","branch":"'"$BRANCH"'","verdict":"fail","counts":{"pass":0,"fail":1,"warn":0},"checks":[{"name":"protection_enabled","status":"fail","detail":"No branch protection rules found"}]}'
+        echo '{"schema":"ra.branch_protection.v1","repo":"'"$REPO"'","branch":"'"$BRANCH"'","verdict":"fail","counts":{"pass":0,"fail":1,"warn":0},"checks":[{"name":"protection_enabled","status":"fail","detail":"No branch protection rules found"}]}'
     else
         echo ""
         echo "VERDICT: FAIL — no branch protection on $BRANCH"
@@ -236,7 +236,7 @@ if [[ "$REPORT_JSON" -eq 1 ]]; then
 
     cat <<EOF
 {
-  "schema": "pi.branch_protection.v1",
+  "schema": "ra.branch_protection.v1",
   "repo": "$REPO",
   "branch": "$BRANCH",
   "verdict": "$VERDICT",

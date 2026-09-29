@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "pi.qa.provider_discrepancy_ledger_audit.v1"
+SCHEMA = "ra.qa.provider_discrepancy_ledger_audit.v1"
 DEFAULT_LEDGER = Path("docs/provider-discrepancy-ledger.json")
 METADATA_PATH = Path("src/provider_metadata.rs")
 PROVIDERS_DOC = Path("docs/providers.md")

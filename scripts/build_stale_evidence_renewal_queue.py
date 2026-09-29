@@ -22,12 +22,12 @@ from pathlib import Path
 from typing import Any
 
 
-QUEUE_SCHEMA = "pi.swarm.stale_evidence_renewal_queue.v1"
-CONTRACT_SCHEMA = "pi.swarm.stale_evidence_renewal_queue_contract.v1"
-FIXTURE_SCHEMA = "pi.swarm.stale_evidence_renewal_queue_fixtures.v1"
-ACTION_PLAN_SCHEMA = "pi.swarm.action_plan.v1"
-RUNPACK_INTEGRATION_SCHEMA = "pi.swarm.stale_evidence_renewal_runpack.v1"
-CACHE_BUDGET_SCHEMA = "pi.swarm.evidence_cache_budget.v1"
+QUEUE_SCHEMA = "ra.swarm.stale_evidence_renewal_queue.v1"
+CONTRACT_SCHEMA = "ra.swarm.stale_evidence_renewal_queue_contract.v1"
+FIXTURE_SCHEMA = "ra.swarm.stale_evidence_renewal_queue_fixtures.v1"
+ACTION_PLAN_SCHEMA = "ra.swarm.action_plan.v1"
+RUNPACK_INTEGRATION_SCHEMA = "ra.swarm.stale_evidence_renewal_runpack.v1"
+CACHE_BUDGET_SCHEMA = "ra.swarm.evidence_cache_budget.v1"
 CONTRACT_PATH = Path("docs/contracts/stale-evidence-renewal-queue-contract.json")
 FIXTURE_PATH = Path("tests/fixtures/stale_evidence_renewal_queue/scenarios.json")
 DEFAULT_FRESHNESS_HOURS = 336
@@ -436,7 +436,7 @@ def build_item(
             "sha256": artifact.sha256,
         },
         "renewal_commands": commands,
-        "blocks_dropin_claim": artifact.schema == "pi.dropin.certification_verdict.v1"
+        "blocks_dropin_claim": artifact.schema == "ra.dropin.certification_verdict.v1"
         and status != "fresh",
     }
 
@@ -888,7 +888,7 @@ def run_self_test() -> int:
     print(
         json_dumps(
             {
-                "schema": "pi.swarm.stale_evidence_renewal_queue_self_test.v1",
+                "schema": "ra.swarm.stale_evidence_renewal_queue_self_test.v1",
                 "status": "pass",
                 "scenario_count": len(results),
                 "scenarios": results,

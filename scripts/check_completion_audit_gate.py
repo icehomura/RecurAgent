@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import Any
 
 
-GATE_SCHEMA = "pi.completion_audit.closeout_gate.v1"
-FIXTURE_SCHEMA = "pi.completion_audit.closeout_gate_fixtures.v1"
-SELF_TEST_SCHEMA = "pi.completion_audit.closeout_gate_self_test.v1"
+GATE_SCHEMA = "ra.completion_audit.closeout_gate.v1"
+FIXTURE_SCHEMA = "ra.completion_audit.closeout_gate_fixtures.v1"
+SELF_TEST_SCHEMA = "ra.completion_audit.closeout_gate_self_test.v1"
 FIXTURE_PATH = Path("tests/fixtures/completion_audit_gate/scenarios.json")
 GOLDEN_DIR = Path("tests/fixtures/completion_audit_gate/goldens")
 GOLDEN_GENERATED_AT = "[GENERATED_AT]"

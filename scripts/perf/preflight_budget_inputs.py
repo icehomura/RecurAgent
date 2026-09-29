@@ -28,30 +28,30 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "pi.perf.budget_preflight.v1"
-EVIDENCE_CACHE_SCHEMA = "pi.perf.evidence_cache.v1"
-EVIDENCE_CACHE_ENTRY_SCHEMA = "pi.perf.evidence_cache_entry.v1"
-HOST_TOPOLOGY_SCHEMA = "pi.perf.host_topology_fingerprint.v1"
+SCHEMA = "ra.perf.budget_preflight.v1"
+EVIDENCE_CACHE_SCHEMA = "ra.perf.evidence_cache.v1"
+EVIDENCE_CACHE_ENTRY_SCHEMA = "ra.perf.evidence_cache_entry.v1"
+HOST_TOPOLOGY_SCHEMA = "ra.perf.host_topology_fingerprint.v1"
 DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24.0
 DEFAULT_EVIDENCE_CACHE_TTL_HOURS = 168.0
 EXTENSION_BLOCKER_BEAD = "bd-2zcs5.51"
 FUTURE_TIMESTAMP_TOLERANCE_SECONDS = 300.0
 EMBEDDED_PROVENANCE_REQUIREMENTS = {
-    "pi.perf.workload.v1": (
+    "ra.perf.workload.v1": (
         "embedded_timestamp",
         "source_commit",
         "source_dirty",
         "run_id",
         "correlation_id",
     ),
-    "pi.ext.rust_bench.v1": (
+    "ra.ext.rust_bench.v1": (
         "embedded_timestamp",
         "source_commit",
         "source_dirty",
         "run_id",
         "correlation_id",
     ),
-    "pi.ext.legacy_bench.v1": (
+    "ra.ext.legacy_bench.v1": (
         "embedded_timestamp",
         "source_commit",
         "source_dirty",
@@ -65,7 +65,7 @@ EMBEDDED_PROVENANCE_REQUIREMENTS = {
         "run_id",
         "correlation_id",
     ),
-    "pi.perf.extension_benchmark_stratification.v1": (
+    "ra.perf.extension_benchmark_stratification.v1": (
         "embedded_timestamp",
         "source_commit",
         "source_dirty",
@@ -481,7 +481,7 @@ def build_host_topology_fingerprint(
         "source": "cgroup_constrained" if any(caveat.startswith("container_") for caveat in caveats) else "host",
     }
     return {
-        "schema": "pi.perf.env_fingerprint.v1",
+        "schema": "ra.perf.env_fingerprint.v1",
         "host_topology_schema": HOST_TOPOLOGY_SCHEMA,
         "timestamp": timestamp or iso_now(),
         "os": platform.platform(),
@@ -1126,8 +1126,8 @@ def binary_candidates(
     if release_override:
         paths.append(Path(release_override).expanduser())
     for evidence_dir in perf_evidence_dirs(repo_root):
-        paths.extend((evidence_dir / "release" / "pi", evidence_dir / "perf" / "pi"))
-    paths.extend((target_dir / "release" / "pi", target_dir / "perf" / "pi"))
+        paths.extend((evidence_dir / "release" / "ra", evidence_dir / "perf" / "ra"))
+    paths.extend((target_dir / "release" / "ra", target_dir / "perf" / "ra"))
     return dedupe_paths(paths)
 
 
@@ -1212,8 +1212,8 @@ def context_budget_json_candidates(repo_root: Path, target_dir: Path) -> tuple[P
 
 def artifact_groups(repo_root: Path, target_dir: Path) -> list[ArtifactGroup]:
     cargo_env = (
-        'export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/data/tmp/pi_agent_rust_cargo/${USER:-agent}/target}" '
-        'TMPDIR="${TMPDIR:-/data/tmp/pi_agent_rust_cargo/${USER:-agent}/tmp}" && '
+        'export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/data/tmp/recur_agent_cargo/${USER:-agent}/target}" '
+        'TMPDIR="${TMPDIR:-/data/tmp/recur_agent_cargo/${USER:-agent}/tmp}" && '
         'mkdir -p "$CARGO_TARGET_DIR" "$TMPDIR"'
     )
     bench_prefix = f"{cargo_env} && rch exec -- cargo"
@@ -1319,10 +1319,10 @@ def artifact_groups(repo_root: Path, target_dir: Path) -> list[ArtifactGroup]:
                 os.environ.get("PERF_RELEASE_BINARY_PATH"),
             ),
             suggested_commands=(
-                f"{bench_prefix} build --bin pi --release",
+                f"{bench_prefix} build --bin ra --release",
             ),
-            reason="release pi binary required for binary_size_release budget",
-            expected_outputs=(target_dir / "release/pi", repo_root / "tests/perf/reports/release/pi"),
+            reason="release ra binary required for binary_size_release budget",
+            expected_outputs=(target_dir / "release/ra", repo_root / "tests/perf/reports/release/ra"),
         ),
         ArtifactGroup(
             contract_id="extension_criterion_protocol",
@@ -1375,7 +1375,7 @@ def artifact_groups(repo_root: Path, target_dir: Path) -> list[ArtifactGroup]:
                 ]
             ),
             suggested_commands=(
-                f"PI_GENERATE_PERF_BUDGET_REPORT=1 {evidence_env} test --test perf_budgets --profile perf generate_budget_report -- --nocapture",
+                f"RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 {evidence_env} test --test perf_budgets --profile perf generate_budget_report -- --nocapture",
             ),
             reason="global extension claim data contract consumed by collect_data_contract_failures",
             expected_outputs=(
@@ -1404,7 +1404,7 @@ def artifact_groups(repo_root: Path, target_dir: Path) -> list[ArtifactGroup]:
                 ]
             ),
             suggested_commands=(
-                f"PI_GENERATE_PERF_BUDGET_REPORT=1 {evidence_env} test --test perf_budgets --profile perf generate_budget_report -- --nocapture",
+                f"RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 {evidence_env} test --test perf_budgets --profile perf generate_budget_report -- --nocapture",
             ),
             reason="phase1 weighted attribution data contract consumed by collect_data_contract_failures",
             expected_outputs=(
@@ -1497,10 +1497,10 @@ def build_report(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     max_age_hours = args.max_age_hours
     cache_dir = resolve_cache_dir(
         target_dir,
-        args.evidence_cache_dir or os.environ.get("PI_PERF_EVIDENCE_CACHE_DIR"),
+        args.evidence_cache_dir or os.environ.get("RECUR_AGENT_PERF_EVIDENCE_CACHE_DIR"),
     )
     expected_correlation_id = args.expected_correlation_id or os.environ.get(
-        "PI_PERF_EXPECTED_CORRELATION_ID"
+        "RECUR_AGENT_PERF_EXPECTED_CORRELATION_ID"
     )
     if args.artifact_readiness_only and not expected_correlation_id:
         return (
@@ -1523,7 +1523,7 @@ def build_report(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         target_dir=target_dir,
         cache_dir=cache_dir,
         git_commit=args.cache_git_commit
-        or os.environ.get("PI_PERF_GIT_COMMIT")
+        or os.environ.get("RECUR_AGENT_PERF_GIT_COMMIT")
         or current_git_commit(repo_root),
         build_profile=args.cache_profile
         or os.environ.get("PERF_PROFILE")
@@ -1667,8 +1667,8 @@ def build_report(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         "expected_output_paths": dedup_expected,
         "safety_notes": [
             "All CPU-intensive cargo refresh commands must be run through rch exec -- ...",
-            "Set CARGO_TARGET_DIR and TMPDIR to /data/tmp/pi_agent_rust_cargo/${USER:-agent}/... before refreshing evidence.",
-            "For RCH report generation, stage required artifacts into a repo-visible evidence root and set PERF_EVIDENCE_DIR plus PI_GENERATE_PERF_BUDGET_REPORT=1 for cargo test --test perf_budgets generate_budget_report.",
+            "Set CARGO_TARGET_DIR and TMPDIR to /data/tmp/recur_agent_cargo/${USER:-agent}/... before refreshing evidence.",
+            "For RCH report generation, stage required artifacts into a repo-visible evidence root and set PERF_EVIDENCE_DIR plus RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 for cargo test --test perf_budgets generate_budget_report.",
             "Cached perf evidence is reusable only when commit, build profile, TTL, lineage, schema, and checksum validation pass; reused entries are labeled source_kind=cache.",
             "Do not refresh tests/perf/reports/budget_summary.json until missing_budget_artifacts and stale_artifacts are empty.",
         ],
@@ -1841,7 +1841,7 @@ def run_self_test() -> int:
         (root / "target/perf/perf/pijs_workload_perf.jsonl").write_text(
             json.dumps(
                 {
-                    "schema": "pi.perf.workload.v1",
+                    "schema": "ra.perf.workload.v1",
                     "timestamp": generated_at,
                     "source_commit": "test-commit",
                     "source_dirty": False,
@@ -1856,11 +1856,11 @@ def run_self_test() -> int:
             + "\n",
             encoding="utf-8",
         )
-        (root / "target/release/pi").write_bytes(b"binary")
+        (root / "target/release/ra").write_bytes(b"binary")
         (root / "tests/perf/reports/extension_benchmark_stratification.json").write_text(
             json.dumps(
                 {
-                    "schema": "pi.perf.extension_benchmark_stratification.v1",
+                    "schema": "ra.perf.extension_benchmark_stratification.v1",
                     "generated_at": generated_at,
                     "source_commit": "test-commit",
                     "source_dirty": False,
@@ -1888,7 +1888,7 @@ def run_self_test() -> int:
         context_budget_path.write_text(
             json.dumps(
                 {
-                    "schema": "pi.semantic_context.performance_budget.v1",
+                    "schema": "ra.semantic_context.performance_budget.v1",
                     "environment": {
                         "cargo_target_dir": str(root / "target"),
                         "tmpdir": str(root / "tmp"),
@@ -1918,7 +1918,7 @@ def run_self_test() -> int:
         (root / "tests/perf/reports/budget_summary.json").write_text(
             json.dumps(
                 {
-                    "schema": "pi.perf.budget_summary.v2",
+                    "schema": "ra.perf.budget_summary.v2",
                     "generated_at": iso_now(),
                     "source_commit": "1" * 40,
                     "run_id": "preflight-self-test",
@@ -2007,7 +2007,7 @@ def run_self_test() -> int:
     scenario_jsonl = provenance_root / "scenario-runner.jsonl"
     scenario_records = [
         {
-            "schema": "pi.ext.rust_bench.v1",
+            "schema": "ra.ext.rust_bench.v1",
             "timestamp": fresh_timestamp,
             "source_commit": expected_commit,
             "source_dirty": False,
@@ -2105,7 +2105,7 @@ def run_self_test() -> int:
         "\n".join(
             json.dumps(
                 {
-                    "schema": "pi.perf.workload.v1",
+                    "schema": "ra.perf.workload.v1",
                     "timestamp": timestamp,
                     "source_commit": expected_commit,
                     "source_dirty": False,
@@ -2132,7 +2132,7 @@ def run_self_test() -> int:
 
     criterion_json = provenance_root / "estimates.json"
     criterion_json.write_text('{"mean":{"point_estimate":1000.0}}\n', encoding="utf-8")
-    binary = provenance_root / "pi"
+    binary = provenance_root / "ra"
     binary.write_bytes(b"binary")
     for path in (criterion_json, binary):
         inspection = inspect_direct_artifact(path, 24.0, provenance_now)
@@ -2382,7 +2382,7 @@ def run_self_test() -> int:
         timestamp="2026-05-09T00:00:00Z",
         build_profile="perf",
     )
-    assert bare_fingerprint["schema"] == "pi.perf.env_fingerprint.v1", bare_fingerprint
+    assert bare_fingerprint["schema"] == "ra.perf.env_fingerprint.v1", bare_fingerprint
     assert bare_fingerprint["host_topology_schema"] == HOST_TOPOLOGY_SCHEMA, bare_fingerprint
     assert bare_fingerprint["cpu_cores"] == 8, bare_fingerprint
     assert bare_fingerprint["mem_total_mb"] == 16 * 1024, bare_fingerprint
@@ -2457,18 +2457,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--max-age-hours",
         type=float,
-        default=float(os.environ.get("PI_PERF_MAX_ARTIFACT_AGE_HOURS", DEFAULT_MAX_ARTIFACT_AGE_HOURS)),
+        default=float(os.environ.get("RECUR_AGENT_PERF_MAX_ARTIFACT_AGE_HOURS", DEFAULT_MAX_ARTIFACT_AGE_HOURS)),
         help="Maximum accepted artifact age in hours.",
     )
     parser.add_argument(
         "--evidence-cache-dir",
-        help="Perf evidence cache directory. Defaults to PI_PERF_EVIDENCE_CACHE_DIR or target/perf/evidence_cache.",
+        help="Perf evidence cache directory. Defaults to RECUR_AGENT_PERF_EVIDENCE_CACHE_DIR or target/perf/evidence_cache.",
     )
     parser.add_argument(
         "--cache-ttl-hours",
         type=float,
         default=float(
-            os.environ.get("PI_PERF_EVIDENCE_CACHE_TTL_HOURS", DEFAULT_EVIDENCE_CACHE_TTL_HOURS)
+            os.environ.get("RECUR_AGENT_PERF_EVIDENCE_CACHE_TTL_HOURS", DEFAULT_EVIDENCE_CACHE_TTL_HOURS)
         ),
         help="Maximum reusable cache TTL in hours; entry ttl_hours is capped by this value.",
     )
@@ -2478,7 +2478,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--cache-git-commit",
-        help="Expected cached evidence git commit. Defaults to PI_PERF_GIT_COMMIT or current HEAD.",
+        help="Expected cached evidence git commit. Defaults to RECUR_AGENT_PERF_GIT_COMMIT or current HEAD.",
     )
     parser.add_argument(
         "--expected-correlation-id",

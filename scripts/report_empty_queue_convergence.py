@@ -22,13 +22,13 @@ from pathlib import Path
 from typing import Any
 
 
-REPORT_SCHEMA = "pi.swarm.empty_queue_convergence_report.v1"
+REPORT_SCHEMA = "ra.swarm.empty_queue_convergence_report.v1"
 POLICY = "read_only_no_mutation"
 IW_DRIFT_T1_PREFIX = "IW-DRIFT-T1:"
 DEFAULT_STALE_IN_PROGRESS_HOURS = 2
-VALIDATION_BROKER_CLI_STATUS_SCHEMA = "pi.validation_broker.cli_status.v1"
-VALIDATION_BROKER_CLI_PLAN_SCHEMA = "pi.validation_broker.cli_plan.v1"
-VALIDATION_BROKER_DOCTOR_SCHEMA = "pi.doctor.validation_broker_posture.v1"
+VALIDATION_BROKER_CLI_STATUS_SCHEMA = "ra.validation_broker.cli_status.v1"
+VALIDATION_BROKER_CLI_PLAN_SCHEMA = "ra.validation_broker.cli_plan.v1"
+VALIDATION_BROKER_DOCTOR_SCHEMA = "ra.doctor.validation_broker_posture.v1"
 VALIDATION_BROKER_SAMPLE_LIMIT = 5
 NON_BLOCKING_DEP_TYPES = {"parent-child", "related"}
 DEFERRED_PLANNING_LABELS = {
@@ -1658,9 +1658,9 @@ def run_self_test() -> int:
                 "command_class": "cargo_check_all_targets",
                 "command_fingerprint": f"cmdfp-{index}",
                 "environment_fingerprint": "envfp",
-                "cwd": "/data/projects/pi_agent_rust",
-                "target_dir": "/data/tmp/pi_agent_rust_cargo/secret/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/secret/tmp",
+                "cwd": "/data/projects/RecurAgent",
+                "target_dir": "/data/tmp/recur_agent_cargo/secret/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/secret/tmp",
                 "runner": "rch",
             }
             for index in range(7)

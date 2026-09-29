@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "pi.operations.maintenance_dashboard.v1"
+SCHEMA = "ra.operations.maintenance_dashboard.v1"
 DEFAULT_OUTPUT = Path("docs/evidence/maintenance-dashboard.json")
 LEDGER_PATH = Path("docs/evidence/dropin-parity-gap-ledger.json")
 VERDICT_PATH = Path("docs/evidence/dropin-certification-verdict.json")
@@ -60,7 +60,7 @@ RCH_DRIFT_CATEGORIES: dict[str, dict[str, Any]] = {
         "drift_class": "infrastructure_drift",
         "blocks": "release_gate_until_worker_workspace_fixed",
         "release_blocking": True,
-        "remediation": "Fix the RCH worker checkout/workdir so cargo resolves pi_agent_rust directly; do not treat parent-workspace manifest failures as local code regressions.",
+        "remediation": "Fix the RCH worker checkout/workdir so cargo resolves recur_agent directly; do not treat parent-workspace manifest failures as local code regressions.",
     },
     "artifact_retrieval_warning_after_success": {
         "drift_class": "evidence_retrieval_drift",

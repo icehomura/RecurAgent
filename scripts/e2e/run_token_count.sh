@@ -4,7 +4,7 @@
 #
 # Hermetic: runs the token_count:: unit suite (table selection, reference
 # vectors, 1MB throughput evidence) plus the compaction estimate fixtures
-# (BPE reference values on the admission path). `pi token` prints per-table
+# (BPE reference values on the admission path). `ra token` prints per-table
 # counts. No network lanes.
 set -euo pipefail
 
@@ -26,7 +26,7 @@ cargo test --lib token_count:: -- --nocapture 2>&1 | tee "$ARTIFACT_DIR/units.lo
 echo "[token-count] Running compaction estimate fixtures (correlation: $CORRELATION_ID)"
 cargo test --lib compaction::tests::estimate -- --nocapture 2>&1 | tee "$ARTIFACT_DIR/estimates.log"
 
-echo "[token-count] pi token utility (correlation: $CORRELATION_ID)"
-cargo run --bin pi --quiet -- token "hello world this is a test" 2>&1 | tee "$ARTIFACT_DIR/pi_token.log"
+echo "[token-count] ra token utility (correlation: $CORRELATION_ID)"
+cargo run --bin ra --quiet -- token "hello world this is a test" 2>&1 | tee "$ARTIFACT_DIR/pi_token.log"
 
 echo "[token-count] PASS (artifacts: $ARTIFACT_DIR)"

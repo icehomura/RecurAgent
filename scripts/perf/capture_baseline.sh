@@ -121,7 +121,7 @@ with open(path) as f:
     baseline = json.load(f)
 
 schema = baseline.get("schema", "")
-if schema != "pi.perf.baseline_variance.v1":
+if schema != "ra.perf.baseline_variance.v1":
     print(f"FAIL: wrong schema: {schema}")
     sys.exit(1)
 print(f"OK: schema={schema}")
@@ -188,7 +188,7 @@ for pair in pairs:
         raise SystemExit(f"baseline file not found for '{label}': {path}")
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("schema") != "pi.perf.baseline_variance.v1":
+    if payload.get("schema") != "ra.perf.baseline_variance.v1":
         raise SystemExit(
             f"baseline schema mismatch for '{label}': {payload.get('schema')}"
         )
@@ -282,7 +282,7 @@ for metric_name in common_metrics:
     )
 
     diagnostic = {
-        "schema": "pi.perf.cross_env_variance_diagnostic.v1",
+        "schema": "ra.perf.cross_env_variance_diagnostic.v1",
         "metric_name": metric_name,
         "severity": severity,
         "event_code": "cross_env_variance_exceeds_threshold" if triggered else "cross_env_variance_within_threshold",
@@ -342,7 +342,7 @@ diagnostics_jsonl_path.write_text(
 )
 
 report = {
-    "schema": "pi.perf.cross_env_variance_diagnosis.v1",
+    "schema": "ra.perf.cross_env_variance_diagnosis.v1",
     "version": "1.0.0",
     "bead_id": "bd-3ar8v.5.7",
     "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -353,7 +353,7 @@ report = {
     "inputs": sorted(inputs, key=lambda row: row["label"]),
     "metrics": [entry["metric"] for entry in diagnostics_rows],
     "diagnostics_log": {
-        "schema": "pi.perf.cross_env_variance_diagnostic.v1",
+        "schema": "ra.perf.cross_env_variance_diagnostic.v1",
         "jsonl_path": str(diagnostics_jsonl_path),
         "entries": len(diagnostics_rows),
     },
@@ -605,7 +605,7 @@ for name in sorted(metrics_data.keys()):
     })
 
 baseline = {
-    "schema": "pi.perf.baseline_variance.v1",
+    "schema": "ra.perf.baseline_variance.v1",
     "version": "1.0.0",
     "bead_id": "bd-3ar8v.1.5",
     "generated_at": timestamp,
