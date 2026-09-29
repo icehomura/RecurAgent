@@ -1354,4 +1354,126 @@ mod tests {
         assert_eq!(fresh[0].state, "completed");
         assert_eq!(fresh[0].received_bytes, 7.0);
     }
+
+    #[test]
+    fn console_events_record_levels_and_readable_arguments() {
+        let mut entries = Vec::new();
+        // A JSON value, an object with no JSON form, and an unserializable
+        // number all have to come back as text rather than `[object Object]`.
+        assert!(record_console_event_into(
+            &mut entries,
+            &json!({"method":"Runtime.consoleAPICalled","params":{
+                "type":"log",
+                "args":[{"type":"string","value":"hello"},
+                        {"type":"object","description":"Widget {}"},
+                        {"type":"number","unserializableValue":"NaN"}]
+            }}),
+        ));
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].level, "log");
+        assert!(entries[0].text.contains("hello"), "{:?}", entries[0].text);
+        assert!(entries[0].text.contains("Widget {}"), "{:?}", entries[0].text);
+        assert!(entries[0].text.contains("NaN"), "{:?}", entries[0].text);
+
+        assert!(record_console_event_into(
+            &mut entries,
+            &json!({"method":"Runtime.exceptionThrown","params":{
+                "exceptionDetails":{
+                    "text":"Uncaught",
+                    "exception":{"description":"TypeError: nope"}
+                }
+            }}),
+        ));
+        assert_eq!(entries[1].level, "exception");
+        assert_eq!(entries[1].text, "TypeError: nope");
+
+        // Something else entirely is not this function's business.
+        assert!(!record_console_event_into(
+            &mut entries,
+            &json!({"method":"Network.loadingFinished","params":{}}),
+        ));
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn console_buffer_is_bounded() {
+        let mut entries = Vec::new();
+        for index in 0..MAX_CONSOLE_ENTRIES + 5 {
+            record_console_event_into(
+                &mut entries,
+                &json!({"method":"Runtime.consoleAPICalled","params":{
+                    "type":"log","args":[{"type":"number","value":index}]
+                }}),
+            );
+        }
+        assert_eq!(entries.len(), MAX_CONSOLE_ENTRIES);
+        // The oldest entries are the ones dropped, so the newest survives.
+        assert!(entries[entries.len() - 1].text.contains("516"));
+    }
+
+    #[test]
+    fn trace_chunks_accumulate_and_are_bounded() {
+        let mut events: Vec<Value> = Vec::new();
+        assert!(record_trace_event_into(
+            &mut events,
+            &json!({"method":"Tracing.dataCollected","params":{
+                "value":[{"name":"a"},{"name":"b"}]
+            }}),
+        ));
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["name"], "a");
+
+        assert!(!record_trace_event_into(
+            &mut events,
+            &json!({"method":"Tracing.tracingComplete","params":{}}),
+        ));
+        assert_eq!(events.len(), 2);
+
+        // A chunk larger than the cap is truncated rather than rejected, so a
+        // runaway capture still yields the beginning of the trace.
+        let oversized: Vec<Value> = (0..MAX_TRACE_EVENTS + 10)
+            .map(|index| json!({"name": index}))
+            .collect();
+        record_trace_event_into(
+            &mut events,
+            &json!({"method":"Tracing.dataCollected","params":{"value": oversized}}),
+        );
+        assert_eq!(events.len(), MAX_TRACE_EVENTS);
+    }
+
+    #[test]
+    fn routes_match_by_substring_and_the_first_route_wins() {
+        let routes = vec![
+            NetworkRoute {
+                pattern: "analytics".to_string(),
+                action: RouteAction::Abort,
+            },
+            NetworkRoute {
+                pattern: "example.com".to_string(),
+                action: RouteAction::Fulfill {
+                    status: 200,
+                    body: "{}".to_string(),
+                    content_type: "application/json".to_string(),
+                },
+            },
+        ];
+        assert_eq!(
+            match_route(&routes, "https://analytics.example.com/x")
+                .map(|route| route.action.clone()),
+            Some(RouteAction::Abort),
+            "the first matching route must win"
+        );
+        assert_eq!(
+            match_route(&routes, "https://example.com/api").map(|route| route.action.clone()),
+            Some(RouteAction::Fulfill {
+                status: 200,
+                body: "{}".to_string(),
+                content_type: "application/json".to_string(),
+            })
+        );
+        assert!(
+            match_route(&routes, "https://other.test/").is_none(),
+            "an unmatched URL must stay unmatched so it is continued, not parked"
+        );
+    }
 }
