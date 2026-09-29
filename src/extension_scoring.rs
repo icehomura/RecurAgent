@@ -997,7 +997,7 @@ fn select_voi_candidate_indices(
         .max_by(compare_voi_selection_states)
         .map(|state| {
             tracing::info!(
-                target: "pi.runtime.math_technique_fire",
+                target: "ra.runtime.math_technique_fire",
                 math_technique = "voi",
                 fire_reason = "voi_utility_estimation",
                 selected_count = state.selected_indices.len(),

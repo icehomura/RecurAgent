@@ -1751,7 +1751,7 @@ impl RegimeShiftDetector {
                         let prev_mode = self.mode;
                         self.mode = desired_mode;
                         tracing::info!(
-                            target: "pi.runtime.dispatch_mode_switch",
+                            target: "ra.runtime.dispatch_mode_switch",
                             from_mode = prev_mode.as_str(),
                             to_mode = desired_mode.as_str(),
                             trigger = "rollout_gate_decision",
@@ -2224,7 +2224,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         check: &PolicyCheck,
     ) {
         tracing::debug!(
-            target: "pi.extensions.policy_snapshot",
+            target: "ra.extensions.policy_snapshot",
             snapshot_version = %self.snapshot_version,
             lookup_path,
             capability = %capability,
@@ -2244,7 +2244,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         service_time_us: f64,
     ) {
         tracing::debug!(
-            target: "pi.extensions.regime_shift",
+            target: "ra.extensions.regime_shift",
             call_id,
             adaptation_mode = observation.mode.as_str(),
             composite_score = observation.score,
@@ -2278,7 +2278,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         );
         if let Some(transition) = observation.transition {
             tracing::info!(
-                target: "pi.extensions.regime_shift",
+                target: "ra.extensions.regime_shift",
                 call_id,
                 transition = transition.as_str(),
                 adaptation_mode = observation.mode.as_str(),
@@ -2322,7 +2322,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         let budget_u64 = u64::try_from(queue_budget).unwrap_or(u64::MAX).max(1);
         let occupancy_permille = depth_u64.saturating_mul(1_000).saturating_div(budget_u64);
         tracing::debug!(
-            target: "pi.extensions.io_uring_lane",
+            target: "ra.extensions.io_uring_lane",
             call_id = request.call_id,
             extension_id = %request.extension_id.as_deref().unwrap_or("<none>"),
             method = request.method(),
@@ -2349,7 +2349,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         fallback_reason: Option<&'static str>,
     ) {
         tracing::debug!(
-            target: "pi.extensions.io_uring_bridge",
+            target: "ra.extensions.io_uring_bridge",
             call_id = request.call_id,
             extension_id = %request.extension_id.as_deref().unwrap_or("<none>"),
             method = request.method(),
@@ -2387,7 +2387,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
             AdmissionAction::Deny => "deny",
         };
         tracing::debug!(
-            target: "pi.resource_governor",
+            target: "ra.resource_governor",
             call_id = request.call_id,
             extension_id = %request.extension_id.as_deref().unwrap_or("<none>"),
             method = request.method(),
@@ -2496,7 +2496,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
             }
             HostcallKind::Log => {
                 tracing::info!(
-                    target: "pi.extension.log",
+                    target: "ra.extension.log",
                     payload = ?request.payload,
                     "Extension log"
                 );
@@ -2580,7 +2580,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
             if shadow_elapsed_us > config.overhead_budget_us as f64 {
                 state.record_overhead_budget_exceeded(config);
                 tracing::warn!(
-                    target: "pi.extensions.dual_exec",
+                    target: "ra.extensions.dual_exec",
                     call_id = request.call_id,
                     extension_id = %request.extension_id.as_deref().unwrap_or("<none>"),
                     method = request.method(),
@@ -2603,7 +2603,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
                 shadow_elapsed_us,
             );
             tracing::warn!(
-                target: "pi.extensions.dual_exec",
+                target: "ra.extensions.dual_exec",
                 call_id = request.call_id,
                 extension_id = %request.extension_id.as_deref().unwrap_or("<none>"),
                 method = request.method(),
@@ -2614,7 +2614,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
             );
         } else {
             tracing::trace!(
-                target: "pi.extensions.dual_exec",
+                target: "ra.extensions.dual_exec",
                 call_id = request.call_id,
                 extension_id = %request.extension_id.as_deref().unwrap_or("<none>"),
                 method = request.method(),
@@ -2773,14 +2773,14 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         if !amac_enabled || rollback_active || rollout_forces_sequential {
             if rollback_active {
                 tracing::warn!(
-                    target: "pi.extensions.dual_exec",
+                    target: "ra.extensions.dual_exec",
                     rollback_remaining,
                     rollback_reason = %rollback_reason,
                     "Dual-exec rollback forcing sequential dispatcher mode"
                 );
             } else if rollout_forces_sequential && amac_enabled {
                 tracing::debug!(
-                    target: "pi.extensions.regime_shift",
+                    target: "ra.extensions.regime_shift",
                     adaptation_mode = adaptation_mode.as_str(),
                     "Rollout gate forcing sequential dispatch mode"
                 );
@@ -2812,7 +2812,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
 
             let group_elapsed_ns = u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX);
             tracing::trace!(
-                target: "pi.extensions.amac",
+                target: "ra.extensions.amac",
                 group_key = ?group_key,
                 decision = ?decision,
                 group_elapsed_ns,
@@ -2996,7 +2996,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
             }
             Some(ProtocolHostcallMethod::Log) => {
                 tracing::info!(
-                    target: "pi.extension.log",
+                    target: "ra.extension.log",
                     payload = ?payload.params,
                     "Extension log"
                 );

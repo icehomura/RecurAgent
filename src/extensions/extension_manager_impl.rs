@@ -3826,7 +3826,7 @@ impl ExtensionManager {
             .map_or("", str::trim);
         if name.is_empty() {
             tracing::warn!(
-                event = "pi.extensions.mcp_invalid_spec",
+                event = "ra.extensions.mcp_invalid_spec",
                 "Skipping MCP server registration with missing name"
             );
             return;

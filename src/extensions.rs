@@ -153,7 +153,7 @@ pub async fn apply_cli_flags(
                     .join(", ")
             };
             tracing::debug!(
-                event = "pi.extensions.flags.ignored_unknown",
+                event = "ra.extensions.flags.ignored_unknown",
                 flag = %cli_flag.display_name(),
                 registered = %known,
                 "Ignoring unknown extension flag (not registered by any loaded extension)."
@@ -3939,7 +3939,7 @@ impl SafetyEnvelopeState {
             self.vetoing = true;
             self.veto_reason = Some("pac_bayes_bound_exceeded");
             tracing::warn!(
-                target: "pi.runtime.math_technique_fire",
+                target: "ra.runtime.math_technique_fire",
                 math_technique = "pac_bayes",
                 fire_reason = "killswitch_admission",
                 bound,
@@ -3959,7 +3959,7 @@ impl SafetyEnvelopeState {
             self.vetoing = true;
             self.veto_reason = Some("conformal_anomaly_excess");
             tracing::warn!(
-                target: "pi.runtime.math_technique_fire",
+                target: "ra.runtime.math_technique_fire",
                 math_technique = "conformal",
                 fire_reason = "compaction_admission",
                 anomaly_rate,
