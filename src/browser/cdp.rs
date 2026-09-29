@@ -3,7 +3,7 @@
 
 use super::{
     BrowserLaunchOptions, BrowserTabInfo, console, dialog, download, drag, emulation, exports,
-    interaction, launch, output, policy, required, storage,
+    interaction, launch, output, policy, required, storage, tracing,
 };
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
@@ -102,6 +102,31 @@ fn record_console_event_into(entries: &mut Vec<ConsoleEntry>, value: &Value) -> 
         entries.remove(0);
     }
     entries.push(entry);
+    true
+}
+
+/// Cap on trace events retained before the buffer starts dropping. A trace of a
+/// multi-second interaction easily exceeds this; the cap exists so a runaway
+/// capture cannot exhaust memory, and the drop is reported rather than silent.
+const MAX_TRACE_EVENTS: usize = 500_000;
+
+/// Apply one `Tracing.dataCollected` event to the trace buffer.
+///
+/// Free function for the same reason as [`record_console_event_into`]: the test
+/// drives a bare `Vec` rather than a live socket.
+fn record_trace_event_into(events: &mut Vec<Value>, value: &Value) -> bool {
+    if value["method"] != "Tracing.dataCollected" {
+        return false;
+    }
+    let Some(chunk) = value["params"]["value"].as_array() else {
+        return false;
+    };
+    for event in chunk {
+        if events.len() >= MAX_TRACE_EVENTS {
+            break;
+        }
+        events.push(event.clone());
+    }
     true
 }
 
@@ -230,6 +255,7 @@ fn validate(args: &Value, allowlist: Option<&[String]>) -> Result<u64> {
         "console" => console::validate(args)?,
         "emulate" | "reset_emulation" => emulation::validate(args)?,
         "drag" => drag::validate(args)?,
+        "trace" => tracing::validate(args)?,
         "open" | "goto" => policy::check_navigation(required(args, "url")?, allowlist)?,
         "evaluate" => {
             required(args, "script")?;
@@ -374,6 +400,7 @@ pub(super) struct Cdp {
     loaded: BTreeSet<(String, String)>,
     downloads: BTreeMap<String, DownloadRecord>,
     console: Vec<ConsoleEntry>,
+    trace: Vec<Value>,
     timeout_ms: u64,
     dialog: dialog::State,
 }
@@ -427,6 +454,7 @@ impl Cdp {
             loaded: BTreeSet::new(),
             downloads: BTreeMap::new(),
             console: Vec::new(),
+            trace: Vec::new(),
             timeout_ms: 30_000,
             dialog: dialog::State::default(),
         })
@@ -463,6 +491,7 @@ impl Cdp {
                     }
                     self.record_download_event(&value)?;
                     record_console_event_into(&mut self.console, &value);
+                    record_trace_event_into(&mut self.trace, &value);
                     if value["method"] == "Inspector.targetCrashed" {
                         return Err(Error::tool("browser", "browser target crashed"));
                     }
@@ -662,6 +691,17 @@ impl Cdp {
             self.console.clear();
         }
         entries
+    }
+
+    /// Drop any buffered trace events, so a restart does not append to a
+    /// previous capture.
+    pub(super) fn clear_trace(&mut self) {
+        self.trace.clear();
+    }
+
+    /// Drain the buffered trace events.
+    pub(super) fn take_trace(&mut self) -> Vec<Value> {
+        std::mem::take(&mut self.trace)
     }
 
     pub(super) async fn evaluate(&mut self, owner: &AgentCx, expression: &str) -> Result<Value> {
@@ -1061,6 +1101,7 @@ impl Session {
             "console" => console::execute(owner, cdp, &tab, args).await,
             "emulate" | "reset_emulation" => emulation::execute(owner, cdp, &tab, args).await,
             "drag" => drag::execute(owner, cdp, &tab, self.references.get(&target), args).await,
+            "trace" => tracing::execute(owner, cdp, cwd, &tab, args).await,
             "evaluate" => {
                 let value = cdp.evaluate(owner, required(args, "script")?).await?;
                 Ok(output(

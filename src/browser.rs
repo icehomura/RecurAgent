@@ -26,6 +26,7 @@ mod launch;
 mod mock;
 mod policy;
 mod storage;
+mod tracing;
 
 pub use launch::BrowserLaunchOptions;
 
