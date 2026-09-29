@@ -1144,7 +1144,7 @@ impl RaApp {
         // See the fuller note in `submit_continue` (bd-k01i6).
         if task_cx.is_cancel_requested() {
             tracing::warn!(
-                event = "pi.interactive.save_skipped_cancelled_region",
+                event = "ra.interactive.save_skipped_cancelled_region",
                 "session save skipped: the request was already cancelled"
             );
             return;

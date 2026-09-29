@@ -1338,7 +1338,7 @@ impl RaApp {
             Ok(auth) => auth,
             Err(err) => {
                 tracing::warn!(
-                    event = "pi.auth.sync_credentials.load_failed",
+                    event = "ra.auth.sync_credentials.load_failed",
                     provider = %changed_canonical,
                     error = %err,
                     "Skipping in-memory credential sync because auth storage could not be loaded"
@@ -3941,7 +3941,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                             && let Err(err) = resources.extend_with_paths(&cwd, &discovered)
                         {
                             tracing::warn!(
-                                event = "pi.resources.reload.extension_paths_failed",
+                                event = "ra.resources.reload.extension_paths_failed",
                                 error = %err,
                                 "Failed to apply extension-discovered resource paths"
                             );

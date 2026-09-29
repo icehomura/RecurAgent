@@ -748,7 +748,7 @@ fn main_impl() -> Result<()> {
     {
         match ra::profiler::start() {
             Ok(()) => {
-                tracing::info!(event = "pi.profile.start", hz = ra::profiler::SAMPLE_HZ);
+                tracing::info!(event = "ra.profile.start", hz = ra::profiler::SAMPLE_HZ);
                 ra::profiler::spawn_snapshot_thread(&crash_agent_dir);
             }
             Err(err) => eprintln!("warning: profiler: {err}"),
@@ -1407,7 +1407,7 @@ fn advisor_options(
     let key = ra::models::resolve_model_key(cli.api_key.as_deref(), auth, &entry);
     if ra::models::model_requires_configured_credential(&entry) && key.is_none() {
         tracing::info!(
-            event = "pi.advisor.no_credentials",
+            event = "ra.advisor.no_credentials",
             "advisor role configured but credentials missing; advisor disabled"
         );
         return None;
@@ -1421,7 +1421,7 @@ fn advisor_options(
         }),
         Err(err) => {
             tracing::warn!(
-                event = "pi.advisor.provider_failed",
+                event = "ra.advisor.provider_failed",
                 error = %err,
                 "advisor provider construction failed; advisor disabled"
             );
@@ -1635,7 +1635,7 @@ async fn run(
             .collect::<Vec<_>>()
             .join(", ");
         tracing::debug!(
-            event = "pi.extensions.flags.ignored_no_extensions",
+            event = "ra.extensions.flags.ignored_no_extensions",
             flags = %rendered,
             "Extension flags provided but no extensions are loaded; ignoring."
         );
@@ -1783,7 +1783,7 @@ async fn run(
                         .map(ExtensionRuntimeHandle::Js)
                         .map_err(anyhow::Error::new)?;
                         tracing::info!(
-                            event = "pi.extension_runtime.engine_decision",
+                            event = "ra.extension_runtime.engine_decision",
                             stage = "main_prewarm",
                             requested = "quickjs",
                             selected = "quickjs",
@@ -1812,7 +1812,7 @@ async fn run(
                         .map(ExtensionRuntimeHandle::NativeRust)
                         .map_err(anyhow::Error::new)?;
                     tracing::info!(
-                        event = "pi.extension_runtime.engine_decision",
+                        event = "ra.extension_runtime.engine_decision",
                         stage = "main_prewarm",
                         requested = "native-rust",
                         selected = "native-rust",
@@ -2484,7 +2484,7 @@ async fn run(
             match join_handle.await {
                 Ok(runtime) => {
                     tracing::info!(
-                        event = "pi.extension_runtime.prewarm.success",
+                        event = "ra.extension_runtime.prewarm.success",
                         runtime = runtime.runtime_name(),
                         "Pre-warmed extension runtime ready"
                     );
@@ -2496,7 +2496,7 @@ async fn run(
                 }
                 Err(e) => {
                     tracing::warn!(
-                        event = "pi.extension_runtime.prewarm.failed",
+                        event = "ra.extension_runtime.prewarm.failed",
                         error = %e,
                         "Extension runtime pre-warm failed, falling back to inline creation"
                     );
@@ -2520,7 +2520,7 @@ async fn run(
             resolved_repair_policy.effective_mode
         };
         tracing::info!(
-            event = "pi.extension_repair_policy.resolved",
+            event = "ra.extension_repair_policy.resolved",
             requested = %resolved_repair_policy.requested_mode,
             source = resolved_repair_policy.source,
             effective = ?effective_repair_policy,
@@ -2590,7 +2590,7 @@ async fn run(
                         .await
                     {
                         tracing::warn!(
-                            event = "pi.auth.extension_oauth_refresh.failed",
+                            event = "ra.auth.extension_oauth_refresh.failed",
                             error = %e,
                             "Failed to refresh extension OAuth tokens, continuing with existing credentials"
                         );
@@ -2643,7 +2643,7 @@ async fn run(
             .collect::<Vec<_>>()
             .join(", ");
         tracing::debug!(
-            event = "pi.extensions.flags.ignored_no_extensions",
+            event = "ra.extensions.flags.ignored_no_extensions",
             flags = %rendered,
             "Extension flags provided but no extensions are loaded; ignoring."
         );

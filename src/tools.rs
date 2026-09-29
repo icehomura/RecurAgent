@@ -8017,7 +8017,7 @@ impl Tool for BashTool {
                                     crate::bash_mediation::MediationVerdict::Allow { hits }
                                         .audit_payload(mode, &input.command);
                                 tracing::info!(
-                                    event = "pi.bash.mediation",
+                                    event = "ra.bash.mediation",
                                     payload = %payload,
                                     "bash mediation allow with hits"
                                 );
@@ -8027,7 +8027,7 @@ impl Tool for BashTool {
                             let payload = crate::bash_mediation::MediationVerdict::Warn { hits }
                                 .audit_payload(mode, &input.command);
                             tracing::info!(
-                                event = "pi.bash.mediation",
+                                event = "ra.bash.mediation",
                                 payload = %payload,
                                 "bash mediation warn"
                             );
@@ -8099,7 +8099,7 @@ impl Tool for BashTool {
                             let payload = crate::bash_mediation::MediationVerdict::Block { hits }
                                 .audit_payload(mode, &input.command);
                             tracing::info!(
-                                event = "pi.bash.mediation",
+                                event = "ra.bash.mediation",
                                 payload = %payload,
                                 "bash mediation block"
                             );
