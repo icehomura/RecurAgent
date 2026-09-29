@@ -251,7 +251,7 @@ fn run() -> Result<()> {
 
     let counts = summarize_counts(&results);
     let report = Report {
-        schema: "pi.ext.release_binary_e2e.v1".to_string(),
+        schema: "ra.ext.release_binary_e2e.v1".to_string(),
         generated_at,
         run_id,
         correlation_id,
@@ -966,7 +966,7 @@ mod tests {
         fs::create_dir_all(&dir).expect("create temp report dir");
 
         let report = Report {
-            schema: "pi.ext.release_binary_e2e.v1".to_string(),
+            schema: "ra.ext.release_binary_e2e.v1".to_string(),
             generated_at: "2026-02-18T00:00:00Z".to_string(),
             run_id: "run-1".to_string(),
             correlation_id: "corr-1".to_string(),
