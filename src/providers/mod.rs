@@ -1128,7 +1128,7 @@ fn create_transport_provider(
     let vcr_client = vcr_client_if_enabled(&entry.model.base_url)?;
     let client = vcr_client.unwrap_or_else(Client::new);
     tracing::debug!(
-        event = "pi.provider.factory.select",
+        event = "ra.provider.factory.select",
         provider = %entry.model.provider,
         canonical_provider = %canonical_provider,
         api = %effective_api,

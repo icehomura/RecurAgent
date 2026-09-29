@@ -790,7 +790,7 @@ impl<T: Clone + QueueTenant> HostcallRequestQueue<T> {
                     let depth = self.len();
                     self.max_depth_seen = self.max_depth_seen.max(depth);
                     tracing::debug!(
-                        target: "pi.extensions.hostcall_queue",
+                        target: "ra.extensions.hostcall_queue",
                         event = "hostcall_queue.enqueue",
                         reason = "small_tier",
                         depth,
@@ -808,7 +808,7 @@ impl<T: Clone + QueueTenant> HostcallRequestQueue<T> {
         if !self.s3fifo.allow_main_admission(tenant_key.as_deref()) {
             self.overflow_rejected_total = self.overflow_rejected_total.saturating_add(1);
             tracing::debug!(
-                target: "pi.extensions.hostcall_queue",
+                target: "ra.extensions.hostcall_queue",
                 event = "hostcall_queue.reject",
                 reason = "fairness_budget",
                 depth = self.len(),
@@ -832,7 +832,7 @@ impl<T: Clone + QueueTenant> HostcallRequestQueue<T> {
             let overflow_depth = self.overflow.len();
             self.max_depth_seen = self.max_depth_seen.max(depth);
             tracing::debug!(
-                target: "pi.extensions.hostcall_queue",
+                target: "ra.extensions.hostcall_queue",
                 event = "hostcall_queue.enqueue",
                 reason = "main_tier",
                 depth,
@@ -848,7 +848,7 @@ impl<T: Clone + QueueTenant> HostcallRequestQueue<T> {
         self.overflow_rejected_total = self.overflow_rejected_total.saturating_add(1);
         self.s3fifo.on_main_overflow_reject(tenant_key.as_deref());
         tracing::debug!(
-            target: "pi.extensions.hostcall_queue",
+            target: "ra.extensions.hostcall_queue",
             event = "hostcall_queue.reject",
             reason = "overflow_capacity",
             depth = self.len(),

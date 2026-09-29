@@ -130,13 +130,13 @@ pub fn spawn_snapshot_thread(agent_dir: &Path) {
                 std::thread::sleep(std::time::Duration::from_secs(SNAPSHOT_INTERVAL_SECS));
                 match write_snapshot(&dir) {
                     Ok(path) => {
-                        tracing::debug!(event = "pi.profile.snapshot", path = %path.display());
+                        tracing::debug!(event = "ra.profile.snapshot", path = %path.display());
                     }
                     Err(err) if !warned => {
                         // A full disk / unwritable dir must not silently
                         // produce an empty run.
                         warned = true;
-                        tracing::warn!(event = "pi.profile.snapshot", error = %err);
+                        tracing::warn!(event = "ra.profile.snapshot", error = %err);
                     }
                     Err(_) => {}
                 }

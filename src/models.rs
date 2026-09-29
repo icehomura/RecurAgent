@@ -3333,7 +3333,7 @@ fn apply_custom_models_with_provider_headers(
 
         if provider_defaults.is_some() {
             tracing::debug!(
-                event = "pi.provider.schema_defaults",
+                event = "ra.provider.schema_defaults",
                 provider = %provider_id,
                 canonical_provider = %canonical_provider,
                 api = %provider_api_string,
@@ -3898,7 +3898,7 @@ where
                 let trimmed = env_value.trim();
                 if trimmed.is_empty() {
                     tracing::warn!(
-                        event = "pi.models.api_key_env_empty",
+                        event = "ra.models.api_key_env_empty",
                         var = value,
                         "models.json apiKey references env var that is set but empty; \
                          falling back to literal value"
@@ -3909,7 +3909,7 @@ where
             }
             None => {
                 tracing::warn!(
-                    event = "pi.models.api_key_env_missing",
+                    event = "ra.models.api_key_env_missing",
                     var = value,
                     "models.json apiKey references an env var that is not set; \
                      falling back to literal value (auth will likely fail)"
