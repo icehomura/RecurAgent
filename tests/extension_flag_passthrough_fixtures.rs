@@ -5,8 +5,8 @@
 //! - Mixed built-in + extension flag sets
 //! - Parity with TypeScript behavior
 
-use pi::cli::parse_with_extension_flags;
-use pi::extensions::ExtensionManager;
+use ra::cli::parse_with_extension_flags;
+use ra::extensions::ExtensionManager;
 
 /// Test fixture scenarios covering mixed built-in and extension flags
 #[derive(Debug)]
@@ -58,7 +58,7 @@ fn get_extension_flag_fixtures() -> Vec<ExtensionFlagFixture> {
                 "--format=json",
                 "--continue",
                 // NOTE: the first positional must not collide with a root
-                // subcommand ("review" became `pi review`), or clap parses it
+                // subcommand ("review" became `ra review`), or clap parses it
                 // as a subcommand invocation instead of message args.
                 "critique",
                 "this",
@@ -105,7 +105,7 @@ fn get_extension_flag_fixtures() -> Vec<ExtensionFlagFixture> {
     ]
 }
 
-fn assert_extension_flag(parsed: &pi::cli::ParsedCli, name: &str, value: Option<&str>) {
+fn assert_extension_flag(parsed: &ra::cli::ParsedCli, name: &str, value: Option<&str>) {
     assert!(
         parsed
             .extension_flags
@@ -189,15 +189,15 @@ fn test_extension_flag_application_integration() {
     // This test validates that the extension flags are properly structured
     // and can be created without panicking
     let test_flags = [
-        pi::cli::ExtensionCliFlag {
+        ra::cli::ExtensionCliFlag {
             name: "debug".to_string(),
             value: Some("true".to_string()),
         },
-        pi::cli::ExtensionCliFlag {
+        ra::cli::ExtensionCliFlag {
             name: "level".to_string(),
             value: Some("info".to_string()),
         },
-        pi::cli::ExtensionCliFlag {
+        ra::cli::ExtensionCliFlag {
             name: "unknown-flag".to_string(),
             value: None,
         },

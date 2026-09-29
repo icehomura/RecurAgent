@@ -8,8 +8,8 @@ const CONTRACT_PATH: &str = "docs/contracts/swarm-progress-slo-closeout-gate-con
 const EVIDENCE_PATH: &str = "docs/evidence/swarm-progress-slo-closeout-gate.json";
 const RUNBOOK_PATH: &str = "docs/swarm-operations-runbook.md";
 const README_PATH: &str = "README.md";
-const EXPECTED_CONTRACT_SCHEMA: &str = "pi.swarm.progress_slo.closeout_gate_contract.v1";
-const EXPECTED_EVIDENCE_SCHEMA: &str = "pi.swarm.progress_slo.closeout_gate.v1";
+const EXPECTED_CONTRACT_SCHEMA: &str = "ra.swarm.progress_slo.closeout_gate_contract.v1";
+const EXPECTED_EVIDENCE_SCHEMA: &str = "ra.swarm.progress_slo.closeout_gate.v1";
 const EXPECTED_PURPOSE: &str =
     "prompt_to_artifact_swarm_progress_slo_closeout_gate_not_source_of_truth";
 

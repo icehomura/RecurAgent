@@ -11,14 +11,14 @@ mod common;
 
 use std::sync::{Arc, Mutex};
 
-use pi::agent::{Agent, AgentConfig};
-use pi::compaction_snap::{
+use ra::agent::{Agent, AgentConfig};
+use ra::compaction_snap::{
     COMPACTION_SUMMARY_PREFIX, COMPACTION_SUMMARY_SUFFIX, SnapFrame, SnapPayload, attach_frames,
     strip_snapcompact_images,
 };
-use pi::model::{ContentBlock, Message, UserContent, UserMessage};
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::tools::ToolRegistry;
+use ra::model::{ContentBlock, Message, UserContent, UserMessage};
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::tools::ToolRegistry;
 
 struct CapturingProvider {
     context: Arc<Mutex<Option<Vec<Message>>>>,
@@ -45,9 +45,9 @@ impl Provider for CapturingProvider {
         &self,
         context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
+    ) -> ra::error::Result<
         std::pin::Pin<
-            Box<dyn futures::Stream<Item = pi::error::Result<pi::model::StreamEvent>> + Send>,
+            Box<dyn futures::Stream<Item = ra::error::Result<ra::model::StreamEvent>> + Send>,
         >,
     > {
         let mut guard = self.context.lock().expect("context mutex");

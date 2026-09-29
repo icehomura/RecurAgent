@@ -5,7 +5,7 @@ expression: text
 ---
 {
   "antigravity-image-gen": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [
       {
         "capability": "env",
@@ -28,13 +28,13 @@ expression: text
             "file": "antigravity-image-gen.ts",
             "line": 192,
             "column": 19,
-            "snippet": "\tconst envMode = (process.env.PI_IMAGE_SAVE_MODE || \"\").toLowerCase();"
+            "snippet": "\tconst envMode = (process.env.RECUR_AGENT_IMAGE_SAVE_MODE || \"\").toLowerCase();"
           },
           {
             "file": "antigravity-image-gen.ts",
             "line": 209,
             "column": 33,
-            "snippet": "\t\tconst dir = params.saveDir || process.env.PI_IMAGE_SAVE_DIR || config.saveDir;"
+            "snippet": "\t\tconst dir = params.saveDir || process.env.RECUR_AGENT_IMAGE_SAVE_DIR || config.saveDir;"
           }
         ],
         "remediation": "Declare `env` capability (scoped) or avoid reading host env vars."
@@ -158,21 +158,21 @@ expression: text
     "flagged": []
   },
   "custom-provider-anthropic": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "custom-provider-qwen-cli": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "doom-overlay": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [
       {
         "capability": "env",
@@ -391,7 +391,7 @@ expression: text
     ]
   },
   "dynamic-resources": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [
       {
@@ -423,7 +423,7 @@ expression: text
     "flagged": []
   },
   "git-checkpoint": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [
       {
         "capability": "exec",
@@ -449,14 +449,14 @@ expression: text
     "flagged": []
   },
   "hello": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "inline-bash": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [
       {
         "capability": "exec",
@@ -476,28 +476,28 @@ expression: text
     "flagged": []
   },
   "permission-gate": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "plan-mode": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "protected-paths": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "sandbox": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [
       {
         "capability": "env",
@@ -606,14 +606,14 @@ expression: text
     "flagged": []
   },
   "status-line": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "subagent": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [
       {
         "capability": "env",
@@ -758,14 +758,14 @@ expression: text
     "flagged": []
   },
   "todo": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],
     "flagged": []
   },
   "with-deps": {
-    "schema": "pi.ext.compat_ledger.v1",
+    "schema": "ra.ext.compat_ledger.v1",
     "capabilities": [],
     "rewrites": [],
     "forbidden": [],

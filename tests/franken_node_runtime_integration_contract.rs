@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-runtime-integration-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.runtime_integration_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.runtime_integration_contract.v1";
 const REQUIRED_CRATE_DEPS: &[&str] = &[
     "franken_node_kernel",
     "franken_node_event_loop",

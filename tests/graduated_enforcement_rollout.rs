@@ -4,7 +4,7 @@
 //! triggers, operator-inspectable state, and integration with the risk controller
 //! enforce flag.
 
-use pi::extensions::{
+use ra::extensions::{
     RollbackTrigger, RollbackWindowStats, RolloutPhase, RolloutState, RolloutTracker,
 };
 

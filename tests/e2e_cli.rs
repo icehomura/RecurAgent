@@ -1,6 +1,6 @@
 //! End-to-end CLI tests (offline).
 //!
-//! These tests invoke the compiled `pi` binary directly and verify that
+//! These tests invoke the compiled `ra` binary directly and verify that
 //! offline flags/subcommands behave as expected, with verbose logging
 //! and artifact capture for debugging failures.
 
@@ -9,15 +9,15 @@ mod common;
 #[cfg(unix)]
 use asupersync::runtime::RuntimeBuilder;
 use common::TestHarness;
-use pi::config::Config;
+use ra::config::Config;
 #[cfg(unix)]
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
 #[cfg(unix)]
-use pi::extensions_js::PiJsRuntimeConfig;
+use ra::extensions_js::RaJsRuntimeConfig;
 #[cfg(unix)]
-use pi::package_manager::{PackageManager, PackageScope, ResolveRoots};
-use pi::session::encode_cwd;
-use pi::tools::ToolRegistry;
+use ra::package_manager::{PackageManager, PackageScope, ResolveRoots};
+use ra::session::encode_cwd;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -40,8 +40,8 @@ const FAKE_NPM_SCRIPT: &str = r#"#!/bin/sh
 set -eu
 
 cmd="${1:-}"
-if [ -n "${PI_E2E_FAKE_NPM_LEDGER:-}" ]; then
-    printf '%s\n' "$*" >> "$PI_E2E_FAKE_NPM_LEDGER"
+if [ -n "${RECUR_AGENT_E2E_FAKE_NPM_LEDGER:-}" ]; then
+    printf '%s\n' "$*" >> "$RECUR_AGENT_E2E_FAKE_NPM_LEDGER"
 fi
 
 if [ "$cmd" = "root" ] && [ "${2:-}" = "-g" ]; then
@@ -140,7 +140,7 @@ struct CliTestHarness {
 impl CliTestHarness {
     fn new(name: &str) -> Self {
         let harness = TestHarness::new(name);
-        let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+        let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_ra"));
 
         let mut env = BTreeMap::new();
 
@@ -153,19 +153,19 @@ impl CliTestHarness {
             env_root.join("home").display().to_string(),
         );
         env.insert(
-            "PI_CODING_AGENT_DIR".to_string(),
+            "RECUR_AGENT_DIR".to_string(),
             env_root.join("agent").display().to_string(),
         );
         env.insert(
-            "PI_CONFIG_PATH".to_string(),
+            "RECUR_AGENT_CONFIG_PATH".to_string(),
             env_root.join("settings.json").display().to_string(),
         );
         env.insert(
-            "PI_SESSIONS_DIR".to_string(),
+            "RECUR_AGENT_SESSIONS_DIR".to_string(),
             env_root.join("sessions").display().to_string(),
         );
         env.insert(
-            "PI_PACKAGE_DIR".to_string(),
+            "RECUR_AGENT_PACKAGE_DIR".to_string(),
             env_root.join("packages").display().to_string(),
         );
 
@@ -223,12 +223,12 @@ impl CliTestHarness {
 
     #[cfg(unix)]
     fn global_settings_path(&self) -> PathBuf {
-        self.env.get("PI_CONFIG_PATH").map_or_else(
+        self.env.get("RECUR_AGENT_CONFIG_PATH").map_or_else(
             || {
                 PathBuf::from(
                     self.env
-                        .get("PI_CODING_AGENT_DIR")
-                        .expect("PI_CODING_AGENT_DIR must be set"),
+                        .get("RECUR_AGENT_DIR")
+                        .expect("RECUR_AGENT_DIR must be set"),
                 )
                 .join("settings.json")
             },
@@ -238,7 +238,7 @@ impl CliTestHarness {
 
     #[cfg(unix)]
     fn project_settings_path(&self) -> PathBuf {
-        self.harness.temp_dir().join(".pi").join("settings.json")
+        self.harness.temp_dir().join(".ra").join("settings.json")
     }
 
     #[cfg(unix)]
@@ -269,7 +269,7 @@ impl CliTestHarness {
     }
 
     fn cli_timeout() -> Duration {
-        std::env::var("PI_E2E_CLI_TIMEOUT_SECS")
+        std::env::var("RECUR_AGENT_E2E_CLI_TIMEOUT_SECS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|value| *value > 0)
@@ -405,7 +405,7 @@ impl CliTestHarness {
 /// Canonicalize a path and strip the Windows `\\?\` prefix if present.
 fn canon(p: &Path) -> PathBuf {
     let c = fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    pi::extensions::strip_unc_prefix(c)
+    ra::extensions::strip_unc_prefix(c)
 }
 
 /// Filesystem permission denials cannot be observed by root (DAC bypass), so
@@ -484,7 +484,7 @@ fn write_context_preview_fixture(root: &Path, readme: &str) {
     fs::write(
         root.join("docs/evidence/dropin-certification-verdict.json"),
         r#"{
-  "schema": "pi.dropin_certification.verdict.v1",
+  "schema": "ra.dropin_certification.verdict.v1",
   "generated_at": "2026-01-01T00:00:00Z",
   "overall_verdict": "CERTIFIED",
   "claim_surface": "release_facing"
@@ -532,8 +532,8 @@ fn resolve_roots_for_cli_harness(harness: &CliTestHarness) -> ResolveRoots {
     let global_base_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
-            .expect("PI_CODING_AGENT_DIR set by CliTestHarness::new"),
+            .get("RECUR_AGENT_DIR")
+            .expect("RECUR_AGENT_DIR set by CliTestHarness::new"),
     );
 
     ResolveRoots {
@@ -541,7 +541,7 @@ fn resolve_roots_for_cli_harness(harness: &CliTestHarness) -> ResolveRoots {
         global_settings_path: harness.global_settings_path(),
         project_settings_path: harness.project_settings_path(),
         global_base_dir,
-        project_base_dir: harness.harness.temp_dir().join(".pi"),
+        project_base_dir: harness.harness.temp_dir().join(".ra"),
     }
 }
 
@@ -841,7 +841,7 @@ fn e2e_cli_explain_extension_policy_outputs_remediation() {
         to_allow_cli.iter().any(|entry| {
             entry
                 .as_str()
-                .is_some_and(|text| text.contains("PI_EXTENSION_ALLOW_DANGEROUS=1"))
+                .is_some_and(|text| text.contains("RECUR_AGENT_EXTENSION_ALLOW_DANGEROUS=1"))
         }),
         "exec remediation should include allow-dangerous CLI guidance"
     );
@@ -1082,7 +1082,7 @@ fn e2e_cli_extension_compat_ledger_logged_when_enabled() {
     let mut harness = CliTestHarness::new("e2e_cli_extension_compat_ledger_logged_when_enabled");
     harness
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "1".to_string());
     harness
         .env
         .insert("RUST_LOG".to_string(), "info".to_string());
@@ -1099,7 +1099,7 @@ fn e2e_cli_extension_compat_ledger_logged_when_enabled() {
 
     assert_exit_code(&harness.harness, &result, 0);
     let combined = format!("{}\n{}", result.stdout, result.stderr);
-    assert_contains(&harness.harness, &combined, "pi.ext.compat_ledger.v1");
+    assert_contains(&harness.harness, &combined, "ra.ext.compat_ledger.v1");
 }
 
 #[test]
@@ -1109,7 +1109,7 @@ fn e2e_cli_extension_compat_ledger_keeps_cli_extensions_with_no_extensions() {
     );
     harness
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "1".to_string());
     harness
         .env
         .insert("RUST_LOG".to_string(), "info".to_string());
@@ -1131,7 +1131,7 @@ fn e2e_cli_extension_compat_ledger_keeps_cli_extensions_with_no_extensions() {
 
     assert_exit_code(&harness.harness, &result, 0);
     let combined = format!("{}\n{}", result.stdout, result.stderr);
-    assert_contains(&harness.harness, &combined, "pi.ext.compat_ledger.v1");
+    assert_contains(&harness.harness, &combined, "ra.ext.compat_ledger.v1");
 
     let log_path = harness.harness.temp_path("extension-cli-log.jsonl");
     harness
@@ -1183,7 +1183,7 @@ fn e2e_cli_fetch_models_is_a_standalone_stdout_command() {
     let sessions_dir = PathBuf::from(
         harness
             .env
-            .get("PI_SESSIONS_DIR")
+            .get("RECUR_AGENT_SESSIONS_DIR")
             .expect("isolated sessions dir"),
     );
     assert!(
@@ -1271,7 +1271,7 @@ fn e2e_cli_fetch_models_uses_models_json_route_credentials_and_headers() {
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
+            .get("RECUR_AGENT_DIR")
             .expect("isolated agent dir"),
     );
     fs::create_dir_all(&agent_dir).expect("create isolated agent dir");
@@ -1366,12 +1366,12 @@ fn e2e_cli_fetch_models_custom_authorization_skips_held_auth_lock() {
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
+            .get("RECUR_AGENT_DIR")
             .expect("isolated agent dir"),
     );
     fs::create_dir_all(&agent_dir).expect("create isolated agent dir");
     let auth_path = agent_dir.join("auth.json");
-    let _held_auth_lock = pi::file_lock::DirLock::acquire_for(&auth_path, Duration::from_secs(1))
+    let _held_auth_lock = ra::file_lock::DirLock::acquire_for(&auth_path, Duration::from_secs(1))
         .expect("hold auth lock while custom-authorization catalog fetch runs");
     fs::write(
         agent_dir.join("models.json"),
@@ -1425,9 +1425,10 @@ fn e2e_cli_fetch_models_ignores_text_input_guards() {
 fn e2e_cli_fetch_models_only_conflicts_with_explicit_hide_cwd_flag() {
     let mut harness =
         CliTestHarness::new("e2e_cli_fetch_models_only_conflicts_with_explicit_hide_cwd_flag");
-    harness
-        .env
-        .insert("PI_HIDE_CWD_IN_PROMPT".to_string(), "true".to_string());
+    harness.env.insert(
+        "RECUR_AGENT_HIDE_CWD_IN_PROMPT".to_string(),
+        "true".to_string(),
+    );
 
     let env_only = harness.run(&["--fetch-models", "openai"]);
     assert_exit_code(&harness.harness, &env_only, 0);
@@ -1506,12 +1507,12 @@ fn e2e_cli_fetch_models_keyless_persist_updates_list_models_despite_held_auth_lo
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
+            .get("RECUR_AGENT_DIR")
             .expect("isolated agent dir"),
     );
     fs::create_dir_all(&agent_dir).expect("create isolated agent dir");
     let auth_path = agent_dir.join("auth.json");
-    let held_auth_lock = pi::file_lock::DirLock::acquire_for(&auth_path, Duration::from_secs(1))
+    let held_auth_lock = ra::file_lock::DirLock::acquire_for(&auth_path, Duration::from_secs(1))
         .expect("hold auth lock while keyless catalog fetch runs");
     fs::write(
         agent_dir.join("models.json"),
@@ -1560,7 +1561,7 @@ fn e2e_cli_persist_models_rejects_static_fallback() {
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
+            .get("RECUR_AGENT_DIR")
             .expect("isolated agent dir"),
     );
     assert!(
@@ -1606,7 +1607,7 @@ fn e2e_cli_fetch_models_rejects_unsafe_static_fallback_ids() {
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
+            .get("RECUR_AGENT_DIR")
             .expect("isolated agent dir"),
     );
     fs::create_dir_all(&agent_dir).expect("create isolated agent dir");
@@ -1629,7 +1630,7 @@ fn e2e_cli_fetch_models_rejects_unsafe_static_fallback_ids() {
     assert_contains(&harness.harness, &result.stderr, "not printable ASCII");
 }
 
-/// bd-print-json-panics-on-closed-stdout: `pi --print --mode json | head` must
+/// bd-print-json-panics-on-closed-stdout: `ra --print --mode json | head` must
 /// end quietly, not panic and file a crash report against the user.
 ///
 /// `println!` panics when the write fails, and Rust disables SIGPIPE at
@@ -1654,7 +1655,7 @@ fn e2e_cli_print_json_ends_quietly_when_its_reader_closes_the_pipe() {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let mut child = command.spawn().expect("spawn pi --print --mode json");
+    let mut child = command.spawn().expect("spawn ra --print --mode json");
 
     // Read one line, then drop the pipe — this is `| head -1`.
     let stdout = child.stdout.take().expect("child stdout pipe");
@@ -1682,7 +1683,7 @@ fn e2e_cli_print_json_ends_quietly_when_its_reader_closes_the_pipe() {
     let crashes = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
+            .get("RECUR_AGENT_DIR")
             .expect("isolated agent dir"),
     )
     .join("crashes");
@@ -1744,7 +1745,7 @@ fn e2e_cli_version_flag() {
     let result = harness.run(&["--version"]);
 
     assert_exit_code(&harness.harness, &result, 0);
-    assert_contains(&harness.harness, &result.stdout, "pi ");
+    assert_contains(&harness.harness, &result.stdout, "ra ");
     assert_contains(&harness.harness, &result.stdout, env!("CARGO_PKG_VERSION"));
     assert_contains(&harness.harness, &result.stdout, "\n");
 }
@@ -1838,7 +1839,7 @@ fn e2e_cli_config_resolves_installed_user_packages_with_one_npm_root_lookup() {
     );
     let ledger = harness.harness.temp_path("fake-npm-ledger.log");
     harness.env.insert(
-        "PI_E2E_FAKE_NPM_LEDGER".to_string(),
+        "RECUR_AGENT_E2E_FAKE_NPM_LEDGER".to_string(),
         ledger.display().to_string(),
     );
 
@@ -1914,12 +1915,12 @@ fn e2e_cli_context_preview_json_is_machine_readable_and_read_only() {
     assert_exit_code(&harness.harness, &result, 0);
     let payload: serde_json::Value =
         serde_json::from_str(&result.stdout).expect("context preview should be JSON");
-    assert_eq!(payload["schema"], "pi.context_bundle_preview.v1");
+    assert_eq!(payload["schema"], "ra.context_bundle_preview.v1");
     assert_eq!(payload["command"]["read_only"], true);
     assert_eq!(payload["command"]["provider_calls"], 0);
     assert_eq!(payload["command"]["writes"], 0);
     assert_eq!(payload["request"]["bead_id"], "bd-preview");
-    assert_eq!(payload["bundle"]["schema"], "pi.semantic_context_bundle.v1");
+    assert_eq!(payload["bundle"]["schema"], "ra.semantic_context_bundle.v1");
     assert!(
         payload["bundle"]["selected_items"]
             .as_array()
@@ -2051,10 +2052,11 @@ fn e2e_cli_config_show_reports_empty_packages_when_none_configured() {
 #[test]
 fn e2e_cli_config_show_lists_discovered_package_resources() {
     let mut harness = CliTestHarness::new("e2e_cli_config_show_lists_discovered_package_resources");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
 
     let package_root = harness.harness.create_dir("config-ui-pkg");
     fs::create_dir_all(package_root.join("extensions")).expect("create package extensions");
@@ -2082,7 +2084,7 @@ fn e2e_cli_config_show_lists_discovered_package_resources() {
         .harness
         .record_artifact("config-ui-pkg.dir", &package_root);
 
-    let project_settings = harness.harness.temp_dir().join(".pi").join("settings.json");
+    let project_settings = harness.harness.temp_dir().join(".ra").join("settings.json");
     fs::create_dir_all(
         project_settings
             .parent()
@@ -2118,17 +2120,18 @@ fn e2e_cli_config_show_lists_discovered_package_resources() {
 #[test]
 fn e2e_cli_startup_surfaces_configured_resource_failures() {
     let mut harness = CliTestHarness::new("e2e_cli_startup_surfaces_configured_resource_failures");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
     // `--list-models` alone short-circuits in main.rs long before resources are
     // loaded, so it never reaches the diagnostic write and this asserted on an
     // empty stderr. Compat scanning is the documented way to make that flag
     // boot the normal startup path — which is the path this test is named for.
     harness
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "1".to_string());
 
     let package_root = harness.harness.create_dir("diagnostic-pkg");
     let skill = package_root.join("skills/oversized-skill/SKILL.md");
@@ -2140,7 +2143,7 @@ fn e2e_cli_startup_surfaces_configured_resource_failures() {
         file.set_len(2 * 1024 * 1024)
             .expect("extend oversized resource");
     }
-    let project_settings = harness.harness.temp_dir().join(".pi/settings.json");
+    let project_settings = harness.harness.temp_dir().join(".ra/settings.json");
     fs::create_dir_all(project_settings.parent().expect("settings parent"))
         .expect("create settings dir");
     fs::write(
@@ -2172,11 +2175,12 @@ fn e2e_cli_startup_surfaces_configured_resource_failures() {
 #[test]
 fn e2e_cli_config_show_surfaces_invalid_package_settings() {
     let mut harness = CliTestHarness::new("e2e_cli_config_show_surfaces_invalid_package_settings");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
-    let project_settings = harness.harness.temp_dir().join(".pi").join("settings.json");
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
+    let project_settings = harness.harness.temp_dir().join(".ra").join("settings.json");
     fs::create_dir_all(
         project_settings
             .parent()
@@ -2211,11 +2215,12 @@ fn e2e_cli_config_show_surfaces_invalid_package_settings() {
 fn e2e_cli_config_without_tty_surfaces_invalid_package_settings() {
     let mut harness =
         CliTestHarness::new("e2e_cli_config_without_tty_surfaces_invalid_package_settings");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
-    let project_settings = harness.harness.temp_dir().join(".pi").join("settings.json");
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
+    let project_settings = harness.harness.temp_dir().join(".ra").join("settings.json");
     fs::create_dir_all(
         project_settings
             .parent()
@@ -2248,7 +2253,7 @@ fn e2e_cli_config_without_tty_surfaces_invalid_package_settings() {
 }
 
 fn write_untrusted_workspace_surface(harness: &CliTestHarness) {
-    let extensions_dir = harness.harness.temp_dir().join(".pi").join("extensions");
+    let extensions_dir = harness.harness.temp_dir().join(".ra").join("extensions");
     fs::create_dir_all(&extensions_dir).expect("create project extensions dir");
     fs::write(
         extensions_dir.join("marker.js"),
@@ -2260,21 +2265,16 @@ fn write_untrusted_workspace_surface(harness: &CliTestHarness) {
 #[test]
 fn e2e_cli_workspace_trust_fails_closed_non_interactive() {
     let mut harness = CliTestHarness::new("e2e_cli_workspace_trust_fails_closed_non_interactive");
-    // The default PI_CONFIG_PATH override would legitimately skip the gate.
-    harness.env.remove("PI_CONFIG_PATH");
+    // The default RECUR_AGENT_CONFIG_PATH override would legitimately skip the gate.
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
     write_untrusted_workspace_surface(&harness);
 
     // Non-interactive main-path launch (piped stdio): the gate must fail
     // closed with a warning and must not persist a decision.
     let result = harness.run(&["-p", "ping"]);
     assert_contains(&harness.harness, &result.stderr, "workspace not trusted");
-    let store_path = PathBuf::from(
-        harness
-            .env
-            .get("PI_CODING_AGENT_DIR")
-            .expect("agent dir env"),
-    )
-    .join("workspace-trust.json");
+    let store_path = PathBuf::from(harness.env.get("RECUR_AGENT_DIR").expect("agent dir env"))
+        .join("workspace-trust.json");
     assert!(
         !store_path.exists(),
         "non-interactive denial must not persist a trust decision"
@@ -2286,13 +2286,13 @@ fn e2e_cli_workspace_trust_fails_closed_non_interactive() {
 fn e2e_cli_package_fast_paths_skip_untrusted_project_updates() {
     let mut harness =
         CliTestHarness::new("e2e_cli_package_fast_paths_skip_untrusted_project_updates");
-    harness.env.remove("PI_CONFIG_PATH");
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
     let npm_ledger = harness.harness.temp_path("untrusted-update-npm.log");
     harness.env.insert(
-        "PI_E2E_FAKE_NPM_LEDGER".to_string(),
+        "RECUR_AGENT_E2E_FAKE_NPM_LEDGER".to_string(),
         npm_ledger.display().to_string(),
     );
-    let project_settings = harness.harness.temp_dir().join(".pi/settings.json");
+    let project_settings = harness.harness.temp_dir().join(".ra/settings.json");
     fs::create_dir_all(project_settings.parent().expect("project settings parent"))
         .expect("create project settings dir");
     fs::write(
@@ -2315,9 +2315,10 @@ fn e2e_cli_package_fast_paths_skip_untrusted_project_updates() {
     assert_contains(&harness.harness, &list.stdout, "No packages installed.");
     assert!(!list.stdout.contains("blocked-project-pkg"));
 
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
     let trusted_list = harness.run(&["list"]);
     assert_exit_code(&harness.harness, &trusted_list, 0);
     assert_contains(
@@ -2331,20 +2332,21 @@ fn e2e_cli_package_fast_paths_skip_untrusted_project_updates() {
 fn e2e_cli_workspace_trust_env_override_and_flag_persistence() {
     let mut harness =
         CliTestHarness::new("e2e_cli_workspace_trust_env_override_and_flag_persistence");
-    harness.env.remove("PI_CONFIG_PATH");
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
     write_untrusted_workspace_surface(&harness);
 
-    // PI_WORKSPACE_TRUST=trusted suppresses the warning without persisting.
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    // RECUR_AGENT_WORKSPACE_TRUST=trusted suppresses the warning without persisting.
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
     let result = harness.run(&["-p", "ping"]);
     assert!(
         !result.stderr.contains("workspace not trusted"),
         "env-trusted run must not warn about workspace trust; stderr: {}",
         result.stderr
     );
-    harness.env.remove("PI_WORKSPACE_TRUST");
+    harness.env.remove("RECUR_AGENT_WORKSPACE_TRUST");
 
     // --trust persists the decision for the current content digest.
     let result = harness.run(&["--trust", "-p", "ping"]);
@@ -2353,13 +2355,8 @@ fn e2e_cli_workspace_trust_env_override_and_flag_persistence() {
         "--trust run must not warn about workspace trust; stderr: {}",
         result.stderr
     );
-    let store_path = PathBuf::from(
-        harness
-            .env
-            .get("PI_CODING_AGENT_DIR")
-            .expect("agent dir env"),
-    )
-    .join("workspace-trust.json");
+    let store_path = PathBuf::from(harness.env.get("RECUR_AGENT_DIR").expect("agent dir env"))
+        .join("workspace-trust.json");
     let store = fs::read_to_string(&store_path).expect("read workspace trust store");
     assert_contains(&harness.harness, &store, "\"decision\": \"trusted\"");
 
@@ -2451,8 +2448,8 @@ fn e2e_cli_print_mode_with_stdin_does_not_create_session_files() {
     let sessions_dir = PathBuf::from(
         harness
             .env
-            .get("PI_SESSIONS_DIR")
-            .expect("PI_SESSIONS_DIR")
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR")
             .clone(),
     );
 
@@ -2490,7 +2487,7 @@ fn e2e_cli_config_paths_honor_env_overrides() {
 
     let env_root = harness.harness.temp_path("env-overrides");
     // Strip \\?\ prefix so env vars and expected paths match CLI output.
-    let env_root = pi::extensions::strip_unc_prefix(env_root);
+    let env_root = ra::extensions::strip_unc_prefix(env_root);
     let agent_dir = env_root.join("agent-root");
     let config_path = env_root.join("settings-override.json");
     let sessions_dir = env_root.join("sessions-root");
@@ -2500,19 +2497,19 @@ fn e2e_cli_config_paths_honor_env_overrides() {
     std::fs::write(&config_path, "{}").expect("write override settings");
 
     harness.env.insert(
-        "PI_CODING_AGENT_DIR".to_string(),
+        "RECUR_AGENT_DIR".to_string(),
         agent_dir.display().to_string(),
     );
     harness.env.insert(
-        "PI_CONFIG_PATH".to_string(),
+        "RECUR_AGENT_CONFIG_PATH".to_string(),
         config_path.display().to_string(),
     );
     harness.env.insert(
-        "PI_SESSIONS_DIR".to_string(),
+        "RECUR_AGENT_SESSIONS_DIR".to_string(),
         sessions_dir.display().to_string(),
     );
     harness.env.insert(
-        "PI_PACKAGE_DIR".to_string(),
+        "RECUR_AGENT_PACKAGE_DIR".to_string(),
         packages_dir.display().to_string(),
     );
 
@@ -2526,7 +2523,7 @@ fn e2e_cli_config_paths_honor_env_overrides() {
     );
     // On macOS, temp_dir() is a symlink; on Windows, strip \\?\ prefix.
     let canonical_temp = canon(harness.harness.temp_dir());
-    let project_path = canonical_temp.join(".pi").join("settings.json");
+    let project_path = canonical_temp.join(".ra").join("settings.json");
     assert_contains(
         &harness.harness,
         &result.stdout,
@@ -2557,15 +2554,15 @@ fn e2e_cli_config_paths_fallback_to_agent_dir() {
     let agent_dir = env_root.join("agent-root");
     std::fs::create_dir_all(&agent_dir).expect("create agent dir");
     // Strip \\?\ prefix so env var and expected paths match CLI output.
-    let agent_dir = pi::extensions::strip_unc_prefix(agent_dir);
+    let agent_dir = ra::extensions::strip_unc_prefix(agent_dir);
 
     harness.env.insert(
-        "PI_CODING_AGENT_DIR".to_string(),
+        "RECUR_AGENT_DIR".to_string(),
         agent_dir.display().to_string(),
     );
-    harness.env.remove("PI_CONFIG_PATH");
-    harness.env.remove("PI_SESSIONS_DIR");
-    harness.env.remove("PI_PACKAGE_DIR");
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.remove("RECUR_AGENT_SESSIONS_DIR");
+    harness.env.remove("RECUR_AGENT_PACKAGE_DIR");
 
     let result = harness.run(&["config"]);
 
@@ -2578,7 +2575,7 @@ fn e2e_cli_config_paths_fallback_to_agent_dir() {
     // On macOS, temp_dir() is a symlink; canonicalize to match binary output.
     // On Windows, strip \\?\ prefix.
     let canonical_temp = canon(harness.harness.temp_dir());
-    let project_path = canonical_temp.join(".pi").join("settings.json");
+    let project_path = canonical_temp.join(".ra").join("settings.json");
     assert_contains(
         &harness.harness,
         &result.stdout,
@@ -2614,10 +2611,11 @@ fn e2e_cli_list_subcommand_works_offline() {
 #[test]
 fn e2e_cli_packages_install_list_remove_offline() {
     let mut harness = CliTestHarness::new("e2e_cli_packages_install_list_remove_offline");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
 
     harness.harness.section("install local (project)");
     harness.harness.create_dir("local-pkg");
@@ -2680,7 +2678,7 @@ fn e2e_cli_packages_install_list_remove_offline() {
     let npm_install_path = harness
         .harness
         .temp_dir()
-        .join(".pi")
+        .join(".ra")
         .join("npm")
         .join("node_modules")
         .join("demo-pkg");
@@ -2726,10 +2724,11 @@ fn e2e_cli_packages_install_list_remove_offline() {
 #[allow(clippy::too_many_lines)]
 fn e2e_cli_packages_update_respects_pinning_offline() {
     let mut harness = CliTestHarness::new("e2e_cli_packages_update_respects_pinning_offline");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
 
     let git = |cwd: &Path, args: &[&str]| -> String {
         let output = Command::new("git")
@@ -2837,7 +2836,7 @@ fn e2e_cli_packages_update_respects_pinning_offline() {
     assert_eq!(
         settings.get("packages"),
         settings_after.get("packages"),
-        "update should not rewrite .pi/settings.json"
+        "update should not rewrite .ra/settings.json"
     );
 
     write_jsonl_artifacts(
@@ -2853,10 +2852,11 @@ fn e2e_cli_packages_update_respects_pinning_offline() {
 fn e2e_cli_extensions_install_update_manifest_resolution_offline() {
     let mut harness =
         CliTestHarness::new("e2e_cli_extensions_install_update_manifest_resolution_offline");
-    harness.env.remove("PI_CONFIG_PATH");
-    harness
-        .env
-        .insert("PI_WORKSPACE_TRUST".to_string(), "trusted".to_string());
+    harness.env.remove("RECUR_AGENT_CONFIG_PATH");
+    harness.env.insert(
+        "RECUR_AGENT_WORKSPACE_TRUST".to_string(),
+        "trusted".to_string(),
+    );
 
     let write_extension_package = |root: &Path,
                                    package_name: &str,
@@ -2960,7 +2960,7 @@ fn e2e_cli_extensions_install_update_manifest_resolution_offline() {
     let remote_pkg_root = harness
         .harness
         .temp_dir()
-        .join(".pi")
+        .join(".ra")
         .join("npm")
         .join("node_modules")
         .join(remote_extension_id);
@@ -3014,7 +3014,7 @@ fn e2e_cli_extensions_install_update_manifest_resolution_offline() {
 
     let extension_manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], harness.harness.temp_dir(), None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: harness.harness.temp_dir().display().to_string(),
         ..Default::default()
     };
@@ -3132,7 +3132,7 @@ fn e2e_interactive_smoke_tmux() {
     // Used in src/interactive.rs for rendering behavior (and in src/app.rs for prompt determinism).
     harness
         .env
-        .insert("PI_TEST_MODE".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
 
     // Force deterministic behavior (no resource discovery variability).
     harness
@@ -3588,8 +3588,8 @@ fn split_ascii_chunks(chunks: &[String], fragment_sizes: &[usize]) -> Vec<String
 /// Create a VCR cassette file and configure the harness for VCR playback.
 ///
 /// Writes a cassette JSON to a temp directory, then sets the `VCR_MODE`,
-/// `VCR_CASSETTE_DIR`, `PI_VCR_TEST_NAME`, `ANTHROPIC_API_KEY`, and
-/// `PI_TEST_MODE` env vars on the harness so the child binary will use
+/// `VCR_CASSETTE_DIR`, `RECUR_AGENT_VCR_TEST_NAME`, `ANTHROPIC_API_KEY`, and
+/// `RECUR_AGENT_TEST_MODE` env vars on the harness so the child binary will use
 /// VCR playback instead of real HTTP.
 fn setup_vcr_anthropic(
     harness: &mut CliTestHarness,
@@ -3675,15 +3675,16 @@ fn setup_vcr_anthropic_response(
         "VCR_CASSETTE_DIR".to_string(),
         cassette_dir.display().to_string(),
     );
-    harness
-        .env
-        .insert("PI_VCR_TEST_NAME".to_string(), cassette_name.to_string());
+    harness.env.insert(
+        "RECUR_AGENT_VCR_TEST_NAME".to_string(),
+        cassette_name.to_string(),
+    );
     harness
         .env
         .insert("ANTHROPIC_API_KEY".to_string(), "test-vcr-key".to_string());
     harness
         .env
-        .insert("PI_TEST_MODE".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
     // Enable body debug output in VCR errors for easier troubleshooting.
     harness
         .env
@@ -3710,13 +3711,13 @@ const PRINT_MODE_ISOLATION_FLAGS: &[&str] = &[
 ];
 
 /// Build the system prompt that the binary produces when given `--system-prompt`
-/// with `PI_TEST_MODE=1`.  The binary always appends a timestamp/cwd footer.
+/// with `RECUR_AGENT_TEST_MODE=1`.  The binary always appends a timestamp/cwd footer.
 fn expected_system_prompt(custom: &str) -> String {
     format!("{custom}\nCurrent date and time: <TIMESTAMP>\nCurrent working directory: <CWD>")
 }
 
 fn expected_anthropic_tools(enabled: &[&str]) -> Vec<serde_json::Value> {
-    fn tool_json(tool: &dyn pi::tools::Tool) -> serde_json::Value {
+    fn tool_json(tool: &dyn ra::tools::Tool) -> serde_json::Value {
         json!({
             "name": tool.name(),
             "description": tool.description(),
@@ -3743,17 +3744,17 @@ fn expected_anthropic_tools(enabled: &[&str]) -> Vec<serde_json::Value> {
     // self-errors outside plan mode), ask (when enabled).
     if enabled.contains(&"todo") {
         let session = Arc::new(asupersync::sync::Mutex::new(
-            pi::session::Session::in_memory(),
+            ra::session::Session::in_memory(),
         ));
-        defs.push(tool_json(&pi::todo::TodoTool::new(session)));
+        defs.push(tool_json(&ra::todo::TodoTool::new(session)));
     }
-    defs.push(tool_json(&pi::plan::SubmitPlanTool::new(
-        pi::plan::PlanState::new(),
+    defs.push(tool_json(&ra::plan::SubmitPlanTool::new(
+        ra::plan::PlanState::new(),
         false,
     )));
     if enabled.contains(&"ask") {
-        defs.push(tool_json(&pi::ask::AskTool::new(
-            pi::ask::AskPolicy::from_config(None),
+        defs.push(tool_json(&ra::ask::AskTool::new(
+            ra::ask::AskPolicy::from_config(None),
         )));
     }
 
@@ -3779,7 +3780,7 @@ fn log_tool_scenario_setup(
         .unwrap_or_else(|| "unset".to_string());
     let cassette_name = harness
         .env
-        .get("PI_VCR_TEST_NAME")
+        .get("RECUR_AGENT_VCR_TEST_NAME")
         .cloned()
         .unwrap_or_else(|| "unset".to_string());
     let cassette_path = harness.env.get("VCR_CASSETTE_DIR").map_or_else(
@@ -3853,7 +3854,12 @@ fn e2e_cli_print_mode_vcr_roundtrip() {
     assert_contains(&harness.harness, &result.stdout, "pong");
 
     // Verify no session files created in print mode (even on success).
-    let sessions_dir = PathBuf::from(harness.env.get("PI_SESSIONS_DIR").expect("PI_SESSIONS_DIR"));
+    let sessions_dir = PathBuf::from(
+        harness
+            .env
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR"),
+    );
     let jsonl_count = count_jsonl_files(&sessions_dir);
     harness
         .harness
@@ -3904,7 +3910,12 @@ fn e2e_cli_print_mode_stdin_sends_to_provider() {
     assert_contains(&harness.harness, &result.stdout, "Received your stdin.");
 
     // Verify no session files created.
-    let sessions_dir = PathBuf::from(harness.env.get("PI_SESSIONS_DIR").expect("PI_SESSIONS_DIR"));
+    let sessions_dir = PathBuf::from(
+        harness
+            .env
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR"),
+    );
     let jsonl_count = count_jsonl_files(&sessions_dir);
     harness
         .harness
@@ -4437,7 +4448,7 @@ fn e2e_cli_json_mode_usage_error_emits_startup_error_record() {
     assert_eq!(record["exit_code"], 2, "{record}");
 }
 
-/// gh #217: the report's shape — read-only `~/.pi`, key on argv — no longer
+/// gh #217: the report's shape — read-only `~/.ra`, key on argv — no longer
 /// fails at startup (the store degrades), so the run reaches the provider;
 /// when that provider rejects the key, the JSON stream ends with a single
 /// `phase: "run"` record carrying the auth diagnostic code, after the
@@ -4481,11 +4492,11 @@ fn e2e_cli_json_mode_read_only_state_dir_and_bad_api_key_emit_run_error_record()
     perms.set_mode(0o500);
     fs::set_permissions(&readonly_root, perms).expect("set readonly perms");
     harness.env.insert(
-        "PI_CODING_AGENT_DIR".to_string(),
+        "RECUR_AGENT_DIR".to_string(),
         readonly_root.join("agent").display().to_string(),
     );
     harness.env.insert(
-        "PI_SESSIONS_DIR".to_string(),
+        "RECUR_AGENT_SESSIONS_DIR".to_string(),
         readonly_root.join("sessions").display().to_string(),
     );
 
@@ -4749,10 +4760,10 @@ fn e2e_cli_specific_tools_enables_subset() {
 fn e2e_cli_default_tools_when_no_flag() {
     let mut harness = CliTestHarness::new("e2e_cli_default_tools_when_no_flag");
     let system_prompt = "Test default tools.";
-    // The default enabled set (pi::xdev::default_enabled_tools) now includes
+    // The default enabled set (ra::xdev::default_enabled_tools) now includes
     // the discoverable tier (ast_grep, lsp, jobs, hub, ...); the helper
     // filters those down to the live schema the request actually carries.
-    let expected_tools = pi::xdev::default_enabled_tools();
+    let expected_tools = ra::xdev::default_enabled_tools();
 
     let request_body = json!({
         "model": "claude-sonnet-4-5",
@@ -5027,7 +5038,7 @@ fn e2e_cli_auth_failure_error() {
         cassette_dir.display().to_string(),
     );
     harness.env.insert(
-        "PI_VCR_TEST_NAME".to_string(),
+        "RECUR_AGENT_VCR_TEST_NAME".to_string(),
         "e2e_auth_failure".to_string(),
     );
     harness
@@ -5035,7 +5046,7 @@ fn e2e_cli_auth_failure_error() {
         .insert("ANTHROPIC_API_KEY".to_string(), "bad-key".to_string());
     harness
         .env
-        .insert("PI_TEST_MODE".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
     harness
         .env
         .insert("VCR_DEBUG_BODY".to_string(), "1".to_string());
@@ -5258,15 +5269,16 @@ fn setup_vcr_anthropic_sequence(
         "VCR_CASSETTE_DIR".to_string(),
         cassette_dir.display().to_string(),
     );
-    harness
-        .env
-        .insert("PI_VCR_TEST_NAME".to_string(), cassette_name.to_string());
+    harness.env.insert(
+        "RECUR_AGENT_VCR_TEST_NAME".to_string(),
+        cassette_name.to_string(),
+    );
     harness
         .env
         .insert("ANTHROPIC_API_KEY".to_string(), "test-vcr-key".to_string());
     harness
         .env
-        .insert("PI_TEST_MODE".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
     harness
         .env
         .insert("VCR_DEBUG_BODY".to_string(), "1".to_string());
@@ -5535,8 +5547,8 @@ fn e2e_cli_handoff_defaults_to_newest_session_and_preserves_explicit_session() {
     let sessions_root = PathBuf::from(
         harness
             .env
-            .get("PI_SESSIONS_DIR")
-            .expect("PI_SESSIONS_DIR set"),
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR set"),
     );
     let project_sessions = sessions_root.join(encode_cwd(cwd));
     fs::create_dir_all(&project_sessions).expect("create project sessions directory");
@@ -5573,7 +5585,7 @@ fn e2e_cli_handoff_defaults_to_newest_session_and_preserves_explicit_session() {
     )
     .expect("set newer session mtime");
 
-    let index = pi::session_index::SessionIndex::for_sessions_root(&sessions_root);
+    let index = ra::session_index::SessionIndex::for_sessions_root(&sessions_root);
     index.reindex_all().expect("index handoff sessions");
 
     let default_result = harness.run(&["handoff", "--print"]);
@@ -5640,14 +5652,14 @@ fn e2e_cli_export_multi_entry_session_integrity() {
     assert_contains(&harness.harness, &html, "high");
 }
 
-/// Test 2: `PI_SESSIONS_DIR` env override appears in `config` output.
+/// Test 2: `RECUR_AGENT_SESSIONS_DIR` env override appears in `config` output.
 #[test]
 fn e2e_cli_session_dir_override_via_env() {
     let mut harness = CliTestHarness::new("e2e_cli_session_dir_override_via_env");
 
     let custom_sessions = harness.harness.temp_path("my-custom-sessions");
     harness.env.insert(
-        "PI_SESSIONS_DIR".to_string(),
+        "RECUR_AGENT_SESSIONS_DIR".to_string(),
         custom_sessions.display().to_string(),
     );
 
@@ -5699,8 +5711,8 @@ fn e2e_cli_no_session_flag_prevents_session_files() {
     let sessions_dir = PathBuf::from(
         harness
             .env
-            .get("PI_SESSIONS_DIR")
-            .expect("PI_SESSIONS_DIR")
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR")
             .clone(),
     );
 
@@ -5766,13 +5778,13 @@ fn e2e_interactive_session_creates_valid_jsonl_tmux() {
 
     harness
         .env
-        .insert("PI_TEST_MODE".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
 
     let sessions_dir = PathBuf::from(
         harness
             .env
-            .get("PI_SESSIONS_DIR")
-            .expect("PI_SESSIONS_DIR")
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR")
             .clone(),
     );
 
@@ -5949,13 +5961,13 @@ fn e2e_interactive_session_continue_loads_previous_tmux() {
 
     harness
         .env
-        .insert("PI_TEST_MODE".to_string(), "1".to_string());
+        .insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
 
     let sessions_dir = PathBuf::from(
         harness
             .env
-            .get("PI_SESSIONS_DIR")
-            .expect("PI_SESSIONS_DIR")
+            .get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR")
             .clone(),
     );
 
@@ -6035,7 +6047,7 @@ fn e2e_interactive_session_continue_loads_previous_tmux() {
         cassette_dir.display().to_string(),
     );
     harness.env.insert(
-        "PI_VCR_TEST_NAME".to_string(),
+        "RECUR_AGENT_VCR_TEST_NAME".to_string(),
         "e2e_session_continue".to_string(),
     );
     harness
@@ -6259,8 +6271,8 @@ fn e2e_cli_startup_migrations_run_by_default() {
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
-            .expect("PI_CODING_AGENT_DIR set"),
+            .get("RECUR_AGENT_DIR")
+            .expect("RECUR_AGENT_DIR set"),
     );
     fs::create_dir_all(&agent_dir).expect("create isolated agent dir");
 
@@ -6363,8 +6375,8 @@ fn e2e_cli_no_migrations_skips_startup_migrations() {
     let agent_dir = PathBuf::from(
         harness
             .env
-            .get("PI_CODING_AGENT_DIR")
-            .expect("PI_CODING_AGENT_DIR set"),
+            .get("RECUR_AGENT_DIR")
+            .expect("RECUR_AGENT_DIR set"),
     );
     fs::create_dir_all(&agent_dir).expect("create isolated agent dir");
 

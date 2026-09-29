@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-shadow-canary-rollout-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.shadow_canary_rollout_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.shadow_canary_rollout_contract.v1";
 const REQUIRED_STATES: &[&str] = &[
     "shadow_disabled",
     "shadow_observe",

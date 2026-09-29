@@ -14,9 +14,9 @@ use crate::conformance::{
     FixtureFile, SetupStep, TestCase, TestResult, validate_expected_with_goldens,
 };
 use clap::error::ErrorKind;
-use pi::cli::{Cli, Commands, ExtensionCliFlag, parse_with_extension_flags};
-use pi::model::ContentBlock;
-use pi::tools::Tool;
+use ra::cli::{Cli, Commands, ExtensionCliFlag, parse_with_extension_flags};
+use ra::model::ContentBlock;
+use ra::tools::Tool;
 use serde_json::{Value, json};
 use std::path::{Component, Path, PathBuf};
 use tempfile::TempDir;
@@ -26,7 +26,7 @@ struct FixtureReflectProvider;
 
 #[async_trait::async_trait]
 #[allow(clippy::unnecessary_literal_bound)]
-impl pi::provider::Provider for FixtureReflectProvider {
+impl ra::provider::Provider for FixtureReflectProvider {
     fn name(&self) -> &str {
         "fixture-reflect"
     }
@@ -41,34 +41,34 @@ impl pi::provider::Provider for FixtureReflectProvider {
 
     async fn stream(
         &self,
-        _context: &pi::provider::Context<'_>,
-        _options: &pi::provider::StreamOptions,
-    ) -> pi::error::Result<
+        _context: &ra::provider::Context<'_>,
+        _options: &ra::provider::StreamOptions,
+    ) -> ra::error::Result<
         std::pin::Pin<
-            Box<dyn futures::Stream<Item = pi::error::Result<pi::model::StreamEvent>> + Send>,
+            Box<dyn futures::Stream<Item = ra::error::Result<ra::model::StreamEvent>> + Send>,
         >,
     > {
-        let message = pi::model::AssistantMessage {
-            content: vec![ContentBlock::Text(pi::model::TextContent::new(
+        let message = ra::model::AssistantMessage {
+            content: vec![ContentBlock::Text(ra::model::TextContent::new(
                 "Fixture synthesis cites memory [1].",
             ))],
-            stop_reason: pi::model::StopReason::Stop,
-            ..pi::model::AssistantMessage::default()
+            stop_reason: ra::model::StopReason::Stop,
+            ..ra::model::AssistantMessage::default()
         };
         Ok(Box::pin(futures::stream::iter(vec![
-            Ok(pi::model::StreamEvent::TextDelta {
+            Ok(ra::model::StreamEvent::TextDelta {
                 content_index: 0,
                 delta: "Fixture synthesis cites memory [1].".to_string(),
             }),
-            Ok(pi::model::StreamEvent::Done {
-                reason: pi::model::StopReason::Stop,
+            Ok(ra::model::StreamEvent::Done {
+                reason: ra::model::StopReason::Stop,
                 message,
             }),
         ])))
     }
 }
 
-/// Test-only adapter around the real `pi stats` aggregation and rendering
+/// Test-only adapter around the real `ra stats` aggregation and rendering
 /// modules. Stats is a CLI surface rather than an agent Tool, so this keeps it
 /// in the same fixture/logging harness without adding a production tool.
 struct FixtureStatsTool {
@@ -86,31 +86,31 @@ impl Tool for FixtureStatsTool {
     }
 
     fn description(&self) -> &str {
-        "Hermetic adapter for the pi stats CLI surface"
+        "Hermetic adapter for the ra stats CLI surface"
     }
 
     fn parameters(&self) -> Value {
         json!({"type": "object"})
     }
 
-    fn effects(&self) -> pi::tools::ToolEffects {
-        pi::tools::ToolEffects::read()
+    fn effects(&self) -> ra::tools::ToolEffects {
+        ra::tools::ToolEffects::read()
     }
 
     async fn execute(
         &self,
         _tool_call_id: &str,
         input: Value,
-        _on_update: Option<Box<dyn Fn(pi::tools::ToolUpdate) + Send + Sync>>,
-    ) -> pi::error::Result<pi::tools::ToolOutput> {
+        _on_update: Option<Box<dyn Fn(ra::tools::ToolUpdate) + Send + Sync>>,
+    ) -> ra::error::Result<ra::tools::ToolOutput> {
         let string_field = |name: &str| input.get(name).and_then(Value::as_str).map(str::to_string);
-        let files = pi::stats::collect_session_files(
+        let files = ra::stats::collect_session_files(
             &self.cwd.join("sessions"),
             input.get("project").and_then(Value::as_str),
         );
-        let report = pi::stats::aggregate(
+        let report = ra::stats::aggregate(
             &files,
-            &pi::stats::StatsFilter {
+            &ra::stats::StatsFilter {
                 since: string_field("since"),
                 until: string_field("until"),
                 provider: string_field("provider"),
@@ -119,11 +119,11 @@ impl Tool for FixtureStatsTool {
         );
         let text = match input.get("format").and_then(Value::as_str) {
             Some("json") => serde_json::to_string_pretty(&report)?,
-            Some("markdown" | "md") => pi::stats::render_markdown(&report),
-            _ => pi::stats::render_text(&report),
+            Some("markdown" | "md") => ra::stats::render_markdown(&report),
+            _ => ra::stats::render_text(&report),
         };
-        Ok(pi::tools::ToolOutput {
-            content: vec![ContentBlock::Text(pi::model::TextContent::new(text))],
+        Ok(ra::tools::ToolOutput {
+            content: vec![ContentBlock::Text(ra::model::TextContent::new(text))],
             details: Some(serde_json::to_value(&report)?),
             is_error: false,
         })
@@ -154,18 +154,18 @@ impl Tool for FixtureReadUrlTool {
         json!({"type": "object"})
     }
 
-    fn effects(&self) -> pi::tools::ToolEffects {
-        pi::tools::ToolEffects::network()
+    fn effects(&self) -> ra::tools::ToolEffects {
+        ra::tools::ToolEffects::network()
     }
 
     async fn execute(
         &self,
         tool_call_id: &str,
         mut input: Value,
-        on_update: Option<Box<dyn Fn(pi::tools::ToolUpdate) + Send + Sync>>,
-    ) -> pi::error::Result<pi::tools::ToolOutput> {
+        on_update: Option<Box<dyn Fn(ra::tools::ToolUpdate) + Send + Sync>>,
+    ) -> ra::error::Result<ra::tools::ToolOutput> {
         let object = input.as_object_mut().ok_or_else(|| {
-            pi::error::Error::validation("read_url fixture input must be an object")
+            ra::error::Error::validation("read_url fixture input must be an object")
         })?;
         let body = object
             .remove("fixtureBody")
@@ -181,13 +181,13 @@ impl Tool for FixtureReadUrlTool {
             .and_then(|value| u16::try_from(value).ok())
             .unwrap_or(200);
         let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .map_err(|error| pi::error::Error::tool("read_url_fixture", error.to_string()))?;
+            .map_err(|error| ra::error::Error::tool("read_url_fixture", error.to_string()))?;
         listener
             .set_nonblocking(true)
-            .map_err(|error| pi::error::Error::tool("read_url_fixture", error.to_string()))?;
+            .map_err(|error| ra::error::Error::tool("read_url_fixture", error.to_string()))?;
         let address = listener
             .local_addr()
-            .map_err(|error| pi::error::Error::tool("read_url_fixture", error.to_string()))?;
+            .map_err(|error| ra::error::Error::tool("read_url_fixture", error.to_string()))?;
         let raw = object
             .get("path")
             .and_then(Value::as_str)
@@ -265,14 +265,14 @@ impl Tool for FixtureReadUrlTool {
                 .map_err(|error| format!("fixture HTTP flush failed: {error}"))
         });
 
-        let result = pi::tools::ReadTool::new(&self.cwd)
+        let result = ra::tools::ReadTool::new(&self.cwd)
             .with_url_policy(true)
             .execute(tool_call_id, input, on_update)
             .await;
         server
             .join()
-            .map_err(|_| pi::error::Error::tool("read_url_fixture", "server thread panicked"))?
-            .map_err(|error| pi::error::Error::tool("read_url_fixture", error))?;
+            .map_err(|_| ra::error::Error::tool("read_url_fixture", "server thread panicked"))?
+            .map_err(|error| ra::error::Error::tool("read_url_fixture", error))?;
         result
     }
 }
@@ -299,33 +299,33 @@ impl Tool for FixtureStreamRulesTool {
         json!({"type": "object"})
     }
 
-    fn effects(&self) -> pi::tools::ToolEffects {
-        pi::tools::ToolEffects::read()
+    fn effects(&self) -> ra::tools::ToolEffects {
+        ra::tools::ToolEffects::read()
     }
 
     async fn execute(
         &self,
         _tool_call_id: &str,
         input: Value,
-        _on_update: Option<Box<dyn Fn(pi::tools::ToolUpdate) + Send + Sync>>,
-    ) -> pi::error::Result<pi::tools::ToolOutput> {
+        _on_update: Option<Box<dyn Fn(ra::tools::ToolUpdate) + Send + Sync>>,
+    ) -> ra::error::Result<ra::tools::ToolOutput> {
         let op = input.get("op").and_then(Value::as_str).unwrap_or("match");
         let (text, details) = match op {
             "match" => {
-                let rules: Vec<pi::stream_rules::StreamRule> = serde_json::from_value(
+                let rules: Vec<ra::stream_rules::StreamRule> = serde_json::from_value(
                     input.get("rules").cloned().unwrap_or_else(|| json!([])),
                 )
-                .map_err(|error| pi::error::Error::validation(error.to_string()))?;
+                .map_err(|error| ra::error::Error::validation(error.to_string()))?;
                 let channel = match input
                     .get("channel")
                     .and_then(Value::as_str)
                     .unwrap_or("assistant")
                 {
-                    "assistant" => pi::stream_rules::StreamChannel::AssistantText,
-                    "thinking" => pi::stream_rules::StreamChannel::Thinking,
-                    "tool_call_argument" => pi::stream_rules::StreamChannel::ToolCallArgument,
+                    "assistant" => ra::stream_rules::StreamChannel::AssistantText,
+                    "thinking" => ra::stream_rules::StreamChannel::Thinking,
+                    "tool_call_argument" => ra::stream_rules::StreamChannel::ToolCallArgument,
                     other => {
-                        return Err(pi::error::Error::validation(format!(
+                        return Err(ra::error::Error::validation(format!(
                             "unknown stream-rules channel {other:?}"
                         )));
                     }
@@ -334,13 +334,13 @@ impl Tool for FixtureStreamRulesTool {
                     .get("lookbackBytes")
                     .and_then(Value::as_u64)
                     .and_then(|value| usize::try_from(value).ok())
-                    .unwrap_or(pi::stream_rules::DEFAULT_ROLLING_LOOKBACK_BYTES);
+                    .unwrap_or(ra::stream_rules::DEFAULT_ROLLING_LOOKBACK_BYTES);
                 let chunks = input
                     .get("chunks")
                     .and_then(Value::as_array)
                     .cloned()
                     .unwrap_or_default();
-                let mut matcher = pi::stream_rules::RollingStreamMatcher::new(&rules, lookback);
+                let mut matcher = ra::stream_rules::RollingStreamMatcher::new(&rules, lookback);
                 let matched = chunks
                     .iter()
                     .filter_map(Value::as_str)
@@ -371,13 +371,13 @@ impl Tool for FixtureStreamRulesTool {
                 let pattern = input
                     .get("pattern")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| pi::error::Error::validation("test_pattern requires pattern"))?;
+                    .ok_or_else(|| ra::error::Error::validation("test_pattern requires pattern"))?;
                 let sample = input
                     .get("sample")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
                 let matched =
-                    pi::stream_rules::StreamRuleStore::default().test_pattern(pattern, sample)?;
+                    ra::stream_rules::StreamRuleStore::default().test_pattern(pattern, sample)?;
                 (
                     matched.as_deref().map_or_else(
                         || "No match.".to_string(),
@@ -387,13 +387,13 @@ impl Tool for FixtureStreamRulesTool {
                 )
             }
             other => {
-                return Err(pi::error::Error::validation(format!(
+                return Err(ra::error::Error::validation(format!(
                     "unknown stream-rules operation {other:?}"
                 )));
             }
         };
-        Ok(pi::tools::ToolOutput {
-            content: vec![ContentBlock::Text(pi::model::TextContent::new(text))],
+        Ok(ra::tools::ToolOutput {
+            content: vec![ContentBlock::Text(ra::model::TextContent::new(text))],
             details: Some(details),
             is_error: false,
         })
@@ -424,18 +424,18 @@ impl Tool for FixtureMcpClientTool {
         json!({"type": "object"})
     }
 
-    fn effects(&self) -> pi::tools::ToolEffects {
-        pi::tools::ToolEffects::network().union(pi::tools::ToolEffects::process())
+    fn effects(&self) -> ra::tools::ToolEffects {
+        ra::tools::ToolEffects::network().union(ra::tools::ToolEffects::process())
     }
 
     async fn execute(
         &self,
         _tool_call_id: &str,
         input: Value,
-        _on_update: Option<Box<dyn Fn(pi::tools::ToolUpdate) + Send + Sync>>,
-    ) -> pi::error::Result<pi::tools::ToolOutput> {
+        _on_update: Option<Box<dyn Fn(ra::tools::ToolUpdate) + Send + Sync>>,
+    ) -> ra::error::Result<ra::tools::ToolOutput> {
         let manager =
-            pi::mcp::McpManager::bootstrap(&self.cwd, &self.cwd.join("global"), &[], true)?;
+            ra::mcp::McpManager::bootstrap(&self.cwd, &self.cwd.join("global"), &[], true)?;
         let op = input.get("op").and_then(Value::as_str).unwrap_or("list");
         let (text, details) = match op {
             "list" => {
@@ -447,11 +447,11 @@ impl Tool for FixtureMcpClientTool {
                 let server = input
                     .get("server")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| pi::error::Error::validation("MCP call requires server"))?;
+                    .ok_or_else(|| ra::error::Error::validation("MCP call requires server"))?;
                 let tool = input
                     .get("tool")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| pi::error::Error::validation("MCP call requires tool"))?;
+                    .ok_or_else(|| ra::error::Error::validation("MCP call requires tool"))?;
                 let result = manager
                     .call_tool(
                         server,
@@ -462,13 +462,13 @@ impl Tool for FixtureMcpClientTool {
                 (serde_json::to_string_pretty(&result)?, result)
             }
             other => {
-                return Err(pi::error::Error::validation(format!(
+                return Err(ra::error::Error::validation(format!(
                     "unknown MCP fixture operation {other:?}"
                 )));
             }
         };
-        Ok(pi::tools::ToolOutput {
-            content: vec![ContentBlock::Text(pi::model::TextContent::new(text))],
+        Ok(ra::tools::ToolOutput {
+            content: vec![ContentBlock::Text(ra::model::TextContent::new(text))],
             details: Some(details),
             is_error: false,
         })
@@ -510,64 +510,64 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
 
     // Create the tool
     let tool: Box<dyn Tool> = match tool_name {
-        "read" => Box::new(pi::tools::ReadTool::new(temp_dir.path())),
+        "read" => Box::new(ra::tools::ReadTool::new(temp_dir.path())),
         "read_url" => Box::new(FixtureReadUrlTool {
             cwd: temp_dir.path().to_path_buf(),
         }),
-        "bash" => Box::new(pi::tools::BashTool::new(temp_dir.path())),
-        "edit" => Box::new(pi::tools::EditTool::new(temp_dir.path())),
-        "write" => Box::new(pi::tools::WriteTool::new(temp_dir.path())),
-        "grep" => Box::new(pi::tools::GrepTool::new(temp_dir.path())),
-        "find" => Box::new(pi::tools::FindTool::new(temp_dir.path())),
-        "ls" => Box::new(pi::tools::LsTool::new(temp_dir.path())),
-        "hashline_edit" => Box::new(pi::tools::HashlineEditTool::new(temp_dir.path())),
-        "ast_grep" => Box::new(pi::ast_tools::AstGrepTool::new(temp_dir.path())),
-        "ast_edit" => Box::new(pi::ast_tools::AstEditTool::new(temp_dir.path())),
-        "lsp" => Box::new(pi::lsp::LspTool::new(temp_dir.path(), None)),
-        "debug" => Box::new(pi::debug::DebugTool::new(temp_dir.path(), None)),
-        "web_search" => Box::new(pi::web_search::WebSearchTool::new()),
+        "bash" => Box::new(ra::tools::BashTool::new(temp_dir.path())),
+        "edit" => Box::new(ra::tools::EditTool::new(temp_dir.path())),
+        "write" => Box::new(ra::tools::WriteTool::new(temp_dir.path())),
+        "grep" => Box::new(ra::tools::GrepTool::new(temp_dir.path())),
+        "find" => Box::new(ra::tools::FindTool::new(temp_dir.path())),
+        "ls" => Box::new(ra::tools::LsTool::new(temp_dir.path())),
+        "hashline_edit" => Box::new(ra::tools::HashlineEditTool::new(temp_dir.path())),
+        "ast_grep" => Box::new(ra::ast_tools::AstGrepTool::new(temp_dir.path())),
+        "ast_edit" => Box::new(ra::ast_tools::AstEditTool::new(temp_dir.path())),
+        "lsp" => Box::new(ra::lsp::LspTool::new(temp_dir.path(), None)),
+        "debug" => Box::new(ra::debug::DebugTool::new(temp_dir.path(), None)),
+        "web_search" => Box::new(ra::web_search::WebSearchTool::new()),
         "xdev" => {
             // The dispatcher's snapshot is built from the real discoverable
             // tools so fixtures exercise the genuine contract (bd-cv653.1.6).
-            let ast_grep = pi::ast_tools::AstGrepTool::new(temp_dir.path());
-            let ast_edit = pi::ast_tools::AstEditTool::new(temp_dir.path());
+            let ast_grep = ra::ast_tools::AstGrepTool::new(temp_dir.path());
+            let ast_edit = ra::ast_tools::AstEditTool::new(temp_dir.path());
             let snapshot = vec![
-                pi::xdev::DiscoverableToolInfo {
+                ra::xdev::DiscoverableToolInfo {
                     name: ast_grep.name().to_string(),
-                    one_liner: pi::xdev::one_liner(ast_grep.description()),
+                    one_liner: ra::xdev::one_liner(ast_grep.description()),
                     description: ast_grep.description().to_string(),
                     parameters: ast_grep.parameters(),
                 },
-                pi::xdev::DiscoverableToolInfo {
+                ra::xdev::DiscoverableToolInfo {
                     name: ast_edit.name().to_string(),
-                    one_liner: pi::xdev::one_liner(ast_edit.description()),
+                    one_liner: ra::xdev::one_liner(ast_edit.description()),
                     description: ast_edit.description().to_string(),
                     parameters: ast_edit.parameters(),
                 },
             ];
-            Box::new(pi::xdev::XdevTool::new(temp_dir.path(), snapshot))
+            Box::new(ra::xdev::XdevTool::new(temp_dir.path(), snapshot))
         }
         "inspect_image" => {
-            Box::new(pi::media_tools::InspectImageTool::new(temp_dir.path()).with_mock(true))
+            Box::new(ra::media_tools::InspectImageTool::new(temp_dir.path()).with_mock(true))
         }
         "generate_image" => {
-            Box::new(pi::media_tools::GenerateImageTool::new(temp_dir.path()).with_mock(true))
+            Box::new(ra::media_tools::GenerateImageTool::new(temp_dir.path()).with_mock(true))
         }
-        "tts" => Box::new(pi::media_tools::TtsTool::new(temp_dir.path()).with_mock(true)),
-        "computer" => Box::new(pi::computer::ComputerTool::new(temp_dir.path()).with_mock(true)),
-        "browser" => Box::new(pi::browser::BrowserTool::new(temp_dir.path()).with_mock(true)),
-        "subagent" => Box::new(pi::subagents::SubagentTool::with_paths(
+        "tts" => Box::new(ra::media_tools::TtsTool::new(temp_dir.path()).with_mock(true)),
+        "computer" => Box::new(ra::computer::ComputerTool::new(temp_dir.path()).with_mock(true)),
+        "browser" => Box::new(ra::browser::BrowserTool::new(temp_dir.path()).with_mock(true)),
+        "subagent" => Box::new(ra::subagents::SubagentTool::with_paths(
             temp_dir.path().to_path_buf(),
             temp_dir.path().join("global"),
             temp_dir.path().join("child-fixture.sh"),
         )),
-        "ask" => Box::new(pi::ask::AskTool::new(pi::ask::AskPolicy::Recommended)),
-        "todo" => Box::new(pi::todo::TodoTool::new(std::sync::Arc::new(
-            asupersync::sync::Mutex::new(pi::session::Session::in_memory()),
+        "ask" => Box::new(ra::ask::AskTool::new(ra::ask::AskPolicy::Recommended)),
+        "todo" => Box::new(ra::todo::TodoTool::new(std::sync::Arc::new(
+            asupersync::sync::Mutex::new(ra::session::Session::in_memory()),
         ))),
-        "jobs" => Box::new(pi::tools::JobsTool::new()),
-        "hub" => Box::new(pi::tools::HubTool::new(temp_dir.path())),
-        "eval" => Box::new(pi::eval::EvalTool::new(temp_dir.path())),
+        "jobs" => Box::new(ra::tools::JobsTool::new()),
+        "hub" => Box::new(ra::tools::HubTool::new(temp_dir.path())),
+        "eval" => Box::new(ra::eval::EvalTool::new(temp_dir.path())),
         "stats" => Box::new(FixtureStatsTool {
             cwd: temp_dir.path().to_path_buf(),
         }),
@@ -580,10 +580,10 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
             let gh_path = "/bin/sh";
             #[cfg(not(unix))]
             let gh_path = "cmd";
-            Box::new(pi::github::GithubTool::new(temp_dir.path(), Some(gh_path)))
+            Box::new(ra::github::GithubTool::new(temp_dir.path(), Some(gh_path)))
         }
         "retain" => {
-            let store = match pi::memory::MemoryStore::open(temp_dir.path()) {
+            let store = match ra::memory::MemoryStore::open(temp_dir.path()) {
                 Ok(store) => store,
                 Err(error) => {
                     return TestResult::fail(
@@ -592,10 +592,10 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
                     );
                 }
             };
-            Box::new(pi::memory::RetainTool::new(std::sync::Arc::new(store)))
+            Box::new(ra::memory::RetainTool::new(std::sync::Arc::new(store)))
         }
         "recall" => {
-            let store = match pi::memory::MemoryStore::open(temp_dir.path()) {
+            let store = match ra::memory::MemoryStore::open(temp_dir.path()) {
                 Ok(store) => store,
                 Err(error) => {
                     return TestResult::fail(
@@ -604,10 +604,10 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
                     );
                 }
             };
-            Box::new(pi::memory::RecallTool::new(std::sync::Arc::new(store)))
+            Box::new(ra::memory::RecallTool::new(std::sync::Arc::new(store)))
         }
         "memory_edit" => {
-            let store = match pi::memory::MemoryStore::open(temp_dir.path()) {
+            let store = match ra::memory::MemoryStore::open(temp_dir.path()) {
                 Ok(store) => store,
                 Err(error) => {
                     return TestResult::fail(
@@ -616,10 +616,10 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
                     );
                 }
             };
-            Box::new(pi::memory::MemoryEditTool::new(std::sync::Arc::new(store)))
+            Box::new(ra::memory::MemoryEditTool::new(std::sync::Arc::new(store)))
         }
         "reflect" => {
-            let store = match pi::memory::MemoryStore::open(temp_dir.path()) {
+            let store = match ra::memory::MemoryStore::open(temp_dir.path()) {
                 Ok(store) => store,
                 Err(error) => {
                     return TestResult::fail(
@@ -628,13 +628,13 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
                     );
                 }
             };
-            Box::new(pi::memory::ReflectTool::with_provider(
+            Box::new(ra::memory::ReflectTool::with_provider(
                 std::sync::Arc::new(store),
                 std::sync::Arc::new(FixtureReflectProvider),
             ))
         }
         "learn" => {
-            let store = match pi::memory::MemoryStore::open(temp_dir.path()) {
+            let store = match ra::memory::MemoryStore::open(temp_dir.path()) {
                 Ok(store) => store,
                 Err(error) => {
                     return TestResult::fail(
@@ -643,11 +643,11 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
                     );
                 }
             };
-            Box::new(pi::tools::LearnTool::new(std::sync::Arc::new(store)))
+            Box::new(ra::tools::LearnTool::new(std::sync::Arc::new(store)))
         }
-        "manage_skill" => Box::new(pi::tools::ManageSkillTool),
+        "manage_skill" => Box::new(ra::tools::ManageSkillTool),
         "submit_plan" => {
-            let state = pi::plan::PlanState::new();
+            let state = ra::plan::PlanState::new();
             let initial_mode = case
                 .setup
                 .iter()
@@ -659,9 +659,9 @@ async fn run_test_case(tool_name: &str, case: &TestCase) -> TestResult {
             if initial_mode == "planning" {
                 state.enter_planning();
             }
-            Box::new(pi::plan::SubmitPlanTool::new(state, false))
+            Box::new(ra::plan::SubmitPlanTool::new(state, false))
         }
-        "security_scan" => Box::new(pi::security_scan::SecurityScanTool::new(temp_dir.path())),
+        "security_scan" => Box::new(ra::security_scan::SecurityScanTool::new(temp_dir.path())),
         _ => {
             return TestResult::fail(&case_name, format!("Unknown tool: {tool_name}"));
         }
@@ -763,7 +763,7 @@ fn run_cli_test_case(case: &TestCase, case_name: &str) -> TestResult {
         Ok(parsed) => {
             // Handle custom --version flag (since clap's is disabled)
             if parsed.cli.version {
-                content = format!("pi {}", env!("CARGO_PKG_VERSION"));
+                content = format!("ra {}", env!("CARGO_PKG_VERSION"));
             }
             details = Some(cli_details(&parsed.cli, &parsed.extension_flags));
         }
@@ -1098,9 +1098,9 @@ fn command_value(command: Option<&Commands>) -> Value {
     }
 }
 
-fn validation_broker_command_value(command: &pi::cli::ValidationBrokerCommand) -> Value {
+fn validation_broker_command_value(command: &ra::cli::ValidationBrokerCommand) -> Value {
     match command {
-        pi::cli::ValidationBrokerCommand::Status {
+        ra::cli::ValidationBrokerCommand::Status {
             store,
             format,
             out_json,
@@ -1115,7 +1115,7 @@ fn validation_broker_command_value(command: &pi::cli::ValidationBrokerCommand) -
             "out_text": out_text,
             "generated_at": generated_at,
         }),
-        pi::cli::ValidationBrokerCommand::Plan {
+        ra::cli::ValidationBrokerCommand::Plan {
             request,
             inputs,
             store,
@@ -1136,17 +1136,17 @@ fn validation_broker_command_value(command: &pi::cli::ValidationBrokerCommand) -
             "out_text": out_text,
             "generated_at": generated_at,
         }),
-        pi::cli::ValidationBrokerCommand::Acquire { .. }
-        | pi::cli::ValidationBrokerCommand::Renew { .. }
-        | pi::cli::ValidationBrokerCommand::Release { .. } => {
+        ra::cli::ValidationBrokerCommand::Acquire { .. }
+        | ra::cli::ValidationBrokerCommand::Renew { .. }
+        | ra::cli::ValidationBrokerCommand::Release { .. } => {
             validation_broker_lease_command_value(command)
         }
     }
 }
 
-fn validation_broker_lease_command_value(command: &pi::cli::ValidationBrokerCommand) -> Value {
+fn validation_broker_lease_command_value(command: &ra::cli::ValidationBrokerCommand) -> Value {
     match command {
-        pi::cli::ValidationBrokerCommand::Acquire {
+        ra::cli::ValidationBrokerCommand::Acquire {
             request,
             store,
             started_at,
@@ -1165,7 +1165,7 @@ fn validation_broker_lease_command_value(command: &pi::cli::ValidationBrokerComm
             "out_json": out_json,
             "out_text": out_text,
         }),
-        pi::cli::ValidationBrokerCommand::Renew {
+        ra::cli::ValidationBrokerCommand::Renew {
             store,
             slot_id,
             owner,
@@ -1186,7 +1186,7 @@ fn validation_broker_lease_command_value(command: &pi::cli::ValidationBrokerComm
             "out_json": out_json,
             "out_text": out_text,
         }),
-        pi::cli::ValidationBrokerCommand::Release {
+        ra::cli::ValidationBrokerCommand::Release {
             store,
             slot_id,
             owner,
@@ -1207,8 +1207,8 @@ fn validation_broker_lease_command_value(command: &pi::cli::ValidationBrokerComm
             "out_json": out_json,
             "out_text": out_text,
         }),
-        pi::cli::ValidationBrokerCommand::Status { .. }
-        | pi::cli::ValidationBrokerCommand::Plan { .. } => {
+        ra::cli::ValidationBrokerCommand::Status { .. }
+        | ra::cli::ValidationBrokerCommand::Plan { .. } => {
             unreachable!("status and plan commands are handled by validation_broker_command_value")
         }
     }
@@ -1287,10 +1287,10 @@ fn run_setup_steps(steps: &[SetupStep], dir: &Path) -> Result<(), String> {
                 tags,
             } => {
                 let kind = match kind.trim().to_ascii_lowercase().as_str() {
-                    "fact" => pi::memory::MemoryKind::Fact,
-                    "lesson" => pi::memory::MemoryKind::Lesson,
-                    "preference" => pi::memory::MemoryKind::Preference,
-                    "decision" => pi::memory::MemoryKind::Decision,
+                    "fact" => ra::memory::MemoryKind::Fact,
+                    "lesson" => ra::memory::MemoryKind::Lesson,
+                    "preference" => ra::memory::MemoryKind::Preference,
+                    "decision" => ra::memory::MemoryKind::Decision,
                     other => {
                         return Err(format!(
                             "Unknown setup memory kind '{other}'; expected fact, lesson, \
@@ -1298,7 +1298,7 @@ fn run_setup_steps(steps: &[SetupStep], dir: &Path) -> Result<(), String> {
                         ));
                     }
                 };
-                let store = pi::memory::MemoryStore::open(dir)
+                let store = ra::memory::MemoryStore::open(dir)
                     .map_err(|error| format!("Failed to open setup memory store: {error}"))?;
                 store
                     .retain(kind, content, tags, None)
@@ -1346,7 +1346,7 @@ pub fn run_truncation_tests(fixture: &FixtureFile) -> Vec<TestResult> {
 
 /// Run a single truncation test case.
 fn run_truncation_test_case(case: &TestCase) -> TestResult {
-    use pi::tools::{truncate_head, truncate_tail};
+    use ra::tools::{truncate_head, truncate_tail};
 
     let case_name = case.display_name();
 
@@ -1354,15 +1354,15 @@ fn run_truncation_test_case(case: &TestCase) -> TestResult {
     let max_lines = usize::try_from(
         case.input["max_lines"]
             .as_u64()
-            .unwrap_or(pi::tools::DEFAULT_MAX_LINES as u64),
+            .unwrap_or(ra::tools::DEFAULT_MAX_LINES as u64),
     )
-    .unwrap_or(pi::tools::DEFAULT_MAX_LINES);
+    .unwrap_or(ra::tools::DEFAULT_MAX_LINES);
     let max_bytes = usize::try_from(
         case.input["max_bytes"]
             .as_u64()
-            .unwrap_or(pi::tools::DEFAULT_MAX_BYTES as u64),
+            .unwrap_or(ra::tools::DEFAULT_MAX_BYTES as u64),
     )
-    .unwrap_or(pi::tools::DEFAULT_MAX_BYTES);
+    .unwrap_or(ra::tools::DEFAULT_MAX_BYTES);
 
     let direction = case
         .input
@@ -1391,8 +1391,8 @@ fn run_truncation_test_case(case: &TestCase) -> TestResult {
     let details = serde_json::json!({
         "truncated": result.truncated,
         "truncated_by": result.truncated_by.map(|t| match t {
-            pi::tools::TruncatedBy::Lines => "lines",
-            pi::tools::TruncatedBy::Bytes => "bytes",
+            ra::tools::TruncatedBy::Lines => "lines",
+            ra::tools::TruncatedBy::Bytes => "bytes",
         }),
         "total_lines": result.total_lines,
         "output_lines": result.output_lines,

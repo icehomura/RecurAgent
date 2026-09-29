@@ -4,13 +4,13 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::config::Config;
-use pi::media_tools::{
+use ra::config::Config;
+use ra::media_tools::{
     DEFAULT_MEDIA_MAX_BYTES, GenerateImageTool, InspectImageTool, MediaSettings, ReadMediaTool,
     TtsTool,
 };
-use pi::model::ContentBlock;
-use pi::tools::{Tool, ToolRegistry};
+use ra::model::ContentBlock;
+use ra::tools::{Tool, ToolRegistry};
 use serde_json::json;
 use std::fs;
 
@@ -536,7 +536,7 @@ fn test_read_media_happy_path_emits_media_block() {
                     base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &media.data)
                         .expect("valid base64");
                 assert_eq!(decoded, WAV_BYTES);
-                assert_eq!(media.input_type(), Some(pi::provider::InputType::Audio));
+                assert_eq!(media.input_type(), Some(ra::provider::InputType::Audio));
                 assert_eq!(
                     media.placeholder(),
                     format!(

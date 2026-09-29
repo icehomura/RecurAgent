@@ -10,11 +10,11 @@
 //! The test generates a compatibility dashboard artifact at:
 //!   `tests/security_compat/security_compat_dashboard.json`
 //!
-//! Schema: `pi.security.compat_dashboard.v1`
+//! Schema: `ra.security.compat_dashboard.v1`
 //!
 //! Regenerate tracked compatibility evidence explicitly with:
-//!   PI_GENERATE_SECURITY_COMPAT_DASHBOARD=1 cargo test --test security_conformance_benign generate_compat_dashboard_artifact -- --exact --nocapture
-//!   PI_GENERATE_SECURITY_COMPAT_EVENTS=1 cargo test --test security_conformance_benign emit_compat_events_jsonl -- --exact --nocapture
+//!   RECUR_AGENT_GENERATE_SECURITY_COMPAT_DASHBOARD=1 cargo test --test security_conformance_benign generate_compat_dashboard_artifact -- --exact --nocapture
+//!   RECUR_AGENT_GENERATE_SECURITY_COMPAT_EVENTS=1 cargo test --test security_conformance_benign emit_compat_events_jsonl -- --exact --nocapture
 //!
 //! Acceptance criteria addressed:
 //! - Benign extension compatibility is continuously measured.
@@ -24,13 +24,13 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     Capability, ExtensionManager, ExtensionOverride, ExtensionPolicy, ExtensionPolicyMode,
     HostCallContext, HostCallPayload, PolicyDecision, PolicyProfile, RuntimeRiskConfig,
     SecurityAlertFilter,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -40,9 +40,10 @@ use std::path::{Path, PathBuf};
 // ============================================================================
 
 /// Schema version for the compatibility dashboard.
-const COMPAT_DASHBOARD_SCHEMA: &str = "pi.security.compat_dashboard.v1";
-const GENERATE_SECURITY_COMPAT_DASHBOARD_ENV: &str = "PI_GENERATE_SECURITY_COMPAT_DASHBOARD";
-const GENERATE_SECURITY_COMPAT_EVENTS_ENV: &str = "PI_GENERATE_SECURITY_COMPAT_EVENTS";
+const COMPAT_DASHBOARD_SCHEMA: &str = "ra.security.compat_dashboard.v1";
+const GENERATE_SECURITY_COMPAT_DASHBOARD_ENV: &str =
+    "RECUR_AGENT_GENERATE_SECURITY_COMPAT_DASHBOARD";
+const GENERATE_SECURITY_COMPAT_EVENTS_ENV: &str = "RECUR_AGENT_GENERATE_SECURITY_COMPAT_EVENTS";
 
 fn security_compat_dashboard_generation_enabled(raw: Option<&str>) -> bool {
     raw == Some("1")
@@ -1282,7 +1283,7 @@ fn benign_workflow_produces_no_security_alerts() {
     }
 
     let filter = SecurityAlertFilter::default();
-    let alerts = pi::extensions::query_security_alerts(&manager, &filter);
+    let alerts = ra::extensions::query_security_alerts(&manager, &filter);
     assert!(
         alerts.is_empty(),
         "Benign log-only workflow should produce 0 alerts, got {}",
@@ -1304,7 +1305,7 @@ fn emit_compat_events_jsonl() {
     let mut lines = Vec::new();
     for check in &checks {
         let event = json!({
-            "schema": "pi.security.compat_event.v1",
+            "schema": "ra.security.compat_event.v1",
             "name": check.name,
             "profile": check.profile,
             "capability": check.capability,
@@ -1319,7 +1320,7 @@ fn emit_compat_events_jsonl() {
         assert_eq!(roundtripped, event, "compatibility event roundtrip");
         assert_eq!(
             roundtripped.get("schema").and_then(|value| value.as_str()),
-            Some("pi.security.compat_event.v1")
+            Some("ra.security.compat_event.v1")
         );
         assert!(
             roundtripped

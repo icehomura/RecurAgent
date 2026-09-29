@@ -4,13 +4,13 @@ mod common;
 
 use asupersync::runtime::RuntimeBuilder;
 use common::{TestHarness, validate_jsonl};
-use pi::Error;
-use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
-use pi::session::{
+use proptest::prelude::*;
+use ra::Error;
+use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
+use ra::session::{
     CustomEntry, EntryBase, Session, SessionEntry, SessionHeader, SessionMessage, encode_cwd,
 };
-use pi::session_index::SessionIndex;
-use proptest::prelude::*;
+use ra::session_index::SessionIndex;
 use serde_json::json;
 use std::future::Future;
 use std::path::Path;
@@ -49,7 +49,7 @@ fn make_assistant_message(text: &str) -> SessionMessage {
     }
 }
 
-async fn open_session(path: &Path) -> pi::PiResult<Session> {
+async fn open_session(path: &Path) -> ra::PiResult<Session> {
     let path_string = path.to_string_lossy().to_string();
     Session::open(&path_string).await
 }
@@ -156,7 +156,7 @@ fn proptest_session_header() -> impl Strategy<Value = SessionHeader> {
         .prop_map(
             |(seed, provider, model_id, thinking_level, parent_session)| SessionHeader {
                 r#type: "session".to_string(),
-                version: Some(pi::session::SESSION_VERSION),
+                version: Some(ra::session::SESSION_VERSION),
                 id: format!("sess-{seed}"),
                 timestamp: "2026-02-03T00:00:00.000Z".to_string(),
                 cwd: "/tmp/project".to_string(),
@@ -207,7 +207,7 @@ fn proptest_message_entries() -> impl Strategy<Value = Vec<SessionEntry>> {
                     content: UserContent::Text(format!("msg-{i}-{}", msg_bytes[i])),
                     timestamp: Some(0),
                 };
-                entries.push(SessionEntry::Message(pi::session::MessageEntry {
+                entries.push(SessionEntry::Message(ra::session::MessageEntry {
                     base,
                     message,
                 }));
@@ -262,7 +262,7 @@ proptest! {
         let mut session = Session::create();
         session.header = SessionHeader {
             r#type: "session".to_string(),
-            version: Some(pi::session::SESSION_VERSION),
+            version: Some(ra::session::SESSION_VERSION),
             id: "sess-proptest".to_string(),
             timestamp: "2026-02-03T00:00:00.000Z".to_string(),
             cwd: "/tmp/project".to_string(),
@@ -444,7 +444,7 @@ fn plan_fork_from_user_message_branches_from_parent_and_returns_selected_text() 
         Some(root_assistant.as_str())
     );
 
-    let pi::session::ForkPlan {
+    let ra::session::ForkPlan {
         entries, leaf_id, ..
     } = plan;
     let mut forked = Session::create();
@@ -915,8 +915,8 @@ fn make_tool_result_message(
     tool_name: &str,
     result_text: &str,
     is_error: bool,
-) -> pi::session::SessionMessage {
-    pi::session::SessionMessage::ToolResult {
+) -> ra::session::SessionMessage {
+    ra::session::SessionMessage::ToolResult {
         tool_call_id: tool_call_id.to_string(),
         tool_name: tool_name.to_string(),
         content: vec![ContentBlock::Text(TextContent::new(result_text))],
@@ -929,10 +929,10 @@ fn make_tool_result_message(
 fn make_assistant_with_tool_use(
     tool_call_id: &str,
     tool_name: &str,
-) -> pi::session::SessionMessage {
-    use pi::model::ToolCall;
+) -> ra::session::SessionMessage {
+    use ra::model::ToolCall;
 
-    pi::session::SessionMessage::Assistant {
+    ra::session::SessionMessage::Assistant {
         message: AssistantMessage {
             content: vec![ContentBlock::ToolCall(ToolCall {
                 id: tool_call_id.to_string(),
@@ -980,7 +980,7 @@ fn save_round_trips_tool_result_message() {
         // Verify tool result entry
         let tool_result_entry = &loaded.entries[2];
         if let SessionEntry::Message(msg_entry) = tool_result_entry {
-            if let pi::session::SessionMessage::ToolResult {
+            if let ra::session::SessionMessage::ToolResult {
                 tool_call_id: id,
                 tool_name: name,
                 is_error,
@@ -1020,7 +1020,7 @@ fn save_round_trips_tool_error_result() {
 
         let tool_result_entry = &loaded.entries[2];
         if let SessionEntry::Message(msg_entry) = tool_result_entry {
-            if let pi::session::SessionMessage::ToolResult { is_error, .. } = &msg_entry.message {
+            if let ra::session::SessionMessage::ToolResult { is_error, .. } = &msg_entry.message {
                 assert!(*is_error, "is_error flag should be preserved as true");
             } else {
                 panic!("Expected ToolResult message");
@@ -1049,7 +1049,7 @@ fn save_preserves_unicode_message_content() {
 
         let first_entry = &loaded.entries[0];
         if let SessionEntry::Message(msg_entry) = first_entry {
-            if let pi::session::SessionMessage::User { content, .. } = &msg_entry.message {
+            if let ra::session::SessionMessage::User { content, .. } = &msg_entry.message {
                 let text = match content {
                     UserContent::Text(t) => t.as_str(),
                     UserContent::Blocks(_) => panic!("Expected Text content"),
@@ -1082,7 +1082,7 @@ fn save_preserves_emoji_in_assistant_response() {
 
         let assistant_entry = &loaded.entries[1];
         if let SessionEntry::Message(msg_entry) = assistant_entry {
-            if let pi::session::SessionMessage::Assistant { message } = &msg_entry.message {
+            if let ra::session::SessionMessage::Assistant { message } = &msg_entry.message {
                 if let Some(ContentBlock::Text(text_block)) = message.content.first() {
                     assert_eq!(
                         text_block.text, emoji_text,
@@ -1112,7 +1112,7 @@ fn save_preserves_message_timestamps() {
         let mut session = Session::create_with_dir(Some(base_dir));
 
         let timestamp = 1_706_918_401_000_i64;
-        session.append_message(pi::session::SessionMessage::User {
+        session.append_message(ra::session::SessionMessage::User {
             content: UserContent::Text("Hello".to_string()),
             timestamp: Some(timestamp),
         });
@@ -1121,7 +1121,7 @@ fn save_preserves_message_timestamps() {
 
         let first_entry = &loaded.entries[0];
         if let SessionEntry::Message(msg_entry) = first_entry {
-            if let pi::session::SessionMessage::User {
+            if let ra::session::SessionMessage::User {
                 timestamp: ts_opt, ..
             } = &msg_entry.message
             {

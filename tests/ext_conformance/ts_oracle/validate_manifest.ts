@@ -6,9 +6,9 @@
  *   bun run tests/ext_conformance/ts_oracle/validate_manifest.ts
  *
  * Optional env:
- * - PI_TS_VALIDATE_LIMIT=N        Limit number of extensions (debug)
- * - PI_TS_VALIDATE_TIER=official-pi-mono|community|npm-registry|third-party-github|agents-mikeastock
- * - PI_TS_VALIDATE_TIMEOUT_MS=15000
+ * - RECUR_AGENT_TS_VALIDATE_LIMIT=N        Limit number of extensions (debug)
+ * - RECUR_AGENT_TS_VALIDATE_TIER=official-pi-mono|community|npm-registry|third-party-github|agents-mikeastock
+ * - RECUR_AGENT_TS_VALIDATE_TIMEOUT_MS=15000
  */
 
 import * as fs from "node:fs";
@@ -79,19 +79,19 @@ const OUTPUT_PATH = path.join(
   REPO_ROOT,
   "tests/ext_conformance/ts_oracle/dynamic_validation_results.json",
 );
-const PI_MONO_ROOT = path.join(REPO_ROOT, "legacy_pi_mono_code/pi-mono");
+const RECUR_AGENT_MONO_ROOT = path.join(REPO_ROOT, "legacy_pi_mono_code/pi-mono");
 
 const BUN = process.env.BUN ?? "/home/ubuntu/.bun/bin/bun";
-const TIMEOUT_MS = Number(process.env.PI_TS_VALIDATE_TIMEOUT_MS ?? "15000");
-const LIMIT = Number(process.env.PI_TS_VALIDATE_LIMIT ?? "0");
-const FILTER_TIER = process.env.PI_TS_VALIDATE_TIER;
-const DET_TIME_MS = process.env.PI_DETERMINISTIC_TIME_MS ?? "1700000000000";
-const DET_TIME_STEP_MS = process.env.PI_DETERMINISTIC_TIME_STEP_MS ?? "1";
-const DET_RANDOM_SEED = process.env.PI_DETERMINISTIC_RANDOM_SEED ?? "1337";
-const DET_RANDOM = process.env.PI_DETERMINISTIC_RANDOM ?? "0.5";
-const DET_CWD = process.env.PI_DETERMINISTIC_CWD ?? "/tmp/ext-conformance-test";
-const DET_HOME = process.env.PI_DETERMINISTIC_HOME ?? "/tmp/ext-conformance-home";
-const CWD = process.env.PI_TS_VALIDATE_CWD ?? DET_CWD;
+const TIMEOUT_MS = Number(process.env.RECUR_AGENT_TS_VALIDATE_TIMEOUT_MS ?? "15000");
+const LIMIT = Number(process.env.RECUR_AGENT_TS_VALIDATE_LIMIT ?? "0");
+const FILTER_TIER = process.env.RECUR_AGENT_TS_VALIDATE_TIER;
+const DET_TIME_MS = process.env.RECUR_AGENT_DETERMINISTIC_TIME_MS ?? "1700000000000";
+const DET_TIME_STEP_MS = process.env.RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS ?? "1";
+const DET_RANDOM_SEED = process.env.RECUR_AGENT_DETERMINISTIC_RANDOM_SEED ?? "1337";
+const DET_RANDOM = process.env.RECUR_AGENT_DETERMINISTIC_RANDOM ?? "0.5";
+const DET_CWD = process.env.RECUR_AGENT_DETERMINISTIC_CWD ?? "/tmp/ext-conformance-test";
+const DET_HOME = process.env.RECUR_AGENT_DETERMINISTIC_HOME ?? "/tmp/ext-conformance-home";
+const CWD = process.env.RECUR_AGENT_TS_VALIDATE_CWD ?? DET_CWD;
 
 function readManifest(filePath: string): ManifestFile {
   const raw = fs.readFileSync(filePath, "utf-8");
@@ -133,14 +133,14 @@ async function runHarness(entryAbs: string): Promise<{
     stderr: "pipe",
     env: {
       ...process.env,
-      NODE_PATH: path.join(PI_MONO_ROOT, "node_modules"),
-      PI_TS_CAPTURE_LOGS: "1",
-      PI_DETERMINISTIC_TIME_MS: DET_TIME_MS,
-      PI_DETERMINISTIC_TIME_STEP_MS: DET_TIME_STEP_MS,
-      PI_DETERMINISTIC_RANDOM_SEED: DET_RANDOM_SEED,
-      PI_DETERMINISTIC_CWD: DET_CWD,
-      PI_DETERMINISTIC_HOME: DET_HOME,
-      ...(DET_RANDOM ? { PI_DETERMINISTIC_RANDOM: DET_RANDOM } : {}),
+      NODE_PATH: path.join(RECUR_AGENT_MONO_ROOT, "node_modules"),
+      RECUR_AGENT_TS_CAPTURE_LOGS: "1",
+      RECUR_AGENT_DETERMINISTIC_TIME_MS: DET_TIME_MS,
+      RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS: DET_TIME_STEP_MS,
+      RECUR_AGENT_DETERMINISTIC_RANDOM_SEED: DET_RANDOM_SEED,
+      RECUR_AGENT_DETERMINISTIC_CWD: DET_CWD,
+      RECUR_AGENT_DETERMINISTIC_HOME: DET_HOME,
+      ...(DET_RANDOM ? { RECUR_AGENT_DETERMINISTIC_RANDOM: DET_RANDOM } : {}),
     },
   });
 
@@ -239,7 +239,7 @@ async function main() {
 
   const summary = summarize(results);
   const output = {
-    schema: "pi.ext.dynamic_validation.v1",
+    schema: "ra.ext.dynamic_validation.v1",
     generated_at: new Date().toISOString(),
     harness: {
       script: "tests/ext_conformance/ts_harness/run_extension.ts",

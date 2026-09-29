@@ -4,10 +4,10 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::computer::{ComputerSettings, ComputerTool};
-use pi::config::Config;
-use pi::model::ContentBlock;
-use pi::tools::{Tool, ToolRegistry};
+use ra::computer::{ComputerSettings, ComputerTool};
+use ra::config::Config;
+use ra::model::ContentBlock;
+use ra::tools::{Tool, ToolRegistry};
 use serde_json::json;
 use std::fs;
 
@@ -86,7 +86,7 @@ fn test_computer_list_windows() {
             _ => panic!("expected text block"),
         };
         assert!(first_text.contains("Found 2 window(s)"));
-        assert!(first_text.contains("Pi Agent Terminal"));
+        assert!(first_text.contains("Recur Agent Terminal"));
 
         let details = output.details.as_ref().expect("details present");
         assert!(details["windows"].is_array());

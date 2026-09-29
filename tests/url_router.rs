@@ -16,7 +16,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{Tool, ToolOutput};
+use ra::tools::{Tool, ToolOutput};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -25,7 +25,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -102,8 +102,8 @@ fn read_skill_via_tool_matches_loader() {
 
     // Author a managed skill (dead-last tier), then read it back through
     // the tool and compare with the loader.
-    pi::skills_managed::create(&name, "url router test skill", "body payload").expect("create");
-    let tool = pi::tools::ReadTool::new(&root);
+    ra::skills_managed::create(&name, "url router test skill", "body payload").expect("create");
+    let tool = ra::tools::ReadTool::new(&root);
     let out = block_on_local(tool.execute("t1", json!({"path": format!("skill://{name}")}), None))
         .expect("read skill");
     let text = first_text(&out);
@@ -112,9 +112,9 @@ fn read_skill_via_tool_matches_loader() {
     assert!(text.contains("body payload"), "{text}");
     assert!(!out.is_error, "{text}");
 
-    let skills = pi::resources::load_skills(pi::resources::LoadSkillsOptions {
+    let skills = ra::resources::load_skills(ra::resources::LoadSkillsOptions {
         cwd: root,
-        agent_dir: pi::config::Config::global_dir(),
+        agent_dir: ra::config::Config::global_dir(),
         skill_paths: Vec::new(),
         include_defaults: true,
     });
@@ -127,7 +127,7 @@ fn read_skill_via_tool_matches_loader() {
     for line in loader_content.lines().take(4) {
         assert!(text.contains(line.trim()), "loader line missing: {line}");
     }
-    pi::skills_managed::delete(&name).expect("cleanup");
+    ra::skills_managed::delete(&name).expect("cleanup");
     finish_case(&harness, case);
 }
 
@@ -136,7 +136,7 @@ fn conflict_read_write_bulk_and_resolution() {
     let case = "conflict_read_write_bulk_and_resolution";
     let harness = TestHarness::new(case);
     let repo = init_repo_with_conflict(&harness, "tool");
-    let tool = pi::tools::ReadTool::new(&repo);
+    let tool = ra::tools::ReadTool::new(&repo);
 
     let out = block_on_local(tool.execute("t1", json!({"path": "conflict://0"}), None))
         .expect("read conflict");
@@ -156,7 +156,7 @@ fn conflict_read_write_bulk_and_resolution() {
     assert!(first_text(&theirs).contains("side"));
 
     // Write the resolution: @theirs wins.
-    let region = pi::url_router::write_conflict_resolution(&repo, 0, "theirs").expect("resolve");
+    let region = ra::url_router::write_conflict_resolution(&repo, 0, "theirs").expect("resolve");
     assert_eq!(region.file, "f.txt");
     let content = std::fs::read_to_string(repo.join("f.txt")).expect("read");
     harness
@@ -164,7 +164,7 @@ fn conflict_read_write_bulk_and_resolution() {
         .info("verify", format!("resolved file: {content}"));
     assert_eq!(content.trim(), "side");
     assert!(
-        pi::url_router::conflict_regions(&repo)
+        ra::url_router::conflict_regions(&repo)
             .expect("regions")
             .is_empty(),
         "no conflicts remain after resolution"
@@ -177,14 +177,14 @@ fn unknown_scheme_errors_with_registered_list() {
     let case = "unknown_scheme_errors_with_registered_list";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let tool = pi::tools::ReadTool::new(&root);
+    let tool = ra::tools::ReadTool::new(&root);
     let err = block_on_local(tool.execute("t1", json!({"path": "foo://bar"}), None))
         .expect_err("foo:// must be refused");
     let text = err.to_string();
     harness
         .log()
         .info("verify", format!("unknown scheme: {text}"));
-    assert!(text.contains("PI_URL_UNKNOWN_SCHEME"), "{text}");
+    assert!(text.contains("RECUR_AGENT_URL_UNKNOWN_SCHEME"), "{text}");
     assert!(text.contains("skill://"), "{text}");
     assert!(text.contains("conflict://"), "{text}");
     finish_case(&harness, case);
@@ -221,11 +221,11 @@ fn pr_view_via_stubbed_gh_backend() {
         }
     }
 
-    let options = pi::url_router::ResolveOptions {
+    let options = ra::url_router::ResolveOptions {
         gh_binary: Some(stub.to_string_lossy().into_owned()),
     };
     let doc =
-        pi::url_router::resolve_with("pr://owner/repo/1428", &root, &options).expect("resolve pr");
+        ra::url_router::resolve_with("pr://owner/repo/1428", &root, &options).expect("resolve pr");
     harness.log().info(
         "verify",
         format!(
@@ -254,8 +254,8 @@ fn pagination_contract_matches_file_reads() {
         use std::fmt::Write as _;
         let _ = writeln!(content, "line {n}");
     }
-    pi::url_router::write_local("paged", &content).expect("seed");
-    let tool = pi::tools::ReadTool::new(&root);
+    ra::url_router::write_local("paged", &content).expect("seed");
+    let tool = ra::tools::ReadTool::new(&root);
     let out = block_on_local(tool.execute(
         "t1",
         json!({"path": "local://paged", "offset": 4, "limit": 3}),

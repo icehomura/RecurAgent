@@ -7,16 +7,16 @@
 //! ## Modes
 //!
 //! - Default (CI-friendly): 60 seconds, ~17 events/sec (1000 events/min)
-//! - Full 1-hour: `PI_MEM_STRESS_DURATION_SECS=3600`
+//! - Full 1-hour: `RECUR_AGENT_MEM_STRESS_DURATION_SECS=3600`
 //!
 //! ## Environment Variables
 //!
 //! | Variable                       | Default | Description                           |
 //! |--------------------------------|---------|---------------------------------------|
-//! | `PI_MEM_STRESS_DURATION_SECS`  | 60      | Total run duration                    |
-//! | `PI_MEM_STRESS_EVENTS_PER_SEC` | 17      | Event dispatch rate (~1000/min)       |
-//! | `PI_MEM_STRESS_RSS_INTERVAL`   | 5       | Seconds between RSS samples           |
-//! | `PI_MEM_STRESS_MAX_EXTENSIONS` | 20      | Max extensions to load simultaneously |
+//! | `RECUR_AGENT_MEM_STRESS_DURATION_SECS`  | 60      | Total run duration                    |
+//! | `RECUR_AGENT_MEM_STRESS_EVENTS_PER_SEC` | 17      | Event dispatch rate (~1000/min)       |
+//! | `RECUR_AGENT_MEM_STRESS_RSS_INTERVAL`   | 5       | Seconds between RSS samples           |
+//! | `RECUR_AGENT_MEM_STRESS_MAX_EXTENSIONS` | 20      | Max extensions to load simultaneously |
 //!
 //! ## Output
 //!
@@ -26,11 +26,11 @@
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::Value;
 use std::fmt::Write as _;
@@ -42,28 +42,28 @@ use sysinfo::{ProcessRefreshKind, RefreshKind, System, get_current_pid};
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 fn duration_secs() -> u64 {
-    std::env::var("PI_MEM_STRESS_DURATION_SECS")
+    std::env::var("RECUR_AGENT_MEM_STRESS_DURATION_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(60)
 }
 
 fn events_per_sec() -> u64 {
-    std::env::var("PI_MEM_STRESS_EVENTS_PER_SEC")
+    std::env::var("RECUR_AGENT_MEM_STRESS_EVENTS_PER_SEC")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(17)
 }
 
 fn rss_interval_secs() -> u64 {
-    std::env::var("PI_MEM_STRESS_RSS_INTERVAL")
+    std::env::var("RECUR_AGENT_MEM_STRESS_RSS_INTERVAL")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(5)
 }
 
 fn max_extensions() -> usize {
-    std::env::var("PI_MEM_STRESS_MAX_EXTENSIONS")
+    std::env::var("RECUR_AGENT_MEM_STRESS_MAX_EXTENSIONS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(20)
@@ -490,7 +490,7 @@ fn write_report(outcome: &StressOutcome, vd: &VerdictData, ext_names: &[String],
 
     // JSON report
     let report = StressReport {
-        schema: "pi.ext.memory_stress.v1".to_string(),
+        schema: "ra.ext.memory_stress.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         config: StressConfig {
             duration_secs: duration_secs(),
@@ -529,10 +529,10 @@ fn write_report(outcome: &StressOutcome, vd: &VerdictData, ext_names: &[String],
 #[test]
 #[allow(clippy::too_many_lines)]
 fn ext_memory_stress_real_extensions() {
-    if std::env::var("PI_MEM_STRESS_REAL").is_err() {
+    if std::env::var("RECUR_AGENT_MEM_STRESS_REAL").is_err() {
         eprintln!(
             "[mem-stress] skipping real extension stress test \
-             (set PI_MEM_STRESS_REAL=1 to enable)"
+             (set RECUR_AGENT_MEM_STRESS_REAL=1 to enable)"
         );
         return;
     }
@@ -577,7 +577,7 @@ fn ext_memory_stress_real_extensions() {
     let cwd = std::env::temp_dir().join("pi-mem-stress");
     let _ = std::fs::create_dir_all(&cwd);
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -676,7 +676,7 @@ fn ext_memory_stress_inline() {
 
     let cwd = harness.temp_dir().to_path_buf();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -833,7 +833,7 @@ fn report_schema_validity() {
     };
 
     let report = StressReport {
-        schema: "pi.ext.memory_stress.v1".to_string(),
+        schema: "ra.ext.memory_stress.v1".to_string(),
         generated_at: "2026-01-01T00:00:00Z".to_string(),
         config: StressConfig {
             duration_secs: 60,
@@ -860,7 +860,7 @@ fn report_schema_validity() {
     let json = serde_json::to_string_pretty(&report).expect("serialize report");
     let parsed: Value = serde_json::from_str(&json).expect("parse report");
 
-    assert_eq!(parsed["schema"], "pi.ext.memory_stress.v1");
+    assert_eq!(parsed["schema"], "ra.ext.memory_stress.v1");
     assert_eq!(parsed["extensions_loaded"], 12);
     assert_eq!(parsed["events_dispatched"], 1020);
     assert!(parsed["verdict"]["pass"].as_bool().unwrap());

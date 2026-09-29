@@ -4,8 +4,8 @@
 use asupersync::runtime::RuntimeBuilder;
 use asupersync::runtime::reactor::create_reactor;
 use asupersync::sync::Mutex as AsyncMutex;
-use pi::failover::RetryPolicy;
-use pi::sdk::{
+use ra::failover::RetryPolicy;
+use ra::sdk::{
     AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession, AgentSessionHandle, ContentBlock,
     Error, EventListeners, FailoverOptions, ImageContent, InputType, Message,
     ResolvedCompactionSettings, Session, SessionPromptResult, SessionTransport,
@@ -20,7 +20,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5mEAAAAASUVORK5CYII=";
+const PNG: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5mEAAAAASUVORK5CYII=";
 const GIF: &str = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 fn images() -> Vec<ImageContent> {
@@ -190,8 +191,8 @@ fn response_body(status: u16) -> (&'static str, String) {
     )
 }
 
-fn model_entry(url: &str, model: &str) -> pi::sdk::ModelEntry {
-    let mut entry = pi::models::ad_hoc_model_entry("openai", model).expect("model entry");
+fn model_entry(url: &str, model: &str) -> ra::sdk::ModelEntry {
+    let mut entry = ra::models::ad_hoc_model_entry("openai", model).expect("model entry");
     entry.model.api = "openai-completions".to_string();
     entry.model.base_url = url.to_string();
     entry.model.input = vec![InputType::Text, InputType::Image];
@@ -200,7 +201,7 @@ fn model_entry(url: &str, model: &str) -> pi::sdk::ModelEntry {
 
 fn handle(url: &str, root: &Path, block_images: bool) -> AgentSessionHandle {
     let entry = model_entry(url, "vision-primary");
-    let provider = pi::providers::create_provider(&entry, None).expect("real provider");
+    let provider = ra::providers::create_provider(&entry, None).expect("real provider");
     let mut stored = Session::create_with_dir(Some(root.join("sessions")));
     stored.header.cwd = root.display().to_string();
     stored.header.provider = Some("openai".to_string());
@@ -231,7 +232,7 @@ fn handle(url: &str, root: &Path, block_images: bool) -> AgentSessionHandle {
     AgentSessionHandle::from_session_with_listeners(session, EventListeners::default())
 }
 
-fn retry_policy(retries: u32, failovers: u32) -> RetryPolicy {
+const fn retry_policy(retries: u32, failovers: u32) -> RetryPolicy {
     RetryPolicy {
         max_retries: retries,
         max_failovers_per_turn: failovers,
@@ -247,7 +248,11 @@ fn user_wire_content(request: &Value) -> &Value {
         .iter()
         .filter(|message| message["role"] == "user")
         .collect::<Vec<_>>();
-    assert_eq!(users.len(), 1, "recovery must not duplicate the user prompt");
+    assert_eq!(
+        users.len(),
+        1,
+        "recovery must not duplicate the user prompt"
+    );
     &users[0]["content"]
 }
 
@@ -362,6 +367,7 @@ fn sdk_mml_img_retry_preserves_wire_attachments_and_one_durable_prompt() {
             serde_json::to_value(messages).unwrap(),
             serde_json::to_value(stored).unwrap()
         );
+        drop(events);
     }
 }
 
@@ -377,7 +383,7 @@ fn sdk_mml_img_failover_keeps_the_original_images_on_the_new_model() {
                 vec!["openai/vision-fallback".to_string()],
             )]),
             available_models: vec![model_entry(&server.url, "vision-fallback")],
-            auth: pi::auth::AuthStorage::empty_at(root.path().join("auth.json")),
+            auth: ra::auth::AuthStorage::empty_at(root.path().join("auth.json")),
             cli_api_key: Some("fixture-key".to_string()),
             cooldown_secs: 300,
         }));
@@ -417,8 +423,7 @@ fn sdk_mml_img_preabort_has_no_provider_or_session_side_effects() {
 fn sdk_mml_img_backoff_abort_keeps_attachments_without_reissuing() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut server = ApiFixture::new(vec![503, 200]);
-    let mut handle =
-        handle(&server.url, root.path(), false).with_retry(Some(retry_policy(2, 0)));
+    let mut handle = handle(&server.url, root.path(), false).with_retry(Some(retry_policy(2, 0)));
     let (abort, signal) = AbortHandle::new();
     let result = run_async(handle.prompt_with_images_with_abort(
         "keep images",
@@ -484,20 +489,21 @@ fn sdk_mml_img_provider_image_blocking_still_applies() {
 fn sdk_mml_img_failed_retry_save_fences_later_image_prompts() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut server = ApiFixture::new(vec![503, 200]);
-    let mut handle =
-        handle(&server.url, root.path(), false).with_retry(Some(retry_policy(1, 0)));
+    let mut handle = handle(&server.url, root.path(), false).with_retry(Some(retry_policy(1, 0)));
     let blocked = root.path().join("directory-not-session.jsonl");
     std::fs::create_dir(&blocked).expect("blocked persistence path");
     let store = handle.session_store();
     let original = Arc::new(Mutex::new(None::<PathBuf>));
     let captured = Arc::clone(&original);
-    let result = run_async(handle.prompt_with_images("persist once", images(), move |event| {
-        if matches!(event, AgentEvent::AutoRetryStart { .. }) {
-            let mut session = store.try_lock().expect("between-attempt session lock");
-            *captured.lock().expect("path lock") = session.path.clone();
-            session.path = Some(blocked.clone());
-        }
-    }));
+    let result = run_async(
+        handle.prompt_with_images("persist once", images(), move |event| {
+            if matches!(event, AgentEvent::AutoRetryStart { .. }) {
+                let mut session = store.try_lock().expect("between-attempt session lock");
+                *captured.lock().expect("path lock") = session.path.clone();
+                session.path = Some(blocked.clone());
+            }
+        }),
+    );
     assert!(result.as_ref().is_err_and(Error::is_session_persistence));
     handle.session_store().try_lock().unwrap().path = original.lock().unwrap().clone();
     let before = serde_json::to_value(run_async(handle.messages()).unwrap()).unwrap();
@@ -524,7 +530,7 @@ printf '{"type":"agent_start","sessionId":"vision-rpc"}\n'
 printf '{"type":"fixture_input","frame":%s}\n' "$frame"
 printf '{"type":"agent_end","sessionId":"vision-rpc","messages":[]}\n'
 "#;
-    let mut transport = SessionTransport::rpc_subprocess(pi::sdk::RpcTransportOptions {
+    let mut transport = SessionTransport::rpc_subprocess(ra::sdk::RpcTransportOptions {
         binary_path: PathBuf::from("/bin/sh"),
         args: vec!["-c".to_string(), script.to_string()],
         cwd: None,
@@ -560,8 +566,8 @@ printf '{"type":"agent_end","sessionId":"vision-rpc","messages":[]}\n'
 #[cfg(unix)]
 mod live_ui {
     use super::*;
-    use pi::ask::{AskAnswer, AskResponse};
-    use pi::sdk::{RpcExtensionUiResponse, RpcTransportClient, RpcTransportOptions};
+    use ra::ask::{AskAnswer, AskResponse};
+    use ra::sdk::{RpcExtensionUiResponse, RpcTransportClient, RpcTransportOptions};
 
     fn client(script: String) -> RpcTransportClient {
         RpcTransportClient::connect(RpcTransportOptions {
@@ -624,10 +630,22 @@ printf '{"type":"response","command":"get_state","id":"%s","success":true,"data"
     #[test]
     fn extension_responses_unblock_live_images_and_preserve_exact_generations() {
         let responses = [
-            (RpcExtensionUiResponse::Confirmed { confirmed: true }, "confirmed", json!(true)),
-            (RpcExtensionUiResponse::Confirmed { confirmed: false }, "confirmed", json!(false)),
+            (
+                RpcExtensionUiResponse::Confirmed { confirmed: true },
+                "confirmed",
+                json!(true),
+            ),
+            (
+                RpcExtensionUiResponse::Confirmed { confirmed: false },
+                "confirmed",
+                json!(false),
+            ),
             (RpcExtensionUiResponse::Cancelled, "cancelled", json!(true)),
-            (RpcExtensionUiResponse::Value { value: Value::Null }, "value", Value::Null),
+            (
+                RpcExtensionUiResponse::Value { value: Value::Null },
+                "value",
+                Value::Null,
+            ),
             (
                 RpcExtensionUiResponse::Value {
                     value: json!({"text": "quote: \"line\"\n雪", "id": "nested-id", "type": "not-a-command"}),
@@ -689,7 +707,11 @@ printf '{"type":"response","command":"get_state","id":"%s","success":true,"data"
                 assert_eq!(frame["requestId"], request_id);
                 assert_eq!(frame["requestGeneration"], generations[index]);
                 assert_eq!(frame[field], expected);
-                assert_eq!(frame.as_object().unwrap().len(), 5, "exactly one answer field");
+                assert_eq!(
+                    frame.as_object().unwrap().len(),
+                    5,
+                    "exactly one answer field"
+                );
             }
             let prompt = &events
                 .iter()
@@ -786,7 +808,10 @@ printf '{"type":"response","command":"get_state","id":"%s","success":true,"data"
                 assert_eq!(frame["dismissed"], true);
                 assert!(frame.get("answers").is_none());
             } else {
-                assert_eq!(frame["answers"], serde_json::to_value(expected.answers).unwrap());
+                assert_eq!(
+                    frame["answers"],
+                    serde_json::to_value(expected.answers).unwrap()
+                );
                 assert!(frame.get("dismissed").is_none());
             }
             assert_eq!(frame.as_object().unwrap().len(), 4);
@@ -843,18 +868,20 @@ printf '{"type":"response","command":"prompt","id":"rpc-1","success":false,"erro
         let invoked = Arc::new(AtomicBool::new(false));
         let observed = Arc::clone(&invoked);
         let mut transport = SessionTransport::RpcSubprocess(client);
-        let result = run_async(transport.prompt_with_images("refused", images(), move |event| {
-            observed.store(true, Ordering::SeqCst);
-            if let SessionTransportEvent::Rpc(event) = event
-                && event["type"] == "extension_ui_request"
-            {
-                let _ = control.extension_ui_response(
-                    event["id"].as_str().unwrap(),
-                    event["requestGeneration"].as_u64().unwrap(),
-                    RpcExtensionUiResponse::Cancelled,
-                );
-            }
-        }));
+        let result = run_async(
+            transport.prompt_with_images("refused", images(), move |event| {
+                observed.store(true, Ordering::SeqCst);
+                if let SessionTransportEvent::Rpc(event) = event
+                    && event["type"] == "extension_ui_request"
+                {
+                    let _ = control.extension_ui_response(
+                        event["id"].as_str().unwrap(),
+                        event["requestGeneration"].as_u64().unwrap(),
+                        RpcExtensionUiResponse::Cancelled,
+                    );
+                }
+            }),
+        );
         assert!(result.is_err());
         assert!(!invoked.load(Ordering::SeqCst));
         transport.shutdown().expect("shutdown fixture");

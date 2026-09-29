@@ -32,7 +32,7 @@ fn classification_file_exists_and_parses() {
     let doc = load_classification();
     assert_eq!(
         doc["schema"].as_str().unwrap(),
-        "pi.qa.provider_discrepancy_classification.v1"
+        "ra.qa.provider_discrepancy_classification.v1"
     );
     harness.log().info("schema", "Classification file valid");
 }

@@ -126,5 +126,5 @@
     "sample_errors": []
   },
   "run_id": "bd-2zcs5.71-darkgoose-20260510T0058Z",
-  "schema": "pi.ext.stress_triage.v1"
+  "schema": "ra.ext.stress_triage.v1"
 }

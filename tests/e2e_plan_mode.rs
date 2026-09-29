@@ -103,7 +103,7 @@ fn e2e_rpc_plan_mode_blocks_approves_executes() {
     let workspace = harness.temp_path("workspace");
     std::fs::create_dir_all(&workspace).expect("mkdir workspace");
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = Command::new(binary);
     command
         .args([
@@ -116,11 +116,11 @@ fn e2e_rpc_plan_mode_blocks_approves_executes() {
         ])
         .current_dir(&workspace)
         .env("HOME", root.join("home"))
-        .env("PI_CODING_AGENT_DIR", root.join("agent"))
-        .env("PI_CONFIG_PATH", root.join("settings.json"))
-        .env("PI_SESSIONS_DIR", root.join("sessions"))
-        .env("PI_PACKAGE_DIR", root.join("packages"))
-        .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+        .env("RECUR_AGENT_DIR", root.join("agent"))
+        .env("RECUR_AGENT_CONFIG_PATH", root.join("settings.json"))
+        .env("RECUR_AGENT_SESSIONS_DIR", root.join("sessions"))
+        .env("RECUR_AGENT_PACKAGE_DIR", root.join("packages"))
+        .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

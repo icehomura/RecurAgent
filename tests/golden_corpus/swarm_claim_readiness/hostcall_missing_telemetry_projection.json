@@ -8,7 +8,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.perf.budget_summary.v2",
+      "schema": "ra.perf.budget_summary.v2",
       "status": "ready"
     },
     {
@@ -41,7 +41,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.ci.full_suite_gate.v1",
+      "schema": "ra.ci.full_suite_gate.v1",
       "status": "ready"
     },
     {
@@ -52,7 +52,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.ci.certification_lane.v1",
+      "schema": "ra.ci.certification_lane.v1",
       "status": "ready"
     },
     {
@@ -63,7 +63,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.ci.evidence_bundle.v1",
+      "schema": "ra.ci.evidence_bundle.v1",
       "status": "ready"
     },
     {
@@ -74,7 +74,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.dropin.certification_verdict.v1",
+      "schema": "ra.dropin.certification_verdict.v1",
       "status": "ready"
     },
     {
@@ -85,7 +85,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.dropin.certification_contract.v1",
+      "schema": "ra.dropin.certification_contract.v1",
       "status": "release_policy"
     },
     {
@@ -96,7 +96,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.dropin.differential_evidence_suite.v1",
+      "schema": "ra.dropin.differential_evidence_suite.v1",
       "status": "historical_snapshot"
     },
     {
@@ -107,7 +107,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.dropin.feature_inventory.v1",
+      "schema": "ra.dropin.feature_inventory.v1",
       "status": "historical_snapshot"
     },
     {
@@ -118,7 +118,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.dropin.parity_gap_ledger.v1",
+      "schema": "ra.dropin.parity_gap_ledger.v1",
       "status": "historical_snapshot"
     },
     {
@@ -129,7 +129,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.ext.must_pass_gate.v1",
+      "schema": "ra.ext.must_pass_gate.v1",
       "status": "ready"
     },
     {
@@ -140,7 +140,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.ext.health_delta.v1",
+      "schema": "ra.ext.health_delta.v1",
       "status": "ready"
     },
     {
@@ -162,7 +162,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.ext.reactor_queue_coverage_evidence.v1",
+      "schema": "ra.ext.reactor_queue_coverage_evidence.v1",
       "status": "ready"
     },
     {
@@ -184,7 +184,7 @@
       "issue_count": 0,
       "issue_kinds": [],
       "release_blocking": true,
-      "schema": "pi.swarm.activity_digest.v1",
+      "schema": "ra.swarm.activity_digest.v1",
       "status": "ready"
     }
   ],
@@ -247,7 +247,7 @@
       "bravo_transitions_total",
       "bravo_rollbacks_total"
     ],
-    "schema": "pi.swarm.hostcall_queue_readiness.v1",
+    "schema": "ra.swarm.hostcall_queue_readiness.v1",
     "source_paths": [
       "tests/perf/reports/stress_triage.json",
       "docs/evidence/ext-stress-reactor-queue-coverage.json"
@@ -461,7 +461,7 @@
   "operator_explanations": {
     "items": [],
     "policy": "degraded_or_stale_evidence_is_never_green",
-    "schema": "pi.swarm.operator_explanations.v1",
+    "schema": "ra.swarm.operator_explanations.v1",
     "status": "ready",
     "summary": {
       "category_counts": {},
@@ -470,11 +470,11 @@
   },
   "overall_ready": true,
   "overall_status": "ready",
-  "schema": "pi.swarm.claim_readiness_report.v1",
+  "schema": "ra.swarm.claim_readiness_report.v1",
   "stale_claims": {
     "items": [],
     "policy": "report_only_no_auto_reopen_or_reassign",
-    "schema": "pi.swarm.stale_claim_report.v1",
+    "schema": "ra.swarm.stale_claim_report.v1",
     "source_paths": {
       "activity_jsonl": [],
       "beads_ledger": ".beads/issues.jsonl",

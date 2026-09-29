@@ -5,8 +5,8 @@
 //! extension dispatcher + VCR matching layers.
 #![forbid(unsafe_code)]
 
-use pi::extensions_js::{HostcallKind, HostcallRequest};
 use proptest::prelude::*;
+use ra::extensions_js::{HostcallKind, HostcallRequest};
 use serde_json::{Value, json};
 
 fn tool_name_strategy() -> impl Strategy<Value = String> {

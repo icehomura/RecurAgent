@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/contracts/semantic-context-graph-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.context.semantic_graph_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.context.semantic_graph_contract.v1";
 const EXPECTED_BEAD_ID: &str = "bd-ircr3.1";
 const EXPECTED_PARENT_BEAD_ID: &str = "bd-ircr3";
 

@@ -6,10 +6,10 @@
 mod common;
 
 use common::TestHarness;
-use pi::extensions::{ExtensionManager, ExtensionRegion};
-use pi::theme::{Theme, looks_like_theme_path};
-use pi::tui::PiConsole;
 use proptest::prelude::*;
+use ra::extensions::{ExtensionManager, ExtensionRegion};
+use ra::theme::{Theme, looks_like_theme_path};
+use ra::tui::RaConsole;
 use std::fmt::Write;
 use std::time::Duration;
 
@@ -17,9 +17,9 @@ use std::time::Duration;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Create a `PiConsole` that forces color output and sinks to /dev/null.
-fn test_console() -> PiConsole {
-    PiConsole::with_color()
+/// Create a `RaConsole` that forces color output and sinks to /dev/null.
+fn test_console() -> RaConsole {
+    RaConsole::with_color()
 }
 
 // ============================================================================
@@ -358,7 +358,7 @@ fn theme_discover_from_temp_dirs() {
     let theme_json = serde_json::to_string_pretty(&Theme::dark()).unwrap();
     std::fs::write(global_themes_dir.join("custom.json"), &theme_json).unwrap();
 
-    let roots = pi::theme::ThemeRoots {
+    let roots = ra::theme::ThemeRoots {
         global_dir,
         project_dir,
     };
@@ -648,7 +648,7 @@ fn extension_region_budget_propagates() {
 }
 
 // ============================================================================
-// 5. PiConsole TUI Components
+// 5. RaConsole TUI Components
 // ============================================================================
 
 #[test]
@@ -761,7 +761,7 @@ fn console_with_theme_does_not_panic() {
                 ctx.push(("theme".to_string(), name.to_string()));
             });
 
-        let console = PiConsole::new_with_theme(Some(theme));
+        let console = RaConsole::new_with_theme(Some(theme));
         console.render_markdown("# Test\n\n**bold** text\n");
         console.render_panel("content", "title");
     }

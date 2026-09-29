@@ -15,7 +15,7 @@ fn repo_root() -> PathBuf {
 
 fn case_dir(case_name: &str) -> PathBuf {
     PathBuf::from("/tmp")
-        .join("pi_agent_rust_cargo_headroom_admission")
+        .join("recur_agent_cargo_headroom_admission")
         .join(format!("{}-{}", case_name, std::process::id()))
 }
 
@@ -44,7 +44,9 @@ fn run_admission_with_env(
     command_args.extend_from_slice(args);
 
     let mut command = Command::new(root.join("scripts/cargo_headroom.sh"));
-    command.env("PATH", path).env("PI_CARGO_PROCESS_COUNT", "0");
+    command
+        .env("PATH", path)
+        .env("RECUR_AGENT_CARGO_PROCESS_COUNT", "0");
     for (key, value) in envs {
         command.env(key, value);
     }
@@ -165,7 +167,7 @@ fn assert_forecast_matches_fixture(decision: &Value, fixture: &AdmissionFixture)
     let forecast = &decision["rch_queue_forecast"];
     assert_eq!(
         forecast["schema"].as_str(),
-        Some("pi.cargo_headroom.rch_queue_forecast.v1")
+        Some("ra.cargo_headroom.rch_queue_forecast.v1")
     );
     assert_eq!(
         forecast["status"].as_str(),
@@ -199,7 +201,7 @@ fn assert_local_process_matches_fixture(decision: &Value, fixture: &AdmissionFix
     let pressure = &decision["local_process_pressure"];
     assert_eq!(
         pressure["schema"].as_str(),
-        Some("pi.cargo_headroom.local_process_pressure.v1")
+        Some("ra.cargo_headroom.local_process_pressure.v1")
     );
     assert_eq!(
         pressure["status"].as_str(),
@@ -257,10 +259,13 @@ fn fixture_path(fixture: &AdmissionFixture, mock_dir: &Path) -> String {
 fn fixture_envs(fixture: &AdmissionFixture) -> Vec<(&'static str, String)> {
     let mut envs = Vec::new();
     if let Some(count) = fixture.process_count_override {
-        envs.push(("PI_CARGO_PROCESS_COUNT", count.to_string()));
+        envs.push(("RECUR_AGENT_CARGO_PROCESS_COUNT", count.to_string()));
     }
     if let Some(max_processes) = fixture.max_local_cargo_processes {
-        envs.push(("PI_CARGO_MAX_LOCAL_PROCESSES", max_processes.to_string()));
+        envs.push((
+            "RECUR_AGENT_CARGO_MAX_LOCAL_PROCESSES",
+            max_processes.to_string(),
+        ));
     }
     envs
 }
@@ -341,7 +346,7 @@ fn assert_paths_match_fixture(decision: &Value, fixture: &AdmissionFixture) {
 }
 
 fn assert_decision_matches_fixture(decision: &Value, fixture: &AdmissionFixture) {
-    assert_eq!(decision["schema"], "pi.cargo_headroom.admission.v1");
+    assert_eq!(decision["schema"], "ra.cargo_headroom.admission.v1");
     assert_eq!(decision["decision"], fixture.expected_decision);
     assert_eq!(
         decision["admission_action"],

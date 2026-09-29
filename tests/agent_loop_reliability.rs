@@ -22,16 +22,16 @@ mod common;
 use async_trait::async_trait;
 use common::{TestHarness, run_async};
 use futures::Stream;
-use pi::agent::{AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall,
     ToolResultMessage, Usage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::session::Session;
-use pi::tools::{Tool, ToolOutput, ToolRegistry, ToolUpdate};
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::session::Session;
+use ra::tools::{Tool, ToolOutput, ToolRegistry, ToolUpdate};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Write as _;
@@ -238,7 +238,7 @@ fn make_agent(provider: Arc<dyn Provider>, cwd: &std::path::Path, max_iters: usi
         tool_approval: None,
         keyword_settings: None,
         max_time: None,
-        turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+        turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
         approval_state: None,
         bash_settings: None,
         secrets: None,
@@ -1419,7 +1419,7 @@ fn repeated_interruption_cycles_no_corruption() {
                 tool_approval: None,
                 keyword_settings: None,
                 max_time: None,
-                turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+                turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
                 approval_state: None,
                 bash_settings: None,
                 secrets: None,
@@ -1549,7 +1549,7 @@ fn session_resume_after_interruption() {
             tool_approval: None,
             keyword_settings: None,
             max_time: None,
-            turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+            turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
             approval_state: None,
             bash_settings: None,
             secrets: None,
@@ -1880,7 +1880,7 @@ fn transient_timeout_retry_backoff_is_recoverable() {
         );
 
         let record = FaultEpisodeRecord {
-            schema: "pi.reliability.fault_episode.v1",
+            schema: "ra.reliability.fault_episode.v1",
             issue_id: "bd-1f42.5.2",
             remediation_issue: "bd-1f42.5.2",
             test_name: test_name.to_string(),
@@ -1992,7 +1992,7 @@ fn partial_write_tool_failure_recovers_without_state_corruption() {
                 tool_approval: None,
                 keyword_settings: None,
                 max_time: None,
-                turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+                turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
                 approval_state: None,
                 bash_settings: None,
                 secrets: None,
@@ -2056,7 +2056,7 @@ fn partial_write_tool_failure_recovers_without_state_corruption() {
         );
 
         let record = FaultEpisodeRecord {
-            schema: "pi.reliability.fault_episode.v1",
+            schema: "ra.reliability.fault_episode.v1",
             issue_id: "bd-1f42.5.2",
             remediation_issue: "bd-1f42.5.2",
             test_name: test_name.to_string(),
@@ -2220,7 +2220,7 @@ fn stream_contract_violation_after_retries_is_fatal() {
         );
 
         let record = FaultEpisodeRecord {
-            schema: "pi.reliability.fault_episode.v1",
+            schema: "ra.reliability.fault_episode.v1",
             issue_id: "bd-1f42.5.2",
             remediation_issue: "bd-1f42.5.2",
             test_name: test_name.to_string(),

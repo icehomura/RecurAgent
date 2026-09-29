@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-deterministic-replay-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.deterministic_replay_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.deterministic_replay_contract.v1";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

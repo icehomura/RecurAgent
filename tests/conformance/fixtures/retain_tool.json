@@ -15,7 +15,7 @@
       "expected": {
         "content_contains": ["Remembered [1] lesson"],
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "id": 1,
           "kind": "lesson",
           "content": "Remote checks must remain fail-closed.",
@@ -35,7 +35,7 @@
       "expected": {
         "content_contains": ["secret redacted before storage"],
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "id": 1,
           "kind": "fact",
           "content": "Never persist [REDACTED_GITHUB_PAT] in a note.",

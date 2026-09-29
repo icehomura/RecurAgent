@@ -1,5 +1,5 @@
 {
-  "schema": "pi.swarm.replay_fault_injection_corpus.v1",
+  "schema": "ra.swarm.replay_fault_injection_corpus.v1",
   "generated_at": "2026-05-13T18:40:00Z",
   "scenarios": [
     {
@@ -9,12 +9,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/swarm_replay_trace/fault_injection_corpus.json",
-          "artifact_schema": "pi.swarm.replay_fault_injection_corpus.v1",
+          "artifact_schema": "ra.swarm.replay_fault_injection_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/swarm_replay_trace/fault_agent_mail_unavailable.events.jsonl",
-          "artifact_schema": "pi.swarm.replay_events_jsonl.v1",
+          "artifact_schema": "ra.swarm.replay_events_jsonl.v1",
           "evidence_kind": "jsonl_event_log"
         }
       ],
@@ -52,12 +52,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/swarm_replay_trace/fault_injection_corpus.json",
-          "artifact_schema": "pi.swarm.replay_fault_injection_corpus.v1",
+          "artifact_schema": "ra.swarm.replay_fault_injection_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/swarm_replay_trace/fault_rch_scratch_saturated.events.jsonl",
-          "artifact_schema": "pi.swarm.replay_events_jsonl.v1",
+          "artifact_schema": "ra.swarm.replay_events_jsonl.v1",
           "evidence_kind": "jsonl_event_log"
         }
       ],
@@ -94,12 +94,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/swarm_replay_trace/fault_injection_corpus.json",
-          "artifact_schema": "pi.swarm.replay_fault_injection_corpus.v1",
+          "artifact_schema": "ra.swarm.replay_fault_injection_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/swarm_replay_trace/fault_reservation_dirty_stale.events.jsonl",
-          "artifact_schema": "pi.swarm.replay_events_jsonl.v1",
+          "artifact_schema": "ra.swarm.replay_events_jsonl.v1",
           "evidence_kind": "jsonl_event_log"
         }
       ],

@@ -291,7 +291,7 @@ def build_inventory_data():
             cause_counts[code] = cause_counts.get(code, 0) + 1
 
     inventory = {
-        "schema": "pi.ext.inventory.v1",
+        "schema": "ra.ext.inventory.v1",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "summary": {
             "extensions": {
@@ -413,7 +413,7 @@ def build_validation_pack(inventory: dict, ext_report: dict) -> dict:
     ]
 
     pack = {
-        "schema": "pi.ext.compatibility_validation_pack.v1",
+        "schema": "ra.ext.compatibility_validation_pack.v1",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "summary": {
             "extensions": conformance_counts,

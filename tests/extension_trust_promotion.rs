@@ -6,12 +6,12 @@
 
 mod common;
 
-use pi::extension_preflight::{
+use ra::extension_preflight::{
     ExtensionTrustState, ExtensionTrustTracker, InstallRecommendation, InstallTimeRiskReport,
     TRUST_LIFECYCLE_SCHEMA, TrustTransitionError, TrustTransitionKind, classify_extension_source,
     initial_trust_state, is_hostcall_allowed_for_trust,
 };
-use pi::extensions::ExtensionPolicy;
+use ra::extensions::ExtensionPolicy;
 
 // ============================================================================
 // Helpers
@@ -32,7 +32,7 @@ fn classify(source: &str) -> InstallTimeRiskReport {
 
 #[test]
 fn trust_lifecycle_schema_is_stable() {
-    assert_eq!(TRUST_LIFECYCLE_SCHEMA, "pi.ext.trust_lifecycle.v1");
+    assert_eq!(TRUST_LIFECYCLE_SCHEMA, "ra.ext.trust_lifecycle.v1");
 }
 
 // ============================================================================

@@ -3,11 +3,11 @@
   "decision": "closeout_admitted",
   "generated_at": "[GENERATED_AT]",
   "operator_next_actions": [],
-  "schema": "pi.completion_audit.closeout_gate.v1",
+  "schema": "ra.completion_audit.closeout_gate.v1",
   "source": {
     "completion_allowed": true,
     "overall_status": "complete",
-    "schema": "pi.completion_audit.v1"
+    "schema": "ra.completion_audit.v1"
   },
   "source_boundaries": {
     "deletes_files": false,

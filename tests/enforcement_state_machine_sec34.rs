@@ -13,13 +13,13 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     ExtensionManager, ExtensionPolicy, ExtensionPolicyMode, HostCallContext, HostCallPayload,
     RuntimeRiskActionValue, RuntimeRiskConfig, RuntimeRiskStateLabelValue,
     dispatch_host_call_shared, verify_runtime_risk_ledger_artifact,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 
 // ============================================================================
@@ -969,7 +969,7 @@ fn shadow_mode_vs_enforced_mode_telemetry_comparison() {
 // SEC-7.2: Graduated enforcement rollout with rollback guards
 // ============================================================================
 
-use pi::extensions::{RollbackTrigger, RolloutPhase};
+use ra::extensions::{RollbackTrigger, RolloutPhase};
 
 /// Rollout phase progression: Shadow → `LogOnly` → `EnforceNew` → `EnforceAll`.
 #[test]

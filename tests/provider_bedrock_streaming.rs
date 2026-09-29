@@ -3,12 +3,12 @@
 
 use asupersync::runtime::RuntimeBuilder;
 use futures::StreamExt as _;
-use pi::model::{
+use ra::model::{
     AssistantMessage, ContentBlock, Message, RedactedThinkingContent, StopReason, StreamEvent,
     TextContent, ThinkingContent, ToolResultMessage, UserContent, UserMessage,
 };
-use pi::provider::{BeforeProviderRequestHook, Context, Provider, StreamOptions, ToolDef};
-use pi::providers::bedrock::BedrockProvider;
+use ra::provider::{BeforeProviderRequestHook, Context, Provider, StreamOptions, ToolDef};
+use ra::providers::bedrock::BedrockProvider;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{Read as _, Write as _};
@@ -290,7 +290,7 @@ fn run<T>(future: impl std::future::Future<Output = T>) -> T {
     // This integration test is its own process. Let bounded OS socket/channel
     // guards police the fixtures instead of racing a virtual HTTP timer with
     // the native server thread. No timeout behavior is claimed by these tests.
-    pi::http::client::set_request_timeout_override(0);
+    ra::http::client::set_request_timeout_override(0);
     RuntimeBuilder::current_thread()
         .build()
         .expect("runtime")
@@ -319,7 +319,7 @@ fn options() -> StreamOptions {
     }
 }
 
-fn collect(server: &Server) -> Vec<pi::error::Result<StreamEvent>> {
+fn collect(server: &Server) -> Vec<ra::error::Result<StreamEvent>> {
     run(async {
         BedrockProvider::new("model-a")
             .with_base_url(&server.base)

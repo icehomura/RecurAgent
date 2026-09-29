@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::overlay_system::{
+use ra::overlay_system::{
     OverlayEntry, OverlayKind, OverlayStack, ToastLevel, ToastNotification, ToastQueue,
     WelcomeScreen,
 };

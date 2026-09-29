@@ -6,11 +6,11 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use std::sync::Arc;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -22,7 +22,7 @@ fn load_ext(harness: &common::TestHarness, source: &str) -> ExtensionManager {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

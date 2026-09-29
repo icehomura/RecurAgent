@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-compatibility-doctor-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.compatibility_doctor_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.compatibility_doctor_contract.v1";
 const REQUIRED_CLASS_IDS: &[&str] = &[
     "PKG-unsupported-native-addon",
     "PKG-unresolved-peer-dependency",
@@ -213,7 +213,7 @@ fn validate_diagnostic_contract(contract: &Value) -> ValidationResult<()> {
     )?;
 
     if contract["diagnostic_contract"]["emit_json_schema"]
-        != Value::String("pi.frankennode.compatibility_doctor_diagnostic.v1".to_string())
+        != Value::String("ra.frankennode.compatibility_doctor_diagnostic.v1".to_string())
     {
         return Err("diagnostic_contract.emit_json_schema mismatch".to_string());
     }
@@ -295,7 +295,7 @@ fn validate_remediation_and_workflow_contract(contract: &Value) -> ValidationRes
         return Err("remediation_contract.require_fix_rationale must be true".to_string());
     }
     if contract["remediation_contract"]["export_schema"]
-        != Value::String("pi.frankennode.compatibility_remediation_plan.v1".to_string())
+        != Value::String("ra.frankennode.compatibility_remediation_plan.v1".to_string())
     {
         return Err("remediation_contract.export_schema mismatch".to_string());
     }
@@ -314,7 +314,7 @@ fn validate_remediation_and_workflow_contract(contract: &Value) -> ValidationRes
     )?;
 
     if contract["workflow_contract"]["bundle_schema"]
-        != Value::String("pi.frankennode.compatibility_doctor_bundle.v1".to_string())
+        != Value::String("ra.frankennode.compatibility_doctor_bundle.v1".to_string())
     {
         return Err("workflow_contract.bundle_schema mismatch".to_string());
     }

@@ -13,7 +13,7 @@
       "expected": {
         "content_regex": "(?s).+",
         "details_exact": {
-          "schema": "pi.managed_skill.v1"
+          "schema": "ra.managed_skill.v1"
         }
       }
     },

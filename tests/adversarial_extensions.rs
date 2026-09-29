@@ -18,11 +18,11 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::{PiJsRuntimeConfig, PiJsRuntimeLimits};
-use pi::tools::ToolRegistry;
+use ra::extensions_js::{RaJsRuntimeConfig, RaJsRuntimeLimits};
+use ra::tools::ToolRegistry;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,13 +37,13 @@ fn load_ext(harness: &common::TestHarness, source: &str) -> ExtensionManager {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let mut js_config = PiJsRuntimeConfig {
+    let mut js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
     js_config
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string());
 
     let runtime = common::run_async({
         let manager = manager.clone();
@@ -80,13 +80,13 @@ fn try_load_ext(source: &str) -> Result<(), String> {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let mut js_config = PiJsRuntimeConfig {
+    let mut js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
     js_config
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string());
 
     let runtime = common::run_async({
         let manager = manager.clone();
@@ -123,13 +123,13 @@ fn try_load_extensions(
     std::fs::create_dir_all(cwd).map_err(|err| err.to_string())?;
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], cwd, None));
-    let mut js_config = PiJsRuntimeConfig {
+    let mut js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
     js_config
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string());
 
     let runtime = common::run_async({
         let manager = manager.clone();
@@ -180,9 +180,9 @@ fn eval_adversarial_with_memory_limit(source: &str, memory_limit_bytes: usize) -
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let mut js_config = PiJsRuntimeConfig {
+    let mut js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
-        limits: PiJsRuntimeLimits {
+        limits: RaJsRuntimeLimits {
             memory_limit_bytes: Some(memory_limit_bytes),
             ..Default::default()
         },
@@ -190,7 +190,7 @@ fn eval_adversarial_with_memory_limit(source: &str, memory_limit_bytes: usize) -
     };
     js_config
         .env
-        .insert("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string());
+        .insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string());
 
     let runtime = common::run_async({
         let manager = manager.clone();
@@ -901,7 +901,7 @@ export default function activate(pi) {{
         let tools = Arc::clone(&tools);
         async move {
             JsExtensionRuntimeHandle::start(
-                PiJsRuntimeConfig {
+                RaJsRuntimeConfig {
                     cwd: cwd.display().to_string(),
                     ..Default::default()
                 },
@@ -1837,21 +1837,21 @@ export default function activate(pi) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// T6 — PI_* ENV VAR ALLOW-LIST EDGE CASE
+// T6 — RECUR_AGENT_* ENV VAR ALLOW-LIST EDGE CASE
 //
-// PI_* vars are unconditionally allowed, but the blocklist is checked first.
-// Verify that PI_API_KEY is still blocked by suffix match.
+// RECUR_AGENT_* vars are unconditionally allowed, but the blocklist is checked first.
+// Verify that RECUR_AGENT_API_KEY is still blocked by suffix match.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn t6_pi_api_key_suffix_still_blocked() {
-    // PI_API_KEY matches *_API_KEY suffix — should be blocked even though
-    // PI_* prefix is allowed. Blocklist is checked before the allow-list.
+    // RECUR_AGENT_API_KEY matches *_API_KEY suffix — should be blocked even though
+    // RECUR_AGENT_* prefix is allowed. Blocklist is checked before the allow-list.
     let result = eval_adversarial(
         r#"
 export default function activate(pi) {
   pi.on("agent_start", () => {
-    const key = process.env.PI_API_KEY;
+    const key = process.env.RECUR_AGENT_API_KEY;
     return { result: key === undefined ? "BLOCKED" : "LEAKED:" + key };
   });
 }
@@ -1859,19 +1859,19 @@ export default function activate(pi) {
     );
     assert_eq!(
         result, "BLOCKED",
-        "PI_API_KEY should be blocked by *_API_KEY suffix despite PI_* prefix allow"
+        "RECUR_AGENT_API_KEY should be blocked by *_API_KEY suffix despite RECUR_AGENT_* prefix allow"
     );
 }
 
 #[test]
 fn t6_pi_safe_var_allowed() {
-    // Regular PI_* var that doesn't match any blocklist pattern should be allowed.
+    // Regular RECUR_AGENT_* var that doesn't match any blocklist pattern should be allowed.
     let result = eval_adversarial(
         r#"
 export default function activate(pi) {
   pi.on("agent_start", () => {
-    // PI_TEST_MODE is a legitimate PI_* var
-    const val = process.env.PI_TEST_MODE;
+    // RECUR_AGENT_TEST_MODE is a legitimate RECUR_AGENT_* var
+    const val = process.env.RECUR_AGENT_TEST_MODE;
     // It's allowed but may not be set in this test environment
     return { result: val !== undefined ? "ALLOWED:" + val : "ALLOWED_BUT_UNSET" };
   });
@@ -1880,7 +1880,7 @@ export default function activate(pi) {
     );
     assert!(
         result.starts_with("ALLOWED"),
-        "PI_TEST_MODE (PI_* prefix, no blocklist match) should be allowed, got: {result}"
+        "RECUR_AGENT_TEST_MODE (RECUR_AGENT_* prefix, no blocklist match) should be allowed, got: {result}"
     );
 }
 

@@ -33,15 +33,15 @@ mod common;
 use async_trait::async_trait;
 use common::{TestHarness, run_async};
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall, Usage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -182,7 +182,7 @@ fn write_jsonl_artifacts(harness: &TestHarness, test_name: &str) {
 }
 
 fn cli_binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn isolated_cli_env(harness: &TestHarness) -> BTreeMap<String, String> {
@@ -191,22 +191,22 @@ fn isolated_cli_env(harness: &TestHarness) -> BTreeMap<String, String> {
     let _ = std::fs::create_dir_all(&env_root);
 
     env.insert(
-        "PI_CODING_AGENT_DIR".to_string(),
+        "RECUR_AGENT_DIR".to_string(),
         env_root.join("agent").display().to_string(),
     );
     env.insert(
-        "PI_CONFIG_PATH".to_string(),
+        "RECUR_AGENT_CONFIG_PATH".to_string(),
         env_root.join("settings.json").display().to_string(),
     );
     env.insert(
-        "PI_SESSIONS_DIR".to_string(),
+        "RECUR_AGENT_SESSIONS_DIR".to_string(),
         env_root.join("sessions").display().to_string(),
     );
     env.insert(
-        "PI_PACKAGE_DIR".to_string(),
+        "RECUR_AGENT_PACKAGE_DIR".to_string(),
         env_root.join("packages").display().to_string(),
     );
-    env.insert("PI_TEST_MODE".to_string(), "1".to_string());
+    env.insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
     env
 }
 
@@ -235,8 +235,8 @@ fn run_cli(
     command.env_remove("GROQ_API_KEY");
     command.env_remove("KIMI_API_KEY");
     command.env_remove("AZURE_OPENAI_API_KEY");
-    command.env_remove("PI_OPENROUTER_API_KEY");
-    command.env_remove("PI_AWS_ACCESS_KEY_ID");
+    command.env_remove("RECUR_AGENT_OPENROUTER_API_KEY");
+    command.env_remove("RECUR_AGENT_AWS_ACCESS_KEY_ID");
     command
         .args(args)
         .envs(env.clone())
@@ -1228,8 +1228,8 @@ fn session_persist_reload_messages_survive() {
     // Verify user message content survived
     let has_user_msg = messages.iter().any(|m| match m {
         Message::User(u) => match &u.content {
-            pi::model::UserContent::Text(t) => t.contains("persist me"),
-            pi::model::UserContent::Blocks(blocks) => blocks.iter().any(|b| match b {
+            ra::model::UserContent::Text(t) => t.contains("persist me"),
+            ra::model::UserContent::Blocks(blocks) => blocks.iter().any(|b| match b {
                 ContentBlock::Text(t) => t.text.contains("persist me"),
                 _ => false,
             }),
@@ -1328,7 +1328,7 @@ fn cli_missing_api_key_clear_error() {
     // Ensure no API keys are set
     env.insert("ANTHROPIC_API_KEY".to_string(), String::new());
     env.insert("OPENAI_API_KEY".to_string(), String::new());
-    env.insert("PI_API_KEY".to_string(), String::new());
+    env.insert("RECUR_AGENT_API_KEY".to_string(), String::new());
 
     let result = run_cli(
         &harness,
@@ -1724,8 +1724,8 @@ fn session_unicode_messages_round_trip() {
     // Verify unicode survived
     let has_unicode = messages.iter().any(|m| match m {
         Message::User(u) => match &u.content {
-            pi::model::UserContent::Text(t) => t.contains('\u{1F600}'),
-            pi::model::UserContent::Blocks(blocks) => blocks.iter().any(|b| match b {
+            ra::model::UserContent::Text(t) => t.contains('\u{1F600}'),
+            ra::model::UserContent::Blocks(blocks) => blocks.iter().any(|b| match b {
                 ContentBlock::Text(t) => t.text.contains('\u{1F600}'),
                 _ => false,
             }),

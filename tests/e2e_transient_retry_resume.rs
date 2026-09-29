@@ -4,7 +4,7 @@
 #![recursion_limit = "256"]
 
 //! E2E: auto-retry on a transient connection error must RESUME the turn, not
-//! replay it from the user message (`pi_agent_rust#125`).
+//! replay it from the user message (`recur_agent#125`).
 //!
 //! When a transient connection drop kills a mid-turn provider request — after
 //! one or more tool calls have already executed — the retry must re-issue only
@@ -26,15 +26,15 @@ mod common;
 use async_trait::async_trait;
 use common::run_async;
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall, Usage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::path::Path;
 use std::pin::Pin;
@@ -226,7 +226,7 @@ async fn run_with_retry_driver(
                 let s = err.to_string();
                 retries < max_retries
                     && !err.is_session_persistence()
-                    && (err.is_transient() || pi::error::is_retryable_error(&s, None, None))
+                    && (err.is_transient() || ra::error::is_retryable_error(&s, None, None))
             }
             Ok(msg) => {
                 matches!(msg.stop_reason, StopReason::Error)
@@ -235,7 +235,7 @@ async fn run_with_retry_driver(
                         .error_message
                         .as_deref()
                         .is_some_and(|message| message.contains(Error::SESSION_PERSISTENCE_PREFIX))
-                    && pi::error::is_retryable_error(
+                    && ra::error::is_retryable_error(
                         msg.error_message.as_deref().unwrap_or(""),
                         Some(msg.usage.input),
                         None,

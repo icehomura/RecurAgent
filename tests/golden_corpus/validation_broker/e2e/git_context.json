@@ -1,5 +1,5 @@
 {
-  "schema": "pi.git_context.v1",
+  "schema": "ra.git_context.v1",
   "generated_at": "2026-05-14T08:30:00Z",
   "branch": "main",
   "head": "abc123fixture",

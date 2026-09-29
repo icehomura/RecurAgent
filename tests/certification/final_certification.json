@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.final_certification.v1",
+  "schema": "ra.qa.final_certification.v1",
   "generated_at": "2026-08-04T12:34:04Z",
   "certification_verdict": "FAIL",
   "evidence": [
@@ -7,7 +7,7 @@
       "gate": "non_mock_compliance",
       "bead": "bd-1f42.2.6",
       "status": "PASS",
-      "detail": "Non-mock rubric present: pi.qa.non_mock_rubric.v1",
+      "detail": "Non-mock rubric present: ra.qa.non_mock_rubric.v1",
       "artifact_path": "docs/non-mock-rubric.json",
       "artifact_sha256": "59a18419d4390e3f7262ca2fa85621fd4084791dc1b29cec0c42f698c73ae2d7"
     },

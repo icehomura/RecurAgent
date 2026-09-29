@@ -17,17 +17,17 @@ use asupersync::sync::Mutex;
 use bubbletea::{KeyMsg, KeyType, Message, Model as BubbleteaModel};
 use common::TestHarness;
 use futures::stream;
-use pi::agent::{Agent, AgentConfig};
-use pi::config::Config;
-use pi::extensions::{ExtensionManager, ExtensionUiRequest, ExtensionUiResponse};
-use pi::interactive::{PiApp, PiMsg};
-use pi::keybindings::KeyBindings;
-use pi::model::{StreamEvent, Usage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
-use pi::resources::{ResourceCliOptions, ResourceLoader};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::agent::{Agent, AgentConfig};
+use ra::config::Config;
+use ra::extensions::{ExtensionManager, ExtensionUiRequest, ExtensionUiResponse};
+use ra::interactive::{RaApp, RaMsg};
+use ra::keybindings::KeyBindings;
+use ra::model::{StreamEvent, Usage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
+use ra::resources::{ResourceCliOptions, ResourceLoader};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -67,8 +67,8 @@ impl Provider for DummyProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         Ok(Box::pin(stream::empty()))
     }
@@ -104,7 +104,7 @@ fn dummy_model_entry() -> ModelEntry {
     }
 }
 
-fn build_app(harness: &TestHarness, extensions: Option<ExtensionManager>) -> PiApp {
+fn build_app(harness: &TestHarness, extensions: Option<ExtensionManager>) -> RaApp {
     let cwd = harness.temp_dir().to_path_buf();
     let config = common::hermetic_interactive_config(Config::default());
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -128,7 +128,7 @@ fn build_app(harness: &TestHarness, extensions: Option<ExtensionManager>) -> PiA
     let session = Session::create();
     let session = Arc::new(Mutex::new(session));
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -183,15 +183,15 @@ fn normalize_view(input: &str) -> String {
         .join("\n")
 }
 
-fn view_text(app: &PiApp) -> String {
+fn view_text(app: &RaApp) -> String {
     normalize_view(&BubbleteaModel::view(app))
 }
 
-fn send_pi_msg(app: &mut PiApp, msg: PiMsg) {
+fn send_pi_msg(app: &mut RaApp, msg: RaMsg) {
     BubbleteaModel::update(app, Message::new(msg));
 }
 
-fn send_key(app: &mut PiApp, key: KeyMsg) {
+fn send_key(app: &mut RaApp, key: KeyMsg) {
     BubbleteaModel::update(app, Message::new(key));
 }
 
@@ -220,7 +220,7 @@ fn cap_prompt_request(
 // ===========================================================================
 
 mod permission_store {
-    use pi::permissions::PermissionStore;
+    use ra::permissions::PermissionStore;
 
     #[test]
     fn corrupt_json_returns_error() {
@@ -344,7 +344,7 @@ mod permission_store {
 // ===========================================================================
 
 mod policy_evaluation {
-    use pi::extensions::{ExtensionPolicy, ExtensionPolicyMode, PolicyDecision};
+    use ra::extensions::{ExtensionPolicy, ExtensionPolicyMode, PolicyDecision};
 
     fn default_policy(mode: ExtensionPolicyMode) -> ExtensionPolicy {
         ExtensionPolicy {
@@ -714,7 +714,7 @@ mod tui_prompt {
             "No prompt before request"
         );
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         let view_after = view_text(&app);
         assert!(
@@ -742,7 +742,7 @@ mod tui_prompt {
             }),
         )
         .with_extension_id(Some("attacker-extension".to_string()));
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(forged));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(forged));
 
         let view = view_text(&app);
         assert!(view.contains("Ordinary extension confirm"), "{view}");
@@ -769,7 +769,7 @@ mod tui_prompt {
             }),
         );
         request.extension_id = Some("mutated-extension".to_string());
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(request));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(request));
 
         let view = view_text(&app);
         assert!(view.contains("trusted-extension"), "{view}");
@@ -794,7 +794,7 @@ mod tui_prompt {
                 "message": "before\u{0090}terminal-payload\u{009c}after",
             }),
         );
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(request));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(request));
 
         let rendered = BubbleteaModel::view(&app);
         assert!(!rendered.contains("attacker.invalid"), "{rendered}");
@@ -817,7 +817,7 @@ mod tui_prompt {
         let mut app = build_app(&harness, Some(manager));
 
         // Show the prompt.
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Type some text - it should NOT reach the input field.
         send_key(&mut app, KeyMsg::from_runes(vec!['h', 'e', 'l', 'l', 'o']));
@@ -838,7 +838,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Initial focus is index 0 = "Allow Once".
         let v0 = view_text(&app);
@@ -871,7 +871,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Press Left from index 0 should wrap to index 3 (Deny Always).
         send_key(&mut app, KeyMsg::from_type(KeyType::Left));
@@ -892,7 +892,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Tab should work like Right.
         send_key(&mut app, KeyMsg::from_type(KeyType::Tab));
@@ -911,7 +911,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Focus is on index 0 = "Allow Once". Press Enter.
         send_key(&mut app, KeyMsg::from_type(KeyType::Enter));
@@ -934,7 +934,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Press Escape to deny.
         send_key(&mut app, KeyMsg::from_type(KeyType::Esc));
@@ -954,7 +954,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Navigate to index 2 = "Deny" (Right, Right).
         send_key(&mut app, KeyMsg::from_type(KeyType::Right));
@@ -976,7 +976,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_non_cap_confirm()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_non_cap_confirm()));
 
         let view = view_text(&app);
         // Should NOT show the capability prompt overlay (no Allow Once/Deny Always buttons).
@@ -995,7 +995,7 @@ mod tui_prompt {
         manager.set_ui_sender(ui_tx);
         let mut app = build_app(&harness, Some(manager));
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(make_cap_request()));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(make_cap_request()));
 
         // Press 'l' (vim right) to move focus.
         send_key(&mut app, KeyMsg::from_runes(vec!['l']));
@@ -1046,7 +1046,7 @@ mod prompt_persistence_integration {
             ui_rx.recv(&cx).await.expect("capability request")
         });
 
-        send_pi_msg(&mut app, PiMsg::ExtensionUiRequest(delivered));
+        send_pi_msg(&mut app, RaMsg::ExtensionUiRequest(delivered));
         for key_type in key_types {
             send_key(&mut app, KeyMsg::from_type(*key_type));
         }

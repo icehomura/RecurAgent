@@ -15,11 +15,11 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::agent::{Agent, AgentConfig};
-use pi::model::{Message, StreamEvent, UserContent, UserMessage};
-use pi::provider::{Context, StreamOptions};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::agent::{Agent, AgentConfig};
+use ra::model::{Message, StreamEvent, UserContent, UserMessage};
+use ra::provider::{Context, StreamOptions};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::path::Path;
 use std::pin::Pin;
@@ -54,8 +54,8 @@ fn user_text(text: &str) -> Message {
 }
 
 fn assistant_text(text: &str) -> Message {
-    Message::Assistant(std::sync::Arc::new(pi::model::AssistantMessage {
-        content: vec![pi::model::ContentBlock::Text(pi::model::TextContent::new(
+    Message::Assistant(std::sync::Arc::new(ra::model::AssistantMessage {
+        content: vec![ra::model::ContentBlock::Text(ra::model::TextContent::new(
             text,
         ))],
         ..Default::default()
@@ -67,7 +67,7 @@ struct SummaryProvider;
 
 #[async_trait::async_trait]
 #[allow(clippy::unnecessary_literal_bound)]
-impl pi::provider::Provider for SummaryProvider {
+impl ra::provider::Provider for SummaryProvider {
     fn name(&self) -> &str {
         "summary-stub"
     }
@@ -84,11 +84,11 @@ impl pi::provider::Provider for SummaryProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
-        let message = pi::model::AssistantMessage {
-            content: vec![pi::model::ContentBlock::Text(pi::model::TextContent::new(
+        let message = ra::model::AssistantMessage {
+            content: vec![ra::model::ContentBlock::Text(ra::model::TextContent::new(
                 "REPORT: explored the span and decided things",
             ))],
             ..Default::default()
@@ -99,7 +99,7 @@ impl pi::provider::Provider for SummaryProvider {
                 delta: "REPORT: explored the span and decided things".to_string(),
             }),
             Ok(StreamEvent::Done {
-                reason: pi::model::StopReason::Stop,
+                reason: ra::model::StopReason::Stop,
                 message,
             }),
         ])))
@@ -108,7 +108,7 @@ impl pi::provider::Provider for SummaryProvider {
 
 fn build_agent(root: &Path) -> Agent {
     let provider = Arc::new(SummaryProvider);
-    let tools = ToolRegistry::new(&[], root, None::<&pi::config::Config>);
+    let tools = ToolRegistry::new(&[], root, None::<&ra::config::Config>);
     Agent::new(provider, tools, AgentConfig::default())
 }
 
@@ -123,7 +123,7 @@ fn mark_twenty_turns_rewind_tree_preserved() {
     // Pre-checkpoint context: 2 messages.
     agent.add_message(user_text("foundation one"));
     agent.add_message(user_text("foundation two"));
-    let checkpoint = pi::checkpoint::mark_checkpoint(
+    let checkpoint = ra::checkpoint::mark_checkpoint(
         &mut session,
         "alpha",
         Some("before exploration"),
@@ -143,11 +143,11 @@ fn mark_twenty_turns_rewind_tree_preserved() {
 
     // Rewind: summarize the span (messages 2..42) and collapse it.
     let span: Vec<Message> = agent.messages()[checkpoint.message_count..].to_vec(); // ubs:ignore bounded by construction
-    let settings = pi::compaction::ResolvedCompactionSettings {
+    let settings = ra::compaction::ResolvedCompactionSettings {
         enabled: true,
         ..Default::default()
     };
-    let summary = block_on_local(pi::checkpoint::summarize_span(
+    let summary = block_on_local(ra::checkpoint::summarize_span(
         &span,
         Arc::new(SummaryProvider),
         "test-key",
@@ -156,7 +156,7 @@ fn mark_twenty_turns_rewind_tree_preserved() {
     .expect("summarize");
     assert!(summary.contains("REPORT"));
 
-    let outcome = pi::checkpoint::apply_rewind_to_active(&mut agent, &checkpoint, summary);
+    let outcome = ra::checkpoint::apply_rewind_to_active(&mut agent, &checkpoint, summary);
     harness.log().info(
         "verify",
         format!(
@@ -182,7 +182,7 @@ fn mark_twenty_turns_rewind_tree_preserved() {
     assert!(report_text.contains("REPORT"), "{report_text}");
 
     // The tree kept everything: session entries still include originals.
-    let checkpoint_found = pi::checkpoint::find_checkpoint(&session, Some("alpha")).expect("find");
+    let checkpoint_found = ra::checkpoint::find_checkpoint(&session, Some("alpha")).expect("find");
     assert_eq!(checkpoint_found.name, "alpha");
     session.append_custom_entry(
         "rewind".to_string(),
@@ -218,7 +218,7 @@ fn fresh_resets_stream_state_transcript_untouched() {
         .collect();
     let old_session_id = agent.stream_options().session_id.clone();
 
-    let new_id = pi::checkpoint::fresh_stream_state(&mut agent, &mut session);
+    let new_id = ra::checkpoint::fresh_stream_state(&mut agent, &mut session);
     let after: Vec<String> = agent
         .messages()
         .iter()
@@ -243,26 +243,26 @@ fn retry_preparation_branches_sibling_of_abandoned_turn() {
     let harness = TestHarness::new(case);
 
     let mut session = Session::in_memory();
-    let first_user = session.append_message(pi::session::SessionMessage::from(user_text(
+    let first_user = session.append_message(ra::session::SessionMessage::from(user_text(
         "first question",
     )));
-    let first_answer = session.append_message(pi::session::SessionMessage::from(assistant_text(
+    let first_answer = session.append_message(ra::session::SessionMessage::from(assistant_text(
         "first answer",
     )));
-    let abandoned_turn = session.append_message(pi::session::SessionMessage::from(user_text(
+    let abandoned_turn = session.append_message(ra::session::SessionMessage::from(user_text(
         "second question",
     )));
-    let abandoned_answer = session.append_message(pi::session::SessionMessage::from(
+    let abandoned_answer = session.append_message(ra::session::SessionMessage::from(
         assistant_text("second answer"),
     ));
 
-    let preparation = pi::checkpoint::prepare_retry_branch(&mut session).expect("prepare");
+    let preparation = ra::checkpoint::prepare_retry_branch(&mut session).expect("prepare");
     assert_eq!(preparation.text, "second question");
     assert_eq!(preparation.abandoned_entry_id, abandoned_turn);
 
     // The retried turn must land as a SIBLING of the abandoned turn: same
     // parent (the first answer), never a child of the abandoned response.
-    let retried = session.append_message(pi::session::SessionMessage::from(user_text(
+    let retried = session.append_message(ra::session::SessionMessage::from(user_text(
         "second question, retried",
     )));
     let retried_parent = session
@@ -313,18 +313,18 @@ fn retry_preparation_on_root_turn_resets_leaf() {
     let harness = TestHarness::new(case);
 
     let mut session = Session::in_memory();
-    let root_turn = session.append_message(pi::session::SessionMessage::from(user_text(
+    let root_turn = session.append_message(ra::session::SessionMessage::from(user_text(
         "only question",
     )));
-    let answer = session.append_message(pi::session::SessionMessage::from(assistant_text(
+    let answer = session.append_message(ra::session::SessionMessage::from(assistant_text(
         "only answer",
     )));
 
-    let preparation = pi::checkpoint::prepare_retry_branch(&mut session).expect("prepare");
+    let preparation = ra::checkpoint::prepare_retry_branch(&mut session).expect("prepare");
     assert_eq!(preparation.text, "only question");
     assert_eq!(preparation.abandoned_entry_id, root_turn);
 
-    let retried = session.append_message(pi::session::SessionMessage::from(user_text(
+    let retried = session.append_message(ra::session::SessionMessage::from(user_text(
         "only question, retried",
     )));
     let retried_parent = session
@@ -344,11 +344,11 @@ fn retry_preparation_without_user_turn_is_none() {
     let harness = TestHarness::new(case);
 
     let mut session = Session::in_memory();
-    session.append_message(pi::session::SessionMessage::from(assistant_text(
+    session.append_message(ra::session::SessionMessage::from(assistant_text(
         "unsolicited",
     )));
     assert!(
-        pi::checkpoint::prepare_retry_branch(&mut session).is_none(),
+        ra::checkpoint::prepare_retry_branch(&mut session).is_none(),
         "no user turn to retry"
     );
     finish_case(&harness, case);
@@ -365,30 +365,30 @@ fn retry_plan_save_reopen_keeps_abandoned_turn_as_sibling() {
     let path = temp.path().join("session.jsonl");
     let mut session = Session::create_with_dir(Some(temp.path().join("sessions")));
     session.path = Some(path.clone());
-    session.append_message(pi::session::SessionMessage::from(user_text(
+    session.append_message(ra::session::SessionMessage::from(user_text(
         "first question",
     )));
-    let first_answer = session.append_message(pi::session::SessionMessage::from(assistant_text(
+    let first_answer = session.append_message(ra::session::SessionMessage::from(assistant_text(
         "first answer",
     )));
-    let abandoned = session.append_message(pi::session::SessionMessage::from(user_text(
+    let abandoned = session.append_message(ra::session::SessionMessage::from(user_text(
         "second question",
     )));
-    session.append_message(pi::session::SessionMessage::from(assistant_text(
+    session.append_message(ra::session::SessionMessage::from(assistant_text(
         "second answer",
     )));
     block_on_local(session.save()).expect("baseline save");
 
-    let plan = pi::checkpoint::plan_retry(&session).expect("plan");
+    let plan = ra::checkpoint::plan_retry(&session).expect("plan");
     assert_eq!(plan.abandoned_entry_id, abandoned);
-    pi::checkpoint::apply_retry_plan(&mut session, &plan).expect("apply");
+    ra::checkpoint::apply_retry_plan(&mut session, &plan).expect("apply");
     block_on_local(session.save()).expect("retry save");
 
     let reopened = block_on_local(Session::open(path.to_string_lossy().as_ref())).expect("reopen");
     assert_eq!(reopened.leaf_id(), Some(first_answer.as_str()));
     let retried = {
         let mut live = reopened;
-        let retried = live.append_message(pi::session::SessionMessage::from(user_text(
+        let retried = live.append_message(ra::session::SessionMessage::from(user_text(
             "second question, retried",
         )));
         let parent = live
@@ -406,7 +406,7 @@ fn retry_plan_save_reopen_keeps_abandoned_turn_as_sibling() {
 struct SlowProvider;
 #[async_trait::async_trait]
 #[allow(clippy::unnecessary_literal_bound)]
-impl pi::provider::Provider for SlowProvider {
+impl ra::provider::Provider for SlowProvider {
     fn name(&self) -> &str {
         "slow-stub"
     }
@@ -423,8 +423,8 @@ impl pi::provider::Provider for SlowProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         // Infinite pending stream: the run would never finish without the cap.
         Ok(Box::pin(futures::stream::pending()))
@@ -437,7 +437,7 @@ fn max_time_stops_at_turn_boundary() {
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
     let provider = Arc::new(SlowProvider);
-    let tools = ToolRegistry::new(&[], &root, None::<&pi::config::Config>);
+    let tools = ToolRegistry::new(&[], &root, None::<&ra::config::Config>);
     let config = AgentConfig {
         max_time: Some(std::time::Duration::ZERO),
         ..AgentConfig::default()
@@ -449,7 +449,7 @@ fn max_time_stops_at_turn_boundary() {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.clone()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.clone()),
             _ => None,
         })
         .unwrap_or_default();
@@ -460,7 +460,7 @@ fn max_time_stops_at_turn_boundary() {
         text.contains("time cap reached"),
         "the marker must be returned: {text}"
     );
-    let _ = json!({"schema": "pi.max_time.v1"});
+    let _ = json!({"schema": "ra.max_time.v1"});
     finish_case(&harness, case);
 }
 
@@ -474,15 +474,15 @@ fn rewind_survives_context_rebuild_from_tree() {
     let mut session = Session::in_memory();
 
     // Two foundation turns in the TREE.
-    session.append_message(pi::session::SessionMessage::from(user_text(
+    session.append_message(ra::session::SessionMessage::from(user_text(
         "foundation one",
     )));
-    session.append_message(pi::session::SessionMessage::from(user_text(
+    session.append_message(ra::session::SessionMessage::from(user_text(
         "foundation two",
     )));
 
     // Checkpoint marker, then an exploration span of 6 tree messages.
-    let checkpoint = pi::checkpoint::mark_checkpoint(
+    let checkpoint = ra::checkpoint::mark_checkpoint(
         &mut session,
         "alpha",
         None,
@@ -490,17 +490,17 @@ fn rewind_survives_context_rebuild_from_tree() {
     );
     let checkpoint_entry_id = checkpoint.entry_id.expect("entry id recorded");
     for index in 0..3 {
-        session.append_message(pi::session::SessionMessage::from(user_text(&format!(
+        session.append_message(ra::session::SessionMessage::from(user_text(&format!(
             "exploration {index}"
         ))));
-        session.append_message(pi::session::SessionMessage::from(assistant_text(&format!(
+        session.append_message(ra::session::SessionMessage::from(assistant_text(&format!(
             "reply {index}"
         ))));
     }
 
     // Durable rewind marker referencing the checkpoint entry.
-    let outcome = pi::checkpoint::RewindOutcome {
-        schema: pi::checkpoint::CHECKPOINT_SCHEMA.to_string(),
+    let outcome = ra::checkpoint::RewindOutcome {
+        schema: ra::checkpoint::CHECKPOINT_SCHEMA.to_string(),
         checkpoint: "alpha".to_string(),
         checkpoint_entry_id: Some(checkpoint_entry_id),
         collapsed_messages: 6,
@@ -515,7 +515,7 @@ fn rewind_survives_context_rebuild_from_tree() {
 
     // Rebuild from the tree: foundation survives, exploration collapses
     // into the report, post-rewind turns keep accumulating.
-    session.append_message(pi::session::SessionMessage::from(user_text("after rewind")));
+    session.append_message(ra::session::SessionMessage::from(user_text("after rewind")));
     let rebuilt = session.to_messages_for_current_path();
     let texts: Vec<String> = rebuilt
         .iter()
@@ -541,10 +541,10 @@ fn rewind_survives_context_rebuild_from_tree() {
     // Legacy rewind entries (no checkpointEntryId) must be a no-op, not a
     // panic or a bogus truncation.
     let mut legacy = Session::in_memory();
-    legacy.append_message(pi::session::SessionMessage::from(user_text("only turn")));
+    legacy.append_message(ra::session::SessionMessage::from(user_text("only turn")));
     legacy.append_custom_entry(
         "rewind".to_string(),
-        Some(serde_json::json!({ "schema": "pi.checkpoint.v1", "summary": "s" })),
+        Some(serde_json::json!({ "schema": "ra.checkpoint.v1", "summary": "s" })),
     );
     assert_eq!(legacy.to_messages_for_current_path().len(), 1);
 

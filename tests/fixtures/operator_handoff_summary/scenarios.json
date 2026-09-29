@@ -1,13 +1,13 @@
 {
-  "schema": "pi.operator.handoff_summary_fixtures.v1",
+  "schema": "ra.operator.handoff_summary_fixtures.v1",
   "scenarios": [
     {
       "id": "clean_handoff",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "project": {
-          "name": "pi_agent_rust",
-          "root": "/data/projects/pi_agent_rust"
+          "name": "recur_agent",
+          "root": "/data/projects/recur_agent"
         },
         "git": {
           "branch": "main",
@@ -86,7 +86,7 @@
     {
       "id": "dirty_worktree",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -137,7 +137,7 @@
     {
       "id": "unpushed_commits",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "def5678",
@@ -180,7 +180,7 @@
     {
       "id": "expired_reservations",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -233,7 +233,7 @@
     {
       "id": "stale_evidence",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -288,7 +288,7 @@
     {
       "id": "failed_validation",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -352,7 +352,7 @@
     {
       "id": "completion_audit_pass",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -384,7 +384,7 @@
           "decisions": []
         },
         "completion_audit": {
-          "schema": "pi.completion_audit.v1",
+          "schema": "ra.completion_audit.v1",
           "overall_status": "complete",
           "completion_allowed": true,
           "summary": {
@@ -428,7 +428,7 @@
     {
       "id": "completion_audit_blocked",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -460,7 +460,7 @@
           "decisions": []
         },
         "completion_audit": {
-          "schema": "pi.completion_audit.v1",
+          "schema": "ra.completion_audit.v1",
           "overall_status": "blocked",
           "completion_allowed": false,
           "requirements": [
@@ -499,7 +499,7 @@
     {
       "id": "completion_audit_missing_source",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -550,7 +550,7 @@
     {
       "id": "completion_audit_proxy_only",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",
@@ -582,7 +582,7 @@
           "decisions": []
         },
         "completion_audit": {
-          "schema": "pi.completion_audit.v1",
+          "schema": "ra.completion_audit.v1",
           "overall_status": "incomplete",
           "completion_allowed": false,
           "requirements": [
@@ -620,7 +620,7 @@
     {
       "id": "redaction",
       "input": {
-        "schema": "pi.operator.handoff_summary_input.v1",
+        "schema": "ra.operator.handoff_summary_input.v1",
         "git": {
           "branch": "main",
           "head": "abc1234",

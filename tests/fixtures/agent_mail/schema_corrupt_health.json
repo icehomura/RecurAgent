@@ -21,7 +21,7 @@
     "recovery_lock_active": false
   },
   "registration_token": "super-secret-registration-token",
-  "schema": "pi.agent_mail.robot_status.v1",
+  "schema": "ra.agent_mail.robot_status.v1",
   "semantic_readiness": {
     "detail": "sqlite schema missing required health_check tables: projects, agents, messages, message_recipients",
     "status": "fail"

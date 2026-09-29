@@ -7,7 +7,7 @@
 //! - `unknown`: Cannot determine classification
 //!
 //! Output is verified against `docs/extension-entry-scan.json`; maintainers can
-//! regenerate that file explicitly with `PI_GENERATE_EXT_ENTRY_SCAN=1`.
+//! regenerate that file explicitly with `RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN=1`.
 //!
 //! Bead: bd-2u2s
 
@@ -59,7 +59,7 @@ struct ScanOutput {
 }
 
 fn artifacts_root() -> PathBuf {
-    std::env::var("PI_TEST_ARTIFACTS_ROOT").map_or_else(
+    std::env::var("RECUR_AGENT_TEST_ARTIFACTS_ROOT").map_or_else(
         |_| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("tests")
@@ -429,7 +429,7 @@ fn scan_extension_entry_points() {
     };
 
     // Validate the committed output, or regenerate it only when explicitly requested.
-    let output_path = std::env::var("PI_TEST_ENTRY_SCAN_PATH").map_or_else(
+    let output_path = std::env::var("RECUR_AGENT_TEST_ENTRY_SCAN_PATH").map_or_else(
         |_| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("docs")
@@ -439,12 +439,12 @@ fn scan_extension_entry_points() {
     );
     let json = serde_json::to_string_pretty(&output).expect("serialize scan output");
     let generate = matches!(
-        std::env::var("PI_GENERATE_EXT_ENTRY_SCAN").as_deref(),
+        std::env::var("RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN").as_deref(),
         Ok("1")
     );
     if generate {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        pi::conformance::snapshot::verify_tree_completeness(
+        ra::conformance::snapshot::verify_tree_completeness(
             repo_root,
             "tests/ext_conformance/artifacts",
         )
@@ -461,7 +461,7 @@ fn scan_extension_entry_points() {
         assert_eq!(
             committed, generated,
             "committed extension entry scan is stale; regenerate explicitly with \
-             PI_GENERATE_EXT_ENTRY_SCAN=1 cargo test --test ext_entry_scan \
+             RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN=1 cargo test --test ext_entry_scan \
              scan_extension_entry_points -- --exact"
         );
     }

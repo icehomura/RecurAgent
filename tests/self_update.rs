@@ -1,4 +1,4 @@
-//! Integration tests for verified in-place self-updater (`pi self-update`) (bd-cv653.7.10).
+//! Integration tests for verified in-place self-updater (`ra self-update`) (bd-cv653.7.10).
 
 mod common;
 
@@ -12,10 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::tempdir;
 
-use pi::self_update::{
+use ra::self_update::{
     ChecksumMap, PackageManager, PlatformInfo, SelfUpdateOptions, SelfUpdateStatus, SelfUpdater,
 };
-use pi::version_check::CURRENT_VERSION;
+use ra::version_check::CURRENT_VERSION;
 
 #[test]
 fn test_checksum_verification_fail_closed() {

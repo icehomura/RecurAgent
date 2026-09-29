@@ -10,9 +10,9 @@
 //! - Denylist takes precedence over allowlist
 //! - GET requests cannot include a body
 
-use pi::connectors::http::{HttpConnector, HttpConnectorConfig};
-use pi::connectors::{Connector, HostCallPayload};
-use pi::extensions::HostCallErrorCode;
+use ra::connectors::http::{HttpConnector, HttpConnectorConfig};
+use ra::connectors::{Connector, HostCallPayload};
+use ra::extensions::HostCallErrorCode;
 #[cfg(unix)]
 use serde_json::Value;
 use serde_json::json;
@@ -160,7 +160,7 @@ fn tls_not_required_allows_http() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Loopback HTTP escape hatch (PI_HTTP_ALLOW_LOOPBACK=1)
+// Loopback HTTP escape hatch (RECUR_AGENT_HTTP_ALLOW_LOOPBACK=1)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -177,7 +177,7 @@ fn loopback_http_denied_when_opt_in_unset() {
     let error = result.error.expect("error payload");
     assert_eq!(error.code, HostCallErrorCode::Denied);
     assert!(
-        error.message.contains("PI_HTTP_ALLOW_LOOPBACK"),
+        error.message.contains("RECUR_AGENT_HTTP_ALLOW_LOOPBACK"),
         "denial message should hint at the opt-in: {}",
         error.message
     );
@@ -207,7 +207,7 @@ fn loopback_http_denied_for_non_loopback_even_when_opt_in() {
         error.message
     );
     assert!(
-        !error.message.contains("PI_HTTP_ALLOW_LOOPBACK"),
+        !error.message.contains("RECUR_AGENT_HTTP_ALLOW_LOOPBACK"),
         "non-loopback denial (even with opt-in) must not surface the \
          loopback hint: {}",
         error.message
@@ -238,7 +238,7 @@ fn tls_required_message_omits_loopback_hint_for_non_loopback_hosts() {
         error.message
     );
     assert!(
-        !error.message.contains("PI_HTTP_ALLOW_LOOPBACK"),
+        !error.message.contains("RECUR_AGENT_HTTP_ALLOW_LOOPBACK"),
         "non-loopback denial must not surface the loopback opt-in hint: {}",
         error.message
     );

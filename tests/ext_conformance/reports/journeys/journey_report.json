@@ -31,7 +31,7 @@
   "must_pass_count": 125,
   "pass_rate_pct": 100.0,
   "passed": 125,
-  "schema": "pi.ext.journey_report.v1",
+  "schema": "ra.ext.journey_report.v1",
   "skipped": 0,
   "tested": 125
 }

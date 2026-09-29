@@ -10,8 +10,8 @@ mod common;
 use clap::Parser;
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::provider::StreamOptions;
-use pi::tools::{Tool, ToolOutput, ToolRegistry};
+use ra::provider::StreamOptions;
+use ra::tools::{Tool, ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{Read as _, Write as _};
@@ -26,7 +26,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -59,9 +59,9 @@ fn project_dir(harness: &TestHarness, name: &str) -> std::path::PathBuf {
     dir
 }
 
-fn memory_config(backend: &str) -> pi::config::Config {
-    pi::config::Config {
-        memory: Some(pi::config::MemorySettings {
+fn memory_config(backend: &str) -> ra::config::Config {
+    ra::config::Config {
+        memory: Some(ra::config::MemorySettings {
             backend: Some(backend.to_string()),
         }),
         ..Default::default()
@@ -191,12 +191,12 @@ fn gemini_body(answer: &str, finish: Option<&str>) -> String {
 }
 
 fn reflection_tool(
-    store: Arc<pi::memory::MemoryStore>,
+    store: Arc<ra::memory::MemoryStore>,
     server: &ReflectionServer,
-) -> pi::memory::ReflectTool {
-    let provider = pi::providers::gemini::GeminiProvider::new("reflection-test")
+) -> ra::memory::ReflectTool {
+    let provider = ra::providers::gemini::GeminiProvider::new("reflection-test")
         .with_base_url(&server.base_url);
-    pi::memory::ReflectTool::with_provider_and_options(
+    ra::memory::ReflectTool::with_provider_and_options(
         store,
         Arc::new(provider),
         StreamOptions {
@@ -216,8 +216,8 @@ fn retain_tool_redacts_secrets() {
     let case = "retain_tool_redacts_secrets";
     let harness = TestHarness::new(case);
     let root = project_dir(&harness, "proj");
-    let store = Arc::new(pi::memory::MemoryStore::open(&root).expect("open"));
-    let tool = pi::memory::RetainTool::new(store);
+    let store = Arc::new(ra::memory::MemoryStore::open(&root).expect("open"));
+    let tool = ra::memory::RetainTool::new(store);
     let out = block_on_local(tool.execute(
         "call-1",
         json!({"content": "my api key = sk-abcdefghijklmnopqrstuvwxyz", "kind": "fact"}),
@@ -261,7 +261,7 @@ fn backend_gate_controls_tool_presence() {
             "backend=off must hide {absent}: {off_names:?}"
         );
     }
-    let default = ToolRegistry::new(&["read"], &root, None::<&pi::config::Config>);
+    let default = ToolRegistry::new(&["read"], &root, None::<&ra::config::Config>);
     let default_names: Vec<&str> = default.tools().iter().map(|tool| tool.name()).collect();
     assert!(
         !default_names.contains(&"retain"),
@@ -275,10 +275,10 @@ fn reflect_cites_memory_ids_through_provider_http() {
     let case = "reflect_cites_memory_ids_through_provider_http";
     let harness = TestHarness::new(case);
     let root = project_dir(&harness, "proj");
-    let store = Arc::new(pi::memory::MemoryStore::open(&root).expect("open"));
+    let store = Arc::new(ra::memory::MemoryStore::open(&root).expect("open"));
     let memory = store
         .retain(
-            pi::memory::MemoryKind::Lesson,
+            ra::memory::MemoryKind::Lesson,
             "always run cargo check before committing",
             &[],
             None,
@@ -286,7 +286,7 @@ fn reflect_cites_memory_ids_through_provider_http() {
         .expect("retain");
     let other = store
         .retain(
-            pi::memory::MemoryKind::Lesson,
+            ra::memory::MemoryKind::Lesson,
             "run tests before committing",
             &[],
             None,
@@ -331,10 +331,10 @@ fn reflect_cites_memory_ids_through_provider_http() {
 fn reflect_rejects_truncated_failed_and_invented_citation_responses() {
     let harness = TestHarness::new("reflect_terminal_errors");
     let root = project_dir(&harness, "proj");
-    let store = Arc::new(pi::memory::MemoryStore::open(&root).unwrap());
+    let store = Arc::new(ra::memory::MemoryStore::open(&root).unwrap());
     let memory = store
         .retain(
-            pi::memory::MemoryKind::Fact,
+            ra::memory::MemoryKind::Fact,
             "parser is incremental",
             &[],
             None,
@@ -362,10 +362,10 @@ fn reflect_rejects_truncated_failed_and_invented_citation_responses() {
 fn reflect_redacts_credentials_in_http_failures() {
     let harness = TestHarness::new("reflect_redacted_http_error");
     let root = project_dir(&harness, "proj");
-    let store = Arc::new(pi::memory::MemoryStore::open(&root).unwrap());
+    let store = Arc::new(ra::memory::MemoryStore::open(&root).unwrap());
     store
         .retain(
-            pi::memory::MemoryKind::Fact,
+            ra::memory::MemoryKind::Fact,
             "parser is incremental",
             &[],
             None,
@@ -384,8 +384,8 @@ fn reflect_redacts_credentials_in_http_failures() {
 fn reflect_validates_input_and_skips_provider_resolution_without_sources() {
     let harness = TestHarness::new("reflect_empty_bank");
     let root = project_dir(&harness, "proj");
-    let store = Arc::new(pi::memory::MemoryStore::open(&root).unwrap());
-    let tool = pi::memory::ReflectTool::new(store);
+    let store = Arc::new(ra::memory::MemoryStore::open(&root).unwrap());
+    let tool = ra::memory::ReflectTool::new(store);
     assert!(block_on_local(tool.execute("call-1", json!({"question": "   "}), None)).is_err());
     assert!(
         block_on_local(tool.execute("call-1", json!({"question": "x".repeat(8193)}), None))
@@ -404,10 +404,10 @@ fn cross_instance_persistence_and_tombstones() {
     let harness = TestHarness::new(case);
     let root = project_dir(&harness, "proj");
     let (kept_id, tomb_id) = {
-        let store = pi::memory::MemoryStore::open(&root).expect("open A");
+        let store = ra::memory::MemoryStore::open(&root).expect("open A");
         let kept = store
             .retain(
-                pi::memory::MemoryKind::Fact,
+                ra::memory::MemoryKind::Fact,
                 "the agent loop lives in src/agent.rs",
                 &[],
                 None,
@@ -415,18 +415,18 @@ fn cross_instance_persistence_and_tombstones() {
             .expect("retain kept");
         let tomb = store
             .retain(
-                pi::memory::MemoryKind::Fact,
+                ra::memory::MemoryKind::Fact,
                 "temporary scaffolding note",
                 &[],
                 None,
             )
             .expect("retain tomb");
         store
-            .edit(tomb.id, pi::memory::MemoryEditOp::Invalidate, None)
+            .edit(tomb.id, ra::memory::MemoryEditOp::Invalidate, None)
             .expect("invalidate");
         (kept.id, tomb.id)
     };
-    let store_b = pi::memory::MemoryStore::open(&root).expect("open B");
+    let store_b = ra::memory::MemoryStore::open(&root).expect("open B");
     let hits = store_b.recall("agent loop", None).expect("recall");
     assert!(
         hits.iter().any(|hit| hit.id == kept_id),
@@ -438,7 +438,7 @@ fn cross_instance_persistence_and_tombstones() {
         "tombstone must be excluded: {tomb_hits:?}"
     );
     store_b
-        .edit(tomb_id, pi::memory::MemoryEditOp::Forget, None)
+        .edit(tomb_id, ra::memory::MemoryEditOp::Forget, None)
         .expect("forget");
     let listed = store_b.list(50).expect("list");
     assert!(
@@ -453,10 +453,10 @@ fn startup_injection_includes_mental_model_when_local() {
     let case = "startup_injection_includes_mental_model_when_local";
     let harness = TestHarness::new(case);
     let root = project_dir(&harness, "proj");
-    let store = pi::memory::MemoryStore::open(&root).expect("open");
+    let store = ra::memory::MemoryStore::open(&root).expect("open");
     store
         .retain(
-            pi::memory::MemoryKind::Decision,
+            ra::memory::MemoryKind::Decision,
             "chose fsqlite over rusqlite for the store",
             &[],
             None,
@@ -486,14 +486,14 @@ fn startup_injection_includes_mental_model_when_local() {
     finish_case(&harness, case);
 }
 
-fn build_prompt_for_test(cwd: &Path, config: &pi::config::Config) -> String {
-    let cli = pi::cli::Cli::parse_from(["pi"]);
-    pi::app::build_system_prompt(
+fn build_prompt_for_test(cwd: &Path, config: &ra::config::Config) -> String {
+    let cli = ra::cli::Cli::parse_from(["pi"]);
+    ra::app::build_system_prompt(
         &cli,
         cwd,
         &["read"],
         None,
-        &pi::config::Config::global_dir(),
+        &ra::config::Config::global_dir(),
         cwd,
         false,
         true,

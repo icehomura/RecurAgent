@@ -16,20 +16,20 @@ mod common;
 use async_trait::async_trait;
 use common::{TestHarness, run_async};
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentEvent, AgentSession, SemanticContextBundleInjection};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentEvent, AgentSession, SemanticContextBundleInjection};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall,
     ToolResultMessage, Usage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::semantic_workspace_graph::{
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::semantic_workspace_graph::{
     ContextArtifactCacheScope, ContextBundleBudget, ContextBundleRequest, SemanticContextBundle,
     SemanticContextBundlePlanner, SemanticWorkspaceGraphBuilder,
 };
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -625,7 +625,7 @@ fn write_context_intelligence_workspace(root: &Path) {
     fs::write(
         root.join("docs/evidence/context-intelligence-current.json"),
         r#"{
-  "schema": "pi.context_intelligence.evidence.v1",
+  "schema": "ra.context_intelligence.evidence.v1",
   "generated_at": "2026-05-12T00:00:00Z",
   "overall_verdict": "CERTIFIED",
   "claim_surface": "release_facing",
@@ -636,7 +636,7 @@ fn write_context_intelligence_workspace(root: &Path) {
     fs::write(
         root.join("docs/evidence/dropin-certification-verdict.json"),
         r#"{
-  "schema": "pi.dropin_certification.verdict.v1",
+  "schema": "ra.dropin_certification.verdict.v1",
   "generated_at": "2025-01-01T00:00:00Z",
   "overall_verdict": "CERTIFIED",
   "claim_surface": "release_facing"
@@ -646,7 +646,7 @@ fn write_context_intelligence_workspace(root: &Path) {
     fs::write(
         root.join("docs/evidence/auth-secret-transcript.json"),
         r#"{
-  "schema": "pi.context_intelligence.secret_transcript.v1",
+  "schema": "ra.context_intelligence.secret_transcript.v1",
   "generated_at": "2026-05-12T00:00:00Z",
   "overall_verdict": "CERTIFIED",
   "claim_surface": "operator_evidence",
@@ -717,7 +717,7 @@ fn run_scenario(
             tool_approval: None,
             keyword_settings: None,
             max_time: None,
-            turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+            turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
             approval_state: None,
             bash_settings: None,
             secrets: None,
@@ -870,7 +870,7 @@ fn context_intelligence_no_mock_harness() {
     let planner = SemanticContextBundlePlanner::new(&graph);
     let bundle = planner.plan(&request);
 
-    assert_eq!(bundle.schema, "pi.semantic_context_bundle.v1");
+    assert_eq!(bundle.schema, "ra.semantic_context_bundle.v1");
     assert!(bundle.selected_items.len() <= bundle.budget.max_items);
     assert!(bundle.estimated_bytes <= bundle.budget.max_bytes);
     assert!(bundle.invalidation_policy.cacheable);
@@ -1011,7 +1011,7 @@ fn context_intelligence_no_mock_harness() {
             tool_approval: None,
             keyword_settings: None,
             max_time: None,
-            turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+            turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
             approval_state: None,
             bash_settings: None,
             secrets: None,
@@ -1490,7 +1490,7 @@ fn rpc_partial_tool_call_arguments_grow_during_stream() {
             tool_approval: None,
             keyword_settings: None,
             max_time: None,
-            turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+            turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
             approval_state: None,
             bash_settings: None,
             secrets: None,

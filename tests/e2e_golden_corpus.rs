@@ -1,7 +1,7 @@
 //! Golden corpus test runner (bd-3vraw / DROPIN-152).
 //!
 //! Loads golden transcript fixtures from `tests/golden_corpus/` and verifies
-//! that the `pi` binary produces outputs matching the golden expectations.
+//! that the `ra` binary produces outputs matching the golden expectations.
 //! Each fixture encodes its own VCR cassette, CLI arguments, stdin, and
 //! expected outcomes, making the corpus self-contained and reproducible.
 //!
@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 // Schema types
 // ═══════════════════════════════════════════════════════════════════════
 
-const GOLDEN_SCHEMA: &str = "pi.golden_corpus.v1";
+const GOLDEN_SCHEMA: &str = "ra.golden_corpus.v1";
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
 /// A single golden corpus fixture loaded from JSON.
@@ -99,7 +99,7 @@ struct GoldenTestHarness {
 impl GoldenTestHarness {
     fn new(name: &str) -> Self {
         let harness = TestHarness::new(name);
-        let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+        let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_ra"));
 
         let mut base_env = BTreeMap::new();
         let env_root = harness.temp_path("pi-env");
@@ -109,19 +109,19 @@ impl GoldenTestHarness {
         base_env.insert("HOME".to_string(), env_root.display().to_string());
         base_env.insert("USERPROFILE".to_string(), env_root.display().to_string());
         base_env.insert(
-            "PI_CODING_AGENT_DIR".to_string(),
+            "RECUR_AGENT_DIR".to_string(),
             env_root.join("agent").display().to_string(),
         );
         base_env.insert(
-            "PI_CONFIG_PATH".to_string(),
+            "RECUR_AGENT_CONFIG_PATH".to_string(),
             env_root.join("settings.json").display().to_string(),
         );
         base_env.insert(
-            "PI_SESSIONS_DIR".to_string(),
+            "RECUR_AGENT_SESSIONS_DIR".to_string(),
             env_root.join("sessions").display().to_string(),
         );
         base_env.insert(
-            "PI_PACKAGE_DIR".to_string(),
+            "RECUR_AGENT_PACKAGE_DIR".to_string(),
             env_root.join("packages").display().to_string(),
         );
         base_env.insert("npm_config_audit".to_string(), "false".to_string());
@@ -240,9 +240,12 @@ impl GoldenTestHarness {
             "VCR_CASSETTE_DIR".to_string(),
             cassette_dir.display().to_string(),
         );
-        env.insert("PI_VCR_TEST_NAME".to_string(), cassette_name.to_string());
+        env.insert(
+            "RECUR_AGENT_VCR_TEST_NAME".to_string(),
+            cassette_name.to_string(),
+        );
         env.insert("ANTHROPIC_API_KEY".to_string(), "test-vcr-key".to_string());
-        env.insert("PI_TEST_MODE".to_string(), "1".to_string());
+        env.insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
         env.insert("VCR_DEBUG_BODY".to_string(), "1".to_string());
     }
 
@@ -264,8 +267,8 @@ impl GoldenTestHarness {
         command.env_remove("GROQ_API_KEY");
         command.env_remove("KIMI_API_KEY");
         command.env_remove("AZURE_OPENAI_API_KEY");
-        command.env_remove("PI_OPENROUTER_API_KEY");
-        command.env_remove("PI_AWS_ACCESS_KEY_ID");
+        command.env_remove("RECUR_AGENT_OPENROUTER_API_KEY");
+        command.env_remove("RECUR_AGENT_AWS_ACCESS_KEY_ID");
         command
             .args(args)
             .envs(env)

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "rpc_mode_parse_error_recovery",
   "surface": "rpc_mode",
   "description": "RPC mode recovery: invalid JSON line returns parse error and subsequent valid command still succeeds",

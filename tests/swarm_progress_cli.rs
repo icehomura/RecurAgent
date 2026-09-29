@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use pi::swarm_progress_slo::{
+use ra::swarm_progress_slo::{
     AgentMailHealth, FreshnessState, ProgressSloEvaluationInput, ProgressSloMetrics,
     ProgressSloSourceStatus, ProgressSloTimeWindow, RchPosture, RedactionState, SourceAvailability,
     ValidationBrokerPosture,
@@ -23,7 +23,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn test_workspace(name: &str) -> TestResult<PathBuf> {
@@ -226,7 +226,7 @@ fn swarm_progress_json_stdout_reports_degraded_agent_mail() -> TestResult {
     let report: Value = serde_json::from_slice(&output.stdout)?;
     assert_eq!(
         report.pointer("/schema").and_then(Value::as_str),
-        Some("pi.swarm.progress_slo.v1")
+        Some("ra.swarm.progress_slo.v1")
     );
     assert_eq!(
         report.pointer("/status").and_then(Value::as_str),

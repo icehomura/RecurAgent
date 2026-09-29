@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_stdin_event_stream",
   "surface": "json_mode_stdin",
   "description": "JSON mode with stdin: verifies stdin content is sent and events are correct",

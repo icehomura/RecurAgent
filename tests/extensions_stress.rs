@@ -12,13 +12,13 @@
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, ExtensionPolicy, HostcallReactorConfig,
     JsExtensionLoadSpec, PolicyProfile,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::hostcall_s3_fifo::{S3FifoConfig, S3FifoDecisionKind, S3FifoPolicy};
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::hostcall_s3_fifo::{S3FifoConfig, S3FifoDecisionKind, S3FifoPolicy};
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap};
@@ -68,7 +68,7 @@ const REACTOR_DRAIN_BUDGET: usize = 128;
 fn effective_rss_budget() -> f64 {
     if std::env::var("CI").is_ok()
         || std::env::var("RCH_REQUIRE_REMOTE").is_ok()
-        || std::env::var("PI_PROVIDER_REPLAY_GIT_COMMIT").is_ok()
+        || std::env::var("RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT").is_ok()
         || std::env::var("RCH_TEST_TIMEOUT_SEC").is_ok()
     {
         10.0
@@ -256,8 +256,8 @@ struct HostcallQosStarvationEvidence {
     decision_trace: Vec<HostcallQosDecisionTrace>,
 }
 
-const HOSTCALL_COST_ATTRIBUTION_SCHEMA: &str = "pi.ext.hostcall_cost_attribution.v1";
-const RESOURCE_FIREWALL_MATRIX_SCHEMA: &str = "pi.ext.resource_firewall_matrix.v1";
+const HOSTCALL_COST_ATTRIBUTION_SCHEMA: &str = "ra.ext.hostcall_cost_attribution.v1";
+const RESOURCE_FIREWALL_MATRIX_SCHEMA: &str = "ra.ext.resource_firewall_matrix.v1";
 
 #[derive(Clone, Debug)]
 struct HostcallCostReplayStep {
@@ -598,7 +598,7 @@ fn build_hostcall_qos_starvation_evidence() -> HostcallQosStarvationEvidence {
     };
 
     HostcallQosStarvationEvidence {
-        schema: "pi.ext.hostcall_qos_starvation_regression.v1".to_string(),
+        schema: "ra.ext.hostcall_qos_starvation_regression.v1".to_string(),
         fixture: "one_extension_floods_s3fifo_budget_while_peer_progresses".to_string(),
         verdict: verdict.to_string(),
         starvation_budget_steps: STARVATION_BUDGET_STEPS,
@@ -1631,7 +1631,7 @@ const fn profile_rotation_latency_within_budget(
 }
 
 fn profile_rotation_duration_secs() -> u64 {
-    std::env::var("PI_STRESS_PROFILE_ROTATION_SECS")
+    std::env::var("RECUR_AGENT_STRESS_PROFILE_ROTATION_SECS")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(PROFILE_ROTATION_DURATION_SECS)
@@ -1840,7 +1840,7 @@ fn load_extensions_with_policy(
     let cwd = project_root();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
     let manager = ExtensionManager::new();
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -1849,7 +1849,7 @@ fn load_extensions_with_policy(
         let manager = manager.clone();
         let tools = Arc::clone(&tools);
         async move {
-            pi::extensions::JsExtensionRuntimeHandle::start_with_policy(
+            ra::extensions::JsExtensionRuntimeHandle::start_with_policy(
                 js_config, tools, manager, policy,
             )
             .await
@@ -2019,7 +2019,7 @@ fn write_stress_report(result: &StressResult, duration_secs: u64, ext_names: &[S
     // RSS samples as events
     for sample in &result.rss_samples {
         let entry = json!({
-            "schema": "pi.ext.stress_rss.v1",
+            "schema": "ra.ext.stress_rss.v1",
             "ts": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
             "t_s": sample.t_s,
             "rss_kb": sample.rss_kb,
@@ -2029,7 +2029,7 @@ fn write_stress_report(result: &StressResult, duration_secs: u64, ext_names: &[S
 
     // Summary event
     let summary_entry = json!({
-        "schema": "pi.ext.stress_summary.v1",
+        "schema": "ra.ext.stress_summary.v1",
         "ts": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         "extensions_loaded": result.extensions_loaded,
         "duration_secs": duration_secs,
@@ -2079,7 +2079,7 @@ fn write_stress_report(result: &StressResult, duration_secs: u64, ext_names: &[S
     let stress_correlation_id = std::env::var("CI_CORRELATION_ID")
         .unwrap_or_else(|_| format!("stress-triage-{stress_run_id}"));
     let triage = json!({
-        "schema": "pi.ext.stress_triage.v1",
+        "schema": "ra.ext.stress_triage.v1",
         "run_id": stress_run_id,
         "correlation_id": stress_correlation_id,
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
@@ -2387,7 +2387,7 @@ fn hostcall_qos_starvation_projection_preserves_non_flooding_progress() {
 
     assert_eq!(
         evidence.schema,
-        "pi.ext.hostcall_qos_starvation_regression.v1"
+        "ra.ext.hostcall_qos_starvation_regression.v1"
     );
     assert_eq!(evidence.verdict, "pass");
     assert!(
@@ -2899,7 +2899,7 @@ fn stress_policy_profile_rotation() {
     }
 
     let report = ProfileRotationReport {
-        schema: "pi.ext.stress_profile_rotation.v1".to_string(),
+        schema: "ra.ext.stress_profile_rotation.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         duration_secs_per_profile: duration_secs,
         events_per_sec: PROFILE_ROTATION_EVENTS_PER_SEC,

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.legacy_fixtures.v1",
+  "schema": "ra.ext.legacy_fixtures.v1",
   "extension": {
     "id": "hello",
     "source": {
@@ -44,7 +44,7 @@
       },
       "outputs": {
         "stdout_normalized_jsonl": [
-          "{\"cwd\":\"<PI_MONO_ROOT>\",\"id\":\"<UUID>\",\"timestamp\":\"<TIMESTAMP>\",\"type\":\"session\",\"version\":3}",
+          "{\"cwd\":\"<RECUR_AGENT_MONO_ROOT>\",\"id\":\"<UUID>\",\"timestamp\":\"<TIMESTAMP>\",\"type\":\"session\",\"version\":3}",
           "{\"type\":\"agent_start\"}",
           "{\"type\":\"turn_start\"}",
           "{\"message\":{\"content\":[{\"text\":\"Run scenario scn-hello-001.\",\"type\":\"text\"}],\"role\":\"user\",\"timestamp\":0},\"type\":\"message_start\"}",
@@ -98,14 +98,14 @@
           "scenario_event_name": null,
           "scenario_id": "scn-hello-001",
           "scenario_kind": "tool",
-          "schema": "pi.legacy_capture.v1",
+          "schema": "ra.legacy_capture.v1",
           "seed_session": null,
           "settings_json": "target/legacy_capture/scn-hello-001/<RUN_ID>/agent/settings.json",
           "started_at": "<TIMESTAMP>"
         },
         "capture_log_normalized_jsonl": [
-          "{\"correlation\":{\"extension_id\":\"hello\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-hello-001\"},\"data\":{\"extension_path\":\"packages/coding-agent/examples/extensions/hello.ts\",\"legacy_head\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"manifest_checksum_sha256\":\"6d4d5a97ada168817b9cb3808e51013969c2ce7c2c4d1536b4d630ad3f8b78f1\",\"manifest_commit\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"model\":\"gpt-4o-mini\",\"node_version\":\"v20.19.4\",\"npm_version\":\"9.2.0\",\"pi_mono_root\":\"legacy_pi_mono_code/pi-mono\",\"provider\":\"openai\",\"scenario_command_name\":null,\"scenario_event_name\":null,\"scenario_kind\":\"tool\",\"scenario_provider_id\":null,\"scenario_tool_name\":\"hello\",\"started_at\":\"<TIMESTAMP>\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.start\",\"schema\":\"pi.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:45.341Z\"}",
-          "{\"correlation\":{\"extension_id\":\"hello\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-hello-001\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.finish\",\"schema\":\"pi.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:47.840Z\"}"
+          "{\"correlation\":{\"extension_id\":\"hello\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-hello-001\"},\"data\":{\"extension_path\":\"packages/coding-agent/examples/extensions/hello.ts\",\"legacy_head\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"manifest_checksum_sha256\":\"6d4d5a97ada168817b9cb3808e51013969c2ce7c2c4d1536b4d630ad3f8b78f1\",\"manifest_commit\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"model\":\"gpt-4o-mini\",\"node_version\":\"v20.19.4\",\"npm_version\":\"9.2.0\",\"pi_mono_root\":\"legacy_pi_mono_code/pi-mono\",\"provider\":\"openai\",\"scenario_command_name\":null,\"scenario_event_name\":null,\"scenario_kind\":\"tool\",\"scenario_provider_id\":null,\"scenario_tool_name\":\"hello\",\"started_at\":\"<TIMESTAMP>\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.start\",\"schema\":\"ra.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:45.341Z\"}",
+          "{\"correlation\":{\"extension_id\":\"hello\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-hello-001\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.finish\",\"schema\":\"ra.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:47.840Z\"}"
         ]
       }
     },

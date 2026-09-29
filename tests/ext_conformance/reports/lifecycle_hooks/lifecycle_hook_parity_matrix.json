@@ -95,6 +95,6 @@
     "agent_end"
   ],
   "reproduce_command": "cargo test --test extensions_event_wiring -- lifecycle_hook_parity_matrix_writes_evidence_artifact --nocapture --exact",
-  "schema": "pi.ext.lifecycle_hook_parity_matrix.v1",
+  "schema": "ra.ext.lifecycle_hook_parity_matrix.v1",
   "status": "pass"
 }

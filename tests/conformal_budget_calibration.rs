@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const CONFORMAL_CONTRACT_SCHEMA: &str = "pi.conformal_calibration.contract.v1";
-pub const CONFORMAL_ARTIFACT_SCHEMA: &str = "pi.conformal_calibration.v1";
+pub const CONFORMAL_CONTRACT_SCHEMA: &str = "ra.conformal_calibration.contract.v1";
+pub const CONFORMAL_ARTIFACT_SCHEMA: &str = "ra.conformal_calibration.v1";
 
 #[derive(Debug, Parser)]
 #[command(name = "conformal_budget_calibration")]
@@ -231,7 +231,7 @@ pub fn calibrate_series(
     let (basis_type, justification) = if series.budget_name == "binary_size_mb" {
         (
             "FOLKLORE_POLICY_CHOICE".to_string(),
-            "Retained as hard architectural release policy gate (48 MiB binary budget)".to_string(),
+            "Retained as hard architectural release policy gate (96 MiB binary budget)".to_string(),
         )
     } else {
         (
@@ -363,7 +363,7 @@ pub fn verify_conformal_artifact(
     };
 
     VerificationReport {
-        schema: "pi.conformal_calibration.verification_report.v1".to_string(),
+        schema: "ra.conformal_calibration.verification_report.v1".to_string(),
         status,
         evaluated_budgets: artifact.calibrated_budgets.len(),
         amendment_records: artifact.amendment_dry_runs.len(),
@@ -596,7 +596,7 @@ fn approved_cold_load_amendment_is_hash_bound_and_non_vacuous() -> Result<()> {
     let amendment: serde_json::Value = serde_json::from_str(&fs::read_to_string(amendment_path)?)?;
     assert_eq!(
         amendment.get("schema").and_then(serde_json::Value::as_str),
-        Some("pi.conformal_budget_amendment.v1")
+        Some("ra.conformal_budget_amendment.v1")
     );
     assert_eq!(
         amendment
@@ -707,7 +707,7 @@ fn approved_cold_load_amendment_is_hash_bound_and_non_vacuous() -> Result<()> {
     );
     let series_sha = format!(
         "sha256:{}",
-        pi::package_manager::hex_encode(&Sha256::digest(series_json.as_bytes()))
+        ra::package_manager::hex_encode(&Sha256::digest(series_json.as_bytes()))
     );
     assert_eq!(
         measurement

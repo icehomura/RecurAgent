@@ -13,12 +13,12 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
     PROTOCOL_VERSION, RegisterPayload,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -52,7 +52,7 @@ fn create_manager_with_runtime(
 ) -> Option<(ExtensionManager, JsExtensionRuntimeHandle)> {
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -500,7 +500,7 @@ fn load_10_plus_real_extensions_simultaneously() {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -582,7 +582,7 @@ fn interleaved_events_to_real_extensions_do_not_hang() {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

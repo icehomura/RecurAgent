@@ -11,7 +11,7 @@ import {
 	type LoadedExtensionConfig,
 } from "./types";
 
-export const CONFIG_DIR = path.join(os.homedir(), ".pi", "agent", "extensions", EXTENSION_ID);
+export const CONFIG_DIR = path.join(os.homedir(), ".ra", "agent", "extensions", EXTENSION_ID);
 export const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -101,7 +101,7 @@ function toResponsesCompactApis(value: unknown, fieldPath: string, warnings: str
 }
 
 /**
- * Load extension config. Single source: `~/.pi/agent/extensions/pi-better-compaction/config.json`
+ * Load extension config. Single source: `~/.ra/agent/extensions/pi-better-compaction/config.json`
  * merged over code defaults. A missing file silently yields the defaults.
  */
 export function loadExtensionConfig(configPath: string = CONFIG_PATH): LoadedExtensionConfig {

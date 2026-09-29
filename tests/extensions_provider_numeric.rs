@@ -6,12 +6,12 @@
 #![recursion_limit = "1024"]
 
 use futures::StreamExt;
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::model::{Message, StopReason, StreamEvent, UserContent, UserMessage};
-use pi::provider::{Context, StreamOptions};
-use pi::providers::create_provider;
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::model::{Message, StopReason, StreamEvent, UserContent, UserMessage};
+use ra::provider::{Context, StreamOptions};
+use ra::providers::create_provider;
+use ra::tools::ToolRegistry;
 use std::sync::Arc;
 
 const NUMERIC_PROVIDER: &str = r#"
@@ -56,14 +56,14 @@ fn make_runtime() -> asupersync::runtime::Runtime {
         .expect("runtime build")
 }
 
-async fn run_case(case: &str) -> Vec<Result<StreamEvent, pi::error::Error>> {
+async fn run_case(case: &str) -> Vec<Result<StreamEvent, ra::error::Error>> {
     let dir = tempfile::tempdir().expect("tempdir");
     let entry_path = dir.path().join("numeric.mjs");
     std::fs::write(&entry_path, NUMERIC_PROVIDER).expect("write numeric provider");
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
     let runtime = JsExtensionRuntimeHandle::start(
-        PiJsRuntimeConfig {
+        RaJsRuntimeConfig {
             cwd: dir.path().display().to_string(),
             ..Default::default()
         },

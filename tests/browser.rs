@@ -4,10 +4,10 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::browser::{BrowserSettings, BrowserTool};
-use pi::config::Config;
-use pi::model::ContentBlock;
-use pi::tools::{Tool, ToolRegistry};
+use ra::browser::{BrowserSettings, BrowserTool};
+use ra::config::Config;
+use ra::model::ContentBlock;
+use ra::tools::{Tool, ToolRegistry};
 use serde_json::json;
 use std::fs;
 

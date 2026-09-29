@@ -21,7 +21,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{Tool, ToolOutput, ToolRegistry};
+use ra::tools::{Tool, ToolOutput, ToolRegistry};
 use serde_json::json;
 
 fn first_text(output: &ToolOutput) -> &str {
@@ -29,7 +29,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -65,9 +65,9 @@ fn unique_name(tag: &str) -> String {
     )
 }
 
-fn memory_config(backend: &str) -> pi::config::Config {
-    pi::config::Config {
-        memory: Some(pi::config::MemorySettings {
+fn memory_config(backend: &str) -> ra::config::Config {
+    ra::config::Config {
+        memory: Some(ra::config::MemorySettings {
             backend: Some(backend.to_string()),
         }),
         ..Default::default()
@@ -75,7 +75,7 @@ fn memory_config(backend: &str) -> pi::config::Config {
 }
 
 fn cleanup(name: &str) {
-    let _ = pi::skills_managed::delete(name);
+    let _ = ra::skills_managed::delete(name);
 }
 
 #[test]
@@ -86,8 +86,8 @@ fn promote_then_fresh_discovery_finds_managed_skill() {
     std::fs::create_dir_all(&cwd).expect("cwd");
     let skill_name = unique_name("promote");
 
-    let store = std::sync::Arc::new(pi::memory::MemoryStore::open(&cwd).expect("open"));
-    let learn = pi::tools::LearnTool::new(store);
+    let store = std::sync::Arc::new(ra::memory::MemoryStore::open(&cwd).expect("open"));
+    let learn = ra::tools::LearnTool::new(store);
     let out = block_on_local(learn.execute(
         "call-1",
         json!({
@@ -106,8 +106,8 @@ fn promote_then_fresh_discovery_finds_managed_skill() {
 
     // Fresh discovery against the real agent dir: the managed tier sees it
     // with managed provenance.
-    let agent_dir = pi::config::Config::global_dir();
-    let loaded = pi::resources::load_skills(pi::resources::LoadSkillsOptions {
+    let agent_dir = ra::config::Config::global_dir();
+    let loaded = ra::resources::load_skills(ra::resources::LoadSkillsOptions {
         cwd,
         agent_dir,
         skill_paths: Vec::new(),
@@ -158,7 +158,7 @@ fn user_skill_shadows_managed_with_diagnostic() {
     )
     .expect("write user");
 
-    let loaded = pi::resources::load_skills(pi::resources::LoadSkillsOptions {
+    let loaded = ra::resources::load_skills(ra::resources::LoadSkillsOptions {
         cwd,
         agent_dir,
         skill_paths: Vec::new(),
@@ -199,7 +199,7 @@ fn manage_skill_refuses_unmanaged_content() {
     let name = unique_name("unmanaged");
 
     // Plant user-authored content inside the managed dir WITHOUT the marker.
-    let dir = pi::skills_managed::managed_skills_dir().join(&name);
+    let dir = ra::skills_managed::managed_skills_dir().join(&name);
     std::fs::create_dir_all(&dir).expect("dir");
     std::fs::write(
         dir.join("SKILL.md"),
@@ -207,7 +207,7 @@ fn manage_skill_refuses_unmanaged_content() {
     )
     .expect("write");
 
-    let tool = pi::tools::ManageSkillTool;
+    let tool = ra::tools::ManageSkillTool;
     let out = block_on_local(tool.execute("call-1", json!({"op": "delete", "name": name}), None))
         .expect("execute");
     let text = first_text(&out);
@@ -215,7 +215,7 @@ fn manage_skill_refuses_unmanaged_content() {
         .log()
         .info("verify", format!("delete refusal: {text}"));
     assert!(out.is_error, "refusal must surface as is_error");
-    assert!(text.contains("PI_SKILL_NOT_MANAGED"), "{text}");
+    assert!(text.contains("RECUR_AGENT_SKILL_NOT_MANAGED"), "{text}");
     assert!(
         dir.join("SKILL.md").exists(),
         "user-authored content must survive the refused delete"
@@ -231,15 +231,15 @@ fn unusable_skill_name_falls_back_to_a_lesson_derived_name() {
     let cwd = harness.temp_path("proj");
     std::fs::create_dir_all(&cwd).expect("cwd");
 
-    let store = std::sync::Arc::new(pi::memory::MemoryStore::open(&cwd).expect("open"));
-    let learn = pi::tools::LearnTool::new(std::sync::Arc::clone(&store));
+    let store = std::sync::Arc::new(ra::memory::MemoryStore::open(&cwd).expect("open"));
+    let learn = ra::tools::LearnTool::new(std::sync::Arc::clone(&store));
     // A requested name that slugifies to nothing is unusable, and the learn
     // tool documents that the skill name is then derived from the lesson.
     // (The previous fixture, "INVALID NAME!!", slugifies to the valid
     // "invalid-name" and its "promotion skipped" expectation only held on
     // hosts that already carried a leftover managed skill of that name.)
     let derived = "a-lesson-with-an-impossible-skill-name";
-    let _ = pi::skills_managed::delete(derived);
+    let _ = ra::skills_managed::delete(derived);
     let input = json!({
         "lesson": "a lesson with an impossible skill name",
         "promote": true,
@@ -255,7 +255,7 @@ fn unusable_skill_name_falls_back_to_a_lesson_derived_name() {
         text.contains(&format!("Promoted to managed skill '{derived}'")),
         "the lesson-derived name must be used: {text}"
     );
-    let listed = pi::skills_managed::list().expect("list");
+    let listed = ra::skills_managed::list().expect("list");
     assert!(
         listed.iter().any(|skill| skill.name == derived),
         "derived skill must be written: {listed:?}"
@@ -289,7 +289,7 @@ fn unusable_skill_name_falls_back_to_a_lesson_derived_name() {
 
     let hits = store.recall("impossible skill name", None).expect("recall");
     assert!(!hits.is_empty(), "lesson must be kept: {hits:?}");
-    let _ = pi::skills_managed::delete(derived);
+    let _ = ra::skills_managed::delete(derived);
     finish_case(&harness, case);
 }
 
@@ -329,7 +329,7 @@ fn manage_skill_crud_through_tool() {
     let case = "manage_skill_crud_through_tool";
     let harness = TestHarness::new(case);
     let name = unique_name("crud");
-    let tool = pi::tools::ManageSkillTool;
+    let tool = ra::tools::ManageSkillTool;
 
     let created = block_on_local(tool.execute(
         "call-1",
@@ -360,11 +360,11 @@ fn audit_ledger_records_mutations() {
     let case = "audit_ledger_records_mutations";
     let harness = TestHarness::new(case);
     let name = unique_name("audit");
-    pi::skills_managed::create(&name, "audit skill", "body").expect("create");
-    pi::skills_managed::update(&name, None, "body two").expect("update");
-    pi::skills_managed::delete(&name).expect("delete");
+    ra::skills_managed::create(&name, "audit skill", "body").expect("create");
+    ra::skills_managed::update(&name, None, "body two").expect("update");
+    ra::skills_managed::delete(&name).expect("delete");
 
-    let ledger = pi::skills_managed::managed_skills_dir().join("audit.jsonl");
+    let ledger = ra::skills_managed::managed_skills_dir().join("audit.jsonl");
     let content = std::fs::read_to_string(&ledger).expect("read ledger");
     let ops: Vec<String> = content
         .lines()

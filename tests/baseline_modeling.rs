@@ -10,7 +10,7 @@
 //! approved runtime risk ledger traces, including deterministic artifact
 //! generation, sparse-data fallbacks, and explainable drift detection.
 
-use pi::extensions::{
+use ra::extensions::{
     BaselineDriftReport, RUNTIME_RISK_BASELINE_SCHEMA_VERSION,
     RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION, RUNTIME_RISK_LEDGER_SCHEMA_VERSION,
     RuntimeRiskActionValue, RuntimeRiskBaselineModel, RuntimeRiskExpectedLossEvidence,
@@ -111,7 +111,7 @@ fn make_artifact(entries: Vec<RuntimeRiskLedgerArtifactEntry>) -> RuntimeRiskLed
 fn baseline_schema_is_stable() {
     assert_eq!(
         RUNTIME_RISK_BASELINE_SCHEMA_VERSION,
-        "pi.ext.runtime_risk_baseline.v1"
+        "ra.ext.runtime_risk_baseline.v1"
     );
 }
 

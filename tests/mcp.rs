@@ -23,10 +23,10 @@ mod common;
 use common::TestHarness;
 use common::harness::MockHttpResponse;
 use common::logging::validate_jsonl_v2_only;
-use pi::mcp::McpManager;
-use pi::mcp::transport::McpTransport;
+use ra::mcp::McpManager;
+use ra::mcp::transport::McpTransport;
 #[cfg(feature = "internal-mcp-fixture")]
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -36,7 +36,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -88,10 +88,10 @@ fn block_on_local<Fut: Future>(future: Fut) -> Fut::Output {
     runtime.block_on(future)
 }
 
-/// Write a project `.pi/mcp.json` with one stdio server entry.
+/// Write a project `.ra/mcp.json` with one stdio server entry.
 fn write_project_mcp_config(root: &Path, name: &str, command: &str, env: &[(&str, &str)]) {
-    let dir = root.join(".pi");
-    std::fs::create_dir_all(&dir).expect("create .pi");
+    let dir = root.join(".ra");
+    std::fs::create_dir_all(&dir).expect("create .ra");
     let env_map: serde_json::Map<String, Value> = env
         .iter()
         .map(|(k, v)| ((*k).to_string(), Value::String((*v).to_string())))
@@ -109,8 +109,8 @@ fn write_project_mcp_config(root: &Path, name: &str, command: &str, env: &[(&str
 }
 
 fn write_project_mcp_value(root: &Path, value: &Value) {
-    let dir = root.join(".pi");
-    std::fs::create_dir_all(&dir).expect("create .pi");
+    let dir = root.join(".ra");
+    std::fs::create_dir_all(&dir).expect("create .ra");
     std::fs::write(dir.join("mcp.json"), value.to_string()).expect("write mcp.json");
 }
 
@@ -146,7 +146,7 @@ fn mcp_discovery_flows_into_manager_list() {
         .info("verify", format!("list rows: {}", rows.len()));
     assert_eq!(rows.len(), 2);
     let docs = rows.iter().find(|r| r.name == "docs").expect("docs row");
-    assert_eq!(docs.provenance, ".pi");
+    assert_eq!(docs.provenance, ".ra");
     assert_eq!(docs.trust, "pending");
     assert_eq!(docs.target, "<stdio>");
     let foreign = rows
@@ -163,14 +163,14 @@ fn mcp_discovery_skips_untrusted_project_sources_without_reading_them() {
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
     let global = harness.temp_path("global");
-    std::fs::create_dir_all(root.join(".pi")).expect("create project config dir");
+    std::fs::create_dir_all(root.join(".ra")).expect("create project config dir");
     std::fs::create_dir_all(root.join(".agents")).expect("create agents config dir");
     std::fs::create_dir_all(root.join(".claude")).expect("create foreign config dir");
     std::fs::create_dir_all(&global).expect("create global config dir");
 
     // This malformed high-precedence project file would block global config
     // if discovery opened it. An untrusted workspace must skip it entirely.
-    std::fs::write(root.join(".pi/mcp.json"), "{ malformed")
+    std::fs::write(root.join(".ra/mcp.json"), "{ malformed")
         .expect("write malformed project config");
     std::fs::write(
         root.join(".agents/mcp.json"),
@@ -195,7 +195,7 @@ fn mcp_discovery_skips_untrusted_project_sources_without_reading_them() {
     .expect("write explicit config");
 
     let untrusted =
-        pi::mcp::config::discover(&root, &global, std::slice::from_ref(&explicit), false);
+        ra::mcp::config::discover(&root, &global, std::slice::from_ref(&explicit), false);
     let mut names = untrusted
         .servers
         .iter()
@@ -210,7 +210,7 @@ fn mcp_discovery_skips_untrusted_project_sources_without_reading_them() {
     );
 
     write_project_mcp_config(&root, "project", "project-bin", &[]);
-    let trusted = pi::mcp::config::discover(&root, &global, std::slice::from_ref(&explicit), true);
+    let trusted = ra::mcp::config::discover(&root, &global, std::slice::from_ref(&explicit), true);
     let mut names = trusted
         .servers
         .iter()
@@ -230,11 +230,11 @@ fn mcp_manager_bootstrap_honors_workspace_trust() {
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
     let global = harness.temp_path("global");
-    std::fs::create_dir_all(root.join(".pi")).expect("create project config dir");
+    std::fs::create_dir_all(root.join(".ra")).expect("create project config dir");
     std::fs::create_dir_all(&global).expect("create global config dir");
 
     std::fs::write(
-        root.join(".pi/mcp.json"),
+        root.join(".ra/mcp.json"),
         r#"{"mcpServers":{"project-server":{"command":"project-bin"}}}"#,
     )
     .expect("write project MCP config");
@@ -652,7 +652,7 @@ fn mcp_http_transport_propagates_validated_initialize_state() {
             ),
         ],
     );
-    let transport = pi::mcp::transport::HttpTransport::new(
+    let transport = ra::mcp::transport::HttpTransport::new(
         &format!("{}/mcp", server.base_url()),
         vec![("Authorization".to_string(), "Bearer test".to_string())],
     )
@@ -740,7 +740,7 @@ fn mcp_http_transport_sse_response() {
         },
     );
     let transport =
-        pi::mcp::transport::HttpTransport::new(&format!("{}/sse", server.base_url()), vec![])
+        ra::mcp::transport::HttpTransport::new(&format!("{}/sse", server.base_url()), vec![])
             .expect("transport construction");
     let result = block_on_local(transport.request(
         "tools/list",
@@ -784,7 +784,7 @@ fn mcp_http_transport_handles_ping_before_streamed_response() {
         ],
     );
     let transport =
-        pi::mcp::transport::HttpTransport::new(&format!("{}/sse-ping", server.base_url()), vec![])
+        ra::mcp::transport::HttpTransport::new(&format!("{}/sse-ping", server.base_url()), vec![])
             .expect("transport construction");
     let result = block_on_local(transport.request(
         "tools/list",
@@ -840,7 +840,7 @@ fn mcp_http_transport_initialize_sse_ping_uses_provisional_session() {
             },
         ],
     );
-    let transport = pi::mcp::transport::HttpTransport::new(
+    let transport = ra::mcp::transport::HttpTransport::new(
         &format!("{}/initialize-sse-ping", server.base_url()),
         vec![],
     )
@@ -927,7 +927,7 @@ fn mcp_http_transport_never_replays_after_nested_response_session_404() {
             MockHttpResponse::text(404, "session expired while answering ping"),
         ],
     );
-    let transport = pi::mcp::transport::HttpTransport::new(
+    let transport = ra::mcp::transport::HttpTransport::new(
         &format!("{}/sse-nested-404", server.base_url()),
         vec![],
     )
@@ -1016,7 +1016,7 @@ fn mcp_http_transport_rejects_malformed_streamed_server_params() {
             body: sse_body.as_bytes().to_vec(),
         },
     );
-    let transport = pi::mcp::transport::HttpTransport::new(
+    let transport = ra::mcp::transport::HttpTransport::new(
         &format!("{}/sse-invalid-params", server.base_url()),
         vec![],
     )
@@ -1071,7 +1071,7 @@ fn mcp_http_transport_rejects_result_or_error_on_streamed_method_envelopes() {
     // A malformed streamed envelope retires the transport, so each case gets
     // a fresh transport that consumes the next queued response.
     for label in ["request with result", "notification with error"] {
-        let transport = pi::mcp::transport::HttpTransport::new(
+        let transport = ra::mcp::transport::HttpTransport::new(
             &format!("{}/sse-mixed-envelope", server.base_url()),
             vec![],
         )
@@ -1122,7 +1122,7 @@ fn mcp_http_transport_rejects_non_object_outgoing_params_before_dispatch() {
         ],
     );
     let transport =
-        pi::mcp::transport::HttpTransport::new(&format!("{}/params", server.base_url()), vec![])
+        ra::mcp::transport::HttpTransport::new(&format!("{}/params", server.base_url()), vec![])
             .expect("transport construction");
 
     let request_error = block_on_local(transport.request(
@@ -1186,7 +1186,7 @@ fn mcp_http_transport_distinguishes_request_and_notification_202() {
         ],
     );
     let transport =
-        pi::mcp::transport::HttpTransport::new(&format!("{}/accepted", server.base_url()), vec![])
+        ra::mcp::transport::HttpTransport::new(&format!("{}/accepted", server.base_url()), vec![])
             .expect("transport construction");
 
     let request_error = block_on_local(transport.request(
@@ -1255,7 +1255,7 @@ fn mcp_http_transport_rejects_wrong_media_type_and_nonempty_202() {
         );
     }
 
-    let wrong_media = pi::mcp::transport::HttpTransport::new(
+    let wrong_media = ra::mcp::transport::HttpTransport::new(
         &format!("{}/wrong-media", server.base_url()),
         vec![],
     )
@@ -1271,7 +1271,7 @@ fn mcp_http_transport_rejects_wrong_media_type_and_nonempty_202() {
         "unexpected media-type error: {media_error}"
     );
     for path in ["json-lookalike", "sse-lookalike"] {
-        let transport = pi::mcp::transport::HttpTransport::new(
+        let transport = ra::mcp::transport::HttpTransport::new(
             &format!("{}/{path}", server.base_url()),
             vec![],
         )
@@ -1288,7 +1288,7 @@ fn mcp_http_transport_rejects_wrong_media_type_and_nonempty_202() {
         );
     }
 
-    let nonempty_accepted = pi::mcp::transport::HttpTransport::new(
+    let nonempty_accepted = ra::mcp::transport::HttpTransport::new(
         &format!("{}/nonempty-accepted", server.base_url()),
         vec![],
     )
@@ -1335,7 +1335,7 @@ fn mcp_http_transport_rejects_mismatched_jsonrpc_envelopes() {
     // outcome is unknowable, which retires the transport. A fresh transport
     // per case keeps the queued responses flowing in order.
     for reason in ["JSON version", "JSON id", "SSE id"] {
-        let transport = pi::mcp::transport::HttpTransport::new(
+        let transport = ra::mcp::transport::HttpTransport::new(
             &format!("{}/mismatch", server.base_url()),
             vec![],
         )
@@ -1405,7 +1405,7 @@ fn mcp_http_transport_does_not_retain_invalid_initialize_state() {
             ),
         ],
     );
-    let transport = pi::mcp::transport::HttpTransport::new(
+    let transport = ra::mcp::transport::HttpTransport::new(
         &format!("{}/invalid-initialize", server.base_url()),
         vec![],
     )
@@ -1566,7 +1566,7 @@ fn mcp_http_transport_rejects_unsupported_version_and_invisible_session_id() {
         ("missing-server-info", "serverInfo field"),
         ("invalid-server-info", "name and version"),
     ] {
-        let transport = pi::mcp::transport::HttpTransport::new(
+        let transport = ra::mcp::transport::HttpTransport::new(
             &format!("{}/{path}", server.base_url()),
             vec![],
         )
@@ -1614,7 +1614,7 @@ fn mcp_http_transport_renews_expired_session_once() {
         ],
     );
     let transport =
-        pi::mcp::transport::HttpTransport::new(&format!("{}/renew", server.base_url()), vec![])
+        ra::mcp::transport::HttpTransport::new(&format!("{}/renew", server.base_url()), vec![])
             .expect("transport construction");
     let initialize_params = json!({
         "protocolVersion": "2025-06-18",
@@ -1708,7 +1708,7 @@ fn mcp_http_transport_aborts_after_second_session_404() {
             MockHttpResponse::text(404, "expired again"),
         ],
     );
-    let transport = pi::mcp::transport::HttpTransport::new(
+    let transport = ra::mcp::transport::HttpTransport::new(
         &format!("{}/renew-twice", server.base_url()),
         vec![],
     )
@@ -1769,13 +1769,13 @@ fn mcp_extension_servers_registered_after_startup_sync_into_the_live_session() {
             "id": "late-extension",
             "name": "late-extension",
             "version": "1.0.0",
-            "apiVersion": pi::extensions::PROTOCOL_VERSION,
+            "apiVersion": ra::extensions::PROTOCOL_VERSION,
             "mcpServers": []
         }))
         .expect("serialize native extension"),
     )
     .expect("write native extension");
-    let mut handle = block_on_local(pi::sdk::create_agent_session(pi::sdk::SessionOptions {
+    let mut handle = block_on_local(ra::sdk::create_agent_session(ra::sdk::SessionOptions {
         provider: Some("openai".to_string()),
         model: Some("gpt-4o".to_string()),
         api_key: Some("dummy-key".to_string()),
@@ -1783,11 +1783,11 @@ fn mcp_extension_servers_registered_after_startup_sync_into_the_live_session() {
         no_session: true,
         enabled_tools: Some(Vec::new()),
         extension_paths: vec![extension_path],
-        mcp: Some(pi::sdk::McpSessionOptions {
+        mcp: Some(ra::sdk::McpSessionOptions {
             config_paths: Vec::new(),
             global_dir: Some(global),
         }),
-        ..pi::sdk::SessionOptions::default()
+        ..ra::sdk::SessionOptions::default()
     }))
     .expect("create MCP-enabled SDK session");
     let manager = handle.mcp_manager().expect("SDK-owned MCP manager");
@@ -1866,7 +1866,7 @@ fn mcp_native_descriptor_cannot_claim_another_extensions_id() {
             "id": "spoofer",
             "name": "spoofer",
             "version": "1.0.0",
-            "apiVersion": pi::extensions::PROTOCOL_VERSION,
+            "apiVersion": ra::extensions::PROTOCOL_VERSION,
             "mcpServers": [{
                 "name": "shared",
                 "command": "pi-mcp-spoof-fixture-does-not-exist",
@@ -1876,7 +1876,7 @@ fn mcp_native_descriptor_cannot_claim_another_extensions_id() {
         .expect("serialize native extension"),
     )
     .expect("write native extension");
-    let handle = block_on_local(pi::sdk::create_agent_session(pi::sdk::SessionOptions {
+    let handle = block_on_local(ra::sdk::create_agent_session(ra::sdk::SessionOptions {
         provider: Some("openai".to_string()),
         model: Some("gpt-4o".to_string()),
         api_key: Some("dummy-key".to_string()),
@@ -1884,7 +1884,7 @@ fn mcp_native_descriptor_cannot_claim_another_extensions_id() {
         no_session: true,
         enabled_tools: Some(Vec::new()),
         extension_paths: vec![extension_path],
-        ..pi::sdk::SessionOptions::default()
+        ..ra::sdk::SessionOptions::default()
     }))
     .expect("create SDK session");
     let servers = handle
@@ -1910,10 +1910,10 @@ fn mcp_native_descriptor_cannot_claim_another_extensions_id() {
 #[cfg(feature = "internal-mcp-fixture")]
 mod fixture_lanes {
     use super::*;
-    use pi::mcp::transport::StdioTransport;
+    use ra::mcp::transport::StdioTransport;
     use std::io::Write as _;
 
-    const FIXTURE_BIN: &str = env!("CARGO_BIN_EXE_pi_mcp_fixture");
+    const FIXTURE_BIN: &str = env!("CARGO_BIN_EXE_ra_mcp_fixture");
     const ENV_ALLOWLIST_CHILD_ATTESTATION: &str = "pi-mcp-env-allowlist-child-complete";
 
     fn fixture_manager(harness: &TestHarness, extra_env: &[(&str, &str)]) -> McpManager {
@@ -2013,7 +2013,7 @@ mod fixture_lanes {
 
         // Mount into a real registry: the tool is first-class.
         let mut registry = ToolRegistry::new(&[], &harness.temp_path("."), None);
-        registry.extend(pi::mcp::mount_tools(&std::sync::Arc::new(manager)));
+        registry.extend(ra::mcp::mount_tools(&std::sync::Arc::new(manager)));
         let echo = registry
             .tools()
             .iter()
@@ -2068,13 +2068,13 @@ mod fixture_lanes {
                 "id": "fixture-extension",
                 "name": "fixture-extension",
                 "version": "1.0.0",
-                "apiVersion": pi::extensions::PROTOCOL_VERSION,
+                "apiVersion": ra::extensions::PROTOCOL_VERSION,
                 "mcpServers": [spec, pending_spec]
             }))
             .expect("serialize native extension"),
         )
         .expect("write native extension");
-        let mut handle = block_on_local(pi::sdk::create_agent_session(pi::sdk::SessionOptions {
+        let mut handle = block_on_local(ra::sdk::create_agent_session(ra::sdk::SessionOptions {
             provider: Some("openai".to_string()),
             model: Some("gpt-4o".to_string()),
             api_key: Some("dummy-key".to_string()),
@@ -2082,11 +2082,11 @@ mod fixture_lanes {
             no_session: true,
             enabled_tools: Some(Vec::new()),
             extension_paths: vec![extension_path],
-            mcp: Some(pi::sdk::McpSessionOptions {
+            mcp: Some(ra::sdk::McpSessionOptions {
                 config_paths: Vec::new(),
                 global_dir: Some(global.clone()),
             }),
-            ..pi::sdk::SessionOptions::default()
+            ..ra::sdk::SessionOptions::default()
         }))
         .expect("create MCP-enabled SDK session");
         assert!(
@@ -2117,7 +2117,7 @@ mod fixture_lanes {
         // algorithm used by FTUI `/mcp trust` and `/mcp test`.
         block_on_local(manager.trust("extension-pending"))
             .expect("trust the pending extension server at runtime");
-        let pending_wrappers = pi::mcp::mount_server_tools(&manager, "extension-pending");
+        let pending_wrappers = ra::mcp::mount_server_tools(&manager, "extension-pending");
         assert!(
             !pending_wrappers.is_empty(),
             "the newly trusted server must expose wrappers"
@@ -2146,7 +2146,7 @@ mod fixture_lanes {
             "repeating trust/test must not duplicate live Agent tools"
         );
 
-        let tools = pi::mcp::mount_tools(&manager);
+        let tools = ra::mcp::mount_tools(&manager);
         let echo = tools
             .iter()
             .find(|tool| tool.name() == "mcp__extension-fixture__echo")
@@ -2206,7 +2206,8 @@ mod fixture_lanes {
         ] {
             let case = format!("mcp_stdio_fixture_rejects_{mode}");
             let harness = TestHarness::new(&case);
-            let manager = fixture_manager(&harness, &[("PI_MCP_FIXTURE_RESPONSE_MODE", mode)]);
+            let manager =
+                fixture_manager(&harness, &[("RECUR_AGENT_MCP_FIXTURE_RESPONSE_MODE", mode)]);
             let error = block_on_local(manager.trust("fixture"))
                 .expect_err("hostile fixture response must fail connection");
             assert!(
@@ -2249,8 +2250,8 @@ mod fixture_lanes {
         let transport = fixture_transport(
             &harness,
             &[
-                ("PI_MCP_FIXTURE_RESPONSE_MODE", "no-read"),
-                ("PI_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
+                ("RECUR_AGENT_MCP_FIXTURE_RESPONSE_MODE", "no-read"),
+                ("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
             ],
         );
         let descendant_pid = fixture_descendant_pid(&transport);
@@ -2280,7 +2281,10 @@ mod fixture_lanes {
         let case = "mcp_stdio_close_and_drop_reap_descendant_trees";
         let harness = TestHarness::new(case);
 
-        let closing = fixture_transport(&harness, &[("PI_MCP_FIXTURE_SPAWN_DESCENDANT", "1")]);
+        let closing = fixture_transport(
+            &harness,
+            &[("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT", "1")],
+        );
         let closing_descendant = fixture_descendant_pid(&closing);
         block_on_local(closing.close());
         assert!(
@@ -2291,8 +2295,8 @@ mod fixture_lanes {
         let dropping = fixture_transport(
             &harness,
             &[
-                ("PI_MCP_FIXTURE_RESPONSE_MODE", "no-read"),
-                ("PI_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
+                ("RECUR_AGENT_MCP_FIXTURE_RESPONSE_MODE", "no-read"),
+                ("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
             ],
         );
         let dropping_descendant = fixture_descendant_pid(&dropping);
@@ -2309,7 +2313,10 @@ mod fixture_lanes {
         let case = "mcp_stdio_dropped_request_and_close_futures_reap_descendant_trees";
         let harness = TestHarness::new(case);
 
-        let requesting = fixture_transport(&harness, &[("PI_MCP_FIXTURE_SPAWN_DESCENDANT", "1")]);
+        let requesting = fixture_transport(
+            &harness,
+            &[("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT", "1")],
+        );
         let requesting_descendant = fixture_descendant_pid(&requesting);
         block_on_local(async {
             let request = Box::pin(requesting.request(
@@ -2345,14 +2352,14 @@ mod fixture_lanes {
         let closing = fixture_transport(
             &harness,
             &[
-                ("PI_MCP_FIXTURE_RESPONSE_MODE", "no-read"),
-                ("PI_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
+                ("RECUR_AGENT_MCP_FIXTURE_RESPONSE_MODE", "no-read"),
+                ("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
             ],
         );
         let closing_descendant = fixture_descendant_pid(&closing);
         block_on_local(async {
             let close = Box::pin(closing.close());
-            let cx = pi::agent_cx::AgentCx::for_current_or_request();
+            let cx = ra::agent_cx::AgentCx::for_current_or_request();
             let now = cx
                 .cx()
                 .timer_driver()
@@ -2384,9 +2391,9 @@ mod fixture_lanes {
         let transport = fixture_transport(
             &harness,
             &[
-                ("PI_MCP_FIXTURE_RESPONSE_MODE", "root-exit"),
-                ("PI_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
-                ("PI_MCP_FIXTURE_DESCENDANT_INHERIT_OUTPUT", "1"),
+                ("RECUR_AGENT_MCP_FIXTURE_RESPONSE_MODE", "root-exit"),
+                ("RECUR_AGENT_MCP_FIXTURE_SPAWN_DESCENDANT", "1"),
+                ("RECUR_AGENT_MCP_FIXTURE_DESCENDANT_INHERIT_OUTPUT", "1"),
             ],
         );
         let descendant_pid = fixture_descendant_pid(&transport);
@@ -2434,14 +2441,14 @@ mod fixture_lanes {
 
     #[test]
     fn mcp_stdio_env_allowlist_proven() {
-        if std::env::var_os("PI_MCP_SECRET_MARKER").is_none() {
+        if std::env::var_os("RECUR_AGENT_MCP_SECRET_MARKER").is_none() {
             let output = std::process::Command::new(
                 std::env::current_exe().expect("current integration-test executable"),
             )
             .arg("--exact")
             .arg("fixture_lanes::mcp_stdio_env_allowlist_proven")
             .arg("--nocapture")
-            .env("PI_MCP_SECRET_MARKER", "controlled-parent-secret")
+            .env("RECUR_AGENT_MCP_SECRET_MARKER", "controlled-parent-secret")
             .output()
             .expect("launch controlled env-allowlist child test");
             assert!(
@@ -2468,7 +2475,7 @@ mod fixture_lanes {
         let report: Value = serde_json::from_str(&text).expect("env_probe JSON");
         assert_eq!(report["PATH"], true, "allowlisted PATH must pass through");
         assert_eq!(
-            report["PI_MCP_SECRET_MARKER"], false,
+            report["RECUR_AGENT_MCP_SECRET_MARKER"], false,
             "ambient secret markers must not leak to servers"
         );
         assert_eq!(report["AWS_SECRET_ACCESS_KEY"], false);
@@ -2483,7 +2490,7 @@ mod fixture_lanes {
         // Crash after request 3: initialize(1), tools/list(2), first echo(3)
         // succeed; the second echo hits the dying process. Pi reconnects, but
         // must not replay a call whose delivery cannot be known.
-        let manager = fixture_manager(&harness, &[("PI_MCP_FIXTURE_CRASH_AFTER", "3")]);
+        let manager = fixture_manager(&harness, &[("RECUR_AGENT_MCP_FIXTURE_CRASH_AFTER", "3")]);
         block_on_local(manager.trust("fixture")).expect("trust");
 
         let first = block_on_local(manager.call_tool("fixture", "echo", json!({"text": "one"})))
@@ -2525,7 +2532,7 @@ mod fixture_lanes {
         let harness = TestHarness::new(case);
         // Crash on the FIRST request (initialize): every connect attempt
         // fails the handshake — a crash loop that engages the budget.
-        let manager = fixture_manager(&harness, &[("PI_MCP_FIXTURE_CRASH_AFTER", "0")]);
+        let manager = fixture_manager(&harness, &[("RECUR_AGENT_MCP_FIXTURE_CRASH_AFTER", "0")]);
 
         // Attempt 1: spawn + handshake fails; count=1, backoff armed (+2s).
         let err = block_on_local(manager.trust("fixture"))

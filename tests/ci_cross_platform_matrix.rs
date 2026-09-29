@@ -11,12 +11,12 @@
 //!   cargo test --test `ci_cross_platform_matrix` -- --nocapture
 //!
 //! Regenerate the tracked report for the current platform explicitly with:
-//!   `PI_GENERATE_CROSS_PLATFORM_MATRIX=1 cargo test --test ci_cross_platform_matrix cross_platform_matrix -- --exact --nocapture`
+//!   `RECUR_AGENT_GENERATE_CROSS_PLATFORM_MATRIX=1 cargo test --test ci_cross_platform_matrix cross_platform_matrix -- --exact --nocapture`
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-const GENERATE_CROSS_PLATFORM_MATRIX_ENV: &str = "PI_GENERATE_CROSS_PLATFORM_MATRIX";
+const GENERATE_CROSS_PLATFORM_MATRIX_ENV: &str = "RECUR_AGENT_GENERATE_CROSS_PLATFORM_MATRIX";
 
 fn cross_platform_matrix_generation_enabled(raw: Option<&str>) -> bool {
     raw == Some("1")
@@ -403,7 +403,7 @@ fn run_platform_checks() -> Vec<PlatformCheck> {
 /// Define the merge policy.
 fn merge_policy() -> MergePolicy {
     MergePolicy {
-        description: "Cross-platform merge policy for pi_agent_rust CI".to_string(),
+        description: "Cross-platform merge policy for recur_agent CI".to_string(),
         required_platforms: vec!["linux".to_string()],
         informational_platforms: vec!["macos".to_string(), "windows".to_string()],
         rules: vec![
@@ -516,7 +516,7 @@ fn cross_platform_matrix() {
     });
 
     let report = CrossPlatformReport {
-        schema: "pi.ci.cross_platform_matrix.v1".to_string(),
+        schema: "ra.ci.cross_platform_matrix.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         platform: platform.to_string(),
         platform_details,
@@ -548,7 +548,7 @@ fn cross_platform_matrix() {
     let mut event_lines: Vec<String> = Vec::new();
     for check in &checks {
         let line = serde_json::json!({
-            "schema": "pi.ci.platform_check_event.v1",
+            "schema": "ra.ci.platform_check_event.v1",
             "check_id": check.id,
             "platform": check.platform,
             "status": check.status,
@@ -709,7 +709,7 @@ fn cross_platform_report_schema() {
 
     assert_eq!(
         val.get("schema").and_then(Value::as_str),
-        Some("pi.ci.cross_platform_matrix.v1"),
+        Some("ra.ci.cross_platform_matrix.v1"),
         "Platform report must have correct schema"
     );
 

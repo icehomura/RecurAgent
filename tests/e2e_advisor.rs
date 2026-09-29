@@ -49,7 +49,7 @@ fn text_sse_body(text: &str) -> String {
 
 fn build_binary(harness: &TestHarness) -> std::path::PathBuf {
     let _ = harness;
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 struct PiEnv {
@@ -90,11 +90,11 @@ impl PiEnv {
         let mut command = Command::new(binary);
         command
             .env("HOME", self.root.join("home"))
-            .env("PI_CODING_AGENT_DIR", self.root.join("agent"))
-            .env("PI_CONFIG_PATH", self.root.join("settings.json"))
-            .env("PI_SESSIONS_DIR", self.root.join("sessions"))
-            .env("PI_PACKAGE_DIR", self.root.join("packages"))
-            .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+            .env("RECUR_AGENT_DIR", self.root.join("agent"))
+            .env("RECUR_AGENT_CONFIG_PATH", self.root.join("settings.json"))
+            .env("RECUR_AGENT_SESSIONS_DIR", self.root.join("sessions"))
+            .env("RECUR_AGENT_PACKAGE_DIR", self.root.join("packages"))
+            .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
             // --print mode drains piped stdin to EOF before starting the turn;
             // nothing writes to it here, so a piped-but-open stdin deadlocks.
             .stdin(Stdio::null())

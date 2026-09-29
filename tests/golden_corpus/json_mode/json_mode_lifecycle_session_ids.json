@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_lifecycle_session_ids",
   "surface": "json_mode",
   "description": "JSON mode: verify sessionId is consistent across all events and messages array in agent_end",

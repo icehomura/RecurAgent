@@ -20,18 +20,18 @@
 mod common;
 
 use common::TestHarness;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::auth::AuthStorage;
-use pi::config::Config;
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::auth::AuthStorage;
+use ra::config::Config;
+use ra::model::{
     AssistantMessage, ContentBlock, StopReason, TextContent, ToolCall, Usage, UserContent,
 };
-use pi::provider::Provider;
-use pi::providers::openai::OpenAIProvider;
-use pi::resources::ResourceLoader;
-use pi::rpc::{RpcOptions, run};
-use pi::session::{AutosaveDurabilityMode, Session, SessionEntry, SessionMessage};
-use pi::tools::ToolRegistry;
+use ra::provider::Provider;
+use ra::providers::openai::OpenAIProvider;
+use ra::resources::ResourceLoader;
+use ra::rpc::{RpcOptions, run};
+use ra::session::{AutosaveDurabilityMode, Session, SessionEntry, SessionMessage};
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -99,7 +99,7 @@ fn setup_rpc(
 ) -> (
     asupersync::channel::mpsc::Sender<String>,
     Arc<Mutex<Receiver<String>>>,
-    asupersync::runtime::JoinHandle<pi::error::Result<()>>,
+    asupersync::runtime::JoinHandle<ra::error::Result<()>>,
 ) {
     setup_rpc_with_save(session, runtime_handle, false)
 }
@@ -114,14 +114,14 @@ fn setup_rpc_with_save(
 ) -> (
     asupersync::channel::mpsc::Sender<String>,
     Arc<Mutex<Receiver<String>>>,
-    asupersync::runtime::JoinHandle<pi::error::Result<()>>,
+    asupersync::runtime::JoinHandle<ra::error::Result<()>>,
 ) {
     let session = Arc::new(asupersync::sync::Mutex::new(session));
     let agent_session = AgentSession::new(
         dummy_agent(),
         session,
         save_enabled,
-        pi::compaction::ResolvedCompactionSettings::default(),
+        ra::compaction::ResolvedCompactionSettings::default(),
     );
 
     let auth_dir = tempfile::tempdir().unwrap();

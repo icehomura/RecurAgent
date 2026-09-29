@@ -6,10 +6,10 @@
 
 mod common;
 
-use pi::conformance_shapes::*;
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::conformance_shapes::*;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -56,14 +56,20 @@ fn deterministic_env(cwd: &Path, home: &Path) -> HashMap<String, String> {
     let home = home.to_string_lossy().into_owned();
     let mut env = HashMap::new();
     env.insert(
-        "PI_DETERMINISTIC_TIME_MS".to_string(),
+        "RECUR_AGENT_DETERMINISTIC_TIME_MS".to_string(),
         "1700000000000".to_string(),
     );
-    env.insert("PI_DETERMINISTIC_TIME_STEP_MS".to_string(), "1".to_string());
-    env.insert("PI_DETERMINISTIC_CWD".to_string(), cwd);
-    env.insert("PI_DETERMINISTIC_HOME".to_string(), home.clone());
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS".to_string(),
+        "1".to_string(),
+    );
+    env.insert("RECUR_AGENT_DETERMINISTIC_CWD".to_string(), cwd);
+    env.insert("RECUR_AGENT_DETERMINISTIC_HOME".to_string(), home.clone());
     env.insert("HOME".to_string(), home);
-    env.insert("PI_DETERMINISTIC_RANDOM".to_string(), "0.5".to_string());
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_RANDOM".to_string(),
+        "0.5".to_string(),
+    );
     env
 }
 
@@ -100,7 +106,7 @@ fn load_and_snapshot(
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
 
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.to_string_lossy().into_owned(),
         env: deterministic_env(&cwd, &home),
         disk_cache_dir: Some(module_cache),

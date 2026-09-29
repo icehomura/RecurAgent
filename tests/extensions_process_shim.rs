@@ -7,18 +7,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use pi::extensions_js::{HostcallKind, PiJsRuntime, PiJsRuntimeConfig, is_env_var_allowed};
-use pi::scheduler::DeterministicClock;
+use ra::extensions_js::{HostcallKind, RaJsRuntime, RaJsRuntimeConfig, is_env_var_allowed};
+use ra::scheduler::DeterministicClock;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-fn config_with_env(env: Vec<(&str, &str)>) -> PiJsRuntimeConfig {
+fn config_with_env(env: Vec<(&str, &str)>) -> RaJsRuntimeConfig {
     let mut env: HashMap<String, String> = env
         .into_iter()
         .map(|(key, value)| (key.to_string(), value.to_string()))
         .collect();
-    env.insert("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string());
-    PiJsRuntimeConfig {
+    env.insert("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string());
+    RaJsRuntimeConfig {
         cwd: "/test".to_string(),
         env,
         deny_env: false,
@@ -26,10 +26,10 @@ fn config_with_env(env: Vec<(&str, &str)>) -> PiJsRuntimeConfig {
     }
 }
 
-fn default_config() -> PiJsRuntimeConfig {
+fn default_config() -> RaJsRuntimeConfig {
     let env: HashMap<String, String> =
-        HashMap::from([("PI_EXT_COMPAT_SCAN".to_string(), "0".to_string())]);
-    PiJsRuntimeConfig {
+        HashMap::from([("RECUR_AGENT_EXT_COMPAT_SCAN".to_string(), "0".to_string())]);
+    RaJsRuntimeConfig {
         cwd: "/test".to_string(),
         env,
         ..Default::default()
@@ -50,10 +50,10 @@ fn is_env_var_allowed_permits_common_vars() {
 #[test]
 fn is_env_var_allowed_permits_pi_prefix() {
     for key in &[
-        "PI_CONFIG",
-        "PI_IMAGE_SAVE_MODE",
-        "PI_PLATFORM",
-        "PI_TARGET_ARCH",
+        "RECUR_AGENT_CONFIG",
+        "RECUR_AGENT_IMAGE_SAVE_MODE",
+        "RECUR_AGENT_PLATFORM",
+        "RECUR_AGENT_TARGET_ARCH",
     ] {
         assert!(is_env_var_allowed(key), "{key} should be allowed");
     }
@@ -74,9 +74,9 @@ fn is_env_var_allowed_blocks_case_variants_of_sensitive_keys() {
 #[test]
 fn is_env_var_allowed_blocks_pi_prefixed_secret_like_keys() {
     for key in &[
-        "PI_OPENAI_API_KEY",
-        "PI_DEPLOY_SECRET",
-        "PI_AWS_SECRET_ACCESS_KEY",
+        "RECUR_AGENT_OPENAI_API_KEY",
+        "RECUR_AGENT_DEPLOY_SECRET",
+        "RECUR_AGENT_AWS_SECRET_ACCESS_KEY",
     ] {
         assert!(!is_env_var_allowed(key), "{key} should be blocked");
     }
@@ -142,7 +142,7 @@ fn pijs_process_env_path_now_accessible() {
             ("ANTHROPIC_API_KEY", "sk-secret-123"),
         ]);
         let runtime =
-            PiJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
+            RaJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
                 .await
                 .expect("create runtime");
 
@@ -182,7 +182,7 @@ fn pijs_process_env_write_does_not_mutate() {
     futures::executor::block_on(async {
         let config = config_with_env(vec![("HOME", "/home/test")]);
         let runtime =
-            PiJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
+            RaJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
                 .await
                 .expect("create runtime");
 
@@ -205,7 +205,7 @@ fn pijs_process_env_write_does_not_mutate() {
 #[test]
 fn pijs_process_stdout_write_routes_to_console() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -233,7 +233,7 @@ fn pijs_process_stdout_write_routes_to_console() {
 #[test]
 fn pijs_process_exit_signals_shutdown() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -272,7 +272,7 @@ fn pijs_process_exit_signals_shutdown() {
 #[test]
 fn pijs_process_exit_fires_listeners() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -305,7 +305,7 @@ fn pijs_process_exit_fires_listeners() {
 #[test]
 fn pijs_process_event_emitter_api() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -387,7 +387,7 @@ fn pijs_process_event_emitter_api() {
 fn pijs_process_hrtime_returns_real_values() {
     futures::executor::block_on(async {
         let clock = Arc::new(DeterministicClock::new(5000));
-        let runtime = PiJsRuntime::with_clock_and_config(Arc::clone(&clock), default_config())
+        let runtime = RaJsRuntime::with_clock_and_config(Arc::clone(&clock), default_config())
             .await
             .expect("create runtime");
 
@@ -415,7 +415,7 @@ fn pijs_process_hrtime_returns_real_values() {
 fn pijs_process_hrtime_diff() {
     futures::executor::block_on(async {
         let clock = Arc::new(DeterministicClock::new(3500));
-        let runtime = PiJsRuntime::with_clock_and_config(Arc::clone(&clock), default_config())
+        let runtime = RaJsRuntime::with_clock_and_config(Arc::clone(&clock), default_config())
             .await
             .expect("create runtime");
 
@@ -440,7 +440,7 @@ fn pijs_process_hrtime_diff() {
 #[test]
 fn pijs_process_arch_and_platform() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -476,7 +476,7 @@ fn pijs_process_arch_and_platform() {
 #[test]
 fn pijs_process_execpath_and_title() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -509,7 +509,7 @@ fn pijs_process_execpath_and_title() {
 fn pijs_process_uptime_and_memory() {
     futures::executor::block_on(async {
         let clock = Arc::new(DeterministicClock::new(10_000));
-        let runtime = PiJsRuntime::with_clock_and_config(Arc::clone(&clock), default_config())
+        let runtime = RaJsRuntime::with_clock_and_config(Arc::clone(&clock), default_config())
             .await
             .expect("create runtime");
 
@@ -547,7 +547,7 @@ fn pijs_process_uptime_and_memory() {
 #[test]
 fn pijs_process_chdir_throws() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -576,7 +576,7 @@ fn pijs_process_chdir_throws() {
 #[test]
 fn pijs_process_kill_throws_enosys() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -605,7 +605,7 @@ fn pijs_process_kill_throws_enosys() {
 #[test]
 fn pijs_process_emit_warning() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -625,7 +625,7 @@ fn pijs_process_env_has_operator() {
     futures::executor::block_on(async {
         let config = config_with_env(vec![("HOME", "/home/test")]);
         let runtime =
-            PiJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
+            RaJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
                 .await
                 .expect("create runtime");
 
@@ -657,7 +657,7 @@ fn pijs_process_env_has_operator() {
 #[test]
 fn pijs_process_release_and_config() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -690,7 +690,7 @@ fn pijs_process_release_and_config() {
 #[test]
 fn pijs_node_process_module_exports_enhanced() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )

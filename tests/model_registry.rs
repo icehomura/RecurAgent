@@ -12,8 +12,8 @@
 mod common;
 
 use common::harness::TestHarness;
-use pi::auth::AuthStorage;
-use pi::models::{ModelRegistry, default_models_path, model_requires_configured_credential};
+use ra::auth::AuthStorage;
+use ra::models::{ModelRegistry, default_models_path, model_requires_configured_credential};
 
 // ============================================================================
 // Built-in Models Tests

@@ -4,7 +4,7 @@
 //! Verifies the `SecurityAlert` types, alert stream recording, artifact
 //! export, and category/severity classification.
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionManager, RuntimeRiskStateLabelValue, SECURITY_ALERT_SCHEMA_VERSION, SecurityAlert,
     SecurityAlertAction, SecurityAlertArtifact, SecurityAlertCategory, SecurityAlertCategoryCounts,
     SecurityAlertSeverity, SecurityAlertSeverityCounts,
@@ -444,7 +444,7 @@ fn empty_manager_exports_empty_artifact() {
 
 #[test]
 fn schema_version_is_stable() {
-    assert_eq!(SECURITY_ALERT_SCHEMA_VERSION, "pi.ext.security_alert.v1");
+    assert_eq!(SECURITY_ALERT_SCHEMA_VERSION, "ra.ext.security_alert.v1");
 }
 
 // ==========================================================================

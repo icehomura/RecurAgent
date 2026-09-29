@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-multi-tier-execution-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.multi_tier_execution_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.multi_tier_execution_contract.v1";
 const REQUIRED_TIER_IDS: &[&str] = &[
     "tier_interp_baseline",
     "tier_superinstruction_fused",

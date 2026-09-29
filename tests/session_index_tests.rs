@@ -6,9 +6,9 @@ mod common;
 
 use asupersync::runtime::RuntimeBuilder;
 use common::TestHarness;
-use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
-use pi::session::{Session, SessionHeader, SessionMessage};
-use pi::session_index::SessionIndex;
+use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
+use ra::session::{Session, SessionHeader, SessionMessage};
+use ra::session_index::SessionIndex;
 use std::fs::{self, File};
 use std::io::Write;
 use std::time::Duration;
@@ -217,7 +217,7 @@ fn list_sessions_returns_newest_first() {
         let harness = TestHarness::new("list_sessions_returns_newest_first");
         let sessions_root = harness.temp_path("sessions");
         let cwd = harness.temp_dir().display().to_string();
-        let encoded_cwd = pi::session::encode_cwd(harness.temp_dir());
+        let encoded_cwd = ra::session::encode_cwd(harness.temp_dir());
 
         // Create the project session directory
         let project_dir = sessions_root.join(&encoded_cwd);

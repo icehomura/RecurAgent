@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-security-sandbox-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.security_sandbox_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.security_sandbox_contract.v1";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

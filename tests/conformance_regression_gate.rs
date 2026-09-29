@@ -419,7 +419,7 @@ fn regression_verdict_is_generated() {
 
     // Build verdict JSON to verify structure.
     let verdict_json = serde_json::json!({
-        "schema": "pi.conformance.regression_gate.v1",
+        "schema": "ra.conformance.regression_gate.v1",
         "verdict": verdict,
         "checks": {
             "pass_rate": {

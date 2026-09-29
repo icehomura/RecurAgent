@@ -25,12 +25,12 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     ExtensionManager, ExtensionPolicy, ExtensionPolicyMode, HostCallContext, HostCallPayload,
     RollbackTrigger, RolloutPhase, RolloutState, RuntimeRiskConfig, dispatch_host_call_shared,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 
 // ============================================================================

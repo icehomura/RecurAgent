@@ -9,14 +9,14 @@
 mod common;
 
 use async_trait::async_trait;
-use pi::PiResult;
-use pi::extensions::{
+use ra::PiResult;
+use ra::extensions::{
     ExtensionManager, ExtensionSession, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
     SessionActionOrigin,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::session::SessionMessage;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::session::SessionMessage;
+use ra::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -408,7 +408,7 @@ fn load_with_mock(
     manager.set_session(session);
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -988,7 +988,7 @@ fn event_hook_extension_registers_hooks() {
 
 #[test]
 fn event_dispatch_through_manager() {
-    use pi::extensions::ExtensionEventName;
+    use ra::extensions::ExtensionEventName;
 
     let harness = common::TestHarness::new("event_dispatch_through_manager");
     let spec = ConformanceMockSpec {
@@ -1067,7 +1067,7 @@ fn session_mutation_scenario() {
     manager.set_session(Arc::clone(&session) as Arc<dyn ExtensionSession>);
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -1172,7 +1172,7 @@ fn custom_entry_scenario() {
     manager.set_session(Arc::clone(&session) as Arc<dyn ExtensionSession>);
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -1257,7 +1257,7 @@ fn model_control_scenario() {
     manager.set_session(Arc::clone(&session) as Arc<dyn ExtensionSession>);
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

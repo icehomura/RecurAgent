@@ -1,5 +1,5 @@
 {
-  "schema": "pi.rpc.extension_ui_scenarios.v1",
+  "schema": "ra.rpc.extension_ui_scenarios.v1",
   "bead": "bd-lnmtp.2.4",
   "description": "Deterministic extension_ui_request/extension_ui_response parity scenarios for the G05 RPC differential harness.",
   "wire": {

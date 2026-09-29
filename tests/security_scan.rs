@@ -4,8 +4,8 @@
 //! zero-hit guard over this repo's src/ (catches self-leaks of secrets).
 #![allow(clippy::missing_panics_doc)]
 
-use pi::security_scan::SecurityScanTool;
-use pi::tools::Tool;
+use ra::security_scan::SecurityScanTool;
+use ra::tools::Tool;
 
 fn block_on_local<F: std::future::Future>(future: F) -> F::Output {
     // ubs:ignore-start — runtime construction is infallible in tests
@@ -42,7 +42,7 @@ fn run_tool(tool: &SecurityScanTool, input: serde_json::Value) -> (String, bool)
                 .content
                 .iter()
                 .filter_map(|block| match block {
-                    pi::model::ContentBlock::Text(t) => Some(t.text.clone()),
+                    ra::model::ContentBlock::Text(t) => Some(t.text.clone()),
                     _ => None,
                 })
                 .collect::<Vec<_>>()
@@ -71,7 +71,7 @@ fn plan_run_disposition_compare_flow() {
         text.contains("secret.aws-access-key"),
         "missing aws hit: {text}"
     );
-    let sarif_path = dir.join(".pi/security-scan.sarif");
+    let sarif_path = dir.join(".ra/security-scan.sarif");
     let sarif = std::fs::read_to_string(&sarif_path).expect("sarif written");
     let doc: serde_json::Value = serde_json::from_str(&sarif).expect("sarif parses");
     assert_eq!(doc["version"].as_str(), Some("2.1.0"));
@@ -119,7 +119,7 @@ fn plan_run_disposition_compare_flow() {
 
     // compare vs the FIRST sarif is impossible (overwritten) — compare the
     // dispositioned baseline against a fresh scan after deleting the store:
-    std::fs::remove_file(dir.join(".pi/security-dispositions.json")).expect("drop store");
+    std::fs::remove_file(dir.join(".ra/security-dispositions.json")).expect("drop store");
     let (text, is_error) = run_tool(&tool, serde_json::json!({ "op": "compare" }));
     assert!(!is_error, "compare failed: {text}");
     assert!(
@@ -153,7 +153,7 @@ fn self_scan_src_has_zero_secret_hits() {
     // secrets rules. (Rule-pattern strings and fragmented fixture text in
     // test modules do not match the literal-value patterns.)
     let repo = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let findings = pi::security_scan::run_scan(&repo, &["src".to_string()]).expect("scan src");
+    let findings = ra::security_scan::run_scan(&repo, &["src".to_string()]).expect("scan src");
     let leaks: Vec<_> = findings
         .iter()
         .filter(|f| f.rule_id.starts_with("secret."))

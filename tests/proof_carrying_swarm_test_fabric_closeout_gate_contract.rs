@@ -10,8 +10,8 @@ const EVIDENCE_PATH: &str = "docs/evidence/proof-carrying-swarm-test-fabric-clos
 const RUNBOOK_PATH: &str = "docs/swarm-operations-runbook.md";
 const README_PATH: &str = "README.md";
 const EXPECTED_CONTRACT_SCHEMA: &str =
-    "pi.swarm.proof_carrying_test_fabric.closeout_gate_contract.v1";
-const EXPECTED_EVIDENCE_SCHEMA: &str = "pi.swarm.proof_carrying_test_fabric.closeout_gate.v1";
+    "ra.swarm.proof_carrying_test_fabric.closeout_gate_contract.v1";
+const EXPECTED_EVIDENCE_SCHEMA: &str = "ra.swarm.proof_carrying_test_fabric.closeout_gate.v1";
 const EXPECTED_PURPOSE: &str =
     "prompt_to_artifact_proof_carrying_swarm_test_fabric_closeout_gate_not_source_of_truth";
 

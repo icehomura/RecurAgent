@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.compatibility_matrix.v1",
+  "schema": "ra.frankennode.compatibility_matrix.v1",
   "bead_id": "bd-3ar8v.7.3",
   "generated_at": "2026-08-04T23:06:24Z",
   "node_version": "v20.19.4",

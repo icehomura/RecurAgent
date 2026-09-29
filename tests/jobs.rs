@@ -6,7 +6,7 @@
 //! 2. cancel mid-run kills the whole process tree (child-spawning script).
 //! 3. Owner-scoped session shutdown kills only that session's jobs.
 //! 4. `kill_all` (process exit) with 2 running jobs leaves zero survivors.
-//! 5. The concurrency cap rejects the 9th job with `PI_JOBS_AT_CAPACITY`.
+//! 5. The concurrency cap rejects the 9th job with `RECUR_AGENT_JOBS_AT_CAPACITY`.
 //!
 //! Logging: structured JSONL per tests/common/logging.rs, v2-validated,
 //! recorded as artifacts.
@@ -15,7 +15,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{Tool, ToolOutput, ToolRegistry};
+use ra::tools::{Tool, ToolOutput, ToolRegistry};
 use serde_json::json;
 use std::time::Duration;
 
@@ -24,7 +24,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -57,23 +57,23 @@ fn block_on_local<F: std::future::Future>(future: F) -> F::Output {
     runtime.block_on(future)
 }
 
-fn execute(tool: &pi::tools::BashTool, input: serde_json::Value) -> ToolOutput {
+fn execute(tool: &ra::tools::BashTool, input: serde_json::Value) -> ToolOutput {
     block_on_local(tool.execute("call-1", input, None)).expect("execute")
 }
 
-fn bash_tool(root: &std::path::Path) -> pi::tools::BashTool {
+fn bash_tool(root: &std::path::Path) -> ra::tools::BashTool {
     bash_tool_for_session(root, TEST_SESSION_ID)
 }
 
-fn bash_tool_for_session(root: &std::path::Path, session_id: &str) -> pi::tools::BashTool {
-    let mut tool = pi::tools::BashTool::new(root);
-    tool.bind_job_session_scope(pi::jobs::JobSessionScope::fixed(session_id));
+fn bash_tool_for_session(root: &std::path::Path, session_id: &str) -> ra::tools::BashTool {
+    let mut tool = ra::tools::BashTool::new(root);
+    tool.bind_job_session_scope(ra::jobs::JobSessionScope::fixed(session_id));
     tool
 }
 
-fn jobs_tool_for_session(session_id: &str) -> pi::tools::JobsTool {
-    let mut tool = pi::tools::JobsTool::new();
-    tool.bind_job_session_scope(pi::jobs::JobSessionScope::fixed(session_id));
+fn jobs_tool_for_session(session_id: &str) -> ra::tools::JobsTool {
+    let mut tool = ra::tools::JobsTool::new();
+    tool.bind_job_session_scope(ra::jobs::JobSessionScope::fixed(session_id));
     tool
 }
 
@@ -133,7 +133,7 @@ fn background_returns_instantly_and_notices_with_tail() {
 
     let id = job_id(&out);
     let details = out.details.as_ref().expect("details");
-    assert_eq!(details["schema"], "pi.bash_job.v1");
+    assert_eq!(details["schema"], "ra.bash_job.v1");
     assert_eq!(details["status"], "running");
 
     // Wait for settle via the jobs tool, then verify the completion notice
@@ -146,13 +146,13 @@ fn background_returns_instantly_and_notices_with_tail() {
     assert!(waited_text.contains("exited"), "{waited_text}");
     assert!(waited_text.contains("bg-marker-"), "{waited_text}");
 
-    let notices = pi::jobs::take_completion_notices(TEST_SESSION_ID);
+    let notices = ra::jobs::take_completion_notices(TEST_SESSION_ID);
     let rendered: Vec<String> = notices
         .iter()
         .map(|message| match &message {
-            pi::model::Message::User(user) => match &user.content {
-                pi::model::UserContent::Text(text) => text.clone(),
-                pi::model::UserContent::Blocks(_) => String::new(),
+            ra::model::Message::User(user) => match &user.content {
+                ra::model::UserContent::Text(text) => text.clone(),
+                ra::model::UserContent::Blocks(_) => String::new(),
             },
             _ => String::new(),
         })
@@ -202,7 +202,7 @@ fn jobs_tool_rejects_a_foreign_session_job_id_without_metadata() {
     ))
     .expect_err("foreign wait must fail closed");
     let rendered = foreign_wait.to_string();
-    assert!(rendered.contains("PI_JOBS_UNKNOWN_ID"));
+    assert!(rendered.contains("RECUR_AGENT_JOBS_UNKNOWN_ID"));
     assert!(!rendered.contains("private-jobs-marker"));
     assert!(!rendered.contains(&artifact_path));
     let foreign_cancel = block_on_local(jobs_tool_for_session(&foreign).execute(
@@ -211,11 +211,15 @@ fn jobs_tool_rejects_a_foreign_session_job_id_without_metadata() {
         None,
     ))
     .expect_err("foreign cancel must fail closed");
-    assert!(foreign_cancel.to_string().contains("PI_JOBS_UNKNOWN_ID"));
+    assert!(
+        foreign_cancel
+            .to_string()
+            .contains("RECUR_AGENT_JOBS_UNKNOWN_ID")
+    );
 
     let owner_wait = execute_jobs_for_session(&owner, "wait", Some(&id), Some(10_000));
     assert!(first_text(&owner_wait).contains("exited"));
-    let _ = pi::jobs::take_completion_notices(&owner);
+    let _ = ra::jobs::take_completion_notices(&owner);
     finish_case(&harness, case);
 }
 
@@ -318,7 +322,7 @@ fn owner_scoped_session_shutdown_preserves_foreign_jobs() {
     )
     .expect("pid fits u32");
 
-    block_on_local(pi::jobs::kill_session(&owner_a)).expect("owner A shutdown");
+    block_on_local(ra::jobs::kill_session(&owner_a)).expect("owner A shutdown");
     std::thread::sleep(Duration::from_millis(300));
     assert!(
         !kill_zero(first_pid),
@@ -328,22 +332,22 @@ fn owner_scoped_session_shutdown_preserves_foreign_jobs() {
         kill_zero(second_pid),
         "foreign owner B job {second_id} was terminated by owner A shutdown"
     );
-    let owner_a_jobs = pi::jobs::list(&owner_a).expect("owner A list");
+    let owner_a_jobs = ra::jobs::list(&owner_a).expect("owner A list");
     assert!(
         owner_a_jobs.iter().any(|job| {
-            job.id == first_id && job.status == pi::jobs::JobStatus::Killed.as_str()
+            job.id == first_id && job.status == ra::jobs::JobStatus::Killed.as_str()
         })
     );
-    let owner_b_jobs = pi::jobs::list(&owner_b).expect("owner B list");
+    let owner_b_jobs = ra::jobs::list(&owner_b).expect("owner B list");
     assert!(
         owner_b_jobs.iter().any(|job| {
-            job.id == second_id && job.status == pi::jobs::JobStatus::Running.as_str()
+            job.id == second_id && job.status == ra::jobs::JobStatus::Running.as_str()
         })
     );
 
-    block_on_local(pi::jobs::kill_session(&owner_b)).expect("owner B cleanup");
-    let _ = pi::jobs::take_completion_notices(&owner_a);
-    let _ = pi::jobs::take_completion_notices(&owner_b);
+    block_on_local(ra::jobs::kill_session(&owner_b)).expect("owner B cleanup");
+    let _ = ra::jobs::take_completion_notices(&owner_a);
+    let _ = ra::jobs::take_completion_notices(&owner_b);
     finish_case(&harness, case);
 }
 
@@ -380,7 +384,7 @@ fn process_exit_kills_all_survivors() {
         format!("running jobs pids: {first_pid}, {second_pid}"),
     );
 
-    pi::jobs::kill_all();
+    ra::jobs::kill_all();
     std::thread::sleep(Duration::from_millis(500));
 
     for pid in [first_pid, second_pid] {
@@ -428,12 +432,12 @@ fn capacity_rejects_ninth_job() {
         .log()
         .info("verify", format!("ninth job result: {text}"));
     assert!(
-        text.contains("PI_JOBS_AT_CAPACITY"),
+        text.contains("RECUR_AGENT_JOBS_AT_CAPACITY"),
         "the 9th job must be rejected with the named capacity error: {text}"
     );
 
     // Clean up the 8 sleepers so they do not linger past the test.
-    pi::jobs::kill_all();
+    ra::jobs::kill_all();
     finish_case(&harness, case);
 }
 
@@ -464,7 +468,7 @@ fn registry_exposes_jobs_tool_by_default() {
             "jobs",
         ],
         &root,
-        None::<&pi::config::Config>,
+        None::<&ra::config::Config>,
     );
     let names: Vec<&str> = registry.tools().iter().map(|tool| tool.name()).collect();
     harness
@@ -483,9 +487,9 @@ fn bash_background_through_registry() {
     let case = "bash_background_through_registry";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let registry = ToolRegistry::new(&["bash", "jobs"], &root, None::<&pi::config::Config>);
+    let registry = ToolRegistry::new(&["bash", "jobs"], &root, None::<&ra::config::Config>);
     let session_id = TEST_SESSION_ID.to_string();
-    let resolver: pi::jobs::JobSessionIdResolver = std::sync::Arc::new(move || {
+    let resolver: ra::jobs::JobSessionIdResolver = std::sync::Arc::new(move || {
         let session_id = session_id.clone();
         Box::pin(async move { Some(session_id) })
     });
@@ -513,7 +517,7 @@ fn bash_background_through_registry() {
     ))
     .expect("wait through registry jobs tool");
     assert!(first_text(&waited).contains("exited"));
-    let _ = pi::jobs::take_completion_notices(TEST_SESSION_ID);
-    pi::jobs::kill_all();
+    let _ = ra::jobs::take_completion_notices(TEST_SESSION_ID);
+    ra::jobs::kill_all();
     finish_case(&harness, case);
 }

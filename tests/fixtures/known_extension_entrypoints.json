@@ -24,12 +24,12 @@
     },
     {
       "repo": "dejanr/dotfiles",
-      "path": ".pi/extensions/project-context/index.ts",
+      "path": ".ra/extensions/project-context/index.ts",
       "registrations": ["registerTool"]
     },
     {
       "repo": "joelazar/dotfiles",
-      "path": ".pi/extensions/commands.ts",
+      "path": ".ra/extensions/commands.ts",
       "registrations": ["registerTool", "registerCommand", "registerFlag"]
     },
     {

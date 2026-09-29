@@ -12,4 +12,4 @@
 {"category":"Stress","metric":"RSS growth under load","rust_value":"0.00%","legacy_value":"N/A","delta":"-","delta_pct":"-","verdict":"PASS"}
 {"category":"Stress","metric":"Dispatch p50 latency","rust_value":"16797us","legacy_value":"N/A","delta":"-","delta_pct":"-","verdict":"INFO"}
 {"category":"Stress","metric":"Dispatch p99 latency","rust_value":"28005us","legacy_value":"N/A","delta":"-","delta_pct":"-","verdict":"PASS"}
-{"comparable":0,"faster":0,"generated_at":"2026-02-01T01:16:17Z","overall_verdict":"ACCEPTABLE REGRESSIONS — see analysis below","schema":"pi.ext.perf_comparison_summary.v1","slower":6}
+{"comparable":0,"faster":0,"generated_at":"2026-02-01T01:16:17Z","overall_verdict":"ACCEPTABLE REGRESSIONS — see analysis below","schema":"ra.ext.perf_comparison_summary.v1","slower":6}

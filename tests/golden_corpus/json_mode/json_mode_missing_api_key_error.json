@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_missing_api_key_error",
   "surface": "json_mode",
   "description": "JSON mode failure path: missing API key should fail fast with non-zero exit and no panic",

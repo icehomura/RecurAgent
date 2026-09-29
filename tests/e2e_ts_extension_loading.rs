@@ -11,10 +11,10 @@
 
 mod common;
 
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::package_manager::{PackageManager, ResolveExtensionSourcesOptions};
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::package_manager::{PackageManager, ResolveExtensionSourcesOptions};
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -183,7 +183,7 @@ fn load_ts_extension(harness: &common::TestHarness, source: &str) -> ExtensionMa
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -742,7 +742,7 @@ fn ts_package_manifest_loads_doom_style_helper_out_of_box() {
         .expect("load spec from resolved package entry");
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -831,7 +831,7 @@ export default function init(pi: any): void {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

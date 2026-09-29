@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::session_store_v2::SessionStoreV2;
+use ra::session_store_v2::SessionStoreV2;
 use serde_json::json;
 use std::time::Instant;
 

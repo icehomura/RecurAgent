@@ -5,7 +5,7 @@
 
 mod common;
 
-use pi::package_manager::{
+use ra::package_manager::{
     PACKAGE_LOCK_SCHEMA, PACKAGE_TRUST_AUDIT_SCHEMA, PackageEntryTrustState, PackageLockAction,
     PackageLockEntry, PackageLockfile, PackageResolvedProvenance, PackageSourceKind,
     digest_package_path, evaluate_lock_transition, read_package_lockfile, sort_lock_entries,
@@ -71,12 +71,12 @@ fn local_entry(path: &str, digest: &str) -> PackageLockEntry {
 
 #[test]
 fn lockfile_schema_version_is_stable() {
-    assert_eq!(PACKAGE_LOCK_SCHEMA, "pi.package_lock.v1");
+    assert_eq!(PACKAGE_LOCK_SCHEMA, "ra.package_lock.v1");
 }
 
 #[test]
 fn trust_audit_schema_version_is_stable() {
-    assert_eq!(PACKAGE_TRUST_AUDIT_SCHEMA, "pi.package_trust_audit.v1");
+    assert_eq!(PACKAGE_TRUST_AUDIT_SCHEMA, "ra.package_trust_audit.v1");
 }
 
 // ============================================================================

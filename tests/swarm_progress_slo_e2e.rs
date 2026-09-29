@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use pi::swarm_progress_slo::{
+use ra::swarm_progress_slo::{
     AgentMailHealth, FreshnessState, ProgressSloEvaluationInput, ProgressSloMetrics,
     ProgressSloSourceStatus, ProgressSloTimeWindow, RchPosture, RedactionState, SourceAvailability,
     ValidationBrokerPosture,
@@ -20,7 +20,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
 const E2E_SUMMARY_SCHEMA: &str = "pi.swarm.progress_slo_e2e.v1";
 const E2E_EVENT_SCHEMA: &str = "pi.swarm.progress_slo_e2e.event.v1";
-const PROGRESS_SCHEMA: &str = "pi.swarm.progress_slo.v1";
+const PROGRESS_SCHEMA: &str = "ra.swarm.progress_slo.v1";
 const GENERATED_AT: &str = "2026-05-15T05:00:00Z";
 const WINDOW_START: &str = "2026-05-15T04:00:00Z";
 const WINDOW_END: &str = "2026-05-15T05:00:00Z";
@@ -85,7 +85,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn test_workspace(name: &str) -> TestResult<PathBuf> {
@@ -288,7 +288,7 @@ fn write_fixture_sources(workspace: &Path, scenario: &Scenario) -> TestResult<(P
     write_json(
         &agent_mail_path,
         &json!({
-            "schema": "pi.swarm.progress_slo.fixture.agent_mail_health.v1",
+            "schema": "ra.swarm.progress_slo.fixture.agent_mail_health.v1",
             "captured_from": "mcp_agent_mail.health_check",
             "status": format!("{:?}", scenario.agent_mail_health).to_lowercase(),
             "live_mutation_allowed": false,
@@ -593,7 +593,7 @@ fn run_scenario(
     )?;
 
     let command_text = format!(
-        "pi swarm-progress --input {} --since {SINCE} --out-json {}",
+        "ra swarm-progress --input {} --since {SINCE} --out-json {}",
         input_path.display(),
         report_path.display()
     );

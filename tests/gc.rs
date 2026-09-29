@@ -1,9 +1,9 @@
-//! Integration tests for retention-policy garbage collection (`pi gc`) (bd-cv653.7.11).
+//! Integration tests for retention-policy garbage collection (`ra gc`) (bd-cv653.7.11).
 
 use std::fs;
 use tempfile::tempdir;
 
-use pi::gc::{
+use ra::gc::{
     GC_LEDGER_SCHEMA, GarbageCollector, GcOptions, GcStoreKind, check_storage_pressure,
     format_bytes, parse_retention_days,
 };

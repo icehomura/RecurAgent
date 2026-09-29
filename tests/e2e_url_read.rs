@@ -82,11 +82,11 @@ impl PiEnv {
         let mut command = Command::new(binary);
         command
             .env("HOME", self.root.join("home"))
-            .env("PI_CODING_AGENT_DIR", self.root.join("agent"))
-            .env("PI_CONFIG_PATH", self.root.join("settings.json"))
-            .env("PI_SESSIONS_DIR", self.root.join("sessions"))
-            .env("PI_PACKAGE_DIR", self.root.join("packages"))
-            .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+            .env("RECUR_AGENT_DIR", self.root.join("agent"))
+            .env("RECUR_AGENT_CONFIG_PATH", self.root.join("settings.json"))
+            .env("RECUR_AGENT_SESSIONS_DIR", self.root.join("sessions"))
+            .env("RECUR_AGENT_PACKAGE_DIR", self.root.join("packages"))
+            .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -159,7 +159,7 @@ fn e2e_read_url_reader_mode_and_pagination() {
     );
     env.write_models(&server.base_url());
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command.args([
         "--print",
@@ -170,7 +170,7 @@ fn e2e_read_url_reader_mode_and_pagination() {
         "test-model",
         "read the install guide",
     ]);
-    harness.log().info("action", "spawning pi --print");
+    harness.log().info("action", "spawning ra --print");
     let child = command.spawn().expect("spawn pi");
     let (stdout, stderr) = run_to_finish(child, 90);
     harness.log().info_ctx("verify", "process finished", |ctx| {
@@ -234,7 +234,7 @@ fn e2e_read_url_ssrf_denied_by_default() {
         ],
     );
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command.args([
         "--print",
@@ -300,7 +300,7 @@ fn e2e_read_url_raw_preserves_wire_html() {
     );
     env.write_models(&server.base_url());
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command.args([
         "--print",

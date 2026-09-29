@@ -24,20 +24,20 @@ mod common;
 
 use async_trait::async_trait;
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::Result;
-use pi::extensions::{
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::Result;
+use ra::extensions::{
     ExtensionHostActions, ExtensionManager, ExtensionSendMessage, ExtensionSendUserMessage,
     ExtensionSession, JsExtensionLoadSpec, JsExtensionRuntimeHandle, SessionActionOrigin,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::model::{
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::model::{
     AssistantMessage, ContentBlock, StopReason, StreamEvent, TextContent, Usage, UserContent,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::session::{Session, SessionHandle, SessionMessage};
-use pi::tools::ToolRegistry;
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::session::{Session, SessionHandle, SessionMessage};
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -159,7 +159,7 @@ fn load_extension(harness: &common::TestHarness, source: &str) -> ExtSetup {
     manager.set_session(Arc::new(session_handle.clone()) as Arc<dyn ExtensionSession>);
 
     let tools = Arc::new(ToolRegistry::new(&["read", "edit", "bash"], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

@@ -13,9 +13,9 @@
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -81,14 +81,29 @@ fn load_guard_extension(ext_id: &str, entry_file: &str) -> Result<LoadedExtensio
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
 
     let mut env = HashMap::new();
-    env.insert("PI_DETERMINISTIC_TIME_MS".to_string(), settings.time_ms);
-    env.insert("PI_DETERMINISTIC_TIME_STEP_MS".to_string(), "1".to_string());
-    env.insert("PI_DETERMINISTIC_CWD".to_string(), settings.cwd.clone());
-    env.insert("PI_DETERMINISTIC_HOME".to_string(), settings.home.clone());
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_TIME_MS".to_string(),
+        settings.time_ms,
+    );
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS".to_string(),
+        "1".to_string(),
+    );
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_CWD".to_string(),
+        settings.cwd.clone(),
+    );
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_HOME".to_string(),
+        settings.home.clone(),
+    );
     env.insert("HOME".to_string(), settings.home);
-    env.insert("PI_DETERMINISTIC_RANDOM".to_string(), "0.5".to_string());
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_RANDOM".to_string(),
+        "0.5".to_string(),
+    );
 
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: settings.cwd,
         env,
         ..Default::default()
@@ -800,7 +815,7 @@ fn guard_conformance_report() {
     let mut lines: Vec<String> = Vec::new();
     for r in &results {
         let entry = json!({
-            "schema": "pi.ext.guard_conformance.v1",
+            "schema": "ra.ext.guard_conformance.v1",
             "ts": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
             "extension_id": r.extension_id,
             "test_name": r.test_name,
@@ -819,7 +834,7 @@ fn guard_conformance_report() {
     let fail_count = results.iter().filter(|r| r.status == "fail").count();
     let error_count = results.iter().filter(|r| r.status == "error").count();
     let triage = json!({
-        "schema": "pi.ext.guard_triage.v1",
+        "schema": "ra.ext.guard_triage.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "tier": "2a",
         "extensions": ["permission-gate", "confirm-destructive", "dirty-repo-guard",

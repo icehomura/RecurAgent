@@ -1,7 +1,7 @@
 {
-  "schema": "pi.perf.binary_size.v1",
+  "schema": "ra.perf.binary_size.v1",
   "generated_at": "2026-08-28T09:17:30.575992+00:00",
-  "binary_path": "/Users/jemanuel/projects/pi_agent_rust/target/release/pi",
+  "binary_path": "/Users/jemanuel/projects/recur_agent/target/release/pi",
   "binary_sha256": "27689834b77579e04b10dd2ac934a2d211e3080fef0f7cbf964e64d3cdad52b4",
   "size_bytes": 34345984,
   "size_mb": 32.755,
@@ -12,7 +12,7 @@
   "compiled_opt_level": "z",
   "strip": true,
   "profile_source": "scripts/perf/measure_binary_size.py",
-  "build_command": "cargo build --release --bin pi",
+  "build_command": "cargo build --release --bin ra",
   "build_exit_code": 0,
   "target_triple": "arm64-unknown-darwin",
   "binary_basename": "pi"

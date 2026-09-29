@@ -259,7 +259,7 @@ fn unanchored_artifacts_ignore_blocks_nested_required_artifacts() -> Result<(), 
     }
 
     let report = parse_json(&output)?;
-    require_string_field(&report, "schema", "pi.rch.artifact_sync_preflight.v1")?;
+    require_string_field(&report, "schema", "ra.rch.artifact_sync_preflight.v1")?;
     require_string_field(&report, "status", "fail")?;
 
     let violations = array_field(&report, "violations")?;
@@ -1068,7 +1068,7 @@ fn postcondition_rejects_empty_baseline_artifact_set() -> Result<(), Box<dyn Err
     fs::write(repo.join(".rchignore"), "/artifacts/\n")?;
     let before_manifest = repo.join("before-rch-artifacts.json");
     let empty_baseline = serde_json::json!({
-        "schema": "pi.rch.artifact_sync_preflight.v1",
+        "schema": "ra.rch.artifact_sync_preflight.v1",
         "mode": "postcondition-baseline",
         "status": "pass",
         "repo_root": repo.display().to_string(),

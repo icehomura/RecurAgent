@@ -10,8 +10,8 @@
 //! - Tier-1-review: vendored artifacts with unknown licenses (need manual review)
 //! - Tier-2 (STRETCH): scored candidates not yet vendored
 
-use pi::conformance::snapshot::SourceTier;
-use pi::extension_inclusion::{normalize_manifest_value, normalized_manifest_hash_from_value};
+use ra::conformance::snapshot::SourceTier;
+use ra::extension_inclusion::{normalize_manifest_value, normalized_manifest_hash_from_value};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use similar::TextDiff;
@@ -291,7 +291,7 @@ fn write_manifest_artifacts(
     fs::write(dir.join("generated.json"), generated).expect("write generated manifest artifact");
 
     let hash_report = json!({
-        "schema": "pi.ext.inclusion_manifest_hash.v1",
+        "schema": "ra.ext.inclusion_manifest_hash.v1",
         "expected_hash": EXPECTED_MANIFEST_HASH,
         "committed_hash": committed_hash,
         "generated_hash": generated_hash,
@@ -497,7 +497,7 @@ fn generate_inclusion_list() {
     let total_must_pass = tier1.len() + tier1_review.len();
 
     let inclusion_list = InclusionList {
-        schema: "pi.ext.inclusion_list.v1",
+        schema: "ra.ext.inclusion_list.v1",
         generated_at: chrono::Utc::now().to_rfc3339(),
         summary: InclusionSummary {
             tier1_count: tier1.len(),
@@ -525,7 +525,7 @@ fn generate_inclusion_list() {
 
     // Optional local update mode for maintainers intentionally regenerating
     // the canonical manifest.
-    if std::env::var_os("PI_WRITE_INCLUSION_LIST").is_some() {
+    if std::env::var_os("RECUR_AGENT_WRITE_INCLUSION_LIST").is_some() {
         fs::write(&output_path, format!("{generated_json}\n"))
             .expect("overwrite committed inclusion list");
     }
@@ -585,7 +585,7 @@ fn generate_inclusion_list() {
     assert!(
         !has_diff,
         "Canonical extension manifest drift detected. \
-         Run `PI_WRITE_INCLUSION_LIST=1 cargo test --test ext_inclusion_list -- --nocapture`, \
+         Run `RECUR_AGENT_WRITE_INCLUSION_LIST=1 cargo test --test ext_inclusion_list -- --nocapture`, \
          review `docs/extension-inclusion-list.json`, and re-run tests.\n\n{diff}"
     );
 

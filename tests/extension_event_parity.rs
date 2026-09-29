@@ -301,7 +301,7 @@ fn log_tail(log: &str) -> Vec<String> {
 }
 
 fn pi_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 /// Write the two-interaction cassette every surface replays.
@@ -487,15 +487,15 @@ fn apply_common_env(command: &mut Command, agent_dir: &Path, cassette_dir: &Path
     let settings_path = agent_dir.join("settings.json");
     write_hermetic_settings(&settings_path);
     command
-        .env("PI_CODING_AGENT_DIR", agent_dir)
-        .env("PI_CONFIG_PATH", &settings_path)
-        .env("PI_SESSIONS_DIR", agent_dir.join("sessions"))
-        .env("PI_PACKAGE_DIR", agent_dir.join("packages"))
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_DIR", agent_dir)
+        .env("RECUR_AGENT_CONFIG_PATH", &settings_path)
+        .env("RECUR_AGENT_SESSIONS_DIR", agent_dir.join("sessions"))
+        .env("RECUR_AGENT_PACKAGE_DIR", agent_dir.join("packages"))
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .env("ANTHROPIC_API_KEY", "pi-parity-fixture-key")
-        .env(pi::vcr::VCR_ENV_MODE, "playback")
-        .env(pi::vcr::VCR_ENV_DIR, cassette_dir)
-        .env("PI_VCR_TEST_NAME", VCR_TEST_NAME)
+        .env(ra::vcr::VCR_ENV_MODE, "playback")
+        .env(ra::vcr::VCR_ENV_DIR, cassette_dir)
+        .env("RECUR_AGENT_VCR_TEST_NAME", VCR_TEST_NAME)
         // Dumps every request body VCR was asked to match, next to the
         // interactions it compared them against. Without it an unmatched
         // request is a sha256 and nothing else, which costs a full build cycle
@@ -565,7 +565,7 @@ fn run_print_surface(
     }
 }
 
-/// Drive `pi --rpc` through one prompt request and collect what it logged.
+/// Drive `ra --rpc` through one prompt request and collect what it logged.
 fn run_rpc_surface(
     harness: &TestHarness,
     workdir: &Path,
@@ -584,7 +584,7 @@ fn run_rpc_surface(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    let mut child = command.spawn().expect("spawn pi --rpc");
+    let mut child = command.spawn().expect("spawn ra --rpc");
     {
         let stdin = child.stdin.as_mut().expect("rpc stdin");
         let request = json!({
@@ -619,7 +619,7 @@ fn run_rpc_surface(
         }
     }
     drop(child.stdin.take());
-    let output = child.wait_with_output().expect("wait for pi --rpc");
+    let output = child.wait_with_output().expect("wait for ra --rpc");
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     harness
         .log()
@@ -632,7 +632,7 @@ fn run_rpc_surface(
         });
     assert!(
         !transcript.trim().is_empty(),
-        "pi --rpc produced no response to the prompt request.\nstderr:\n{stderr}"
+        "ra --rpc produced no response to the prompt request.\nstderr:\n{stderr}"
     );
 
     let names = parse_dispatched_events(&stderr);
@@ -671,15 +671,18 @@ fn run_tmux_surface(name: &str, owner: &str, classic: bool) -> Option<SurfaceRun
     let cassette_dir = session.harness.temp_path("vcr");
     write_parity_cassette(&cassette_dir, SAMPLE_FILE);
 
-    // TuiSession points PI_CONFIG_PATH at a .toml; give it the same hermetic
+    // TuiSession points RECUR_AGENT_CONFIG_PATH at a .toml; give it the same hermetic
     // JSON settings the other surfaces run under so the advisor stays off here
     // too and all five drive the identical turn.
     let settings_path = session.harness.temp_path("pi-settings.json");
     write_hermetic_settings(&settings_path);
-    session.set_env("PI_CONFIG_PATH", &settings_path.display().to_string());
-    session.set_env(pi::vcr::VCR_ENV_MODE, "playback");
-    session.set_env(pi::vcr::VCR_ENV_DIR, &cassette_dir.display().to_string());
-    session.set_env("PI_VCR_TEST_NAME", VCR_TEST_NAME);
+    session.set_env(
+        "RECUR_AGENT_CONFIG_PATH",
+        &settings_path.display().to_string(),
+    );
+    session.set_env(ra::vcr::VCR_ENV_MODE, "playback");
+    session.set_env(ra::vcr::VCR_ENV_DIR, &cassette_dir.display().to_string());
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_TEST_NAME);
     // TuiSession sets RUST_LOG=info by default, which would bury the records
     // under everything else pi logs at info during startup.
     session.set_env("RUST_LOG", "pi=info");
@@ -756,7 +759,7 @@ fn write_parity_artifact(
         let record = run.outcome.as_ref().map_or_else(
             || {
                 json!({
-                    "schema": "pi.ext.event_parity.v1",
+                    "schema": "ra.ext.event_parity.v1",
                     "surface": run.name,
                     "routing_owner": run.owner,
                     "verdict": verdict,
@@ -775,7 +778,7 @@ fn write_parity_artifact(
                     counts.insert((*name).to_string(), json!(events.count_of(name)));
                 }
                 json!({
-                    "schema": "pi.ext.event_parity.v1",
+                    "schema": "ra.ext.event_parity.v1",
                     "surface": run.name,
                     "routing_owner": run.owner,
                     "verdict": verdict,

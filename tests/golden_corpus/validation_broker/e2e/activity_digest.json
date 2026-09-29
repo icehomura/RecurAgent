@@ -1,5 +1,5 @@
 {
-  "schema": "pi.swarm.activity_digest.v1",
+  "schema": "ra.swarm.activity_digest.v1",
   "generated_at": "2026-05-14T08:30:00Z",
   "saturation": {
     "saturated": true,

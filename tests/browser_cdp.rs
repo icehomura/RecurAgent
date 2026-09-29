@@ -2,8 +2,8 @@
 //! These are protocol fixtures, not claims of live Chromium coverage.
 #![forbid(unsafe_code)]
 
-use pi::browser::BrowserTool;
-use pi::tools::Tool;
+use ra::browser::BrowserTool;
+use ra::tools::Tool;
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -282,7 +282,7 @@ fn native_browser_never_falls_back_to_mock_when_endpoint_is_invalid() {
 #[test]
 fn native_screenshot_preserves_peer_pixels_and_returns_an_image_block() {
     use base64::Engine as _;
-    use pi::model::ContentBlock;
+    use ra::model::ContentBlock;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(PNG)
         .unwrap();

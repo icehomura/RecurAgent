@@ -2,25 +2,25 @@
 //!
 //! Tests verify the JS→Rust bridge boundary for `pi.exec`, `pi.http`,
 //! `pi.session`, `pi.events`, and `pi.log` hostcalls. Each test creates
-//! a `PiJsRuntime` with `DeterministicClock`, evaluates JS that calls
+//! a `RaJsRuntime` with `DeterministicClock`, evaluates JS that calls
 //! `pi.*`, drains the resulting `HostcallRequest`, and verifies the
 //! `HostcallKind`, payload, and JS-side result when completed.
 
-use pi::extensions_js::{HostcallKind, HostcallRequest, PiJsRuntime, PiJsRuntimeConfig};
-use pi::scheduler::{DeterministicClock, HostcallOutcome};
+use ra::extensions_js::{HostcallKind, HostcallRequest, RaJsRuntime, RaJsRuntimeConfig};
+use ra::scheduler::{DeterministicClock, HostcallOutcome};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn drain_one(runtime: &PiJsRuntime<DeterministicClock>) -> HostcallRequest {
+fn drain_one(runtime: &RaJsRuntime<DeterministicClock>) -> HostcallRequest {
     let mut queue = runtime.drain_hostcall_requests();
     queue
         .pop_front()
         .expect("expected a hostcall request to be queued")
 }
 
-fn drain_all(runtime: &PiJsRuntime<DeterministicClock>) -> VecDeque<HostcallRequest> {
+fn drain_all(runtime: &RaJsRuntime<DeterministicClock>) -> VecDeque<HostcallRequest> {
     runtime.drain_hostcall_requests()
 }
 
@@ -29,7 +29,7 @@ fn drain_all(runtime: &PiJsRuntime<DeterministicClock>) -> VecDeque<HostcallRequ
 /// Returns the payload of the `__report` tool call.
 fn eval_and_report(js_body: &str) -> Value {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -57,14 +57,14 @@ fn eval_and_report(js_body: &str) -> Value {
 /// any intermediate hostcalls with their test-specified outcomes.
 /// This default version completes non-report hostcalls with `Success(Null)`.
 #[allow(clippy::future_not_send)]
-async fn process_until_report(runtime: &PiJsRuntime<DeterministicClock>) -> Value {
+async fn process_until_report(runtime: &RaJsRuntime<DeterministicClock>) -> Value {
     process_until_report_with(runtime, |_req| HostcallOutcome::Success(Value::Null)).await
 }
 
 /// Like `process_until_report` but with a custom completer for non-report hostcalls.
 #[allow(clippy::future_not_send)]
 async fn process_until_report_with<F>(
-    runtime: &PiJsRuntime<DeterministicClock>,
+    runtime: &RaJsRuntime<DeterministicClock>,
     completer: F,
 ) -> Value
 where
@@ -95,7 +95,7 @@ where
 #[test]
 fn exec_produces_correct_hostcall_kind() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -115,7 +115,7 @@ fn exec_produces_correct_hostcall_kind() {
 #[test]
 fn exec_includes_args_in_payload() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -145,7 +145,7 @@ fn exec_success_resolves_promise() {
 #[test]
 fn exec_error_rejects_promise() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -182,7 +182,7 @@ fn exec_error_rejects_promise() {
 #[test]
 fn exec_with_cwd_option() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -206,7 +206,7 @@ fn exec_with_cwd_option() {
 #[test]
 fn exec_with_timeout_option() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -234,7 +234,7 @@ fn exec_with_timeout_option() {
 #[test]
 fn exec_with_stream_option() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -258,7 +258,7 @@ fn exec_with_stream_option() {
 #[test]
 fn exec_no_args_defaults_to_empty() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -279,7 +279,7 @@ fn exec_no_args_defaults_to_empty() {
 #[test]
 fn http_produces_correct_hostcall_kind() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -300,7 +300,7 @@ fn http_produces_correct_hostcall_kind() {
 #[test]
 fn http_payload_includes_url_and_method() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -326,7 +326,7 @@ fn http_payload_includes_url_and_method() {
 #[test]
 fn http_success_resolves_with_response() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -366,7 +366,7 @@ fn http_success_resolves_with_response() {
 #[test]
 fn http_error_rejects_promise() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -403,7 +403,7 @@ fn http_error_rejects_promise() {
 #[test]
 fn http_timeout_error_mapping() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -444,7 +444,7 @@ fn http_timeout_error_mapping() {
 #[test]
 fn session_produces_correct_hostcall_kind_with_op() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -464,7 +464,7 @@ fn session_produces_correct_hostcall_kind_with_op() {
 #[test]
 fn session_set_model_payload() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -492,7 +492,7 @@ fn session_set_model_payload() {
 #[test]
 fn session_get_state_resolves() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -527,7 +527,7 @@ fn session_get_state_resolves() {
 #[test]
 fn session_set_name_resolves() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -552,7 +552,7 @@ fn session_set_name_resolves() {
 #[test]
 fn session_unknown_op_error() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -592,7 +592,7 @@ fn session_unknown_op_error() {
 #[test]
 fn session_get_model_resolves() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -627,7 +627,7 @@ fn session_get_model_resolves() {
 #[test]
 fn session_set_thinking_level_payload() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -651,7 +651,7 @@ fn session_set_thinking_level_payload() {
 #[test]
 fn session_append_entry_payload() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -680,7 +680,7 @@ fn session_append_entry_payload() {
 #[test]
 fn events_produces_correct_hostcall_kind() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -700,7 +700,7 @@ fn events_produces_correct_hostcall_kind() {
 #[test]
 fn events_emit_payload() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -725,7 +725,7 @@ fn events_emit_payload() {
 #[test]
 fn events_emit_resolves_with_dispatch_result() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -762,7 +762,7 @@ fn events_emit_resolves_with_dispatch_result() {
 #[test]
 fn events_unsupported_op_error() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -802,7 +802,7 @@ fn events_unsupported_op_error() {
 #[test]
 fn events_list_resolves() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -835,7 +835,7 @@ fn events_list_resolves() {
 #[test]
 fn log_produces_correct_hostcall_kind() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -856,7 +856,7 @@ fn log_produces_correct_hostcall_kind() {
 #[test]
 fn log_payload_includes_fields() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -881,7 +881,7 @@ fn log_payload_includes_fields() {
 #[test]
 fn log_resolves_on_success() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -914,7 +914,7 @@ fn log_resolves_on_success() {
 #[test]
 fn ui_produces_correct_hostcall_kind() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -934,7 +934,7 @@ fn ui_produces_correct_hostcall_kind() {
 #[test]
 fn ui_confirm_payload() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -958,7 +958,7 @@ fn ui_confirm_payload() {
 #[test]
 fn ui_input_resolves_with_value() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -986,7 +986,7 @@ fn ui_input_resolves_with_value() {
 #[test]
 fn ui_denied_error() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -1026,9 +1026,9 @@ fn ui_denied_error() {
 #[test]
 fn hostcall_includes_extension_id_from_runtime_owner() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config_with_policy_for_extension(
+        let runtime = RaJsRuntime::with_clock_and_config_with_policy_for_extension(
             DeterministicClock::new(0),
-            PiJsRuntimeConfig::default(),
+            RaJsRuntimeConfig::default(),
             None,
             "my-test-extension".to_string(),
         )
@@ -1054,7 +1054,7 @@ fn hostcall_extension_id_is_none_when_runtime_has_no_owner() {
     futures::executor::block_on(async {
         // The ordinary constructor is an explicit low-level harness principal:
         // it has no production extension owner and therefore emits no owner id.
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -1076,7 +1076,7 @@ fn hostcall_extension_id_is_none_when_runtime_has_no_owner() {
 #[test]
 fn pending_hostcall_count_tracks_lifecycle() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -1103,7 +1103,7 @@ fn pending_hostcall_count_tracks_lifecycle() {
 #[test]
 fn multiple_concurrent_hostcalls_tracked() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -1161,7 +1161,7 @@ pi.http({ url: "https://example.com", method: "GET" });
 #[test]
 fn error_code_io_maps_correctly() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -1198,7 +1198,7 @@ fn error_code_io_maps_correctly() {
 #[test]
 fn error_code_internal_maps_correctly() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -1231,7 +1231,7 @@ fn error_code_internal_maps_correctly() {
 #[test]
 fn error_code_denied_maps_correctly() {
     let result = futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.frankennode.kernel_boundary_drift_report.v1",
+  "schema": "ra.frankennode.kernel_boundary_drift_report.v1",
   "bead_id": "bd-3ar8v.7.2",
   "support_bead_ids": ["bd-3ar8v.7.2.5"],
   "generated_at": "2026-02-17T08:30:00Z",

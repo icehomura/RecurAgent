@@ -355,9 +355,9 @@ fn testing_policy_practical_finish_policy_references_required_artifacts() {
         "tests/full_suite_gate/practical_finish_checkpoint.json",
         "pi.perf3x.practical_finish_checkpoint.v1",
         "tests/perf/reports/parameter_sweeps.json",
-        "pi.perf.parameter_sweeps.v1",
+        "ra.perf.parameter_sweeps.v1",
         "tests/full_suite_gate/extension_remediation_backlog.json",
-        "pi.qa.extension_remediation_backlog.v1",
+        "ra.qa.extension_remediation_backlog.v1",
         "tests/ci_full_suite_gate.rs",
         "tests/release_readiness.rs",
     ];
@@ -802,9 +802,9 @@ fn flake_triage_documents_quarantine_required_fields() {
 fn flake_triage_has_configuration_variables() {
     let policy = load_text(FLAKE_TRIAGE_PATH);
     let vars = [
-        "PI_CONFORMANCE_MAX_RETRIES",
-        "PI_CONFORMANCE_RETRY_DELAY",
-        "PI_CONFORMANCE_FLAKE_BUDGET",
+        "RECUR_AGENT_CONFORMANCE_MAX_RETRIES",
+        "RECUR_AGENT_CONFORMANCE_RETRY_DELAY",
+        "RECUR_AGENT_CONFORMANCE_FLAKE_BUDGET",
     ];
     for var in &vars {
         assert!(
@@ -1376,8 +1376,8 @@ fn franken_node_mission_contract_is_versioned_and_has_required_tiers() {
 
     assert_eq!(
         contract["schema"].as_str(),
-        Some("pi.franken_node.mission_contract.v1"),
-        "franken mission contract schema must be pi.franken_node.mission_contract.v1"
+        Some("ra.franken_node.mission_contract.v1"),
+        "franken mission contract schema must be ra.franken_node.mission_contract.v1"
     );
     assert_eq!(
         contract["bead_id"].as_str(),
@@ -1991,8 +1991,8 @@ fn run_all_claim_integrity_gate_wires_fail_closed_conditions() {
         "claim_integrity.franken_node_requested_claim_tier_known",
         "claim_integrity.franken_node_requested_claim_tier_allowed",
         "claim_integrity.franken_node_claim_gate_status_json",
-        "pi.franken_node.claim_gate_status.v1",
-        "pi.franken_node.kernel_boundary_drift_report.v1",
+        "ra.franken_node.claim_gate_status.v1",
+        "ra.franken_node.kernel_boundary_drift_report.v1",
         "\"franken_node_claim_gate_status\"",
         "\"franken_node_kernel_boundary_drift_report\"",
     ] {
@@ -2267,7 +2267,7 @@ fn run_all_emits_scenario_cell_status_artifacts() {
     let run_all = load_text("scripts/e2e/run_all.sh");
 
     for token in [
-        "pi.claim_integrity.scenario_cell_status.v1",
+        "ra.claim_integrity.scenario_cell_status.v1",
         "claim_integrity_scenario_cell_status.json",
         "claim_integrity_scenario_cell_status.md",
         "claim_integrity.scenario_cell_status_json",
@@ -2295,7 +2295,7 @@ fn run_all_emits_evidence_adjudication_matrix_artifacts() {
     let run_all = load_text("scripts/e2e/run_all.sh");
 
     for token in [
-        "pi.claim_integrity.evidence_adjudication_matrix.v1",
+        "ra.claim_integrity.evidence_adjudication_matrix.v1",
         "claim_integrity_evidence_adjudication_matrix.json",
         "claim_integrity_evidence_adjudication_matrix.md",
         "claim_integrity.evidence_adjudication_matrix_json",
@@ -2326,7 +2326,7 @@ fn run_all_wires_reactor_comparison_evidence_tokens() {
         "reactor_comparison.p95_delta_us",
         "reactor_comparison.p99_delta_us",
         "reactor_comparison.contention_proxy_improved",
-        "pi.ext.stress_comparison.v1",
+        "ra.ext.stress_comparison.v1",
         "Reactor comparison throughput gain (%)",
     ] {
         assert!(
@@ -2712,11 +2712,11 @@ fn test_double_inventory_schema_is_versioned() {
 fn runtime_hostcall_telemetry_schema_is_versioned() {
     let schema = load_json(RUNTIME_HOSTCALL_TELEMETRY_SCHEMA_PATH);
     assert_eq!(
-        schema["properties"]["schema"]["enum"][0], "pi.ext.hostcall_telemetry.v1",
+        schema["properties"]["schema"]["enum"][0], "ra.ext.hostcall_telemetry.v1",
         "runtime hostcall telemetry schema id must be versioned and canonical"
     );
     assert_eq!(
-        schema["$defs"]["event"]["properties"]["schema"]["enum"][0], "pi.ext.hostcall_telemetry.v1",
+        schema["$defs"]["event"]["properties"]["schema"]["enum"][0], "ra.ext.hostcall_telemetry.v1",
         "runtime hostcall telemetry event schema id must match artifact schema"
     );
 }
@@ -3014,7 +3014,7 @@ fn parse_perf3x_critical_beads_from_full_suite_gate_source(
 fn evidence_logging_contract_schema_exists_and_is_valid_json() {
     let schema = load_json(EVIDENCE_LOGGING_CONTRACT_PATH);
     assert_eq!(
-        schema["$id"], "pi.test.evidence_logging_contract.v1",
+        schema["$id"], "ra.test.evidence_logging_contract.v1",
         "contract schema must have correct $id"
     );
     assert_eq!(
@@ -3099,16 +3099,16 @@ fn evidence_logging_instance_schema_registry_contains_all_canonical_schemas() {
         .collect();
 
     let required_schemas = [
-        "pi.test.log.v2",
-        "pi.test.artifact.v1",
-        "pi.qa.evidence_contract.v1",
+        "ra.test.log.v2",
+        "ra.test.artifact.v1",
+        "ra.qa.evidence_contract.v1",
         "pi.e2e.failure_digest.v1",
-        "pi.parity.test_logging_contract.v1",
-        "pi.ext.rust_bench.v1",
-        "pi.perf.budget.v1",
-        "pi.bench.protocol.v1",
-        "pi.perf.sli_ux_matrix.v1",
-        "pi.test.transcript.v1",
+        "ra.parity.test_logging_contract.v1",
+        "ra.ext.rust_bench.v1",
+        "ra.perf.budget.v1",
+        "ra.bench.protocol.v1",
+        "ra.perf.sli_ux_matrix.v1",
+        "ra.test.transcript.v1",
     ];
     for schema_id in &required_schemas {
         assert!(
@@ -3131,7 +3131,7 @@ fn evidence_logging_instance_has_schema_relationships() {
     );
     // Verify evidence contract references test log schema
     let has_evidence_to_log = relationships.iter().any(|r| {
-        r["from_schema"] == "pi.qa.evidence_contract.v1" && r["to_schema"] == "pi.test.log.v2"
+        r["from_schema"] == "ra.qa.evidence_contract.v1" && r["to_schema"] == "ra.test.log.v2"
     });
     assert!(
         has_evidence_to_log,
@@ -3245,8 +3245,8 @@ fn evidence_logging_instance_perf_evidence_contract_is_complete() {
     let instance = load_json(EVIDENCE_LOGGING_INSTANCE_PATH);
     let perf = &instance["perf_evidence_contract"];
     assert_eq!(
-        perf["schema"], "pi.perf.evidence.v1",
-        "perf evidence must use pi.perf.evidence.v1 schema"
+        perf["schema"], "ra.perf.evidence.v1",
+        "perf evidence must use ra.perf.evidence.v1 schema"
     );
     // Must define required record types
     let record_types = perf["required_record_types"]
@@ -3276,8 +3276,8 @@ fn evidence_logging_instance_bead_coverage_contract_is_complete() {
     let instance = load_json(EVIDENCE_LOGGING_INSTANCE_PATH);
     let coverage = &instance["bead_coverage_contract"];
     assert_eq!(
-        coverage["schema"], "pi.perf.bead_coverage.v1",
-        "bead coverage must use pi.perf.bead_coverage.v1 schema"
+        coverage["schema"], "ra.perf.bead_coverage.v1",
+        "bead coverage must use ra.perf.bead_coverage.v1 schema"
     );
     // Must define coverage policy
     let policy = &coverage["coverage_policy"];
@@ -3519,7 +3519,7 @@ bin="$target_dir/$profile/examples/pijs_workload"
 mkdir -p "$(dirname "$bin")"
 cat > "$bin" <<'EOF'
 #!/usr/bin/env bash
-echo '{"schema":"pi.perf.workload.stub.v1"}'
+echo '{"schema":"ra.perf.workload.stub.v1"}'
 EOF
 chmod +x "$bin"
 "#,
@@ -3698,8 +3698,8 @@ fn orchestrate_script_generates_manifest_with_required_schema() {
     let content = load_text(ORCHESTRATE_SCRIPT_PATH);
 
     assert!(
-        content.contains("pi.perf.run_manifest.v1"),
-        "orchestrate.sh must emit manifest with schema pi.perf.run_manifest.v1"
+        content.contains("ra.perf.run_manifest.v1"),
+        "orchestrate.sh must emit manifest with schema ra.perf.run_manifest.v1"
     );
 
     let required_manifest_fields = [
@@ -3759,8 +3759,8 @@ fn orchestrate_script_generates_baseline_variance_confidence_artifact() {
         "orchestrate.sh must emit baseline_variance_confidence.json"
     );
     assert!(
-        content.contains("pi.perf.baseline_variance_confidence.v1"),
-        "orchestrate.sh must emit pi.perf.baseline_variance_confidence.v1 schema"
+        content.contains("ra.perf.baseline_variance_confidence.v1"),
+        "orchestrate.sh must emit ra.perf.baseline_variance_confidence.v1 schema"
     );
 
     let required_fields = [
@@ -3790,8 +3790,8 @@ fn orchestrate_script_generates_pgo_pipeline_summary_artifact() {
         "orchestrate.sh must emit pgo_pipeline_summary.json"
     );
     assert!(
-        content.contains("pi.perf.pgo_pipeline_summary.v1"),
-        "orchestrate.sh must emit pi.perf.pgo_pipeline_summary.v1 schema"
+        content.contains("ra.perf.pgo_pipeline_summary.v1"),
+        "orchestrate.sh must emit ra.perf.pgo_pipeline_summary.v1 schema"
     );
 
     for field in &[
@@ -3813,10 +3813,10 @@ fn orchestrate_script_references_contract_schemas() {
     let content = load_text(ORCHESTRATE_SCRIPT_PATH);
 
     let contract_schemas = [
-        "pi.test.evidence_logging_contract.v1",
-        "pi.qa.evidence_contract.v1",
-        "pi.bench.protocol.v1",
-        "pi.perf.sli_ux_matrix.v1",
+        "ra.test.evidence_logging_contract.v1",
+        "ra.qa.evidence_contract.v1",
+        "ra.bench.protocol.v1",
+        "ra.perf.sli_ux_matrix.v1",
     ];
 
     for schema in &contract_schemas {
@@ -3861,8 +3861,8 @@ fn bundle_script_generates_metadata_sidecar() {
     let content = load_text(BUNDLE_SCRIPT_PATH);
 
     assert!(
-        content.contains("pi.perf.bundle_meta.v1"),
-        "bundle.sh must emit metadata with schema pi.perf.bundle_meta.v1"
+        content.contains("ra.perf.bundle_meta.v1"),
+        "bundle.sh must emit metadata with schema ra.perf.bundle_meta.v1"
     );
 
     assert!(
@@ -3876,8 +3876,8 @@ fn bundle_script_generates_inventory() {
     let content = load_text(BUNDLE_SCRIPT_PATH);
 
     assert!(
-        content.contains("pi.perf.bundle_inventory.v1"),
-        "bundle.sh must emit inventory with schema pi.perf.bundle_inventory.v1"
+        content.contains("ra.perf.bundle_inventory.v1"),
+        "bundle.sh must emit inventory with schema ra.perf.bundle_inventory.v1"
     );
 
     assert!(
@@ -3944,12 +3944,12 @@ fn bench_extension_workloads_script_emits_pgo_comparison_and_event_schemas() {
     let content = load_text(BENCH_EXTENSION_WORKLOADS_SCRIPT_PATH);
 
     assert!(
-        content.contains("pi.perf.pgo_pipeline_event.v1"),
-        "bench_extension_workloads.sh must emit pi.perf.pgo_pipeline_event.v1 records"
+        content.contains("ra.perf.pgo_pipeline_event.v1"),
+        "bench_extension_workloads.sh must emit ra.perf.pgo_pipeline_event.v1 records"
     );
     assert!(
-        content.contains("pi.perf.pgo_comparison.v1"),
-        "bench_extension_workloads.sh must emit pi.perf.pgo_comparison.v1 comparison artifacts"
+        content.contains("ra.perf.pgo_comparison.v1"),
+        "bench_extension_workloads.sh must emit ra.perf.pgo_comparison.v1 comparison artifacts"
     );
     assert!(
         content.contains("pgo_delta_"),
@@ -4123,7 +4123,7 @@ fn bench_extension_workloads_compare_mode_emits_reproducible_artifact_lineage() 
 
     assert_eq!(
         comparison_payload["schema"].as_str(),
-        Some("pi.perf.pgo_comparison.v1"),
+        Some("ra.perf.pgo_comparison.v1"),
         "comparison artifact must use expected schema"
     );
     assert_eq!(
@@ -4183,8 +4183,8 @@ fn capture_baseline_script_exists() {
 fn capture_baseline_script_emits_variance_schema() {
     let content = load_text(CAPTURE_BASELINE_SCRIPT_PATH);
     assert!(
-        content.contains("pi.perf.baseline_variance.v1"),
-        "capture_baseline.sh must emit schema pi.perf.baseline_variance.v1"
+        content.contains("ra.perf.baseline_variance.v1"),
+        "capture_baseline.sh must emit schema ra.perf.baseline_variance.v1"
     );
 }
 
@@ -4235,8 +4235,8 @@ fn capture_baseline_script_supports_cross_environment_diagnosis_mode() {
         "--diagnose-env",
         "--diagnose-output",
         "--variance-alert-pct",
-        "pi.perf.cross_env_variance_diagnosis.v1",
-        "pi.perf.cross_env_variance_diagnostic.v1",
+        "ra.perf.cross_env_variance_diagnosis.v1",
+        "ra.perf.cross_env_variance_diagnostic.v1",
     ] {
         assert!(
             content.contains(token),
@@ -4253,10 +4253,10 @@ fn baseline_variance_schema_in_evidence_instance() {
         .expect("must have schemas");
     let found = schemas
         .iter()
-        .any(|s| s["schema_id"].as_str() == Some("pi.perf.baseline_variance.v1"));
+        .any(|s| s["schema_id"].as_str() == Some("ra.perf.baseline_variance.v1"));
     assert!(
         found,
-        "pi.perf.baseline_variance.v1 must be in schema registry"
+        "ra.perf.baseline_variance.v1 must be in schema registry"
     );
 }
 
@@ -4268,8 +4268,8 @@ fn run_manifest_schema_in_evidence_instance() {
         .expect("must have schemas");
     let found = schemas
         .iter()
-        .any(|s| s["schema_id"].as_str() == Some("pi.perf.run_manifest.v1"));
-    assert!(found, "pi.perf.run_manifest.v1 must be in schema registry");
+        .any(|s| s["schema_id"].as_str() == Some("ra.perf.run_manifest.v1"));
+    assert!(found, "ra.perf.run_manifest.v1 must be in schema registry");
 }
 
 #[test]
@@ -4280,7 +4280,7 @@ fn baseline_variance_has_schema_relationships() {
         .expect("must have relationships");
     let has_baseline_rel = relationships
         .iter()
-        .any(|r| r["from_schema"].as_str() == Some("pi.perf.baseline_variance.v1"));
+        .any(|r| r["from_schema"].as_str() == Some("ra.perf.baseline_variance.v1"));
     assert!(
         has_baseline_rel,
         "baseline_variance schema must have relationship entries"
@@ -4305,7 +4305,7 @@ fn orchestrate_script_supports_cross_environment_diagnosis_flow() {
         "PERF_CROSS_ENV_ENFORCE",
         "cross_env_variance_diagnosis",
         "--diagnose-env",
-        "pi.perf.cross_env_variance_diagnosis.v1",
+        "ra.perf.cross_env_variance_diagnosis.v1",
     ] {
         assert!(
             content.contains(token),
@@ -4322,7 +4322,7 @@ fn capture_baseline_cross_env_diagnosis_emits_structured_report_and_log() {
     let diagnosis_out = temp.path().join("cross_env_diagnosis.json");
 
     let baseline_ci_payload = serde_json::json!({
-        "schema": "pi.perf.baseline_variance.v1",
+        "schema": "ra.perf.baseline_variance.v1",
         "version": "1.0.0",
         "git_commit": "aaaaaaaa",
         "measurement_rounds": 5,
@@ -4343,7 +4343,7 @@ fn capture_baseline_cross_env_diagnosis_emits_structured_report_and_log() {
         ]
     });
     let baseline_canary_payload = serde_json::json!({
-        "schema": "pi.perf.baseline_variance.v1",
+        "schema": "ra.perf.baseline_variance.v1",
         "version": "1.0.0",
         "git_commit": "bbbbbbbb",
         "measurement_rounds": 5,
@@ -4408,7 +4408,7 @@ fn capture_baseline_cross_env_diagnosis_emits_structured_report_and_log() {
 
     assert_eq!(
         report["schema"].as_str(),
-        Some("pi.perf.cross_env_variance_diagnosis.v1"),
+        Some("ra.perf.cross_env_variance_diagnosis.v1"),
         "diagnosis report must use cross-env diagnosis schema"
     );
     assert_eq!(
@@ -4453,7 +4453,7 @@ fn capture_baseline_cross_env_diagnosis_emits_structured_report_and_log() {
     for entry in parsed_lines {
         assert_eq!(
             entry["schema"].as_str(),
-            Some("pi.perf.cross_env_variance_diagnostic.v1"),
+            Some("ra.perf.cross_env_variance_diagnostic.v1"),
             "diagnostics log entries must use cross-env diagnostic schema"
         );
         assert!(

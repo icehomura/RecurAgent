@@ -13,13 +13,13 @@ use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 // The single definition lives in src/; see its doc for why three copies
 // of this number was itself a defect (bd-649i1).
-use pi::semantic_workspace_graph::PERF_CANONICAL_BUDGET_INVENTORY_SHA256;
+use ra::semantic_workspace_graph::PERF_CANONICAL_BUDGET_INVENTORY_SHA256;
 
-const REPORT_SCHEMA: &str = "pi.release_readiness.v1";
-const CONFORMANCE_SUMMARY_SCHEMA: &str = "pi.ext.conformance_summary.v2";
+const REPORT_SCHEMA: &str = "ra.release_readiness.v1";
+const CONFORMANCE_SUMMARY_SCHEMA: &str = "ra.ext.conformance_summary.v2";
 const CONFORMANCE_SUMMARY_PATH: &str = "tests/ext_conformance/reports/conformance_summary.json";
 const CONFORMANCE_MAX_AGE_HOURS: i64 = 168;
-const MUST_PASS_GATE_SCHEMA: &str = "pi.ext.must_pass_gate.v1";
+const MUST_PASS_GATE_SCHEMA: &str = "ra.ext.must_pass_gate.v1";
 const MUST_PASS_INCLUSION_PATH: &str = "docs/extension-inclusion-list.json";
 const MUST_PASS_MANIFEST_PATH: &str = "tests/ext_conformance/VALIDATED_MANIFEST.json";
 const MUST_PASS_VERDICT_PATH: &str =
@@ -28,15 +28,15 @@ const MUST_PASS_EVENTS_PATH: &str = "tests/ext_conformance/reports/gate/must_pas
 const MUST_PASS_EVIDENCE_PATHS: &[&str] = &[MUST_PASS_VERDICT_PATH, MUST_PASS_EVENTS_PATH];
 const MUST_PASS_ARTIFACTS_PATH: &str = "tests/ext_conformance/artifacts";
 const EXPECTED_CANONICAL_MUST_PASS_EXTENSIONS_V1: u64 = 208;
-const NON_MOCK_RUBRIC_SCHEMA: &str = "pi.qa.non_mock_rubric.v1";
-const FULL_SUITE_GATE_SCHEMA: &str = "pi.ci.full_suite_gate.v1";
-const EXT_REMEDIATION_BACKLOG_SCHEMA: &str = "pi.qa.extension_remediation_backlog.v1";
+const NON_MOCK_RUBRIC_SCHEMA: &str = "ra.qa.non_mock_rubric.v1";
+const FULL_SUITE_GATE_SCHEMA: &str = "ra.ci.full_suite_gate.v1";
+const EXT_REMEDIATION_BACKLOG_SCHEMA: &str = "ra.qa.extension_remediation_backlog.v1";
 const PRACTICAL_FINISH_CHECKPOINT_SCHEMA: &str = "pi.perf3x.practical_finish_checkpoint.v1";
-const PARAMETER_SWEEPS_SCHEMA: &str = "pi.perf.parameter_sweeps.v1";
+const PARAMETER_SWEEPS_SCHEMA: &str = "ra.perf.parameter_sweeps.v1";
 const PARAMETER_SWEEPS_PRIMARY_ARTIFACT_REL: &str = "tests/perf/reports/parameter_sweeps.json";
-const OPPORTUNITY_MATRIX_SCHEMA: &str = "pi.perf.opportunity_matrix.v1";
+const OPPORTUNITY_MATRIX_SCHEMA: &str = "ra.perf.opportunity_matrix.v1";
 const OPPORTUNITY_MATRIX_PRIMARY_ARTIFACT_REL: &str = "tests/perf/reports/opportunity_matrix.json";
-const PERF_BUDGET_SUMMARY_SCHEMA: &str = "pi.perf.budget_summary.v2";
+const PERF_BUDGET_SUMMARY_SCHEMA: &str = "ra.perf.budget_summary.v2";
 const PERF_BUDGET_SUMMARY_PATH: &str = "tests/perf/reports/budget_summary.json";
 const PERF_CANONICAL_BUDGET_COUNT: usize = 19;
 const PERF_MAX_EVIDENCE_AGE_HOURS: i64 = 168;
@@ -661,7 +661,7 @@ fn parse_canonical_must_pass_ids(
 ) -> Result<BTreeSet<String>, String> {
     let inclusion: V = parse_release_json(inclusion_contents)
         .map_err(|err| format!("failed to parse {MUST_PASS_INCLUSION_PATH}: {err}"))?;
-    if get_str(&inclusion, "/schema") != "pi.ext.inclusion_list.v1" {
+    if get_str(&inclusion, "/schema") != "ra.ext.inclusion_list.v1" {
         return Err(format!(
             "unexpected schema in {MUST_PASS_INCLUSION_PATH}: {}",
             get_str(&inclusion, "/schema")
@@ -799,7 +799,7 @@ fn validate_must_pass_event_metadata(
     line_number: usize,
     expected: &ExpectedMustPassEventLineage<'_>,
 ) -> Result<(), String> {
-    if get_str(event, "/schema") != "pi.ext.gate_event.v1" {
+    if get_str(event, "/schema") != "ra.ext.gate_event.v1" {
         return Err(format!(
             "invalid must-pass event schema at {MUST_PASS_EVENTS_PATH}:{line_number}"
         ));
@@ -1098,7 +1098,7 @@ fn validate_certified_must_pass_against_contents(
     }
 
     let events_sha256 =
-        pi::package_manager::hex_encode(&Sha256::digest(events_contents.as_bytes()));
+        ra::package_manager::hex_encode(&Sha256::digest(events_contents.as_bytes()));
     (
         Signal::Pass,
         format!(
@@ -1148,7 +1148,7 @@ fn current_git_commit(root: &Path) -> Result<String, String> {
         }
     }
 
-    if let Ok(commit) = std::env::var("PI_PROVIDER_REPLAY_GIT_COMMIT") {
+    if let Ok(commit) = std::env::var("RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT") {
         let commit = commit.trim();
         if matches!(commit.len(), 40 | 64)
             && commit.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -1592,7 +1592,7 @@ fn must_pass_tree_records(
 
 fn source_tree_sha256(records: &[(String, String, String)]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"pi.ext.must_pass_source_tree.v2\0");
+    hasher.update(b"ra.ext.must_pass_source_tree.v2\0");
     for (path, mode, blob) in records {
         hasher.update(path.as_bytes());
         hasher.update([0]);
@@ -1601,7 +1601,7 @@ fn source_tree_sha256(records: &[(String, String, String)]) -> String {
         hasher.update(blob.as_bytes());
         hasher.update([0]);
     }
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 fn canonical_git_tree_sha256(root: &Path, commit: &str) -> Result<String, String> {
@@ -1620,7 +1620,7 @@ fn canonical_git_tree_sha256(root: &Path, commit: &str) -> Result<String, String
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    Ok(pi::package_manager::hex_encode(&Sha256::digest(
+    Ok(ra::package_manager::hex_encode(&Sha256::digest(
         &output.stdout,
     )))
 }
@@ -1632,13 +1632,13 @@ fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
             let mut hasher = Sha1::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         64 => {
             let mut hasher = Sha256::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         length => Err(format!("unsupported Git object ID length: {length}")),
     }
@@ -1872,8 +1872,8 @@ fn capture_must_pass_source_snapshot(root: &Path) -> Result<MustPassSourceSnapsh
     Ok(MustPassSourceSnapshot {
         git_commit,
         source_tree_sha256: source_tree_sha256(&records),
-        inclusion_sha256: pi::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
-        manifest_sha256: pi::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
+        inclusion_sha256: ra::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
+        manifest_sha256: ra::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
         inclusion_contents,
         manifest_contents,
         tracked_paths,
@@ -2477,7 +2477,7 @@ fn evaluate_committed_conformance_summary(root: &Path) -> (Signal, String, Optio
             None,
         );
     }
-    let sha256 = pi::package_manager::hex_encode(&Sha256::digest(&artifact_before.contents));
+    let sha256 = ra::package_manager::hex_encode(&Sha256::digest(&artifact_before.contents));
     (signal, detail, Some(sha256))
 }
 
@@ -3587,7 +3587,7 @@ fn performance_budget_inventory_sha256(budgets: &[V]) -> Result<String, String> 
         .map_err(|error| format!("failed to serialize canonical budget inventory: {error}"))?;
     }
     canonical.push(']');
-    Ok(pi::package_manager::hex_encode(&Sha256::digest(
+    Ok(ra::package_manager::hex_encode(&Sha256::digest(
         canonical.as_bytes(),
     )))
 }
@@ -5353,7 +5353,7 @@ fn release_readiness_collectors_fail_closed_on_duplicate_json() {
         .expect("create performance evidence directory");
     std::fs::write(
         &path,
-        br#"{"schema":"pi.perf.budget_summary.v2","schema":"forged"}"#,
+        br#"{"schema":"ra.perf.budget_summary.v2","schema":"forged"}"#,
     )
     .expect("write duplicate-key performance evidence");
 
@@ -5388,7 +5388,7 @@ fn performance_git_environment_scrubbing_is_ascii_case_insensitive() {
             std::ffi::OsString::from("1"),
         ),
         (
-            std::ffi::OsString::from("PI_RELEASE_TEST_SENTINEL"),
+            std::ffi::OsString::from("RECUR_AGENT_RELEASE_TEST_SENTINEL"),
             std::ffi::OsString::from("retained"),
         ),
     ];
@@ -5407,7 +5407,7 @@ fn performance_git_environment_scrubbing_is_ascii_case_insensitive() {
         );
     }
     assert!(command.get_envs().any(|(key, value)| {
-        key == "PI_RELEASE_TEST_SENTINEL"
+        key == "RECUR_AGENT_RELEASE_TEST_SENTINEL"
             && value.is_some_and(|value| value == std::ffi::OsStr::new("retained"))
     }));
 }
@@ -5493,7 +5493,7 @@ fn performance_budget_v2_blocked_claim_fails_closed() {
 fn performance_budget_legacy_v1_cannot_authorize_claims() {
     let fixture = performance_source_repository_fixture();
     let mut summary = fixture.summary.clone();
-    summary["schema"] = serde_json::json!("pi.perf.budget_summary.v1");
+    summary["schema"] = serde_json::json!("ra.perf.budget_summary.v1");
     let (signal, detail) = validate_performance_budget_summary(fixture.root.path(), &summary);
     assert_eq!(signal, Signal::Fail, "{detail}");
     assert!(detail.contains(PERF_BUDGET_SUMMARY_SCHEMA), "{detail}");
@@ -6109,8 +6109,8 @@ fn signal_serde_roundtrip() {
 
 // ── Final QA Certification (bd-1f42.7.3) ────────────────────────────────────
 
-const CERT_SCHEMA: &str = "pi.qa.final_certification.v1";
-const GENERATE_FINAL_CERTIFICATION_ENV: &str = "PI_GENERATE_FINAL_CERTIFICATION";
+const CERT_SCHEMA: &str = "ra.qa.final_certification.v1";
+const GENERATE_FINAL_CERTIFICATION_ENV: &str = "RECUR_AGENT_GENERATE_FINAL_CERTIFICATION";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CertEvidence {
@@ -6204,7 +6204,7 @@ fn build_phase5_go_no_go_snapshot(
 
 fn sha256_file(path: &Path) -> Option<String> {
     let data = std::fs::read(path).ok()?;
-    Some(pi::package_manager::hex_encode(&Sha256::digest(data)))
+    Some(ra::package_manager::hex_encode(&Sha256::digest(data)))
 }
 
 fn check_cert_gate(
@@ -6224,7 +6224,7 @@ fn check_cert_gate(
             ),
             Ok(value) => {
                 let (signal, detail) = check(&value);
-                let sha = pi::package_manager::hex_encode(&Sha256::digest(&artifact.contents));
+                let sha = ra::package_manager::hex_encode(&Sha256::digest(&artifact.contents));
                 (signal, detail, Some(sha))
             }
         },
@@ -6570,7 +6570,7 @@ fn write_final_certification_artifacts(
     let mut events = String::new();
     for evidence in &cert.evidence {
         let event = serde_json::json!({
-            "schema": "pi.qa.certification_event.v1",
+            "schema": "ra.qa.certification_event.v1",
             "timestamp": cert.generated_at,
             "git_commit": cert.git_commit,
             "source_tree_sha256": cert.source_tree_sha256,
@@ -6804,7 +6804,7 @@ fn parse_must_pass_gate_verdict_does_not_replace_current_zero_counts_with_legacy
 #[test]
 fn validate_must_pass_gate_metadata_accepts_current_schema() {
     let gate = serde_json::json!({
-        "schema": "pi.ext.must_pass_gate.v1",
+        "schema": "ra.ext.must_pass_gate.v1",
         "generated_at": "2026-02-17T03:06:08.928Z",
         "run_id": "local-20260217T030608928Z",
         "correlation_id": "must-pass-gate-local-20260217T030608928Z",
@@ -6986,7 +6986,7 @@ fn write_must_pass_catalog_fixtures(root: &Path, canonical_ids: &[&str]) -> (Str
     let canonical_count =
         u64::try_from(canonical_ids.len()).expect("canonical fixture count fits u64");
     let inclusion = serde_json::json!({
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "tier1": canonical_ids
             .iter()
             .map(|id| serde_json::json!({"id": id}))
@@ -7032,7 +7032,7 @@ fn write_must_pass_events_fixture(
             .position(|candidate| candidate == id)
             .map_or(1, |index| if index % 2 == 0 { 1 } else { 3 });
         let event = serde_json::json!({
-            "schema": "pi.ext.gate_event.v1",
+            "schema": "ra.ext.gate_event.v1",
             "run_id": run_id,
             "correlation_id": correlation_id,
             "git_commit": TEST_MUST_PASS_GIT_COMMIT,
@@ -7358,7 +7358,7 @@ fn canonical_must_pass_rejects_tier_zero() {
     std::fs::write(
         &inclusion_path,
         serde_json::to_vec_pretty(&serde_json::json!({
-            "schema": "pi.ext.inclusion_list.v1",
+            "schema": "ra.ext.inclusion_list.v1",
             "tier1": [{"id": "invalid-zero-tier"}],
             "tier1_review": [],
             "summary": {
@@ -7731,7 +7731,7 @@ fn non_mock_rubric_accepts_current_schema() {
 
 #[test]
 fn non_mock_rubric_rejects_legacy_schema() {
-    let rubric = serde_json::json!({"schema": "pi.test.non_mock_rubric.v1"});
+    let rubric = serde_json::json!({"schema": "ra.test.non_mock_rubric.v1"});
 
     let (signal, detail) = validate_non_mock_rubric(&rubric);
     assert_eq!(signal, Signal::Fail);
@@ -7763,7 +7763,7 @@ fn current_conformance_summary_accepts_complete_reconciled_counts() {
 #[test]
 fn current_conformance_summary_rejects_incoherent_counts() {
     let summary = serde_json::json!({
-        "schema": "pi.ext.conformance_summary.v2",
+        "schema": "ra.ext.conformance_summary.v2",
         "counts": {"total": 2, "tested": 2, "pass": 1, "fail": 0, "na": 0}
     });
 
@@ -7886,7 +7886,7 @@ fn practical_finish_checkpoint_rejects_residual_count_mismatch() {
 #[test]
 fn parameter_sweeps_contract_accepts_consistent_shape() {
     let artifact = serde_json::json!({
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json"
@@ -7926,7 +7926,7 @@ fn parameter_sweeps_contract_accepts_consistent_shape() {
 #[test]
 fn parameter_sweeps_contract_rejects_readiness_incoherence() {
     let artifact = serde_json::json!({
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json"
@@ -7970,7 +7970,7 @@ fn parameter_sweeps_contract_rejects_readiness_incoherence() {
 #[test]
 fn opportunity_matrix_contract_accepts_consistent_shape() {
     let artifact = serde_json::json!({
-        "schema": "pi.perf.opportunity_matrix.v1",
+        "schema": "ra.perf.opportunity_matrix.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
@@ -7999,7 +7999,7 @@ fn opportunity_matrix_contract_accepts_consistent_shape() {
 #[test]
 fn opportunity_matrix_contract_rejects_readiness_incoherence() {
     let artifact = serde_json::json!({
-        "schema": "pi.perf.opportunity_matrix.v1",
+        "schema": "ra.perf.opportunity_matrix.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",

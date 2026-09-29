@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const DRIFT_WATCH_CONTRACT_SCHEMA: &str = "pi.perf.drift_watch.contract.v1";
-pub const DRIFT_WATCH_ARTIFACT_SCHEMA: &str = "pi.perf.drift_watch.v1";
+pub const DRIFT_WATCH_CONTRACT_SCHEMA: &str = "ra.perf.drift_watch.contract.v1";
+pub const DRIFT_WATCH_ARTIFACT_SCHEMA: &str = "ra.perf.drift_watch.v1";
 
 #[derive(Debug, Parser)]
 #[command(name = "perf_drift_watch")]
@@ -486,7 +486,7 @@ pub fn verify_drift_artifact(
     };
 
     VerificationReport {
-        schema: "pi.perf.drift_watch.verification_report.v1".to_string(),
+        schema: "ra.perf.drift_watch.verification_report.v1".to_string(),
         status,
         evaluated_budgets: artifact.analyses.len(),
         errors,

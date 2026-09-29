@@ -11,8 +11,8 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     ExtensionManager, ExtensionPolicy, ExtensionPolicyMode, HostCallContext, HostCallPayload,
     RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION, RUNTIME_RISK_LEDGER_SCHEMA_VERSION,
     RuntimeRiskActionValue, RuntimeRiskCalibrationConfig, RuntimeRiskCalibrationObjective,
@@ -23,7 +23,7 @@ use pi::extensions::{
     replay_runtime_risk_ledger_artifact, runtime_risk_compute_ledger_hash_artifact,
     runtime_risk_ledger_data_hash, verify_runtime_risk_ledger_artifact,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 
 // ============================================================================
@@ -430,7 +430,7 @@ fn tamper_schema_version_mismatch_detected() {
     )];
     let mut artifact = build_valid_artifact(entries);
 
-    artifact.schema = "pi.ext.runtime_risk_ledger.v999".to_string();
+    artifact.schema = "ra.ext.runtime_risk_ledger.v999".to_string();
 
     let report = verify_runtime_risk_ledger_artifact(&artifact);
     assert!(!report.valid, "wrong schema must fail verification");
@@ -587,9 +587,9 @@ fn calibration_objectives_differ() {
         .expect("BalancedAccuracy calibration");
 
     // All must produce valid schema
-    assert_eq!(report_mel.schema, "pi.ext.runtime_risk_calibration.v1");
-    assert_eq!(report_mfp.schema, "pi.ext.runtime_risk_calibration.v1");
-    assert_eq!(report_ba.schema, "pi.ext.runtime_risk_calibration.v1");
+    assert_eq!(report_mel.schema, "ra.ext.runtime_risk_calibration.v1");
+    assert_eq!(report_mfp.schema, "ra.ext.runtime_risk_calibration.v1");
+    assert_eq!(report_ba.schema, "ra.ext.runtime_risk_calibration.v1");
 
     // Source data hash must match
     assert_eq!(report_mel.source_data_hash, artifact.data_hash);

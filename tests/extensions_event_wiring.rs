@@ -12,18 +12,18 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
     PROTOCOL_VERSION, RegisterPayload,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::model::ToolCall;
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::model::ToolCall;
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 const GENERATE_LIFECYCLE_HOOK_PARITY_ARTIFACT_ENV: &str =
-    "PI_GENERATE_LIFECYCLE_HOOK_PARITY_ARTIFACT";
+    "RECUR_AGENT_GENERATE_LIFECYCLE_HOOK_PARITY_ARTIFACT";
 
 fn lifecycle_hook_parity_artifact_generation_enabled(raw: Option<&str>) -> bool {
     raw == Some("1")
@@ -49,7 +49,7 @@ fn load_js_extension(harness: &common::TestHarness, source: &str) -> ExtensionMa
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -89,7 +89,7 @@ fn make_tool_call(name: &str, args: Value) -> ToolCall {
 
 fn make_tool_output(text: &str) -> ToolOutput {
     ToolOutput {
-        content: vec![pi::model::ContentBlock::Text(pi::model::TextContent {
+        content: vec![ra::model::ContentBlock::Text(ra::model::TextContent {
             text: text.to_string(),
             text_signature: None,
         })],
@@ -252,7 +252,7 @@ fn build_lifecycle_hook_parity_artifact(
     cancellable_results: &[Value],
 ) -> Value {
     json!({
-        "schema": "pi.ext.lifecycle_hook_parity_matrix.v1",
+        "schema": "ra.ext.lifecycle_hook_parity_matrix.v1",
         "generated_at": chrono::Utc::now()
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         "status": "pass",
@@ -272,7 +272,7 @@ fn build_lifecycle_hook_parity_artifact(
         ],
         "ordering_trace": ordering_trace,
         "cancellable_assertions": cancellable_results,
-        "reproduce_command": "PI_GENERATE_LIFECYCLE_HOOK_PARITY_ARTIFACT=1 cargo test --test extensions_event_wiring lifecycle_hook_parity_matrix_writes_evidence_artifact -- --exact --nocapture",
+        "reproduce_command": "RECUR_AGENT_GENERATE_LIFECYCLE_HOOK_PARITY_ARTIFACT=1 cargo test --test extensions_event_wiring lifecycle_hook_parity_matrix_writes_evidence_artifact -- --exact --nocapture",
     })
 }
 
@@ -293,7 +293,7 @@ fn validate_and_maybe_write_lifecycle_hook_parity_artifact(
     assert_eq!(roundtripped, artifact, "lifecycle hook artifact roundtrip");
     assert_eq!(
         roundtripped.get("schema").and_then(Value::as_str),
-        Some("pi.ext.lifecycle_hook_parity_matrix.v1")
+        Some("ra.ext.lifecycle_hook_parity_matrix.v1")
     );
     assert_eq!(
         roundtripped.get("status").and_then(Value::as_str),
@@ -991,7 +991,7 @@ fn event_ordering_startup_then_tool_call_then_agent_end() {
                 .expect("dispatch tool_call");
 
             let output = ToolOutput {
-                content: vec![pi::model::ContentBlock::Text(pi::model::TextContent {
+                content: vec![ra::model::ContentBlock::Text(ra::model::TextContent {
                     text: "ok".to_string(),
                     text_signature: None,
                 })],
@@ -1221,7 +1221,7 @@ fn load_js_extensions(harness: &common::TestHarness, sources: &[(&str, &str)]) -
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

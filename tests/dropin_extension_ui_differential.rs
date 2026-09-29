@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-const PI_TEST_RUNNER: &str = env!("CARGO_BIN_EXE_pi");
+const RECUR_AGENT_TEST_RUNNER: &str = env!("CARGO_BIN_EXE_ra");
 const RPC_TEST_PROVIDER: &str = "ollama";
 const RPC_TEST_MODEL: &str = "qwen2.5:0.5b";
 const UI_SCENARIOS: &str =
@@ -267,7 +267,7 @@ fn spawn_output_reader(stdout: ChildStdout) -> Receiver<io::Result<String>> {
 }
 
 fn spawn_rpc_child(root: &Path, extension_path: &Path) -> TestResult<RpcChild> {
-    let mut child = Command::new(PI_TEST_RUNNER)
+    let mut child = Command::new(RECUR_AGENT_TEST_RUNNER)
         .args(["--mode", "rpc", "--print", "-e"])
         .arg(extension_path)
         .args([
@@ -281,10 +281,16 @@ fn spawn_rpc_child(root: &Path, extension_path: &Path) -> TestResult<RpcChild> {
             "--no-prompt-templates",
             "--no-themes",
         ])
-        .env("PI_CODING_AGENT_DIR", root.join("agent").as_os_str())
-        .env("PI_CONFIG_PATH", root.join("settings.json").as_os_str())
-        .env("PI_SESSIONS_DIR", root.join("sessions").as_os_str())
-        .env("PI_PACKAGE_DIR", root.join("packages").as_os_str())
+        .env("RECUR_AGENT_DIR", root.join("agent").as_os_str())
+        .env(
+            "RECUR_AGENT_CONFIG_PATH",
+            root.join("settings.json").as_os_str(),
+        )
+        .env(
+            "RECUR_AGENT_SESSIONS_DIR",
+            root.join("sessions").as_os_str(),
+        )
+        .env("RECUR_AGENT_PACKAGE_DIR", root.join("packages").as_os_str())
         .current_dir(root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -451,7 +457,7 @@ fn g05_extension_ui_differential_fixture_validation() {
 
     assert_eq!(
         scenarios["schema"],
-        "pi.dropin.extension_ui_differential_scenarios.v1"
+        "ra.dropin.extension_ui_differential_scenarios.v1"
     );
     assert_eq!(scenarios["bead"], "bd-lnmtp.2.4");
     assert!(

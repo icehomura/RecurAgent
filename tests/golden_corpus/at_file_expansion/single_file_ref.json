@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "at_file_single_ref",
   "surface": "at_file_expansion",
   "description": "@file expansion: single file reference is expanded into message content",

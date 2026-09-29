@@ -10,17 +10,17 @@ const CLOSEOUT_CONTRACT_PATH: &str = "docs/contracts/validation-broker-closeout-
 const CLOSEOUT_EVIDENCE_PATH: &str = "docs/evidence/validation-broker-closeout-gate.json";
 const README_PATH: &str = "README.md";
 const SWARM_RUNBOOK_PATH: &str = "docs/swarm-operations-runbook.md";
-const EXPECTED_SCHEMA: &str = "pi.validation_broker.contract.v1";
-const EXPECTED_CLOSEOUT_CONTRACT_SCHEMA: &str = "pi.validation_broker.closeout_gate_contract.v1";
-const EXPECTED_CLOSEOUT_SCHEMA: &str = "pi.validation_broker.closeout_gate.v1";
-const EXPECTED_REQUEST_SCHEMA: &str = "pi.validation_broker.request.v1";
-const EXPECTED_SLOT_SCHEMA: &str = "pi.validation_broker.slot.v1";
-const EXPECTED_DECISION_SCHEMA: &str = "pi.validation_broker.decision.v1";
-const EXPECTED_FAULT_CORPUS_SCHEMA: &str = "pi.validation_broker.fault_corpus.v1";
-const EXPECTED_FAULT_EVENT_SCHEMA: &str = "pi.validation_broker.fault_event.v1";
-const EXPECTED_STRESS_PROFILE_CORPUS_SCHEMA: &str = "pi.validation_broker.stress_profile_corpus.v1";
-const EXPECTED_STRESS_BUDGET_REPORT_SCHEMA: &str = "pi.validation_broker.stress_budget_report.v1";
-const EXPECTED_STRESS_EVIDENCE_SCHEMA: &str = "pi.validation_broker.stress_evidence.v1";
+const EXPECTED_SCHEMA: &str = "ra.validation_broker.contract.v1";
+const EXPECTED_CLOSEOUT_CONTRACT_SCHEMA: &str = "ra.validation_broker.closeout_gate_contract.v1";
+const EXPECTED_CLOSEOUT_SCHEMA: &str = "ra.validation_broker.closeout_gate.v1";
+const EXPECTED_REQUEST_SCHEMA: &str = "ra.validation_broker.request.v1";
+const EXPECTED_SLOT_SCHEMA: &str = "ra.validation_broker.slot.v1";
+const EXPECTED_DECISION_SCHEMA: &str = "ra.validation_broker.decision.v1";
+const EXPECTED_FAULT_CORPUS_SCHEMA: &str = "ra.validation_broker.fault_corpus.v1";
+const EXPECTED_FAULT_EVENT_SCHEMA: &str = "ra.validation_broker.fault_event.v1";
+const EXPECTED_STRESS_PROFILE_CORPUS_SCHEMA: &str = "ra.validation_broker.stress_profile_corpus.v1";
+const EXPECTED_STRESS_BUDGET_REPORT_SCHEMA: &str = "ra.validation_broker.stress_budget_report.v1";
+const EXPECTED_STRESS_EVIDENCE_SCHEMA: &str = "ra.validation_broker.stress_evidence.v1";
 const EXPECTED_BEAD_ID: &str = "bd-gusp4.1";
 const EXPECTED_PARENT_BEAD_ID: &str = "bd-gusp4";
 
@@ -809,11 +809,11 @@ fn validation_broker_contract_declares_cli_surface() -> TestResult {
     let contract = load_contract()?;
 
     require(
-        pointer_str(&contract, "/cli_status_schema")? == "pi.validation_broker.cli_status.v1",
+        pointer_str(&contract, "/cli_status_schema")? == "ra.validation_broker.cli_status.v1",
         "CLI status schema mismatch",
     )?;
     require(
-        pointer_str(&contract, "/cli_plan_schema")? == "pi.validation_broker.cli_plan.v1",
+        pointer_str(&contract, "/cli_plan_schema")? == "ra.validation_broker.cli_plan.v1",
         "CLI plan schema mismatch",
     )?;
     require(
@@ -849,7 +849,7 @@ fn validation_broker_contract_declares_doctor_runpack_projection() -> TestResult
         pointer_str(
             &contract,
             "/doctor_runpack_projection_contract/doctor_schema",
-        )? == "pi.doctor.validation_broker_posture.v1",
+        )? == "ra.doctor.validation_broker_posture.v1",
         "Doctor projection schema mismatch",
     )?;
     require(
@@ -921,12 +921,12 @@ fn validation_broker_operator_docs_cover_workflow_privacy_and_cli_flags() -> Tes
     )?;
 
     for fragment in [
-        "pi validation-broker status",
-        "pi validation-broker plan",
-        "pi validation-broker acquire",
-        "pi validation-broker renew",
-        "pi validation-broker release",
-        "--store \"$PI_VALIDATION_BROKER_STORE\"",
+        "ra validation-broker status",
+        "ra validation-broker plan",
+        "ra validation-broker acquire",
+        "ra validation-broker renew",
+        "ra validation-broker release",
+        "--store \"$RECUR_AGENT_VALIDATION_BROKER_STORE\"",
         "--request \"$capture_dir/validation-request.json\"",
         "--inputs \"$capture_dir/validation-inputs.json\"",
         "--slot-id \"$slot_id\"",
@@ -1232,7 +1232,7 @@ fn validation_broker_closeout_gate_artifact_satisfies_contract() -> TestResult {
         "README must link validation broker closeout evidence",
     )?;
     require(
-        runbook.contains("pi.validation_broker.closeout_gate.v1"),
+        runbook.contains("ra.validation_broker.closeout_gate.v1"),
         "runbook must document validation broker closeout schema",
     )?;
     require(

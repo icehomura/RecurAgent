@@ -9,8 +9,8 @@ const EVIDENCE_PATH: &str = "docs/evidence/fourth-wave-self-healing-closeout-gat
 const RUNBOOK_PATH: &str = "docs/swarm-operations-runbook.md";
 const README_PATH: &str = "README.md";
 const EXPECTED_CONTRACT_SCHEMA: &str =
-    "pi.swarm.fourth_wave_self_healing.closeout_gate_contract.v1";
-const EXPECTED_EVIDENCE_SCHEMA: &str = "pi.swarm.fourth_wave_self_healing.closeout_gate.v1";
+    "ra.swarm.fourth_wave_self_healing.closeout_gate_contract.v1";
+const EXPECTED_EVIDENCE_SCHEMA: &str = "ra.swarm.fourth_wave_self_healing.closeout_gate.v1";
 const EXPECTED_PURPOSE: &str =
     "prompt_to_artifact_fourth_wave_self_healing_closeout_gate_not_source_of_truth";
 

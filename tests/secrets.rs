@@ -12,7 +12,7 @@
 //!    placeholders, zero raw secrets (canary assertions).
 //! 2. Model echoes a placeholder into a write → file on disk gets the REAL
 //!    value; a tool echo of the value is masked in outbound provider context.
-//! 3. Block mode refuses the send with a named `PI_SECRET_BLOCK` error.
+//! 3. Block mode refuses the send with a named `RECUR_AGENT_SECRET_BLOCK` error.
 //! 4. Explicit export screening masks known secret values; the local user
 //!    transcript is not claimed to be a redacted export.
 //!
@@ -23,11 +23,11 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::agent::{Agent, AgentConfig};
-use pi::model::StreamEvent;
-use pi::provider::{Context, StreamOptions};
-use pi::secrets::SecretsSettings;
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::agent::{Agent, AgentConfig};
+use ra::model::StreamEvent;
+use ra::provider::{Context, StreamOptions};
+use ra::secrets::SecretsSettings;
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::json;
 use std::path::Path;
 use std::pin::Pin;
@@ -57,12 +57,12 @@ fn block_on_local<F: std::future::Future>(future: F) -> F::Output {
     runtime.block_on(Box::pin(future))
 }
 
-fn first_text(output: &pi::tools::ToolOutput) -> &str {
+fn first_text(output: &ra::tools::ToolOutput) -> &str {
     output
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -80,7 +80,7 @@ struct CaptureProvider {
 
 #[async_trait::async_trait]
 #[allow(clippy::unnecessary_literal_bound)]
-impl pi::provider::Provider for CaptureProvider {
+impl ra::provider::Provider for CaptureProvider {
     fn name(&self) -> &str {
         "capture"
     }
@@ -97,8 +97,8 @@ impl pi::provider::Provider for CaptureProvider {
         &self,
         context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         let mut payload = String::new();
         if let Some(prompt) = context.system_prompt.as_deref() {
@@ -125,7 +125,7 @@ fn build_agent(root: &Path, secrets: Option<SecretsSettings>) -> (Agent, Arc<Mut
     let provider = Arc::new(CaptureProvider {
         capture: Arc::clone(&capture),
     });
-    let tools = ToolRegistry::new(&[], root, None::<&pi::config::Config>);
+    let tools = ToolRegistry::new(&[], root, None::<&ra::config::Config>);
     let config = AgentConfig {
         system_prompt: Some("base prompt".to_string()),
         secrets,
@@ -192,7 +192,7 @@ fn inbound_restore_writes_real_value_and_masks_echo() {
 
     // The model echoes the placeholder into a write → the file gets the
     // REAL value.
-    let tool_call = pi::model::ToolCall {
+    let tool_call = ra::model::ToolCall {
         id: "t1".to_string(),
         name: "write".to_string(),
         arguments: json!({
@@ -211,7 +211,7 @@ fn inbound_restore_writes_real_value_and_masks_echo() {
 
     // Echo hygiene: a result containing the real value is masked back.
     let mut output = ToolOutput {
-        content: vec![pi::model::ContentBlock::Text(pi::model::TextContent::new(
+        content: vec![ra::model::ContentBlock::Text(ra::model::TextContent::new(
             format!("wrote {SECRET}"),
         ))],
         details: None,
@@ -258,7 +258,7 @@ fn dotted_key_round_trips_through_the_agent() {
         "placeholder must not be re-vaulted on the second turn: {joined}"
     );
 
-    let restored = agent.restore_secrets_inbound(pi::model::ToolCall {
+    let restored = agent.restore_secrets_inbound(ra::model::ToolCall {
         id: "t1".to_string(),
         name: "bash".to_string(),
         arguments: json!({ "command": "curl -H 'Authorization: Bearer <pi-secret:000001>'" }),
@@ -271,7 +271,7 @@ fn dotted_key_round_trips_through_the_agent() {
     );
 
     let mut output = ToolOutput {
-        content: vec![pi::model::ContentBlock::Text(pi::model::TextContent::new(
+        content: vec![ra::model::ContentBlock::Text(ra::model::TextContent::new(
             format!("OPENAI_API_KEY={DOTTED}\n"),
         ))],
         details: None,
@@ -300,7 +300,7 @@ fn block_mode_refuses_the_send() {
         .expect_err("block mode must refuse");
     let text = err.to_string();
     harness.log().info("verify", format!("block error: {text}"));
-    assert!(text.contains("PI_SECRET_BLOCK"), "{text}");
+    assert!(text.contains("RECUR_AGENT_SECRET_BLOCK"), "{text}");
     finish_case(&harness, case);
 }
 
@@ -393,6 +393,7 @@ fn complete_and_truncated_private_keys_protect_the_body_at_the_provider_boundary
         assert!(!capture.payloads[0].contains(PEM_BODY));
         assert!(!capture.payloads[0].contains("Proc-Type"));
         assert!(!capture.payloads[0].contains("-----END"));
+        drop(capture);
     }
     finish_case(&harness, case);
 }
@@ -405,7 +406,7 @@ struct PrivateKeyToolProvider {
 
 #[async_trait::async_trait]
 #[allow(clippy::unnecessary_literal_bound)]
-impl pi::provider::Provider for PrivateKeyToolProvider {
+impl ra::provider::Provider for PrivateKeyToolProvider {
     fn name(&self) -> &str {
         "capture"
     }
@@ -422,10 +423,10 @@ impl pi::provider::Provider for PrivateKeyToolProvider {
         &self,
         context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
-        use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, ToolCall};
+        use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, ToolCall};
 
         let payload = serde_json::to_string(context.messages.as_ref()).expect("provider payload");
         let step = {
@@ -462,12 +463,16 @@ impl pi::provider::Provider for PrivateKeyToolProvider {
                 thought_signature: None,
             }));
         } else {
-            message.content.push(ContentBlock::Text(TextContent::new("key copied")));
+            message
+                .content
+                .push(ContentBlock::Text(TextContent::new("key copied")));
         }
-        Ok(Box::pin(futures::stream::iter(vec![Ok(StreamEvent::Done {
-            reason: message.stop_reason,
-            message,
-        })])))
+        Ok(Box::pin(futures::stream::iter(vec![Ok(
+            StreamEvent::Done {
+                reason: message.stop_reason,
+                message,
+            },
+        )])))
     }
 }
 
@@ -477,7 +482,9 @@ fn private_key_placeholder_executes_real_write_and_read_without_cloud_disclosure
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
     let capture = Arc::new(Mutex::new(Capture::default()));
-    let provider = Arc::new(PrivateKeyToolProvider { capture: Arc::clone(&capture) });
+    let provider = Arc::new(PrivateKeyToolProvider {
+        capture: Arc::clone(&capture),
+    });
     let tools = ToolRegistry::new(&["write", "read"], &root, None);
     let mut agent = Agent::new(provider, tools, AgentConfig::default());
     let key = private_key_fixture();
@@ -486,14 +493,25 @@ fn private_key_placeholder_executes_real_write_and_read_without_cloud_disclosure
     let result = block_on_local(agent.run(
         format!("Copy this private key, then read the copy:\n{key}"),
         move |event| {
-            if let pi::agent::AgentEvent::ToolExecutionEnd { tool_name, is_error, .. } = event {
-                recorded.lock().expect("tool events").push((tool_name, is_error));
+            if let ra::agent::AgentEvent::ToolExecutionEnd {
+                tool_name,
+                is_error,
+                ..
+            } = event
+            {
+                recorded
+                    .lock()
+                    .expect("tool events")
+                    .push((tool_name, is_error));
             }
         },
     ))
     .expect("real tool round trip");
-    assert_eq!(result.stop_reason, pi::model::StopReason::Stop);
-    assert_eq!(std::fs::read_to_string(root.join("copied.pem")).expect("written key"), key);
+    assert_eq!(result.stop_reason, ra::model::StopReason::Stop);
+    assert_eq!(
+        std::fs::read_to_string(root.join("copied.pem")).expect("written key"),
+        key
+    );
     assert_eq!(
         *completed_tools.lock().expect("tool events"),
         vec![("write".to_string(), false), ("read".to_string(), false)]
@@ -502,7 +520,10 @@ fn private_key_placeholder_executes_real_write_and_read_without_cloud_disclosure
     assert_eq!(capture.payloads.len(), 3);
     for payload in &capture.payloads {
         assert!(payload.contains("<pi-secret:"));
-        assert!(!payload.contains(PEM_BODY), "private body reached the provider");
+        assert!(
+            !payload.contains(PEM_BODY),
+            "private body reached the provider"
+        );
         assert!(!payload.contains("-----BEGIN"));
         assert!(!payload.contains("-----END"));
     }
@@ -515,16 +536,19 @@ fn truncated_private_key_block_mode_never_calls_the_provider() {
     let case = "private_key_block_before_provider";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let (mut agent, capture) = build_agent(&root, Some(SecretsSettings {
-        mode: Some("block".to_string()),
-        extra_patterns: None,
-    }));
-    let result = block_on_local(agent.run(
-        format!("-----BEGIN PRIVATE KEY-----\n{PEM_BODY}"),
-        |_| {},
-    ));
-    let error = result.expect_err("block mode refuses before provider entry").to_string();
-    assert!(error.contains("PI_SECRET_BLOCK"));
+    let (mut agent, capture) = build_agent(
+        &root,
+        Some(SecretsSettings {
+            mode: Some("block".to_string()),
+            extra_patterns: None,
+        }),
+    );
+    let result =
+        block_on_local(agent.run(format!("-----BEGIN PRIVATE KEY-----\n{PEM_BODY}"), |_| {}));
+    let error = result
+        .expect_err("block mode refuses before provider entry")
+        .to_string();
+    assert!(error.contains("RECUR_AGENT_SECRET_BLOCK"));
     assert!(!error.contains(PEM_BODY));
     assert!(capture.lock().expect("capture").payloads.is_empty());
     finish_case(&harness, case);
@@ -535,10 +559,17 @@ fn overlapping_custom_rules_cover_the_full_secret_in_real_agent_context() {
     let case = "overlapping_rules_provider_boundary";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let (mut agent, capture) = build_agent(&root, Some(SecretsSettings {
-        mode: Some("obfuscate".to_string()),
-        extra_patterns: Some(vec!["abcde".to_string(), "defgh".to_string(), "ghij".to_string()]),
-    }));
+    let (mut agent, capture) = build_agent(
+        &root,
+        Some(SecretsSettings {
+            mode: Some("obfuscate".to_string()),
+            extra_patterns: Some(vec![
+                "abcde".to_string(),
+                "defgh".to_string(),
+                "ghij".to_string(),
+            ]),
+        }),
+    );
     block_on_local(agent.run("safe abcdefghij safe", |_| {})).expect("run");
     let capture = capture.lock().expect("capture");
     assert_eq!(capture.payloads.len(), 1);
@@ -561,7 +592,8 @@ fn json_credentials_stay_protected_after_the_assignment_leaves_history() {
     // Keep the session's vault, but remove the original KEY=value hint.
     // This tests the loss of context, not a synthetic second detector call.
     agent.clear_messages();
-    block_on_local(agent.run(format!("echoed value: {OPAQUE_SECRET}"), |_| {})).expect("later turn");
+    block_on_local(agent.run(format!("echoed value: {OPAQUE_SECRET}"), |_| {}))
+        .expect("later turn");
     let capture = capture.lock().expect("capture");
     assert_eq!(capture.payloads.len(), 2);
     for payload in &capture.payloads {
@@ -573,7 +605,7 @@ fn json_credentials_stay_protected_after_the_assignment_leaves_history() {
         .secrets_transform_outbound_text(&format!("side question quotes {OPAQUE_SECRET}"))
         .expect("auxiliary outbound screening");
     assert_eq!(side_context, "side question quotes <pi-secret:000001>");
-    let call = agent.restore_secrets_inbound(pi::model::ToolCall {
+    let call = agent.restore_secrets_inbound(ra::model::ToolCall {
         id: "remembered-value".to_string(),
         name: "write".to_string(),
         arguments: json!({"path": "key.txt", "content": "<pi-secret:000001>"}),
@@ -611,7 +643,7 @@ fn multiline_credentials_are_masked_inside_nested_tool_result_details() {
     let key = private_key_fixture();
     block_on_local(agent.run(key.clone(), |_| {})).expect("establish vault");
     let mut output = ToolOutput {
-        content: vec![pi::model::ContentBlock::Text(pi::model::TextContent::new(
+        content: vec![ra::model::ContentBlock::Text(ra::model::TextContent::new(
             format!("copied:\n{key}"),
         ))],
         details: Some(json!({
@@ -639,18 +671,27 @@ fn serialized_transcript_export_masks_multiline_keys_without_breaking_jsonl() {
     let root = harness.temp_path(".");
     let (mut agent, _) = build_agent(&root, None);
     block_on_local(agent.run(private_key_fixture(), |_| {})).expect("establish vault");
-    let records = agent.messages().iter().map(|message| {
-        serde_json::to_string(message).expect("serialize local transcript")
-    }).collect::<Vec<_>>();
+    let records = agent
+        .messages()
+        .iter()
+        .map(|message| serde_json::to_string(message).expect("serialize local transcript"))
+        .collect::<Vec<_>>();
     let original = format!("{}\r\n", records.join("\r\n"));
-    assert!(original.contains(PEM_BODY), "local input is deliberately not an export");
+    assert!(
+        original.contains(PEM_BODY),
+        "local input is deliberately not an export"
+    );
     let exported = agent.mask_secrets_text(&original);
     assert!(!exported.contains(PEM_BODY));
     assert!(exported.contains("<pi-secret:000001>"));
     assert!(exported.ends_with("\r\n"));
-    let decoded = exported.lines().map(|line| {
-        serde_json::from_str::<serde_json::Value>(line).expect("screened record remains valid JSON")
-    }).collect::<Vec<_>>();
+    let decoded = exported
+        .lines()
+        .map(|line| {
+            serde_json::from_str::<serde_json::Value>(line)
+                .expect("screened record remains valid JSON")
+        })
+        .collect::<Vec<_>>();
     assert_eq!(decoded.len(), records.len());
     for (before, after) in records.iter().zip(&decoded) {
         let before: serde_json::Value = serde_json::from_str(before).unwrap();
@@ -666,24 +707,28 @@ fn quoted_generic_credentials_obey_block_and_off_modes_at_provider_entry() {
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
     for mode in ["block", "off"] {
-        let (mut agent, capture) = build_agent(&root, Some(SecretsSettings {
-            mode: Some(mode.to_string()),
-            extra_patterns: None,
-        }));
-        let result = block_on_local(agent.run(
-            json!({"password": OPAQUE_SECRET}).to_string(),
-            |_| {},
-        ));
+        let (mut agent, capture) = build_agent(
+            &root,
+            Some(SecretsSettings {
+                mode: Some(mode.to_string()),
+                extra_patterns: None,
+            }),
+        );
+        let result =
+            block_on_local(agent.run(json!({"password": OPAQUE_SECRET}).to_string(), |_| {}));
         let capture = capture.lock().expect("capture");
         if mode == "block" {
-            let error = result.expect_err("quoted keys must not bypass block mode").to_string();
-            assert!(error.contains("PI_SECRET_BLOCK"));
+            let error = result
+                .expect_err("quoted keys must not bypass block mode")
+                .to_string();
+            assert!(error.contains("RECUR_AGENT_SECRET_BLOCK"));
             assert!(!error.contains(OPAQUE_SECRET));
             assert!(capture.payloads.is_empty());
         } else {
             result.expect("off mode retains ordinary provider behavior");
             assert_eq!(capture.payloads.len(), 1);
             assert!(capture.payloads[0].contains(OPAQUE_SECRET));
+            drop(capture);
         }
     }
     finish_case(&harness, case);

@@ -1,6 +1,6 @@
 use asupersync::test_utils;
-use pi::model::ContentBlock;
-use pi::tools::{EditTool, Tool};
+use ra::model::ContentBlock;
+use ra::tools::{EditTool, Tool};
 use serde_json::json;
 use unicode_normalization::UnicodeNormalization;
 

@@ -1,6 +1,6 @@
 //! `FrankenTUI` preview stack E2E via `tmux` (bd-cv653.9.1, acceptance lane T8).
 //!
-//! Launches `pi --ftui` in a real PTY (tmux pane), drives the ported surfaces
+//! Launches `ra --ftui` in a real PTY (tmux pane), drives the ported surfaces
 //! (banner, `/help`, display-only `!` bash, quit), and proves the session tears
 //! down cleanly. The inline-mode smoke covers the scrollback-preserving
 //! runtime path end to end.
@@ -23,7 +23,7 @@ use std::time::Duration;
 
 /// Patience budgets for the tmux-driven FTUI lane.
 ///
-/// These drive a real `pi` inside a real tmux pane and poll the pane's contents
+/// These drive a real `ra` inside a real tmux pane and poll the pane's contents
 /// until the expected text appears, so every wait here is bounded by how fast
 /// the machine can start a process, render a frame, and let tmux report it.
 ///
@@ -55,7 +55,7 @@ impl TmuxE2eLock {
         let thread_guard = TMUX_E2E_IN_PROCESS_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let path = std::env::temp_dir().join("pi_agent_rust.tmux-e2e.lock");
+        let path = std::env::temp_dir().join("recur_agent.tmux-e2e.lock");
         let mut opts = OpenOptions::new();
         opts.create(true).read(true).write(true).truncate(false);
         let file = opts.open(&path).expect("open tmux e2e lock file"); // ubs:ignore test harness setup — failed lock open is an immediate test failure (same pattern as tests/e2e_tui.rs)
@@ -107,7 +107,7 @@ fn quit_and_assert_clean(session: &TuiSession) {
     while session.tmux.session_exists() {
         assert!(
             start.elapsed() < Duration::from_secs(10),
-            "pi --ftui did not exit within 10s of ctrl+c"
+            "ra --ftui did not exit within 10s of ctrl+c"
         );
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -182,8 +182,8 @@ fn run_signal_teardown(name: &str, signal: &str, blind_stty_sane: bool, mid_acti
         return;
     };
 
-    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_pi") else {
-        eprintln!("Skipping: CARGO_BIN_EXE_pi not set");
+    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_ra") else {
+        eprintln!("Skipping: CARGO_BIN_EXE_ra not set");
         return;
     };
     let binary = std::path::PathBuf::from(binary);
@@ -204,14 +204,14 @@ fn run_signal_teardown(name: &str, signal: &str, blind_stty_sane: bool, mid_acti
     let mut script = String::from("#!/usr/bin/env sh\nset -u\n");
     let _ = writeln!(script, "exec 2>{}\nset -x", trace_log.display());
     for (key, sub) in [
-        ("PI_CODING_AGENT_DIR", "agent"),
-        ("PI_CONFIG_PATH", "config.toml"),
-        ("PI_SESSIONS_DIR", "sessions"),
-        ("PI_PACKAGE_DIR", "packages"),
+        ("RECUR_AGENT_DIR", "agent"),
+        ("RECUR_AGENT_CONFIG_PATH", "config.toml"),
+        ("RECUR_AGENT_SESSIONS_DIR", "sessions"),
+        ("RECUR_AGENT_PACKAGE_DIR", "packages"),
     ] {
         let _ = writeln!(script, "export {key}={}", env_root.join(sub).display());
     }
-    script.push_str("export PI_TEST_MODE=1\nexport OPENAI_API_KEY=pi-e2e-sigkill-dummy\n");
+    script.push_str("export RECUR_AGENT_TEST_MODE=1\nexport OPENAI_API_KEY=pi-e2e-sigkill-dummy\n");
     // Environment forensics: rch execution contexts inherit variables that
     // can leak through tmux into pi and break startup; dump the pane-side
     // environment for diffing against a known-good interactive run.
@@ -421,8 +421,8 @@ fn e2e_ftui_ctrl_z_suspend_fg_resumes() {
         eprintln!("Skipping: tmux not available");
         return;
     };
-    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_pi") else {
-        eprintln!("Skipping: CARGO_BIN_EXE_pi not set");
+    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_ra") else {
+        eprintln!("Skipping: CARGO_BIN_EXE_ra not set");
         return;
     };
     let binary = std::path::PathBuf::from(binary);
@@ -435,14 +435,14 @@ fn e2e_ftui_ctrl_z_suspend_fg_resumes() {
     let mut script = String::from("#!/usr/bin/env sh\nset -u\n");
     let _ = writeln!(script, "exec 2>{}\nset -x", trace_log.display());
     for (key, sub) in [
-        ("PI_CODING_AGENT_DIR", "agent"),
-        ("PI_CONFIG_PATH", "config.toml"),
-        ("PI_SESSIONS_DIR", "sessions"),
-        ("PI_PACKAGE_DIR", "packages"),
+        ("RECUR_AGENT_DIR", "agent"),
+        ("RECUR_AGENT_CONFIG_PATH", "config.toml"),
+        ("RECUR_AGENT_SESSIONS_DIR", "sessions"),
+        ("RECUR_AGENT_PACKAGE_DIR", "packages"),
     ] {
         let _ = writeln!(script, "export {key}={}", env_root.join(sub).display());
     }
-    script.push_str("export PI_TEST_MODE=1\nexport OPENAI_API_KEY=pi-e2e-suspend-dummy\n");
+    script.push_str("export RECUR_AGENT_TEST_MODE=1\nexport OPENAI_API_KEY=pi-e2e-suspend-dummy\n");
     let _ = writeln!(
         script,
         "/bin/sh -c 'echo $$ > {pid}; exec {bin} --ftui --no-session \
@@ -551,8 +551,8 @@ fn e2e_ftui_ctrl_z_suspend_fg_resumes() {
 fn launch_with_sentinel(session: &TuiSession, sentinel: &str, inline: bool) {
     use std::fmt::Write as _;
 
-    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_pi") else {
-        panic!("CARGO_BIN_EXE_pi not set");
+    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_ra") else {
+        panic!("CARGO_BIN_EXE_ra not set");
     };
     let binary = std::path::PathBuf::from(binary);
     let env_root = session.harness.temp_dir().join("env");
@@ -560,14 +560,16 @@ fn launch_with_sentinel(session: &TuiSession, sentinel: &str, inline: bool) {
 
     let mut script = String::from("#!/usr/bin/env sh\nset -u\n");
     for (key, sub) in [
-        ("PI_CODING_AGENT_DIR", "agent"),
-        ("PI_CONFIG_PATH", "config.toml"),
-        ("PI_SESSIONS_DIR", "sessions"),
-        ("PI_PACKAGE_DIR", "packages"),
+        ("RECUR_AGENT_DIR", "agent"),
+        ("RECUR_AGENT_CONFIG_PATH", "config.toml"),
+        ("RECUR_AGENT_SESSIONS_DIR", "sessions"),
+        ("RECUR_AGENT_PACKAGE_DIR", "packages"),
     ] {
         let _ = writeln!(script, "export {key}={}", env_root.join(sub).display());
     }
-    script.push_str("export PI_TEST_MODE=1\nexport OPENAI_API_KEY=pi-e2e-scrollback-dummy\n");
+    script.push_str(
+        "export RECUR_AGENT_TEST_MODE=1\nexport OPENAI_API_KEY=pi-e2e-scrollback-dummy\n",
+    );
     let _ = writeln!(script, "echo {sentinel}");
     let _ = writeln!(
         script,
@@ -725,26 +727,26 @@ fn e2e_ftui_resize_storm_survives() {
 /// pane stream. `tmux pipe-pane` records every byte pi writes into the pane
 /// while a resize storm plus input churn run; the capture is then fed to
 /// the upstream FrankenTUI analyzer (ftui-harness `flicker_scan`, wired via
-/// `PI_FTUI_FLICKER_SCAN_BIN`), whose detector flags unsynchronized full
+/// `RECUR_AGENT_FTUI_FLICKER_SCAN_BIN`), whose detector flags unsynchronized full
 /// repaints, partial clears, and unpaired frame markers. Skipped when tmux
 /// or the analyzer binary is unavailable so CI and worker runs stay green;
 /// owner hosts with `/dp/frankentui` get real detection:
 ///
 /// ```sh
 /// cd /dp/frankentui && cargo build -p ftui-harness --bin flicker_scan
-/// export PI_FTUI_FLICKER_SCAN_BIN="$CARGO_TARGET_DIR/debug/flicker_scan"
+/// export RECUR_AGENT_FTUI_FLICKER_SCAN_BIN="$CARGO_TARGET_DIR/debug/flicker_scan"
 /// ```
 #[test]
 #[allow(clippy::too_many_lines)]
 fn e2e_ftui_resize_storm_stream_is_flicker_free() {
-    let analyzer = std::env::var("PI_FTUI_FLICKER_SCAN_BIN")
+    let analyzer = std::env::var("RECUR_AGENT_FTUI_FLICKER_SCAN_BIN")
         .ok()
         .filter(|p| !p.is_empty())
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_file());
     let Some(analyzer) = analyzer else {
         eprintln!(
-            "Skipping: PI_FTUI_FLICKER_SCAN_BIN must point at a built ftui-harness \
+            "Skipping: RECUR_AGENT_FTUI_FLICKER_SCAN_BIN must point at a built ftui-harness \
              flicker_scan binary"
         );
         return;
@@ -933,7 +935,7 @@ fn ftui_vcr_args() -> Vec<String> {
     ftui_vcr_args_with_session(false, false)
 }
 
-/// Write the launch wrapper a VCR scenario starts `pi` through, and return its
+/// Write the launch wrapper a VCR scenario starts `ra` through, and return its
 /// path.
 ///
 /// Stderr goes to a file because tracing output otherwise interleaves with the
@@ -952,27 +954,27 @@ fn write_ftui_vcr_launcher(
     use std::fmt::Write as _;
     let mut script = String::from("#!/usr/bin/env sh\nset -u\n");
     for (key, sub) in [
-        ("PI_CODING_AGENT_DIR", "agent"),
-        ("PI_CONFIG_PATH", "config.toml"),
-        ("PI_SESSIONS_DIR", "sessions"),
-        ("PI_PACKAGE_DIR", "packages"),
+        ("RECUR_AGENT_DIR", "agent"),
+        ("RECUR_AGENT_CONFIG_PATH", "config.toml"),
+        ("RECUR_AGENT_SESSIONS_DIR", "sessions"),
+        ("RECUR_AGENT_PACKAGE_DIR", "packages"),
     ] {
         let _ = writeln!(script, "export {key}={}", env_root.join(sub).display());
     }
-    script.push_str("export PI_TEST_MODE=1\nexport ANTHROPIC_API_KEY=pi-e2e-vcr-dummy\n");
-    let _ = writeln!(script, "export {}=playback", pi::vcr::VCR_ENV_MODE);
+    script.push_str("export RECUR_AGENT_TEST_MODE=1\nexport ANTHROPIC_API_KEY=pi-e2e-vcr-dummy\n");
+    let _ = writeln!(script, "export {}=playback", ra::vcr::VCR_ENV_MODE);
     let _ = writeln!(
         script,
         "export {}={}",
-        pi::vcr::VCR_ENV_DIR,
+        ra::vcr::VCR_ENV_DIR,
         cassette_dir.display()
     );
-    let _ = writeln!(script, "export PI_VCR_TEST_NAME={test_name}");
+    let _ = writeln!(script, "export RECUR_AGENT_VCR_TEST_NAME={test_name}");
     script.push_str("export VCR_DEBUG_BODY=1\n");
     // Stable path: the harness temp dir is deleted on drop, and the debug
     // bodies are exactly what we need after a failure.
     script.push_str("export VCR_DEBUG_BODY_FILE=/private/tmp/pi-tests/ftui-vcr-bodies.txt\n");
-    let binary = std::env::var_os("CARGO_BIN_EXE_pi").expect("CARGO_BIN_EXE_pi"); // ubs:ignore test setup expect
+    let binary = std::env::var_os("CARGO_BIN_EXE_ra").expect("CARGO_BIN_EXE_ra"); // ubs:ignore test setup expect
     let _ = write!(
         script,
         "exec {}",
@@ -999,7 +1001,7 @@ fn write_ftui_vcr_launcher(
 ///
 /// `persist` drops `--no-session`, which the other VCR scenarios want precisely
 /// because they must not leave session files behind; the continue scenario
-/// needs the opposite. Sessions land under the harness's `PI_SESSIONS_DIR`, so
+/// needs the opposite. Sessions land under the harness's `RECUR_AGENT_SESSIONS_DIR`, so
 /// nothing escapes the temp root either way.
 fn ftui_vcr_args_with_session(persist: bool, continue_recent: bool) -> Vec<String> {
     let mut args: Vec<String> = vec!["--ftui".to_string()];
@@ -1047,11 +1049,11 @@ fn ftui_vcr_system_prompt_for(
     use clap::Parser as _;
     let mut parsed: Vec<&str> = vec!["pi"];
     parsed.extend(args.iter().map(String::as_str));
-    let cli = pi::cli::Cli::try_parse_from(parsed).expect("parse ftui vcr args"); // ubs:ignore test setup expect
+    let cli = ra::cli::Cli::try_parse_from(parsed).expect("parse ftui vcr args"); // ubs:ignore test setup expect
     let enabled_tools = cli.enabled_tools();
     let global_dir = env_root.join("agent");
     let package_dir = env_root.join("packages");
-    pi::app::build_system_prompt(
+    ra::app::build_system_prompt(
         &cli,
         workdir,
         &enabled_tools,
@@ -1061,7 +1063,7 @@ fn ftui_vcr_system_prompt_for(
         true,
         true,
         None,
-        &pi::config::Config::default(),
+        &ra::config::Config::default(),
     )
     .expect("build ftui vcr system prompt") // ubs:ignore test setup expect
 }
@@ -1072,7 +1074,7 @@ fn write_ftui_vcr_cassette(
     test_name: &str,
     response_text: &str,
 ) -> std::path::PathBuf {
-    use pi::vcr::{Cassette, Interaction, RecordedRequest, RecordedResponse};
+    use ra::vcr::{Cassette, Interaction, RecordedRequest, RecordedResponse};
     use serde_json::json;
 
     let cassette_path = dir.join(format!("{test_name}.json"));
@@ -1354,8 +1356,8 @@ fn e2e_ftui_sigterm_mid_stream_restores_terminal() {
         eprintln!("Skipping: tmux not available");
         return;
     };
-    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_pi") else {
-        eprintln!("Skipping: CARGO_BIN_EXE_pi not set");
+    let Some(binary) = std::env::var_os("CARGO_BIN_EXE_ra") else {
+        eprintln!("Skipping: CARGO_BIN_EXE_ra not set");
         return;
     };
     let binary = std::path::PathBuf::from(binary);
@@ -1386,23 +1388,26 @@ fn e2e_ftui_sigterm_mid_stream_restores_terminal() {
     // wrapper dies before pi draws anything.
     let _ = write!(script, "exec 2>{}\nset -x\n", trace_log.display());
     for (key, sub) in [
-        ("PI_CODING_AGENT_DIR", "agent"),
-        ("PI_CONFIG_PATH", "config.toml"),
-        ("PI_SESSIONS_DIR", "sessions"),
-        ("PI_PACKAGE_DIR", "packages"),
+        ("RECUR_AGENT_DIR", "agent"),
+        ("RECUR_AGENT_CONFIG_PATH", "config.toml"),
+        ("RECUR_AGENT_SESSIONS_DIR", "sessions"),
+        ("RECUR_AGENT_PACKAGE_DIR", "packages"),
     ] {
         let _ = writeln!(script, "export {key}={}", env_root.join(sub).display());
     }
-    script.push_str("export PI_TEST_MODE=1\nexport ANTHROPIC_API_KEY=pi-e2e-vcr-dummy\n");
-    let _ = writeln!(script, "export {}=playback", pi::vcr::VCR_ENV_MODE);
+    script.push_str("export RECUR_AGENT_TEST_MODE=1\nexport ANTHROPIC_API_KEY=pi-e2e-vcr-dummy\n");
+    let _ = writeln!(script, "export {}=playback", ra::vcr::VCR_ENV_MODE);
     let _ = writeln!(
         script,
         "export {}={}",
-        pi::vcr::VCR_ENV_DIR,
+        ra::vcr::VCR_ENV_DIR,
         cassette_dir.display()
     );
-    let _ = writeln!(script, "export PI_VCR_TEST_NAME={FTUI_VCR_KILL_TEST_NAME}");
-    let _ = writeln!(script, "export {}=150", pi::vcr::VCR_ENV_CHUNK_DELAY_MS);
+    let _ = writeln!(
+        script,
+        "export RECUR_AGENT_VCR_TEST_NAME={FTUI_VCR_KILL_TEST_NAME}"
+    );
+    let _ = writeln!(script, "export {}=150", ra::vcr::VCR_ENV_CHUNK_DELAY_MS);
     let _ = write!(
         script,
         "/bin/sh -c 'echo $$ > {pid}; exec {bin}",
@@ -1581,18 +1586,18 @@ fn e2e_ftui_share_creates_secret_gist() {
     let gist_url = "https://gist.github.com/testuser/e2e_ftui_share_id";
     let gh_path = common::mocks::write_mock_gh_script(&mock_bin, gist_url);
 
-    let pi_dir = session.harness.temp_path(".pi");
-    std::fs::create_dir_all(&pi_dir).expect("create .pi");
+    let pi_dir = session.harness.temp_path(".ra");
+    std::fs::create_dir_all(&pi_dir).expect("create .ra");
     std::fs::write(
         pi_dir.join("settings.json"),
         format!("{{\"ghPath\": \"{}\"}}", gh_path.display()),
     )
     .expect("write settings.json");
     session.set_env(
-        "PI_CONFIG_PATH",
+        "RECUR_AGENT_CONFIG_PATH",
         &pi_dir.join("settings.json").display().to_string(),
     );
-    session.set_env("PI_WORKSPACE_TRUST", "trusted");
+    session.set_env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
 
     session.launch(&ftui_args());
     session.wait_and_capture("startup", "pi interactive stack", STARTUP_TIMEOUT);
@@ -1641,18 +1646,18 @@ fn e2e_ftui_share_public_never_invokes_gh() {
     let gh_path =
         common::mocks::write_mock_gh_script(&mock_bin, "https://gist.github.com/testuser/never");
 
-    let pi_dir = session.harness.temp_path(".pi");
-    std::fs::create_dir_all(&pi_dir).expect("create .pi");
+    let pi_dir = session.harness.temp_path(".ra");
+    std::fs::create_dir_all(&pi_dir).expect("create .ra");
     std::fs::write(
         pi_dir.join("settings.json"),
         format!("{{\"ghPath\": \"{}\"}}", gh_path.display()),
     )
     .expect("write settings.json");
     session.set_env(
-        "PI_CONFIG_PATH",
+        "RECUR_AGENT_CONFIG_PATH",
         &pi_dir.join("settings.json").display().to_string(),
     );
-    session.set_env("PI_WORKSPACE_TRUST", "trusted");
+    session.set_env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
 
     session.launch(&ftui_args());
     session.wait_and_capture("startup", "pi interactive stack", STARTUP_TIMEOUT);
@@ -1763,12 +1768,21 @@ fn e2e_ftui_tan_delivers_its_summary_to_the_parent_turn() {
     )
     .expect("write settings");
 
-    session.set_env("PI_CODING_AGENT_DIR", &coding_dir.display().to_string());
-    session.set_env("PI_CONFIG_PATH", &settings_path.display().to_string());
-    session.set_env("PI_SESSIONS_DIR", &sessions_dir.display().to_string());
-    session.set_env("PI_PACKAGE_DIR", &packages_dir.display().to_string());
-    session.set_env("PI_NO_AUTO_UPDATE_CHECK", "1");
-    session.set_env("PI_WORKSPACE_TRUST", "trusted");
+    session.set_env("RECUR_AGENT_DIR", &coding_dir.display().to_string());
+    session.set_env(
+        "RECUR_AGENT_CONFIG_PATH",
+        &settings_path.display().to_string(),
+    );
+    session.set_env(
+        "RECUR_AGENT_SESSIONS_DIR",
+        &sessions_dir.display().to_string(),
+    );
+    session.set_env(
+        "RECUR_AGENT_PACKAGE_DIR",
+        &packages_dir.display().to_string(),
+    );
+    session.set_env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1");
+    session.set_env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
 
     session.launch(&[
         "--ftui",

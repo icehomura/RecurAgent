@@ -25,7 +25,7 @@ fn test_chrome_modules_tui_integration() {
     let harness = TestHarness::new("chrome_tui_integration");
 
     // 1. StatusLine integration
-    let status_ctx = pi::status_line::StatusContext {
+    let status_ctx = ra::status_line::StatusContext {
         model: "claude-3-5-sonnet",
         thinking_level: Some("high"),
         mode: "act",
@@ -39,8 +39,8 @@ fn test_chrome_modules_tui_integration() {
         session_name: "test-session",
         timestamp_str: "12:00:00",
     };
-    let status_line = pi::status_line::PowerlineStatusLine::with_preset(
-        pi::status_line::StatusLinePreset::Default,
+    let status_line = ra::status_line::PowerlineStatusLine::with_preset(
+        ra::status_line::StatusLinePreset::Default,
     );
     let rendered_status = status_line.render(&status_ctx, 120);
     assert!(rendered_status.contains("claude-3-5-sonnet"));
@@ -50,7 +50,7 @@ fn test_chrome_modules_tui_integration() {
         .info("status_line", "powerline rendered successfully");
 
     // 2. OverlaySystem WelcomeScreen integration
-    let welcome = pi::overlay_system::WelcomeScreen::default();
+    let welcome = ra::overlay_system::WelcomeScreen::default();
     assert!(welcome.greeting.contains("Welcome to Pi"));
     assert!(!welcome.current_tip().is_empty());
     harness
@@ -59,33 +59,33 @@ fn test_chrome_modules_tui_integration() {
 
     // 3. MarkdownRich enhancement integration
     let raw_md = "Use colour #ff5500 for alpha = \\alpha and beta = \\beta.";
-    let latex_converted = pi::markdown_rich::latex_to_unicode(raw_md);
+    let latex_converted = ra::markdown_rich::latex_to_unicode(raw_md);
     assert!(latex_converted.contains('α'));
     assert!(latex_converted.contains('β'));
-    let hex_swatched = pi::markdown_rich::render_hex_swatches(&latex_converted);
+    let hex_swatched = ra::markdown_rich::render_hex_swatches(&latex_converted);
     assert!(hex_swatched.contains("■ #ff5500"));
     harness
         .log()
         .info("markdown_rich", "latex and hex swatches rendered");
 
     // 4. Delight terminal title & sparkline integration
-    let title = pi::delight::format_terminal_title("Pi · gpt-4o · processing");
+    let title = ra::delight::format_terminal_title("Pi · gpt-4o · processing");
     assert!(title.contains("gpt-4o"));
     assert!(title.contains("processing"));
-    let sparkline = pi::delight::render_sparkline(&[1.0, 5.0, 3.0, 8.0, 2.0]);
+    let sparkline = ra::delight::render_sparkline(&[1.0, 5.0, 3.0, 8.0, 2.0]);
     assert_eq!(sparkline.chars().count(), 5);
     harness
         .log()
         .info("delight", "title and sparkline rendered");
 
     // 5. Gallery entry point verification through the shipped CLI.
-    let gallery = std::process::Command::new(env!("CARGO_BIN_EXE_pi"))
+    let gallery = std::process::Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(["gallery", "--format", "json"])
         .output()
-        .expect("run pi gallery");
-    assert!(gallery.status.success(), "pi gallery failed: {gallery:?}");
+        .expect("run ra gallery");
+    assert!(gallery.status.success(), "ra gallery failed: {gallery:?}");
     let json_report = String::from_utf8(gallery.stdout).expect("gallery stdout is UTF-8");
-    assert!(json_report.contains("pi.gallery.matrix.v1"));
+    assert!(json_report.contains("ra.gallery.matrix.v1"));
     harness
         .log()
         .info("gallery", "gallery matrix report generated");

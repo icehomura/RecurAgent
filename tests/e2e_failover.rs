@@ -129,11 +129,11 @@ impl PiEnv {
         let mut command = Command::new(binary);
         command
             .env("HOME", self.root.join("home"))
-            .env("PI_CODING_AGENT_DIR", self.root.join("agent"))
-            .env("PI_CONFIG_PATH", self.root.join("settings.json"))
-            .env("PI_SESSIONS_DIR", self.root.join("sessions"))
-            .env("PI_PACKAGE_DIR", self.root.join("packages"))
-            .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+            .env("RECUR_AGENT_DIR", self.root.join("agent"))
+            .env("RECUR_AGENT_CONFIG_PATH", self.root.join("settings.json"))
+            .env("RECUR_AGENT_SESSIONS_DIR", self.root.join("sessions"))
+            .env("RECUR_AGENT_PACKAGE_DIR", self.root.join("packages"))
+            .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -204,7 +204,7 @@ fn e2e_failover_429_walks_chain_and_completes() {
 
     let env = PiEnv::new(&harness);
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command.args([
         "--print",
@@ -217,7 +217,7 @@ fn e2e_failover_429_walks_chain_and_completes() {
     ]);
     harness
         .log()
-        .info("action", "spawning pi --print on 429 primary");
+        .info("action", "spawning ra --print on 429 primary");
     let child = command.spawn().expect("spawn pi");
     let (stdout, stderr) = run_and_collect(child, 90);
     harness.log().info_ctx("verify", "process finished", |ctx| {
@@ -257,11 +257,11 @@ fn e2e_failover_429_walks_chain_and_completes() {
     harness.record_artifact("e2e_failover_429.jsonl", &path);
 }
 
-/// Run `pi --rpc` with ONE piped prompt against the mock server and return the
+/// Run `ra --rpc` with ONE piped prompt against the mock server and return the
 /// parsed event stream plus the raw stdout/stderr for diagnostics.
 ///
 /// Closing stdin after the single request is the documented one-shot shape:
-/// `printf '{"type":"prompt",...}' | pi --mode rpc` drains the in-flight turn
+/// `printf '{"type":"prompt",...}' | ra --mode rpc` drains the in-flight turn
 /// and still emits the full stream through `agent_end` before exiting (gh #137,
 /// src/rpc.rs). The RPC loop serialises the same `AgentEvent` values print mode
 /// does, so `event_kinds` reads both surfaces.
@@ -272,7 +272,7 @@ fn run_rpc_failover(
 ) -> (Vec<serde_json::Value>, String, String) {
     let env = PiEnv::new(harness);
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command
         .args([
@@ -285,10 +285,10 @@ fn run_rpc_failover(
         ])
         .stdin(Stdio::piped());
     harness.log().info("action", label);
-    let mut child = command.spawn().expect("spawn pi --rpc");
+    let mut child = command.spawn().expect("spawn ra --rpc");
     {
         use std::io::Write as _;
-        let stdin = child.stdin.as_mut().expect("pi --rpc stdin was not piped");
+        let stdin = child.stdin.as_mut().expect("ra --rpc stdin was not piped");
         writeln!(stdin, r#"{{"type":"prompt","id":"p1","message":"ping"}}"#)
             .expect("write the prompt request");
         stdin.flush().expect("flush the prompt request");
@@ -309,7 +309,7 @@ fn run_rpc_failover(
     (events, stdout, stderr)
 }
 
-/// Drive `pi --rpc` to a failover and then abort the fallback turn mid-flight.
+/// Drive `ra --rpc` to a failover and then abort the fallback turn mid-flight.
 ///
 /// The abort has to land INSIDE the fallback turn or the test proves nothing,
 /// so nothing here sleeps and hopes. The fallback base URL points at a listener
@@ -329,7 +329,7 @@ fn run_rpc_failover_then_abort(
         &format!("{}/primary/v1", server.base_url()),
         stalled_backup_base,
     );
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command
         .args([
@@ -342,9 +342,9 @@ fn run_rpc_failover_then_abort(
         ])
         .stdin(Stdio::piped());
     harness.log().info("action", label);
-    let mut child = command.spawn().expect("spawn pi --rpc");
+    let mut child = command.spawn().expect("spawn ra --rpc");
 
-    let stdout = child.stdout.take().expect("pi --rpc stdout was not piped");
+    let stdout = child.stdout.take().expect("ra --rpc stdout was not piped");
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     let pump = std::thread::spawn(move || {
         use std::io::BufRead as _;
@@ -360,7 +360,7 @@ fn run_rpc_failover_then_abort(
 
     {
         use std::io::Write as _;
-        let stdin = child.stdin.as_mut().expect("pi --rpc stdin was not piped");
+        let stdin = child.stdin.as_mut().expect("ra --rpc stdin was not piped");
         writeln!(stdin, r#"{{"type":"prompt","id":"p1","message":"ping"}}"#)
             .expect("write the prompt request");
         stdin.flush().expect("flush the prompt request");
@@ -373,7 +373,7 @@ fn run_rpc_failover_then_abort(
         let Ok(line) = rx.recv_timeout(Duration::from_millis(250)) else {
             assert!(
                 Instant::now() < deadline,
-                "pi --rpc never reached the failover boundary: {lines:?}"
+                "ra --rpc never reached the failover boundary: {lines:?}"
             );
             continue;
         };
@@ -389,7 +389,7 @@ fn run_rpc_failover_then_abort(
         match kind.as_deref() {
             Some("failover_start") if !aborted => {
                 use std::io::Write as _;
-                let stdin = child.stdin.as_mut().expect("pi --rpc stdin was not piped");
+                let stdin = child.stdin.as_mut().expect("ra --rpc stdin was not piped");
                 writeln!(stdin, r#"{{"type":"abort","id":"a1"}}"#).expect("write the abort");
                 stdin.flush().expect("flush the abort");
                 aborted = true;
@@ -399,7 +399,7 @@ fn run_rpc_failover_then_abort(
         }
         assert!(
             Instant::now() < deadline,
-            "pi --rpc never produced a terminal agent_end after the abort: {lines:?}"
+            "ra --rpc never produced a terminal agent_end after the abort: {lines:?}"
         );
     }
 
@@ -450,7 +450,7 @@ fn run_to_exit(child: &mut std::process::Child, deadline_secs: u64) -> Option<i3
     }
 }
 
-/// Run `pi --print --mode json` against the mock server and return the parsed
+/// Run `ra --print --mode json` against the mock server and return the parsed
 /// event stream plus the raw stdout/stderr for diagnostics.
 fn run_print_json_failover(
     harness: &TestHarness,
@@ -459,7 +459,7 @@ fn run_print_json_failover(
 ) -> (Vec<serde_json::Value>, String, String) {
     let env = PiEnv::new(harness);
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command.args([
         "--print",
@@ -489,7 +489,7 @@ fn run_print_json_failover(
     (events, stdout, stderr)
 }
 
-/// Run `pi --print --mode json` with TWO prompts against the mock server.
+/// Run `ra --print --mode json` with TWO prompts against the mock server.
 ///
 /// Two prompts is the whole point for bd-gm481.1: restoration is a
 /// between-prompt lifecycle, so a single-prompt run can never observe it.
@@ -501,7 +501,7 @@ fn run_print_json_two_prompts(
 ) -> (Vec<serde_json::Value>, String, String) {
     let env = PiEnv::with_cooldown_secs(harness, Some(cooldown_secs));
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     // Flags first: `Cli::args` is `trailing_var_arg`, so everything after the
     // first positional is captured as another message. Both positionals below
@@ -582,7 +582,7 @@ fn e2e_failover_json_mode_closes_lifecycle_after_backup_success() {
     let (events, stdout, stderr) = run_print_json_failover(
         &harness,
         &server,
-        "spawning pi --print --mode json on 429 primary",
+        "spawning ra --print --mode json on 429 primary",
     );
     let kinds = event_kinds(&events);
     let start = kinds
@@ -708,7 +708,7 @@ fn e2e_failover_json_mode_closes_lifecycle_after_backup_failure() {
     let (events, stdout, stderr) = run_print_json_failover(
         &harness,
         &server,
-        "spawning pi --print --mode json on 429 primary and 503 backup",
+        "spawning ra --print --mode json on 429 primary and 503 backup",
     );
     let kinds = event_kinds(&events);
     let start = kinds
@@ -803,7 +803,7 @@ fn e2e_failover_json_mode_gives_the_fallback_its_own_retry_lifecycle() {
     let (events, stdout, stderr) = run_print_json_failover(
         &harness,
         &server,
-        "spawning pi --print --mode json on a 429 primary and a fallback that needs one retry",
+        "spawning ra --print --mode json on a 429 primary and a fallback that needs one retry",
     );
     let kinds = event_kinds(&events);
 
@@ -946,7 +946,7 @@ fn e2e_failover_json_mode_gives_the_fallback_its_own_retry_lifecycle() {
     harness.record_artifact("e2e_failover_json_fallback_retry.jsonl", &path);
 }
 
-/// bd-2vmu6, RPC half: the same collision, over `pi --rpc`, which is the
+/// bd-2vmu6, RPC half: the same collision, over `ra --rpc`, which is the
 /// surface SDK clients actually drive.
 ///
 /// The bead's acceptance asks for this scenario on BOTH surfaces. The RPC
@@ -989,7 +989,7 @@ fn e2e_failover_rpc_mode_gives_the_fallback_its_own_retry_lifecycle() {
     let (events, stdout, stderr) = run_rpc_failover(
         &harness,
         &server,
-        "spawning pi --rpc on a 429 primary and a fallback that needs one retry",
+        "spawning ra --rpc on a 429 primary and a fallback that needs one retry",
     );
     let kinds = event_kinds(&events);
 
@@ -1136,7 +1136,7 @@ fn e2e_failover_rpc_abort_at_the_boundary_still_closes_both_lifecycles() {
         &harness,
         &server,
         &stalled_base,
-        "spawning pi --rpc on a 429 primary and a fallback that never answers",
+        "spawning ra --rpc on a 429 primary and a fallback that never answers",
     );
     let kinds = event_kinds(&events);
 
@@ -1361,7 +1361,7 @@ fn e2e_failover_401_never_fails_over() {
 
     let env = PiEnv::new(&harness);
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = env.command(&binary);
     command.args([
         "--print",
@@ -1443,7 +1443,7 @@ fn e2e_credential_rotation_swaps_key_on_429() {
     )
     .expect("write settings.json");
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = Command::new(binary);
     command
         .args([
@@ -1456,11 +1456,11 @@ fn e2e_credential_rotation_swaps_key_on_429() {
             "ping",
         ])
         .env("HOME", root.join("home"))
-        .env("PI_CODING_AGENT_DIR", root.join("agent"))
-        .env("PI_CONFIG_PATH", root.join("settings.json"))
-        .env("PI_SESSIONS_DIR", root.join("sessions"))
-        .env("PI_PACKAGE_DIR", root.join("packages"))
-        .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+        .env("RECUR_AGENT_DIR", root.join("agent"))
+        .env("RECUR_AGENT_CONFIG_PATH", root.join("settings.json"))
+        .env("RECUR_AGENT_SESSIONS_DIR", root.join("sessions"))
+        .env("RECUR_AGENT_PACKAGE_DIR", root.join("packages"))
+        .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
         .env("OPENAI_API_KEYS", "k-aaa,k-bbb")
         .env_remove("OPENAI_API_KEY")
         .stdin(Stdio::null())
@@ -1581,18 +1581,18 @@ fn e2e_path_scope_pins_repo_model_set() {
     );
     std::fs::write(root.join("settings.json"), settings).expect("write settings.json");
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let run_in = |cwd: &std::path::Path| {
         let mut command = Command::new(&binary);
         command
             .args(["--print", "--no-session", "ping"])
             .current_dir(cwd)
             .env("HOME", root.join("home"))
-            .env("PI_CODING_AGENT_DIR", root.join("agent"))
-            .env("PI_CONFIG_PATH", root.join("settings.json"))
-            .env("PI_SESSIONS_DIR", root.join("sessions"))
-            .env("PI_PACKAGE_DIR", root.join("packages"))
-            .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+            .env("RECUR_AGENT_DIR", root.join("agent"))
+            .env("RECUR_AGENT_CONFIG_PATH", root.join("settings.json"))
+            .env("RECUR_AGENT_SESSIONS_DIR", root.join("sessions"))
+            .env("RECUR_AGENT_PACKAGE_DIR", root.join("packages"))
+            .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -1667,7 +1667,7 @@ fn e2e_failover_reopen_restores_primary_once_cooldown_elapsed() {
 
     let env = PiEnv::with_cooldown_secs(&harness, Some(0));
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let session_dir = env.root.join("sessions");
     std::fs::create_dir_all(&session_dir).expect("create session_dir");
 
@@ -1759,7 +1759,7 @@ fn e2e_failover_reopen_stays_on_fallback_while_cooldown_holds() {
 
     let env = PiEnv::with_cooldown_secs(&harness, Some(600));
     env.write_models(&server.base_url());
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let session_dir = env.root.join("sessions");
     std::fs::create_dir_all(&session_dir).expect("create session_dir");
 

@@ -56,8 +56,8 @@ const PRACTICAL_FINISH_BASE_SOURCE: &str = ".beads/beads.base.jsonl";
 const PRACTICAL_FINISH_REQUIRED_LEDGER_ANCHORS: &[&str] =
     &["bd-3ar8v", "bd-3ar8v.6", "bd-3ar8v.6.9"];
 
-const MUST_PASS_GATE_SCHEMA: &str = "pi.ext.must_pass_gate.v1";
-const MUST_PASS_EVENT_SCHEMA: &str = "pi.ext.gate_event.v1";
+const MUST_PASS_GATE_SCHEMA: &str = "ra.ext.must_pass_gate.v1";
+const MUST_PASS_EVENT_SCHEMA: &str = "ra.ext.gate_event.v1";
 const MUST_PASS_INCLUSION_PATH: &str = "docs/extension-inclusion-list.json";
 const MUST_PASS_MANIFEST_PATH: &str = "tests/ext_conformance/VALIDATED_MANIFEST.json";
 const MUST_PASS_VERDICT_PATH: &str =
@@ -148,7 +148,8 @@ const WAIVER_REQUIRED_FIELDS: &[&str] = &[
 const WAIVER_VALID_SCOPES: &[&str] = &["full", "preflight", "both"];
 const WAIVER_MAX_DURATION_DAYS: i64 = 30;
 const WAIVER_EXPIRY_WARN_DAYS: i64 = 3;
-const GENERATE_FULL_SUITE_GATE_ARTIFACTS_ENV: &str = "PI_GENERATE_FULL_SUITE_GATE_ARTIFACTS";
+const GENERATE_FULL_SUITE_GATE_ARTIFACTS_ENV: &str =
+    "RECUR_AGENT_GENERATE_FULL_SUITE_GATE_ARTIFACTS";
 
 fn full_suite_gate_artifact_generation_requested() -> bool {
     let raw = std::env::var(GENERATE_FULL_SUITE_GATE_ARTIFACTS_ENV).ok();
@@ -465,11 +466,11 @@ const PRACTICAL_FINISH_CHECKPOINT_ARTIFACT_REL: &str =
     "tests/full_suite_gate/practical_finish_checkpoint.json";
 const EXTENSION_REMEDIATION_BACKLOG_ARTIFACT_REL: &str =
     "tests/full_suite_gate/extension_remediation_backlog.json";
-const EXTENSION_REMEDIATION_BACKLOG_SCHEMA: &str = "pi.qa.extension_remediation_backlog.v1";
+const EXTENSION_REMEDIATION_BACKLOG_SCHEMA: &str = "ra.qa.extension_remediation_backlog.v1";
 const OPPORTUNITY_MATRIX_PRIMARY_ARTIFACT_REL: &str = "tests/perf/reports/opportunity_matrix.json";
-const OPPORTUNITY_MATRIX_SCHEMA: &str = "pi.perf.opportunity_matrix.v1";
+const OPPORTUNITY_MATRIX_SCHEMA: &str = "ra.perf.opportunity_matrix.v1";
 const PARAMETER_SWEEPS_PRIMARY_ARTIFACT_REL: &str = "tests/perf/reports/parameter_sweeps.json";
-const PARAMETER_SWEEPS_SCHEMA: &str = "pi.perf.parameter_sweeps.v1";
+const PARAMETER_SWEEPS_SCHEMA: &str = "ra.perf.parameter_sweeps.v1";
 const STRESS_TRIAGE_ARTIFACT_REL: &str = "tests/perf/reports/stress_triage.json";
 const CONFORMANCE_SUMMARY_ARTIFACT_REL: &str =
     "tests/ext_conformance/reports/conformance_summary.json";
@@ -1945,7 +1946,7 @@ fn must_pass_tree_records(
 
 fn must_pass_source_tree_sha256(records: &[(String, String, String)]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"pi.ext.must_pass_source_tree.v2\0");
+    hasher.update(b"ra.ext.must_pass_source_tree.v2\0");
     for (path, mode, blob) in records {
         hasher.update(path.as_bytes());
         hasher.update([0]);
@@ -1954,7 +1955,7 @@ fn must_pass_source_tree_sha256(records: &[(String, String, String)]) -> String 
         hasher.update(blob.as_bytes());
         hasher.update([0]);
     }
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
@@ -1964,13 +1965,13 @@ fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
             let mut hasher = Sha1::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         64 => {
             let mut hasher = Sha256::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         length => Err(format!("unsupported Git object ID length: {length}")),
     }
@@ -2066,8 +2067,8 @@ fn capture_must_pass_source_snapshot(root: &Path) -> Result<MustPassSourceSnapsh
     Ok(MustPassSourceSnapshot {
         git_commit,
         source_tree_sha256: must_pass_source_tree_sha256(&records),
-        inclusion_sha256: pi::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
-        manifest_sha256: pi::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
+        inclusion_sha256: ra::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
+        manifest_sha256: ra::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
         inclusion_contents,
         manifest_contents,
         tracked_paths,
@@ -2081,7 +2082,7 @@ fn canonical_must_pass_entries(
 ) -> Result<BTreeMap<String, u64>, String> {
     let inclusion: Value = serde_json::from_slice(inclusion_contents)
         .map_err(|err| format!("invalid {MUST_PASS_INCLUSION_PATH}: {err}"))?;
-    if inclusion.get("schema").and_then(Value::as_str) != Some("pi.ext.inclusion_list.v1") {
+    if inclusion.get("schema").and_then(Value::as_str) != Some("ra.ext.inclusion_list.v1") {
         return Err(format!(
             "unexpected schema in {MUST_PASS_INCLUSION_PATH}: {}",
             inclusion
@@ -4110,7 +4111,7 @@ fn full_suite_gate() {
                   Non-blocking gates produce warnings but do not block.";
 
     let report = FullSuiteVerdict {
-        schema: "pi.ci.full_suite_gate.v1".to_string(),
+        schema: "ra.ci.full_suite_gate.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         verdict: verdict.to_string(),
         policy: policy.to_string(),
@@ -4141,7 +4142,7 @@ fn full_suite_gate() {
     let mut lines: Vec<String> = Vec::new();
     for gate in &gates {
         let line = serde_json::json!({
-            "schema": "pi.ci.full_suite_gate_event.v1",
+            "schema": "ra.ci.full_suite_gate_event.v1",
             "gate_id": gate.id,
             "gate_name": gate.name,
             "bead": gate.bead,
@@ -4296,7 +4297,7 @@ fn full_suite_gate_report_schema() {
 
     assert_eq!(
         val.get("schema").and_then(Value::as_str),
-        Some("pi.ci.full_suite_gate.v1"),
+        Some("ra.ci.full_suite_gate.v1"),
         "Must have correct schema"
     );
     assert!(val.get("verdict").is_some(), "Must have verdict");
@@ -4438,7 +4439,7 @@ fn preflight_fast_fail() {
     eprintln!();
 
     let report = PreflightVerdict {
-        schema: "pi.ci.preflight_lane.v1".to_string(),
+        schema: "ra.ci.preflight_lane.v1".to_string(),
         lane: "preflight".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         verdict: verdict.to_string(),
@@ -4608,7 +4609,7 @@ fn full_certification() {
     let invalid = validations.iter().filter(|v| v.status == "invalid").count();
 
     let waiver_audit = WaiverAuditReport {
-        schema: "pi.ci.waiver_audit.v1".to_string(),
+        schema: "ra.ci.waiver_audit.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         total_waivers: waivers.len(),
         active,
@@ -4733,7 +4734,7 @@ fn full_certification() {
     }
 
     let report = CertificationVerdict {
-        schema: "pi.ci.certification_lane.v1".to_string(),
+        schema: "ra.ci.certification_lane.v1".to_string(),
         lane: "full".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         verdict: verdict.to_string(),
@@ -4794,7 +4795,7 @@ fn full_certification() {
     let mut lines: Vec<String> = Vec::new();
     for gate in &effective_gates {
         let line = serde_json::json!({
-            "schema": "pi.ci.certification_event.v1",
+            "schema": "ra.ci.certification_event.v1",
             "lane": "full",
             "gate_id": gate.id,
             "gate_name": gate.name,
@@ -5009,7 +5010,7 @@ fn waiver_lifecycle_audit() {
     eprintln!();
 
     let report = WaiverAuditReport {
-        schema: "pi.ci.waiver_audit.v1".to_string(),
+        schema: "ra.ci.waiver_audit.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         total_waivers: waivers.len(),
         active,
@@ -5657,7 +5658,7 @@ fn perf3x_bead_coverage_evaluator_fails_closed_when_evidence_paths_are_missing()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock before unix epoch")
         .as_nanos();
-    temp.push(format!("pi_agent_rust_per3x_coverage_warn_{nonce}"));
+    temp.push(format!("recur_agent_per3x_coverage_warn_{nonce}"));
     std::fs::create_dir_all(&temp).expect("create temp root");
 
     let (status, detail) = evaluate_perf3x_bead_coverage(&temp, &perf3x_bead_coverage_contract());
@@ -5777,9 +5778,7 @@ fn perf3x_bead_coverage_audit_report_tracks_missing_evidence_fail_closed() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock before unix epoch")
         .as_nanos();
-    temp.push(format!(
-        "pi_agent_rust_perf3x_coverage_audit_missing_{nonce}"
-    ));
+    temp.push(format!("recur_agent_perf3x_coverage_audit_missing_{nonce}"));
     std::fs::create_dir_all(&temp).expect("create temp root");
 
     let report = build_perf3x_bead_coverage_audit_report(&temp, &perf3x_bead_coverage_contract());
@@ -6577,7 +6576,7 @@ fn extension_remediation_backlog_gate_fails_closed_on_summary_shape_mismatch() {
     std::fs::create_dir_all(&report_dir).expect("create report directory");
     let artifact_path = report_dir.join("extension_remediation_backlog.json");
     let payload = serde_json::json!({
-        "schema": "pi.qa.extension_remediation_backlog.v1",
+        "schema": "ra.qa.extension_remediation_backlog.v1",
         "summary": {
             "total_non_pass_extensions": 2,
             "actionable": 1,
@@ -6613,7 +6612,7 @@ fn extension_remediation_backlog_gate_passes_on_consistent_summary_shape() {
     std::fs::create_dir_all(&report_dir).expect("create report directory");
     let artifact_path = report_dir.join("extension_remediation_backlog.json");
     let payload = serde_json::json!({
-        "schema": "pi.qa.extension_remediation_backlog.v1",
+        "schema": "ra.qa.extension_remediation_backlog.v1",
         "summary": {
             "total_non_pass_extensions": 2,
             "actionable": 1,
@@ -6666,7 +6665,7 @@ fn opportunity_matrix_gate_fails_closed_on_readiness_decision_incoherence() {
     std::fs::create_dir_all(&report_dir).expect("create report directory");
     let artifact_path = report_dir.join("opportunity_matrix.json");
     let payload = serde_json::json!({
-        "schema": "pi.perf.opportunity_matrix.v1",
+        "schema": "ra.perf.opportunity_matrix.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
@@ -6708,7 +6707,7 @@ fn opportunity_matrix_gate_passes_on_consistent_contract_shape() {
     std::fs::create_dir_all(&report_dir).expect("create report directory");
     let artifact_path = report_dir.join("opportunity_matrix.json");
     let payload = serde_json::json!({
-        "schema": "pi.perf.opportunity_matrix.v1",
+        "schema": "ra.perf.opportunity_matrix.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json",
@@ -6762,7 +6761,7 @@ fn parameter_sweeps_gate_fails_closed_on_readiness_incoherence() {
     std::fs::create_dir_all(&report_dir).expect("create report directory");
     let artifact_path = report_dir.join("parameter_sweeps.json");
     let payload = serde_json::json!({
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json"
@@ -6806,7 +6805,7 @@ fn parameter_sweeps_gate_passes_on_consistent_contract_shape() {
     std::fs::create_dir_all(&report_dir).expect("create report directory");
     let artifact_path = report_dir.join("parameter_sweeps.json");
     let payload = serde_json::json!({
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "source_identity": {
             "source_artifact": "phase1_matrix_validation",
             "source_artifact_path": "tests/perf/reports/phase1_matrix_validation.json"
@@ -6857,7 +6856,7 @@ fn conformance_stress_lineage_passes_with_valid_artifacts() {
     std::fs::write(
         &conformance_path,
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.conformance_summary.v2",
+            "schema": "ra.ext.conformance_summary.v2",
             "run_id": "local-20260217T000000000Z",
             "correlation_id": "conformance-summary-local-20260217T000000000Z",
             "pass_rate_pct": 100.0,
@@ -6873,7 +6872,7 @@ fn conformance_stress_lineage_passes_with_valid_artifacts() {
     std::fs::write(
         &stress_path,
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.stress_triage.v1",
+            "schema": "ra.ext.stress_triage.v1",
             "run_id": "local-20260217T000000000Z",
             "correlation_id": "stress-triage-local-20260217T000000000Z",
             "pass": true,
@@ -6901,7 +6900,7 @@ fn conformance_stress_lineage_fails_when_run_id_missing() {
     std::fs::write(
         conformance_dir.join("conformance_summary.json"),
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.conformance_summary.v2",
+            "schema": "ra.ext.conformance_summary.v2",
             "correlation_id": "test-corr",
             "pass_rate_pct": 100.0,
             "counts": { "total": 60, "pass": 60 }
@@ -6915,7 +6914,7 @@ fn conformance_stress_lineage_fails_when_run_id_missing() {
     std::fs::write(
         stress_dir.join("stress_triage.json"),
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.stress_triage.v1",
+            "schema": "ra.ext.stress_triage.v1",
             "run_id": "local-test",
             "correlation_id": "stress-test",
             "pass": true
@@ -6948,7 +6947,7 @@ fn conformance_stress_lineage_fails_when_stress_verdict_not_pass() {
     std::fs::write(
         conformance_dir.join("conformance_summary.json"),
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.conformance_summary.v2",
+            "schema": "ra.ext.conformance_summary.v2",
             "run_id": "local-test",
             "correlation_id": "test-corr",
             "pass_rate_pct": 100.0,
@@ -6963,7 +6962,7 @@ fn conformance_stress_lineage_fails_when_stress_verdict_not_pass() {
     std::fs::write(
         stress_dir.join("stress_triage.json"),
         serde_json::to_string_pretty(&serde_json::json!({
-            "schema": "pi.ext.stress_triage.v1",
+            "schema": "ra.ext.stress_triage.v1",
             "run_id": "local-test",
             "correlation_id": "stress-test",
             "pass": false
@@ -7072,9 +7071,7 @@ fn assert_non_empty_text_artifact_rejects_whitespace_only_file() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock before unix epoch")
         .as_nanos();
-    path.push(format!(
-        "pi_agent_rust_certification_report_empty_{nonce}.md"
-    ));
+    path.push(format!("recur_agent_certification_report_empty_{nonce}.md"));
 
     std::fs::write(&path, " \n\t").expect("write whitespace artifact");
     let err =
@@ -7135,7 +7132,7 @@ fn canonical_must_pass_fixture(count: usize) -> (Vec<u8>, Vec<u8>, BTreeSet<Stri
         .map(|index| format!("extension-{index:03}"))
         .collect::<Vec<_>>();
     let inclusion = serde_json::json!({
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "tier1": ids
             .iter()
             .map(|id| serde_json::json!({"id": id}))
@@ -7710,7 +7707,7 @@ fn must_pass_event_contract_validates_stretch_rows_instead_of_skipping_them() {
     let must_pass = must_pass_event_fixture("extension-a");
     let mut invalid_stretch = must_pass_event_fixture("extension-stretch");
     invalid_stretch["set"] = Value::String("stretch".to_string());
-    invalid_stretch["schema"] = Value::String("pi.ext.gate_event.v0".to_string());
+    invalid_stretch["schema"] = Value::String("ra.ext.gate_event.v0".to_string());
     write_must_pass_event_fixture(temp.path(), &[must_pass.clone(), invalid_stretch]);
 
     let verdict = must_pass_contract_fixture(1);
@@ -7836,7 +7833,7 @@ fn run_all_wires_scenario_cell_status_artifacts_into_evidence_contract() {
         "PERF_EXTENSION_STRATIFICATION_JSON",
         "claim_integrity_scenario_cell_status.json",
         "claim_integrity_scenario_cell_status.md",
-        "pi.claim_integrity.scenario_cell_status.v1",
+        "ra.claim_integrity.scenario_cell_status.v1",
         "\"claim_integrity_scenario_cells\"",
         "PERF_PHASE1_MATRIX_VALIDATION_JSON",
         "phase1_matrix_validation.json",
@@ -7892,7 +7889,7 @@ fn run_all_wires_scenario_cell_status_artifacts_into_evidence_contract() {
         "claim_integrity.evidence_adjudication_matrix_schema",
         "claim_integrity_evidence_adjudication_matrix.json",
         "claim_integrity_evidence_adjudication_matrix.md",
-        "pi.claim_integrity.evidence_adjudication_matrix.v1",
+        "ra.claim_integrity.evidence_adjudication_matrix.v1",
         "\"claim_integrity_adjudication_matrix\"",
         "\"source_record_stream\"",
         "\"source_workload_path\"",

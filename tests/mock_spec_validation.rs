@@ -321,7 +321,7 @@ fn default_fixture_parses_to_mock_spec() {
     let content = std::fs::read_to_string(&path).expect("read default fixture");
     let spec: MockSpec = serde_json::from_str(&content).expect("parse default fixture");
 
-    assert_eq!(spec.schema, "pi.ext.mock_spec.v1");
+    assert_eq!(spec.schema, "ra.ext.mock_spec.v1");
     assert_eq!(spec.extension_id, "_default");
 
     // Session
@@ -435,7 +435,7 @@ fn roundtrip_serialization_is_lossless() {
 
 #[test]
 fn minimal_mock_spec_parses() {
-    let json = r#"{"schema": "pi.ext.mock_spec.v1", "extension_id": "test"}"#;
+    let json = r#"{"schema": "ra.ext.mock_spec.v1", "extension_id": "test"}"#;
     let spec: MockSpec = serde_json::from_str(json).expect("parse minimal spec");
     assert_eq!(spec.extension_id, "test");
     assert!(spec.session.is_none());
@@ -450,7 +450,7 @@ fn minimal_mock_spec_parses() {
 #[test]
 fn exec_match_variants_parse() {
     let json = r#"{
-        "schema": "pi.ext.mock_spec.v1",
+        "schema": "ra.ext.mock_spec.v1",
         "extension_id": "exec-test",
         "exec": {
             "rules": [
@@ -485,7 +485,7 @@ fn exec_match_variants_parse() {
 #[test]
 fn http_match_variants_parse() {
     let json = r#"{
-        "schema": "pi.ext.mock_spec.v1",
+        "schema": "ra.ext.mock_spec.v1",
         "extension_id": "http-test",
         "http": {
             "rules": [
@@ -522,7 +522,7 @@ fn http_match_variants_parse() {
 #[test]
 fn tool_invocation_with_error_parses() {
     let json = r#"{
-        "schema": "pi.ext.mock_spec.v1",
+        "schema": "ra.ext.mock_spec.v1",
         "extension_id": "tool-error-test",
         "tools": {
             "invocations": [
@@ -552,7 +552,7 @@ fn tool_invocation_with_error_parses() {
 #[test]
 fn event_fire_sequence_parses() {
     let json = r#"{
-        "schema": "pi.ext.mock_spec.v1",
+        "schema": "ra.ext.mock_spec.v1",
         "extension_id": "events-test",
         "events": {
             "fire_sequence": [
@@ -588,7 +588,7 @@ fn event_fire_sequence_parses() {
 #[test]
 fn session_with_rich_messages_parses() {
     let json = r#"{
-        "schema": "pi.ext.mock_spec.v1",
+        "schema": "ra.ext.mock_spec.v1",
         "extension_id": "session-test",
         "session": {
             "name": "rich-session",
@@ -645,7 +645,7 @@ fn session_with_rich_messages_parses() {
 #[test]
 fn model_mock_with_available_models_parses() {
     let json = r#"{
-        "schema": "pi.ext.mock_spec.v1",
+        "schema": "ra.ext.mock_spec.v1",
         "extension_id": "model-test",
         "model": {
             "current": {

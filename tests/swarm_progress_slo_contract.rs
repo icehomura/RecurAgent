@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/contracts/swarm-progress-slo-contract.json";
-const EXPECTED_CONTRACT_SCHEMA: &str = "pi.swarm.progress_slo_contract.v1";
-const EXPECTED_PROGRESS_SCHEMA: &str = "pi.swarm.progress_slo.v1";
+const EXPECTED_CONTRACT_SCHEMA: &str = "ra.swarm.progress_slo_contract.v1";
+const EXPECTED_PROGRESS_SCHEMA: &str = "ra.swarm.progress_slo.v1";
 const EXPECTED_BEAD_ID: &str = "bd-wzri8.1";
 const EXPECTED_PARENT_BEAD_ID: &str = "bd-wzri8";
 

@@ -11,15 +11,15 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     ExtensionManager, ExtensionPolicy, ExtensionPolicyMode, HostCallContext, HostCallPayload,
     RUNTIME_RISK_CALIBRATION_SCHEMA_VERSION, RUNTIME_RISK_EXPLANATION_TERM_BUDGET,
     RUNTIME_RISK_LEDGER_SCHEMA_VERSION, RuntimeRiskCalibrationConfig,
     RuntimeRiskCalibrationObjective, RuntimeRiskConfig, calibrate_runtime_risk_from_ledger,
     dispatch_host_call_shared, verify_runtime_risk_ledger_artifact,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::time::Instant;
 

@@ -6,11 +6,11 @@ use super::{
     user_text, vcr_mode, vcr_strict,
 };
 use crate::common::TestHarness;
-use pi::http::client::Client;
-use pi::model::{Message, StopReason};
-use pi::provider::{Context, Provider, StreamOptions, ToolDef};
-use pi::providers::azure::AzureOpenAIProvider;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::http::client::Client;
+use ra::model::{Message, StopReason};
+use ra::provider::{Context, Provider, StreamOptions, ToolDef};
+use ra::providers::azure::AzureOpenAIProvider;
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::json;
 use std::env;
 

@@ -18,9 +18,9 @@
 
 mod common;
 
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
@@ -569,7 +569,7 @@ fn must_pass_tree_records(
 
 fn source_tree_sha256(records: &[(String, String, String)]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"pi.ext.must_pass_source_tree.v2\0");
+    hasher.update(b"ra.ext.must_pass_source_tree.v2\0");
     for (path, mode, blob) in records {
         hasher.update(path.as_bytes());
         hasher.update([0]);
@@ -578,7 +578,7 @@ fn source_tree_sha256(records: &[(String, String, String)]) -> String {
         hasher.update(blob.as_bytes());
         hasher.update([0]);
     }
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
@@ -588,13 +588,13 @@ fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
             let mut hasher = Sha1::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         64 => {
             let mut hasher = Sha256::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         length => Err(format!("unsupported Git object ID length: {length}")),
     }
@@ -660,7 +660,7 @@ fn parse_authoritative_must_pass_ids(
 ) -> Result<Vec<String>, String> {
     let inclusion: AuthoritativeInclusionList = serde_json::from_slice(contents)
         .map_err(|err| format!("invalid {MUST_PASS_INCLUSION_PATH}: {err}"))?;
-    if inclusion.schema != "pi.ext.inclusion_list.v1" {
+    if inclusion.schema != "ra.ext.inclusion_list.v1" {
         return Err(format!(
             "unexpected schema in {MUST_PASS_INCLUSION_PATH}: {}",
             inclusion.schema
@@ -900,8 +900,8 @@ fn capture_must_pass_source_snapshot(root: &Path) -> Result<MustPassSourceSnapsh
         provenance: MustPassSourceProvenance {
             git_commit,
             source_tree_sha256: source_tree_sha256(&records),
-            inclusion_sha256: pi::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
-            manifest_sha256: pi::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
+            inclusion_sha256: ra::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
+            manifest_sha256: ra::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
         },
         inclusion_contents,
         manifest_contents,
@@ -976,10 +976,10 @@ fn hermetic_conformance_env(cwd: &Path) -> std::collections::HashMap<String, Str
     let home = home.display().to_string();
     let tmp = tmp.display().to_string();
     std::collections::HashMap::from([
-        ("PI_DETERMINISTIC_CWD".to_string(), cwd),
+        ("RECUR_AGENT_DETERMINISTIC_CWD".to_string(), cwd),
         ("HOME".to_string(), home.clone()),
         ("USERPROFILE".to_string(), home.clone()),
-        ("PI_DETERMINISTIC_HOME".to_string(), home),
+        ("RECUR_AGENT_DETERMINISTIC_HOME".to_string(), home),
         ("TMPDIR".to_string(), tmp.clone()),
         ("TEMP".to_string(), tmp.clone()),
         ("TMP".to_string(), tmp),
@@ -1011,8 +1011,8 @@ fn prepare_extension_fixture(ext_id: &str, cwd: &Path) {
     }
 
     for prompt_dir in [
-        cwd.join(".pi").join("prompts"),
-        cwd.join("home").join(".pi").join("agent").join("prompts"),
+        cwd.join(".ra").join("prompts"),
+        cwd.join("home").join(".ra").join("agent").join("prompts"),
     ] {
         std::fs::create_dir_all(&prompt_dir).expect("create prompt-template-model fixture dir");
         std::fs::write(
@@ -1075,7 +1075,7 @@ fn run_conformance_test(ext_id: &str) {
     // Start JS runtime and load the extension.
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env: hermetic_conformance_env(&cwd),
         deny_env: false,
@@ -1245,7 +1245,7 @@ export default function(pi) {
 
 fn provider_mirror_probe_evidence(status: &str, error: Option<&str>) -> Value {
     serde_json::json!({
-        "schema": "pi.ext.provider_mirror_helper_probe.v1",
+        "schema": "ra.ext.provider_mirror_helper_probe.v1",
         "status": status,
         "owner_module": PROVIDER_MIRROR_OWNER_MODULE,
         "fix_surface": PROVIDER_MIRROR_FIX_SURFACE,
@@ -1277,7 +1277,7 @@ fn load_provider_mirror_probe(entry_file: &Path, cwd: &Path) -> Result<Extension
     })?;
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env: hermetic_conformance_env(&cwd),
         deny_env: false,
@@ -1398,7 +1398,7 @@ fn load_extension_runtime_for_journey(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env: hermetic_conformance_env(&cwd),
         deny_env: false,
@@ -1802,13 +1802,13 @@ fn try_conformance(ext_id: &str) -> ExtensionConformanceResult {
     try_conformance_with_manifest(load_manifest(), ext_id)
 }
 
-/// When PI_DUMP_REGISTRATION_OBSERVATIONS=1, append every extension's
+/// When RECUR_AGENT_DUMP_REGISTRATION_OBSERVATIONS=1, append every extension's
 /// runtime-observed registration identities to a JSONL oracle artifact. This
 /// is the ground-truth feed for regenerating VALIDATED_MANIFEST.json entries
 /// (see docs/EXTENSION_REFRESH_CHECKLIST.md §3.2) and for diagnosing manifest
 /// drift like bd-sog97.29.
 fn maybe_dump_registration_observation(ext_id: &str, observation: &RegistrationObservation) {
-    if std::env::var("PI_DUMP_REGISTRATION_OBSERVATIONS")
+    if std::env::var("RECUR_AGENT_DUMP_REGISTRATION_OBSERVATIONS")
         .ok()
         .as_deref()
         != Some("1")
@@ -1936,7 +1936,7 @@ fn try_conformance_with_manifest(manifest: &Manifest, ext_id: &str) -> Extension
         _ => {}
     }
 
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env,
         deny_env: false,
@@ -2166,7 +2166,7 @@ fn conformance_full_report() {
     let mut lines: Vec<String> = Vec::new();
     for r in &results {
         let entry = serde_json::json!({
-            "schema": "pi.ext.conformance_result.v1",
+            "schema": "ra.ext.conformance_result.v1",
             "id": r.id,
             "tier": r.tier,
             "status": r.status,
@@ -2184,7 +2184,7 @@ fn conformance_full_report() {
 
     // ── Write JSON summary ──
     let summary = serde_json::json!({
-        "schema": "pi.ext.conformance_report.v1",
+        "schema": "ra.ext.conformance_report.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "manifest_count": total,
         "tested": tested,
@@ -2306,19 +2306,19 @@ fn conformance_full_report() {
 // so CI matrix jobs can fan out.
 //
 // Environment variables:
-//   PI_SHARD_INDEX  — 0-based index of this shard (default: 0)
-//   PI_SHARD_TOTAL  — total number of shards (default: 1 = no sharding)
-//   PI_SHARD_PARALLELISM — max threads within a shard (default: num_cpus or 4)
+//   RECUR_AGENT_SHARD_INDEX  — 0-based index of this shard (default: 0)
+//   RECUR_AGENT_SHARD_TOTAL  — total number of shards (default: 1 = no sharding)
+//   RECUR_AGENT_SHARD_PARALLELISM — max threads within a shard (default: num_cpus or 4)
 //
 // Run:
 //   cargo test --test ext_conformance_generated --features ext-conformance \
 //     -- conformance_sharded_matrix --nocapture
 //
 // CI matrix example (4 shards):
-//   PI_SHARD_INDEX=0 PI_SHARD_TOTAL=4 cargo test ...
-//   PI_SHARD_INDEX=1 PI_SHARD_TOTAL=4 cargo test ...
-//   PI_SHARD_INDEX=2 PI_SHARD_TOTAL=4 cargo test ...
-//   PI_SHARD_INDEX=3 PI_SHARD_TOTAL=4 cargo test ...
+//   RECUR_AGENT_SHARD_INDEX=0 RECUR_AGENT_SHARD_TOTAL=4 cargo test ...
+//   RECUR_AGENT_SHARD_INDEX=1 RECUR_AGENT_SHARD_TOTAL=4 cargo test ...
+//   RECUR_AGENT_SHARD_INDEX=2 RECUR_AGENT_SHARD_TOTAL=4 cargo test ...
+//   RECUR_AGENT_SHARD_INDEX=3 RECUR_AGENT_SHARD_TOTAL=4 cargo test ...
 
 /// Failure category for triage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -2390,16 +2390,16 @@ struct ShardConfig {
 impl ShardConfig {
     /// Read configuration from environment variables with sensible defaults.
     fn from_env() -> Self {
-        let shard_index: usize = std::env::var("PI_SHARD_INDEX")
+        let shard_index: usize = std::env::var("RECUR_AGENT_SHARD_INDEX")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
-        let shard_total: usize = std::env::var("PI_SHARD_TOTAL")
+        let shard_total: usize = std::env::var("RECUR_AGENT_SHARD_TOTAL")
             .ok()
             .and_then(|v| v.parse().ok())
             .filter(|&v| v > 0)
             .unwrap_or(1);
-        let parallelism: usize = std::env::var("PI_SHARD_PARALLELISM")
+        let parallelism: usize = std::env::var("RECUR_AGENT_SHARD_PARALLELISM")
             .ok()
             .and_then(|v| v.parse().ok())
             .filter(|&v| v > 0)
@@ -2596,7 +2596,7 @@ fn conformance_sharded_matrix() {
     let mut lines: Vec<String> = Vec::new();
     for r in &results {
         let entry = serde_json::json!({
-            "schema": "pi.ext.conformance_result.v2",
+            "schema": "ra.ext.conformance_result.v2",
             "id": r.inner.id,
             "tier": r.inner.tier,
             "status": r.inner.status,
@@ -2616,7 +2616,7 @@ fn conformance_sharded_matrix() {
 
     // ── Write JSON shard report ──
     let report = ShardReport {
-        schema: "pi.ext.conformance_shard_report.v1".to_string(),
+        schema: "ra.ext.conformance_shard_report.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         shard_index: config.shard_index,
         shard_total: config.shard_total,
@@ -2879,7 +2879,7 @@ fn conformance_merge_shard_reports() {
     };
 
     let merged = serde_json::json!({
-        "schema": "pi.ext.conformance_merged_report.v1",
+        "schema": "ra.ext.conformance_merged_report.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "shards_merged": shard_files.len(),
         "shard_total": shard_total,
@@ -3069,7 +3069,7 @@ fn try_conformance_detailed(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env: hermetic_conformance_env(&cwd),
         deny_env: false,
@@ -3294,7 +3294,7 @@ fn conformance_failure_dossiers() {
                     "cargo test --test ext_conformance_generated --features ext-conformance -- conformance_failure_dossiers --nocapture".to_string();
 
                 let dossier = FailureDossier {
-                    schema: "pi.ext.failure_dossier.v1".to_string(),
+                    schema: "ra.ext.failure_dossier.v1".to_string(),
                     generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
                     extension_id: entry.id.clone(),
                     extension_tier: entry.conformance_tier,
@@ -3350,7 +3350,7 @@ fn conformance_failure_dossiers() {
     };
 
     let index = serde_json::json!({
-        "schema": "pi.ext.dossier_index.v1",
+        "schema": "ra.ext.dossier_index.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "manifest_count": total,
         "tested": tested,
@@ -3633,7 +3633,7 @@ fn selection_test_entry(id: &str, conformance_tier: u32) -> ManifestEntry {
 #[test]
 fn authoritative_must_pass_parser_combines_sections_and_rejects_bad_ids() {
     let valid = br#"{
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "summary": {"tier1_count": 2, "tier1_review_count": 1, "total_must_pass": 3},
         "tier1": [{"id": "alpha"}, {"id": "beta"}],
         "tier1_review": [{"id": "gamma"}]
@@ -3644,7 +3644,7 @@ fn authoritative_must_pass_parser_combines_sections_and_rejects_bad_ids() {
     );
 
     let duplicate = br#"{
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "summary": {"tier1_count": 1, "tier1_review_count": 1, "total_must_pass": 2},
         "tier1": [{"id": "duplicate"}],
         "tier1_review": [{"id": "duplicate"}]
@@ -3654,7 +3654,7 @@ fn authoritative_must_pass_parser_combines_sections_and_rejects_bad_ids() {
     assert!(duplicate_error.contains("duplicate must-pass id duplicate"));
 
     let missing = br#"{
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "summary": {"tier1_count": 1, "tier1_review_count": 0, "total_must_pass": 1},
         "tier1": [{}],
         "tier1_review": []
@@ -3665,7 +3665,7 @@ fn authoritative_must_pass_parser_combines_sections_and_rejects_bad_ids() {
     );
 
     let malformed = br#"{
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "summary": {"tier1_count": 1, "tier1_review_count": 0, "total_must_pass": 1},
         "tier1": [{"id": " padded "}],
         "tier1_review": []
@@ -4156,7 +4156,7 @@ fn conformance_must_pass_gate() {
     ];
 
     let verdict = MustPassGateVerdict {
-        schema: "pi.ext.must_pass_gate.v1".to_string(),
+        schema: "ra.ext.must_pass_gate.v1".to_string(),
         generated_at,
         run_id: run_id.clone(),
         correlation_id: correlation_id.clone(),
@@ -4210,7 +4210,7 @@ fn conformance_must_pass_gate() {
     let mut event_lines: Vec<String> = Vec::new();
     for r in &mp_results {
         let line = serde_json::json!({
-            "schema": "pi.ext.gate_event.v1",
+            "schema": "ra.ext.gate_event.v1",
             "set": "must_pass",
             "run_id": run_id.clone(),
             "correlation_id": correlation_id.clone(),
@@ -4230,7 +4230,7 @@ fn conformance_must_pass_gate() {
     }
     for r in &stretch_results {
         let line = serde_json::json!({
-            "schema": "pi.ext.gate_event.v1",
+            "schema": "ra.ext.gate_event.v1",
             "set": "stretch",
             "run_id": run_id.clone(),
             "correlation_id": correlation_id.clone(),
@@ -4492,40 +4492,46 @@ fn provider_modes() -> Vec<ProviderMode> {
             name: "anthropic_streaming",
             description: "Anthropic Messages API with SSE streaming",
             env_overrides: vec![
-                ("PI_DETERMINISTIC_PROVIDER_HINT", "anthropic"),
-                ("PI_DETERMINISTIC_API_STYLE", "anthropic_messages"),
+                ("RECUR_AGENT_DETERMINISTIC_PROVIDER_HINT", "anthropic"),
+                ("RECUR_AGENT_DETERMINISTIC_API_STYLE", "anthropic_messages"),
             ],
         },
         ProviderMode {
             name: "openai_completions",
             description: "OpenAI Chat Completions API",
             env_overrides: vec![
-                ("PI_DETERMINISTIC_PROVIDER_HINT", "openai"),
-                ("PI_DETERMINISTIC_API_STYLE", "openai_completions"),
+                ("RECUR_AGENT_DETERMINISTIC_PROVIDER_HINT", "openai"),
+                ("RECUR_AGENT_DETERMINISTIC_API_STYLE", "openai_completions"),
             ],
         },
         ProviderMode {
             name: "openai_responses",
             description: "OpenAI Responses API (reasoning models)",
             env_overrides: vec![
-                ("PI_DETERMINISTIC_PROVIDER_HINT", "openai"),
-                ("PI_DETERMINISTIC_API_STYLE", "openai_responses"),
+                ("RECUR_AGENT_DETERMINISTIC_PROVIDER_HINT", "openai"),
+                ("RECUR_AGENT_DETERMINISTIC_API_STYLE", "openai_responses"),
             ],
         },
         ProviderMode {
             name: "gemini_generative",
             description: "Google Gemini / GenerativeAI",
             env_overrides: vec![
-                ("PI_DETERMINISTIC_PROVIDER_HINT", "google"),
-                ("PI_DETERMINISTIC_API_STYLE", "google_generative_ai"),
+                ("RECUR_AGENT_DETERMINISTIC_PROVIDER_HINT", "google"),
+                (
+                    "RECUR_AGENT_DETERMINISTIC_API_STYLE",
+                    "google_generative_ai",
+                ),
             ],
         },
         ProviderMode {
             name: "openai_compatible",
             description: "Generic OpenAI-compatible endpoint (e.g., groq, deepseek, xai)",
             env_overrides: vec![
-                ("PI_DETERMINISTIC_PROVIDER_HINT", "openai_compatible"),
-                ("PI_DETERMINISTIC_API_STYLE", "openai_completions"),
+                (
+                    "RECUR_AGENT_DETERMINISTIC_PROVIDER_HINT",
+                    "openai_compatible",
+                ),
+                ("RECUR_AGENT_DETERMINISTIC_API_STYLE", "openai_completions"),
             ],
         },
     ]
@@ -4533,7 +4539,7 @@ fn provider_modes() -> Vec<ProviderMode> {
 
 /// Run conformance for a single extension with runtime environment overrides.
 ///
-/// Unlike [`try_conformance`], this creates a `PiJsRuntimeConfig` with the
+/// Unlike [`try_conformance`], this creates a `RaJsRuntimeConfig` with the
 /// given env overrides passed through the config `env` map, so no process-level
 /// environment mutation is needed.
 #[allow(clippy::too_many_lines, clippy::cast_possible_truncation)]
@@ -4605,7 +4611,7 @@ fn try_conformance_with_env(
             .map(|(k, v)| ((*k).to_string(), (*v).to_string())),
     );
 
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env,
         deny_env: false,
@@ -4896,7 +4902,7 @@ fn conformance_provider_compat_matrix() {
 
     // ── Build report ──
     let report = ProviderCompatReport {
-        schema: "pi.ext.provider_compat_matrix.v1".to_string(),
+        schema: "ra.ext.provider_compat_matrix.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         provider_modes: modes
             .iter()
@@ -4933,7 +4939,7 @@ fn conformance_provider_compat_matrix() {
     let mut event_lines: Vec<String> = Vec::new();
     for c in &cells {
         let line = serde_json::json!({
-            "schema": "pi.ext.provider_compat_event.v1",
+            "schema": "ra.ext.provider_compat_event.v1",
             "extension_id": c.extension_id,
             "tier": c.extension_tier,
             "provider_mode": c.provider_mode,
@@ -5283,7 +5289,7 @@ fn run_category_journey(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         env: hermetic_conformance_env(&cwd),
         deny_env: false,
@@ -5657,7 +5663,7 @@ fn conformance_extension_journeys() {
     let mut lines: Vec<String> = Vec::new();
     for r in &results {
         let line = serde_json::json!({
-            "schema": "pi.ext.journey_event.v1",
+            "schema": "ra.ext.journey_event.v1",
             "extension_id": r.extension_id,
             "tier": r.extension_tier,
             "journey_category": r.journey_category,
@@ -5675,7 +5681,7 @@ fn conformance_extension_journeys() {
 
     // ── Write JSON report ──
     let report = serde_json::json!({
-        "schema": "pi.ext.journey_report.v1",
+        "schema": "ra.ext.journey_report.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         "must_pass_count": must_pass.len(),
         "tested": tested,
@@ -5806,10 +5812,10 @@ fn conformance_extension_journeys() {
 // development.
 //
 // Environment variables:
-//   PI_HEALTH_BASELINE_PATH  — override baseline file (default: auto-detected)
-//   PI_HEALTH_UPDATE_BASELINE — "true" to write a per-extension snapshot for
+//   RECUR_AGENT_HEALTH_BASELINE_PATH  — override baseline file (default: auto-detected)
+//   RECUR_AGENT_HEALTH_UPDATE_BASELINE — "true" to write a per-extension snapshot for
 //                               future comparisons (default: false)
-//   PI_HEALTH_FAIL_ON_REGRESSION — "true" to fail the test on regressions
+//   RECUR_AGENT_HEALTH_FAIL_ON_REGRESSION — "true" to fail the test on regressions
 //                                  (default: false)
 //
 // Run:
@@ -5905,21 +5911,23 @@ fn conformance_health_delta() {
     let _ = std::fs::create_dir_all(&report_dir);
 
     // ── Load baseline ──
-    let baseline_path = std::env::var("PI_HEALTH_BASELINE_PATH").ok().map_or_else(
-        || {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests")
-                .join("ext_conformance")
-                .join("reports")
-                .join("conformance_baseline.json")
-        },
-        PathBuf::from,
-    );
+    let baseline_path = std::env::var("RECUR_AGENT_HEALTH_BASELINE_PATH")
+        .ok()
+        .map_or_else(
+            || {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests")
+                    .join("ext_conformance")
+                    .join("reports")
+                    .join("conformance_baseline.json")
+            },
+            PathBuf::from,
+        );
 
-    let fail_on_regression =
-        std::env::var("PI_HEALTH_FAIL_ON_REGRESSION").is_ok_and(|v| v == "true" || v == "1");
+    let fail_on_regression = std::env::var("RECUR_AGENT_HEALTH_FAIL_ON_REGRESSION")
+        .is_ok_and(|v| v == "true" || v == "1");
     let update_baseline =
-        std::env::var("PI_HEALTH_UPDATE_BASELINE").is_ok_and(|v| v == "true" || v == "1");
+        std::env::var("RECUR_AGENT_HEALTH_UPDATE_BASELINE").is_ok_and(|v| v == "true" || v == "1");
 
     let baseline_json: serde_json::Value = if baseline_path.exists() {
         let data = std::fs::read_to_string(&baseline_path).expect("Failed to read baseline");
@@ -6162,7 +6170,7 @@ fn conformance_health_delta() {
 
     // ── Build report ──
     let report = HealthDeltaReport {
-        schema: "pi.ext.health_delta.v1".to_string(),
+        schema: "ra.ext.health_delta.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         baseline_path: baseline_path.display().to_string(),
         baseline_date: baseline_date.clone(),
@@ -6217,7 +6225,7 @@ fn conformance_health_delta() {
         .collect();
     for d in &all_deltas {
         let line = serde_json::json!({
-            "schema": "pi.ext.health_delta_event.v1",
+            "schema": "ra.ext.health_delta_event.v1",
             "id": d.id,
             "tier": d.tier,
             "delta_type": d.delta_type,

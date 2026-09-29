@@ -4,11 +4,11 @@
 
 mod common;
 
-use pi::error::Error;
-use pi::model::{
+use ra::error::Error;
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, TextContent, ToolCall, Usage,
 };
-use pi::session::Session;
+use ra::session::Session;
 use serde_json::json;
 
 // ============================================================================
@@ -104,7 +104,7 @@ mod exit_codes {
 
 mod cli_combinations {
     use clap::Parser;
-    use pi::cli::Cli;
+    use ra::cli::Cli;
 
     #[test]
     fn print_mode_with_provider_and_model() {
@@ -263,7 +263,7 @@ mod cli_combinations {
 
 mod cli_flag_combinations {
     use clap::Parser;
-    use pi::cli::Cli;
+    use ra::cli::Cli;
 
     fn parse_args(args: &[&str]) -> Cli {
         Cli::try_parse_from(args).expect("CLI parse should succeed")
@@ -317,8 +317,8 @@ mod session_invariants {
     use super::*;
 
     fn user_msg(text: &str) -> Message {
-        Message::User(pi::model::UserMessage {
-            content: pi::model::UserContent::Text(text.to_string()),
+        Message::User(ra::model::UserMessage {
+            content: ra::model::UserContent::Text(text.to_string()),
             timestamp: 0,
         })
     }
@@ -527,8 +527,8 @@ mod message_serde_invariants {
 
     #[test]
     fn user_text_message_round_trips() {
-        let msg = Message::User(pi::model::UserMessage {
-            content: pi::model::UserContent::Text("hello".to_string()),
+        let msg = Message::User(ra::model::UserMessage {
+            content: ra::model::UserContent::Text("hello".to_string()),
             timestamp: 12345,
         });
         let json = serde_json::to_value(&msg).expect("serialize");
@@ -610,7 +610,7 @@ mod message_serde_invariants {
 // ============================================================================
 
 mod config_types {
-    use pi::config::Config;
+    use ra::config::Config;
 
     #[test]
     fn config_default_is_valid() {
@@ -817,7 +817,7 @@ mod structured_traceability_logs {
 mod omp_tool_cross_surface_parity {
     use super::*;
     use common::logging::{TestLogger, validate_jsonl};
-    use pi::model::{ToolCall, ToolResultMessage};
+    use ra::model::{ToolCall, ToolResultMessage};
     use serde_json::json;
 
     #[test]

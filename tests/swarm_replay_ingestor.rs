@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use pi::swarm_replay::{
+use ra::swarm_replay::{
     SWARM_REPLAY_PERFORMANCE_EVIDENCE_SCHEMA, SWARM_REPLAY_POLICY_REPORT_SCHEMA,
     SWARM_REPLAY_REPORT_SCHEMA, SWARM_REPLAY_TRACE_SCHEMA, SwarmReplayBaselinePolicy,
     SwarmReplayEvent, SwarmReplayEventUncertainty, SwarmReplayGuards, SwarmReplayIngestRequest,
@@ -250,13 +250,13 @@ fn write_clean_sources(root: &Path, include_agent_mail: bool) -> std::io::Result
                 "command": "rch exec -- cargo test --test swarm_replay_ingestor",
                 "runner": "rch",
                 "exit_code": 0,
-                "target_dir": "/data/tmp/pi_agent_rust_cargo/amberosprey/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/amberosprey/tmp",
+                "target_dir": "/data/tmp/recur_agent_cargo/amberosprey/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/amberosprey/tmp",
                 "created_at": "2026-05-13T18:10:00Z"
             }],
             "artifacts": [{
                 "artifact_path": "tests/golden_corpus/swarm_replay_trace/normalized_trace.json",
-                "artifact_schema": "pi.swarm.replay_trace.v1",
+                "artifact_schema": "ra.swarm.replay_trace.v1",
                 "verdict": "pass",
                 "command": "cargo test --test swarm_replay_ingestor",
                 "created_at": "2026-05-13T18:11:00Z"
@@ -267,7 +267,7 @@ fn write_clean_sources(root: &Path, include_agent_mail: bool) -> std::io::Result
         root,
         "docs/evidence/context-intelligence-closeout-gate.json",
         &json!({
-            "schema": "pi.context_intelligence.closeout_gate.v1",
+            "schema": "ra.context_intelligence.closeout_gate.v1",
             "verdict": "pass",
             "generated_at": "2026-05-13T18:12:00Z"
         }),
@@ -275,12 +275,12 @@ fn write_clean_sources(root: &Path, include_agent_mail: bool) -> std::io::Result
     write_text(
         root,
         "flight/events.jsonl",
-        r#"{"schema":"pi.swarm.flight_recorder.event.v1","event_kind":"agent_turn","agent_name":"AmberOsprey","created_at":"2026-05-13T18:13:00Z"}"#,
+        r#"{"schema":"ra.swarm.flight_recorder.event.v1","event_kind":"agent_turn","agent_name":"AmberOsprey","created_at":"2026-05-13T18:13:00Z"}"#,
     )?;
     write_text(
         root,
         "activity/events.jsonl",
-        r#"{"schema":"pi.swarm.activity_ledger.v1","event_kind":"operator_handoff","handoff_id":"activity-handoff","summary":"handoff from activity ledger","next_actions":["inspect replay"],"evidence_paths":["tests/full_suite_gate/swarm_activity_digest.json"],"created_at":"2026-05-13T18:14:00Z"}"#,
+        r#"{"schema":"ra.swarm.activity_ledger.v1","event_kind":"operator_handoff","handoff_id":"activity-handoff","summary":"handoff from activity ledger","next_actions":["inspect replay"],"evidence_paths":["tests/full_suite_gate/swarm_activity_digest.json"],"created_at":"2026-05-13T18:14:00Z"}"#,
     )
 }
 
@@ -365,9 +365,9 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
                 "max_tool_concurrency": 16,
                 "extension_hostcall_lanes": 24,
                 "rch_worker_slots": 8,
-                "target_dir": "/data/tmp/pi_agent_rust_cargo/amberosprey/target",
+                "target_dir": "/data/tmp/recur_agent_cargo/amberosprey/target",
                 "target_free_gib": 512,
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/amberosprey/tmp",
+                "tmpdir": "/data/tmp/recur_agent_cargo/amberosprey/tmp",
                 "tmpdir_free_gib": 256,
                 "numa_hint": "pin_rch_workers_by_socket",
                 "created_at": "2026-05-13T18:07:00Z"
@@ -443,8 +443,8 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
                 "command": "rch exec -- cargo test --test swarm_replay_ingestor",
                 "runner": "rch",
                 "exit_code": 0,
-                "target_dir": "/data/tmp/pi_agent_rust_cargo/amberosprey/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/amberosprey/tmp",
+                "target_dir": "/data/tmp/recur_agent_cargo/amberosprey/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/amberosprey/tmp",
                 "created_at": "2026-05-13T18:13:00Z"
             }],
             "artifacts": [
@@ -457,7 +457,7 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
                 },
                 {
                     "artifact_path": "tests/golden_corpus/swarm_replay_trace/normalized_trace.json",
-                    "artifact_schema": "pi.swarm.replay_trace.v1",
+                    "artifact_schema": "ra.swarm.replay_trace.v1",
                     "verdict": "pass",
                     "command": "cargo test --test swarm_replay_ingestor",
                     "created_at": "2026-05-13T18:15:00Z"
@@ -469,7 +469,7 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
         root,
         "docs/evidence/context-intelligence-closeout-gate.json",
         &json!({
-            "schema": "pi.context_intelligence.closeout_gate.v1",
+            "schema": "ra.context_intelligence.closeout_gate.v1",
             "verdict": "pass",
             "generated_at": "2026-05-13T18:16:00Z"
         }),
@@ -478,9 +478,9 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
         root,
         "flight/events.jsonl",
         concat!(
-            r#"{"schema":"pi.swarm.flight_recorder.event.v1","event_kind":"agent_turn","agent_name":"AmberOsprey","created_at":"2026-05-13T18:17:00Z"}"#,
+            r#"{"schema":"ra.swarm.flight_recorder.event.v1","event_kind":"agent_turn","agent_name":"AmberOsprey","created_at":"2026-05-13T18:17:00Z"}"#,
             "\n",
-            r#"{"schema":"pi.swarm.flight_recorder.event.v1","event_kind":"validation_gate","agent_name":"AmberOsprey","created_at":"2026-05-13T18:18:00Z"}"#,
+            r#"{"schema":"ra.swarm.flight_recorder.event.v1","event_kind":"validation_gate","agent_name":"AmberOsprey","created_at":"2026-05-13T18:18:00Z"}"#,
             "\n"
         ),
     )?;
@@ -488,9 +488,9 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
         root,
         "activity/events.jsonl",
         concat!(
-            r#"{"schema":"pi.swarm.activity_ledger.v1","event_kind":"operator_handoff","handoff_id":"activity-no-mock-e2e","summary":"activity ledger handoff","next_actions":["compare policies"],"evidence_paths":["tests/full_suite_gate/swarm_activity_digest.json"],"created_at":"2026-05-13T18:19:00Z"}"#,
+            r#"{"schema":"ra.swarm.activity_ledger.v1","event_kind":"operator_handoff","handoff_id":"activity-no-mock-e2e","summary":"activity ledger handoff","next_actions":["compare policies"],"evidence_paths":["tests/full_suite_gate/swarm_activity_digest.json"],"created_at":"2026-05-13T18:19:00Z"}"#,
             "\n",
-            r#"{"schema":"pi.swarm.activity_ledger.v1","event_kind":"verification","agent_name":"AmberOsprey","created_at":"2026-05-13T18:20:00Z"}"#,
+            r#"{"schema":"ra.swarm.activity_ledger.v1","event_kind":"verification","agent_name":"AmberOsprey","created_at":"2026-05-13T18:20:00Z"}"#,
             "\n"
         ),
     )?;
@@ -501,7 +501,7 @@ fn write_no_mock_e2e_sources(root: &Path) -> std::io::Result<()> {
 fn source_row<'a>(
     trace: &'a SwarmReplayTrace,
     source_id: &str,
-) -> Result<&'a pi::swarm_replay::SwarmReplaySourceInventoryRow, String> {
+) -> Result<&'a ra::swarm_replay::SwarmReplaySourceInventoryRow, String> {
     trace
         .source_inventory
         .iter()
@@ -639,7 +639,7 @@ fn trace_from_events(events: Vec<SwarmReplayEvent>) -> SwarmReplayTrace {
     }
 }
 
-fn diagnostic_codes(report: &pi::swarm_replay::SwarmReplayReport) -> BTreeSet<String> {
+fn diagnostic_codes(report: &ra::swarm_replay::SwarmReplayReport) -> BTreeSet<String> {
     report
         .diagnostics
         .iter()
@@ -672,8 +672,8 @@ fn metamorphic_semantic_events() -> Vec<SwarmReplayEvent> {
                 "command": "rch exec -- cargo test metamorphic_swarm -- --nocapture",
                 "runner": "rch",
                 "exit_code": 0,
-                "target_dir": "/data/tmp/pi_agent_rust_cargo/codex/target",
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/codex/tmp"
+                "target_dir": "/data/tmp/recur_agent_cargo/codex/target",
+                "tmpdir": "/data/tmp/recur_agent_cargo/codex/tmp"
             }),
         ),
         replay_event(
@@ -741,7 +741,7 @@ fn with_event(mut events: Vec<SwarmReplayEvent>, event: SwarmReplayEvent) -> Vec
     events
 }
 
-fn metamorphic_state_projection(report: &pi::swarm_replay::SwarmReplayReport) -> Value {
+fn metamorphic_state_projection(report: &ra::swarm_replay::SwarmReplayReport) -> Value {
     let beads = report
         .final_state
         .beads
@@ -821,8 +821,8 @@ fn push_metamorphic_comparison(
     records: &mut Vec<Value>,
     transform_id: &str,
     fixture_id: &str,
-    left: &pi::swarm_replay::SwarmReplayReport,
-    right: &pi::swarm_replay::SwarmReplayReport,
+    left: &ra::swarm_replay::SwarmReplayReport,
+    right: &ra::swarm_replay::SwarmReplayReport,
     expected_equivalent: bool,
 ) -> bool {
     let compared_fields = [
@@ -848,7 +848,7 @@ fn push_metamorphic_comparison(
         .collect::<Vec<_>>();
     let equivalent = mismatches.is_empty();
     records.push(json!({
-        "schema": "pi.swarm.metamorphic_replay_comparison.v1",
+        "schema": "ra.swarm.metamorphic_replay_comparison.v1",
         "transform_id": transform_id,
         "fixture_id": fixture_id,
         "expected_equivalent": expected_equivalent,
@@ -881,8 +881,8 @@ fn decision<'a>(
 fn write_no_mock_e2e_outputs(
     root: &Path,
     trace: &SwarmReplayTrace,
-    replay: &pi::swarm_replay::SwarmReplayReport,
-    policy_report: &pi::swarm_replay::SwarmReplayPolicyReport,
+    replay: &ra::swarm_replay::SwarmReplayReport,
+    policy_report: &ra::swarm_replay::SwarmReplayPolicyReport,
 ) -> Result<Value, Box<dyn Error>> {
     write_json(root, "evidence/trace.json", &serde_json::to_value(trace)?)?;
     write_json(
@@ -939,7 +939,7 @@ fn write_no_mock_e2e_outputs(
         "entries": [
             {
                 "path": "evidence/replay-events.jsonl",
-                "artifact_schema": "pi.swarm.replay_events_jsonl.v1",
+                "artifact_schema": "ra.swarm.replay_events_jsonl.v1",
                 "evidence_kind": "jsonl_event_log",
                 "record_count": trace.events.len()
             },
@@ -1088,9 +1088,9 @@ fn doctor_preflight_budget_profile_feeds_resource_timeline() -> TestResult {
                 "max_tool_concurrency": 16,
                 "extension_hostcall_lanes": 24,
                 "rch_worker_slots": 8,
-                "target_dir": "/data/tmp/pi_agent_rust_cargo/doctor/target",
+                "target_dir": "/data/tmp/recur_agent_cargo/doctor/target",
                 "target_free_gib": 512,
-                "tmpdir": "/data/tmp/pi_agent_rust_cargo/doctor/tmp",
+                "tmpdir": "/data/tmp/recur_agent_cargo/doctor/tmp",
                 "tmpdir_free_gib": 256,
                 "numa_hint": "pin_rch_workers_by_socket",
                 "created_at": "2026-05-13T18:05:00Z"
@@ -1238,7 +1238,7 @@ fn fault_injection_corpus_replays_coordination_failures() -> TestResult {
     let corpus_value = load_json(FAULT_INJECTION_CORPUS)?;
     let corpus: FaultInjectionCorpus = serde_json::from_value(corpus_value)?;
 
-    assert_eq!(corpus.schema, "pi.swarm.replay_fault_injection_corpus.v1");
+    assert_eq!(corpus.schema, "ra.swarm.replay_fault_injection_corpus.v1");
     assert_eq!(corpus.generated_at, GENERATED_AT);
     assert!(corpus.scenarios.len() >= 3);
 
@@ -1254,7 +1254,7 @@ fn fault_injection_corpus_replays_coordination_failures() -> TestResult {
         assert!(
             scenario.artifact_manifest.iter().any(|artifact| {
                 artifact.path == scenario.event_log_path
-                    && artifact.artifact_schema == "pi.swarm.replay_events_jsonl.v1"
+                    && artifact.artifact_schema == "ra.swarm.replay_events_jsonl.v1"
                     && artifact.evidence_kind == "jsonl_event_log"
             }),
             "scenario {} must manifest its replay JSONL log",
@@ -2379,12 +2379,12 @@ fn resource_profile_payload(profile: ResourceProfileFixture<'_>) -> Value {
         "extension_hostcall_lanes": profile.extension_hostcall_lanes,
         "rch_worker_slots": profile.rch_worker_slots,
         "target_dir": format!(
-            "/data/tmp/pi_agent_rust_cargo/{profile_id}/target",
+            "/data/tmp/recur_agent_cargo/{profile_id}/target",
             profile_id = profile.profile_id
         ),
         "target_free_gib": profile.target_free_gib,
         "tmpdir": format!(
-            "/data/tmp/pi_agent_rust_cargo/{profile_id}/tmp",
+            "/data/tmp/recur_agent_cargo/{profile_id}/tmp",
             profile_id = profile.profile_id
         ),
         "tmpdir_free_gib": profile.tmpdir_free_gib,

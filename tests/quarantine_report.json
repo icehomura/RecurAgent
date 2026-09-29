@@ -1,5 +1,5 @@
 {
-  "schema": "pi.test.quarantine_report.v2",
+  "schema": "ra.test.quarantine_report.v2",
   "generated_at": "2026-02-10T06:43:11.746414+00:00",
   "policy_version": "2026-02-10",
   "today": "2026-02-10",

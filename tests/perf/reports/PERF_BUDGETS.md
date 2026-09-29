@@ -106,8 +106,8 @@ Performance claims are blocked. Blocking reason codes:
 
 ## Measurement Methodology
 
-- **`startup_version_p95`**: hyperfine: `pi --version` (10 runs, 3 warmup)
-- **`startup_full_agent_p95`**: hyperfine: `pi --print '.'` with full init (10 runs, 3 warmup)
+- **`startup_version_p95`**: hyperfine: `ra --version` (10 runs, 3 warmup)
+- **`startup_full_agent_p95`**: hyperfine: `ra --print '.'` with full init (10 runs, 3 warmup)
 - **`ext_cold_load_simple_p95`**: criterion: load_init_cold mean point estimate for simple single-file extensions; 20 independent 10-sample processes, conformal amendment bd-sog97.5
 - **`ext_cold_load_complex_p95`**: criterion: load_init_cold for multi-registration extensions (10 samples)
 - **`ext_load_60_total`**: conformance runner: sequential load of all 60 official extensions
@@ -135,5 +135,5 @@ CI-enforced budgets are checked on every PR. A budget violation blocks the PR fr
 cargo test --test perf_budgets -- --nocapture
 
 # Generate full budget report
-PI_GENERATE_PERF_BUDGET_REPORT=1 cargo test --test perf_budgets generate_budget_report -- --nocapture
+RECUR_AGENT_GENERATE_PERF_BUDGET_REPORT=1 cargo test --test perf_budgets generate_budget_report -- --nocapture
 ```

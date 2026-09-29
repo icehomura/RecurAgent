@@ -15,8 +15,8 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::model::ContentBlock;
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::model::ContentBlock;
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;

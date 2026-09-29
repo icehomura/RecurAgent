@@ -17,14 +17,15 @@
 //!
 //! Regenerate the tracked summary explicitly with:
 //! ```bash
-//! PI_GENERATE_ARTIFACT_RETENTION_REPORT=1 \
+//! RECUR_AGENT_GENERATE_ARTIFACT_RETENTION_REPORT=1 \
 //!   cargo test --test ci_artifact_retention artifact_retention_summary_report -- --exact --nocapture
 //! ```
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-const GENERATE_ARTIFACT_RETENTION_REPORT_ENV: &str = "PI_GENERATE_ARTIFACT_RETENTION_REPORT";
+const GENERATE_ARTIFACT_RETENTION_REPORT_ENV: &str =
+    "RECUR_AGENT_GENERATE_ARTIFACT_RETENTION_REPORT";
 
 fn artifact_retention_report_generation_enabled(raw: Option<&str>) -> bool {
     raw == Some("1")
@@ -439,10 +440,10 @@ fn artifact_retention_summary_report() {
 
     let upload_count = ci_content.matches("actions/upload-artifact").count();
     let retention_30d = ci_content.matches("retention-days: 30").count();
-    let total_paths = ci_content.matches("pi_agent_rust/tests/").count();
+    let total_paths = ci_content.matches("recur_agent/tests/").count();
 
     let report = serde_json::json!({
-        "schema": "pi.ci.artifact_retention_report.v1",
+        "schema": "ra.ci.artifact_retention_report.v1",
         "bead": "bd-3uqg.8.11",
         "generated_at": chrono::Utc::now().to_rfc3339(),
         "ci_workflow": {

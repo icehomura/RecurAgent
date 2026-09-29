@@ -1,7 +1,7 @@
 {
-  "schema": "pi.ext.health_delta.v1",
+  "schema": "ra.ext.health_delta.v1",
   "generated_at": "2026-08-17T17:05:27.000Z",
-  "baseline_path": "/Users/jemanuel/projects/pi_agent_rust/.claude/worktrees/fsqlite-cutover/tests/ext_conformance/reports/conformance_baseline.json",
+  "baseline_path": "/Users/jemanuel/projects/recur_agent/.claude/worktrees/fsqlite-cutover/tests/ext_conformance/reports/conformance_baseline.json",
   "baseline_date": "2026-08-04T03:26:54Z",
   "current_summary": {
     "excluded": 1,

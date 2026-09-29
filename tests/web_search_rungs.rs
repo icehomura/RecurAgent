@@ -8,7 +8,7 @@ mod common;
 use common::TestHarness;
 use common::harness::MockHttpResponse;
 use common::logging::validate_jsonl_v2_only;
-use pi::web_search::{RungError, SearchFilters, SearchResult, all_rungs};
+use ra::web_search::{RungError, SearchFilters, SearchResult, all_rungs};
 
 fn json_response(status: u16, body: &str) -> MockHttpResponse {
     MockHttpResponse {
@@ -54,14 +54,14 @@ fn run_rung(
     let server = harness.start_mock_http_server();
     server.add_route(mock_method, mock_path, mock_response);
     let _guard = env_lock().lock().expect("env lock");
-    pi::web_search::set_base_url_override(rung_name, &server.base_url());
+    ra::web_search::set_base_url_override(rung_name, &server.base_url());
     let rungs = all_rungs();
     let rung = &rungs[rung_name];
     let mut result = None;
     asupersync::test_utils::run_test(|| async {
         result = Some(
             (rung.run)(
-                &pi::http::client::Client::new(),
+                &ra::http::client::Client::new(),
                 "rust async runtime",
                 &filters(),
                 key,
@@ -69,7 +69,7 @@ fn run_rung(
             .await,
         );
     });
-    pi::web_search::clear_base_url_overrides();
+    ra::web_search::clear_base_url_overrides();
     result.expect("rung future ran to completion")
 }
 
@@ -159,7 +159,7 @@ fn keyed_rung_without_key_is_no_key_error() {
     let mut result = None;
     asupersync::test_utils::run_test(|| async {
         result =
-            Some((rung.run)(&pi::http::client::Client::new(), "query", &filters(), None).await);
+            Some((rung.run)(&ra::http::client::Client::new(), "query", &filters(), None).await);
     });
     let result = result.expect("rung future ran to completion");
     let err = result.expect_err("no key must error before any request");

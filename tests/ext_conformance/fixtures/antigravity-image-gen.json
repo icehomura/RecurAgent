@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.legacy_fixtures.v1",
+  "schema": "ra.ext.legacy_fixtures.v1",
   "extension": {
     "id": "antigravity-image-gen",
     "source": {
@@ -47,7 +47,7 @@
       },
       "outputs": {
         "stdout_normalized_jsonl": [
-          "{\"cwd\":\"<PI_MONO_ROOT>\",\"id\":\"<UUID>\",\"timestamp\":\"<TIMESTAMP>\",\"type\":\"session\",\"version\":3}",
+          "{\"cwd\":\"<RECUR_AGENT_MONO_ROOT>\",\"id\":\"<UUID>\",\"timestamp\":\"<TIMESTAMP>\",\"type\":\"session\",\"version\":3}",
           "{\"type\":\"agent_start\"}",
           "{\"type\":\"turn_start\"}",
           "{\"message\":{\"content\":[{\"text\":\"Run scenario scn-antigravity-image-gen-001.\",\"type\":\"text\"}],\"role\":\"user\",\"timestamp\":0},\"type\":\"message_start\"}",
@@ -101,14 +101,14 @@
           "scenario_event_name": null,
           "scenario_id": "scn-antigravity-image-gen-001",
           "scenario_kind": "tool",
-          "schema": "pi.legacy_capture.v1",
+          "schema": "ra.legacy_capture.v1",
           "seed_session": null,
           "settings_json": "target/legacy_capture/scn-antigravity-image-gen-001/<RUN_ID>/agent/settings.json",
           "started_at": "<TIMESTAMP>"
         },
         "capture_log_normalized_jsonl": [
-          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-001\"},\"data\":{\"extension_path\":\"packages/coding-agent/examples/extensions/antigravity-image-gen.ts\",\"legacy_head\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"manifest_checksum_sha256\":\"3c383d17632154edd17b3d5322d64d6feefb596bdf09e71026c77ec1fa493924\",\"manifest_commit\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"model\":\"gpt-4o-mini\",\"node_version\":\"v20.19.4\",\"npm_version\":\"9.2.0\",\"pi_mono_root\":\"legacy_pi_mono_code/pi-mono\",\"provider\":\"openai\",\"scenario_command_name\":null,\"scenario_event_name\":null,\"scenario_kind\":\"tool\",\"scenario_provider_id\":null,\"scenario_tool_name\":\"generate_image\",\"started_at\":\"<TIMESTAMP>\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.start\",\"schema\":\"pi.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:47.850Z\"}",
-          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-001\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.finish\",\"schema\":\"pi.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:50.429Z\"}"
+          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-001\"},\"data\":{\"extension_path\":\"packages/coding-agent/examples/extensions/antigravity-image-gen.ts\",\"legacy_head\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"manifest_checksum_sha256\":\"3c383d17632154edd17b3d5322d64d6feefb596bdf09e71026c77ec1fa493924\",\"manifest_commit\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"model\":\"gpt-4o-mini\",\"node_version\":\"v20.19.4\",\"npm_version\":\"9.2.0\",\"pi_mono_root\":\"legacy_pi_mono_code/pi-mono\",\"provider\":\"openai\",\"scenario_command_name\":null,\"scenario_event_name\":null,\"scenario_kind\":\"tool\",\"scenario_provider_id\":null,\"scenario_tool_name\":\"generate_image\",\"started_at\":\"<TIMESTAMP>\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.start\",\"schema\":\"ra.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:47.850Z\"}",
+          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-001\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.finish\",\"schema\":\"ra.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:50.429Z\"}"
         ]
       }
     },
@@ -144,7 +144,7 @@
       },
       "outputs": {
         "stdout_normalized_jsonl": [
-          "{\"cwd\":\"<PI_MONO_ROOT>\",\"id\":\"<UUID>\",\"timestamp\":\"<TIMESTAMP>\",\"type\":\"session\",\"version\":3}",
+          "{\"cwd\":\"<RECUR_AGENT_MONO_ROOT>\",\"id\":\"<UUID>\",\"timestamp\":\"<TIMESTAMP>\",\"type\":\"session\",\"version\":3}",
           "{\"type\":\"agent_start\"}",
           "{\"type\":\"turn_start\"}",
           "{\"message\":{\"content\":[{\"text\":\"Run scenario scn-antigravity-image-gen-002.\",\"type\":\"text\"}],\"role\":\"user\",\"timestamp\":0},\"type\":\"message_start\"}",
@@ -199,14 +199,14 @@
           "scenario_event_name": null,
           "scenario_id": "scn-antigravity-image-gen-002",
           "scenario_kind": "tool",
-          "schema": "pi.legacy_capture.v1",
+          "schema": "ra.legacy_capture.v1",
           "seed_session": null,
           "settings_json": "target/legacy_capture/scn-antigravity-image-gen-002/<RUN_ID>/agent/settings.json",
           "started_at": "<TIMESTAMP>"
         },
         "capture_log_normalized_jsonl": [
-          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-002\"},\"data\":{\"extension_path\":\"packages/coding-agent/examples/extensions/antigravity-image-gen.ts\",\"legacy_head\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"manifest_checksum_sha256\":\"3c383d17632154edd17b3d5322d64d6feefb596bdf09e71026c77ec1fa493924\",\"manifest_commit\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"model\":\"gpt-4o-mini\",\"node_version\":\"v20.19.4\",\"npm_version\":\"9.2.0\",\"pi_mono_root\":\"legacy_pi_mono_code/pi-mono\",\"provider\":\"openai\",\"scenario_command_name\":null,\"scenario_event_name\":null,\"scenario_kind\":\"tool\",\"scenario_provider_id\":null,\"scenario_tool_name\":\"generate_image\",\"started_at\":\"<TIMESTAMP>\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.start\",\"schema\":\"pi.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:50.450Z\"}",
-          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-002\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.finish\",\"schema\":\"pi.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:52.942Z\"}"
+          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-002\"},\"data\":{\"extension_path\":\"packages/coding-agent/examples/extensions/antigravity-image-gen.ts\",\"legacy_head\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"manifest_checksum_sha256\":\"3c383d17632154edd17b3d5322d64d6feefb596bdf09e71026c77ec1fa493924\",\"manifest_commit\":\"df5b0f76c026b35fdd7f0fb78cb0dbaaf939c1b5\",\"model\":\"gpt-4o-mini\",\"node_version\":\"v20.19.4\",\"npm_version\":\"9.2.0\",\"pi_mono_root\":\"legacy_pi_mono_code/pi-mono\",\"provider\":\"openai\",\"scenario_command_name\":null,\"scenario_event_name\":null,\"scenario_kind\":\"tool\",\"scenario_provider_id\":null,\"scenario_tool_name\":\"generate_image\",\"started_at\":\"<TIMESTAMP>\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.start\",\"schema\":\"ra.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:50.450Z\"}",
+          "{\"correlation\":{\"extension_id\":\"antigravity-image-gen\",\"run_id\":\"<RUN_ID>\",\"scenario_id\":\"scn-antigravity-image-gen-002\"},\"event\":\"capture\",\"level\":\"info\",\"message\":\"capture.finish\",\"schema\":\"ra.ext.log.v1\",\"source\":{\"component\":\"capture\",\"pid\":2999939},\"ts\":\"2026-02-03T12:36:52.942Z\"}"
         ]
       }
     }

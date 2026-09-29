@@ -6,19 +6,19 @@ mod common;
 use base64::Engine as _;
 use clap::{Parser, error::ErrorKind};
 use common::{TestHarness, validate_jsonl};
-use pi::app::{
+use ra::app::{
     apply_piped_stdin, build_initial_content, build_system_prompt, normalize_cli,
     prepare_initial_message, resolve_api_key, resolve_model_scope, select_model_and_thinking,
     validate_rpc_args,
 };
-use pi::auth::{AuthCredential, AuthStorage};
-use pi::cli;
-use pi::config::Config;
-use pi::model::{ContentBlock, ThinkingLevel};
-use pi::models::{ModelEntry, ModelRegistry};
-use pi::provider::{InputType, Model, ModelCost};
-use pi::session::Session;
-use pi::tools::process_file_arguments;
+use ra::auth::{AuthCredential, AuthStorage};
+use ra::cli;
+use ra::config::Config;
+use ra::model::{ContentBlock, ThinkingLevel};
+use ra::models::{ModelEntry, ModelRegistry};
+use ra::provider::{InputType, Model, ModelCost};
+use ra::session::Session;
+use ra::tools::process_file_arguments;
 use std::collections::HashMap;
 
 fn make_registry(harness: &TestHarness, creds: &[(&str, &str)]) -> ModelRegistry {
@@ -560,7 +560,7 @@ fn prepare_initial_message_wraps_files_and_appends_first_message() {
         &file_args,
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("prepare initial")
     .expect("initial message present");
@@ -666,7 +666,7 @@ fn prepare_initial_message_leaves_remaining_messages() {
         &file_args,
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("prepare initial")
     .expect("initial message present");
@@ -693,7 +693,7 @@ fn prepare_initial_message_attaches_images_and_builds_content_blocks() {
         &file_args,
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("prepare initial")
     .expect("initial message present");
@@ -729,7 +729,7 @@ fn process_file_arguments_missing_file_reports_error() {
         &args,
         harness.temp_dir(),
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect_err("missing file should error");
     assert!(err.to_string().contains("Cannot access file"));
@@ -749,7 +749,7 @@ fn process_file_arguments_small_image_respects_auto_resize_flag() {
         &args,
         harness.temp_dir(),
         true,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("process file arguments");
     assert_eq!(processed.images.len(), 1);
@@ -857,7 +857,7 @@ fn prepare_initial_message_no_files_returns_none() {
         &[],
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("ok");
     assert!(result.is_none());
@@ -877,7 +877,7 @@ fn prepare_initial_message_files_only_no_messages() {
         &file_args,
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("prepare initial")
     .expect("initial message present");
@@ -899,7 +899,7 @@ fn prepare_initial_message_empty_file_returns_none() {
         &file_args,
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("ok");
     // Empty file produces no text and no images → returns None
@@ -921,7 +921,7 @@ fn process_file_arguments_multiple_text_files() {
         &args,
         harness.temp_dir(),
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("ok");
 
@@ -949,7 +949,7 @@ fn process_file_arguments_empty_file_skipped() {
         &args,
         harness.temp_dir(),
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("ok");
 
@@ -978,7 +978,7 @@ fn process_file_arguments_mixed_text_and_image() {
         &args,
         harness.temp_dir(),
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("ok");
 
@@ -1000,7 +1000,7 @@ fn process_file_arguments_unicode_content_preserved() {
         &args,
         harness.temp_dir(),
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("ok");
 
@@ -1092,7 +1092,7 @@ fn prepare_initial_message_multiple_files_with_message() {
         &file_args,
         &mut messages,
         false,
-        &pi::workspace::WorkspaceHandle::default(),
+        &ra::workspace::WorkspaceHandle::default(),
     )
     .expect("prepare initial")
     .expect("initial message present");
@@ -1241,7 +1241,7 @@ fn cli_ts_flag_parity_matrix_reports_full_coverage() {
 fn extension_registered_flags_can_be_passed_through_cli_parser() {
     // `--plan` became a built-in flag in bbc68341 (model roles), so the
     // extension-owned string flag needs a name the root parser does not claim.
-    let manager = pi::extensions::ExtensionManager::new();
+    let manager = ra::extensions::ExtensionManager::new();
     manager.register_flag(serde_json::json!({
         "name": "deploy-lane",
         "type": "string",

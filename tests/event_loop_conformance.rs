@@ -4,8 +4,8 @@
 //! Also includes `LabRuntime`-backed deterministic tests (bd-48tv).
 #![forbid(unsafe_code)]
 
-use pi::extensions_js::{ClockHandle, MacrotaskKind, ManualClock, PiEventLoop};
-use pi::scheduler::{self, HostcallOutcome, Scheduler};
+use ra::extensions_js::{ClockHandle, MacrotaskKind, ManualClock, RaEventLoop};
+use ra::scheduler::{self, HostcallOutcome, Scheduler};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -86,7 +86,7 @@ fn event_loop_fixture_conformance() {
 
 fn run_case(case: &Case) {
     let clock = Arc::new(ManualClock::new(case.start_ms));
-    let mut loop_state = PiEventLoop::new(ClockHandle::new(clock.clone()));
+    let mut loop_state = RaEventLoop::new(ClockHandle::new(clock.clone()));
     let mut timers: HashMap<&str, u64> = HashMap::new();
 
     for (idx, op) in case.ops.iter().enumerate() {
@@ -215,7 +215,7 @@ fn event_loop_deterministic_for_same_seed() {
 
 fn run_ops(start_ms: u64, ops: &[GeneratedOp]) -> Vec<TraceEntry> {
     let clock = Arc::new(ManualClock::new(start_ms));
-    let mut loop_state = PiEventLoop::new(ClockHandle::new(clock.clone()));
+    let mut loop_state = RaEventLoop::new(ClockHandle::new(clock.clone()));
     let mut timers = Vec::new();
     let mut hostcall_seq = 0_u64;
     let mut event_seq = 0_u64;
@@ -363,7 +363,7 @@ impl scheduler::Clock for LabBridgeClock {
 }
 
 // Note: `Arc<LabBridgeClock>` implements `scheduler::Clock` via the blanket
-// `impl<C: Clock> Clock for Arc<C>` in pi::scheduler.
+// `impl<C: Clock> Clock for Arc<C>` in ra::scheduler.
 
 /// Trace a `Scheduler` macrotask to a string for determinism comparison.
 fn trace_scheduler_task(task: &scheduler::Macrotask) -> String {
@@ -619,7 +619,7 @@ fn lab_virtual_time_timer_ordering() {
     drop(s);
 }
 
-/// `PiEventLoop` determinism under `LabRuntime`: same seed → same trace.
+/// `RaEventLoop` determinism under `LabRuntime`: same seed → same trace.
 #[test]
 fn lab_event_loop_determinism() {
     fn run(seed: u64) -> Vec<String> {
@@ -627,11 +627,11 @@ fn lab_event_loop_determinism() {
         let root = runtime.state.create_root_region(Budget::INFINITE);
 
         let clock = Arc::new(ManualClock::new(0));
-        let event_loop = Arc::new(std::sync::Mutex::new(PiEventLoop::new(ClockHandle::new(
+        let event_loop = Arc::new(std::sync::Mutex::new(RaEventLoop::new(ClockHandle::new(
             clock.clone(),
         ))));
 
-        // Spawn concurrent tasks that enqueue into the PiEventLoop.
+        // Spawn concurrent tasks that enqueue into the RaEventLoop.
         for i in 0..6_u64 {
             let el = Arc::clone(&event_loop);
             let (tid, _) = runtime
@@ -675,18 +675,18 @@ fn lab_event_loop_determinism() {
     for seed in [0_u64, 7, 42, 999] {
         let a = run(seed);
         let b = run(seed);
-        assert_eq!(a, b, "PiEventLoop trace mismatch for seed={seed}");
+        assert_eq!(a, b, "RaEventLoop trace mismatch for seed={seed}");
     }
 }
 
-/// `LabRuntime` invariants hold after `PiEventLoop` operations.
+/// `LabRuntime` invariants hold after `RaEventLoop` operations.
 #[test]
 fn lab_event_loop_invariants_hold() {
     let mut runtime = lab_for_extensions(42);
     let root = runtime.state.create_root_region(Budget::INFINITE);
 
     let clock = Arc::new(ManualClock::new(0));
-    let event_loop = Arc::new(std::sync::Mutex::new(PiEventLoop::new(ClockHandle::new(
+    let event_loop = Arc::new(std::sync::Mutex::new(RaEventLoop::new(ClockHandle::new(
         clock,
     ))));
 

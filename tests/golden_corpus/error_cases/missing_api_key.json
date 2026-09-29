@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "error_missing_api_key",
   "surface": "error_cases",
   "description": "Error: missing API key results in non-zero exit code",

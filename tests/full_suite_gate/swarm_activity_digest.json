@@ -1,5 +1,5 @@
 {
-  "schema": "pi.swarm.activity_digest.v1",
+  "schema": "ra.swarm.activity_digest.v1",
   "generated_at": "2026-05-09T11:40:21Z",
   "correlation_id": "bd-2zcs5-runpack-closeout-20260509",
   "claim_scope": "operator_handoff_digest_not_release_performance_claim",

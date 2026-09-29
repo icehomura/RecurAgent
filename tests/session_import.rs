@@ -14,8 +14,8 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::session::Session;
-use pi::session_import::{import_claude, import_codex};
+use ra::session::Session;
+use ra::session_import::{import_claude, import_codex};
 
 fn finish_case(harness: &TestHarness, case: &str) {
     harness
@@ -94,10 +94,10 @@ fn claude_end_to_end_fidelity_and_idempotency() {
         .info("verify", format!("replayed {} messages", messages.len()));
     assert_eq!(messages.len(), 4);
     let has_tool_call = messages.iter().any(|message| match message {
-        pi::model::Message::Assistant(assistant) => assistant
+        ra::model::Message::Assistant(assistant) => assistant
             .content
             .iter()
-            .any(|block| matches!(block, pi::model::ContentBlock::ToolCall(call) if call.id == "call_123")),
+            .any(|block| matches!(block, ra::model::ContentBlock::ToolCall(call) if call.id == "call_123")),
         _ => false,
     });
     assert!(has_tool_call, "tool_use pair must import: {messages:?}");
@@ -125,17 +125,17 @@ fn codex_reasoning_and_tools_import() {
     let messages = session.to_messages_for_current_path();
     assert_eq!(messages.len(), 4);
     let has_thinking = messages.iter().any(|message| match message {
-        pi::model::Message::Assistant(assistant) => assistant
+        ra::model::Message::Assistant(assistant) => assistant
             .content
             .iter()
-            .any(|block| matches!(block, pi::model::ContentBlock::Thinking(_))),
+            .any(|block| matches!(block, ra::model::ContentBlock::Thinking(_))),
         _ => false,
     });
     let has_tool_call = messages.iter().any(|message| match message {
-        pi::model::Message::Assistant(assistant) => assistant
+        ra::model::Message::Assistant(assistant) => assistant
             .content
             .iter()
-            .any(|block| matches!(block, pi::model::ContentBlock::ToolCall(_))),
+            .any(|block| matches!(block, ra::model::ContentBlock::ToolCall(_))),
         _ => false,
     });
     assert!(has_thinking, "reasoning must import as a thinking block");

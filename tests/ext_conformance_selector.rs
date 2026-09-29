@@ -203,7 +203,7 @@ fn format_selection_log(
     selected: &[String],
 ) -> String {
     serde_json::json!({
-        "schema": "pi.ext.trial_selection.v1",
+        "schema": "ra.ext.trial_selection.v1",
         "seed": seed,
         "requested_sample_size": sample_size,
         "actual_sample_size": selected.len(),
@@ -475,7 +475,7 @@ fn selector_log_format() {
     let log = format_selection_log(42, 2, &filter, &selected);
 
     let parsed: serde_json::Value = serde_json::from_str(&log).expect("valid JSON");
-    assert_eq!(parsed["schema"], "pi.ext.trial_selection.v1");
+    assert_eq!(parsed["schema"], "ra.ext.trial_selection.v1");
     assert_eq!(parsed["seed"], 42);
     assert_eq!(parsed["requested_sample_size"], 2);
     assert_eq!(parsed["actual_sample_size"], 2);

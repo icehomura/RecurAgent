@@ -5,7 +5,7 @@
 //!
 //! # Versioned Logging Contract
 //!
-//! All transcript events conform to schema `pi.test.transcript.v1`:
+//! All transcript events conform to schema `ra.test.transcript.v1`:
 //! - Each line is a JSON object with a `type` field
 //! - Known types: `scenario_header`, `step_result`, `event_boundary`, `artifact`
 //! - All timestamps are in milliseconds since scenario start
@@ -26,7 +26,7 @@ use serde::Serialize;
 use std::fmt;
 
 /// Schema version for the transcript logging contract.
-pub const TRANSCRIPT_SCHEMA: &str = "pi.test.transcript.v1";
+pub const TRANSCRIPT_SCHEMA: &str = "ra.test.transcript.v1";
 
 /// Known event types in a transcript.
 pub const EVENT_TYPE_HEADER: &str = "scenario_header";
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn schema_version_is_stable() {
-        assert_eq!(TRANSCRIPT_SCHEMA, "pi.test.transcript.v1");
+        assert_eq!(TRANSCRIPT_SCHEMA, "ra.test.transcript.v1");
         assert_eq!(EVENT_TYPE_HEADER, "scenario_header");
         assert_eq!(EVENT_TYPE_STEP, "step_result");
         assert_eq!(EVENT_TYPE_BOUNDARY, "event_boundary");

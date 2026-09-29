@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-runtime-substrate-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.runtime_substrate_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.runtime_substrate_contract.v1";
 const REQUIRED_WORKLOAD_IDS: &[&str] = &[
     "WL-extension-only-burst",
     "WL-runtime-mixed-long-session",

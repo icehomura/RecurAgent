@@ -22,7 +22,7 @@
       "expected": {
         "content_exact": "Memory 1 updated.",
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "id": 1,
           "op": "update"
         }
@@ -49,15 +49,15 @@
     },
     {
       "name": "memory_edit_names_unknown_id",
-      "description": "an absent id returns the stable PI_MEMORY_UNKNOWN_ID taxonomy",
+      "description": "an absent id returns the stable RECUR_AGENT_MEMORY_UNKNOWN_ID taxonomy",
       "requirement_ids": ["MEM-EDIT-ERR-1"],
       "input": {
         "id": 999,
         "op": "invalidate"
       },
       "expected": {
-        "content_contains": ["PI_MEMORY_UNKNOWN_ID: no memory with id 999"],
-        "details_contains": ["PI_MEMORY_UNKNOWN_ID: no memory with id 999"]
+        "content_contains": ["RECUR_AGENT_MEMORY_UNKNOWN_ID: no memory with id 999"],
+        "details_contains": ["RECUR_AGENT_MEMORY_UNKNOWN_ID: no memory with id 999"]
       }
     }
   ]

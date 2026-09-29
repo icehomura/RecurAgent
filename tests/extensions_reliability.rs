@@ -14,11 +14,11 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -32,7 +32,7 @@ fn load_js_extension(harness: &common::TestHarness, source: &str) -> ExtensionMa
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -72,7 +72,7 @@ fn try_load_js_extension(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -540,7 +540,7 @@ fn runtime_survives_failed_load_attempt() {
     // Set up manager + runtime.
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -718,7 +718,7 @@ fn rapid_create_load_shutdown_cycle() {
 
         let manager = ExtensionManager::new();
         let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-        let js_config = PiJsRuntimeConfig {
+        let js_config = RaJsRuntimeConfig {
             cwd: cwd.display().to_string(),
             ..Default::default()
         };
@@ -757,7 +757,7 @@ fn multiple_extensions_one_good_one_throwing() {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -1072,7 +1072,7 @@ fn error_followed_by_success() {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -1266,7 +1266,7 @@ fn load_failure_then_good_load_succeeds() {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

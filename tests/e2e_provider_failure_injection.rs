@@ -33,10 +33,10 @@ mod common;
 
 use common::{MockHttpResponse, TestHarness};
 use futures::StreamExt;
-use pi::model::{Message, UserContent, UserMessage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, StreamEvent, StreamOptions};
-use pi::providers::create_provider;
+use ra::model::{Message, UserContent, UserMessage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, StreamEvent, StreamOptions};
+use ra::providers::create_provider;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
@@ -99,7 +99,7 @@ fn make_sse_response(body: &str) -> MockHttpResponse {
 }
 
 fn collect_events(
-    provider: Arc<dyn pi::provider::Provider>,
+    provider: Arc<dyn ra::provider::Provider>,
     context: Context<'static>,
     options: StreamOptions,
 ) -> Result<Vec<StreamEvent>, String> {
@@ -239,7 +239,7 @@ fn anthropic_route() -> String {
 fn setup_openai(
     harness: &TestHarness,
     response: MockHttpResponse,
-) -> (Arc<dyn pi::provider::Provider>, common::MockHttpServer) {
+) -> (Arc<dyn ra::provider::Provider>, common::MockHttpServer) {
     let server = harness.start_mock_http_server();
     let route = oai_route();
     server.add_route("POST", &route, response);
@@ -253,7 +253,7 @@ fn setup_openai(
 fn setup_anthropic(
     harness: &TestHarness,
     response: MockHttpResponse,
-) -> (Arc<dyn pi::provider::Provider>, common::MockHttpServer) {
+) -> (Arc<dyn ra::provider::Provider>, common::MockHttpServer) {
     let server = harness.start_mock_http_server();
     let route = anthropic_route();
     server.add_route("POST", &route, response);
@@ -540,9 +540,9 @@ fn http_503_service_unavailable() {
 /// a visible card rather than leaving the turn silent.
 #[test]
 fn http_503_turn_end_emits_structured_provider_error() {
-    use pi::agent::{Agent, AgentConfig, AgentEvent};
-    use pi::error::ProviderErrorKind;
-    use pi::tools::ToolRegistry;
+    use ra::agent::{Agent, AgentConfig, AgentEvent};
+    use ra::error::ProviderErrorKind;
+    use ra::tools::ToolRegistry;
     use std::sync::Mutex;
 
     let harness = TestHarness::new("http_503_turn_end_emits_structured_provider_error");
@@ -581,7 +581,7 @@ fn http_503_turn_end_emits_structured_provider_error() {
 
     let err = result.expect_err("HTTP 503 must fail the turn");
     assert!(
-        matches!(err, pi::error::Error::Provider { .. }),
+        matches!(err, ra::error::Error::Provider { .. }),
         "expected a provider error, got {err:?}"
     );
 
@@ -642,9 +642,9 @@ fn http_503_turn_end_emits_structured_provider_error() {
     // that names the provider, the status, and the retry situation.
     #[cfg(feature = "ftui")]
     {
-        let msgs = pi::interactive_ftui::agent_event_to_pi_msgs(&events[agent_end_index]);
+        let msgs = ra::interactive_ftui::agent_event_to_pi_msgs(&events[agent_end_index]);
         let [
-            pi::interactive::PiMsg::AgentDone {
+            ra::interactive::RaMsg::AgentDone {
                 error_message: Some(card),
                 ..
             },
@@ -1120,7 +1120,7 @@ fn comprehensive_failure_injection_report() {
 fn setup_gemini(
     harness: &TestHarness,
     response: MockHttpResponse,
-) -> (Arc<dyn pi::provider::Provider>, common::MockHttpServer) {
+) -> (Arc<dyn ra::provider::Provider>, common::MockHttpServer) {
     let server = harness.start_mock_http_server();
     // Gemini sends the API key in x-goog-api-key and keeps only alt=sse in the URL.
     server.add_route("POST", "/models/fail-test:streamGenerateContent", response);

@@ -7,10 +7,10 @@
 mod common;
 
 use common::TestHarness;
-use pi::extension_preflight::{
+use ra::extension_preflight::{
     FindingCategory, FindingSeverity, PREFLIGHT_SCHEMA, PreflightAnalyzer, PreflightVerdict,
 };
-use pi::extensions::{
+use ra::extensions::{
     CompatibilityScanner, ExtensionPolicy, ExtensionPolicyMode, PolicyDecision, PolicyProfile,
 };
 use std::fs;
@@ -50,8 +50,8 @@ fn write_policy_settings(root: &Path, profile: &str) {
             "profile": profile
         }
     });
-    let settings_dir = root.join(".pi");
-    fs::create_dir_all(&settings_dir).expect("mkdir .pi/");
+    let settings_dir = root.join(".ra");
+    fs::create_dir_all(&settings_dir).expect("mkdir .ra/");
     fs::write(
         settings_dir.join("settings.json"),
         serde_json::to_string_pretty(&settings).unwrap(),
@@ -425,7 +425,7 @@ fn workflow_escalation_per_extension_override() {
     let mut per_ext = std::collections::HashMap::new();
     per_ext.insert(
         "trusted-ext".to_string(),
-        pi::extensions::ExtensionOverride {
+        ra::extensions::ExtensionOverride {
             mode: None,
             allow: vec!["exec".to_string(), "env".to_string()],
             deny: vec![],

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.mock_spec.v1",
+  "schema": "ra.ext.mock_spec.v1",
   "extension_id": "git-checkpoint",
   "description": "Example mock spec with HTTP and exec rules for git-checkpoint extension. Demonstrates deterministic HTTP + git command mocking and a simple event fire sequence.",
   "session": {

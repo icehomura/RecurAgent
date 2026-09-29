@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_openai_responses_ndjson",
   "surface": "json_mode",
   "description": "JSON mode: OpenAI Responses NDJSON stream playback",

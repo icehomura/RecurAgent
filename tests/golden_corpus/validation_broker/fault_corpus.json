@@ -1,5 +1,5 @@
 {
-  "schema": "pi.validation_broker.fault_corpus.v1",
+  "schema": "ra.validation_broker.fault_corpus.v1",
   "corpus_id": "validation-broker-build-storm-faults",
   "generated_at_utc": "2026-05-14T08:30:00Z",
   "event_log_path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
@@ -23,12 +23,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -59,12 +59,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -95,12 +95,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -143,12 +143,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -186,12 +186,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -222,12 +222,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -265,12 +265,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -311,12 +311,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],
@@ -354,12 +354,12 @@
       "artifact_manifest": [
         {
           "path": "tests/golden_corpus/validation_broker/fault_corpus.json",
-          "artifact_schema": "pi.validation_broker.fault_corpus.v1",
+          "artifact_schema": "ra.validation_broker.fault_corpus.v1",
           "evidence_kind": "corpus_manifest"
         },
         {
           "path": "tests/golden_corpus/validation_broker/fault_events.jsonl",
-          "artifact_schema": "pi.validation_broker.fault_event.v1",
+          "artifact_schema": "ra.validation_broker.fault_event.v1",
           "evidence_kind": "event_log"
         }
       ],

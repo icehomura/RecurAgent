@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 const MANIFEST_PATH: &str = "docs/franken-node-kernel-extraction-boundary-manifest.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.kernel_extraction_boundary_manifest.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.kernel_extraction_boundary_manifest.v1";
 const REQUIRED_CORE_MODULES: &[&str] = &[
     "src/agent_cx.rs",
     "src/scheduler.rs",

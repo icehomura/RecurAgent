@@ -1,7 +1,7 @@
 //! E2E artifact retention + log triage workflow validation (bd-3uqg.8.11).
 //!
 //! Validates that CI artifact retention and triage infrastructure enforces:
-//! 1. Structured log schema compliance (pi.test.log.v2, pi.test.artifact.v1)
+//! 1. Structured log schema compliance (ra.test.log.v2, ra.test.artifact.v1)
 //! 2. Artifact index JSONL production and schema correctness
 //! 3. Log redaction completeness (no leaked secrets)
 //! 4. CI workflow artifact upload/retention configuration
@@ -94,7 +94,7 @@ fn log_schema_fields_are_present() {
     let first_line = log_content.lines().next().expect("at least one line");
     let parsed: Value = serde_json::from_str(first_line).expect("valid JSON");
 
-    // Required fields per pi.test.log.v2 schema
+    // Required fields per ra.test.log.v2 schema
     let required_fields = ["schema", "seq", "ts", "t_ms", "level", "message"];
     for field in &required_fields {
         assert!(
@@ -115,8 +115,8 @@ fn log_schema_version_is_v2() {
 
     let schema = parsed["schema"].as_str().unwrap_or("");
     assert!(
-        schema == "pi.test.log.v2" || schema == "pi.test.log.v1",
-        "Log schema must be pi.test.log.v2 (or v1 for backward compat), got: {schema}"
+        schema == "ra.test.log.v2" || schema == "ra.test.log.v1",
+        "Log schema must be ra.test.log.v2 (or v1 for backward compat), got: {schema}"
     );
 }
 
@@ -129,8 +129,8 @@ fn artifact_schema_is_v1() {
 
     let artifact_index = harness.dump_artifact_index();
     assert!(
-        artifact_index.contains("pi.test.artifact.v1"),
-        "Artifact index should use pi.test.artifact.v1 schema"
+        artifact_index.contains("ra.test.artifact.v1"),
+        "Artifact index should use ra.test.artifact.v1 schema"
     );
 }
 
@@ -863,7 +863,7 @@ fn comprehensive_artifact_retention_report() {
 
     // Write comprehensive report
     let report = serde_json::json!({
-        "schema": "pi.test.artifact_retention_report.v1",
+        "schema": "ra.test.artifact_retention_report.v1",
         "total_checks": checks.len(),
         "passed": checks.iter().filter(|c| c["status"] == "pass").count(),
         "failed": checks.iter().filter(|c| c["status"] == "fail").count(),

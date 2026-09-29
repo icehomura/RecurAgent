@@ -43,7 +43,7 @@ struct GoldenPathHarness {
 impl GoldenPathHarness {
     fn new(name: &str) -> Self {
         let harness = TestHarness::new(name);
-        let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+        let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_ra"));
 
         let env_root = harness.temp_path("pi-env");
         let _ = fs::create_dir_all(&env_root);
@@ -51,19 +51,19 @@ impl GoldenPathHarness {
         let mut env = BTreeMap::new();
         // Fully isolate from user environment.
         env.insert(
-            "PI_CODING_AGENT_DIR".into(),
+            "RECUR_AGENT_DIR".into(),
             env_root.join("agent").display().to_string(),
         );
         env.insert(
-            "PI_CONFIG_PATH".into(),
+            "RECUR_AGENT_CONFIG_PATH".into(),
             env_root.join("settings.json").display().to_string(),
         );
         env.insert(
-            "PI_SESSIONS_DIR".into(),
+            "RECUR_AGENT_SESSIONS_DIR".into(),
             env_root.join("sessions").display().to_string(),
         );
         env.insert(
-            "PI_PACKAGE_DIR".into(),
+            "RECUR_AGENT_PACKAGE_DIR".into(),
             env_root.join("packages").display().to_string(),
         );
         // Offline-friendly npm.
@@ -193,8 +193,8 @@ fn golden_path_version_prints_cleanly() {
     let r = h.run(&["--version"]);
     assert_eq!(r.exit_code, 0, "stderr: {}", r.stderr);
     assert!(
-        r.stdout.starts_with("pi "),
-        "version should start with 'pi ': {:?}",
+        r.stdout.starts_with("ra "),
+        "version should start with 'ra ': {:?}",
         r.stdout
     );
 }

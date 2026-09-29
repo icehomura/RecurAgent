@@ -1,4 +1,4 @@
-use pi::extensions_js::PiJsRuntime;
+use ra::extensions_js::RaJsRuntime;
 use std::fs;
 use tempfile::TempDir;
 
@@ -21,7 +21,7 @@ fn repro_ext_path_traversal() {
         )
         .unwrap();
 
-        let runtime = PiJsRuntime::new().await.unwrap();
+        let runtime = RaJsRuntime::new().await.unwrap();
 
         // Register extension root
         runtime.add_extension_root(ext_root.clone());

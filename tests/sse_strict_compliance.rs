@@ -1,4 +1,4 @@
-use pi::sse::SseParser;
+use ra::sse::SseParser;
 
 #[test]
 fn test_sse_bom_stripping() {

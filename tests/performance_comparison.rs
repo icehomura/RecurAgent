@@ -133,7 +133,7 @@ fn generate_comparison_json(comparisons: &[LoadComparison], raw: &Value) -> Valu
     let same = comparisons.iter().filter(|c| c.delta_ms == 0).count();
 
     json!({
-        "schema": "pi.ext.performance_comparison.v1",
+        "schema": "ra.ext.performance_comparison.v1",
         "generated_at": now,
         "source": "load_time_benchmark.json",
         "source_generated_at": raw.get("generated_at"),
@@ -339,7 +339,7 @@ fn generate_performance_comparison() {
     let mut lines: Vec<String> = Vec::new();
     for c in &comparisons {
         let entry = json!({
-            "schema": "pi.ext.performance_event.v1",
+            "schema": "ra.ext.performance_event.v1",
             "ts": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
             "extension_id": c.extension,
             "rust_load_ms": c.rust_ms,

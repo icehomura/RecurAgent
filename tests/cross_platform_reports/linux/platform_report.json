@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ci.cross_platform_matrix.v1",
+  "schema": "ra.ci.cross_platform_matrix.v1",
   "generated_at": "2026-08-04T22:32:18.268Z",
   "platform": "linux",
   "platform_details": {
@@ -10,7 +10,7 @@
     "os": "linux"
   },
   "merge_policy": {
-    "description": "Cross-platform merge policy for pi_agent_rust CI",
+    "description": "Cross-platform merge policy for recur_agent CI",
     "required_platforms": ["linux"],
     "informational_platforms": ["macos", "windows"],
     "rules": [

@@ -15,11 +15,11 @@
   "operator_next_actions": [
     "Replace proxy-only evidence with direct command, artifact, git, or Beads evidence."
   ],
-  "schema": "pi.completion_audit.closeout_gate.v1",
+  "schema": "ra.completion_audit.closeout_gate.v1",
   "source": {
     "completion_allowed": false,
     "overall_status": "incomplete",
-    "schema": "pi.completion_audit.v1"
+    "schema": "ra.completion_audit.v1"
   },
   "source_boundaries": {
     "deletes_files": false,

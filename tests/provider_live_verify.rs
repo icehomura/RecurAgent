@@ -9,21 +9,21 @@
 //!
 //! This suite is deliberately **isolated from required CI gates**.  A provider
 //! outage or quota issue must not block unrelated merges.  The gate env var
-//! `PI_LIVE_PROVIDER_TESTS=1` enables the suite; individual provider tests
+//! `RECUR_AGENT_LIVE_PROVIDER_TESTS=1` enables the suite; individual provider tests
 //! further gate on secret availability.
 //!
 //! # Running
 //!
 //! ```bash
 //! # Run with any available provider secrets:
-//! PI_LIVE_PROVIDER_TESTS=1 cargo test provider_live_verify -- --nocapture
+//! RECUR_AGENT_LIVE_PROVIDER_TESTS=1 cargo test provider_live_verify -- --nocapture
 //!
 //! # Run only Anthropic live tests:
-//! PI_LIVE_PROVIDER_TESTS=1 ANTHROPIC_API_KEY=sk-... \
+//! RECUR_AGENT_LIVE_PROVIDER_TESTS=1 ANTHROPIC_API_KEY=sk-... \
 //!     cargo test provider_live_verify::anthropic -- --nocapture
 //!
 //! # Run only OpenAI-compatible providers:
-//! PI_LIVE_PROVIDER_TESTS=1 cargo test provider_live_verify::oai_compat -- --nocapture
+//! RECUR_AGENT_LIVE_PROVIDER_TESTS=1 cargo test provider_live_verify::oai_compat -- --nocapture
 //! ```
 //!
 //! # Cost control
@@ -34,22 +34,22 @@ mod common;
 
 use common::TestHarness;
 use futures::StreamExt;
-use pi::model::{Message, StopReason, StreamEvent, UserContent, UserMessage};
-use pi::provider::{Context, Provider, StreamOptions, ToolDef};
-use pi::provider_metadata::{PROVIDER_METADATA, ProviderMetadata, provider_auth_env_keys};
-use pi::providers::anthropic::AnthropicProvider;
-use pi::providers::cohere::CohereProvider;
-use pi::providers::gemini::GeminiProvider;
-use pi::providers::openai::OpenAIProvider;
-use pi::providers::openai_responses::OpenAIResponsesProvider;
-use pi::providers::{normalize_openai_base, normalize_openai_responses_base};
+use ra::model::{Message, StopReason, StreamEvent, UserContent, UserMessage};
+use ra::provider::{Context, Provider, StreamOptions, ToolDef};
+use ra::provider_metadata::{PROVIDER_METADATA, ProviderMetadata, provider_auth_env_keys};
+use ra::providers::anthropic::AnthropicProvider;
+use ra::providers::cohere::CohereProvider;
+use ra::providers::gemini::GeminiProvider;
+use ra::providers::openai::OpenAIProvider;
+use ra::providers::openai_responses::OpenAIResponsesProvider;
+use ra::providers::{normalize_openai_base, normalize_openai_responses_base};
 use serde::Serialize;
 use std::env;
 use std::path::PathBuf;
 use std::time::Instant;
 
 // ============================================================================
-// Gate: skip entire module unless PI_LIVE_PROVIDER_TESTS=1 (or PI_E2E_TESTS=1)
+// Gate: skip entire module unless RECUR_AGENT_LIVE_PROVIDER_TESTS=1 (or RECUR_AGENT_E2E_TESTS=1)
 // ============================================================================
 
 fn live_tests_enabled() -> bool {
@@ -57,13 +57,15 @@ fn live_tests_enabled() -> bool {
         env::var(name)
             .is_ok_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
     }
-    flag("PI_LIVE_PROVIDER_TESTS") || flag("PI_E2E_TESTS") || flag("CI_E2E_TESTS")
+    flag("RECUR_AGENT_LIVE_PROVIDER_TESTS") || flag("RECUR_AGENT_E2E_TESTS") || flag("CI_E2E_TESTS")
 }
 
 macro_rules! skip_unless_live {
     () => {
         if !live_tests_enabled() {
-            eprintln!("SKIPPED (set PI_LIVE_PROVIDER_TESTS=1 or PI_E2E_TESTS=1 to run)");
+            eprintln!(
+                "SKIPPED (set RECUR_AGENT_LIVE_PROVIDER_TESTS=1 or RECUR_AGENT_E2E_TESTS=1 to run)"
+            );
             return;
         }
     };
@@ -201,7 +203,7 @@ async fn collect_stream_events(
                         // Fall back to Done message text if no deltas were received.
                         if text.is_empty() {
                             for block in &message.content {
-                                if let pi::model::ContentBlock::Text(tc) = block
+                                if let ra::model::ContentBlock::Text(tc) = block
                                     && !tc.text.is_empty()
                                 {
                                     text.clone_from(&tc.text);
@@ -240,7 +242,7 @@ async fn collect_stream_events(
 struct StreamResult {
     events: Vec<StreamEvent>,
     text: String,
-    tool_calls: Vec<pi::model::ToolCall>,
+    tool_calls: Vec<ra::model::ToolCall>,
     has_start: bool,
     has_done: bool,
     stop_reason: Option<StopReason>,
@@ -899,84 +901,84 @@ mod oai_compat {
 
     #[test]
     fn groq_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("groq").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("groq").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("groq", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn deepseek_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("deepseek").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("deepseek").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("deepseek", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn openrouter_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("openrouter").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("openrouter").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("openrouter", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn xai_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("xai").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("xai").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("xai", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn mistral_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("mistral").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("mistral").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("mistral", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn fireworks_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("fireworks").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("fireworks").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("fireworks", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn togetherai_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("togetherai").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("togetherai").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("togetherai", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn perplexity_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("perplexity").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("perplexity").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("perplexity", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn deepinfra_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("deepinfra").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("deepinfra").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("deepinfra", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn cerebras_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("cerebras").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("cerebras").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("cerebras", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn nvidia_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("nvidia").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("nvidia").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("nvidia", defaults.api, defaults.base_url);
     }
 
     #[test]
     fn nebius_simple_text() {
-        let meta = pi::provider_metadata::provider_metadata("nebius").unwrap();
+        let meta = ra::provider_metadata::provider_metadata("nebius").unwrap();
         let defaults = meta.routing_defaults.unwrap();
         verify_oai_compat_simple_text("nebius", defaults.api, defaults.base_url);
     }
@@ -1008,7 +1010,7 @@ fn streaming_event_timeline_is_well_ordered() {
     eprintln!("  Using {provider_id} (via {source}) for timeline ordering test");
 
     common::run_async(async move {
-        let meta = pi::provider_metadata::provider_metadata(provider_id).unwrap();
+        let meta = ra::provider_metadata::provider_metadata(provider_id).unwrap();
         let provider = build_provider_from_metadata(meta)
             .unwrap_or_else(|| panic!("failed to build provider for {provider_id}"));
         let context = simple_context("Say just the word hello");
@@ -1069,7 +1071,7 @@ fn usage_tokens_are_populated_in_done_event() {
     };
 
     common::run_async(async move {
-        let meta = pi::provider_metadata::provider_metadata(provider_id).unwrap();
+        let meta = ra::provider_metadata::provider_metadata(provider_id).unwrap();
         let provider = build_provider_from_metadata(meta).unwrap();
         let context = simple_context("Say just the word hello");
         let options = simple_options(&api_key);

@@ -1,14 +1,14 @@
 //! Fixture-sshd e2e for ssh:// workspace tools (bd-cv653.6.5).
 //!
-//! **Gated live lane**: skipped unless `PI_SSH_E2E=1`. The fixture (a
+//! **Gated live lane**: skipped unless `RECUR_AGENT_SSH_E2E=1`. The fixture (a
 //! userspace `/usr/sbin/sshd` on 127.0.0.1 plus a scoped OpenSSH client
 //! config) is owned by `scripts/e2e/run_ssh_workspace.sh`, which exports
-//! `PI_SSH_CLIENT_CONFIG_FILE`, `PI_SSH_ALLOWED_HOSTS`, and
-//! `PI_SSH_E2E_WORK`. This target then drives the REAL tool surfaces —
+//! `RECUR_AGENT_SSH_CLIENT_CONFIG_FILE`, `RECUR_AGENT_SSH_ALLOWED_HOSTS`, and
+//! `RECUR_AGENT_SSH_E2E_WORK`. This target then drives the REAL tool surfaces —
 //! read / write / edit / `hashline_edit` — through the `url_router` against
 //! the fixture, plus the non-allowlisted-host refusal.
 //!
-//! Scratch files live under `$PI_SSH_E2E_WORK` and are intentionally left
+//! Scratch files live under `$RECUR_AGENT_SSH_E2E_WORK` and are intentionally left
 //! in place (repo policy: agents never delete); the OS temp cleaner
 //! reclaims them. The crate's `unsafe_code = "forbid"` lint is honored:
 //! this target performs no environment mutation.
@@ -19,9 +19,9 @@ use std::path::{Path, PathBuf};
 mod common;
 
 use asupersync::test_utils;
-use pi::model::ContentBlock;
-use pi::tools::{EditTool, HashlineEditTool, ReadTool, Tool, WriteTool};
-use pi::url_router;
+use ra::model::ContentBlock;
+use ra::tools::{EditTool, HashlineEditTool, ReadTool, Tool, WriteTool};
+use ra::url_router;
 
 use common::logging::TestLogger;
 
@@ -44,12 +44,13 @@ fn url_for(work: &Path, name: &str) -> String {
 
 #[test]
 fn ssh_workspace_roundtrip_fixture_sshd() {
-    if std::env::var("PI_SSH_E2E").as_deref() != Ok("1") {
+    if std::env::var("RECUR_AGENT_SSH_E2E").as_deref() != Ok("1") {
         eprintln!("[ssh-e2e] skipped: run scripts/e2e/run_ssh_workspace.sh to enable");
         return;
     }
     let work = PathBuf::from(
-        std::env::var("PI_SSH_E2E_WORK").expect("PI_SSH_E2E_WORK exported by the runner"),
+        std::env::var("RECUR_AGENT_SSH_E2E_WORK")
+            .expect("RECUR_AGENT_SSH_E2E_WORK exported by the runner"),
     );
 
     test_utils::run_test(|| async move {
@@ -198,7 +199,7 @@ fn ssh_workspace_roundtrip_fixture_sshd() {
             .await;
         let err = refused.expect_err("unlisted host must be refused");
         assert!(
-            err.to_string().contains("PI_SSH_HOST_NOT_ALLOWED"),
+            err.to_string().contains("RECUR_AGENT_SSH_HOST_NOT_ALLOWED"),
             "unexpected error: {err}"
         );
         logger.info(BEAD, "case=refusal ok");

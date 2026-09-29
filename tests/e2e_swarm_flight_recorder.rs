@@ -26,29 +26,29 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
-use pi::agent::{AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession, InputSource};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession, InputSource};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent,
     ToolResultMessage, Usage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::resource_governor::{
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::resource_governor::{
     AdmissionAction, HostResourceBudgets, HostResourceSample, ResourceDimension, ResourceGovernor,
     ResourceOperationKind, ResourceRequest,
 };
-use pi::session::Session;
-use pi::session_index::SessionIndex;
-use pi::swarm_flight_recorder::{
+use ra::session::Session;
+use ra::session_index::SessionIndex;
+use ra::swarm_flight_recorder::{
     SWARM_FLIGHT_RECORDER_EVENT_SCHEMA, SWARM_FLIGHT_RECORDER_REPORT_SCHEMA, SwarmFlightRecorder,
     SwarmFlightRecorderEvent, validate_swarm_flight_recorder_jsonl,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::{Value, json};
 use url::Url;
 
-const SWARM_PRESSURE_LAB_SCHEMA: &str = "pi.swarm.pressure_lab.v1";
+const SWARM_PRESSURE_LAB_SCHEMA: &str = "ra.swarm.pressure_lab.v1";
 const SWARM_PRESSURE_LAB_RUN_ID: &str = "swarm-pressure-lab-deterministic-v1";
 const SWARM_PRESSURE_LAB_BURST_AGENTS: usize = 6;
 const SWARM_PRESSURE_LAB_MODELED_AGENTS: u64 = 64;
@@ -188,7 +188,7 @@ impl Provider for FlightProvider {
         if call_index == 0 {
             return Ok(self.stream_done(self.assistant_message(
                 StopReason::ToolUse,
-                vec![ContentBlock::ToolCall(pi::model::ToolCall {
+                vec![ContentBlock::ToolCall(ra::model::ToolCall {
                     id: "flight-read-1".to_string(),
                     name: "read".to_string(),
                     arguments: json!({ "path": self.read_path }),
@@ -542,7 +542,7 @@ async fn run_flight_session(
         tool_approval: None,
         keyword_settings: None,
         max_time: None,
-        turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+        turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
         approval_state: None,
         bash_settings: None,
         secrets: None,
@@ -596,7 +596,7 @@ async fn run_flight_session(
 
     let sessions_dir = workspace.join("sessions");
     let (session_entries, session_path, indexed_sessions) = {
-        let cx = pi::agent_cx::AgentCx::for_current_or_request();
+        let cx = ra::agent_cx::AgentCx::for_current_or_request();
         let guard = session.lock(cx.cx()).await?;
         let session_path = guard
             .path
@@ -682,7 +682,7 @@ async fn run_cancelled_pressure_session(
         tool_approval: None,
         keyword_settings: None,
         max_time: None,
-        turn_recovery: pi::turn_recovery::TurnRecoveryMode::default(),
+        turn_recovery: ra::turn_recovery::TurnRecoveryMode::default(),
         approval_state: None,
         bash_settings: None,
         secrets: None,
@@ -730,7 +730,7 @@ async fn run_cancelled_pressure_session(
     assert_eq!(message.error_message.as_deref(), Some("Aborted"));
 
     let session_entries = {
-        let cx = pi::agent_cx::AgentCx::for_current_or_request();
+        let cx = ra::agent_cx::AgentCx::for_current_or_request();
         let guard = session.lock(cx.cx()).await?;
         guard.entries_for_current_path().len()
     };
@@ -777,7 +777,7 @@ fn pressure_lab_memory(sample: HostResourceSample) -> Value {
 }
 
 fn pressure_lab_governor_decisions()
--> Vec<(ResourceRequest, pi::resource_governor::AdmissionDecision)> {
+-> Vec<(ResourceRequest, ra::resource_governor::AdmissionDecision)> {
     let sample = pressure_lab_sample();
     let governor = ResourceGovernor::with_budgets(HostResourceBudgets::fixed_with_queue_depth(
         4.0,

@@ -3,7 +3,7 @@
 //! Validates that provider e2e and quality-gate claims include enforceable
 //! structured logging artifacts tied to executable schemas, not prose-only
 //! assertions. Cross-references:
-//! - JSONL schema definitions (pi.test.log.v2, pi.test.artifact.v1)
+//! - JSONL schema definitions (ra.test.log.v2, ra.test.artifact.v1)
 //! - Correlation ID model (trace_id, span_id, parent_span_id)
 //! - Redaction completeness (10 sensitive key patterns)
 //! - Artifact contract (docs/provider_e2e_artifact_contract.json)
@@ -87,7 +87,7 @@ fn artifact_contract_defines_jsonl_schemas() {
         .expect("jsonl_schemas must be object");
 
     let expected = [
-        "pi.test.log.v1",
+        "ra.test.log.v1",
         TEST_LOG_SCHEMA_V2,
         TEST_ARTIFACT_SCHEMA_V1,
     ];
@@ -202,7 +202,7 @@ fn artifact_contract_documents_gaps() {
 #[test]
 fn validate_jsonl_line_accepts_valid_v2_record() {
     let record = serde_json::json!({
-        "schema": "pi.test.log.v2",
+        "schema": "ra.test.log.v2",
         "type": "log",
         "trace_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
         "seq": 1,
@@ -222,7 +222,7 @@ fn validate_jsonl_line_accepts_valid_v2_record() {
 #[test]
 fn validate_jsonl_line_rejects_missing_trace_id_in_v2() {
     let record = serde_json::json!({
-        "schema": "pi.test.log.v2",
+        "schema": "ra.test.log.v2",
         "type": "log",
         "seq": 1,
         "ts": "2026-02-13T00:00:00Z",
@@ -242,7 +242,7 @@ fn validate_jsonl_line_rejects_missing_trace_id_in_v2() {
 #[test]
 fn validate_jsonl_line_accepts_valid_artifact_record() {
     let record = serde_json::json!({
-        "schema": "pi.test.artifact.v1",
+        "schema": "ra.test.artifact.v1",
         "type": "artifact",
         "seq": 1,
         "ts": "2026-02-13T00:00:00Z",
@@ -260,7 +260,7 @@ fn validate_jsonl_line_accepts_valid_artifact_record() {
 #[test]
 fn validate_jsonl_line_rejects_unknown_schema() {
     let record = serde_json::json!({
-        "schema": "pi.test.unknown.v99",
+        "schema": "ra.test.unknown.v99",
         "type": "log",
         "seq": 1
     });
@@ -272,7 +272,7 @@ fn validate_jsonl_line_rejects_unknown_schema() {
 #[test]
 fn validate_jsonl_line_rejects_non_numeric_seq() {
     let record = serde_json::json!({
-        "schema": "pi.test.log.v2",
+        "schema": "ra.test.log.v2",
         "type": "log",
         "trace_id": "aaaa",
         "seq": "not-a-number",
@@ -293,10 +293,10 @@ fn validate_jsonl_line_rejects_non_numeric_seq() {
 #[test]
 fn validate_jsonl_batch_catches_all_errors() {
     let content = [
-        r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"2026-01-01T00:00:00Z","t_ms":0,"level":"info","category":"t","message":"ok"}"#,
-        r#"{"schema":"pi.test.unknown.v1","type":"bad"}"#,
+        r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"2026-01-01T00:00:00Z","t_ms":0,"level":"info","category":"t","message":"ok"}"#,
+        r#"{"schema":"ra.test.unknown.v1","type":"bad"}"#,
         r"not valid json at all",
-        r#"{"schema":"pi.test.log.v2","type":"log","seq":2}"#,
+        r#"{"schema":"ra.test.log.v2","type":"log","seq":2}"#,
     ].join("\n");
 
     let errors = validate_jsonl(&content);
@@ -984,7 +984,7 @@ fn comprehensive_artifact_schema_validation_report() {
     let skipped = checks.iter().filter(|c| c["status"] == "skip").count();
 
     let report = serde_json::json!({
-        "schema": "pi.qa.artifact_schema_validation_report.v1",
+        "schema": "ra.qa.artifact_schema_validation_report.v1",
         "bead": "bd-3uqg.14.3.3",
         "total_checks": total,
         "passed": passed,
@@ -1012,7 +1012,7 @@ fn comprehensive_artifact_schema_validation_report() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 13: Formal evidence contract schema (pi.qa.evidence_contract.v1)
+// Section 13: Formal evidence contract schema (ra.qa.evidence_contract.v1)
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
@@ -1440,7 +1440,7 @@ fn synthetic_evidence_contract_validates_against_schema() {
 #[test]
 fn v2_only_enforcement_rejects_v1_log_records() {
     let v1_record = serde_json::json!({
-        "schema": "pi.test.log.v1",
+        "schema": "ra.test.log.v1",
         "type": "log",
         "seq": 1,
         "ts": "2026-02-13T00:00:00Z",
@@ -1465,7 +1465,7 @@ fn v2_only_enforcement_rejects_v1_log_records() {
 #[test]
 fn v2_only_enforcement_accepts_v2_log_records() {
     let v2_record = serde_json::json!({
-        "schema": "pi.test.log.v2",
+        "schema": "ra.test.log.v2",
         "type": "log",
         "trace_id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
         "seq": 1,
@@ -1484,9 +1484,9 @@ fn v2_only_enforcement_accepts_v2_log_records() {
 
 #[test]
 fn v2_only_enforcement_accepts_artifact_v1_records() {
-    // pi.test.artifact.v1 is the CURRENT artifact schema (not deprecated).
+    // ra.test.artifact.v1 is the CURRENT artifact schema (not deprecated).
     let artifact = serde_json::json!({
-        "schema": "pi.test.artifact.v1",
+        "schema": "ra.test.artifact.v1",
         "type": "artifact",
         "seq": 1,
         "ts": "2026-02-13T00:00:00Z",
@@ -1529,10 +1529,10 @@ fn harness_output_passes_v2_only_enforcement() {
 #[test]
 fn v2_only_batch_enforcement_catches_all_v1_records() {
     let mixed_content = [
-        r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"ok"}"#,
-        r#"{"schema":"pi.test.log.v1","type":"log","seq":2,"ts":"x","t_ms":0,"level":"info","category":"c","message":"v1-bad"}"#,
-        r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":3,"ts":"x","t_ms":0,"name":"a","path":"/tmp/a"}"#,
-        r#"{"schema":"pi.test.log.v1","type":"log","seq":4,"ts":"x","t_ms":0,"level":"warn","category":"c","message":"v1-also-bad"}"#,
+        r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"ok"}"#,
+        r#"{"schema":"ra.test.log.v1","type":"log","seq":2,"ts":"x","t_ms":0,"level":"info","category":"c","message":"v1-bad"}"#,
+        r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":3,"ts":"x","t_ms":0,"name":"a","path":"/tmp/a"}"#,
+        r#"{"schema":"ra.test.log.v1","type":"log","seq":4,"ts":"x","t_ms":0,"level":"warn","category":"c","message":"v1-also-bad"}"#,
     ]
     .join("\n");
 
@@ -1549,7 +1549,7 @@ fn v2_only_batch_enforcement_catches_all_v1_records() {
 #[test]
 fn backward_compat_validate_jsonl_still_accepts_v1() {
     // Grandfathered path: validate_jsonl() (non-strict) still accepts v1.
-    let v1_record = r#"{"schema":"pi.test.log.v1","type":"log","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"grandfathered"}"#;
+    let v1_record = r#"{"schema":"ra.test.log.v1","type":"log","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"grandfathered"}"#;
     let errors = validate_jsonl(v1_record);
     assert!(
         errors.is_empty(),
@@ -1572,9 +1572,9 @@ fn artifact_index_cross_validation_detects_missing_paths() {
 
     let artifact_index = format!(
         concat!(
-            r#"{{"schema":"pi.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":100,"name":"output","path":"{existing}"}}"#,
+            r#"{{"schema":"ra.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":100,"name":"output","path":"{existing}"}}"#,
             "\n",
-            r#"{{"schema":"pi.test.artifact.v1","type":"artifact","seq":2,"ts":"x","t_ms":200,"name":"missing_artifact","path":"{missing}"}}"#,
+            r#"{{"schema":"ra.test.artifact.v1","type":"artifact","seq":2,"ts":"x","t_ms":200,"name":"missing_artifact","path":"{missing}"}}"#,
             "\n",
         ),
         existing = existing,
@@ -1601,9 +1601,9 @@ fn artifact_index_cross_validation_passes_when_all_paths_exist() {
 
     let artifact_index = format!(
         concat!(
-            r#"{{"schema":"pi.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"result","path":"{a}"}}"#,
+            r#"{{"schema":"ra.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"result","path":"{a}"}}"#,
             "\n",
-            r#"{{"schema":"pi.test.artifact.v1","type":"artifact","seq":2,"ts":"x","t_ms":0,"name":"test_log","path":"{b}"}}"#,
+            r#"{{"schema":"ra.test.artifact.v1","type":"artifact","seq":2,"ts":"x","t_ms":0,"name":"test_log","path":"{b}"}}"#,
             "\n",
         ),
         a = file_a.display(),
@@ -1622,7 +1622,7 @@ fn artifact_index_cross_validation_handles_relative_paths() {
     std::fs::write(sub.join("output.log"), "data").expect("write file");
 
     let artifact_index = concat!(
-        r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"output","path":"artifacts/output.log"}"#,
+        r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"output","path":"artifacts/output.log"}"#,
         "\n",
     );
 
@@ -1638,7 +1638,7 @@ fn artifact_index_cross_validation_warns_on_missing_relative_path() {
     let dir = tempfile::tempdir().expect("create temp dir");
 
     let artifact_index = concat!(
-        r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"ghost","path":"does/not/exist.log"}"#,
+        r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"ghost","path":"does/not/exist.log"}"#,
         "\n",
     );
 
@@ -1655,9 +1655,9 @@ fn artifact_index_cross_validation_skips_non_artifact_records() {
 
     // Mix a v2 log record (should be skipped) with an artifact record
     let artifact_index = concat!(
-        r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#,
+        r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#,
         "\n",
-        r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":2,"ts":"x","t_ms":0,"name":"missing","path":"nope.log"}"#,
+        r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":2,"ts":"x","t_ms":0,"name":"missing","path":"nope.log"}"#,
         "\n",
     );
 

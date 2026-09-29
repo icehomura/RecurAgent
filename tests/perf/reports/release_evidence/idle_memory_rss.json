@@ -1,15 +1,15 @@
 {
-  "schema": "pi.perf.idle_memory_rss.v1",
+  "schema": "ra.perf.idle_memory_rss.v1",
   "generated_at": "2026-08-28T09:23:47.912759+00:00",
   "pid": 17113,
   "process_name": "pi",
   "allocator": "system",
-  "binary_path": "/Users/jemanuel/projects/pi_agent_rust/target/release/pi",
+  "binary_path": "/Users/jemanuel/projects/recur_agent/target/release/pi",
   "binary_sha256": "27689834b77579e04b10dd2ac934a2d211e3080fef0f7cbf964e64d3cdad52b4",
   "rss_bytes": 8388608,
   "idle_state": "startup_before_user_input",
   "cargo_profile": "release",
-  "build_command": "cargo build --bin pi --release",
+  "build_command": "cargo build --bin ra --release",
   "sample_count": 5,
   "samples": [
     {

@@ -1,15 +1,15 @@
 //! Security suite: budget enforcement tests (bd-246d).
 //!
-//! Tests verify that `PiJsRuntime` enforces CPU, memory, and stack budgets,
+//! Tests verify that `RaJsRuntime` enforces CPU, memory, and stack budgets,
 //! and that hostcall timeouts terminate runaway operations cleanly.
 
-use pi::extensions_js::{PiJsRuntime, PiJsRuntimeConfig, PiJsRuntimeLimits};
-use pi::scheduler::DeterministicClock;
+use ra::extensions_js::{RaJsRuntime, RaJsRuntimeConfig, RaJsRuntimeLimits};
+use ra::scheduler::DeterministicClock;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn config_with_limits(limits: PiJsRuntimeLimits) -> PiJsRuntimeConfig {
-    PiJsRuntimeConfig {
+fn config_with_limits(limits: RaJsRuntimeLimits) -> RaJsRuntimeConfig {
+    RaJsRuntimeConfig {
         limits,
         ..Default::default()
     }
@@ -22,12 +22,12 @@ fn config_with_limits(limits: PiJsRuntimeLimits) -> PiJsRuntimeConfig {
 #[test]
 fn interrupt_budget_zero_aborts_immediately() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(0),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -48,12 +48,12 @@ fn interrupt_budget_zero_aborts_immediately() {
 #[test]
 fn interrupt_budget_small_aborts_tight_loop() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(100),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -74,12 +74,12 @@ fn interrupt_budget_small_aborts_tight_loop() {
 #[test]
 fn interrupt_budget_none_allows_completion() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: None,
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -94,12 +94,12 @@ fn interrupt_budget_none_allows_completion() {
 #[test]
 fn interrupt_budget_resets_between_evals() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(10_000),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -120,12 +120,12 @@ fn interrupt_budget_resets_between_evals() {
 #[test]
 fn interrupt_budget_aborts_recursive_function() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(500),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -142,12 +142,12 @@ fn interrupt_budget_aborts_recursive_function() {
 #[test]
 fn interrupt_budget_preserves_state_after_trip() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(50),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -183,9 +183,9 @@ fn memory_limit_prevents_large_allocation() {
         // Measure the bridge's initialized footprint first. The embedded bridge
         // grows as compatibility shims are added, so a fixed limit can fail
         // during runtime construction and never exercise allocation control.
-        let baseline_runtime = PiJsRuntime::with_clock_and_config(
+        let baseline_runtime = RaJsRuntime::with_clock_and_config(
             DeterministicClock::new(0),
-            PiJsRuntimeConfig::default(),
+            RaJsRuntimeConfig::default(),
         )
         .await
         .expect("create baseline runtime");
@@ -200,14 +200,14 @@ fn memory_limit_prevents_large_allocation() {
         let memory_limit_bytes = usize::try_from(baseline_bytes)
             .expect("QuickJS memory usage fits usize")
             .saturating_add(2 * 1024 * 1024);
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // Leave modest headroom for the eval itself while keeping the
             // attempted allocation far beyond the permitted heap.
             memory_limit_bytes: Some(memory_limit_bytes),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -225,13 +225,13 @@ fn memory_limit_prevents_large_allocation() {
 #[test]
 fn memory_limit_allows_small_allocations() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // 10MB memory limit — generous for small work
             memory_limit_bytes: Some(10 * 1024 * 1024),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -250,12 +250,12 @@ fn memory_limit_allows_small_allocations() {
 #[test]
 fn memory_limit_tracks_usage_in_stats() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             memory_limit_bytes: Some(50 * 1024 * 1024),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -280,13 +280,13 @@ fn memory_limit_tracks_usage_in_stats() {
 #[test]
 fn memory_limit_gradual_growth_triggers_oom() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // Very tight: 2MB
             memory_limit_bytes: Some(2 * 1024 * 1024),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -315,14 +315,14 @@ for (let i = 0; i < 100000; i++) {
 #[test]
 fn stack_limit_prevents_deep_recursion() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // Small stack: 512KB — bridge JS init needs >256KB on macOS ARM64
             // after recent bridge code growth (regex operations during init).
             max_stack_bytes: Some(512 * 1024),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -336,13 +336,13 @@ fn stack_limit_prevents_deep_recursion() {
 #[test]
 fn stack_limit_allows_reasonable_recursion() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // 1MB stack — should handle moderate recursion
             max_stack_bytes: Some(1024 * 1024),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -364,17 +364,17 @@ fn stack_limit_allows_reasonable_recursion() {
 
 #[test]
 fn hostcall_timeout_is_tracked_in_stats() {
-    use pi::extensions_js::HostcallKind;
-    use pi::scheduler::HostcallOutcome;
+    use ra::extensions_js::HostcallKind;
+    use ra::scheduler::HostcallOutcome;
     use serde_json::Value;
 
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             hostcall_timeout_ms: Some(100),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -402,7 +402,7 @@ fn hostcall_timeout_is_tracked_in_stats() {
 #[test]
 fn combined_limits_all_enforced() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             memory_limit_bytes: Some(5 * 1024 * 1024),
             max_stack_bytes: Some(256 * 1024),
             interrupt_budget: Some(50_000),
@@ -410,7 +410,7 @@ fn combined_limits_all_enforced() {
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime with combined limits");
 
@@ -433,7 +433,7 @@ fn combined_limits_all_enforced() {
 #[test]
 fn memory_limit_with_interrupt_budget_oom_before_budget() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // 2MB memory limit — enough for QuickJS GC to work, but OOM on bulk alloc
             memory_limit_bytes: Some(2 * 1024 * 1024),
             // Generous interrupt budget
@@ -441,7 +441,7 @@ fn memory_limit_with_interrupt_budget_oom_before_budget() {
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -460,12 +460,12 @@ fn memory_limit_with_interrupt_budget_oom_before_budget() {
 #[test]
 fn budget_exceeded_error_is_descriptive() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(10),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -484,7 +484,7 @@ fn budget_exceeded_error_is_descriptive() {
 #[test]
 fn stack_overflow_error_is_not_budget_error() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             // 512KB: bridge JS init needs >256KB on macOS ARM64
             max_stack_bytes: Some(512 * 1024),
             // No interrupt budget — so stack overflow should be separate error
@@ -492,7 +492,7 @@ fn stack_overflow_error_is_not_budget_error() {
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -521,12 +521,12 @@ fn stack_overflow_error_is_not_budget_error() {
 #[test]
 fn interrupt_budget_applies_to_nested_functions() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(500),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 
@@ -549,12 +549,12 @@ fn interrupt_budget_applies_to_nested_functions() {
 #[test]
 fn budget_does_not_interfere_with_normal_promises() {
     futures::executor::block_on(async {
-        let config = config_with_limits(PiJsRuntimeLimits {
+        let config = config_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(100_000),
             ..Default::default()
         });
 
-        let runtime = PiJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
+        let runtime = RaJsRuntime::with_clock_and_config(DeterministicClock::new(0), config)
             .await
             .expect("create runtime");
 

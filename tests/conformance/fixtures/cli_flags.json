@@ -329,7 +329,7 @@
       "name": "version_output",
       "input": { "args": ["--version"] },
       "expected": {
-        "content_contains": ["pi"]
+        "content_contains": ["ra"]
       }
     }
   ]

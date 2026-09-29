@@ -15,8 +15,8 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::model::ContentBlock;
-use pi::tools::{Tool, ToolOutput, ToolRegistry};
+use ra::model::ContentBlock;
+use ra::tools::{Tool, ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ async fn stage(harness: &TestHarness, tool: &dyn Tool, input: Value) -> ToolOutp
         .expect("stage must succeed")
 }
 
-async fn resolve_raw(tool: &dyn Tool, input: Value) -> pi::error::Result<ToolOutput> {
+async fn resolve_raw(tool: &dyn Tool, input: Value) -> ra::error::Result<ToolOutput> {
     tool.execute("test-resolve", input, None).await
 }
 
@@ -801,7 +801,7 @@ fn ast_tools_are_gated_behind_tools_flag() {
     // Load modes (bd-cv653.1.6): the default built-in set enables the
     // structural tools as DISCOVERABLE (reachable via xdev, hidden from the
     // schema until promoted) — present but not schema-silent.
-    let defaults = pi::cli::parse_with_extension_flags(vec!["pi".to_string()])
+    let defaults = ra::cli::parse_with_extension_flags(vec!["pi".to_string()])
         .expect("default CLI parse")
         .cli;
     let names = defaults.enabled_tools();
@@ -813,7 +813,7 @@ fn ast_tools_are_gated_behind_tools_flag() {
     assert!(default_registry.is_discoverable("ast_edit"));
     assert!(!default_registry.is_discoverable("read"));
 
-    let cli = pi::cli::parse_with_extension_flags(vec![
+    let cli = ra::cli::parse_with_extension_flags(vec![
         "pi".to_string(),
         "--tools".to_string(),
         "read,ast_grep,ast_edit".to_string(),

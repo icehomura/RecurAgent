@@ -29,7 +29,7 @@ struct ExecOutput {
 }
 
 fn run_pi(harness: &TestHarness, env_vars: &[(&str, &str)], args: &[&str]) -> ExecOutput {
-    let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_pi")); // ubs:ignore false positive: Cargo provides the compiled test binary path.
+    let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_ra")); // ubs:ignore false positive: Cargo provides the compiled test binary path.
     let mut cmd = Command::new(&binary_path);
     cmd.args(args);
     cmd.current_dir(harness.temp_dir());
@@ -105,10 +105,10 @@ fn e2e_resource_load_failure_modes() {
     std::fs::write(&healthy_settings, &healthy_settings_content).expect("write healthy settings");
 
     let broken_env = [
-        ("PI_CODING_AGENT_DIR", agent_dir.to_str().unwrap()),
-        ("PI_CONFIG_PATH", broken_settings.to_str().unwrap()),
-        ("PI_PACKAGE_DIR", packages_dir.to_str().unwrap()),
-        ("PI_SESSIONS_DIR", sessions_dir.to_str().unwrap()),
+        ("RECUR_AGENT_DIR", agent_dir.to_str().unwrap()),
+        ("RECUR_AGENT_CONFIG_PATH", broken_settings.to_str().unwrap()),
+        ("RECUR_AGENT_PACKAGE_DIR", packages_dir.to_str().unwrap()),
+        ("RECUR_AGENT_SESSIONS_DIR", sessions_dir.to_str().unwrap()),
         ("npm_config_prefix", non_writable_prefix.to_str().unwrap()),
         ("npm_config_audit", "false"),
         ("npm_config_fund", "false"),
@@ -263,10 +263,13 @@ fn e2e_resource_load_failure_modes() {
     // Must exit 0, emit no warning, and emit no error records.
     // ------------------------------------------------------------------------
     let healthy_env = [
-        ("PI_CODING_AGENT_DIR", agent_dir.to_str().unwrap()),
-        ("PI_CONFIG_PATH", healthy_settings.to_str().unwrap()),
-        ("PI_PACKAGE_DIR", packages_dir.to_str().unwrap()),
-        ("PI_SESSIONS_DIR", sessions_dir.to_str().unwrap()),
+        ("RECUR_AGENT_DIR", agent_dir.to_str().unwrap()),
+        (
+            "RECUR_AGENT_CONFIG_PATH",
+            healthy_settings.to_str().unwrap(),
+        ),
+        ("RECUR_AGENT_PACKAGE_DIR", packages_dir.to_str().unwrap()),
+        ("RECUR_AGENT_SESSIONS_DIR", sessions_dir.to_str().unwrap()),
     ];
     let case3_args = ["--version"];
     let case3_out = run_pi(&harness, &healthy_env, &case3_args);

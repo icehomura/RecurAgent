@@ -13,9 +13,9 @@
 //! - E2E pipeline (mixed sources → validated output)
 //! - Serde round-trips
 
-use pi::extension_popularity::CandidatePool;
-use pi::extension_validation::*;
 use proptest::prelude::*;
+use ra::extension_popularity::CandidatePool;
+use ra::extension_validation::*;
 use std::fs;
 
 // ====================================================================
@@ -429,7 +429,7 @@ fn dedup_different_extensions_stay_separate() {
 fn vendored_candidates_promoted_to_true_extension() {
     // Simulate a candidate pool with a vendored item that has no code-level evidence.
     let pool_json = serde_json::json!({
-        "$schema": "pi.ext.candidate_pool.v1",
+        "$schema": "ra.ext.candidate_pool.v1",
         "generated_at": "2026-02-06T00:00:00Z",
         "source_inputs": {
             "artifact_provenance": "test",
@@ -483,7 +483,7 @@ fn vendored_candidates_promoted_to_true_extension() {
 #[test]
 fn non_vendored_pool_items_not_promoted() {
     let pool_json = serde_json::json!({
-        "$schema": "pi.ext.candidate_pool.v1",
+        "$schema": "ra.ext.candidate_pool.v1",
         "generated_at": "2026-02-06T00:00:00Z",
         "source_inputs": {
             "artifact_provenance": "test",

@@ -13,15 +13,15 @@
 //! - `build_js_context` / `build_js_options` fidelity
 
 use futures::StreamExt;
-use pi::agent::{Agent, AgentConfig, AgentEvent};
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentEvent};
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::model::{
     AssistantMessageEvent, ContentBlock, Message, StopReason, StreamEvent, UserContent, UserMessage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::providers::create_provider;
-use pi::tools::ToolRegistry;
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::providers::create_provider;
+use ra::tools::ToolRegistry;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::tempdir;
@@ -39,7 +39,7 @@ async fn load_extension(source: &str) -> (tempfile::TempDir, ExtensionManager) {
     let tools = Arc::new(ToolRegistry::new(&[], dir.path(), None));
 
     let js_runtime = JsExtensionRuntimeHandle::start(
-        PiJsRuntimeConfig {
+        RaJsRuntimeConfig {
             cwd: dir.path().display().to_string(),
             ..Default::default()
         },
@@ -85,10 +85,10 @@ fn make_runtime() -> asupersync::runtime::Runtime {
 
 /// Collect all stream events into a Vec.
 async fn collect_events(
-    provider: &dyn pi::provider::Provider,
+    provider: &dyn ra::provider::Provider,
     ctx: &Context<'_>,
     opts: &StreamOptions,
-) -> Vec<Result<StreamEvent, pi::error::Error>> {
+) -> Vec<Result<StreamEvent, ra::error::Error>> {
     let mut stream = provider.stream(ctx, opts).await.expect("stream");
     let mut events = Vec::new();
     while let Some(item) = stream.next().await {
@@ -105,7 +105,7 @@ async fn collect_events(
 }
 
 type TestProviderStream =
-    std::pin::Pin<Box<dyn futures::Stream<Item = Result<StreamEvent, pi::error::Error>> + Send>>;
+    std::pin::Pin<Box<dyn futures::Stream<Item = Result<StreamEvent, ra::error::Error>> + Send>>;
 
 struct CollidingProviderFixture {
     // Struct fields drop in declaration order. Keep every runtime-facing
@@ -134,7 +134,7 @@ async fn load_colliding_provider_fixture() -> CollidingProviderFixture {
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &workspace, None));
     let runtime = JsExtensionRuntimeHandle::start(
-        PiJsRuntimeConfig {
+        RaJsRuntimeConfig {
             cwd: workspace.display().to_string(),
             ..Default::default()
         },
@@ -986,7 +986,7 @@ fn stream_simple_cache_retention_passed_to_options() {
         let ctx = basic_context();
         let opts = StreamOptions {
             api_key: Some("sk-test".to_string()),
-            cache_retention: pi::provider::CacheRetention::Long,
+            cache_retention: ra::provider::CacheRetention::Long,
             ..Default::default()
         };
         let events = collect_events(provider.as_ref(), &ctx, &opts).await;

@@ -15,9 +15,9 @@
 //! It verifies the committed structured evidence log at
 //! `tests/ext_conformance/artifacts/PROVENANCE_VERIFICATION.json`
 //! for auditability. Maintainers can regenerate that file explicitly with
-//! `PI_GENERATE_PROVENANCE_VERIFICATION=1`.
+//! `RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION=1`.
 
-use pi::conformance::snapshot::{SourceTier, digest_artifact_dir, validate_directory, validate_id};
+use ra::conformance::snapshot::{SourceTier, digest_artifact_dir, validate_directory, validate_id};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -119,13 +119,13 @@ struct ArtifactException {
 #[allow(clippy::too_many_lines)]
 fn provenance_verification_evidence_log() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let artifacts_root = std::env::var("PI_TEST_ARTIFACTS_ROOT").map_or_else(
+    let artifacts_root = std::env::var("RECUR_AGENT_TEST_ARTIFACTS_ROOT").map_or_else(
         |_| repo_root.join("tests/ext_conformance/artifacts"),
         std::path::PathBuf::from,
     );
 
     // Verify tree completeness first (bd-s7hzz)
-    pi::conformance::snapshot::verify_tree_completeness(
+    ra::conformance::snapshot::verify_tree_completeness(
         repo_root,
         "tests/ext_conformance/artifacts",
     )
@@ -310,7 +310,7 @@ fn provenance_verification_evidence_log() {
     };
 
     let evidence = VerificationEvidence {
-        schema: "pi.ext.provenance_verification.v1",
+        schema: "ra.ext.provenance_verification.v1",
         generated_at: chrono::Utc::now().to_rfc3339(),
         summary: VerificationSummary {
             total_artifacts: all_ids.len(),
@@ -324,7 +324,7 @@ fn provenance_verification_evidence_log() {
     };
 
     let evidence_json = serde_json::to_string_pretty(&evidence).expect("serialize evidence log");
-    let output_path = std::env::var("PI_TEST_PROVENANCE_OUTPUT_PATH").map_or_else(
+    let output_path = std::env::var("RECUR_AGENT_TEST_PROVENANCE_OUTPUT_PATH").map_or_else(
         |_| repo_root.join("tests/ext_conformance/artifacts/PROVENANCE_VERIFICATION.json"),
         std::path::PathBuf::from,
     );
@@ -346,12 +346,12 @@ fn provenance_verification_evidence_log() {
     );
 
     let generate = matches!(
-        std::env::var("PI_GENERATE_PROVENANCE_VERIFICATION").as_deref(),
+        std::env::var("RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION").as_deref(),
         Ok("1")
     );
     if generate {
         // Enforce tree completeness before writing the evidence log (bd-s7hzz)
-        pi::conformance::snapshot::verify_tree_completeness(
+        ra::conformance::snapshot::verify_tree_completeness(
             repo_root,
             "tests/ext_conformance/artifacts",
         )
@@ -384,7 +384,7 @@ fn provenance_verification_evidence_log() {
         assert_eq!(
             committed, computed,
             "committed provenance evidence is stale; regenerate explicitly with \
-             PI_GENERATE_PROVENANCE_VERIFICATION=1 cargo test \
+             RECUR_AGENT_GENERATE_PROVENANCE_VERIFICATION=1 cargo test \
              --test ext_provenance_verification provenance_verification_evidence_log -- --exact"
         );
     }

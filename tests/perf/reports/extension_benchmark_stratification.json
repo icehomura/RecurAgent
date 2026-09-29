@@ -1,5 +1,5 @@
 {
-  "schema": "pi.perf.extension_benchmark_stratification.v1",
+  "schema": "ra.perf.extension_benchmark_stratification.v1",
   "bead_id": "bd-2zcs5.71",
   "generated_at": "2026-05-10T01:04:47.457606+00:00",
   "run_id": "bd-2zcs5.71-darkgoose-20260510T0058Z",
@@ -39,8 +39,8 @@
       "lineage": {
         "run_id_lineage": ["bd-2zcs5.71-darkgoose-20260510T0058Z"],
         "source_artifacts": [
-          "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/criterion/ext_load_init/load_init_cold/hello/new/estimates.json",
-          "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
+          "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/criterion/ext_load_init/load_init_cold/hello/new/estimates.json",
+          "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
         ]
       }
     },
@@ -71,8 +71,8 @@
       "lineage": {
         "run_id_lineage": ["bd-2zcs5.71-darkgoose-20260510T0058Z"],
         "source_artifacts": [
-          "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/perf/pijs_workload_perf.jsonl",
-          "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
+          "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/perf/pijs_workload_perf.jsonl",
+          "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
         ]
       }
     },
@@ -103,8 +103,8 @@
       "lineage": {
         "run_id_lineage": ["bd-2zcs5.71-darkgoose-20260510T0058Z"],
         "source_artifacts": [
-          "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/perf/pijs_workload_perf.jsonl",
-          "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
+          "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/perf/pijs_workload_perf.jsonl",
+          "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
         ]
       }
     }
@@ -133,8 +133,8 @@
   },
   "lineage": {
     "run_id_lineage": ["bd-2zcs5.71-darkgoose-20260510T0058Z"],
-    "source_pijs_workload_path": "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/perf/pijs_workload_perf.jsonl",
-    "source_cold_load_path": "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/criterion/ext_load_init/load_init_cold/hello/new/estimates.json",
-    "source_legacy_extension_workloads_path": "/data/tmp/pi_agent_rust_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
+    "source_pijs_workload_path": "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/perf/pijs_workload_perf.jsonl",
+    "source_cold_load_path": "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/criterion/ext_load_init/load_init_cold/hello/new/estimates.json",
+    "source_legacy_extension_workloads_path": "/data/tmp/recur_agent_cargo/darkgoose-bd-2zcs5-51/target/perf/legacy_extension_workloads.jsonl"
   }
 }

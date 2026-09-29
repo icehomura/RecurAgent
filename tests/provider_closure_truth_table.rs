@@ -32,7 +32,7 @@ fn truth_table_file_exists_and_parses() {
     let doc = load_truth_table();
     assert_eq!(
         doc["schema"].as_str().unwrap(),
-        "pi.qa.provider_closure_truth_table.v1"
+        "ra.qa.provider_closure_truth_table.v1"
     );
     harness.log().info("schema", "Truth table file valid");
 }

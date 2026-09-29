@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-benchmark-resource-gate-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.benchmark_resource_gate_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.benchmark_resource_gate_contract.v1";
 const REQUIRED_WORKLOAD_CLASSES: &[&str] = &[
     "macro_long_session_resume",
     "macro_extension_heavy_mixed",

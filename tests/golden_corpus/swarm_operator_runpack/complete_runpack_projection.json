@@ -22,7 +22,7 @@
     "build_slots": {
       "data": {
         "active": 1,
-        "schema": "pi.doctor.agent_mail_build_slots.v1"
+        "schema": "ra.doctor.agent_mail_build_slots.v1"
       },
       "detail": "[REDACTED] should be redacted",
       "remediation": "Renew active reservations before long-running verification",
@@ -33,7 +33,7 @@
       {
         "data": {
           "active": 1,
-          "schema": "pi.doctor.agent_mail_build_slots.v1"
+          "schema": "ra.doctor.agent_mail_build_slots.v1"
         },
         "detail": "[REDACTED] should be redacted",
         "remediation": "Renew active reservations before long-running verification",
@@ -203,7 +203,7 @@
         "id": "smoke_harness",
         "issue": null,
         "role": "required_surface",
-        "schema": "pi.swarm.smoke_harness.v1",
+        "schema": "ra.swarm.smoke_harness.v1",
         "status": "ok",
         "timestamp": null
       },
@@ -213,7 +213,7 @@
         "id": "activity_digest",
         "issue": null,
         "role": "required_surface",
-        "schema": "pi.swarm.activity_digest.v1",
+        "schema": "ra.swarm.activity_digest.v1",
         "status": "ok",
         "timestamp": null
       },
@@ -223,7 +223,7 @@
         "id": "cargo_admission",
         "issue": null,
         "role": "required_surface",
-        "schema": "pi.cargo_headroom.admission.v1",
+        "schema": "ra.cargo_headroom.admission.v1",
         "status": "ok",
         "timestamp": null
       },
@@ -233,7 +233,7 @@
         "id": "tail_latency",
         "issue": null,
         "role": "optional_diagnostic",
-        "schema": "pi.operator_tail_latency.v1",
+        "schema": "ra.operator_tail_latency.v1",
         "status": "ok",
         "timestamp": "[TIMESTAMP]"
       },
@@ -243,7 +243,7 @@
         "id": "flight_recorder",
         "issue": null,
         "role": "optional_diagnostic",
-        "schema": "pi.swarm.flight_recorder.report.v1",
+        "schema": "ra.swarm.flight_recorder.report.v1",
         "status": "ok",
         "timestamp": "[TIMESTAMP]"
       },
@@ -253,7 +253,7 @@
         "id": "host_preflight",
         "issue": null,
         "role": "optional_diagnostic",
-        "schema": "pi.doctor.swarm_resource_preflight.v1",
+        "schema": "ra.doctor.swarm_resource_preflight.v1",
         "status": "ok",
         "timestamp": "[TIMESTAMP]"
       },
@@ -263,7 +263,7 @@
         "id": "hostcall_swarm_profile",
         "issue": null,
         "role": "optional_diagnostic",
-        "schema": "pi.ext.hostcall_admission_swarm_profile.v1",
+        "schema": "ra.ext.hostcall_admission_swarm_profile.v1",
         "status": "ok",
         "timestamp": "[TIMESTAMP]"
       },
@@ -293,7 +293,7 @@
         "id": "rch_artifact_sync",
         "issue": null,
         "role": "optional_diagnostic",
-        "schema": "pi.rch.artifact_sync_preflight.v1",
+        "schema": "ra.rch.artifact_sync_preflight.v1",
         "status": "ok",
         "timestamp": "[TIMESTAMP]"
       }
@@ -304,7 +304,7 @@
       "Do not turn diagnostic evidence into release-facing performance or drop-in claims without claim-integrity gates."
     ],
     "purpose": "operator_diagnostic_not_release_performance_claim",
-    "schema": "pi.swarm.bottleneck_attribution_dashboard.v1",
+    "schema": "ra.swarm.bottleneck_attribution_dashboard.v1",
     "stale_after_hours": 24,
     "status": "ready",
     "surface_coverage": {
@@ -521,7 +521,7 @@
     },
     "mode": "current",
     "project_root": "[WORKSPACE]",
-    "schema": "pi.swarm.operator_runpack_capture.v1",
+    "schema": "ra.swarm.operator_runpack_capture.v1",
     "status": "degraded",
     "temp_artifacts": [
       {
@@ -530,7 +530,7 @@
         "kind": "cargo_target_dir",
         "last_observed_at": "[TIMESTAMP]",
         "owner": "Codex",
-        "path": "[PI_AGENT_CARGO_TMP]/test/target",
+        "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
         "reason": "active cargo_headroom target dir",
         "state": "active"
       },
@@ -558,7 +558,7 @@
         "id": "stale_unknown_target",
         "kind": "cargo_target_dir",
         "last_observed_at": "[TIMESTAMP]",
-        "path": "[PI_AGENT_CARGO_TMP]/unknown/stale-target",
+        "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target",
         "reason": "stale unknown-owner fixture",
         "state": "stale_candidate"
       }
@@ -568,7 +568,7 @@
     "agent_mail_build_slots": {
       "data": {
         "active": 1,
-        "schema": "pi.doctor.agent_mail_build_slots.v1"
+        "schema": "ra.doctor.agent_mail_build_slots.v1"
       },
       "detail": "[REDACTED] should be redacted",
       "remediation": "Renew active reservations before long-running verification",
@@ -579,7 +579,7 @@
       {
         "data": {
           "active": 1,
-          "schema": "pi.doctor.agent_mail_build_slots.v1"
+          "schema": "ra.doctor.agent_mail_build_slots.v1"
         },
         "detail": "[REDACTED] should be redacted",
         "remediation": "Renew active reservations before long-running verification",
@@ -640,7 +640,7 @@
         "selected_sensitive_omissions": 0,
         "suppressed_unsafe_nodes": 0
       },
-      "schema": "pi.doctor.context_intelligence_posture.v1",
+      "schema": "ra.doctor.context_intelligence_posture.v1",
       "severity": "warn",
       "status": "degraded",
       "title": "Context intelligence posture degraded"
@@ -650,7 +650,7 @@
       {
         "data": {
           "active": 1,
-          "schema": "pi.doctor.agent_mail_build_slots.v1"
+          "schema": "ra.doctor.agent_mail_build_slots.v1"
         },
         "detail": "[REDACTED] should be redacted",
         "remediation": "Renew active reservations before long-running verification",
@@ -710,7 +710,7 @@
             "selected_sensitive_omissions": 0,
             "suppressed_unsafe_nodes": 0
           },
-          "schema": "pi.doctor.context_intelligence_posture.v1",
+          "schema": "ra.doctor.context_intelligence_posture.v1",
           "status": "degraded"
         },
         "detail": "graph nodes=42 edges=64 missing_inputs=0 malformed_inputs=0 unreadable_inputs=0; bundle coverage=partial_stale_suppressed selected=12 excluded=3 stale_suppressions=1 missing_test_links=2 validation_commands=4; cache pressure=1 fingerprints=19",
@@ -746,7 +746,7 @@
             "reason_ids": [
               "PROGRESS-SLO-RCH-SATURATED"
             ],
-            "schema": "pi.swarm.progress_slo.v1",
+            "schema": "ra.swarm.progress_slo.v1",
             "status": "build_saturated",
             "suppressed_claims": [],
             "time_window": {
@@ -766,13 +766,13 @@
             "build_saturation": "red",
             "recommended_operator_posture": "backoff_heavy_cargo"
           },
-          "schema": "pi.doctor.swarm_progress_slo_posture.v1",
+          "schema": "ra.doctor.swarm_progress_slo_posture.v1",
           "source_status": {
             "doctor_authority": "environment_diagnostics_only",
             "issue": null,
             "path": "progress-slo.json",
             "progress_slo_report": "available",
-            "source_of_truth": "pi.swarm.progress_slo.v1"
+            "source_of_truth": "ra.swarm.progress_slo.v1"
           },
           "source_summary": {
             "degraded": 1,
@@ -792,7 +792,7 @@
       "contract_version": "1.0.0",
       "degraded_reasons": [],
       "detail": "status=build_saturated, confidence=0.640, reasons=PROGRESS-SLO-RCH-SATURATED",
-      "doctor_schema": "pi.doctor.swarm_progress_slo_posture.v1",
+      "doctor_schema": "ra.doctor.swarm_progress_slo_posture.v1",
       "generated_at": "[TIMESTAMP]",
       "guards": {
         "advisory_only": true,
@@ -824,7 +824,7 @@
         "build_saturation": "red",
         "recommended_operator_posture": "backoff_heavy_cargo"
       },
-      "schema": "pi.swarm.progress_slo.v1",
+      "schema": "ra.swarm.progress_slo.v1",
       "severity": "warn",
       "source_status": "available",
       "source_summary": {
@@ -886,7 +886,7 @@
         "status": "??"
       }
     ],
-    "schema": "pi.swarm.git_context.v1",
+    "schema": "ra.swarm.git_context.v1",
     "status": "ok",
     "upstream": {
       "ahead": 1,
@@ -1023,7 +1023,7 @@
             "freshness": "current",
             "id": "cargo_admission",
             "path": "[WORKSPACE]/cargo.json",
-            "schema": "pi.cargo_headroom.admission.v1",
+            "schema": "ra.cargo_headroom.admission.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1032,7 +1032,7 @@
             "freshness": "current",
             "id": "rch_artifact_sync",
             "path": "[WORKSPACE]/rch-artifact-sync.json",
-            "schema": "pi.rch.artifact_sync_preflight.v1",
+            "schema": "ra.rch.artifact_sync_preflight.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1075,7 +1075,7 @@
             "freshness": "current",
             "id": "smoke_harness",
             "path": "[WORKSPACE]/smoke.json",
-            "schema": "pi.swarm.smoke_harness.v1",
+            "schema": "ra.swarm.smoke_harness.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1151,7 +1151,7 @@
             "freshness": "current",
             "id": "smoke_harness",
             "path": "[WORKSPACE]/smoke.json",
-            "schema": "pi.swarm.smoke_harness.v1",
+            "schema": "ra.swarm.smoke_harness.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1160,7 +1160,7 @@
             "freshness": "current",
             "id": "tail_latency",
             "path": "[WORKSPACE]/tail-latency.json",
-            "schema": "pi.operator_tail_latency.v1",
+            "schema": "ra.operator_tail_latency.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1169,7 +1169,7 @@
             "freshness": "current",
             "id": "flight_recorder",
             "path": "[WORKSPACE]/flight-recorder-report.json",
-            "schema": "pi.swarm.flight_recorder.report.v1",
+            "schema": "ra.swarm.flight_recorder.report.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1220,7 +1220,7 @@
             "freshness": "current",
             "id": "smoke_harness",
             "path": "[WORKSPACE]/smoke.json",
-            "schema": "pi.swarm.smoke_harness.v1",
+            "schema": "ra.swarm.smoke_harness.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1229,7 +1229,7 @@
             "freshness": "current",
             "id": "activity_digest",
             "path": "[WORKSPACE]/activity.json",
-            "schema": "pi.swarm.activity_digest.v1",
+            "schema": "ra.swarm.activity_digest.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1238,7 +1238,7 @@
             "freshness": "current",
             "id": "cargo_admission",
             "path": "[WORKSPACE]/cargo.json",
-            "schema": "pi.cargo_headroom.admission.v1",
+            "schema": "ra.cargo_headroom.admission.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1247,7 +1247,7 @@
             "freshness": "current",
             "id": "tail_latency",
             "path": "[WORKSPACE]/tail-latency.json",
-            "schema": "pi.operator_tail_latency.v1",
+            "schema": "ra.operator_tail_latency.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1256,7 +1256,7 @@
             "freshness": "current",
             "id": "flight_recorder",
             "path": "[WORKSPACE]/flight-recorder-report.json",
-            "schema": "pi.swarm.flight_recorder.report.v1",
+            "schema": "ra.swarm.flight_recorder.report.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1265,7 +1265,7 @@
             "freshness": "current",
             "id": "host_preflight",
             "path": "[WORKSPACE]/host-preflight.json",
-            "schema": "pi.doctor.swarm_resource_preflight.v1",
+            "schema": "ra.doctor.swarm_resource_preflight.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1274,7 +1274,7 @@
             "freshness": "current",
             "id": "hostcall_swarm_profile",
             "path": "[WORKSPACE]/hostcall-profile.json",
-            "schema": "pi.ext.hostcall_admission_swarm_profile.v1",
+            "schema": "ra.ext.hostcall_admission_swarm_profile.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1301,7 +1301,7 @@
             "freshness": "current",
             "id": "rch_artifact_sync",
             "path": "[WORKSPACE]/rch-artifact-sync.json",
-            "schema": "pi.rch.artifact_sync_preflight.v1",
+            "schema": "ra.rch.artifact_sync_preflight.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1335,7 +1335,7 @@
             "freshness": "current",
             "id": "claim_readiness",
             "path": "[WORKSPACE]/claim.json",
-            "schema": "pi.swarm.claim_readiness_report.v1",
+            "schema": "ra.swarm.claim_readiness_report.v1",
             "sha256": "[SHA256]",
             "status": "ok",
             "timestamp": "[TIMESTAMP]"
@@ -1354,7 +1354,7 @@
       }
     ],
     "purpose": "advisory_pressure_prediction_not_release_performance_claim",
-    "schema": "pi.swarm.predictive_telemetry_ledger.v1",
+    "schema": "ra.swarm.predictive_telemetry_ledger.v1",
     "source_freshness": [
       {
         "freshness_classification": "fresh",
@@ -1374,7 +1374,7 @@
         "id": "claim_readiness",
         "issue": null,
         "path": "[WORKSPACE]/claim.json",
-        "schema": "pi.swarm.claim_readiness_report.v1",
+        "schema": "ra.swarm.claim_readiness_report.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1386,7 +1386,7 @@
         "id": "smoke_harness",
         "issue": null,
         "path": "[WORKSPACE]/smoke.json",
-        "schema": "pi.swarm.smoke_harness.v1",
+        "schema": "ra.swarm.smoke_harness.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1398,7 +1398,7 @@
         "id": "activity_digest",
         "issue": null,
         "path": "[WORKSPACE]/activity.json",
-        "schema": "pi.swarm.activity_digest.v1",
+        "schema": "ra.swarm.activity_digest.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1410,7 +1410,7 @@
         "id": "cargo_admission",
         "issue": null,
         "path": "[WORKSPACE]/cargo.json",
-        "schema": "pi.cargo_headroom.admission.v1",
+        "schema": "ra.cargo_headroom.admission.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1434,7 +1434,7 @@
         "id": "git_status",
         "issue": null,
         "path": "[WORKSPACE]/git-status.json",
-        "schema": "pi.swarm.git_context.v1",
+        "schema": "ra.swarm.git_context.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1446,7 +1446,7 @@
         "id": "tail_latency",
         "issue": null,
         "path": "[WORKSPACE]/tail-latency.json",
-        "schema": "pi.operator_tail_latency.v1",
+        "schema": "ra.operator_tail_latency.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1458,7 +1458,7 @@
         "id": "flight_recorder",
         "issue": null,
         "path": "[WORKSPACE]/flight-recorder-report.json",
-        "schema": "pi.swarm.flight_recorder.report.v1",
+        "schema": "ra.swarm.flight_recorder.report.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1470,7 +1470,7 @@
         "id": "host_preflight",
         "issue": null,
         "path": "[WORKSPACE]/host-preflight.json",
-        "schema": "pi.doctor.swarm_resource_preflight.v1",
+        "schema": "ra.doctor.swarm_resource_preflight.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1482,7 +1482,7 @@
         "id": "hostcall_swarm_profile",
         "issue": null,
         "path": "[WORKSPACE]/hostcall-profile.json",
-        "schema": "pi.ext.hostcall_admission_swarm_profile.v1",
+        "schema": "ra.ext.hostcall_admission_swarm_profile.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1518,7 +1518,7 @@
         "id": "rch_artifact_sync",
         "issue": null,
         "path": "[WORKSPACE]/rch-artifact-sync.json",
-        "schema": "pi.rch.artifact_sync_preflight.v1",
+        "schema": "ra.rch.artifact_sync_preflight.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
@@ -1530,14 +1530,14 @@
         "id": "progress_slo",
         "issue": null,
         "path": "[WORKSPACE]/progress-slo.json",
-        "schema": "pi.swarm.progress_slo.v1",
+        "schema": "ra.swarm.progress_slo.v1",
         "sha256": "[SHA256]",
         "size_bytes": "[SIZE_BYTES]",
         "status": "ok",
         "timestamp": null
       }
     ],
-    "source_runpack_schema": "pi.swarm.operator_runpack.v1",
+    "source_runpack_schema": "ra.swarm.operator_runpack.v1",
     "status": "blocked",
     "summary": {
       "blocked_or_stale_count": 3,
@@ -1604,7 +1604,7 @@
       "recommended_operator_posture": "backoff_heavy_cargo",
       "validation_saturation": "green"
     },
-    "schema": "pi.swarm.progress_slo.v1",
+    "schema": "ra.swarm.progress_slo.v1",
     "source_path": "[WORKSPACE]/progress-slo.json",
     "source_summary": {
       "total": 1
@@ -1621,7 +1621,7 @@
   "purpose": "operator_handoff_not_release_performance_claim",
   "rch_admission": {
     "allow_local_fallback": false,
-    "cargo_target_dir": "[PI_AGENT_CARGO_TMP]/test/target",
+    "cargo_target_dir": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
     "command_class": "heavy",
     "decision": "backoff",
     "queue_forecast": {
@@ -1663,8 +1663,8 @@
       "matched_entries": 28719,
       "omitted_entries": 28619,
       "operator_note": "scratch cleanup planner output is advisory only; explicit written approval is required before deletion",
-      "owner_marker_schema": "pi.scratch_target_owner.v1",
-      "planner_schema": "pi.scratch_cleanup_plan.v1",
+      "owner_marker_schema": "ra.scratch_target_owner.v1",
+      "planner_schema": "ra.scratch_cleanup_plan.v1",
       "reason": "cleanup_candidates_need_approval",
       "recommended_action": "manual_review",
       "risk_flags": {
@@ -1672,7 +1672,7 @@
         "arg_max_prone": true,
         "unknown_owner_entries": 28719
       },
-      "schema": "pi.cargo_headroom.scratch_cleanup_pressure.v1",
+      "schema": "ra.cargo_headroom.scratch_cleanup_pressure.v1",
       "shallow_bytes": 1048576,
       "source_kind": "fixture",
       "status": "ok",
@@ -1682,7 +1682,7 @@
     },
     "status": "ok",
     "storage_remediation": null,
-    "tmpdir": "[PI_AGENT_CARGO_TMP]/test/tmp"
+    "tmpdir": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp"
   },
   "redaction_summary": {
     "fields": [
@@ -1773,10 +1773,10 @@
         },
         "paths": {
           "artifact_paths": [],
-          "cargo_target_dir": "[PI_AGENT_CARGO_TMP]/test/target",
+          "cargo_target_dir": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
           "remote_target_dir": null,
           "remote_tmpdir": null,
-          "tmpdir": "[PI_AGENT_CARGO_TMP]/test/tmp"
+          "tmpdir": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp"
         },
         "runner": {
           "command_rewrite": {},
@@ -1793,7 +1793,7 @@
           "worker_id": null,
           "worker_state": "queue_backoff"
         },
-        "schema": "pi.remote_validation.proof_entry.v1",
+        "schema": "ra.remote_validation.proof_entry.v1",
         "timing": {
           "duration_ms": "[DURATION]",
           "ended_at_utc": "[TIMESTAMP]",
@@ -1837,7 +1837,7 @@
       "policy": "derived from redacted runpack sources; no raw logs stored",
       "redacted_count": 2
     },
-    "schema": "pi.remote_validation.proof_ledger.v1",
+    "schema": "ra.remote_validation.proof_ledger.v1",
     "summary": {
       "authoritative_for_bead_entries": 0,
       "blocked_entries": 1,
@@ -1874,15 +1874,15 @@
       "purpose": "Check Beads/drop-in ledger invariant"
     },
     {
-      "command": "CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
+      "command": "CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp rch exec -- cargo check --all-targets",
       "purpose": "Run compiler check through RCH"
     },
     {
-      "command": "CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
+      "command": "CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp rch exec -- cargo clippy --all-targets -- -D warnings",
       "purpose": "Run clippy through RCH"
     }
   ],
-  "schema": "pi.swarm.operator_runpack.v1",
+  "schema": "ra.swarm.operator_runpack.v1",
   "smoke_harness": {
     "artifact_manifest": [
       {
@@ -1919,7 +1919,7 @@
       "id": "claim_readiness",
       "issue": null,
       "path": "[WORKSPACE]/claim.json",
-      "schema": "pi.swarm.claim_readiness_report.v1",
+      "schema": "ra.swarm.claim_readiness_report.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1928,7 +1928,7 @@
       "id": "smoke_harness",
       "issue": null,
       "path": "[WORKSPACE]/smoke.json",
-      "schema": "pi.swarm.smoke_harness.v1",
+      "schema": "ra.swarm.smoke_harness.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1937,7 +1937,7 @@
       "id": "activity_digest",
       "issue": null,
       "path": "[WORKSPACE]/activity.json",
-      "schema": "pi.swarm.activity_digest.v1",
+      "schema": "ra.swarm.activity_digest.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1946,7 +1946,7 @@
       "id": "cargo_admission",
       "issue": null,
       "path": "[WORKSPACE]/cargo.json",
-      "schema": "pi.cargo_headroom.admission.v1",
+      "schema": "ra.cargo_headroom.admission.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1964,7 +1964,7 @@
       "id": "git_status",
       "issue": null,
       "path": "[WORKSPACE]/git-status.json",
-      "schema": "pi.swarm.git_context.v1",
+      "schema": "ra.swarm.git_context.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1973,7 +1973,7 @@
       "id": "tail_latency",
       "issue": null,
       "path": "[WORKSPACE]/tail-latency.json",
-      "schema": "pi.operator_tail_latency.v1",
+      "schema": "ra.operator_tail_latency.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1982,7 +1982,7 @@
       "id": "flight_recorder",
       "issue": null,
       "path": "[WORKSPACE]/flight-recorder-report.json",
-      "schema": "pi.swarm.flight_recorder.report.v1",
+      "schema": "ra.swarm.flight_recorder.report.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -1991,7 +1991,7 @@
       "id": "host_preflight",
       "issue": null,
       "path": "[WORKSPACE]/host-preflight.json",
-      "schema": "pi.doctor.swarm_resource_preflight.v1",
+      "schema": "ra.doctor.swarm_resource_preflight.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -2000,7 +2000,7 @@
       "id": "hostcall_swarm_profile",
       "issue": null,
       "path": "[WORKSPACE]/hostcall-profile.json",
-      "schema": "pi.ext.hostcall_admission_swarm_profile.v1",
+      "schema": "ra.ext.hostcall_admission_swarm_profile.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -2027,7 +2027,7 @@
       "id": "rch_artifact_sync",
       "issue": null,
       "path": "[WORKSPACE]/rch-artifact-sync.json",
-      "schema": "pi.rch.artifact_sync_preflight.v1",
+      "schema": "ra.rch.artifact_sync_preflight.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -2036,7 +2036,7 @@
       "id": "progress_slo",
       "issue": null,
       "path": "[WORKSPACE]/progress-slo.json",
-      "schema": "pi.swarm.progress_slo.v1",
+      "schema": "ra.swarm.progress_slo.v1",
       "sha256": "[SHA256]",
       "size_bytes": "[SIZE_BYTES]",
       "status": "ok"
@@ -2264,7 +2264,7 @@
     "green_requires_all_required_evidence": true,
     "max_score": 16,
     "overall_status": "degraded",
-    "schema": "pi.swarm.safety_scorecard.v1",
+    "schema": "ra.swarm.safety_scorecard.v1",
     "status_counts": {
       "green": 3,
       "red": 3,
@@ -2303,7 +2303,7 @@
       "redacted_count": 0
     },
     "sample_window": 512,
-    "schema": "pi.operator_tail_latency.v1",
+    "schema": "ra.operator_tail_latency.v1",
     "status": "ok",
     "telemetry_enabled": true
   },
@@ -2321,12 +2321,12 @@
         "kind": "cargo_target_dir",
         "last_observed_at": "[TIMESTAMP]",
         "owner": "Codex",
-        "path": "[PI_AGENT_CARGO_TMP]/test/target",
+        "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
         "permission_boundary": "No deletion command emitted. Explicit written operator approval is required before deleting any file or directory.",
         "reason": "cargo_headroom selected target directory",
         "review_commands": [
-          "test -e [PI_AGENT_CARGO_TMP]/test/target && stat [PI_AGENT_CARGO_TMP]/test/target",
-          "du -sh [PI_AGENT_CARGO_TMP]/test/target"
+          "test -e [RECUR_AGENT_AGENT_CARGO_TMP]/test/target && stat [RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
+          "du -sh [RECUR_AGENT_AGENT_CARGO_TMP]/test/target"
         ],
         "source": "cargo_admission",
         "state": "active"
@@ -2342,12 +2342,12 @@
         "kind": "cargo_tmpdir",
         "last_observed_at": "[TIMESTAMP]",
         "owner": null,
-        "path": "[PI_AGENT_CARGO_TMP]/test/tmp",
+        "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp",
         "permission_boundary": "No deletion command emitted. Explicit written operator approval is required before deleting any file or directory.",
         "reason": "cargo_headroom selected TMPDIR",
         "review_commands": [
-          "test -e [PI_AGENT_CARGO_TMP]/test/tmp && stat [PI_AGENT_CARGO_TMP]/test/tmp",
-          "du -sh [PI_AGENT_CARGO_TMP]/test/tmp"
+          "test -e [RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp && stat [RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp",
+          "du -sh [RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp"
         ],
         "source": "cargo_admission",
         "state": "active"
@@ -2447,12 +2447,12 @@
         "kind": "cargo_target_dir",
         "last_observed_at": "[TIMESTAMP]",
         "owner": null,
-        "path": "[PI_AGENT_CARGO_TMP]/unknown/stale-target",
+        "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target",
         "permission_boundary": "No deletion command emitted. Explicit written operator approval is required before deleting any file or directory.",
         "reason": "stale unknown-owner fixture",
         "review_commands": [
-          "test -e [PI_AGENT_CARGO_TMP]/unknown/stale-target && stat [PI_AGENT_CARGO_TMP]/unknown/stale-target",
-          "du -sh [PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "test -e [RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target && stat [RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target",
+          "du -sh [RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "source": "capture_manifest.temp_artifacts",
         "state": "stale_candidate"
@@ -2467,14 +2467,14 @@
       "unknown_owner_deletion_protected": true
     },
     "known_temp_roots": [
-      "[PI_AGENT_CARGO_TMP]",
+      "[RECUR_AGENT_AGENT_CARGO_TMP]",
       "[DATA_TMP]",
       "[TMP]",
       ".rch-target*",
       ".rch-tmp*"
     ],
     "purpose": "read_only_temp_artifact_inventory_not_cleanup_executor",
-    "schema": "pi.swarm.temp_artifact_inventory.v1",
+    "schema": "ra.swarm.temp_artifact_inventory.v1",
     "status": "review_required",
     "summary": {
       "active_or_retained_count": 6,
@@ -2655,7 +2655,7 @@
       }
     ],
     "purpose": "operator_diagnostic_not_release_performance_claim",
-    "schema": "pi.swarm.turn_pressure_ledger.v1",
+    "schema": "ra.swarm.turn_pressure_ledger.v1",
     "status": "blocked",
     "summary": {
       "dimension_count": 6,
@@ -2757,7 +2757,7 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "cache_reuse": "target_dir_reuse_if_clean",
         "command_class": "cargo_test_focused",
@@ -2768,14 +2768,14 @@
           "rch_admission.queue_forecast"
         ],
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test conformance"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test conformance"
         ],
         "id": "focused_tests",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
         "no_local_fallback": true,
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true,
         "risk": "medium",
@@ -2787,7 +2787,7 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "cache_reuse": "target_dir_reuse_if_clean",
         "command_class": "cargo_test_e2e_conformance",
@@ -2798,14 +2798,14 @@
           "rch_admission.queue_forecast"
         ],
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test e2e"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test e2e"
         ],
         "id": "e2e_conformance",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
         "no_local_fallback": true,
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true,
         "risk": "medium",
@@ -2817,7 +2817,7 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "cache_reuse": "target_dir_reuse_if_clean",
         "command_class": "cargo_check_all_targets",
@@ -2828,14 +2828,14 @@
           "remote_validation_proof_ledger.summary"
         ],
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets"
         ],
         "id": "all_targets_check",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
         "no_local_fallback": true,
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true,
         "risk": "high",
@@ -2847,7 +2847,7 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "cache_reuse": "target_dir_reuse_if_clean",
         "command_class": "cargo_clippy_all_targets",
@@ -2858,14 +2858,14 @@
           "remote_validation_proof_ledger.summary"
         ],
         "exact_commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
         ],
         "id": "clippy",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
         "no_local_fallback": true,
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true,
         "risk": "high",
@@ -2888,22 +2888,22 @@
     },
     "local_fallback_rejections": [
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test conformance",
+        "command": "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test conformance",
         "group_id": "focused_tests",
         "reason": "RCH-required validation must not fail open into a local cargo build."
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test e2e",
+        "command": "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test e2e",
         "group_id": "e2e_conformance",
         "reason": "RCH-required validation must not fail open into a local cargo build."
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets",
+        "command": "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets",
         "group_id": "all_targets_check",
         "reason": "RCH-required validation must not fail open into a local cargo build."
       },
       {
-        "command": "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings",
+        "command": "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings",
         "group_id": "clippy",
         "reason": "RCH-required validation must not fail open into a local cargo build."
       }
@@ -2911,7 +2911,7 @@
     "predictive_summary": {
       "coordination_pressure": "blocked",
       "next_bottleneck_observation": "work_queue_pressure",
-      "schema": "pi.swarm.predictive_telemetry_ledger.v1",
+      "schema": "ra.swarm.predictive_telemetry_ledger.v1",
       "status": "blocked",
       "validation_pressure": "pressured",
       "work_queue_pressure": "blocked"
@@ -2938,7 +2938,7 @@
       {
         "action": "defer",
         "commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test conformance"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test conformance"
         ],
         "group_id": "focused_tests",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
@@ -2946,18 +2946,18 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true
       },
       {
         "action": "defer",
         "commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test e2e"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo test e2e"
         ],
         "group_id": "e2e_conformance",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
@@ -2965,18 +2965,18 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true
       },
       {
         "action": "defer",
         "commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets"
         ],
         "group_id": "all_targets_check",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
@@ -2984,18 +2984,18 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true
       },
       {
         "action": "defer",
         "commands": [
-          "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
+          "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo clippy --all-targets -- -D warnings"
         ],
         "group_id": "clippy",
         "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
@@ -3003,17 +3003,17 @@
           "decision=backoff",
           "queue_recommended_action=backoff",
           "slot_pressure=saturated",
-          "stale_target_cache=[PI_AGENT_CARGO_TMP]/unknown/stale-target"
+          "stale_target_cache=[RECUR_AGENT_AGENT_CARGO_TMP]/unknown/stale-target"
         ],
         "required_env": {
-          "CARGO_TARGET_DIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/target",
-          "TMPDIR": "[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
+          "CARGO_TARGET_DIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target",
+          "TMPDIR": "[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp"
         },
         "requires_rch": true
       }
     ],
-    "schema": "pi.swarm.validation_scheduler_plan.v1",
-    "source_runpack_schema": "pi.swarm.operator_runpack.v1",
+    "schema": "ra.swarm.validation_scheduler_plan.v1",
+    "source_runpack_schema": "ra.swarm.operator_runpack.v1",
     "status": "degraded",
     "summary": {
       "blocked_group_count": 0,

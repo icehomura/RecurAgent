@@ -1,9 +1,9 @@
 mod common;
 
 use common::{TestHarness, run_async};
-use pi::auth::{AuthCredential, AuthStorage};
-use pi::http::client::Client;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::auth::{AuthCredential, AuthStorage};
+use ra::http::client::Client;
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ fn cassette_root() -> PathBuf {
 fn sha256_hex(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 fn read_json(path: &Path) -> Value {
@@ -95,7 +95,7 @@ fn log_refresh_event(harness: &TestHarness, test: &str, event: &str, data: &[(&s
         .expect("clock should be after epoch")
         .as_millis();
     let entry = serde_json::json!({
-        "schema": "pi.test.auth_event.v1",
+        "schema": "ra.test.auth_event.v1",
         "test": test,
         "event": event,
         "timestamp_ms": timestamp_ms,

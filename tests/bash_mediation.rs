@@ -12,8 +12,8 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::config::BashSettings;
-use pi::tools::{Tool, ToolOutput, ToolRegistry};
+use ra::config::BashSettings;
+use ra::tools::{Tool, ToolOutput, ToolRegistry};
 use serde_json::json;
 use std::path::Path;
 
@@ -22,7 +22,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -57,11 +57,11 @@ fn block_on_local<Fut: Future>(future: Fut) -> Fut::Output {
     runtime.block_on(future)
 }
 
-fn bash_tool(cwd: &Path, settings: Option<BashSettings>) -> pi::tools::BashTool {
-    pi::tools::BashTool::new(cwd).with_mediation(settings)
+fn bash_tool(cwd: &Path, settings: Option<BashSettings>) -> ra::tools::BashTool {
+    ra::tools::BashTool::new(cwd).with_mediation(settings)
 }
 
-fn execute(tool: &pi::tools::BashTool, command: &str) -> ToolOutput {
+fn execute(tool: &ra::tools::BashTool, command: &str) -> ToolOutput {
     block_on_local(tool.execute("call-1", json!({"command": command}), None))
         .expect("execute must not error at the transport level")
 }
@@ -130,7 +130,7 @@ fn block_critical_refuses_named_class_with_rule_id() {
         "a dcg-compatible rule id must name the class: {rule_ids:?}"
     );
     assert!(hits.iter().any(|h| h["tier"].as_str() == Some("critical")));
-    assert_eq!(details["schema"], "pi.bash.mediation.v1");
+    assert_eq!(details["schema"], "ra.bash.mediation.v1");
     finish_case(&harness, case);
 }
 
@@ -211,7 +211,7 @@ fn audit_payload_shape_is_stable() {
     let out = execute(&tool, "rm -rf /");
     let details = out.details.expect("audit details");
     harness.log().info("verify", format!("audit: {details}"));
-    assert_eq!(details["schema"], "pi.bash.mediation.v1");
+    assert_eq!(details["schema"], "ra.bash.mediation.v1");
     assert_eq!(details["verdict"], "block");
     assert_eq!(details["mode"], "block-critical");
     assert!(details["command"].as_str().is_some());
@@ -228,7 +228,7 @@ fn registry_constructs_bash_with_mediation() {
     let case = "registry_constructs_bash_with_mediation";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let config = pi::config::Config {
+    let config = ra::config::Config {
         bash: Some(settings("block-critical")),
         ..Default::default()
     };

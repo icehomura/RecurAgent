@@ -1,10 +1,10 @@
 {
-  "schema": "pi.extension.quarantine_rehearsal_fixtures.v1",
+  "schema": "ra.extension.quarantine_rehearsal_fixtures.v1",
   "scenarios": [
     {
       "id": "startup_crash_loop_quarantine",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "startup_crash_loop_quarantine",
         "extension": {
           "id": "ext-startup-loop",
@@ -41,7 +41,7 @@
     {
       "id": "runtime_crash_loop_quarantine",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "runtime_crash_loop_quarantine",
         "extension": {
           "id": "ext-runtime-loop",
@@ -91,7 +91,7 @@
     {
       "id": "permission_escalation_rejection",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "permission_escalation_rejection",
         "extension": {
           "id": "ext-permission-drift",
@@ -127,7 +127,7 @@
     {
       "id": "stale_provenance_fail_closed",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "stale_provenance_fail_closed",
         "extension": {
           "id": "ext-stale-provenance",
@@ -163,7 +163,7 @@
     {
       "id": "trusted_rollback_candidate",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "trusted_rollback_candidate",
         "extension": {
           "id": "ext-rollback",
@@ -222,7 +222,7 @@
     {
       "id": "action_plan_projection",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "action_plan_projection",
         "extension": {
           "id": "ext-action-plan",
@@ -258,7 +258,7 @@
     {
       "id": "missing_policy_fail_closed",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "missing_policy_fail_closed",
         "extension": {
           "id": "ext-missing-policy",
@@ -293,7 +293,7 @@
     {
       "id": "missing_provenance_fail_closed",
       "input": {
-        "schema": "pi.extension.quarantine_rehearsal_input.v1",
+        "schema": "ra.extension.quarantine_rehearsal_input.v1",
         "scenario_id": "missing_provenance_fail_closed",
         "extension": {
           "id": "ext-missing-provenance",

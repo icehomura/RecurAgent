@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/contracts/swarm-replay-trace-contract.json";
-const EXPECTED_CONTRACT_SCHEMA: &str = "pi.swarm.replay_trace_contract.v1";
-const EXPECTED_TRACE_SCHEMA: &str = "pi.swarm.replay_trace.v1";
+const EXPECTED_CONTRACT_SCHEMA: &str = "ra.swarm.replay_trace_contract.v1";
+const EXPECTED_TRACE_SCHEMA: &str = "ra.swarm.replay_trace.v1";
 const EXPECTED_BEAD_ID: &str = "bd-in57w.1";
 const EXPECTED_PARENT_BEAD_ID: &str = "bd-in57w";
 const AGENT_MAIL_UNAVAILABLE_FIXTURE: &str =
@@ -538,7 +538,7 @@ fn validate_agent_mail_unavailable_fixture(trace: &Value) -> TestResult {
 
 fn validate_source_inventory_scenario_suite(suite: &Value) -> TestResult {
     require(
-        pointer_str(suite, "/schema")? == "pi.swarm.replay_trace.fixture_suite.v1",
+        pointer_str(suite, "/schema")? == "ra.swarm.replay_trace.fixture_suite.v1",
         "source inventory fixture suite schema mismatch",
     )?;
     require(

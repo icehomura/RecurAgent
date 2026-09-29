@@ -10,7 +10,7 @@
 mod common;
 
 use common::TestHarness;
-use pi::config::{Config, SettingsScope};
+use ra::config::{Config, SettingsScope};
 use serde_json::json;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
@@ -265,7 +265,7 @@ fn config_load_empty_file_returns_defaults() {
     let cwd = harness.create_dir("cwd");
     let global_dir = harness.create_dir("global");
     write_file(&global_dir.join("settings.json"), "");
-    write_file(&cwd.join(".pi/settings.json"), "   \n  ");
+    write_file(&cwd.join(".ra/settings.json"), "   \n  ");
 
     let config = Config::load_with_roots(None, &global_dir, &cwd).expect("load config");
     assert!(config.theme.is_none());
@@ -322,7 +322,7 @@ fn config_load_invalid_json_in_project_returns_error() {
     let cwd = harness.create_dir("cwd");
     let global_dir = harness.create_dir("global");
     write_file(&global_dir.join("settings.json"), "{}");
-    write_file(&cwd.join(".pi/settings.json"), "not json");
+    write_file(&cwd.join(".ra/settings.json"), "not json");
 
     let result = Config::load_with_roots(None, &global_dir, &cwd);
     assert!(
@@ -493,7 +493,7 @@ fn repair_policy_defaults_to_suggest() {
     assert_eq!(resolved.source, "cli");
     assert_eq!(
         resolved.effective_mode,
-        pi::extensions::RepairPolicyMode::Suggest
+        ra::extensions::RepairPolicyMode::Suggest
     );
 }
 
@@ -506,7 +506,7 @@ fn repair_policy_cli_override_wins() {
     assert_eq!(resolved.source, "cli");
     assert_eq!(
         resolved.effective_mode,
-        pi::extensions::RepairPolicyMode::Off
+        ra::extensions::RepairPolicyMode::Off
     );
 }
 
@@ -521,7 +521,7 @@ fn repair_policy_auto_strict_from_config() {
     assert_eq!(resolved.source, "cli");
     assert_eq!(
         resolved.effective_mode,
-        pi::extensions::RepairPolicyMode::AutoStrict
+        ra::extensions::RepairPolicyMode::AutoStrict
     );
 }
 
@@ -532,7 +532,7 @@ fn repair_policy_unknown_mode_falls_back_to_suggest() {
     let resolved = config.resolve_repair_policy_with_metadata(Some("invalid-mode"));
     assert_eq!(
         resolved.effective_mode,
-        pi::extensions::RepairPolicyMode::Suggest
+        ra::extensions::RepairPolicyMode::Suggest
     );
 }
 

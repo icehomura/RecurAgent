@@ -9,10 +9,10 @@ const CONTRACT_PATH: &str = "docs/contracts/remote-validation-proof-ledger-contr
 const EXAMPLES_PATH: &str = "tests/golden_corpus/remote_validation_proof_ledger/examples.json";
 const RUNBOOK_PATH: &str = "docs/swarm-operations-runbook.md";
 const README_PATH: &str = "README.md";
-const EXPECTED_CONTRACT_SCHEMA: &str = "pi.remote_validation.proof_ledger_contract.v1";
-const EXPECTED_LEDGER_SCHEMA: &str = "pi.remote_validation.proof_ledger.v1";
-const EXPECTED_ENTRY_SCHEMA: &str = "pi.remote_validation.proof_entry.v1";
-const EXPECTED_EXAMPLE_SCHEMA: &str = "pi.remote_validation.proof_ledger.example_corpus.v1";
+const EXPECTED_CONTRACT_SCHEMA: &str = "ra.remote_validation.proof_ledger_contract.v1";
+const EXPECTED_LEDGER_SCHEMA: &str = "ra.remote_validation.proof_ledger.v1";
+const EXPECTED_ENTRY_SCHEMA: &str = "ra.remote_validation.proof_entry.v1";
+const EXPECTED_EXAMPLE_SCHEMA: &str = "ra.remote_validation.proof_ledger.example_corpus.v1";
 const EXPECTED_BEAD_ID: &str = "bd-e5le6.1";
 const EXPECTED_PARENT_BEAD_ID: &str = "bd-e5le6";
 
@@ -507,7 +507,7 @@ fn operator_docs_reference_contract_and_claim_boundary() -> TestResult {
 
     let required_runbook_fragments = [
         "docs/contracts/remote-validation-proof-ledger-contract.json",
-        "pi.remote_validation.proof_ledger.v1",
+        "ra.remote_validation.proof_ledger.v1",
         "operator evidence only",
         "not release performance evidence",
         "local fallback",

@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::web_remote::{
+use ra::web_remote::{
     BindMode, ControlMode, EMBEDDED_WEB_CLIENT_HTML, WebFrameType, WebRemoteManager,
     WebRemoteSettings,
 };
@@ -34,7 +34,7 @@ fn test_threat_model_document_exists_and_valid() {
     );
 
     let content = std::fs::read_to_string(doc_path).unwrap_or_default();
-    assert!(content.contains("pi.web.threat_model.v1"));
+    assert!(content.contains("ra.web.threat_model.v1"));
     assert!(content.contains("T-01"));
     assert!(content.contains("T-02"));
     assert!(content.contains("T-03"));
@@ -61,7 +61,7 @@ fn test_canary_secrets_obfuscation_in_web_frames() {
     assert!(!safe_content.contains(raw_secret));
 
     let frame = manager.next_frame(WebFrameType::Patch, 80, 24, &safe_content);
-    assert_eq!(frame.schema, "pi.web.frame.v1");
+    assert_eq!(frame.schema, "ra.web.frame.v1");
     assert!(!frame.data.contains(raw_secret));
     assert!(frame.data.contains(placeholder));
 

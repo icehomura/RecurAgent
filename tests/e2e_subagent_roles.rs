@@ -2,13 +2,13 @@
 //! role model end-to-end over real processes.
 //!
 //! Flow: a mock HTTP server fronts two OpenAI-compatible providers on distinct
-//! path prefixes (`/default/v1` parent, `/role/v1` child). The parent `pi`
+//! path prefixes (`/default/v1` parent, `/role/v1` child). The parent `ra`
 //! process runs the `e2edefault` provider; its scripted first response calls
 //! the `subagent` tool on a `scout` agent whose definition pins NO model.
 //! Settings assign `modelRoles.task = "e2erole/role-model"`. The child must
 //! then reach the `/role/v1` prefix with model `role-model` in the request
 //! body — proving parent → child role routing through the real binary
-//! boundary (parent spawns the actual `pi` binary with `--model <role spec>`).
+//! boundary (parent spawns the actual `ra` binary with `--model <role spec>`).
 //!
 //! No network beyond loopback; structured JSONL logs per tests/common/logging.rs.
 
@@ -127,7 +127,7 @@ fn e2e_subagent_child_uses_task_role_model() {
             ));
         });
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = Command::new(binary);
     command
         .args([
@@ -142,11 +142,11 @@ fn e2e_subagent_child_uses_task_role_model() {
         ])
         .arg("run the scout")
         .env("HOME", &home)
-        .env("PI_CODING_AGENT_DIR", env_root.join("agent"))
-        .env("PI_CONFIG_PATH", env_root.join("settings.json"))
-        .env("PI_SESSIONS_DIR", env_root.join("sessions"))
-        .env("PI_PACKAGE_DIR", env_root.join("packages"))
-        .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+        .env("RECUR_AGENT_DIR", env_root.join("agent"))
+        .env("RECUR_AGENT_CONFIG_PATH", env_root.join("settings.json"))
+        .env("RECUR_AGENT_SESSIONS_DIR", env_root.join("sessions"))
+        .env("RECUR_AGENT_PACKAGE_DIR", env_root.join("packages"))
+        .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
         .env_remove("ANTHROPIC_API_KEY")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

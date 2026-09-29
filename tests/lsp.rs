@@ -17,9 +17,9 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::config::{Config, LspServerSettings, LspSettings};
-use pi::model::ContentBlock;
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::config::{Config, LspServerSettings, LspSettings};
+use ra::model::ContentBlock;
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::Path;
@@ -82,11 +82,11 @@ fn probe_rust_analyzer(command: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-/// Discover a working rust-analyzer command. Order: `PI_LSP_RUST_ANALYZER`
+/// Discover a working rust-analyzer command. Order: `RECUR_AGENT_LSP_RUST_ANALYZER`
 /// override, `rust-analyzer` on PATH, `$HOME/.cargo/bin/rust-analyzer` (the
 /// rustup default — job environments with a minimal PATH still find it).
 fn rust_analyzer_command() -> Option<String> {
-    if let Ok(override_cmd) = std::env::var("PI_LSP_RUST_ANALYZER") {
+    if let Ok(override_cmd) = std::env::var("RECUR_AGENT_LSP_RUST_ANALYZER") {
         return probe_rust_analyzer(&override_cmd).then_some(override_cmd);
     }
     if probe_rust_analyzer("rust-analyzer") {
@@ -128,10 +128,10 @@ fn ra_config(command: &str) -> Config {
 }
 
 /// Whether the live lane must run (skip becomes a loud failure). Set
-/// `PI_LSP_TEST_REQUIRE_RA=1` in environments that guarantee the binary —
+/// `RECUR_AGENT_LSP_TEST_REQUIRE_RA=1` in environments that guarantee the binary —
 /// a skip there would mean the lane silently lost its proof.
 fn rust_analyzer_required() -> bool {
-    std::env::var("PI_LSP_TEST_REQUIRE_RA")
+    std::env::var("RECUR_AGENT_LSP_TEST_REQUIRE_RA")
         .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
 }
 
@@ -144,7 +144,7 @@ fn live_lane_or_skip(harness: &TestHarness, case: &str) -> bool {
     }
     assert!(
         !rust_analyzer_required(),
-        "PI_LSP_TEST_REQUIRE_RA is set but rust-analyzer is not installed; \
+        "RECUR_AGENT_LSP_TEST_REQUIRE_RA is set but rust-analyzer is not installed; \
          refusing to let case '{case}' skip its proof"
     );
     harness.log().info("skip", skip_reason(case));
@@ -209,7 +209,7 @@ pub fn run() -> String {
 }
 
 /// The lsp tool pulled from a registry honoring `--tools` gating.
-fn lsp_tool(cwd: &Path, config: Option<&Config>) -> pi::tools::ToolRegistry {
+fn lsp_tool(cwd: &Path, config: Option<&Config>) -> ra::tools::ToolRegistry {
     ToolRegistry::new(&["lsp"], cwd, config)
 }
 
@@ -227,7 +227,7 @@ fn block_on_local<Fut: Future>(future: Fut) -> Fut::Output {
     runtime.block_on(future)
 }
 
-fn execute_lsp(registry: &ToolRegistry, input: Value) -> Result<ToolOutput, pi::error::Error> {
+fn execute_lsp(registry: &ToolRegistry, input: Value) -> Result<ToolOutput, ra::error::Error> {
     let tools = registry.tools();
     let tool = tools
         .iter()
@@ -261,7 +261,7 @@ fn lsp_registered_and_gated_by_tools() {
     // Default enabled set: lsp is discoverable-tier (not in the provider
     // schema until promoted), which is the --tools gate.
     let default = ToolRegistry::new(
-        &pi::xdev::default_enabled_tools(),
+        &ra::xdev::default_enabled_tools(),
         &harness.temp_path("."),
         None,
     );

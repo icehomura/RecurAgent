@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-unified-test-certification-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.unified_test_certification_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.unified_test_certification_contract.v1";
 const REQUIRED_DIMENSION_IDS: &[&str] = &[
     "unit_tests",
     "integration_tests",

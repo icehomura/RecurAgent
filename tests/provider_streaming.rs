@@ -15,20 +15,20 @@
 //! RCH omits repository metadata, so full replay-lineage runs must pass the
 //! authoritative source commit explicitly:
 //! ```bash
-//! PI_PROVIDER_REPLAY_GIT_COMMIT="$(git rev-parse HEAD)" \
+//! RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT="$(git rev-parse HEAD)" \
 //!   rch exec -- cargo test --test provider_streaming
 //! ```
 mod common;
 
 use common::{MockHttpResponse, TestHarness};
 use futures::{Stream, StreamExt};
-use pi::model::{
+use ra::model::{
     AssistantMessage, ContentBlock, Cost, Message, StopReason, StreamEvent, ToolCall,
     ToolResultMessage, Usage, UserContent, UserMessage,
 };
-use pi::provider::{Context, Provider, StreamOptions, ToolDef};
-use pi::providers::cursor::CursorProvider;
-use pi::vcr::{Cassette, VcrMode};
+use ra::provider::{Context, Provider, StreamOptions, ToolDef};
+use ra::providers::cursor::CursorProvider;
+use ra::vcr::{Cassette, VcrMode};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::env;
@@ -77,9 +77,9 @@ pub(crate) fn vcr_strict() -> bool {
     env_truthy("VCR_STRICT")
 }
 
-const PROVIDER_REPLAY_CACHE_SCHEMA: &str = "pi.test.provider_replay_cache.v1";
+const PROVIDER_REPLAY_CACHE_SCHEMA: &str = "ra.test.provider_replay_cache.v1";
 const PROVIDER_REPLAY_CACHE_CASSETTE_VERSION: &str = "1.0";
-const PROVIDER_REPLAY_GIT_COMMIT_ENV: &str = "PI_PROVIDER_REPLAY_GIT_COMMIT";
+const PROVIDER_REPLAY_GIT_COMMIT_ENV: &str = "RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT";
 
 pub(crate) struct ProviderReplayCacheSpec<'a> {
     pub provider: &'a str,
@@ -594,7 +594,7 @@ pub(crate) struct StreamOutcome {
 
 pub(crate) async fn collect_events<S>(mut stream: S) -> StreamOutcome
 where
-    S: Stream<Item = pi::PiResult<StreamEvent>> + Unpin,
+    S: Stream<Item = ra::PiResult<StreamEvent>> + Unpin,
 {
     let mut events = Vec::new();
     let mut stream_error = None;
@@ -894,7 +894,7 @@ pub(crate) fn record_stream_contract_artifact(
     let file_name = format!("{provider}_{scenario}.contract.json");
     let path = harness.temp_path(&file_name);
     let payload = json!({
-        "schema": "pi.test.provider_contract.v1",
+        "schema": "ra.test.provider_contract.v1",
         "provider": provider,
         "scenario": scenario,
         "description": description,
@@ -944,7 +944,7 @@ pub(crate) fn assert_error_translation(
     let file_name = format!("{provider}_{scenario}.error-contract.json");
     let path = harness.temp_path(&file_name);
     let payload = json!({
-        "schema": "pi.test.provider_error_translation.v1",
+        "schema": "ra.test.provider_error_translation.v1",
         "provider": provider,
         "scenario": scenario,
         "description": description,
@@ -1002,7 +1002,7 @@ pub(crate) fn tool_result_message(
     Message::ToolResult(std::sync::Arc::new(ToolResultMessage {
         tool_call_id: tool_call_id.to_string(),
         tool_name: tool_name.to_string(),
-        content: vec![ContentBlock::Text(pi::model::TextContent::new(
+        content: vec![ContentBlock::Text(ra::model::TextContent::new(
             content.to_string(),
         ))],
         details: None,
@@ -1025,7 +1025,7 @@ mod backpressure_tests {
     use super::*;
     use std::collections::{BTreeMap, VecDeque};
 
-    const BACKPRESSURE_SCHEMA: &str = "pi.test.provider_stream_backpressure.v1";
+    const BACKPRESSURE_SCHEMA: &str = "ra.test.provider_stream_backpressure.v1";
     const PRESSURE_QUEUE_CAP: usize = 6;
     const SLOW_CONSUMER_DRAIN_EVERY: usize = 4;
 
@@ -1115,7 +1115,7 @@ mod backpressure_tests {
     ) -> AssistantMessage {
         AssistantMessage {
             content: vec![
-                ContentBlock::Text(pi::model::TextContent::new(text.to_string())),
+                ContentBlock::Text(ra::model::TextContent::new(text.to_string())),
                 ContentBlock::ToolCall(tool_call),
             ],
             api: "stream".to_string(),
@@ -1911,7 +1911,7 @@ fn cursor_streaming_smoke_proves_text_done_and_connect_request() {
 #[cfg(test)]
 mod replay_cache_tests {
     use super::*;
-    use pi::vcr::{Interaction, RecordedRequest, RecordedResponse};
+    use ra::vcr::{Interaction, RecordedRequest, RecordedResponse};
 
     const TEST_GIT_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 

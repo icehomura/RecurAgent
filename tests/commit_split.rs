@@ -1,6 +1,6 @@
-//! Integration tests for dependency-ordered atomic commit splitting (`pi commit`) (bd-cv653.3.14).
+//! Integration tests for dependency-ordered atomic commit splitting (`ra commit`) (bd-cv653.3.14).
 
-use pi::commit_split::{
+use ra::commit_split::{
     CommitOptions, CommitPlanner, CommitUnit, ConflictScanner, DiffParser, FileCategory,
 };
 

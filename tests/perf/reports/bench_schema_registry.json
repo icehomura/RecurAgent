@@ -56,7 +56,7 @@
       ],
       "threshold_representation": "exactly_six_decimal_places"
     },
-    "schema": "pi.perf.budget_summary.v2"
+    "schema": "ra.perf.budget_summary.v2"
   },
   "env_fingerprint_fields": [
     {
@@ -183,10 +183,10 @@
       ],
       "required_runtime_engine": "quickjs",
       "required_scenario": "tool_call_roundtrip",
-      "required_schema": "pi.perf.workload.v1",
+      "required_schema": "ra.perf.workload.v1",
       "required_tool": "pijs_workload",
       "required_tool_calls_per_iteration": [1, 10],
-      "scope": "pi.perf.workload.v1/pijs_workload"
+      "scope": "ra.perf.workload.v1/pijs_workload"
     },
     "realistic_replay_inputs": [
       {
@@ -402,7 +402,7 @@
         "ux_outcome": "Large-session operations remain usable for humans under realistic transcript load."
       }
     ],
-    "schema": "pi.bench.protocol.v1",
+    "schema": "ra.bench.protocol.v1",
     "swarm_scale_requirements": {
       "documented_run_commands": {
         "local": "PERF_CARGO_RUNNER=local ./scripts/perf/orchestrate.sh --profile full",
@@ -490,43 +490,43 @@
     ],
     "version": "1.0.0"
   },
-  "schema": "pi.bench.schema_registry.v1",
+  "schema": "ra.bench.schema_registry.v1",
   "schemas": [
     {
       "description": "Canonical benchmark protocol contract (partitions, datasets, metadata, replay inputs)",
-      "name": "pi.bench.protocol.v1"
+      "name": "ra.bench.protocol.v1"
     },
     {
       "description": "Rust QuickJS extension benchmark event (load, tool call, event hook)",
-      "name": "pi.ext.rust_bench.v1"
+      "name": "ra.ext.rust_bench.v1"
     },
     {
       "description": "Legacy pi-mono (Node.js) extension benchmark event",
-      "name": "pi.ext.legacy_bench.v1"
+      "name": "ra.ext.legacy_bench.v1"
     },
     {
       "description": "PiJS workload harness output (tool call throughput)",
-      "name": "pi.perf.workload.v1"
+      "name": "ra.perf.workload.v1"
     },
     {
       "description": "Performance budget check result",
-      "name": "pi.perf.budget.v1"
+      "name": "ra.perf.budget.v1"
     },
     {
       "description": "Strict provenance-bound budget summary with per-budget results and claim readiness",
-      "name": "pi.perf.budget_summary.v2"
+      "name": "ra.perf.budget_summary.v2"
     },
     {
       "description": "Per-extension conformance report event",
-      "name": "pi.ext.conformance_report.v2"
+      "name": "ra.ext.conformance_report.v2"
     },
     {
       "description": "Aggregate conformance summary with per-tier breakdowns",
-      "name": "pi.ext.conformance_summary.v2"
+      "name": "ra.ext.conformance_summary.v2"
     },
     {
       "description": "Layered extension benchmark artifact linking cold-load, per-call, and full E2E evidence with claim-integrity guards",
-      "name": "pi.perf.extension_benchmark_stratification.v1"
+      "name": "ra.perf.extension_benchmark_stratification.v1"
     },
     {
       "description": "Phase-1 realistic/matched-state matrix validation with stage attribution and release-gate readiness",
@@ -534,7 +534,7 @@
     },
     {
       "description": "Host-scale resource-governor admission decision telemetry for swarm pressure control",
-      "name": "pi.resource_governor.admission.v1"
+      "name": "ra.resource_governor.admission.v1"
     }
   ]
 }

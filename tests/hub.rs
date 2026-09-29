@@ -5,7 +5,7 @@
 //!    after both gates pass; ps shows running; logs cursor advances;
 //!    stop leaves no processes.
 //! 2. PTY send drives a `python3 -i` REPL fixture through the tool surface.
-//! 3. Duplicate live name → `PI_HUB_NAME_TAKEN`; restart after completion.
+//! 3. Duplicate live name → `RECUR_AGENT_HUB_NAME_TAKEN`; restart after completion.
 //! 4. `kill_session_services` (session exit) leaves zero survivors.
 //!
 //! Logging: structured JSONL per tests/common/logging.rs, v2-validated,
@@ -15,7 +15,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{Tool, ToolOutput};
+use ra::tools::{Tool, ToolOutput};
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::time::Duration;
@@ -37,7 +37,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -69,8 +69,8 @@ fn hub_exec(cwd: &std::path::Path, input: Value) -> ToolOutput {
 }
 
 fn hub_exec_for_session(cwd: &std::path::Path, session_id: &str, input: Value) -> ToolOutput {
-    let mut tool = pi::tools::HubTool::new(cwd);
-    tool.bind_job_session_scope(pi::jobs::JobSessionScope::fixed(session_id));
+    let mut tool = ra::tools::HubTool::new(cwd);
+    tool.bind_job_session_scope(ra::jobs::JobSessionScope::fixed(session_id));
     block_on_local(tool.execute("call-1", input, None)).expect("hub execute")
 }
 
@@ -119,7 +119,7 @@ fn fixture_server_readiness_conjunction_and_lifecycle() {
     );
     assert!(!out.is_error, "{text}");
     let details = out.details.as_ref().expect("details");
-    assert_eq!(details["schema"], "pi.hub.service.v1");
+    assert_eq!(details["schema"], "ra.hub.service.v1");
     assert_eq!(details["status"], "running");
     assert_eq!(details["ready"], true);
     let pid = u32::try_from(details["pid"].as_u64().expect("pid")).expect("pid fits u32"); // ubs:ignore test fixture
@@ -278,7 +278,7 @@ fn duplicate_name_and_restart_flow() {
         .log()
         .info("verify", format!("duplicate start: {second_text}"));
     assert!(
-        second_text.contains("PI_HUB_NAME_TAKEN"),
+        second_text.contains("RECUR_AGENT_HUB_NAME_TAKEN"),
         "duplicate live name must be a named error: {second_text}"
     );
 
@@ -340,7 +340,7 @@ fn session_exit_kills_non_detached_services() {
         .log()
         .info("verify", format!("service pids: {pid_a}, {pid_b}"));
 
-    pi::hub::kill_session_services();
+    ra::hub::kill_session_services();
     std::thread::sleep(Duration::from_millis(500));
 
     for pid in [pid_a, pid_b] {
@@ -365,8 +365,8 @@ fn hub_jobs_group_wraps_background_jobs() {
     let root = harness.temp_path(".");
 
     // Spawn a background job through the bash tool, then manage it via hub.
-    let mut bash = pi::tools::BashTool::new(&root);
-    bash.bind_job_session_scope(pi::jobs::JobSessionScope::fixed("hub-integration-session"));
+    let mut bash = ra::tools::BashTool::new(&root);
+    bash.bind_job_session_scope(ra::jobs::JobSessionScope::fixed("hub-integration-session"));
     let out = block_on_local(bash.execute(
         "call-1",
         json!({"command": "echo hub-jobs-marker", "background": true, "timeout": 30}),
@@ -409,8 +409,8 @@ fn hub_jobs_group_hides_foreign_session_jobs() {
     let root = harness.temp_path(".");
     let owner = format!("hub-owner-{}", uuid::Uuid::new_v4().simple());
     let foreign = format!("hub-foreign-{}", uuid::Uuid::new_v4().simple());
-    let mut bash = pi::tools::BashTool::new(&root);
-    bash.bind_job_session_scope(pi::jobs::JobSessionScope::fixed(owner.clone()));
+    let mut bash = ra::tools::BashTool::new(&root);
+    bash.bind_job_session_scope(ra::jobs::JobSessionScope::fixed(owner.clone()));
     let output = block_on_local(bash.execute(
         "owner-job",
         json!({
@@ -441,7 +441,7 @@ fn hub_jobs_group_hides_foreign_session_jobs() {
     );
     assert!(foreign_wait.is_error);
     let foreign_text = first_text(&foreign_wait);
-    assert!(foreign_text.contains("PI_JOBS_UNKNOWN_ID"));
+    assert!(foreign_text.contains("RECUR_AGENT_JOBS_UNKNOWN_ID"));
     assert!(!foreign_text.contains("private-hub-marker"));
     let foreign_cancel = hub_exec_for_session(
         &root,
@@ -449,7 +449,7 @@ fn hub_jobs_group_hides_foreign_session_jobs() {
         json!({"op": "jobs", "action": "cancel", "jobId": job_id}),
     );
     assert!(foreign_cancel.is_error);
-    assert!(first_text(&foreign_cancel).contains("PI_JOBS_UNKNOWN_ID"));
+    assert!(first_text(&foreign_cancel).contains("RECUR_AGENT_JOBS_UNKNOWN_ID"));
 
     let owner_wait = hub_exec_for_session(
         &root,
@@ -463,6 +463,6 @@ fn hub_jobs_group_hides_foreign_session_jobs() {
     );
     assert!(!owner_wait.is_error);
     assert!(first_text(&owner_wait).contains("exited"));
-    let _ = pi::jobs::take_completion_notices(&owner);
+    let _ = ra::jobs::take_completion_notices(&owner);
     finish_case(&harness, case);
 }

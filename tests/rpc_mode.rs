@@ -10,18 +10,18 @@ mod common;
 
 use common::logging::TestLogger;
 use common::{TestEnv, TestHarness};
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::auth::AuthStorage;
-use pi::config::Config;
-use pi::http::client::Client;
-use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, ToolCall, Usage};
-use pi::provider::Provider;
-use pi::providers::openai::OpenAIProvider;
-use pi::resources::ResourceLoader;
-use pi::rpc::{RpcOptions, run};
-use pi::session::{Session, SessionMessage};
-use pi::tools::ToolRegistry;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::auth::AuthStorage;
+use ra::config::Config;
+use ra::http::client::Client;
+use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, ToolCall, Usage};
+use ra::provider::Provider;
+use ra::providers::openai::OpenAIProvider;
+use ra::resources::ResourceLoader;
+use ra::rpc::{RpcOptions, run};
+use ra::session::{Session, SessionMessage};
+use ra::tools::ToolRegistry;
+use ra::vcr::{VcrMode, VcrRecorder};
 use std::env;
 use std::path::Path;
 use std::path::PathBuf;
@@ -179,7 +179,7 @@ fn rpc_get_state_and_prompt() {
             agent,
             session,
             false,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
 
         let auth_dir = tempfile::tempdir().unwrap();
@@ -449,7 +449,7 @@ fn rpc_session_stats_counts_tool_calls_and_results() {
         session.header.model_id = Some(model);
         session.header.thinking_level = Some("off".to_string());
         session.append_message(SessionMessage::User {
-            content: pi::model::UserContent::Text("hi".to_string()),
+            content: ra::model::UserContent::Text("hi".to_string()),
             timestamp: Some(now),
         });
         session.append_message(SessionMessage::Assistant {
@@ -489,7 +489,7 @@ fn rpc_session_stats_counts_tool_calls_and_results() {
             agent,
             session,
             false,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
 
         let auth_dir = tempfile::tempdir().unwrap();

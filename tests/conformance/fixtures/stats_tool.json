@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "tool": "stats",
-  "description": "Local pi stats contract for bd-cv653.7.7 and bd-cv653.8.1: exact aggregate math, composed provider/time attribution, and malformed-line tolerance over hermetic session JSONL.",
+  "description": "Local ra stats contract for bd-cv653.7.7 and bd-cv653.8.1: exact aggregate math, composed provider/time attribution, and malformed-line tolerance over hermetic session JSONL.",
   "cases": [
     {
       "name": "stats_aggregates_usage_tools_and_compactions",
@@ -24,7 +24,7 @@
           "read"
         ],
         "details": {
-          "schema": "pi.stats.v1",
+          "schema": "ra.stats.v1",
           "sessions": 1,
           "messages": 1,
           "tokens": {
@@ -63,7 +63,7 @@
         "provider": "anthropic"
       },
       "expected": {
-        "content_contains": ["\"schema\": \"pi.stats.v1\"", "\"tool\": \"grep\""],
+        "content_contains": ["\"schema\": \"ra.stats.v1\"", "\"tool\": \"grep\""],
         "details": {
           "sessions": 1,
           "messages": 1,
@@ -98,13 +98,13 @@
       },
       "expected": {
         "content_contains": [
-          "# pi stats",
+          "# ra stats",
           "- Sessions: 1",
           "- Messages: 1",
           "- Tokens (in/out/total): 3 / 5 / 8"
         ],
         "details": {
-          "schema": "pi.stats.v1",
+          "schema": "ra.stats.v1",
           "sessions": 1,
           "messages": 1,
           "tokens": {

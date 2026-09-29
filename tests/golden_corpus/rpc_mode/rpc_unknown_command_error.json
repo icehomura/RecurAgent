@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "rpc_mode_unknown_command_error",
   "surface": "rpc_mode",
   "description": "RPC mode failure path: unknown command returns structured error response",

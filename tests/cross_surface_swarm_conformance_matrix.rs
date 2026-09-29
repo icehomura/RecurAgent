@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 const EVIDENCE_PATH: &str = "docs/evidence/cross-surface-swarm-conformance-matrix.json";
-const EXPECTED_SCHEMA: &str = "pi.swarm.cross_surface_conformance_matrix.v1";
+const EXPECTED_SCHEMA: &str = "ra.swarm.cross_surface_conformance_matrix.v1";
 const EXPECTED_BEAD: &str = "bd-zeccr.2";
 
 const REQUIRED_SURFACES: &[&str] = &[

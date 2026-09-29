@@ -10,7 +10,7 @@
       "setup": [
         {
           "type": "create_file",
-          "path": ".pi/mcp.json",
+          "path": ".ra/mcp.json",
           "content": "{\"mcpServers\":{\"docs\":{\"command\":\"/pi-fixture-definitely-missing/docs-mcp\"}}}"
         }
       ],
@@ -20,7 +20,7 @@
       "expected": {
         "content_contains": [
           "\"name\": \"docs\"",
-          "\"provenance\": \".pi\"",
+          "\"provenance\": \".ra\"",
           "\"trust\": \"pending\"",
           "\"target\": \"<stdio>\""
         ],
@@ -29,7 +29,7 @@
           "servers": [
             {
               "name": "docs",
-              "provenance": ".pi",
+              "provenance": ".ra",
               "trust": "pending",
               "health": "not started",
               "tools": 0
@@ -45,7 +45,7 @@
       "setup": [
         {
           "type": "create_file",
-          "path": ".pi/mcp.json",
+          "path": ".ra/mcp.json",
           "content": "{\"mcpServers\":{\"guarded\":{\"command\":\"/pi-fixture-definitely-missing/guarded-mcp\"}}}"
         }
       ],

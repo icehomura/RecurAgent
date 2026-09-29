@@ -2,10 +2,10 @@
 mod tests {
     use async_trait::async_trait;
     use futures::Stream;
-    use pi::agent::{Agent, AgentConfig};
-    use pi::model::{CustomMessage, Message, UserContent, UserMessage};
-    use pi::provider::{Context, Provider, StreamOptions};
-    use pi::tools::ToolRegistry;
+    use ra::agent::{Agent, AgentConfig};
+    use ra::model::{CustomMessage, Message, UserContent, UserMessage};
+    use ra::provider::{Context, Provider, StreamOptions};
+    use ra::tools::ToolRegistry;
     use std::pin::Pin;
     use std::sync::Arc;
 
@@ -41,8 +41,8 @@ mod tests {
             &self,
             context: &Context<'_>,
             _options: &StreamOptions,
-        ) -> pi::error::Result<
-            Pin<Box<dyn Stream<Item = pi::error::Result<pi::model::StreamEvent>> + Send>>,
+        ) -> ra::error::Result<
+            Pin<Box<dyn Stream<Item = ra::error::Result<ra::model::StreamEvent>> + Send>>,
         > {
             let mut guard = self.context.lock().unwrap();
             *guard = Some(context.messages.to_vec());

@@ -97,7 +97,7 @@
       "text": "Inspect or update `scripts/build_completion_audit.py`"
     }
   ],
-  "schema": "pi.completion_audit.v1",
+  "schema": "ra.completion_audit.v1",
   "summary": {
     "contradiction": 0,
     "covered": 6,

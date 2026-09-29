@@ -10,10 +10,10 @@
 
 use asupersync::runtime::RuntimeBuilder;
 use futures::StreamExt;
-use pi::model::{Message, StreamEvent, UserContent, UserMessage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, StreamOptions};
-use pi::providers::create_provider;
+use ra::model::{Message, StreamEvent, UserContent, UserMessage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, StreamOptions};
+use ra::providers::create_provider;
 use std::collections::HashMap;
 
 const OLLAMA_BASE: &str = "http://127.0.0.1:11434/v1";

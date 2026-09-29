@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ci.preflight_lane.v1",
+  "schema": "ra.ci.preflight_lane.v1",
   "lane": "preflight",
   "generated_at": "2026-08-04T22:32:23.883Z",
   "verdict": "fail",

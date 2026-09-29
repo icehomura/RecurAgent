@@ -15,7 +15,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{Tool, ToolOutput};
+use ra::tools::{Tool, ToolOutput};
 use serde_json::json;
 
 fn finish_case(harness: &TestHarness, case: &str) {
@@ -44,7 +44,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -64,7 +64,7 @@ fn js_and_python_kernels_acceptance_cycle() {
     let case = "js_and_python_kernels_acceptance_cycle";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let tool = pi::eval::EvalTool::new(&root);
+    let tool = ra::eval::EvalTool::new(&root);
 
     // JS: const + mutate + top-level await across cells.
     let out = block_on_local(tool.execute(
@@ -138,7 +138,7 @@ fn kernel_crash_and_bridge_denial() {
         return;
     }
     let root = harness.temp_path(".");
-    let tool = pi::eval::EvalTool::new(&root);
+    let tool = ra::eval::EvalTool::new(&root);
 
     let out =
         block_on_local(tool.execute("c1", json!({"kernel": "python", "code": "y = 7"}), None))
@@ -190,7 +190,7 @@ fn registry_exposes_eval_by_default() {
     let case = "registry_exposes_eval_by_default";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let registry = pi::tools::ToolRegistry::new(&["eval"], &root, None::<&pi::config::Config>);
+    let registry = ra::tools::ToolRegistry::new(&["eval"], &root, None::<&ra::config::Config>);
     let names: Vec<&str> = registry.tools().iter().map(|tool| tool.name()).collect();
     harness
         .log()

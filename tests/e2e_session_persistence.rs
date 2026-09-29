@@ -14,25 +14,25 @@ use common::TestHarness;
 #[cfg(unix)]
 use common::tmux::{TmuxInstance, sh_escape};
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::cli::Cli;
-use pi::compaction::ResolvedCompactionSettings;
-use pi::config::Config;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::cli::Cli;
+use ra::compaction::ResolvedCompactionSettings;
+use ra::config::Config;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall, Usage,
     UserContent,
 };
-use pi::provider::{Context, Provider, StreamOptions};
+use ra::provider::{Context, Provider, StreamOptions};
 #[cfg(unix)]
-use pi::session::encode_cwd;
-use pi::session::{
+use ra::session::encode_cwd;
+use ra::session::{
     Session, SessionEntry, SessionMessage, SessionStoreKind, create_v2_sidecar_from_jsonl,
     migration_status,
 };
-use pi::session_index::SessionIndex;
-use pi::session_store_v2::SessionStoreV2;
-use pi::tools::ToolRegistry;
+use ra::session_index::SessionIndex;
+use ra::session_store_v2::SessionStoreV2;
+use ra::tools::ToolRegistry;
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 use std::collections::{BTreeMap, HashSet};
@@ -177,9 +177,9 @@ struct CliResult {
     duration: Duration,
 }
 
-const SESSION_STORE_CHAOS_HARNESS_SCHEMA: &str = "pi.session.store_chaos_harness.v1";
-const SESSION_STORE_CHAOS_WORKER_SCHEMA: &str = "pi.session.store_chaos_worker.v1";
-const SESSION_DIVERGENCE_REPORT_SCHEMA: &str = "pi.session.divergence_report.v1";
+const SESSION_STORE_CHAOS_HARNESS_SCHEMA: &str = "ra.session.store_chaos_harness.v1";
+const SESSION_STORE_CHAOS_WORKER_SCHEMA: &str = "ra.session.store_chaos_worker.v1";
+const SESSION_DIVERGENCE_REPORT_SCHEMA: &str = "ra.session.divergence_report.v1";
 
 #[derive(Debug, Clone)]
 struct SessionChaosWorkerSpec {
@@ -215,7 +215,7 @@ struct SessionChaosChildResult {
 }
 
 fn cli_binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn isolated_cli_env(harness: &TestHarness) -> BTreeMap<String, String> {
@@ -224,22 +224,22 @@ fn isolated_cli_env(harness: &TestHarness) -> BTreeMap<String, String> {
     let _ = std::fs::create_dir_all(&env_root);
 
     env.insert(
-        "PI_CODING_AGENT_DIR".to_string(),
+        "RECUR_AGENT_DIR".to_string(),
         env_root.join("agent").display().to_string(),
     );
     env.insert(
-        "PI_CONFIG_PATH".to_string(),
+        "RECUR_AGENT_CONFIG_PATH".to_string(),
         env_root.join("settings.json").display().to_string(),
     );
     env.insert(
-        "PI_SESSIONS_DIR".to_string(),
+        "RECUR_AGENT_SESSIONS_DIR".to_string(),
         env_root.join("sessions").display().to_string(),
     );
     env.insert(
-        "PI_PACKAGE_DIR".to_string(),
+        "RECUR_AGENT_PACKAGE_DIR".to_string(),
         env_root.join("packages").display().to_string(),
     );
-    env.insert("PI_TEST_MODE".to_string(), "1".to_string());
+    env.insert("RECUR_AGENT_TEST_MODE".to_string(), "1".to_string());
 
     env
 }
@@ -266,8 +266,8 @@ fn run_cli(
     command.env_remove("GROQ_API_KEY");
     command.env_remove("KIMI_API_KEY");
     command.env_remove("AZURE_OPENAI_API_KEY");
-    command.env_remove("PI_OPENROUTER_API_KEY");
-    command.env_remove("PI_AWS_ACCESS_KEY_ID");
+    command.env_remove("RECUR_AGENT_OPENROUTER_API_KEY");
+    command.env_remove("RECUR_AGENT_AWS_ACCESS_KEY_ID");
     command
         .args(args)
         .envs(env.clone())
@@ -360,7 +360,7 @@ fn session_divergence_report_path(
 
 fn file_sha256(path: &Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
-    Some(pi::package_manager::hex_encode(&Sha256::digest(&bytes)))
+    Some(ra::package_manager::hex_encode(&Sha256::digest(&bytes)))
 }
 
 fn file_size_bytes(path: &Path) -> Option<u64> {
@@ -486,12 +486,12 @@ fn spawn_session_store_chaos_child(
         .arg("--exact")
         .arg("session_store_chaos_worker_process_entrypoint")
         .arg("--nocapture")
-        .env("PI_SESSION_STORE_CHAOS_WORKER", "1")
-        .env("PI_SESSION_STORE_CHAOS_WORKER_ID", spec.id)
-        .env("PI_SESSION_STORE_CHAOS_BACKEND", spec.backend)
-        .env("PI_SESSION_STORE_CHAOS_INJECT", spec.inject)
-        .env("PI_SESSION_STORE_CHAOS_ROOT", sessions_root)
-        .env("PI_SESSION_STORE_CHAOS_ARTIFACT_DIR", artifact_dir)
+        .env("RECUR_AGENT_SESSION_STORE_CHAOS_WORKER", "1")
+        .env("RECUR_AGENT_SESSION_STORE_CHAOS_WORKER_ID", spec.id)
+        .env("RECUR_AGENT_SESSION_STORE_CHAOS_BACKEND", spec.backend)
+        .env("RECUR_AGENT_SESSION_STORE_CHAOS_INJECT", spec.inject)
+        .env("RECUR_AGENT_SESSION_STORE_CHAOS_ROOT", sessions_root)
+        .env("RECUR_AGENT_SESSION_STORE_CHAOS_ARTIFACT_DIR", artifact_dir)
         .current_dir(worker_cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -662,7 +662,7 @@ fn record_inline_json_artifact(harness: &TestHarness, name: &str, value: &Value)
     let bytes = serde_json::to_vec(value).expect("serialize inline JSON artifact");
     let path = harness.temp_path(name);
     std::fs::write(&path, &bytes).expect("write inline JSON artifact");
-    let sha256 = pi::package_manager::hex_encode(&Sha256::digest(&bytes));
+    let sha256 = ra::package_manager::hex_encode(&Sha256::digest(&bytes));
     let content_base64 = BASE64_STANDARD.encode(&bytes);
     harness
         .log()
@@ -775,15 +775,21 @@ fn run_persistence_failpoint_child(
         .arg("persistence_failpoint_worker_process_entrypoint")
         .arg("--nocapture")
         .arg("--test-threads=1")
-        .env("PI_SESSION_PERSISTENCE_TEST_WORKER", "1")
-        .env("PI_SESSION_PERSISTENCE_TEST_PATH", session_path)
-        .env("PI_SESSION_PERSISTENCE_TEST_BACKEND", backend)
-        .env("PI_SESSION_PERSISTENCE_TEST_FAILPOINT", failpoint)
-        .env("PI_SESSION_PERSISTENCE_TEST_FAILPOINT_ACTION", "hard_exit")
-        .env("PI_SESSION_PERSISTENCE_TEST_MARKER_PATH", marker_path)
-        .env("PI_SESSION_PERSISTENCE_TEST_MESSAGE", message)
+        .env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_WORKER", "1")
+        .env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_PATH", session_path)
+        .env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_BACKEND", backend)
+        .env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_FAILPOINT", failpoint)
         .env(
-            "PI_SESSION_PERSISTENCE_TEST_SAVE_MODE",
+            "RECUR_AGENT_SESSION_PERSISTENCE_TEST_FAILPOINT_ACTION",
+            "hard_exit",
+        )
+        .env(
+            "RECUR_AGENT_SESSION_PERSISTENCE_TEST_MARKER_PATH",
+            marker_path,
+        )
+        .env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_MESSAGE", message)
+        .env(
+            "RECUR_AGENT_SESSION_PERSISTENCE_TEST_SAVE_MODE",
             save_mode.unwrap_or("default"),
         )
         .stdin(Stdio::null())
@@ -817,15 +823,17 @@ fn run_persistence_failpoint_child(
 #[cfg(feature = "internal-persistence-fault-injection")]
 #[test]
 fn persistence_failpoint_worker_process_entrypoint() {
-    if std::env::var_os("PI_SESSION_PERSISTENCE_TEST_WORKER").is_none() {
+    if std::env::var_os("RECUR_AGENT_SESSION_PERSISTENCE_TEST_WORKER").is_none() {
         return;
     }
-    let session_path = PathBuf::from(required_chaos_env("PI_SESSION_PERSISTENCE_TEST_PATH"));
-    let backend = required_chaos_env("PI_SESSION_PERSISTENCE_TEST_BACKEND");
+    let session_path = PathBuf::from(required_chaos_env(
+        "RECUR_AGENT_SESSION_PERSISTENCE_TEST_PATH",
+    ));
+    let backend = required_chaos_env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_BACKEND");
     // Read only to fail fast when the parent omitted it; the backend consumes
     // the variable itself at the checkpoint.
-    let _failpoint = required_chaos_env("PI_SESSION_PERSISTENCE_TEST_FAILPOINT");
-    let message = required_chaos_env("PI_SESSION_PERSISTENCE_TEST_MESSAGE");
+    let _failpoint = required_chaos_env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_FAILPOINT");
+    let message = required_chaos_env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_MESSAGE");
 
     run_async_test(async {
         let mut session = Session::open(session_path.to_string_lossy().as_ref())
@@ -838,11 +846,12 @@ fn persistence_failpoint_worker_process_entrypoint() {
         // A dirty header forces the full-rewrite path; leaving it clean takes
         // the incremental append path. Defaults: JSONL rewrites, SQLite
         // appends; the save-mode variable selects the other path.
-        let rewrite = match std::env::var("PI_SESSION_PERSISTENCE_TEST_SAVE_MODE").as_deref() {
-            Ok("rewrite") => true,
-            Ok("append") => false,
-            _ => backend == "jsonl",
-        };
+        let rewrite =
+            match std::env::var("RECUR_AGENT_SESSION_PERSISTENCE_TEST_SAVE_MODE").as_deref() {
+                Ok("rewrite") => true,
+                Ok("append") => false,
+                _ => backend == "jsonl",
+            };
         if rewrite {
             session.set_model_header(Some(format!("failpoint-{backend}")), None, None);
         }
@@ -853,7 +862,7 @@ fn persistence_failpoint_worker_process_entrypoint() {
 
 #[test]
 fn session_store_chaos_worker_process_entrypoint() {
-    if std::env::var_os("PI_SESSION_STORE_CHAOS_WORKER").is_none() {
+    if std::env::var_os("RECUR_AGENT_SESSION_STORE_CHAOS_WORKER").is_none() {
         return;
     }
 
@@ -862,11 +871,13 @@ fn session_store_chaos_worker_process_entrypoint() {
 
 #[allow(clippy::too_many_lines)]
 fn run_session_store_chaos_worker_from_env() {
-    let worker_id = required_chaos_env("PI_SESSION_STORE_CHAOS_WORKER_ID");
-    let backend = required_chaos_env("PI_SESSION_STORE_CHAOS_BACKEND");
-    let inject = required_chaos_env("PI_SESSION_STORE_CHAOS_INJECT");
-    let sessions_root = PathBuf::from(required_chaos_env("PI_SESSION_STORE_CHAOS_ROOT"));
-    let artifact_dir = PathBuf::from(required_chaos_env("PI_SESSION_STORE_CHAOS_ARTIFACT_DIR"));
+    let worker_id = required_chaos_env("RECUR_AGENT_SESSION_STORE_CHAOS_WORKER_ID");
+    let backend = required_chaos_env("RECUR_AGENT_SESSION_STORE_CHAOS_BACKEND");
+    let inject = required_chaos_env("RECUR_AGENT_SESSION_STORE_CHAOS_INJECT");
+    let sessions_root = PathBuf::from(required_chaos_env("RECUR_AGENT_SESSION_STORE_CHAOS_ROOT"));
+    let artifact_dir = PathBuf::from(required_chaos_env(
+        "RECUR_AGENT_SESSION_STORE_CHAOS_ARTIFACT_DIR",
+    ));
     std::fs::create_dir_all(&sessions_root).expect("create chaos sessions root");
     std::fs::create_dir_all(&artifact_dir).expect("create chaos artifact dir");
 
@@ -914,7 +925,7 @@ fn run_session_store_chaos_worker_from_env() {
                 first_entry_id.clone(),
                 128,
                 Some(json!({
-                    "schema": "pi.session.store_chaos_compaction_fixture.v1",
+                    "schema": "ra.session.store_chaos_compaction_fixture.v1",
                     "workerId": worker_id,
                 })),
                 Some(false),
@@ -2132,7 +2143,7 @@ fn sqlite_fault_injection_flush_windows_preserve_integrity() {
         let mid_texts = user_texts_in_order(&reopened_mid.to_messages_for_current_path());
         assert_eq!(mid_texts, vec!["sqlite-base".to_string()]);
         assert_no_duplicate_user_texts(&mid_texts, "sqlite mid-flush window");
-        let mid_meta = pi::session_sqlite::load_session_meta(&stable_path)
+        let mid_meta = ra::session_sqlite::load_session_meta(&stable_path)
             .await
             .expect("load SQLite metadata after rollback recovery");
         assert_eq!(
@@ -2178,7 +2189,7 @@ fn sqlite_fault_injection_flush_windows_preserve_integrity() {
             "sqlite post-crash ordering mismatch"
         );
         assert_no_duplicate_user_texts(&post_texts, "sqlite post-flush window");
-        let post_meta = pi::session_sqlite::load_session_meta(&stable_path)
+        let post_meta = ra::session_sqlite::load_session_meta(&stable_path)
             .await
             .expect("load SQLite metadata after committed post-flush save");
         assert_eq!(
@@ -2303,7 +2314,7 @@ fn session_dir_override_and_env_sessions_path() {
     std::fs::create_dir_all(&env_sessions).expect("create env sessions dir");
     let mut env = isolated_cli_env(&harness);
     env.insert(
-        "PI_SESSIONS_DIR".to_string(),
+        "RECUR_AGENT_SESSIONS_DIR".to_string(),
         env_sessions.display().to_string(),
     );
 
@@ -2407,7 +2418,7 @@ fn explicit_session_flag_preserves_custom_session_root_for_index_updates() {
 
     run_async_test(async {
         let custom_root = harness.temp_path("custom-root");
-        let session_dir = custom_root.join(pi::session::encode_cwd(
+        let session_dir = custom_root.join(ra::session::encode_cwd(
             &std::env::current_dir().expect("current dir"),
         ));
         let session_path = session_dir.join("session.jsonl");
@@ -2514,7 +2525,7 @@ fn cli_continue_tmux_loads_existing_session() {
         cassette_dir.display().to_string(),
     );
     env.insert(
-        "PI_VCR_TEST_NAME".to_string(),
+        "RECUR_AGENT_VCR_TEST_NAME".to_string(),
         "e2e_continue_session".to_string(),
     );
     env.insert("ANTHROPIC_API_KEY".to_string(), "test-vcr-key".to_string());
@@ -2533,7 +2544,10 @@ fn cli_continue_tmux_loads_existing_session() {
     .expect("write cassette");
     harness.record_artifact("continue-cassette.json", &cassette_path);
 
-    let sessions_dir = PathBuf::from(env.get("PI_SESSIONS_DIR").expect("PI_SESSIONS_DIR"));
+    let sessions_dir = PathBuf::from(
+        env.get("RECUR_AGENT_SESSIONS_DIR")
+            .expect("RECUR_AGENT_SESSIONS_DIR"),
+    );
     let project_sessions = sessions_dir.join(encode_cwd(harness.temp_dir()));
     std::fs::create_dir_all(&project_sessions).expect("create project sessions dir");
     let session_file = project_sessions.join("2026-02-06T00-00-00.000Z_continue.jsonl");
@@ -2655,7 +2669,9 @@ fn cli_continue_tmux_loads_existing_session() {
             ));
             ctx.push((
                 "cassette_name".into(),
-                env.get("PI_VCR_TEST_NAME").cloned().unwrap_or_default(),
+                env.get("RECUR_AGENT_VCR_TEST_NAME")
+                    .cloned()
+                    .unwrap_or_default(),
             ));
             ctx.push(("cassette_path".into(), cassette_path.display().to_string()));
         });
@@ -2822,10 +2838,12 @@ fn jsonl_append_fault_windows_preserve_integrity() {
 #[cfg(feature = "internal-persistence-fault-injection")]
 #[test]
 fn setter_post_rename_worker_process_entrypoint() {
-    if std::env::var_os("PI_SESSION_SETTER_FAILPOINT_WORKER").is_none() {
+    if std::env::var_os("RECUR_AGENT_SESSION_SETTER_FAILPOINT_WORKER").is_none() {
         return;
     }
-    let session_path = PathBuf::from(required_chaos_env("PI_SESSION_PERSISTENCE_TEST_PATH"));
+    let session_path = PathBuf::from(required_chaos_env(
+        "RECUR_AGENT_SESSION_PERSISTENCE_TEST_PATH",
+    ));
     run_async_test(async {
         let session = Session::open(session_path.to_string_lossy().as_ref())
             .await
@@ -2838,17 +2856,17 @@ fn setter_post_rename_worker_process_entrypoint() {
             Arc::new(asupersync::sync::Mutex::new(session)),
         );
 
-        if std::env::var("PI_SESSION_SETTER_KIND").as_deref() == Ok("model") {
+        if std::env::var("RECUR_AGENT_SESSION_SETTER_KIND").as_deref() == Ok("model") {
             let auth_dir = tempfile::tempdir().expect("auth dir");
             let mut auth =
-                pi::auth::AuthStorage::load(auth_dir.path().join("auth.json")).expect("load auth");
+                ra::auth::AuthStorage::load(auth_dir.path().join("auth.json")).expect("load auth");
             auth.set(
                 "openai",
-                pi::auth::AuthCredential::ApiKey {
+                ra::auth::AuthCredential::ApiKey {
                     key: "openai-key".to_string(),
                 },
             );
-            agent_session.set_model_registry(pi::models::ModelRegistry::load(&auth, None));
+            agent_session.set_model_registry(ra::models::ModelRegistry::load(&auth, None));
             agent_session.set_auth_storage(auth);
 
             let err = agent_session
@@ -2868,7 +2886,7 @@ fn setter_post_rename_worker_process_entrypoint() {
             );
         } else {
             let err = agent_session
-                .set_thinking_level(pi::model::ThinkingLevel::High)
+                .set_thinking_level(ra::model::ThinkingLevel::High)
                 .await
                 .expect_err("both saves fail after their rename");
             assert!(err.is_session_persistence(), "{err}");
@@ -2937,11 +2955,11 @@ fn run_setter_post_rename_child(kind: &str) -> Session {
             .arg("setter_post_rename_worker_process_entrypoint")
             .arg("--nocapture")
             .arg("--test-threads=1")
-            .env("PI_SESSION_SETTER_FAILPOINT_WORKER", "1")
-            .env("PI_SESSION_SETTER_KIND", kind)
-            .env("PI_SESSION_PERSISTENCE_TEST_PATH", &stable_path)
+            .env("RECUR_AGENT_SESSION_SETTER_FAILPOINT_WORKER", "1")
+            .env("RECUR_AGENT_SESSION_SETTER_KIND", kind)
+            .env("RECUR_AGENT_SESSION_PERSISTENCE_TEST_PATH", &stable_path)
             .env(
-                "PI_SESSION_PERSISTENCE_TEST_FAILPOINT",
+                "RECUR_AGENT_SESSION_PERSISTENCE_TEST_FAILPOINT",
                 "jsonl_after_rename_before_parent_sync",
             )
             .stdin(Stdio::null())

@@ -59,8 +59,8 @@ fn rubric_schema_version_is_v1() {
     let rubric = load_rubric();
     assert_eq!(
         rubric["schema"].as_str().unwrap(),
-        "pi.qa.non_mock_rubric.v1",
-        "Rubric schema version must be pi.qa.non_mock_rubric.v1"
+        "ra.qa.non_mock_rubric.v1",
+        "Rubric schema version must be ra.qa.non_mock_rubric.v1"
     );
 }
 
@@ -357,7 +357,7 @@ fn failure_log_schema_has_required_fields() {
 
     assert_eq!(
         schema["schema_id"].as_str().unwrap(),
-        "pi.test.failure_log.v1"
+        "ra.test.failure_log.v1"
     );
 
     let fields = schema["fields"]

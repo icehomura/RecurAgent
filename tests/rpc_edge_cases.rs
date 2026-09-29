@@ -17,18 +17,18 @@
 mod common;
 
 use common::TestHarness;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::auth::AuthStorage;
-use pi::config::Config;
-use pi::http::client::Client;
-use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
-use pi::provider::Provider;
-use pi::providers::openai::OpenAIProvider;
-use pi::resources::ResourceLoader;
-use pi::rpc::{RpcOptions, run};
-use pi::session::{Session, SessionMessage};
-use pi::tools::ToolRegistry;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::auth::AuthStorage;
+use ra::config::Config;
+use ra::http::client::Client;
+use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
+use ra::provider::Provider;
+use ra::providers::openai::OpenAIProvider;
+use ra::resources::ResourceLoader;
+use ra::rpc::{RpcOptions, run};
+use ra::session::{Session, SessionMessage};
+use ra::tools::ToolRegistry;
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::Value;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -56,7 +56,7 @@ fn build_agent_session(session: Session, cassette_dir: &Path) -> AgentSession {
         agent,
         session,
         false,
-        pi::compaction::ResolvedCompactionSettings::default(),
+        ra::compaction::ResolvedCompactionSettings::default(),
     )
 }
 

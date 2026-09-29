@@ -4,7 +4,7 @@
       "read_only_probe"
     ],
     "decision": "pause_or_surface_blocker",
-    "schema": "pi.swarm.action_plan.v1",
+    "schema": "ra.swarm.action_plan.v1",
     "source_action": "fail_closed",
     "status": "blocked"
   },
@@ -46,7 +46,7 @@
         "POLICY-rch_mutation"
       ],
       "requires_operator_ids": [],
-      "schema": "pi.swarm.work_admission_dry_run_executor.v1",
+      "schema": "ra.swarm.work_admission_dry_run_executor.v1",
       "summary": {
         "blocked": 1,
         "never_execute": 6,
@@ -55,7 +55,7 @@
       },
       "would_execute_ids": []
     },
-    "schema": "pi.swarm.work_admission_gate.v1",
+    "schema": "ra.swarm.work_admission_gate.v1",
     "status": "blocked"
   }
 }

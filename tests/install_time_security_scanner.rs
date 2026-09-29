@@ -5,12 +5,12 @@
 
 mod common;
 
-use pi::extension_preflight::{
+use ra::extension_preflight::{
     INSTALL_TIME_RISK_SCHEMA, InstallRecommendation, InstallTimeRiskReport, PreflightVerdict,
     RiskTier, SECURITY_RULEBOOK_VERSION, SECURITY_SCAN_SCHEMA, SecurityRuleId, SecurityScanReport,
     SecurityScanner, classify_extension_source, security_evidence_ledger_jsonl,
 };
-use pi::extensions::ExtensionPolicy;
+use ra::extensions::ExtensionPolicy;
 
 // ============================================================================
 // Helpers
@@ -477,7 +477,7 @@ fn evidence_ledger_produces_valid_jsonl() {
     assert_eq!(lines.len(), r.findings.len());
     for line in &lines {
         let entry: serde_json::Value = serde_json::from_str(line).unwrap();
-        assert_eq!(entry["schema"], "pi.ext.security_evidence_ledger.v1");
+        assert_eq!(entry["schema"], "ra.ext.security_evidence_ledger.v1");
         assert_eq!(entry["extension_id"], "test-ext");
     }
 }

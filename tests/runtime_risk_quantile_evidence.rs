@@ -9,14 +9,14 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     ExtensionManager, ExtensionPolicy, ExtensionPolicyMode, HostCallContext, HostCallPayload,
     RuntimeRiskActionValue, RuntimeRiskCalibrationConfig, RuntimeRiskConfig,
     calibrate_runtime_risk_from_ledger, dispatch_host_call_shared,
     replay_runtime_risk_ledger_artifact, verify_runtime_risk_ledger_artifact,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -53,7 +53,7 @@ fn write_env_artifact(harness: &TestHarness, test_name: &str) -> serde_json::Val
         "rust_version": env!("CARGO_PKG_VERSION"),
         "target": std::env::consts::ARCH,
         "os": std::env::consts::OS,
-        "pi_test_mode": std::env::var("PI_TEST_MODE").unwrap_or_default(),
+        "pi_test_mode": std::env::var("RECUR_AGENT_TEST_MODE").unwrap_or_default(),
         "timestamp_utc": chrono_like_timestamp(),
     });
     let path = harness.temp_path("env.json");
@@ -69,7 +69,7 @@ fn write_manifest_artifact(
     artifacts: &BTreeMap<String, String>,
 ) {
     let manifest = json!({
-        "schema": "pi.ext.quantile_evidence.manifest.v1",
+        "schema": "ra.ext.quantile_evidence.manifest.v1",
         "test_name": test_name,
         "bead_id": "bd-xqipg",
         "artifacts": artifacts,

@@ -5,7 +5,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-INSTALLER="${PI_INSTALLER_TEST_SOURCE:-$ROOT/install.sh}"
+INSTALLER="${RECUR_AGENT_INSTALLER_TEST_SOURCE:-$ROOT/install.sh}"
 set --
 # shellcheck source=../install.sh
 source "$INSTALLER"
@@ -19,7 +19,7 @@ TEST_CASE=""
 BUILD_MODE=success
 GIT_MODE=success
 OWNER=Dicklesworthstone
-REPO=pi_agent_rust
+REPO=recur_agent
 VERSION=v0.0.0-test
 
 fail() { printf 'FAIL: %s\nFixtures: %s\n' "$*" "$TEST_ROOT" >&2; exit 1; }
@@ -44,8 +44,8 @@ cargo() {
     missing) return 0 ;;
   esac
   mkdir -p "$target_dir/release"
-  printf '#!/usr/bin/env bash\nprintf "fresh fixture binary\\n"\n' > "$target_dir/release/pi${EXE_EXT}"
-  chmod +x "$target_dir/release/pi${EXE_EXT}"
+  printf '#!/usr/bin/env bash\nprintf "fresh fixture binary\\n"\n' > "$target_dir/release/ra${EXE_EXT}"
+  chmod +x "$target_dir/release/ra${EXE_EXT}"
   printf 'fixture build output must stay on stderr\n'
 }
 
@@ -55,7 +55,7 @@ git() {
   local destination="" arg=""
   for arg in "$@"; do destination="$arg"; done
   mkdir -p "$destination"
-  printf '[package]\nname = "pi_agent_rust"\n' > "$destination/Cargo.toml"
+  printf '[package]\nname = "recur_agent"\n' > "$destination/Cargo.toml"
 }
 
 new_case() {
@@ -68,7 +68,7 @@ new_case() {
   GIT_MODE=success
   unset CARGO_TARGET_DIR
   mkdir -p "$SOURCE_DIR/.cargo" "$TMP"
-  printf '[package]\nname = "pi_agent_rust"\n' > "$SOURCE_DIR/Cargo.toml"
+  printf '[package]\nname = "recur_agent"\n' > "$SOURCE_DIR/Cargo.toml"
 }
 
 expect_success() {
@@ -84,41 +84,41 @@ expect_success() {
 }
 
 new_case default
-expect_success "$SOURCE_DIR/target/release/pi"
+expect_success "$SOURCE_DIR/target/release/ra"
 if grep -Fxq -- --offline "$TEST_CASE/cargo.args"; then fail "online build forced offline"; fi
 
 new_case environment
 export CARGO_TARGET_DIR="$TEST_CASE/shared cache with spaces"
-expect_success "$SOURCE_DIR/target/release/pi"
+expect_success "$SOURCE_DIR/target/release/ra"
 [ ! -e "$CARGO_TARGET_DIR" ] || fail "source install wrote into shared target directory"
 
 new_case configuration
 printf '[build]\ntarget-dir = "%s"\n' "$TEST_CASE/configured cache" > "$SOURCE_DIR/.cargo/config.toml"
-expect_success "$SOURCE_DIR/target/release/pi"
+expect_success "$SOURCE_DIR/target/release/ra"
 [ ! -e "$TEST_CASE/configured cache" ] || fail "source install used configured target directory"
 assert_arg --target-dir
 assert_arg "$SOURCE_DIR/target"
 
 new_case offline
 OFFLINE=1
-expect_success "$SOURCE_DIR/target/release/pi"
+expect_success "$SOURCE_DIR/target/release/ra"
 assert_arg --offline
 [ ! -e "$TEST_CASE/git.args" ] || fail "local offline build attempted a clone"
 
 new_case windows_suffix
 EXE_EXT=.exe
-expect_success "$SOURCE_DIR/target/release/pi.exe"
+expect_success "$SOURCE_DIR/target/release/ra.exe"
 
 new_case failed_build_with_stale_binary
 mkdir -p "$SOURCE_DIR/target/release"
-printf 'old binary must survive\n' > "$SOURCE_DIR/target/release/pi"
-chmod +x "$SOURCE_DIR/target/release/pi"
+printf 'old binary must survive\n' > "$SOURCE_DIR/target/release/ra"
+chmod +x "$SOURCE_DIR/target/release/ra"
 BUILD_MODE=fail
 # The conditional intentionally disables errexit inside build_from_source.
 if output="$(build_from_source 2> "$TEST_CASE/stderr")"; then fail "failed build returned stale binary"; fi
 [ -z "$output" ] || fail "failed build returned an artifact path"
 grep -Fq 'Source build failed' "$TEST_CASE/stderr" || fail "missing build failure diagnostic"
-grep -Fxq 'old binary must survive' "$SOURCE_DIR/target/release/pi" || fail "stale binary was modified"
+grep -Fxq 'old binary must survive' "$SOURCE_DIR/target/release/ra" || fail "stale binary was modified"
 
 new_case missing_binary
 BUILD_MODE=missing
@@ -127,7 +127,7 @@ if output="$(build_from_source 2> "$TEST_CASE/stderr")"; then fail "missing bina
 
 new_case cloned_source
 SOURCE_DIR=""
-expect_success "$TMP/src/target/release/pi"
+expect_success "$TMP/src/target/release/ra"
 [ -f "$TEST_CASE/git.args" ] || fail "source acquisition was skipped"
 
 new_case failed_clone

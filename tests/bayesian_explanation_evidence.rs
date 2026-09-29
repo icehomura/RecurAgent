@@ -10,14 +10,14 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     ExtensionManager, ExtensionPolicy, ExtensionPolicyMode, HostCallContext, HostCallPayload,
     RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION, RuntimeRiskCalibrationConfig, RuntimeRiskConfig,
     calibrate_runtime_risk_from_ledger, dispatch_host_call_shared,
     replay_runtime_risk_ledger_artifact, verify_runtime_risk_ledger_artifact,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -74,7 +74,7 @@ fn write_manifest_artifact(
     artifacts: &BTreeMap<String, String>,
 ) {
     let manifest = json!({
-        "schema": "pi.ext.explanation_evidence.manifest.v1",
+        "schema": "ra.ext.explanation_evidence.manifest.v1",
         "test_name": test_name,
         "bead_id": "bd-3nvpz",
         "artifacts": artifacts,

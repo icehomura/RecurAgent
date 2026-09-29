@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "print_stdin_pipe",
   "surface": "print_stdin",
   "description": "Print mode with stdin pipe: content piped to provider",

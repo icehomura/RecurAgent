@@ -21,7 +21,7 @@
       "expected": {
         "content_contains": ["[1] (lesson): Remote verification must remain fail-closed."],
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "query": "Remote verification"
         },
         "details_contains": ["Remote verification must remain fail-closed."]
@@ -46,7 +46,7 @@
         "content_exact": "No memories match 'Boundary sentinel'.",
         "content_not_contains": ["Boundary sentinel memory."],
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "query": "Boundary sentinel",
           "memories": []
         }

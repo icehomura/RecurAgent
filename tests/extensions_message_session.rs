@@ -6,8 +6,8 @@
 //! integration. Session-dependent tests use real `SessionHandle` backed by an
 //! in-memory `Session`, exercising the full session persistence plumbing.
 
-use pi::extensions::{ExtensionManager, ExtensionSession, PROTOCOL_VERSION, RegisterPayload};
-use pi::session::{Session, SessionHandle};
+use ra::extensions::{ExtensionManager, ExtensionSession, PROTOCOL_VERSION, RegisterPayload};
+use ra::session::{Session, SessionHandle};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ fn create_test_session() -> SessionHandle {
 
 // Assertion helper; consuming the Result keeps the many call sites terse.
 #[allow(clippy::needless_pass_by_value)]
-fn assert_session_action_ok(result: pi::error::Result<()>, operation: &str) {
+fn assert_session_action_ok(result: ra::error::Result<()>, operation: &str) {
     assert!(result.is_ok(), "{operation} failed: {result:?}");
 }
 

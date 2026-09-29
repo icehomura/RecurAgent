@@ -1,5 +1,5 @@
 Swarm Replay Preview
-schema: pi.swarm.replay_preview.v1
+schema: ra.swarm.replay_preview.v1
 trace: golden-swarm-replay-normalized
 events: 2 replayed, 2 snapshots
 sources: 11 (missing_sources)

@@ -1,8 +1,8 @@
 #![allow(clippy::too_many_lines)]
 
-use pi::model::ContentBlock;
-use pi::sse::SseParser;
-use pi::tools::{
+use ra::model::ContentBlock;
+use ra::sse::SseParser;
+use ra::tools::{
     BashTool, EditTool, FindTool, GrepTool, LsTool, ReadTool, Tool, ToolOutput, ToolUpdate,
     WriteTool, truncate_head, truncate_tail,
 };
@@ -57,11 +57,11 @@ fn assert_not_contains(haystack: &str, needle: &str, scenario_id: &str) {
     );
 }
 
-async fn execute<T: Tool + ?Sized>(tool: &T, input: Value) -> pi::PiResult<ToolOutput> {
+async fn execute<T: Tool + ?Sized>(tool: &T, input: Value) -> ra::PiResult<ToolOutput> {
     tool.execute("g09-tool-io", input, None).await
 }
 
-async fn execute_text<T: Tool + ?Sized>(tool: &T, input: Value) -> pi::PiResult<String> {
+async fn execute_text<T: Tool + ?Sized>(tool: &T, input: Value) -> ra::PiResult<String> {
     execute(tool, input)
         .await
         .map(|output| output_text(&output))
@@ -71,7 +71,7 @@ fn write_fixture(path: impl AsRef<Path>, content: &str) {
     std::fs::write(path, content).expect("write fixture file");
 }
 
-async fn run_scenario(scenario: &Scenario) -> pi::PiResult<()> {
+async fn run_scenario(scenario: &Scenario) -> ra::PiResult<()> {
     let temp_dir = tempfile::tempdir().expect("create isolated G09 scenario directory");
     let root = temp_dir.path();
 
@@ -155,10 +155,13 @@ async fn run_scenario(scenario: &Scenario) -> pi::PiResult<()> {
             let tool = BashTool::with_shell(
                 root,
                 None,
-                Some("export PI_G09_PREFIXED=from-prefix".to_string()),
+                Some("export RECUR_AGENT_G09_PREFIXED=from-prefix".to_string()),
             );
-            let output =
-                execute_text(&tool, json!({"command": "printf \"$PI_G09_PREFIXED\\n\""})).await?;
+            let output = execute_text(
+                &tool,
+                json!({"command": "printf \"$RECUR_AGENT_G09_PREFIXED\\n\""}),
+            )
+            .await?;
             assert_contains(&output, "from-prefix", &scenario.id);
         }
         "bash_line_truncation_details" => {

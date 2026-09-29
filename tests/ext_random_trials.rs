@@ -4,33 +4,33 @@
 //! Selects a deterministic random subset from the Rust-N/A pool and runs
 //! them through the conformance harness. The default test lane is a bounded
 //! one-extension smoke run; operators can opt into broader batches with
-//! `PI_EXT_RANDOM_N`. Results are written as JSONL logs and a summary manifest.
+//! `RECUR_AGENT_EXT_RANDOM_N`. Results are written as JSONL logs and a summary manifest.
 //!
 //! # Environment Variables
-//! - `PI_EXT_RANDOM_SEED` - u64 seed for deterministic selection (default: 42)
-//! - `PI_EXT_RANDOM_N` - sample size (default: 1; use 20 for the legacy batch)
-//! - `PI_EXT_RANDOM_FILTER` - optional `tier:1-3` or `source:community` filter
-//! - `PI_EXT_RANDOM_IDS` - optional comma-separated explicit ID list (bypasses selector)
-//! - `PI_EXT_RANDOM_OUTPUT_DIR` - optional output directory (default: `$TMPDIR/pi_agent_rust/...`)
+//! - `RECUR_AGENT_EXT_RANDOM_SEED` - u64 seed for deterministic selection (default: 42)
+//! - `RECUR_AGENT_EXT_RANDOM_N` - sample size (default: 1; use 20 for the legacy batch)
+//! - `RECUR_AGENT_EXT_RANDOM_FILTER` - optional `tier:1-3` or `source:community` filter
+//! - `RECUR_AGENT_EXT_RANDOM_IDS` - optional comma-separated explicit ID list (bypasses selector)
+//! - `RECUR_AGENT_EXT_RANDOM_OUTPUT_DIR` - optional output directory (default: `$TMPDIR/recur_agent/...`)
 //!
 //! # Smoke Run
 //! ```sh
-//! PI_EXT_RANDOM_SEED=42 PI_EXT_RANDOM_N=1 \
+//! RECUR_AGENT_EXT_RANDOM_SEED=42 RECUR_AGENT_EXT_RANDOM_N=1 \
 //!   rch exec -- cargo test --features ext-conformance --test ext_random_trials random_trials_batch -- --nocapture
 //! ```
 //!
 //! # Wider Opt-In Batch
 //! ```sh
-//! PI_EXT_RANDOM_SEED=42 PI_EXT_RANDOM_N=20 \
+//! RECUR_AGENT_EXT_RANDOM_SEED=42 RECUR_AGENT_EXT_RANDOM_N=20 \
 //!   rch exec -- cargo test --features ext-conformance --test ext_random_trials random_trials_batch -- --nocapture
 //! ```
 #![allow(clippy::too_many_lines, clippy::needless_raw_string_hashes)]
 
 mod common;
 
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -38,7 +38,7 @@ use std::sync::{Arc, OnceLock};
 
 const DEFAULT_RANDOM_SEED: u64 = 42;
 const DEFAULT_RANDOM_SAMPLE_SIZE: usize = 1;
-const RANDOM_OUTPUT_DIR_ENV: &str = "PI_EXT_RANDOM_OUTPUT_DIR";
+const RANDOM_OUTPUT_DIR_ENV: &str = "RECUR_AGENT_EXT_RANDOM_OUTPUT_DIR";
 
 // ===========================================================================
 // SplitMix64 PRNG (same as ext_conformance_selector.rs)
@@ -153,7 +153,7 @@ fn output_dir_from_override(override_dir: Option<&str>) -> PathBuf {
     }
 
     std::env::temp_dir()
-        .join("pi_agent_rust")
+        .join("recur_agent")
         .join("ext_conformance")
         .join("random_trials")
 }
@@ -461,7 +461,7 @@ fn run_trial(ext_id: &str) -> TrialResult {
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -694,16 +694,16 @@ struct TrialConfig {
 
 fn trial_config_from_env() -> TrialConfig {
     TrialConfig {
-        seed: std::env::var("PI_EXT_RANDOM_SEED")
+        seed: std::env::var("RECUR_AGENT_EXT_RANDOM_SEED")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(DEFAULT_RANDOM_SEED),
-        sample_size: std::env::var("PI_EXT_RANDOM_N")
+        sample_size: std::env::var("RECUR_AGENT_EXT_RANDOM_N")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(DEFAULT_RANDOM_SAMPLE_SIZE),
-        filter_str: std::env::var("PI_EXT_RANDOM_FILTER").unwrap_or_default(),
-        explicit_ids: std::env::var("PI_EXT_RANDOM_IDS").ok(),
+        filter_str: std::env::var("RECUR_AGENT_EXT_RANDOM_FILTER").unwrap_or_default(),
+        explicit_ids: std::env::var("RECUR_AGENT_EXT_RANDOM_IDS").ok(),
     }
 }
 
@@ -792,7 +792,7 @@ fn run_random_trials_with_config(config: &TrialConfig) -> TrialRun {
     };
 
     TrialRun {
-        schema: "pi.ext.random_trials.v1".to_string(),
+        schema: "ra.ext.random_trials.v1".to_string(),
         seed: config.seed,
         sample_size: config.sample_size,
         filter_str: config.filter_str.clone(),
@@ -869,7 +869,7 @@ fn write_trial_output(run: &TrialRun) -> TrialOutputPaths {
 /// Run a batch of random extension trials.
 ///
 /// Defaults to a one-extension deterministic smoke lane. Increase
-/// `PI_EXT_RANDOM_N` for a wider opt-in batch.
+/// `RECUR_AGENT_EXT_RANDOM_N` for a wider opt-in batch.
 #[test]
 fn random_trials_batch() {
     let run = run_random_trials();
@@ -939,7 +939,7 @@ fn output_dir_defaults_to_tmpdir_backed_path() {
     assert!(dir.starts_with(std::env::temp_dir()));
     assert!(
         dir.ends_with(
-            Path::new("pi_agent_rust")
+            Path::new("recur_agent")
                 .join("ext_conformance")
                 .join("random_trials")
         )

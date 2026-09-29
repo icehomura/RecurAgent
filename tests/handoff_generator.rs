@@ -1,11 +1,11 @@
 //! Tests for the structured cross-session/cross-agent handoff generator (`bd-cv653.3.17`).
 
-use pi::handoff::{
+use ra::handoff::{
     Decision, FailedApproach, FileTouched, HANDOFF_SCHEMA_V1, HandoffDocument, HandoffGenerator,
     HandoffTarget,
 };
-use pi::model::{AssistantMessage, ContentBlock, TextContent, ToolCall, UserContent};
-use pi::session::{CompactionEntry, EntryBase, MessageEntry, SessionEntry, SessionMessage};
+use ra::model::{AssistantMessage, ContentBlock, TextContent, ToolCall, UserContent};
+use ra::session::{CompactionEntry, EntryBase, MessageEntry, SessionEntry, SessionMessage};
 use std::fs;
 use tempfile::tempdir;
 
@@ -56,7 +56,7 @@ fn test_handoff_schema_and_metadata() {
     let Ok(json_val) = serde_json::to_value(&doc) else {
         return;
     };
-    assert_eq!(json_val["schema"], "pi.handoff.v1");
+    assert_eq!(json_val["schema"], "ra.handoff.v1");
     assert_eq!(json_val["session_id"], "test-session-001");
 }
 

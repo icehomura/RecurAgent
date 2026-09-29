@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const OPPORTUNITY_MATRIX_SCHEMA: &str = "pi.perf.opportunity_matrix.v1";
+const OPPORTUNITY_MATRIX_SCHEMA: &str = "ra.perf.opportunity_matrix.v1";
 const PRACTICAL_FINISH_CHECKPOINT_ARTIFACT: &str =
     "tests/full_suite_gate/practical_finish_checkpoint.json";
 const EXTENSION_REMEDIATION_BACKLOG_ARTIFACT: &str =
@@ -31,7 +31,7 @@ const CANONICAL_223_FAILURE_TRIO: [&str; 3] = [
     "npm/aliou-pi-synthetic",
     "npm/pi-package-test",
 ];
-const GENERATE_QA_CERTIFICATION_DOSSIER_ENV: &str = "PI_GENERATE_QA_CERTIFICATION_DOSSIER";
+const GENERATE_QA_CERTIFICATION_DOSSIER_ENV: &str = "RECUR_AGENT_GENERATE_QA_CERTIFICATION_DOSSIER";
 
 fn qa_certification_dossier_generation_requested() -> bool {
     let raw = std::env::var(GENERATE_QA_CERTIFICATION_DOSSIER_ENV).ok();
@@ -1041,7 +1041,7 @@ fn build_extension_remediation_backlog(
     }
 
     ExtensionRemediationBacklog {
-        schema: "pi.qa.extension_remediation_backlog.v1".to_string(),
+        schema: "ra.qa.extension_remediation_backlog.v1".to_string(),
         generated_at: generated_at.to_string(),
         source_inputs: ExtensionRemediationInputs {
             certification_dossier: "tests/full_suite_gate/certification_dossier.json".to_string(),
@@ -1449,7 +1449,7 @@ fn certification_dossier() {
 
     // ── Build dossier ──
     let dossier = CertificationDossier {
-        schema: "pi.qa.certification_dossier.v1".to_string(),
+        schema: "ra.qa.certification_dossier.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         bead: "bd-1f42.8.10".to_string(),
         verdict: overall_verdict.to_string(),
@@ -1733,7 +1733,7 @@ fn certification_dossier() {
 
     // ── Assertions ──
     let reloaded = dossier_value;
-    assert_eq!(reloaded["schema"], "pi.qa.certification_dossier.v1");
+    assert_eq!(reloaded["schema"], "ra.qa.certification_dossier.v1");
     assert!(!reloaded["generated_at"].as_str().unwrap_or("").is_empty());
 
     // Both closure questions must have an answer
@@ -1768,7 +1768,7 @@ fn certification_dossier() {
         .expect("extension remediation backlog must be valid JSON");
     assert_eq!(
         backlog_reloaded["schema"],
-        "pi.qa.extension_remediation_backlog.v1"
+        "ra.qa.extension_remediation_backlog.v1"
     );
     assert_eq!(
         backlog_reloaded["summary"]["total_non_pass_extensions"]
@@ -2367,7 +2367,7 @@ fn remediation_backlog_artifact_shape_is_reproducible() {
     );
 
     let parsed: Value = serde_json::from_str(&json_a).expect("parse reproducible backlog");
-    assert_eq!(parsed["schema"], "pi.qa.extension_remediation_backlog.v1");
+    assert_eq!(parsed["schema"], "ra.qa.extension_remediation_backlog.v1");
     assert_eq!(
         parsed["entries"].as_array().map_or(0, std::vec::Vec::len),
         2

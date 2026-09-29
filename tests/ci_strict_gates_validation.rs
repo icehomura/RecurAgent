@@ -266,7 +266,7 @@ fn ci_operator_runbook_retains_parameter_sweeps_signature_playbook_tokens() {
         "tests/perf/reports/phase1_matrix_validation.json",
         "rch exec -- cargo test --test release_evidence_gate --",
         "parameter_sweeps_contract_links_phase1_matrix_and_readiness --nocapture --exact",
-        "Enforce artifact schema `pi.perf.parameter_sweeps.v1`.",
+        "Enforce artifact schema `ra.perf.parameter_sweeps.v1`.",
         "source_identity",
         "phase1_matrix_validation",
         "status = ready",
@@ -445,7 +445,7 @@ fn full_suite_gate_wires_extension_remediation_backlog_contract() {
     for token in [
         EXT_REMEDIATION_GATE_ID,
         "check_extension_remediation_backlog_artifact",
-        "pi.qa.extension_remediation_backlog.v1",
+        "ra.qa.extension_remediation_backlog.v1",
     ] {
         assert!(
             gate.contains(token),
@@ -460,7 +460,7 @@ fn full_suite_gate_wires_parameter_sweeps_integrity_contract() {
     for token in [
         PARAMETER_SWEEPS_GATE_ID,
         "check_parameter_sweeps_artifact",
-        "pi.perf.parameter_sweeps.v1",
+        "ra.perf.parameter_sweeps.v1",
     ] {
         assert!(
             gate.contains(token),

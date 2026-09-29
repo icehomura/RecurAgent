@@ -477,7 +477,7 @@ cargo test --test ext_conformance_scenarios --features ext-conformance
 cargo test --test extensions_policy_negative
 
 # 2. Generate this consolidated report
-PI_GENERATE_CONFORMANCE_REPORT=1 cargo test --locked --test conformance_report generate_conformance_report -- --exact --nocapture
+RECUR_AGENT_GENERATE_CONFORMANCE_REPORT=1 cargo test --locked --test conformance_report generate_conformance_report -- --exact --nocapture
 ```
 
 Report files:

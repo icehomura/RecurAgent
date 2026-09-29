@@ -15,11 +15,11 @@ mod common;
 
 use common::TestHarness;
 use futures::StreamExt;
-use pi::http::client::Client;
-use pi::model::{Message, StopReason, StreamEvent, ThinkingLevel, UserContent, UserMessage};
-use pi::provider::{CacheRetention, Context, Provider, StreamOptions, ThinkingBudgets, ToolDef};
-use pi::providers::anthropic::AnthropicProvider;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::http::client::Client;
+use ra::model::{Message, StopReason, StreamEvent, ThinkingLevel, UserContent, UserMessage};
+use ra::provider::{CacheRetention, Context, Provider, StreamOptions, ThinkingBudgets, ToolDef};
+use ra::providers::anthropic::AnthropicProvider;
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;

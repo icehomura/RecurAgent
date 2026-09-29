@@ -9,7 +9,7 @@ const FIXTURE: &str = include_str!("fixtures/rpc_extension_ui_scenarios.json");
 #[test]
 fn rpc_extension_ui_fixture_has_required_parity_scenarios() {
     let fixture: Value = serde_json::from_str(FIXTURE).expect("valid extension UI scenario JSON");
-    assert_eq!(fixture["schema"], "pi.rpc.extension_ui_scenarios.v1");
+    assert_eq!(fixture["schema"], "ra.rpc.extension_ui_scenarios.v1");
     assert_eq!(fixture["bead"], "bd-lnmtp.2.4");
     assert_eq!(
         fixture["wire"]["request_event_type"],

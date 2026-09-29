@@ -1,4 +1,4 @@
-//! Common test infrastructure for `pi_agent_rust`.
+//! Common test infrastructure for `recur_agent`.
 //!
 //! This module provides shared utilities for integration and E2E tests:
 //! - Verbose logging infrastructure with auto-dump on test failure
@@ -87,15 +87,15 @@ pub fn apply_prompt_cache_wire_shape(body: &mut serde_json::Value) {
     }
 }
 
-/// Seed interactive test configs so `PiApp::new()` stays hermetic.
+/// Seed interactive test configs so `RaApp::new()` stays hermetic.
 ///
 /// Startup changelog bootstrapping persists `lastChangelogVersion` on first run. Tests that use
 /// `Config::default()` do not want to mutate the real user config, so we mark the current version
 /// as already seen unless a test intentionally overrides it.
 #[allow(dead_code)]
-pub fn hermetic_interactive_config(mut config: pi::config::Config) -> pi::config::Config {
+pub fn hermetic_interactive_config(mut config: ra::config::Config) -> ra::config::Config {
     if config.last_changelog_version.is_none() {
-        config.last_changelog_version = Some(pi::platform::VERSION.to_string());
+        config.last_changelog_version = Some(ra::platform::VERSION.to_string());
     }
     config
 }

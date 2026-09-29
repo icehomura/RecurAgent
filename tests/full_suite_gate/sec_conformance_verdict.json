@@ -1,5 +1,5 @@
 {
-  "schema": "pi.sec.compatibility_conformance.v1",
+  "schema": "ra.sec.compatibility_conformance.v1",
   "generated_at": "2026-08-04T23:06:49.419Z",
   "bead": "bd-1a2cu",
   "verdict": "pass",

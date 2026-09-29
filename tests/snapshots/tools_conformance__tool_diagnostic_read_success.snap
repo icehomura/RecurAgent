@@ -17,7 +17,7 @@ expression: pretty
     "output_text": "    1→alpha\n    2→beta\n    3→gamma"
   },
   "cwd": "<WORKSPACE_ROOT>",
-  "schema": "pi.test.tool_diagnostic.v1",
+  "schema": "ra.test.tool_diagnostic.v1",
   "test": "e2e_read_diagnostic_artifact_matches_golden_contract",
   "timing_ms": {
     "diagnostics_capture": 0,

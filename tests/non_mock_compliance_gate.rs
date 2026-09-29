@@ -197,7 +197,7 @@ fn extension_stub_reconciliation_declares_disposition_policy() {
 
     assert_eq!(
         reconciliation["schema"].as_str(),
-        Some("pi.qa.extension_stub_placeholder_reconciliation.v1"),
+        Some("ra.qa.extension_stub_placeholder_reconciliation.v1"),
         "extension stub reconciliation must declare a stable schema"
     );
     assert_eq!(
@@ -520,7 +520,7 @@ fn no_vcr_imports_in_unit_suite_files() {
     let unit_section = &classification[unit_start..unit_end];
 
     let vcr_imports = [
-        "use pi::vcr",
+        "use ra::vcr",
         "VcrRecorder",
         "VcrMode",
         "cassette_root",
@@ -700,7 +700,7 @@ fn rubric_modules_have_corresponding_test_evidence() {
     // Optionally write compliance report.
     if std::env::var("COMPLIANCE_REPORT").is_ok() {
         let report = json!({
-            "schema": "pi.qa.compliance_report.v1",
+            "schema": "ra.qa.compliance_report.v1",
             "bead_id": "bd-1f42.2.6",
             "generated_at": chrono_lite_now(),
             "modules": compliance_entries,
@@ -729,7 +729,7 @@ fn rubric_defines_failure_log_schema() {
 
     assert_eq!(
         schema["schema_id"].as_str().unwrap(),
-        "pi.test.failure_log.v1"
+        "ra.test.failure_log.v1"
     );
 
     let fields = schema["fields"].as_array().unwrap();
@@ -937,7 +937,7 @@ fn all_modules_have_positive_targets() {
 fn compliance_report_format_is_valid() {
     // Build a sample compliance report and validate its structure.
     let report = json!({
-        "schema": "pi.qa.compliance_report.v1",
+        "schema": "ra.qa.compliance_report.v1",
         "bead_id": "bd-1f42.2.6",
         "generated_at": "2026-02-12T00:00:00Z",
         "modules": [
@@ -955,7 +955,7 @@ fn compliance_report_format_is_valid() {
 
     assert_eq!(
         report["schema"].as_str().unwrap(),
-        "pi.qa.compliance_report.v1"
+        "ra.qa.compliance_report.v1"
     );
 
     let modules = report["modules"].as_array().unwrap();

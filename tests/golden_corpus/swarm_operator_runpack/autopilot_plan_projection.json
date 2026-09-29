@@ -8,7 +8,7 @@
           "purpose": "Inspect budget drift"
         },
         {
-          "command": "pi doctor --only swarm --format json",
+          "command": "ra doctor --only swarm --format json",
           "purpose": "Refresh swarm resource preflight"
         },
         {
@@ -191,13 +191,13 @@
       "headroom_paths": {
         "CARGO_TARGET_DIR": {
           "available_kb": 52428800,
-          "path": "[PI_AGENT_CARGO_TMP]/test/target",
+          "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
           "problem": null,
           "ready": true
         },
         "TMPDIR": {
           "available_kb": 52428800,
-          "path": "[PI_AGENT_CARGO_TMP]/test/tmp",
+          "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp",
           "problem": null,
           "ready": true
         }
@@ -215,12 +215,12 @@
       "active_agents": 1,
       "active_builds": 8,
       "active_reservations": 1,
-      "cargo_target_dir": "[PI_AGENT_CARGO_TMP]/test/target",
+      "cargo_target_dir": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
       "queue_depth": 4,
       "queue_recommended_action": "backoff",
       "queued_builds": 4,
       "slot_pressure": "saturated",
-      "tmpdir": "[PI_AGENT_CARGO_TMP]/test/tmp"
+      "tmpdir": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp"
     },
     "current_profile": {
       "critical_failures": [],
@@ -230,13 +230,13 @@
       "headroom_paths": {
         "CARGO_TARGET_DIR": {
           "available_kb": 52428800,
-          "path": "[PI_AGENT_CARGO_TMP]/test/target",
+          "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
           "problem": null,
           "ready": true
         },
         "TMPDIR": {
           "available_kb": 52428800,
-          "path": "[PI_AGENT_CARGO_TMP]/test/tmp",
+          "path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/tmp",
           "problem": null,
           "ready": true
         }
@@ -262,7 +262,7 @@
       "rch_verification_fanout": 0,
       "reason": "deny_new_work until critical budget drift clears"
     },
-    "schema": "pi.swarm.budget_drift.v1",
+    "schema": "ra.swarm.budget_drift.v1",
     "signals": [
       {
         "current": 4,
@@ -289,7 +289,7 @@
   ],
   "failure_actions": [
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "agent_mail",
       "escalation": "Run repair only after the dry-run output is understood; continue with Beads assignment as the temporary coordination lock.",
       "evidence_paths": [
@@ -321,7 +321,7 @@
       "title": "Agent Mail database schema is missing required tables"
     },
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "rch",
       "escalation": "If saturation persists, split validation by surface or pause heavy cargo work instead of allowing local fallback.",
       "evidence_paths": [
@@ -353,7 +353,7 @@
       "title": "RCH queue is saturated; do not start broad cargo validation"
     },
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "agent_mail",
       "escalation": "Do not assume reservation writes landed while Mail is degraded; use Beads status and narrow file surfaces until Mail is healthy.",
       "evidence_paths": [
@@ -385,7 +385,7 @@
       "title": "Agent Mail is degraded or read-only"
     },
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "beads",
       "escalation": "Do not force-release reservations or alter another agent's files unless Mail or recent commits confirm the claim is abandoned.",
       "evidence_paths": [
@@ -426,7 +426,7 @@
     "automatic file reservation"
   ],
   "generated_at": "[TIMESTAMP]",
-  "input_pack_schema": "pi.swarm.autopilot_input_pack.v1",
+  "input_pack_schema": "ra.swarm.autopilot_input_pack.v1",
   "input_pack_status": "degraded",
   "omitted_actions": [
     {
@@ -457,7 +457,7 @@
     ],
     "redacted_count": 2
   },
-  "schema": "pi.swarm.autopilot_plan.v1",
+  "schema": "ra.swarm.autopilot_plan.v1",
   "status": "degraded",
   "work_partitions": []
 }

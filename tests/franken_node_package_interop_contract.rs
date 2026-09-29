@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-package-interop-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.package_interop_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.package_interop_contract.v1";
 const REQUIRED_SCENARIOS: &[&str] = &[
     "SCN-package-exports-condition-priority",
     "SCN-cjs-esm-entrypoint-bridging",

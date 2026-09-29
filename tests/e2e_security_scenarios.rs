@@ -17,9 +17,9 @@
 mod common;
 
 use common::TestHarness;
-use pi::connectors::http::HttpConnector;
-use pi::extension_preflight::{PREFLIGHT_SCHEMA, PreflightAnalyzer, PreflightVerdict};
-use pi::extensions::{
+use ra::connectors::http::HttpConnector;
+use ra::extension_preflight::{PREFLIGHT_SCHEMA, PreflightAnalyzer, PreflightVerdict};
+use ra::extensions::{
     ExecMediationPolicy, ExtensionManager, ExtensionOverride, ExtensionPolicy, ExtensionPolicyMode,
     ExtensionQuotaConfig, HostCallContext, HostCallPayload, IncidentBundleFilter,
     IncidentBundleRedactionPolicy, PolicyDecision, PolicyProfile,
@@ -27,7 +27,7 @@ use pi::extensions::{
     SECURITY_ALERT_SCHEMA_VERSION, SecretBrokerPolicy, SecurityAlertCategory,
     dispatch_host_call_shared, verify_runtime_risk_ledger_artifact,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::fs;
 use std::path::Path;
@@ -38,7 +38,7 @@ use std::time::Instant;
 // ============================================================================
 
 /// Schema identifier for E2E security scenario results.
-const E2E_SCENARIO_SCHEMA: &str = "pi.test.security_scenario.v1";
+const E2E_SCENARIO_SCHEMA: &str = "ra.test.security_scenario.v1";
 
 /// Issue ID for all tests in this file.
 const ISSUE_ID: &str = "bd-3fa19";

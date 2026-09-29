@@ -13,9 +13,9 @@
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -151,10 +151,10 @@ fn default_deterministic_home() -> String {
 }
 
 fn deterministic_settings() -> DeterministicSettings {
-    let random_env = std::env::var("PI_DETERMINISTIC_RANDOM")
+    let random_env = std::env::var("RECUR_AGENT_DETERMINISTIC_RANDOM")
         .ok()
         .filter(|val| !val.trim().is_empty());
-    let seed_env = std::env::var("PI_DETERMINISTIC_RANDOM_SEED")
+    let seed_env = std::env::var("RECUR_AGENT_DETERMINISTIC_RANDOM_SEED")
         .ok()
         .filter(|val| !val.trim().is_empty());
     let random_value = if random_env.is_some() {
@@ -165,18 +165,24 @@ fn deterministic_settings() -> DeterministicSettings {
         Some("0.5".to_string())
     };
     DeterministicSettings {
-        time_ms: env_or_default("PI_DETERMINISTIC_TIME_MS", DEFAULT_DETERMINISTIC_TIME_MS),
+        time_ms: env_or_default(
+            "RECUR_AGENT_DETERMINISTIC_TIME_MS",
+            DEFAULT_DETERMINISTIC_TIME_MS,
+        ),
         time_step_ms: env_or_default(
-            "PI_DETERMINISTIC_TIME_STEP_MS",
+            "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS",
             DEFAULT_DETERMINISTIC_TIME_STEP_MS,
         ),
         random_seed: env_or_default(
-            "PI_DETERMINISTIC_RANDOM_SEED",
+            "RECUR_AGENT_DETERMINISTIC_RANDOM_SEED",
             DEFAULT_DETERMINISTIC_RANDOM_SEED,
         ),
         random_value,
-        cwd: env_or_default_owned("PI_DETERMINISTIC_CWD", default_deterministic_cwd()),
-        home: env_or_default_owned("PI_DETERMINISTIC_HOME", default_deterministic_home()),
+        cwd: env_or_default_owned("RECUR_AGENT_DETERMINISTIC_CWD", default_deterministic_cwd()),
+        home: env_or_default_owned(
+            "RECUR_AGENT_DETERMINISTIC_HOME",
+            default_deterministic_home(),
+        ),
     }
 }
 
@@ -193,10 +199,10 @@ fn deterministic_settings_for(extension_path: &Path) -> DeterministicSettings {
     let mut settings = deterministic_settings();
     let key = sanitize_path_for_dir(extension_path);
 
-    if std::env::var("PI_DETERMINISTIC_CWD").is_err() {
+    if std::env::var("RECUR_AGENT_DETERMINISTIC_CWD").is_err() {
         settings.cwd = Path::new(&settings.cwd).join(&key).display().to_string();
     }
-    if std::env::var("PI_DETERMINISTIC_HOME").is_err() {
+    if std::env::var("RECUR_AGENT_DETERMINISTIC_HOME").is_err() {
         settings.home = Path::new(&settings.home).join(&key).display().to_string();
     }
 
@@ -204,7 +210,7 @@ fn deterministic_settings_for(extension_path: &Path) -> DeterministicSettings {
 }
 
 fn ts_oracle_timeout() -> Duration {
-    std::env::var("PI_TS_ORACLE_TIMEOUT_SECS")
+    std::env::var("RECUR_AGENT_TS_ORACLE_TIMEOUT_SECS")
         .ok()
         .and_then(|val| val.parse::<u64>().ok())
         .map_or(
@@ -249,7 +255,7 @@ fn ts_oracle_node_path() -> &'static Path {
         fn symlink_pkg(_scope_dir: &Path, _name: &str, _target: &Path) {}
 
         let base = PathBuf::from(format!(
-            "/tmp/pi_agent_rust_ts_oracle_node_path-{}",
+            "/tmp/recur_agent_ts_oracle_node_path-{}",
             std::process::id()
         ));
 
@@ -392,14 +398,20 @@ fn run_ts_oracle_result(extension_path: &Path) -> Result<Value, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("NODE_PATH", node_path.as_ref())
-        .env("PI_DETERMINISTIC_TIME_MS", &settings.time_ms)
-        .env("PI_DETERMINISTIC_TIME_STEP_MS", &settings.time_step_ms)
-        .env("PI_DETERMINISTIC_CWD", &settings.cwd)
-        .env("PI_DETERMINISTIC_HOME", &settings.home);
+        .env("RECUR_AGENT_DETERMINISTIC_TIME_MS", &settings.time_ms)
+        .env(
+            "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS",
+            &settings.time_step_ms,
+        )
+        .env("RECUR_AGENT_DETERMINISTIC_CWD", &settings.cwd)
+        .env("RECUR_AGENT_DETERMINISTIC_HOME", &settings.home);
     if let Some(random_value) = settings.random_value.as_deref() {
-        cmd.env("PI_DETERMINISTIC_RANDOM", random_value);
+        cmd.env("RECUR_AGENT_DETERMINISTIC_RANDOM", random_value);
     } else {
-        cmd.env("PI_DETERMINISTIC_RANDOM_SEED", &settings.random_seed);
+        cmd.env(
+            "RECUR_AGENT_DETERMINISTIC_RANDOM_SEED",
+            &settings.random_seed,
+        );
     }
 
     let timeout = ts_oracle_timeout();
@@ -513,14 +525,20 @@ fn run_ts_harness_with_mock_spec_result(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("NODE_PATH", node_path.as_ref())
-        .env("PI_DETERMINISTIC_TIME_MS", &settings.time_ms)
-        .env("PI_DETERMINISTIC_TIME_STEP_MS", &settings.time_step_ms)
-        .env("PI_DETERMINISTIC_CWD", &settings.cwd)
-        .env("PI_DETERMINISTIC_HOME", &settings.home);
+        .env("RECUR_AGENT_DETERMINISTIC_TIME_MS", &settings.time_ms)
+        .env(
+            "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS",
+            &settings.time_step_ms,
+        )
+        .env("RECUR_AGENT_DETERMINISTIC_CWD", &settings.cwd)
+        .env("RECUR_AGENT_DETERMINISTIC_HOME", &settings.home);
     if let Some(random_value) = settings.random_value.as_deref() {
-        cmd.env("PI_DETERMINISTIC_RANDOM", random_value);
+        cmd.env("RECUR_AGENT_DETERMINISTIC_RANDOM", random_value);
     } else {
-        cmd.env("PI_DETERMINISTIC_RANDOM_SEED", &settings.random_seed);
+        cmd.env(
+            "RECUR_AGENT_DETERMINISTIC_RANDOM_SEED",
+            &settings.random_seed,
+        );
     }
 
     let timeout = ts_oracle_timeout();
@@ -620,16 +638,22 @@ fn run_ts_event_dispatch_bench_result(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("NODE_PATH", node_path.as_ref())
-        .env("PI_EVENT_BENCH_ITERS", iters.to_string())
-        .env("PI_EVENT_BENCH_WARMUP", warmup.to_string())
-        .env("PI_DETERMINISTIC_TIME_MS", &settings.time_ms)
-        .env("PI_DETERMINISTIC_TIME_STEP_MS", &settings.time_step_ms)
-        .env("PI_DETERMINISTIC_CWD", &settings.cwd)
-        .env("PI_DETERMINISTIC_HOME", &settings.home);
+        .env("RECUR_AGENT_EVENT_BENCH_ITERS", iters.to_string())
+        .env("RECUR_AGENT_EVENT_BENCH_WARMUP", warmup.to_string())
+        .env("RECUR_AGENT_DETERMINISTIC_TIME_MS", &settings.time_ms)
+        .env(
+            "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS",
+            &settings.time_step_ms,
+        )
+        .env("RECUR_AGENT_DETERMINISTIC_CWD", &settings.cwd)
+        .env("RECUR_AGENT_DETERMINISTIC_HOME", &settings.home);
     if let Some(random_value) = settings.random_value.as_deref() {
-        cmd.env("PI_DETERMINISTIC_RANDOM", random_value);
+        cmd.env("RECUR_AGENT_DETERMINISTIC_RANDOM", random_value);
     } else {
-        cmd.env("PI_DETERMINISTIC_RANDOM_SEED", &settings.random_seed);
+        cmd.env(
+            "RECUR_AGENT_DETERMINISTIC_RANDOM_SEED",
+            &settings.random_seed,
+        );
     }
 
     let timeout = ts_oracle_timeout();
@@ -764,25 +788,34 @@ fn run_rust_event_dispatch_bench_result(
         let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
         let mut env = HashMap::new();
         env.insert(
-            "PI_DETERMINISTIC_TIME_MS".to_string(),
+            "RECUR_AGENT_DETERMINISTIC_TIME_MS".to_string(),
             settings.time_ms.clone(),
         );
         env.insert(
-            "PI_DETERMINISTIC_TIME_STEP_MS".to_string(),
+            "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS".to_string(),
             settings.time_step_ms.clone(),
         );
-        env.insert("PI_DETERMINISTIC_CWD".to_string(), settings.cwd.clone());
-        env.insert("PI_DETERMINISTIC_HOME".to_string(), settings.home.clone());
+        env.insert(
+            "RECUR_AGENT_DETERMINISTIC_CWD".to_string(),
+            settings.cwd.clone(),
+        );
+        env.insert(
+            "RECUR_AGENT_DETERMINISTIC_HOME".to_string(),
+            settings.home.clone(),
+        );
         env.insert("HOME".to_string(), settings.home.clone());
         if let Some(random_value) = settings.random_value.as_ref() {
-            env.insert("PI_DETERMINISTIC_RANDOM".to_string(), random_value.clone());
+            env.insert(
+                "RECUR_AGENT_DETERMINISTIC_RANDOM".to_string(),
+                random_value.clone(),
+            );
         } else {
             env.insert(
-                "PI_DETERMINISTIC_RANDOM_SEED".to_string(),
+                "RECUR_AGENT_DETERMINISTIC_RANDOM_SEED".to_string(),
                 settings.random_seed.clone(),
             );
         }
-        let js_config = PiJsRuntimeConfig {
+        let js_config = RaJsRuntimeConfig {
             cwd: settings.cwd.clone(),
             env,
             ..Default::default()
@@ -873,7 +906,7 @@ fn run_rust_event_dispatch_bench_result(
         }
 
         let report = serde_json::json!({
-            "schema": "pi.ext.event_dispatch_latency.v1",
+            "schema": "ra.ext.event_dispatch_latency.v1",
             "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
             "toolchain": "rust",
             "iters": iters,
@@ -916,25 +949,31 @@ fn load_rust_snapshot_timed(extension_path: &Path) -> Result<(Value, u64), Strin
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
     let mut env = HashMap::new();
     env.insert(
-        "PI_DETERMINISTIC_TIME_MS".to_string(),
+        "RECUR_AGENT_DETERMINISTIC_TIME_MS".to_string(),
         settings.time_ms.clone(),
     );
     env.insert(
-        "PI_DETERMINISTIC_TIME_STEP_MS".to_string(),
+        "RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS".to_string(),
         settings.time_step_ms.clone(),
     );
-    env.insert("PI_DETERMINISTIC_CWD".to_string(), settings.cwd.clone());
-    env.insert("PI_DETERMINISTIC_HOME".to_string(), settings.home.clone());
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_CWD".to_string(),
+        settings.cwd.clone(),
+    );
+    env.insert(
+        "RECUR_AGENT_DETERMINISTIC_HOME".to_string(),
+        settings.home.clone(),
+    );
     env.insert("HOME".to_string(), settings.home.clone());
     if let Some(random_value) = settings.random_value {
-        env.insert("PI_DETERMINISTIC_RANDOM".to_string(), random_value);
+        env.insert("RECUR_AGENT_DETERMINISTIC_RANDOM".to_string(), random_value);
     } else {
         env.insert(
-            "PI_DETERMINISTIC_RANDOM_SEED".to_string(),
+            "RECUR_AGENT_DETERMINISTIC_RANDOM_SEED".to_string(),
             settings.random_seed.clone(),
         );
     }
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: settings.cwd.clone(),
         env,
         ..Default::default()
@@ -1495,8 +1534,8 @@ fn ts_harness_fires_mock_spec_event_sequence() {
 
 #[test]
 fn diff_official_manifest() {
-    let filter = std::env::var("PI_OFFICIAL_FILTER").ok();
-    let max = std::env::var("PI_OFFICIAL_MAX")
+    let filter = std::env::var("RECUR_AGENT_OFFICIAL_FILTER").ok();
+    let max = std::env::var("RECUR_AGENT_OFFICIAL_MAX")
         .ok()
         .and_then(|val| val.parse::<usize>().ok());
 
@@ -1549,8 +1588,8 @@ fn diff_official_manifest() {
 #[ignore = "bd-8t27h.12: generate load-time benchmark report"]
 #[allow(clippy::too_many_lines)]
 fn load_time_benchmark_official() {
-    let filter = std::env::var("PI_LOAD_TIME_FILTER").ok();
-    let max = std::env::var("PI_LOAD_TIME_MAX")
+    let filter = std::env::var("RECUR_AGENT_LOAD_TIME_FILTER").ok();
+    let max = std::env::var("RECUR_AGENT_LOAD_TIME_MAX")
         .ok()
         .and_then(|val| val.parse::<usize>().ok());
 
@@ -1663,7 +1702,7 @@ fn load_time_benchmark_official() {
     }
 
     let report = serde_json::json!({
-        "schema": "pi.ext.load_time_benchmark.v1",
+        "schema": "ra.ext.load_time_benchmark.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "tier": "official-pi-mono",
         "filter": filter,
@@ -1698,11 +1737,11 @@ fn load_time_benchmark_official() {
 fn event_dispatch_latency_benchmark() {
     let extension_path = event_dispatch_bench_extension_path();
     let payloads_path = event_payloads_path();
-    let iters = std::env::var("PI_EVENT_BENCH_ITERS")
+    let iters = std::env::var("RECUR_AGENT_EVENT_BENCH_ITERS")
         .ok()
         .and_then(|val| val.parse::<usize>().ok())
         .unwrap_or(1000);
-    let warmup = std::env::var("PI_EVENT_BENCH_WARMUP")
+    let warmup = std::env::var("RECUR_AGENT_EVENT_BENCH_WARMUP")
         .ok()
         .and_then(|val| val.parse::<usize>().ok())
         .unwrap_or(25);
@@ -1770,7 +1809,7 @@ fn event_dispatch_latency_benchmark() {
     }
 
     let report = serde_json::json!({
-        "schema": "pi.ext.event_dispatch_latency_report.v1",
+        "schema": "ra.ext.event_dispatch_latency_report.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "iters": iters,
         "warmup": warmup,
@@ -1912,12 +1951,12 @@ fn diff_deterministic_globals() {
 }
 
 /// Run differential conformance tests on community extensions (58 extensions from pi-mono).
-/// Use `PI_COMMUNITY_FILTER` env var to filter by name substring.
-/// Use `PI_COMMUNITY_MAX` env var to limit the number of extensions to test.
+/// Use `RECUR_AGENT_COMMUNITY_FILTER` env var to filter by name substring.
+/// Use `RECUR_AGENT_COMMUNITY_MAX` env var to limit the number of extensions to test.
 #[test]
 fn diff_community_manifest() {
-    let filter = std::env::var("PI_COMMUNITY_FILTER").ok();
-    let max = std::env::var("PI_COMMUNITY_MAX")
+    let filter = std::env::var("RECUR_AGENT_COMMUNITY_FILTER").ok();
+    let max = std::env::var("RECUR_AGENT_COMMUNITY_MAX")
         .ok()
         .and_then(|val| val.parse::<usize>().ok());
 
@@ -2009,14 +2048,14 @@ fn diff_community_manifest() {
 }
 
 /// Run bounded differential conformance tests on npm registry extensions.
-/// Use `PI_NPM_FILTER` env var to filter by name substring.
-/// Use `PI_NPM_MAX` env var to limit the number of extensions to test
+/// Use `RECUR_AGENT_NPM_FILTER` env var to filter by name substring.
+/// Use `RECUR_AGENT_NPM_MAX` env var to limit the number of extensions to test
 /// (defaults to a deterministic sample of 5).
 #[test]
 #[ignore = "bd-8t27h.18: npm registry extensions need bounded deterministic opt-in lane"]
 fn diff_npm_manifest() {
-    let filter = std::env::var("PI_NPM_FILTER").ok();
-    let max = std::env::var("PI_NPM_MAX")
+    let filter = std::env::var("RECUR_AGENT_NPM_FILTER").ok();
+    let max = std::env::var("RECUR_AGENT_NPM_MAX")
         .ok()
         .and_then(|val| val.parse::<usize>().ok())
         .unwrap_or(DEFAULT_NPM_MAX);
@@ -2033,7 +2072,7 @@ fn diff_npm_manifest() {
 
     assert!(
         !selected.is_empty(),
-        "PI_NPM_FILTER={filter:?} PI_NPM_MAX={max} selected no npm-registry extensions"
+        "RECUR_AGENT_NPM_FILTER={filter:?} RECUR_AGENT_NPM_MAX={max} selected no npm-registry extensions"
     );
 
     eprintln!(
@@ -2109,12 +2148,12 @@ fn diff_npm_manifest() {
 }
 
 /// Run differential conformance tests on third-party GitHub extensions (23 extensions).
-/// Use `PI_THIRDPARTY_FILTER` env var to filter by name substring.
-/// Use `PI_THIRDPARTY_MAX` env var to limit the number of extensions to test.
+/// Use `RECUR_AGENT_THIRDPARTY_FILTER` env var to filter by name substring.
+/// Use `RECUR_AGENT_THIRDPARTY_MAX` env var to limit the number of extensions to test.
 #[test]
 fn diff_thirdparty_manifest() {
-    let filter = std::env::var("PI_THIRDPARTY_FILTER").ok();
-    let max = std::env::var("PI_THIRDPARTY_MAX")
+    let filter = std::env::var("RECUR_AGENT_THIRDPARTY_FILTER").ok();
+    let max = std::env::var("RECUR_AGENT_THIRDPARTY_MAX")
         .ok()
         .and_then(|val| val.parse::<usize>().ok());
 
@@ -2232,7 +2271,7 @@ fn diff_thirdparty_manifest() {
 // ─── Built-in extensions (bd-k7i) ─────────────────────────────────────────
 
 /// Differential conformance tests on built-in pi-mono extensions (4 extensions
-/// from .pi/extensions/).
+/// from .ra/extensions/).
 #[test]
 fn diff_builtin_manifest() {
     let selected: Vec<(String, String)> = builtin_extensions().clone();

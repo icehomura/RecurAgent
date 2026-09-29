@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.scenario_fixture.v1",
+  "schema": "ra.ext.scenario_fixture.v1",
   "extension": {
     "id": "minimal_multi",
     "source": {

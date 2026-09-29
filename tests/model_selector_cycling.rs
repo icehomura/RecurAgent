@@ -4,7 +4,7 @@
 //!
 //! Tests are organized into:
 //! 1. Helper function unit tests (parse, resolve, match, strip)
-//! 2. Model selector overlay integration with `PiApp`
+//! 2. Model selector overlay integration with `RaApp`
 //! 3. Scoped cycling deterministic ordering tests
 //! 4. Resolve + cycling integration
 
@@ -16,19 +16,19 @@ use asupersync::channel::mpsc;
 use bubbletea::{KeyMsg, KeyType, Model as BubbleteaModel};
 use common::TestHarness;
 use futures::stream;
-use pi::agent::{Agent, AgentConfig};
-use pi::config::Config;
-use pi::interactive::{
-    PiApp, model_entry_matches, parse_scoped_model_patterns, resolve_scoped_model_entries,
+use ra::agent::{Agent, AgentConfig};
+use ra::config::Config;
+use ra::interactive::{
+    RaApp, model_entry_matches, parse_scoped_model_patterns, resolve_scoped_model_entries,
     strip_thinking_level_suffix,
 };
-use pi::keybindings::KeyBindings;
-use pi::model::{StreamEvent, Usage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
-use pi::resources::{ResourceCliOptions, ResourceLoader};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::keybindings::KeyBindings;
+use ra::model::{StreamEvent, Usage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
+use ra::resources::{ResourceCliOptions, ResourceLoader};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
@@ -66,8 +66,8 @@ impl Provider for DummyProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         Ok(Box::pin(stream::empty()))
     }
@@ -108,7 +108,7 @@ fn build_app_with_models(
     current: ModelEntry,
     scope: Vec<ModelEntry>,
     available: Vec<ModelEntry>,
-) -> PiApp {
+) -> RaApp {
     build_app_with_models_and_config(harness, current, scope, available, Config::default())
 }
 
@@ -118,7 +118,7 @@ fn build_app_with_models_and_config(
     scope: Vec<ModelEntry>,
     available: Vec<ModelEntry>,
     config: Config,
-) -> PiApp {
+) -> RaApp {
     let config = common::hermetic_interactive_config(config);
     let cwd = harness.temp_dir().to_path_buf();
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -138,7 +138,7 @@ fn build_app_with_models_and_config(
     };
     let (event_tx, _event_rx) = mpsc::channel(1024);
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -164,12 +164,12 @@ fn build_app_with_models_and_config(
     app
 }
 
-fn get_status(app: &PiApp) -> Option<&str> {
+fn get_status(app: &RaApp) -> Option<&str> {
     app.status_message()
 }
 
 #[allow(dead_code)]
-fn get_view(app: &PiApp) -> String {
+fn get_view(app: &RaApp) -> String {
     BubbleteaModel::view(app)
 }
 
@@ -456,7 +456,7 @@ fn resolve_sorted_by_full_id() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 2. Model selector overlay integration with PiApp
+// 2. Model selector overlay integration with RaApp
 // ═══════════════════════════════════════════════════════════════════
 
 #[test]

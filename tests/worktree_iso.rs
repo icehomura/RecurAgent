@@ -4,8 +4,8 @@
 //! 1. Two parallel "children" edit the SAME file in isolated worktrees;
 //!    the parent applies both patches serially; the overlapping second
 //!    apply reports the conflict cleanly and leaves the worktree.
-//! 2. `pi worktree` list/clean reaps only our prefixed worktrees.
-//! 3. Non-git directory + isolation requested → `PI_ISO_NOT_GIT` through
+//! 2. `ra worktree` list/clean reaps only our prefixed worktrees.
+//! 3. Non-git directory + isolation requested → `RECUR_AGENT_ISO_NOT_GIT` through
 //!    the subagent tool surface.
 //! 4. The dirty-tree invariant: a child sees uncommitted parent content
 //!    (round-7 fixture).
@@ -17,8 +17,8 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{Tool, ToolOutput};
-use pi::worktree_iso::{IsoApplyMode, apply_to_parent, collect_diff, drop_worktree, isolate};
+use ra::tools::{Tool, ToolOutput};
+use ra::worktree_iso::{IsoApplyMode, apply_to_parent, collect_diff, drop_worktree, isolate};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -28,7 +28,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -104,7 +104,7 @@ fn two_children_collide_serial_apply_reports_cleanly() {
     harness
         .log()
         .info("verify", format!("B conflict: {message}"));
-    assert!(message.contains("PI_ISO_CONFLICT"), "{message}");
+    assert!(message.contains("RECUR_AGENT_ISO_CONFLICT"), "{message}");
     assert!(message.contains("shared.txt"), "{message}");
     let after = std::fs::read_to_string(repo.join("shared.txt")).expect("read after");
     assert!(
@@ -141,7 +141,7 @@ fn worktree_cli_reaps_only_ours() {
     );
 
     // list shows ours; clean (0 days) reaps ours but not the foreign one.
-    let mine = pi::worktree_iso::list_mine(&repo).expect("list");
+    let mine = ra::worktree_iso::list_mine(&repo).expect("list");
     harness.log().info(
         "verify",
         format!(
@@ -150,13 +150,13 @@ fn worktree_cli_reaps_only_ours() {
         ),
     );
     assert!(
-        mine.iter().any(|w| w.path.contains("pi-iso-")),
+        mine.iter().any(|w| w.path.contains("ra-iso-")),
         "list must include our worktree: {mine:?}"
     );
 
-    let reaped = pi::worktree_iso::reap_stale(&repo, std::time::Duration::ZERO).expect("reap");
+    let reaped = ra::worktree_iso::reap_stale(&repo, std::time::Duration::ZERO).expect("reap");
     assert!(
-        reaped.iter().any(|path| path.contains("pi-iso-")),
+        reaped.iter().any(|path| path.contains("ra-iso-")),
         "clean reaps ours: {reaped:?}"
     );
     assert!(foreign_path.exists(), "foreign worktree survives the sweep");
@@ -187,13 +187,13 @@ fn non_git_refusal_through_tool() {
     #[cfg(not(unix))]
     let outside_base = std::env::temp_dir();
     let outside = tempfile::Builder::new()
-        .prefix("pi-iso-not-a-repo-")
+        .prefix("ra-iso-not-a-repo-")
         .tempdir_in(outside_base)
         .expect("non-repository directory");
     let root = outside.path().join("not-a-repo");
     std::fs::create_dir_all(&root).expect("dir");
 
-    let tool = pi::subagents::SubagentTool::new(&root);
+    let tool = ra::subagents::SubagentTool::new(&root);
     let out = block_on_local(tool.execute(
         "call-1",
         json!({
@@ -206,12 +206,12 @@ fn non_git_refusal_through_tool() {
     ));
     // The request-level single-task form routes through tasks; assert via
     // the isolation parser directly for the named refusal path.
-    let iso_err = pi::worktree_iso::isolate(&root, "x").unwrap_err();
+    let iso_err = ra::worktree_iso::isolate(&root, "x").unwrap_err();
     harness.log().info(
         "verify",
         format!("non-git refusal: {iso_err} (tool built: {})", out.is_ok()),
     );
-    assert!(iso_err.to_string().contains("PI_ISO_NOT_GIT"));
+    assert!(iso_err.to_string().contains("RECUR_AGENT_ISO_NOT_GIT"));
     assert_eq!(
         IsoApplyMode::parse(Some("worktree")).ok(),
         None,

@@ -3,7 +3,7 @@
 //! Tests cover: bundle construction, filtering, redaction, deterministic
 //! generation, verification, forensic replay, and JSON round-trip stability.
 
-use pi::extensions::{
+use ra::extensions::{
     ExecMediationArtifact, ExecMediationLedgerEntry, INCIDENT_EVIDENCE_BUNDLE_SCHEMA_VERSION,
     IncidentBundleFilter, IncidentBundleRedactionPolicy, IncidentEvidenceBundle, QuotaBreachEvent,
     RUNTIME_HOSTCALL_TELEMETRY_SCHEMA_VERSION, RUNTIME_RISK_LEDGER_SCHEMA_VERSION,
@@ -19,7 +19,7 @@ use pi::extensions::{
 // Test helpers
 // ---------------------------------------------------------------------------
 
-use pi::extensions::{
+use ra::extensions::{
     RUNTIME_RISK_EXPLANATION_SCHEMA_VERSION, RuntimeRiskExpectedLossEvidence,
     RuntimeRiskExplanationBudgetState, RuntimeRiskExplanationLevelValue,
     RuntimeRiskPosteriorEvidence,
@@ -215,7 +215,7 @@ fn telemetry_artifact(
 
 fn exec_artifact(entries: Vec<ExecMediationLedgerEntry>) -> ExecMediationArtifact {
     ExecMediationArtifact {
-        schema: "pi.ext.exec_mediation.v1".to_string(),
+        schema: "ra.ext.exec_mediation.v1".to_string(),
         generated_at_ms: 99999,
         entry_count: entries.len(),
         entries,
@@ -224,7 +224,7 @@ fn exec_artifact(entries: Vec<ExecMediationLedgerEntry>) -> ExecMediationArtifac
 
 fn secret_artifact(entries: Vec<SecretBrokerLedgerEntry>) -> SecretBrokerArtifact {
     SecretBrokerArtifact {
-        schema: "pi.ext.secret_broker.v1".to_string(),
+        schema: "ra.ext.secret_broker.v1".to_string(),
         generated_at_ms: 99999,
         entry_count: entries.len(),
         entries,
@@ -903,7 +903,7 @@ fn wrong_schema_fails_verification() {
         &[],
     );
 
-    bundle.schema = "pi.ext.wrong.v999".to_string();
+    bundle.schema = "ra.ext.wrong.v999".to_string();
 
     let report = verify_incident_evidence_bundle(&bundle);
     assert!(!report.valid);

@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.mock_spec.v1",
+  "schema": "ra.ext.mock_spec.v1",
   "extension_id": "_default",
   "description": "Default mock spec for simple extensions. Provides minimal session state, no HTTP/exec mocks, and auto-accept UI dialogs. Suitable for Tier 1-2 extensions that only register tools/commands and subscribe to events.",
   "session": {

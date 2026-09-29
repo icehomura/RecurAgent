@@ -8,9 +8,9 @@
 mod common;
 
 use common::TestHarness;
-use pi::error::Error;
-use pi::model::ContentBlock;
-use pi::tools::ToolRegistry;
+use ra::error::Error;
+use ra::model::ContentBlock;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::fmt::Write as _;
 #[cfg(unix)]

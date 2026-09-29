@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "error_empty_message",
   "surface": "error_cases",
   "description": "Print mode with empty string message and invalid API key: exits non-zero without panic",

@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::web_remote::{
+use ra::web_remote::{
     BindMode, ControlMode, EMBEDDED_WEB_CLIENT_HTML, TokenKind, WebFrameType, WebRemoteManager,
     WebRemoteSettings, render_half_block_qr,
 };
@@ -31,7 +31,7 @@ fn test_web_frame_protocol_and_schema() {
     let manager = WebRemoteManager::new(WebRemoteSettings::default());
 
     let kf = manager.next_frame(WebFrameType::Keyframe, 120, 36, "Header\nBody line");
-    assert_eq!(kf.schema, "pi.web.frame.v1");
+    assert_eq!(kf.schema, "ra.web.frame.v1");
     assert_eq!(kf.seq, 1);
     assert_eq!(kf.frame_type, WebFrameType::Keyframe);
     assert_eq!(kf.width, 120);
@@ -39,7 +39,7 @@ fn test_web_frame_protocol_and_schema() {
     assert_eq!(kf.data, "Header\nBody line");
 
     let patch = manager.next_frame(WebFrameType::Patch, 120, 36, "Diff chunk");
-    assert_eq!(patch.schema, "pi.web.frame.v1");
+    assert_eq!(patch.schema, "ra.web.frame.v1");
     assert_eq!(patch.seq, 2);
     assert_eq!(patch.frame_type, WebFrameType::Patch);
 
@@ -155,7 +155,7 @@ fn test_input_arbitration_and_audit_ledger() {
     let logs = manager.audit_log();
     assert!(logs.len() >= 4);
     for entry in &logs {
-        assert_eq!(entry.schema, "pi.web.audit.v1");
+        assert_eq!(entry.schema, "ra.web.audit.v1");
         assert!(entry.timestamp_ms > 0);
     }
 

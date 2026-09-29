@@ -13,7 +13,7 @@
 mod common;
 
 use common::TestHarness;
-use pi::resources::{
+use ra::resources::{
     DiagnosticKind, LoadPromptTemplatesOptions, LoadSkillsOptions, LoadThemesOptions,
     dedupe_prompts, dedupe_themes, load_prompt_templates, load_skills, load_themes,
 };
@@ -331,7 +331,7 @@ fn dedupe_themes_case_insensitive_collision() {
 
     // Create two themes with same name different case
     let path_lower = agent_dir.join("themes").join("dark.ini");
-    let path_upper = cwd.join(".pi").join("themes").join("Dark.ini");
+    let path_upper = cwd.join(".ra").join("themes").join("Dark.ini");
     write_theme_ini(&harness, &path_lower, "brand.accent = bold #38bdf8");
     write_theme_ini(&harness, &path_upper, "brand.accent = bold #facc15");
 
@@ -370,7 +370,7 @@ fn load_skills_with_defaults_includes_user_and_project_dirs() {
     write_skill(&harness, &user_skill_dir, "user_skill", "User skill", "");
 
     // Project-level skill
-    let project_skill_dir = cwd.join(".pi").join("skills").join("project_skill");
+    let project_skill_dir = cwd.join(".ra").join("skills").join("project_skill");
     write_skill(
         &harness,
         &project_skill_dir,

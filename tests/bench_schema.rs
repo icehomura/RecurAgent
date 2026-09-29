@@ -15,7 +15,7 @@
     dead_code
 )]
 
-use pi::perf_build::{
+use ra::perf_build::{
     BUILD_FINGERPRINT_CONTRACT, BenchmarkBuildVerification, BenchmarkProvenance,
     CANONICAL_PIJS_PERF_FEATURES, benchmark_provenance_config_hash,
     matches_canonical_perf_build_fingerprint, profile_from_target_path, sha256_file,
@@ -61,7 +61,7 @@ pub struct EnvFingerprint {
     pub config_hash: String,
 }
 
-/// Schema: `pi.ext.rust_bench.v1` — Rust extension benchmark event.
+/// Schema: `ra.ext.rust_bench.v1` — Rust extension benchmark event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RustBenchEvent {
     pub schema: String,
@@ -74,7 +74,7 @@ pub struct RustBenchEvent {
     pub env: Option<EnvFingerprint>,
 }
 
-/// Schema: `pi.ext.legacy_bench.v1` — Legacy (TS/Node) benchmark event.
+/// Schema: `ra.ext.legacy_bench.v1` — Legacy (TS/Node) benchmark event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LegacyBenchEvent {
     pub schema: String,
@@ -87,7 +87,7 @@ pub struct LegacyBenchEvent {
     pub node: Option<Value>,
 }
 
-/// Schema: `pi.perf.workload.v1` — PiJS workload benchmark event.
+/// Schema: `ra.perf.workload.v1` — PiJS workload benchmark event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkloadEvent {
     pub scenario: String,
@@ -99,7 +99,7 @@ pub struct WorkloadEvent {
     pub calls_per_sec: u64,
 }
 
-/// Schema: `pi.perf.budget.v1` — Performance budget check result.
+/// Schema: `ra.perf.budget.v1` — Performance budget check result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BudgetEvent {
     pub budget_name: String,
@@ -113,7 +113,7 @@ pub struct BudgetEvent {
 
 // ─── Schema Registry ─────────────────────────────────────────────────────────
 
-const PERF_BUDGET_SUMMARY_SCHEMA: &str = "pi.perf.budget_summary.v2";
+const PERF_BUDGET_SUMMARY_SCHEMA: &str = "ra.perf.budget_summary.v2";
 const PERF_BUDGET_DEFINITION_FIELDS: &[&str] = &[
     "name",
     "category",
@@ -142,36 +142,36 @@ const PERF_BUDGET_V0_2_0_INVENTORY_SHA256: &str =
 /// Known JSONL schemas with version and description.
 const SCHEMAS: &[(&str, &str)] = &[
     (
-        "pi.bench.protocol.v1",
+        "ra.bench.protocol.v1",
         "Canonical benchmark protocol contract (partitions, datasets, metadata, replay inputs)",
     ),
     (
-        "pi.ext.rust_bench.v1",
+        "ra.ext.rust_bench.v1",
         "Rust QuickJS extension benchmark event (load, tool call, event hook)",
     ),
     (
-        "pi.ext.legacy_bench.v1",
+        "ra.ext.legacy_bench.v1",
         "Legacy pi-mono (Node.js) extension benchmark event",
     ),
     (
-        "pi.perf.workload.v1",
+        "ra.perf.workload.v1",
         "PiJS workload harness output (tool call throughput)",
     ),
-    ("pi.perf.budget.v1", "Performance budget check result"),
+    ("ra.perf.budget.v1", "Performance budget check result"),
     (
         PERF_BUDGET_SUMMARY_SCHEMA,
         "Strict provenance-bound budget summary with per-budget results and claim readiness",
     ),
     (
-        "pi.ext.conformance_report.v2",
+        "ra.ext.conformance_report.v2",
         "Per-extension conformance report event",
     ),
     (
-        "pi.ext.conformance_summary.v2",
+        "ra.ext.conformance_summary.v2",
         "Aggregate conformance summary with per-tier breakdowns",
     ),
     (
-        "pi.perf.extension_benchmark_stratification.v1",
+        "ra.perf.extension_benchmark_stratification.v1",
         "Layered extension benchmark artifact linking cold-load, per-call, and full E2E evidence with claim-integrity guards",
     ),
     (
@@ -179,7 +179,7 @@ const SCHEMAS: &[(&str, &str)] = &[
         "Phase-1 realistic/matched-state matrix validation with stage attribution and release-gate readiness",
     ),
     (
-        "pi.resource_governor.admission.v1",
+        "ra.resource_governor.admission.v1",
         "Host-scale resource-governor admission decision telemetry for swarm pressure control",
     ),
 ];
@@ -213,7 +213,7 @@ const ENV_FINGERPRINT_FIELDS: &[(&str, &str)] = &[
     ("config_hash", "SHA-256 of env fields for dedup"),
 ];
 
-const BENCH_PROTOCOL_SCHEMA: &str = "pi.bench.protocol.v1";
+const BENCH_PROTOCOL_SCHEMA: &str = "ra.bench.protocol.v1";
 const BENCH_PROTOCOL_VERSION: &str = "1.0.0";
 const PARTITION_MATCHED_STATE: &str = "matched-state";
 const PARTITION_REALISTIC: &str = "realistic";
@@ -280,8 +280,8 @@ const REGRESSION_GATE_LOAD_REQUIRED_RECORD_FIELDS: &[&str] =
     &["disk_cache_policy", "host_page_cache_policy"];
 const REGRESSION_GATE_POSITIVE_SAMPLE_FIELDS: &[&str] = &["runs", "iterations", "total_calls"];
 const REGRESSION_GATE_GENERIC_SCOPE: &str = "generic_benchmark_record";
-const PIJS_GATE_SCOPE: &str = "pi.perf.workload.v1/pijs_workload";
-const PIJS_GATE_SCHEMA: &str = "pi.perf.workload.v1";
+const PIJS_GATE_SCOPE: &str = "ra.perf.workload.v1/pijs_workload";
+const PIJS_GATE_SCHEMA: &str = "ra.perf.workload.v1";
 const PIJS_GATE_TOOL: &str = "pijs_workload";
 const PIJS_GATE_SCENARIO: &str = "tool_call_roundtrip";
 const PIJS_GATE_RUNTIME_ENGINE: &str = "quickjs";
@@ -317,9 +317,9 @@ const PIJS_GATE_REQUIRED_RECORD_FIELDS: &[&str] = &[
     "elapsed_us_f64",
     "per_call_us_f64",
 ];
-const EXT_STRATIFICATION_SCHEMA: &str = "pi.perf.extension_benchmark_stratification.v1";
+const EXT_STRATIFICATION_SCHEMA: &str = "ra.perf.extension_benchmark_stratification.v1";
 const PHASE1_MATRIX_SCHEMA: &str = "pi.perf.phase1_matrix_validation.v1";
-const RESOURCE_GOVERNOR_ADMISSION_SCHEMA: &str = "pi.resource_governor.admission.v1";
+const RESOURCE_GOVERNOR_ADMISSION_SCHEMA: &str = "ra.resource_governor.admission.v1";
 const REALISTIC_SESSION_SIZES: &[u64] = &[100_000, 200_000, 500_000, 1_000_000, 5_000_000];
 const USER_PERCEIVED_SLI_IDS: &[&str] = &[
     "interactive_turn_p95_ms",
@@ -349,7 +349,7 @@ fn schema_doc_generation_enabled(raw: Option<&str>) -> bool {
 
 fn schema_doc_generation_requested() -> bool {
     schema_doc_generation_enabled(
-        std::env::var("PI_GENERATE_BENCH_SCHEMA_DOCS")
+        std::env::var("RECUR_AGENT_GENERATE_BENCH_SCHEMA_DOCS")
             .ok()
             .as_deref(),
     )
@@ -556,7 +556,7 @@ fn pijs_schema_candidates_prioritize_canonical_perf_artifact() {
 
 #[test]
 fn pijs_schema_target_selection_is_explicit_and_hermetic() {
-    let project = Path::new("/workspace/pi_agent_rust");
+    let project = Path::new("/workspace/recur_agent");
     let explicit = std::ffi::OsStr::new("/data/tmp/pi-schema-target");
     assert_eq!(
         bench_target_dirs_for(project, project, Some(explicit)),
@@ -611,13 +611,13 @@ for key in CI_CORRELATION_ID RUST_LOG TEST_LOG_JSONL_PATH TEST_ARTIFACT_INDEX_PA
   esac
 done
 shift 2
-PI_FAKE_RCH_EXECUTED=1 exec "$@"
+RECUR_AGENT_FAKE_RCH_EXECUTED=1 exec "$@"
 "#;
     write_executable(&bin_dir.join("rch"), rch_stub);
 
     let cargo_stub = r#"#!/usr/bin/env bash
 set -euo pipefail
-if [[ "${PI_FAKE_RCH_EXECUTED:-0}" != "1" ]]; then
+if [[ "${RECUR_AGENT_FAKE_RCH_EXECUTED:-0}" != "1" ]]; then
   echo "cargo bypassed fake rch" >&2
   exit 67
 fi
@@ -651,8 +651,8 @@ case " $* " in
     fault_message="sqlite mid-flush failure"
     summary_name="sqlite-fault-window-summary.json"
     summary_windows='{"pre_flush":["sqlite-base"],"mid_flush":["sqlite-base"],"post_flush":["sqlite-base","sqlite-postflush-persisted"]}'
-    if [[ "${PI_FAKE_OMIT_SQLITE_REPORTS:-0}" == "1" ]]; then
-      printf '%s\n' "$case_id" >>"${PI_FAKE_INVOCATION_LOG:?}"
+    if [[ "${RECUR_AGENT_FAKE_OMIT_SQLITE_REPORTS:-0}" == "1" ]]; then
+      printf '%s\n' "$case_id" >>"${RECUR_AGENT_FAKE_INVOCATION_LOG:?}"
       exit 0
     fi
     ;;
@@ -662,32 +662,32 @@ case " $* " in
     ;;
 esac
 
-printf '%s\n' "$case_id" >>"${PI_FAKE_INVOCATION_LOG:?}"
+printf '%s\n' "$case_id" >>"${RECUR_AGENT_FAKE_INVOCATION_LOG:?}"
 summary_correlation="${CI_CORRELATION_ID:?}"
-if [[ "${PI_FAKE_WRONG_SUMMARY_IDENTITY:-0}" == "1" ]]; then
+if [[ "${RECUR_AGENT_FAKE_WRONG_SUMMARY_IDENTITY:-0}" == "1" ]]; then
   summary_correlation="stale-summary-correlation"
 fi
 summary_payload="{\"schema\":\"pi.e2e.persistence_fault_case_summary.v1\",\"case_id\":\"$case_id\",\"test_name\":\"$test_name\",\"correlation_id\":\"$summary_correlation\",\"scenario\":\"${case_id}_fault_windows\",\"windows\":$summary_windows}"
 summary_size="$(python3 -c 'import sys; print(len(sys.argv[1].encode()))' "$summary_payload")"
 summary_sha="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' "$summary_payload")"
 summary_base64="$(python3 -c 'import base64,sys; print(base64.b64encode(sys.argv[1].encode()).decode())' "$summary_payload")"
-if [[ "${PI_FAKE_TAMPERED_SUMMARY_PAYLOAD:-0}" == "1" ]]; then
+if [[ "${RECUR_AGENT_FAKE_TAMPERED_SUMMARY_PAYLOAD:-0}" == "1" ]]; then
   summary_base64="$(python3 -c 'import base64; print(base64.b64encode(b"{}").decode())')"
 fi
 diagnostic_ts="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))')"
-artifact_record="{\"schema\":\"pi.test.artifact.v1\",\"type\":\"artifact\",\"test\":\"$test_name\",\"seq\":3,\"ts\":\"$diagnostic_ts\",\"t_ms\":0,\"name\":\"$summary_name\",\"path\":\"/tmp/$summary_name\",\"size_bytes\":$summary_size,\"sha256\":\"$summary_sha\"}"
-if [[ "${PI_FAKE_MALFORMED_ARTIFACT_INDEX:-0}" == "1" ]]; then
-  artifact_record="{\"schema\":\"pi.test.artifact.v1\",\"test\":\"$test_name\",\"name\":\"$summary_name\"}"
+artifact_record="{\"schema\":\"ra.test.artifact.v1\",\"type\":\"artifact\",\"test\":\"$test_name\",\"seq\":3,\"ts\":\"$diagnostic_ts\",\"t_ms\":0,\"name\":\"$summary_name\",\"path\":\"/tmp/$summary_name\",\"size_bytes\":$summary_size,\"sha256\":\"$summary_sha\"}"
+if [[ "${RECUR_AGENT_FAKE_MALFORMED_ARTIFACT_INDEX:-0}" == "1" ]]; then
+  artifact_record="{\"schema\":\"ra.test.artifact.v1\",\"test\":\"$test_name\",\"name\":\"$summary_name\"}"
 fi
 diagnostic_test_name="$test_name"
-if [[ "${PI_FAKE_WRONG_TEST_LOG_IDENTITY:-0}" == "1" ]]; then
+if [[ "${RECUR_AGENT_FAKE_WRONG_TEST_LOG_IDENTITY:-0}" == "1" ]]; then
   diagnostic_test_name="wrong-$test_name"
 fi
-log_record="{\"schema\":\"pi.test.log.v2\",\"type\":\"log\",\"test\":\"$diagnostic_test_name\",\"trace_id\":\"trace-$case_id\",\"ci_correlation_id\":\"${CI_CORRELATION_ID:?}\",\"seq\":1,\"ts\":\"$diagnostic_ts\",\"t_ms\":0,\"level\":\"info\",\"category\":\"fault\",\"message\":\"$fault_message\"}"
-if [[ "${PI_FAKE_MALFORMED_TEST_LOG:-0}" == "1" ]]; then
-  log_record="{\"schema\":\"pi.test.log.v2\",\"type\":\"log\",\"test\":\"$test_name\",\"ci_correlation_id\":\"${CI_CORRELATION_ID:?}\",\"category\":\"fault\",\"message\":\"$fault_message\"}"
+log_record="{\"schema\":\"ra.test.log.v2\",\"type\":\"log\",\"test\":\"$diagnostic_test_name\",\"trace_id\":\"trace-$case_id\",\"ci_correlation_id\":\"${CI_CORRELATION_ID:?}\",\"seq\":1,\"ts\":\"$diagnostic_ts\",\"t_ms\":0,\"level\":\"info\",\"category\":\"fault\",\"message\":\"$fault_message\"}"
+if [[ "${RECUR_AGENT_FAKE_MALFORMED_TEST_LOG:-0}" == "1" ]]; then
+  log_record="{\"schema\":\"ra.test.log.v2\",\"type\":\"log\",\"test\":\"$test_name\",\"ci_correlation_id\":\"${CI_CORRELATION_ID:?}\",\"category\":\"fault\",\"message\":\"$fault_message\"}"
 fi
-payload_record="{\"schema\":\"pi.test.log.v2\",\"type\":\"log\",\"test\":\"$diagnostic_test_name\",\"trace_id\":\"trace-$case_id\",\"ci_correlation_id\":\"${CI_CORRELATION_ID:?}\",\"seq\":2,\"ts\":\"$diagnostic_ts\",\"t_ms\":0,\"level\":\"info\",\"category\":\"artifact_payload\",\"message\":\"inline JSON artifact bytes\",\"context\":{\"artifact_name\":\"$summary_name\",\"content_encoding\":\"base64\",\"content_sha256\":\"$summary_sha\",\"content_base64\":\"$summary_base64\"}}"
+payload_record="{\"schema\":\"ra.test.log.v2\",\"type\":\"log\",\"test\":\"$diagnostic_test_name\",\"trace_id\":\"trace-$case_id\",\"ci_correlation_id\":\"${CI_CORRELATION_ID:?}\",\"seq\":2,\"ts\":\"$diagnostic_ts\",\"t_ms\":0,\"level\":\"info\",\"category\":\"artifact_payload\",\"message\":\"inline JSON artifact bytes\",\"context\":{\"artifact_name\":\"$summary_name\",\"content_encoding\":\"base64\",\"content_sha256\":\"$summary_sha\",\"content_base64\":\"$summary_base64\"}}"
 cat >"$TEST_LOG_JSONL_PATH" <<JSON
 $log_record
 $payload_record
@@ -790,26 +790,26 @@ fn run_persistence_fault_runner_with_fake_rch(
         .env("PERSISTENCE_CARGO_RUNNER", "rch")
         .env("PERSISTENCE_MIN_REPO_FREE_MB", "1")
         .env("PERSISTENCE_MIN_TMP_FREE_MB", "1")
-        .env("PI_FAKE_INVOCATION_LOG", &invocation_log);
+        .env("RECUR_AGENT_FAKE_INVOCATION_LOG", &invocation_log);
     match fault {
         FakePersistenceFault::None => {}
         FakePersistenceFault::OmitSqliteReports => {
-            command.env("PI_FAKE_OMIT_SQLITE_REPORTS", "1");
+            command.env("RECUR_AGENT_FAKE_OMIT_SQLITE_REPORTS", "1");
         }
         FakePersistenceFault::MalformedArtifactIndex => {
-            command.env("PI_FAKE_MALFORMED_ARTIFACT_INDEX", "1");
+            command.env("RECUR_AGENT_FAKE_MALFORMED_ARTIFACT_INDEX", "1");
         }
         FakePersistenceFault::MalformedTestLog => {
-            command.env("PI_FAKE_MALFORMED_TEST_LOG", "1");
+            command.env("RECUR_AGENT_FAKE_MALFORMED_TEST_LOG", "1");
         }
         FakePersistenceFault::TamperedSummaryPayload => {
-            command.env("PI_FAKE_TAMPERED_SUMMARY_PAYLOAD", "1");
+            command.env("RECUR_AGENT_FAKE_TAMPERED_SUMMARY_PAYLOAD", "1");
         }
         FakePersistenceFault::WrongTestLogIdentity => {
-            command.env("PI_FAKE_WRONG_TEST_LOG_IDENTITY", "1");
+            command.env("RECUR_AGENT_FAKE_WRONG_TEST_LOG_IDENTITY", "1");
         }
         FakePersistenceFault::WrongSummaryIdentity => {
-            command.env("PI_FAKE_WRONG_SUMMARY_IDENTITY", "1");
+            command.env("RECUR_AGENT_FAKE_WRONG_SUMMARY_IDENTITY", "1");
         }
     }
     command.output().expect("run persistence fault runner")
@@ -1159,7 +1159,7 @@ const FAKE_ORCHESTRATE_CORRELATION_ID: &str = "bench-schema-orchestrate-correlat
 fn install_fake_orchestrate_toolchain(bin_dir: &Path) {
     let cargo_stub = r#"#!/usr/bin/env bash
 set -euo pipefail
-if [[ "${PI_FAKE_RCH_EXECUTED:-0}" != "1" ]]; then
+if [[ "${RECUR_AGENT_FAKE_RCH_EXECUTED:-0}" != "1" ]]; then
   echo "cargo bypassed the required rch exec path" >&2
   exit 66
 fi
@@ -1194,7 +1194,7 @@ fi
 
 if [[ -n "$bench_name" && "$no_run" == "1" ]]; then
   :
-elif [[ -n "$bench_name" && -n "${PI_IDLE_RSS_RAW_RELATIVE_PATH:-}" ]]; then
+elif [[ -n "$bench_name" && -n "${RECUR_AGENT_IDLE_RSS_RAW_RELATIVE_PATH:-}" ]]; then
   python3 - "$target_dir/release/pi" <<'PY'
 import hashlib
 import json
@@ -1222,7 +1222,7 @@ bench_env_sha256 = hashlib.sha256(
     json.dumps(bench_env, separators=(",", ":"), sort_keys=True).encode()
 ).hexdigest()
 rss_values = [1048576, 1179648, 1310720, 1441792, 1572864]
-if os.environ.get("PI_FAKE_IDLE_RSS_OVER_BUDGET") == "1":
+if os.environ.get("RECUR_AGENT_FAKE_IDLE_RSS_OVER_BUDGET") == "1":
     rss_values[-1] = 64 * 1024 * 1024
 samples = [
     {"pid": 1001 + index, "process_name": "pi", "rss_bytes": rss_bytes}
@@ -1231,11 +1231,11 @@ samples = [
 max_rss = max(rss_values)
 representative = samples[rss_values.index(max_rss)]
 record = {
-    "schema": "pi.perf.idle_rss_measurement.v1",
+    "schema": "ra.perf.idle_rss_measurement.v1",
     "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "run_id": os.environ["PI_IDLE_RSS_CORRELATION_ID"],
-    "correlation_id": os.environ["PI_IDLE_RSS_CORRELATION_ID"],
-    "source_commit": os.environ["PI_IDLE_RSS_SOURCE_COMMIT"],
+    "run_id": os.environ["RECUR_AGENT_IDLE_RSS_CORRELATION_ID"],
+    "correlation_id": os.environ["RECUR_AGENT_IDLE_RSS_CORRELATION_ID"],
+    "source_commit": os.environ["RECUR_AGENT_IDLE_RSS_SOURCE_COMMIT"],
     "source_dirty": False,
     "pid": representative["pid"],
     "process_name": "pi",
@@ -1245,7 +1245,7 @@ record = {
     "rss_bytes": max_rss,
     "idle_state": "startup_before_user_input",
     "cargo_profile": "release",
-    "build_command": "cargo build --bin pi --release",
+    "build_command": "cargo build --bin ra --release",
     "sample_count": 5,
     "samples": samples,
     "rss_spread_bytes": max_rss - min(rss_values),
@@ -1257,7 +1257,7 @@ record = {
 print("[idle-rss-control] " + json.dumps(record, separators=(",", ":")))
 PY
 elif [[ -n "$bench_name" ]]; then
-  criterion_root="$target_dir/criterion/${PI_CRITERION_OUTPUT_SUBDIR:?}"
+  criterion_root="$target_dir/criterion/${RECUR_AGENT_CRITERION_OUTPUT_SUBDIR:?}"
   mkdir -p "$criterion_root/report"
   printf '%s\n' '<html>current isolated fixture report</html>' >"$criterion_root/report/index.html"
   printf '%s\n' '[bench-env] os=linux arch=x86_64 cpu="fixture" cores=8 mem_mb=1024 governor=performance turbo=disabled aslr=disabled thp=never noise_score=0 config_hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >&2
@@ -1290,17 +1290,17 @@ elif [[ -n "$bench_name" ]]; then
           exit 79
         fi
       done
-      if [[ "${PI_BENCH_RUN_ID:-}" != "${CI_CORRELATION_ID:?}" \
-        || "${PI_BENCH_CORRELATION_ID:-}" != "${CI_CORRELATION_ID:?}" \
-        || "${PI_BENCH_ALLOCATOR:-}" != "system" \
-        || "${PI_BENCH_BUILD_PROFILE:-}" != "perf" ]]; then
+      if [[ "${RECUR_AGENT_BENCH_RUN_ID:-}" != "${CI_CORRELATION_ID:?}" \
+        || "${RECUR_AGENT_BENCH_CORRELATION_ID:-}" != "${CI_CORRELATION_ID:?}" \
+        || "${RECUR_AGENT_BENCH_ALLOCATOR:-}" != "system" \
+        || "${RECUR_AGENT_BENCH_BUILD_PROFILE:-}" != "perf" ]]; then
         echo "criterion_pijs omitted canonical identity, allocator, or profile controls" >&2
         exit 80
       fi
       pijs_binary="$criterion_root/pijs_workload"
       printf '%s\n' '#!/usr/bin/env sh' 'exit 0' >"$pijs_binary"
       chmod +x "$pijs_binary"
-      if [[ "${PI_FAKE_DROP_RCH_PIJS_ARTIFACT:-0}" != "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_DROP_RCH_PIJS_ARTIFACT:-0}" != "1" ]]; then
         python3 - \
         "$criterion_root/pijs_workload.jsonl" \
         "$pijs_binary" \
@@ -1355,7 +1355,7 @@ for tool_calls in (1, 10):
     elapsed_us_f64 = 1_000_000.5
     records.append(
         {
-            "schema": "pi.perf.workload.v1",
+            "schema": "ra.perf.workload.v1",
             "timestamp": timestamp,
             "run_id": correlation_id,
             "correlation_id": correlation_id,
@@ -1419,7 +1419,7 @@ for record in records:
             "tool_executions": 20000,
             "event_executions": 2000,
             "comparison_contract": {
-                "schema": "pi.perf.cross_runtime_comparison.v1",
+                "schema": "ra.perf.cross_runtime_comparison.v1",
                 "claim_scope": "full_e2e_long_session",
                 "measurement_boundary": "matched_full_session_workflow",
                 "release_claim_eligible": True,
@@ -1478,7 +1478,7 @@ PY
       done
       mkdir -p "$criterion_root/context_intelligence"
       cat >"$criterion_root/context_intelligence/perf_budget.json" <<JSON
-{"schema":"pi.semantic_context.performance_budget.v1","generated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","source_commit":"${VERGEN_GIT_SHA:?}","source_dirty":false,"environment":{"cargo_target_dir":"$target_dir","tmpdir":"/tmp"},"host":{"os":"linux","arch":"x86_64"},"determinism":{"randomized_file_order_checked":true,"matched":true},"cache_hit_miss":{"cold_graph_build":"miss","warm_graph_build":"hit","incremental_update":"miss"},"metrics":{"context_graph_build_cold_ms":{"value_ms":1.0},"context_graph_build_warm_ms":{"value_ms":1.0},"context_incremental_update_ms":{"value_ms":1.0},"context_planning_ms":{"value_ms":1.0},"context_bundle_serialization_ms":{"value_ms":1.0},"context_bundle_estimated_bytes":{"bytes":8192.0}}}
+{"schema":"ra.semantic_context.performance_budget.v1","generated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","source_commit":"${VERGEN_GIT_SHA:?}","source_dirty":false,"environment":{"cargo_target_dir":"$target_dir","tmpdir":"/tmp"},"host":{"os":"linux","arch":"x86_64"},"determinism":{"randomized_file_order_checked":true,"matched":true},"cache_hit_miss":{"cold_graph_build":"miss","warm_graph_build":"hit","incremental_update":"miss"},"metrics":{"context_graph_build_cold_ms":{"value_ms":1.0},"context_graph_build_warm_ms":{"value_ms":1.0},"context_incremental_update_ms":{"value_ms":1.0},"context_planning_ms":{"value_ms":1.0},"context_bundle_serialization_ms":{"value_ms":1.0},"context_bundle_estimated_bytes":{"bytes":8192.0}}}
 JSON
       ;;
   esac
@@ -1487,22 +1487,22 @@ fi
 case "$test_name" in
   bench_scenario_runner)
     cat >"$artifact_output_dir/scenario_runner.jsonl" <<'JSON'
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"cold_start","extension":"hello","stats":{"p95_ms":18.0},"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/cold_start","replay_input":{"runs":5}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"warm_start","extension":"hello","stats":{"p95_ms":8.0},"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/warm_start","replay_input":{"runs":5}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"tool_call","extension":"hello","per_call_us":33.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/tool_call","replay_input":{"iterations":500}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"event_dispatch","extension":"hello","per_event_us":21.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/event_dispatch","replay_input":{"iterations":500}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":48.0,"append_ms":36.0,"save_ms":22.0,"index_ms":11.0,"total_ms":117.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_100000","replay_input":{"session_messages":100000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":62.0,"append_ms":45.0,"save_ms":29.0,"index_ms":13.0,"total_ms":149.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_200000","replay_input":{"session_messages":200000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":91.0,"append_ms":68.0,"save_ms":43.0,"index_ms":18.0,"total_ms":220.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_500000","replay_input":{"session_messages":500000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":136.0,"append_ms":101.0,"save_ms":64.0,"index_ms":24.0,"total_ms":325.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_1000000","replay_input":{"session_messages":1000000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":212.0,"append_ms":158.0,"save_ms":97.0,"index_ms":35.0,"total_ms":502.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_5000000","replay_input":{"session_messages":5000000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":44.0,"append_ms":32.0,"save_ms":19.0,"index_ms":10.0,"total_ms":105.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_100000","replay_input":{"session_messages":100000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":57.0,"append_ms":41.0,"save_ms":25.0,"index_ms":12.0,"total_ms":135.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_200000","replay_input":{"session_messages":200000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":84.0,"append_ms":61.0,"save_ms":37.0,"index_ms":16.0,"total_ms":198.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_500000","replay_input":{"session_messages":500000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":124.0,"append_ms":90.0,"save_ms":54.0,"index_ms":21.0,"total_ms":289.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_1000000","replay_input":{"session_messages":1000000}}}
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":198.0,"append_ms":146.0,"save_ms":88.0,"index_ms":33.0,"total_ms":465.0,"protocol_schema":"pi.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"pi_agent_rust","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_5000000","replay_input":{"session_messages":5000000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"cold_start","extension":"hello","stats":{"p95_ms":18.0},"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/cold_start","replay_input":{"runs":5}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"warm_start","extension":"hello","stats":{"p95_ms":8.0},"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/warm_start","replay_input":{"runs":5}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"tool_call","extension":"hello","per_call_us":33.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/tool_call","replay_input":{"iterations":500}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"event_dispatch","extension":"hello","per_event_us":21.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","partition":"matched-state","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/event_dispatch","replay_input":{"iterations":500}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":48.0,"append_ms":36.0,"save_ms":22.0,"index_ms":11.0,"total_ms":117.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_100000","replay_input":{"session_messages":100000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":62.0,"append_ms":45.0,"save_ms":29.0,"index_ms":13.0,"total_ms":149.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_200000","replay_input":{"session_messages":200000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":91.0,"append_ms":68.0,"save_ms":43.0,"index_ms":18.0,"total_ms":220.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_500000","replay_input":{"session_messages":500000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":136.0,"append_ms":101.0,"save_ms":64.0,"index_ms":24.0,"total_ms":325.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_1000000","replay_input":{"session_messages":1000000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"matched-state","open_ms":212.0,"append_ms":158.0,"save_ms":97.0,"index_ms":35.0,"total_ms":502.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"matched-state/session_5000000","replay_input":{"session_messages":5000000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":44.0,"append_ms":32.0,"save_ms":19.0,"index_ms":10.0,"total_ms":105.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_100000","replay_input":{"session_messages":100000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":57.0,"append_ms":41.0,"save_ms":25.0,"index_ms":12.0,"total_ms":135.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_200000","replay_input":{"session_messages":200000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":84.0,"append_ms":61.0,"save_ms":37.0,"index_ms":16.0,"total_ms":198.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_500000","replay_input":{"session_messages":500000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":124.0,"append_ms":90.0,"save_ms":54.0,"index_ms":21.0,"total_ms":289.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_1000000","replay_input":{"session_messages":1000000}}}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","scenario":"session_workload_matrix","extension":"core","partition":"realistic","open_ms":198.0,"append_ms":146.0,"save_ms":88.0,"index_ms":33.0,"total_ms":465.0,"protocol_schema":"ra.bench.protocol.v1","protocol_version":"1.0.0","evidence_class":"measured","confidence":"high","correlation_id":"stub-correlation","scenario_metadata":{"runtime":"recur_agent","build_profile":"perf","host":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8},"scenario_id":"realistic/session_5000000","replay_input":{"session_messages":5000000}}}
 JSON
-    if [[ "${PI_FAKE_DROP_INDEX_STAGE_SAMPLE:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_DROP_INDEX_STAGE_SAMPLE:-0}" == "1" ]]; then
       python3 - "$artifact_output_dir/scenario_runner.jsonl" <<'PY'
 import json
 import os
@@ -1527,7 +1527,7 @@ for line in rows:
 path.write_text("\n".join(rewritten) + ("\n" if rewritten else ""), encoding="utf-8")
 PY
     fi
-    if [[ "${PI_FAKE_DROP_ALL_STAGE_SAMPLES:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_DROP_ALL_STAGE_SAMPLES:-0}" == "1" ]]; then
       python3 - "$artifact_output_dir/scenario_runner.jsonl" <<'PY'
 import json
 import sys
@@ -1545,7 +1545,7 @@ for line in rows:
 path.write_text("\n".join(rewritten) + ("\n" if rewritten else ""), encoding="utf-8")
 PY
     fi
-    if [[ "${PI_FAKE_ZERO_STAGE_SAMPLE:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_ZERO_STAGE_SAMPLE:-0}" == "1" ]]; then
       python3 - "$artifact_output_dir/scenario_runner.jsonl" <<'PY'
 import json
 import sys
@@ -1565,18 +1565,18 @@ for line in rows:
 path.write_text("\n".join(rewritten) + ("\n" if rewritten else ""), encoding="utf-8")
 PY
     fi
-    if [[ "${PI_BENCH_LEGACY_RUNTIMES:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_BENCH_LEGACY_RUNTIMES:-0}" == "1" ]]; then
       cat >"$artifact_output_dir/legacy_extension_workloads.jsonl" <<'JSON'
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"hello","runtime_kind":"node","runs":10,"summary":{"count":10,"p50_ms":10.0,"p95_ms":10.0}}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"pirate","runtime_kind":"node","runs":10,"summary":{"count":10,"p50_ms":12.0,"p95_ms":12.0}}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_tool_call/hello","extension":"hello","runtime_kind":"node","iterations":2000,"per_call_us":20.0}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_event_hook/before_agent_start","extension":"pirate","runtime_kind":"node","iterations":2000,"per_call_us":22.0}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"full_e2e_long_session","extension":"hello+pirate","runtime_kind":"node","iterations":2000,"tool_calls_per_iteration":10,"tool_executions":20000,"event_executions":2000,"elapsed_ms":2400.0,"workload_shape":{"extension_loads_per_iteration":2,"tool_calls_per_iteration":10,"event_hooks_per_iteration":1}}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"hello","runtime_kind":"bun","runs":10,"summary":{"count":10,"p50_ms":8.0,"p95_ms":8.0}}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"pirate","runtime_kind":"bun","runs":10,"summary":{"count":10,"p50_ms":9.0,"p95_ms":9.0}}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_tool_call/hello","extension":"hello","runtime_kind":"bun","iterations":2000,"per_call_us":15.0}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"ext_event_hook/before_agent_start","extension":"pirate","runtime_kind":"bun","iterations":2000,"per_call_us":16.0}
-{"schema":"pi.ext.legacy_bench.v1","scenario":"full_e2e_long_session","extension":"hello+pirate","runtime_kind":"bun","iterations":2000,"tool_calls_per_iteration":10,"tool_executions":20000,"event_executions":2000,"elapsed_ms":1800.0,"workload_shape":{"extension_loads_per_iteration":2,"tool_calls_per_iteration":10,"event_hooks_per_iteration":1}}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"hello","runtime_kind":"node","runs":10,"summary":{"count":10,"p50_ms":10.0,"p95_ms":10.0}}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"pirate","runtime_kind":"node","runs":10,"summary":{"count":10,"p50_ms":12.0,"p95_ms":12.0}}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_tool_call/hello","extension":"hello","runtime_kind":"node","iterations":2000,"per_call_us":20.0}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_event_hook/before_agent_start","extension":"pirate","runtime_kind":"node","iterations":2000,"per_call_us":22.0}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"full_e2e_long_session","extension":"hello+pirate","runtime_kind":"node","iterations":2000,"tool_calls_per_iteration":10,"tool_executions":20000,"event_executions":2000,"elapsed_ms":2400.0,"workload_shape":{"extension_loads_per_iteration":2,"tool_calls_per_iteration":10,"event_hooks_per_iteration":1}}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"hello","runtime_kind":"bun","runs":10,"summary":{"count":10,"p50_ms":8.0,"p95_ms":8.0}}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_load_init/load_init_cold","extension":"pirate","runtime_kind":"bun","runs":10,"summary":{"count":10,"p50_ms":9.0,"p95_ms":9.0}}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_tool_call/hello","extension":"hello","runtime_kind":"bun","iterations":2000,"per_call_us":15.0}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"ext_event_hook/before_agent_start","extension":"pirate","runtime_kind":"bun","iterations":2000,"per_call_us":16.0}
+{"schema":"ra.ext.legacy_bench.v1","scenario":"full_e2e_long_session","extension":"hello+pirate","runtime_kind":"bun","iterations":2000,"tool_calls_per_iteration":10,"tool_executions":20000,"event_executions":2000,"elapsed_ms":1800.0,"workload_shape":{"extension_loads_per_iteration":2,"tool_calls_per_iteration":10,"event_hooks_per_iteration":1}}
 JSON
     fi
     python3 - "$artifact_output_dir/scenario_runner.jsonl" <<'PY'
@@ -1591,7 +1591,7 @@ rewritten = []
 for line in rows:
     record = json.loads(line)
     if record.get("scenario") == "session_workload_matrix":
-        if os.environ.get("PI_FAKE_SYNTHETIC_MATRIX_EVIDENCE") == "1":
+        if os.environ.get("RECUR_AGENT_FAKE_SYNTHETIC_MATRIX_EVIDENCE") == "1":
             record.update(
                 {
                     "evidence_class": "inferred",
@@ -1655,7 +1655,7 @@ for line in rows:
     rewritten.append(json.dumps(record, separators=(",", ":")))
 path.write_text("\n".join(rewritten) + ("\n" if rewritten else ""), encoding="utf-8")
 PY
-    if [[ "${PI_FAKE_DROP_SWARM_METRICS:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_DROP_SWARM_METRICS:-0}" == "1" ]]; then
       python3 - "$artifact_output_dir/scenario_runner.jsonl" <<'PY'
 import json
 import sys
@@ -1677,8 +1677,8 @@ PY
     python3 - \
       "$artifact_output_dir/ext_bench_harness.jsonl" \
       "$artifact_output_dir/ext_bench_harness_report.json" \
-      "${PI_FAKE_DROP_EXT_BENCH_HARNESS_COVERAGE:-0}" \
-      "${PI_FAKE_CORRUPT_EXT_BENCH_BUDGET:-0}" <<'PY'
+      "${RECUR_AGENT_FAKE_DROP_EXT_BENCH_HARNESS_COVERAGE:-0}" \
+      "${RECUR_AGENT_FAKE_CORRUPT_EXT_BENCH_BUDGET:-0}" <<'PY'
 import hashlib
 import json
 import os
@@ -1690,7 +1690,7 @@ jsonl_path = Path(sys.argv[1])
 report_path = Path(sys.argv[2])
 drop_coverage = sys.argv[3] == "1"
 corrupt_budget = sys.argv[4] == "1"
-raw_mode = os.environ.get("PI_BENCH_MODE", "pr").strip().lower()
+raw_mode = os.environ.get("RECUR_AGENT_BENCH_MODE", "pr").strip().lower()
 mode = "nightly" if raw_mode in {"nightly", "full"} else (
     "custom" if raw_mode == "custom" else "pr"
 )
@@ -1709,9 +1709,9 @@ def unsigned_override(name, fallback):
 
 
 default_max, default_iterations, default_event_count = mode_defaults[mode]
-max_extensions = unsigned_override("PI_BENCH_MAX", default_max)
-iterations = unsigned_override("PI_BENCH_ITERATIONS", default_iterations)
-event_count = unsigned_override("PI_BENCH_EVENT_COUNT", default_event_count)
+max_extensions = unsigned_override("RECUR_AGENT_BENCH_MAX", default_max)
+iterations = unsigned_override("RECUR_AGENT_BENCH_ITERATIONS", default_iterations)
+event_count = unsigned_override("RECUR_AGENT_BENCH_EVENT_COUNT", default_event_count)
 manifest = json.loads(
     Path("tests/ext_conformance/VALIDATED_MANIFEST.json").read_text(encoding="utf-8")
 )
@@ -1789,7 +1789,7 @@ fake_env = {
     "cpu_model": "fake-rch-worker",
     "cpu_cores": 8,
     "mem_total_mb": 65536,
-    "build_profile": os.environ["PI_BENCH_BUILD_PROFILE"],
+    "build_profile": os.environ["RECUR_AGENT_BENCH_BUILD_PROFILE"],
     "git_commit": os.environ["VERGEN_GIT_SHA"],
     "features": [
         "bpe-tokens",
@@ -1840,8 +1840,8 @@ records = []
 for entry in selected:
     records.append(
         {
-            "schema": "pi.ext.rust_bench.v1",
-            "runtime": "pi_agent_rust",
+            "schema": "ra.ext.rust_bench.v1",
+            "runtime": "recur_agent",
             "scenario": "cold_load",
             "extension": entry["id"],
             "group": group_for(entry),
@@ -1856,8 +1856,8 @@ for index, entry in enumerate(selected):
         continue
     records.append(
         {
-            "schema": "pi.ext.rust_bench.v1",
-            "runtime": "pi_agent_rust",
+            "schema": "ra.ext.rust_bench.v1",
+            "runtime": "recur_agent",
             "scenario": "warm_load",
             "extension": entry["id"],
             "group": group_for(entry),
@@ -1869,8 +1869,8 @@ for index, entry in enumerate(selected):
     )
 records.append(
     {
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "event_dispatch",
         "extension": f"{len(selected)}_extensions",
         "group": "aggregate",
@@ -1932,7 +1932,7 @@ budget_checks = [
 if corrupt_budget:
     budget_checks[0]["actual_us"] = 1
 report = {
-    "schema": "pi.bench.harness_report.v1",
+    "schema": "ra.bench.harness_report.v1",
     "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "mode": mode,
     "env": fake_env,
@@ -1967,10 +1967,10 @@ report_path.write_text(json.dumps(report, separators=(",", ":")), encoding="utf-
 PY
     ;;
   perf_bench_harness)
-    if [[ -n "${PI_FAKE_PERF_BENCH_INVOCATION_MARKER:-}" ]]; then
-      printf '%s\n' invoked >"$PI_FAKE_PERF_BENCH_INVOCATION_MARKER"
+    if [[ -n "${RECUR_AGENT_FAKE_PERF_BENCH_INVOCATION_MARKER:-}" ]]; then
+      printf '%s\n' invoked >"$RECUR_AGENT_FAKE_PERF_BENCH_INVOCATION_MARKER"
     fi
-    if [[ "${PI_FAKE_RCH_STRICT_PINNED:-0}" != "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_RCH_STRICT_PINNED:-0}" != "1" ]]; then
       echo "perf_bench_harness did not use the clean committed-source pin" >&2
       exit 73
     fi
@@ -1994,7 +1994,7 @@ PY
         exit 72
       fi
     done
-    if [[ "${PI_FAKE_REQUIRE_BENCH_CONTROLS:-0}" == "1" ]] \
+    if [[ "${RECUR_AGENT_FAKE_REQUIRE_BENCH_CONTROLS:-0}" == "1" ]] \
       && { [[ "${BENCH_QUICK:-}" != "1" ]] || [[ "${BENCH_ITERATIONS:-}" != "1" ]]; }; then
       echo "perf_bench_harness did not receive benchmark quick/iteration controls" >&2
       exit 75
@@ -2003,20 +2003,20 @@ PY
       echo "perf_bench_harness omitted BENCH_OUTPUT_TARGET_SUBDIR" >&2
       exit 69
     fi
-    if [[ "${PI_FAKE_DROP_RCH_EXTENSION_ARTIFACT:-0}" != "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_DROP_RCH_EXTENSION_ARTIFACT:-0}" != "1" ]]; then
       mkdir -p "$target_dir/$BENCH_OUTPUT_TARGET_SUBDIR"
       extension_commit="${VERGEN_GIT_SHA:?}"
-      if [[ "${PI_FAKE_WRONG_RCH_EXTENSION_COMMIT:-0}" == "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_WRONG_RCH_EXTENSION_COMMIT:-0}" == "1" ]]; then
         extension_commit="ffffffffffffffffffffffffffffffffffffffff"
       fi
-      benchmark_run_id="${PI_BENCH_RUN_ID:?}"
-      if [[ "${PI_FAKE_STALE_RCH_EXTENSION_ARTIFACT:-0}" == "1" ]]; then
+      benchmark_run_id="${RECUR_AGENT_BENCH_RUN_ID:?}"
+      if [[ "${RECUR_AGENT_FAKE_STALE_RCH_EXTENSION_ARTIFACT:-0}" == "1" ]]; then
         benchmark_run_id="stale-benchmark-run"
       fi
       binary_sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       binary_path="/target/perf/deps/perf_bench_harness-stub"
       extension_features_json='["bpe-tokens","ext-conformance","ftui","sqlite-sessions","tui"]'
-      if [[ "${PI_FAKE_WRONG_RCH_EXTENSION_BINARY_PROFILE:-0}" == "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_WRONG_RCH_EXTENSION_BINARY_PROFILE:-0}" == "1" ]]; then
         binary_path="/target/release/deps/perf_bench_harness-stub"
       fi
       config_hash="$(python3 - "$extension_commit" "$binary_sha256" "$binary_path" <<'PY'
@@ -2051,7 +2051,7 @@ encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 print(hashlib.sha256(encoded).hexdigest())
 PY
 )"
-      if [[ "${PI_FAKE_INVALID_RCH_EXTENSION_CONFIG_HASH:-0}" == "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_INVALID_RCH_EXTENSION_CONFIG_HASH:-0}" == "1" ]]; then
         config_hash="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       fi
       extension_artifact="$target_dir/$BENCH_OUTPUT_TARGET_SUBDIR/extension_bench.jsonl"
@@ -2067,16 +2067,16 @@ PY
       for extension_name in "${extension_names[@]}"; do
         for scenario_name in cold_start warm_start; do
           cat >>"$extension_artifact" <<JSON
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","benchmark_run_id":"$benchmark_run_id","source_commit":"$extension_commit","source_dirty":false,"scenario":"$scenario_name","extension":"$extension_name","runs":1,"summary":{"count":1,"min_ms":1.0,"p50_ms":1.0,"p95_ms":1.0,"p99_ms":1.0,"p999_ms":1.0,"max_ms":1.0,"mean_ms":1.0},"elapsed_ms":1.0,"per_call_us":1000.0,"calls_per_sec":1000.0,"env":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8,"mem_total_mb":1024,"build_profile":"perf","executable_build_profile":"perf","executable_profile_verified":true,"build_fingerprint_verified":true,"build_profile_verified":true,"build_fingerprint_contract":"cargo_build_fingerprint.v1","compiled_profile_family":"release","compiled_opt_level":"3","compiled_debug":"true","debug_assertions":false,"git_commit":"$extension_commit","source_dirty":false,"features":$extension_features_json,"binary_path":"$binary_path","binary_sha256":"$binary_sha256","config_hash":"$config_hash"},"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","benchmark_run_id":"$benchmark_run_id","source_commit":"$extension_commit","source_dirty":false,"scenario":"$scenario_name","extension":"$extension_name","runs":1,"summary":{"count":1,"min_ms":1.0,"p50_ms":1.0,"p95_ms":1.0,"p99_ms":1.0,"p999_ms":1.0,"max_ms":1.0,"mean_ms":1.0},"elapsed_ms":1.0,"per_call_us":1000.0,"calls_per_sec":1000.0,"env":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8,"mem_total_mb":1024,"build_profile":"perf","executable_build_profile":"perf","executable_profile_verified":true,"build_fingerprint_verified":true,"build_profile_verified":true,"build_fingerprint_contract":"cargo_build_fingerprint.v1","compiled_profile_family":"release","compiled_opt_level":"3","compiled_debug":"true","debug_assertions":false,"git_commit":"$extension_commit","source_dirty":false,"features":$extension_features_json,"binary_path":"$binary_path","binary_sha256":"$binary_sha256","config_hash":"$config_hash"},"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 JSON
         done
       done
       cat >>"$extension_artifact" <<JSON
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","benchmark_run_id":"$benchmark_run_id","source_commit":"$extension_commit","source_dirty":false,"scenario":"tool_call","extension":"hello","runs":1,"summary":{"count":1,"min_ms":1.0,"p50_ms":1.0,"p95_ms":1.0,"p99_ms":1.0,"p999_ms":1.0,"max_ms":1.0,"mean_ms":1.0},"elapsed_ms":1.0,"per_call_us":1000.0,"calls_per_sec":1000.0,"env":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8,"mem_total_mb":1024,"build_profile":"perf","executable_build_profile":"perf","executable_profile_verified":true,"build_fingerprint_verified":true,"build_profile_verified":true,"build_fingerprint_contract":"cargo_build_fingerprint.v1","compiled_profile_family":"release","compiled_opt_level":"3","compiled_debug":"true","debug_assertions":false,"git_commit":"$extension_commit","source_dirty":false,"features":$extension_features_json,"binary_path":"$binary_path","binary_sha256":"$binary_sha256","config_hash":"$config_hash"},"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","benchmark_run_id":"$benchmark_run_id","source_commit":"$extension_commit","source_dirty":false,"scenario":"tool_call","extension":"hello","runs":1,"summary":{"count":1,"min_ms":1.0,"p50_ms":1.0,"p95_ms":1.0,"p99_ms":1.0,"p999_ms":1.0,"max_ms":1.0,"mean_ms":1.0},"elapsed_ms":1.0,"per_call_us":1000.0,"calls_per_sec":1000.0,"env":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8,"mem_total_mb":1024,"build_profile":"perf","executable_build_profile":"perf","executable_profile_verified":true,"build_fingerprint_verified":true,"build_profile_verified":true,"build_fingerprint_contract":"cargo_build_fingerprint.v1","compiled_profile_family":"release","compiled_opt_level":"3","compiled_debug":"true","debug_assertions":false,"git_commit":"$extension_commit","source_dirty":false,"features":$extension_features_json,"binary_path":"$binary_path","binary_sha256":"$binary_sha256","config_hash":"$config_hash"},"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 JSON
-      if [[ "${PI_FAKE_DROP_RCH_EXTENSION_COVERAGE:-0}" != "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_DROP_RCH_EXTENSION_COVERAGE:-0}" != "1" ]]; then
         cat >>"$extension_artifact" <<JSON
-{"schema":"pi.ext.rust_bench.v1","runtime":"pi_agent_rust","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","benchmark_run_id":"$benchmark_run_id","source_commit":"$extension_commit","source_dirty":false,"scenario":"event_hook","extension":"pirate","runs":1,"summary":{"count":1,"min_ms":1.0,"p50_ms":1.0,"p95_ms":1.0,"p99_ms":1.0,"p999_ms":1.0,"max_ms":1.0,"mean_ms":1.0},"elapsed_ms":1.0,"per_call_us":1000.0,"calls_per_sec":1000.0,"env":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8,"mem_total_mb":1024,"build_profile":"perf","executable_build_profile":"perf","executable_profile_verified":true,"build_fingerprint_verified":true,"build_profile_verified":true,"build_fingerprint_contract":"cargo_build_fingerprint.v1","compiled_profile_family":"release","compiled_opt_level":"3","compiled_debug":"true","debug_assertions":false,"git_commit":"$extension_commit","source_dirty":false,"features":$extension_features_json,"binary_path":"$binary_path","binary_sha256":"$binary_sha256","config_hash":"$config_hash"},"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+{"schema":"ra.ext.rust_bench.v1","runtime":"recur_agent","run_id":"${CI_CORRELATION_ID:?}","correlation_id":"${CI_CORRELATION_ID:?}","benchmark_run_id":"$benchmark_run_id","source_commit":"$extension_commit","source_dirty":false,"scenario":"event_hook","extension":"pirate","runs":1,"summary":{"count":1,"min_ms":1.0,"p50_ms":1.0,"p95_ms":1.0,"p99_ms":1.0,"p999_ms":1.0,"max_ms":1.0,"mean_ms":1.0},"elapsed_ms":1.0,"per_call_us":1000.0,"calls_per_sec":1000.0,"env":{"os":"linux","arch":"x86_64","cpu_model":"stub","cpu_cores":8,"mem_total_mb":1024,"build_profile":"perf","executable_build_profile":"perf","executable_profile_verified":true,"build_fingerprint_verified":true,"build_profile_verified":true,"build_fingerprint_contract":"cargo_build_fingerprint.v1","compiled_profile_family":"release","compiled_opt_level":"3","compiled_debug":"true","debug_assertions":false,"git_commit":"$extension_commit","source_dirty":false,"features":$extension_features_json,"binary_path":"$binary_path","binary_sha256":"$binary_sha256","config_hash":"$config_hash"},"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 JSON
       fi
       printf '%s\n' '# fake extension benchmark summary' \
@@ -2084,10 +2084,10 @@ JSON
     fi
     ;;
   perf_budgets)
-    if [[ "${PI_PERF_POST_GENERATION:-0}" == "1" ]]; then
-      if [[ "${PI_FAKE_RCH_STRICT_PINNED:-0}" != "1" \
-        || "${PI_FAKE_RCH_HAS_OVERLAY:-0}" != "1" \
-        || "${PERF_EVIDENCE_DIR:-}" != "${PI_FAKE_RCH_OVERLAY_PATH:-}" ]]; then
+    if [[ "${RECUR_AGENT_PERF_POST_GENERATION:-0}" == "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_RCH_STRICT_PINNED:-0}" != "1" \
+        || "${RECUR_AGENT_FAKE_RCH_HAS_OVERLAY:-0}" != "1" \
+        || "${PERF_EVIDENCE_DIR:-}" != "${RECUR_AGENT_FAKE_RCH_OVERLAY_PATH:-}" ]]; then
         echo "post-generation perf_budgets must use a clean current-evidence overlay" >&2
         exit 74
       fi
@@ -2101,7 +2101,7 @@ JSON
       python3 - \
         "${PERF_EVIDENCE_DIR:?}" \
         "${CI_CORRELATION_ID:?}" \
-        "${PI_PERF_EXPECTED_SOURCE_COMMIT:?}" <<'PY'
+        "${RECUR_AGENT_PERF_EXPECTED_SOURCE_COMMIT:?}" <<'PY'
 import json
 import os
 import re
@@ -2113,7 +2113,7 @@ expected_correlation_id = sys.argv[2]
 expected_source_commit = sys.argv[3]
 inventory_path = evidence_dir / "post_generation_evidence_inventory.json"
 inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-if inventory.get("schema") != "pi.perf.post_generation_evidence_inventory.v1":
+if inventory.get("schema") != "ra.perf.post_generation_evidence_inventory.v1":
     raise SystemExit("post-generation evidence inventory schema mismatch")
 if inventory.get("source_commit") != expected_source_commit:
     raise SystemExit("post-generation evidence inventory source_commit mismatch")
@@ -2203,7 +2203,7 @@ for name in (
         support_checks = payload.get("support_checks")
         if (
             payload.get("schema")
-            != "pi.perf.post_generation_producer_admission.v1"
+            != "ra.perf.post_generation_producer_admission.v1"
             or payload.get("status") != "ready"
             or payload.get("failure_count") != 0
             or payload.get("failures") != []
@@ -2264,14 +2264,14 @@ for name in (
             if observed_entries != contract:
                 raise SystemExit("post-generation producer admission entry mismatch")
 marker = {
-    "schema": "pi.perf.fake_post_generation_invocation.v1",
+    "schema": "ra.perf.fake_post_generation_invocation.v1",
     "correlation_id": expected_correlation_id,
     "test_filter": "ci_enforced_budgets_fail_on_regression_or_missing_data",
     "exact": True,
 }
-if os.environ.get("PI_FAKE_MUTATE_POST_GENERATION_PACKAGE") == "1":
+if os.environ.get("RECUR_AGENT_FAKE_MUTATE_POST_GENERATION_PACKAGE") == "1":
     (evidence_dir / "consumer-unlisted.json").write_text(
-        '{"schema":"pi.perf.consumer_mutation.v1"}\n', encoding="utf-8"
+        '{"schema":"ra.perf.consumer_mutation.v1"}\n', encoding="utf-8"
     )
 print(json.dumps(marker, sort_keys=True))
 PY
@@ -2317,7 +2317,7 @@ def fake_comparison_contract(claim_scope):
     }
     boundary, workload_shape = definitions[claim_scope]
     return {
-        "schema": "pi.perf.cross_runtime_comparison.v1",
+        "schema": "ra.perf.cross_runtime_comparison.v1",
         "claim_scope": claim_scope,
         "measurement_boundary": boundary,
         "release_claim_eligible": True,
@@ -2350,7 +2350,7 @@ for relative_path, correlation_field in artifacts:
             raw_lines.append(line)
     if (
         relative_path == "legacy_extension_workloads.jsonl"
-        and os.environ.get("PI_FAKE_DROP_LEGACY_BENCH_COVERAGE") == "1"
+        and os.environ.get("RECUR_AGENT_FAKE_DROP_LEGACY_BENCH_COVERAGE") == "1"
         and records
     ):
         records.pop()
@@ -2384,7 +2384,7 @@ for relative_path, correlation_field in artifacts:
                 "full_e2e_long_session"
             )
         elif relative_path == "legacy_extension_workloads.jsonl":
-            portable_shim = os.environ.get("PI_FAKE_PORTABLE_LEGACY_SHIM") == "1"
+            portable_shim = os.environ.get("RECUR_AGENT_FAKE_PORTABLE_LEGACY_SHIM") == "1"
             if portable_shim:
                 record["runtime"] = (
                     f"portable_{record['runtime_kind']}_extension_api"
@@ -2423,7 +2423,7 @@ for relative_path, correlation_field in artifacts:
         and records
     ):
         if (
-            os.environ.get("PI_FAKE_INJECT_FOREIGN_SCENARIO_ROW") == "1"
+            os.environ.get("RECUR_AGENT_FAKE_INJECT_FOREIGN_SCENARIO_ROW") == "1"
             and not any(
                 record.get("orchestration_correlation_id") == "foreign-correlation"
                 for record in records
@@ -2433,7 +2433,7 @@ for relative_path, correlation_field in artifacts:
             foreign["orchestration_correlation_id"] = "foreign-correlation"
             foreign["total_ms"] = 0.001
             records.append(foreign)
-        if os.environ.get("PI_FAKE_INJECT_STALE_SCENARIO_ROW") == "1":
+        if os.environ.get("RECUR_AGENT_FAKE_INJECT_STALE_SCENARIO_ROW") == "1":
             stale = dict(records[-1])
             stale["timestamp"] = "2000-01-01T00:00:00Z"
             stale["total_ms"] = 0.002
@@ -2446,7 +2446,7 @@ for relative_path, correlation_field in artifacts:
         encoding="utf-8",
     )
 PY
-  if [[ "${PI_FAKE_INJECT_MALFORMED_SCENARIO_ROW:-0}" == "1" ]] \
+  if [[ "${RECUR_AGENT_FAKE_INJECT_MALFORMED_SCENARIO_ROW:-0}" == "1" ]] \
     && ! grep -qx '{not-json' "$artifact_output_dir/scenario_runner.jsonl" 2>/dev/null; then
     printf '{not-json\n' >>"$artifact_output_dir/scenario_runner.jsonl"
   fi
@@ -2458,7 +2458,7 @@ exit 0
 set -euo pipefail
 case "${1:-}" in
   check)
-    if [[ "${PI_FAKE_RCH_CHECK_OK:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_RCH_CHECK_OK:-0}" == "1" ]]; then
       exit 0
     fi
     exit 2
@@ -2472,13 +2472,13 @@ case "${1:-}" in
       BENCH_OUTPUT_TARGET_SUBDIR \
       BENCH_QUICK \
       BENCH_ITERATIONS \
-      PI_BENCH_RUN_ID \
-      PI_BENCH_CORRELATION_ID \
-      PI_BENCH_ALLOCATOR \
-      PI_BENCH_MODE \
-      PI_BENCH_LEGACY_RUNTIMES \
+      RECUR_AGENT_BENCH_RUN_ID \
+      RECUR_AGENT_BENCH_CORRELATION_ID \
+      RECUR_AGENT_BENCH_ALLOCATOR \
+      RECUR_AGENT_BENCH_MODE \
+      RECUR_AGENT_BENCH_LEGACY_RUNTIMES \
       CARGO_BUILD_JOBS \
-      PI_CRITERION_OUTPUT_SUBDIR; do
+      RECUR_AGENT_CRITERION_OUTPUT_SUBDIR; do
       case ",${RCH_ENV_ALLOWLIST:-}," in
         *",$key,"*) ;;
         *)
@@ -2538,7 +2538,7 @@ case "${1:-}" in
       exit 68
     fi
     if [[ "$has_overlay" == "1" ]]; then
-      for key in PERF_EVIDENCE_DIR PI_PERF_POST_GENERATION PI_PERF_EXPECTED_SOURCE_COMMIT CI_CORRELATION_ID PI_PERF_STRICT; do
+      for key in PERF_EVIDENCE_DIR RECUR_AGENT_PERF_POST_GENERATION RECUR_AGENT_PERF_EXPECTED_SOURCE_COMMIT CI_CORRELATION_ID RECUR_AGENT_PERF_STRICT; do
         case ",${RCH_ENV_ALLOWLIST:-}," in
           *",$key,"*) ;;
           *)
@@ -2548,12 +2548,12 @@ case "${1:-}" in
         esac
       done
     fi
-    if PI_FAKE_RCH_EXECUTED=1 \
-      PI_FAKE_RCH_STRICT_PINNED="$strict_pinned" \
-      PI_FAKE_RCH_HAS_OVERLAY="$has_overlay" \
-      PI_FAKE_RCH_OVERLAY_PATH="$overlay_path" \
+    if RECUR_AGENT_FAKE_RCH_EXECUTED=1 \
+      RECUR_AGENT_FAKE_RCH_STRICT_PINNED="$strict_pinned" \
+      RECUR_AGENT_FAKE_RCH_HAS_OVERLAY="$has_overlay" \
+      RECUR_AGENT_FAKE_RCH_OVERLAY_PATH="$overlay_path" \
       "$@"; then
-      if [[ "${PI_FAKE_RCH_LOCAL_FALLBACK:-0}" == "1" ]]; then
+      if [[ "${RECUR_AGENT_FAKE_RCH_LOCAL_FALLBACK:-0}" == "1" ]]; then
         echo "[RCH] local (fixture fallback)" >&2
       else
         echo "[RCH] remote fixture-worker (1.00s)" >&2
@@ -2577,24 +2577,24 @@ esac
 set -euo pipefail
 case "${1:-}" in
   rev-parse)
-    if [[ "${PI_FAKE_GIT_IDENTITY_UNAVAILABLE:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_GIT_IDENTITY_UNAVAILABLE:-0}" == "1" ]]; then
       exit 64
     fi
     call_number=1
-    if [[ -n "${PI_FAKE_GIT_REV_PARSE_STATE_FILE:-}" ]]; then
-      if [[ -f "$PI_FAKE_GIT_REV_PARSE_STATE_FILE" ]]; then
-        read -r call_number <"$PI_FAKE_GIT_REV_PARSE_STATE_FILE"
+    if [[ -n "${RECUR_AGENT_FAKE_GIT_REV_PARSE_STATE_FILE:-}" ]]; then
+      if [[ -f "$RECUR_AGENT_FAKE_GIT_REV_PARSE_STATE_FILE" ]]; then
+        read -r call_number <"$RECUR_AGENT_FAKE_GIT_REV_PARSE_STATE_FILE"
         call_number=$((call_number + 1))
       fi
-      printf '%s\n' "$call_number" >"$PI_FAKE_GIT_REV_PARSE_STATE_FILE"
+      printf '%s\n' "$call_number" >"$RECUR_AGENT_FAKE_GIT_REV_PARSE_STATE_FILE"
     fi
     full_commit='0123456789abcdef0123456789abcdef01234567'
-    if [[ "${PI_FAKE_GIT_DRIFT_FROM_REV_PARSE_CALL:-0}" -gt 0 \
-      && "$call_number" -ge "${PI_FAKE_GIT_DRIFT_FROM_REV_PARSE_CALL}" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_GIT_DRIFT_FROM_REV_PARSE_CALL:-0}" -gt 0 \
+      && "$call_number" -ge "${RECUR_AGENT_FAKE_GIT_DRIFT_FROM_REV_PARSE_CALL}" ]]; then
       full_commit='ffffffffffffffffffffffffffffffffffffffff'
     fi
-    if [[ -n "${PI_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE:-}" \
-      && -e "${PERF_OUTPUT_DIR:?}/${PI_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE}" ]]; then
+    if [[ -n "${RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE:-}" \
+      && -e "${PERF_OUTPUT_DIR:?}/${RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE}" ]]; then
       full_commit='ffffffffffffffffffffffffffffffffffffffff'
     fi
     # Drift keyed on the benchmark having ACTUALLY run, rather than on an
@@ -2605,9 +2605,9 @@ case "${1:-}" in
     # benchmark — a pre-invocation drift wearing a post-invocation name. The
     # invocation marker is written by the cargo stub's perf_bench_harness case
     # itself, so it cannot exist until the benchmark really started.
-    if [[ "${PI_FAKE_GIT_DRIFT_AFTER_BENCH_INVOCATION:-0}" == "1" \
-      && -n "${PI_FAKE_PERF_BENCH_INVOCATION_MARKER:-}" \
-      && -e "${PI_FAKE_PERF_BENCH_INVOCATION_MARKER}" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_BENCH_INVOCATION:-0}" == "1" \
+      && -n "${RECUR_AGENT_FAKE_PERF_BENCH_INVOCATION_MARKER:-}" \
+      && -e "${RECUR_AGENT_FAKE_PERF_BENCH_INVOCATION_MARKER}" ]]; then
       full_commit='ffffffffffffffffffffffffffffffffffffffff'
     fi
     if [[ "${2:-}" == "--short" && "${3:-}" == "HEAD" ]]; then
@@ -2619,10 +2619,10 @@ case "${1:-}" in
     fi
     ;;
   status)
-    if [[ "${PI_FAKE_GIT_STATUS_UNAVAILABLE:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_GIT_STATUS_UNAVAILABLE:-0}" == "1" ]]; then
       exit 64
     fi
-    if [[ "${PI_FAKE_GIT_DIRTY:-0}" == "1" ]]; then
+    if [[ "${RECUR_AGENT_FAKE_GIT_DIRTY:-0}" == "1" ]]; then
       printf '%s\n' ' M scripts/perf/orchestrate.sh'
     fi
     ;;
@@ -2675,7 +2675,7 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
 
     write_json(
         &target_dir.join("perf/context_intelligence/perf_budget.json"),
-        r#"{"schema":"pi.semantic_context.performance_budget.v1"}"#,
+        r#"{"schema":"ra.semantic_context.performance_budget.v1"}"#,
     );
 
     let release_pi = target_dir.join("release/pi");
@@ -2690,7 +2690,7 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
     write_json(
         &target_dir.join("perf/release_evidence/binary_size_measurement.json"),
         &serde_json::to_string(&json!({
-            "schema": "pi.perf.binary_size_measurement.v1",
+            "schema": "ra.perf.binary_size_measurement.v1",
             "generated_at": generated_at,
             "run_id": FAKE_ORCHESTRATE_CORRELATION_ID,
             "correlation_id": FAKE_ORCHESTRATE_CORRELATION_ID,
@@ -2704,7 +2704,7 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
             "compiled_opt_level": "z",
             "strip": true,
             "profile_source": "Cargo.toml#profile.release",
-            "build_command": "cargo build --bin pi --release"
+            "build_command": "cargo build --bin ra --release"
         }))
         .expect("serialize fake binary-size control"),
     );
@@ -2722,13 +2722,13 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
         "noise_score": 0,
         "config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     });
-    let bench_env_sha256 = pi::package_manager::hex_encode(&Sha256::digest(
+    let bench_env_sha256 = ra::package_manager::hex_encode(&Sha256::digest(
         serde_json::to_vec(&bench_env).expect("serialize fake bench environment"),
     ));
     write_json(
         &target_dir.join("perf/release_evidence/idle_memory_rss.json"),
         &serde_json::to_string(&json!({
-            "schema": "pi.perf.idle_rss_measurement.v1",
+            "schema": "ra.perf.idle_rss_measurement.v1",
             "generated_at": generated_at,
             "run_id": FAKE_ORCHESTRATE_CORRELATION_ID,
             "correlation_id": FAKE_ORCHESTRATE_CORRELATION_ID,
@@ -2742,7 +2742,7 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
             "rss_bytes": 1_572_864,
             "idle_state": "startup_before_user_input",
             "cargo_profile": "release",
-            "build_command": "cargo build --bin pi --release",
+            "build_command": "cargo build --bin ra --release",
             "sample_count": 5,
             "samples": [
                 {"pid": 1001, "process_name": "pi", "rss_bytes": 1_048_576},
@@ -2762,7 +2762,7 @@ fn install_fake_orchestrate_staging_artifacts(target_dir: &Path) {
 
     write_json(
         &target_dir.join("perf/extension_benchmark_stratification.json"),
-        r#"{"schema":"pi.perf.extension_benchmark_stratification.v1"}"#,
+        r#"{"schema":"ra.perf.extension_benchmark_stratification.v1"}"#,
     );
     write_json(
         &target_dir.join("perf/results/phase1_matrix_validation.json"),
@@ -2973,7 +2973,7 @@ fn canonical_protocol_contract() -> Value {
             "control_schema_version": "v1",
             "unproven_input_status": "NO_DATA",
             "release_binary": {
-                "schema": "pi.perf.binary_size_measurement.v1",
+                "schema": "ra.perf.binary_size_measurement.v1",
                 "required_fields": [
                     "binary_path",
                     "binary_sha256",
@@ -2986,7 +2986,7 @@ fn canonical_protocol_contract() -> Value {
                 ]
             },
             "idle_rss": {
-                "schema": "pi.perf.idle_rss_measurement.v1",
+                "schema": "ra.perf.idle_rss_measurement.v1",
                 "required_fields": [
                     "generated_at",
                     "pid",
@@ -3008,7 +3008,7 @@ fn canonical_protocol_contract() -> Value {
                 ]
             },
             "criterion_cold_load": {
-                "schema": "pi.perf.cold_load_measurement.v1",
+                "schema": "ra.perf.cold_load_measurement.v1",
                 "required_fields": [
                     "bench_env_source",
                     "bench_env_sha256",
@@ -4415,7 +4415,7 @@ fn validate_extension_stratification_record(record: &Value) -> Result<(), String
         .and_then(Value::as_object)
         .ok_or_else(|| "claim_integrity.cross_runtime_comparison must be object".to_string())?;
     if cross_runtime.get("contract_schema").and_then(Value::as_str)
-        != Some("pi.perf.cross_runtime_comparison.v1")
+        != Some("ra.perf.cross_runtime_comparison.v1")
         || cross_runtime
             .get("legacy_pi_mono_executed_required")
             .and_then(Value::as_bool)
@@ -6649,8 +6649,8 @@ fn regression_gate_protocol_fixture(root: &Path) -> Value {
         debug_assertions: false,
     });
     json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "tool_call",
         "extension": "hello",
         "iterations": 500,
@@ -6683,7 +6683,7 @@ fn regression_gate_protocol_fixture(root: &Path) -> Value {
         "config_hash": config_hash,
         "correlation_id": "0123456789abcdef0123456789abcdef",
         "scenario_metadata": {
-            "runtime": "pi_agent_rust",
+            "runtime": "recur_agent",
             "build_profile": "release",
             "host": {
                 "os": "linux",
@@ -7079,15 +7079,15 @@ fn schema_registry_is_complete() {
 
 #[test]
 fn resource_governor_admission_schema_accepts_live_decision_payload() {
-    let budgets = pi::resource_governor::HostResourceBudgets::fixed(10.0, 1_000, 100, 100, 1_000);
-    let governor = pi::resource_governor::ResourceGovernor::with_budgets(budgets);
-    let request = pi::resource_governor::ResourceRequest::new(
-        pi::resource_governor::ResourceOperationKind::Tool,
+    let budgets = ra::resource_governor::HostResourceBudgets::fixed(10.0, 1_000, 100, 100, 1_000);
+    let governor = ra::resource_governor::ResourceGovernor::with_budgets(budgets);
+    let request = ra::resource_governor::ResourceRequest::new(
+        ra::resource_governor::ResourceOperationKind::Tool,
         "read",
     )
     .with_queue_depth(4)
     .with_estimated_tool_output_bytes(900);
-    let sample = pi::resource_governor::HostResourceSample {
+    let sample = ra::resource_governor::HostResourceSample {
         load_avg_1m: Some(2.0),
         rss_bytes: Some(200),
         process_count: Some(20),
@@ -7624,8 +7624,8 @@ fn protocol_contract_exposes_user_perceived_sli_matrix() {
 #[test]
 fn protocol_record_validator_accepts_golden_fixture() {
     let golden = json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "tool_call",
         "extension": "hello",
         "protocol_schema": BENCH_PROTOCOL_SCHEMA,
@@ -7636,7 +7636,7 @@ fn protocol_record_validator_accepts_golden_fixture() {
         "correlation_id": "0123456789abcdef0123456789abcdef",
         "swarm_metrics": swarm_metrics_fixture(117.0, 48.0, 36.0, 22.0, 11.0),
         "scenario_metadata": {
-            "runtime": "pi_agent_rust",
+            "runtime": "recur_agent",
             "build_profile": "release",
             "host": {
                 "os": "linux",
@@ -7997,8 +7997,8 @@ fn pijs_workload_admission_allows_explicitly_ineligible_native_diagnostics() {
 #[test]
 fn protocol_record_validator_accepts_matched_state_session_matrix_fixture() {
     let fixture = json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "session_workload_matrix",
         "extension": "core",
         "protocol_schema": BENCH_PROTOCOL_SCHEMA,
@@ -8009,7 +8009,7 @@ fn protocol_record_validator_accepts_matched_state_session_matrix_fixture() {
         "correlation_id": "0123456789abcdef0123456789abcdef",
         "swarm_metrics": swarm_metrics_fixture(117.0, 48.0, 36.0, 22.0, 11.0),
         "scenario_metadata": {
-            "runtime": "pi_agent_rust",
+            "runtime": "recur_agent",
             "build_profile": "release",
             "host": {
                 "os": "linux",
@@ -8031,8 +8031,8 @@ fn protocol_record_validator_accepts_matched_state_session_matrix_fixture() {
 #[test]
 fn protocol_record_validator_rejects_missing_correlation_id() {
     let malformed = json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "cold_start",
         "extension": "hello",
         "protocol_schema": BENCH_PROTOCOL_SCHEMA,
@@ -8041,7 +8041,7 @@ fn protocol_record_validator_rejects_missing_correlation_id() {
         "evidence_class": EVIDENCE_CLASS_MEASURED,
         "confidence": CONFIDENCE_HIGH,
         "scenario_metadata": {
-            "runtime": "pi_agent_rust",
+            "runtime": "recur_agent",
             "build_profile": "release",
             "host": {
                 "os": "linux",
@@ -8064,8 +8064,8 @@ fn protocol_record_validator_rejects_missing_correlation_id() {
 #[test]
 fn protocol_record_validator_rejects_invalid_partition_or_size() {
     let bad_partition = json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "tool_call",
         "extension": "hello",
         "protocol_schema": BENCH_PROTOCOL_SCHEMA,
@@ -8075,7 +8075,7 @@ fn protocol_record_validator_rejects_invalid_partition_or_size() {
         "confidence": CONFIDENCE_HIGH,
         "correlation_id": "abc",
         "scenario_metadata": {
-            "runtime": "pi_agent_rust",
+            "runtime": "recur_agent",
             "build_profile": "release",
             "host": {
                 "os": "linux",
@@ -8093,8 +8093,8 @@ fn protocol_record_validator_rejects_invalid_partition_or_size() {
     );
 
     let bad_size = json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "tool_call",
         "extension": "hello",
         "protocol_schema": BENCH_PROTOCOL_SCHEMA,
@@ -8104,7 +8104,7 @@ fn protocol_record_validator_rejects_invalid_partition_or_size() {
         "confidence": CONFIDENCE_HIGH,
         "correlation_id": "abc",
         "scenario_metadata": {
-            "runtime": "pi_agent_rust",
+            "runtime": "recur_agent",
             "build_profile": "release",
             "host": {
                 "os": "linux",
@@ -8196,7 +8196,7 @@ fn extension_stratification_golden_fixture() -> Value {
                 "full_e2e_is_release_facing_primary_signal": true
             },
             "cross_runtime_comparison": {
-                "contract_schema": "pi.perf.cross_runtime_comparison.v1",
+                "contract_schema": "ra.perf.cross_runtime_comparison.v1",
                 "legacy_pi_mono_executed_required": true,
                 "exact_workload_and_host_contract_required": true,
                 "portable_shim_record_count": 0,
@@ -9243,11 +9243,11 @@ fn evidence_contract_schema_includes_benchmark_protocol_definition() {
     );
     assert_eq!(
         budget_controls["properties"]["release_binary"]["properties"]["schema"]["const"],
-        "pi.perf.binary_size_measurement.v1"
+        "ra.perf.binary_size_measurement.v1"
     );
     assert_eq!(
         budget_controls["properties"]["idle_rss"]["properties"]["schema"]["const"],
-        "pi.perf.idle_rss_measurement.v1"
+        "ra.perf.idle_rss_measurement.v1"
     );
     let idle_rss_fields =
         budget_controls["properties"]["idle_rss"]["properties"]["required_fields"]["items"]["enum"]
@@ -9272,7 +9272,7 @@ fn evidence_contract_schema_includes_benchmark_protocol_definition() {
     }
     assert_eq!(
         budget_controls["properties"]["criterion_cold_load"]["properties"]["schema"]["const"],
-        "pi.perf.cold_load_measurement.v1"
+        "ra.perf.cold_load_measurement.v1"
     );
     assert_eq!(
         budget_controls["properties"]["criterion_cold_load"]["properties"]["max_noise_score"]["const"],
@@ -9479,9 +9479,9 @@ fn evidence_contract_schema_includes_benchmark_protocol_definition() {
 fn protocol_is_referenced_by_benchmark_and_conformance_harnesses() {
     let refs = vec![
         ("tests/bench_scenario_runner.rs", BENCH_PROTOCOL_SCHEMA),
-        ("tests/perf_bench_harness.rs", "pi.ext.rust_bench.v1"),
-        ("tests/ext_bench_harness.rs", "pi.ext.rust_bench.v1"),
-        ("tests/perf_comparison.rs", "pi.ext.perf_comparison.v1"),
+        ("tests/perf_bench_harness.rs", "ra.ext.rust_bench.v1"),
+        ("tests/ext_bench_harness.rs", "ra.ext.rust_bench.v1"),
+        ("tests/perf_comparison.rs", "ra.ext.perf_comparison.v1"),
         ("tests/ext_conformance_scenarios.rs", "conformance"),
     ];
 
@@ -9525,16 +9525,16 @@ fn orchestrate_script_emits_budget_input_negative_controls_before_consumption() 
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", script_path.display()));
 
     for token in [
-        "pi.perf.binary_size_measurement.v1",
+        "ra.perf.binary_size_measurement.v1",
         "binary_size_measurement.json",
         "Cargo.toml#profile.release",
-        "cargo build --bin pi --release",
-        "pi.perf.cold_load_measurement.v1",
+        "cargo build --bin ra --release",
+        "ra.perf.cold_load_measurement.v1",
         "cold_load_measurement.json",
-        "pi.perf.idle_rss_measurement.v1",
+        "ra.perf.idle_rss_measurement.v1",
         "idle_memory_rss.raw.json",
         "idle_memory_rss.json",
-        "PI_IDLE_RSS_RAW_RELATIVE_PATH",
+        "RECUR_AGENT_IDLE_RSS_RAW_RELATIVE_PATH",
         "[idle-rss-control] ",
         "benches/bench_env.rs",
         "PERF_MAX_BENCH_ENV_NOISE_SCORE",
@@ -9591,11 +9591,11 @@ fn orchestrate_final_evidence_gates_run_after_derived_artifact_generation() {
 
     for token in [
         "--message-format=json-render-diagnostics",
-        "pi.perf.post_generation_producer_admission.v1",
+        "ra.perf.post_generation_producer_admission.v1",
         "remote_execution_verified",
-        "for required_env in PERF_EVIDENCE_DIR PI_PERF_POST_GENERATION PI_PERF_EXPECTED_SOURCE_COMMIT CI_CORRELATION_ID PI_PERF_STRICT; do",
+        "for required_env in PERF_EVIDENCE_DIR RECUR_AGENT_PERF_POST_GENERATION RECUR_AGENT_PERF_EXPECTED_SOURCE_COMMIT CI_CORRELATION_ID RECUR_AGENT_PERF_STRICT; do",
         "POST_GENERATION_STAGE_RELATIVE=\".rch-tmp/pi-perf-evidence/$post_generation_stage_key\"",
-        "pi.perf.post_generation_evidence_inventory.v1",
+        "ra.perf.post_generation_evidence_inventory.v1",
         "Post-generation evidence package remained exact after remote consumption",
         "post_generation_evidence_package",
         "--overlay-path\" \"$POST_GENERATION_STAGE_RELATIVE",
@@ -9699,10 +9699,9 @@ fn run_orchestrate_with_fake_toolchain_with_env(
     fs::create_dir_all(&output_dir).expect("create output dir");
     install_fake_orchestrate_toolchain(&bin_dir);
     install_fake_orchestrate_staging_artifacts(&target_dir);
-    if extra_env
-        .iter()
-        .any(|(key, value)| *key == "PI_FAKE_PRECREATE_RCH_EXTENSION_ARTIFACT" && *value == "1")
-    {
+    if extra_env.iter().any(|(key, value)| {
+        *key == "RECUR_AGENT_FAKE_PRECREATE_RCH_EXTENSION_ARTIFACT" && *value == "1"
+    }) {
         let stale_artifact = target_dir
             .join("nextest")
             .join("pi-perf")
@@ -9723,19 +9722,19 @@ fn run_orchestrate_with_fake_toolchain_with_env(
             .expect("fault-injection summary parent"),
     )
     .expect("create fake fault-injection evidence directory");
-    let fault_injection_summary_only_failure = extra_env
-        .iter()
-        .any(|(key, value)| *key == "PI_FAKE_PERSISTENCE_SUMMARY_ONLY_FAILURE" && *value == "1");
+    let fault_injection_summary_only_failure = extra_env.iter().any(|(key, value)| {
+        *key == "RECUR_AGENT_FAKE_PERSISTENCE_SUMMARY_ONLY_FAILURE" && *value == "1"
+    });
     let fault_injection_passed = !fault_injection_summary_only_failure
-        && !extra_env
-            .iter()
-            .any(|(key, value)| *key == "PI_FAKE_FAILED_PERSISTENCE_SUMMARY" && *value == "1");
+        && !extra_env.iter().any(|(key, value)| {
+            *key == "RECUR_AGENT_FAKE_FAILED_PERSISTENCE_SUMMARY" && *value == "1"
+        });
     let fault_injection_case_exit_69 = extra_env
         .iter()
-        .any(|(key, value)| *key == "PI_FAKE_PERSISTENCE_CASE_EXIT_69" && *value == "1");
+        .any(|(key, value)| *key == "RECUR_AGENT_FAKE_PERSISTENCE_CASE_EXIT_69" && *value == "1");
     let fault_injection_source_commit = if extra_env
         .iter()
-        .any(|(key, value)| *key == "PI_FAKE_FOREIGN_PERSISTENCE_SOURCE" && *value == "1")
+        .any(|(key, value)| *key == "RECUR_AGENT_FAKE_FOREIGN_PERSISTENCE_SOURCE" && *value == "1")
     {
         "ffffffffffffffffffffffffffffffffffffffff"
     } else {
@@ -9789,7 +9788,7 @@ fn run_orchestrate_with_fake_toolchain_with_env(
                 "path": artifact_path,
                 "present": true,
                 "size_bytes": artifact_bytes.len(),
-                "sha256": pi::package_manager::hex_encode(&Sha256::digest(&artifact_bytes)),
+                "sha256": ra::package_manager::hex_encode(&Sha256::digest(&artifact_bytes)),
             }));
         }
     }
@@ -9850,7 +9849,7 @@ fn run_orchestrate_with_fake_toolchain_with_env(
     fs::write(&fault_injection_summary, &fault_injection_summary_bytes)
         .expect("write fake fault-injection evidence");
     let fault_injection_summary_sha256 =
-        pi::package_manager::hex_encode(&Sha256::digest(&fault_injection_summary_bytes));
+        ra::package_manager::hex_encode(&Sha256::digest(&fault_injection_summary_bytes));
     let fault_injection_manifest_payload = json!({
         "schema": "pi.e2e.persistence_fault_injection.manifest.v1",
         "run_id": FAKE_ORCHESTRATE_CORRELATION_ID,
@@ -9894,10 +9893,9 @@ fn run_orchestrate_with_fake_toolchain_with_env(
             "overall": i32::from(!fault_injection_passed),
         }
     });
-    if !extra_env
-        .iter()
-        .any(|(key, value)| *key == "PI_FAKE_MISSING_PERSISTENCE_MANIFEST" && *value == "1")
-    {
+    if !extra_env.iter().any(|(key, value)| {
+        *key == "RECUR_AGENT_FAKE_MISSING_PERSISTENCE_MANIFEST" && *value == "1"
+    }) {
         fs::write(
             &fault_injection_manifest,
             serde_json::to_vec(&fault_injection_manifest_payload)
@@ -9906,7 +9904,7 @@ fn run_orchestrate_with_fake_toolchain_with_env(
         .expect("write fake fault-injection manifest");
     }
     if extra_env.iter().any(|(key, value)| {
-        *key == "PI_FAKE_TAMPER_PERSISTENCE_SUMMARY_AFTER_MANIFEST" && *value == "1"
+        *key == "RECUR_AGENT_FAKE_TAMPER_PERSISTENCE_SUMMARY_AFTER_MANIFEST" && *value == "1"
     }) {
         let mut tampered_summary = fs::read(&fault_injection_summary)
             .expect("read fake fault-injection summary before tampering");
@@ -9922,7 +9920,7 @@ fn run_orchestrate_with_fake_toolchain_with_env(
     );
     let profile = if extra_env
         .iter()
-        .any(|(key, value)| *key == "PI_FAKE_PROFILE_QUICK" && *value == "1")
+        .any(|(key, value)| *key == "RECUR_AGENT_FAKE_PROFILE_QUICK" && *value == "1")
     {
         "quick"
     } else {
@@ -9930,7 +9928,7 @@ fn run_orchestrate_with_fake_toolchain_with_env(
     };
     let omit_require_rch_cli = extra_env
         .iter()
-        .any(|(key, value)| *key == "PI_FAKE_OMIT_REQUIRE_RCH_CLI" && *value == "1");
+        .any(|(key, value)| *key == "RECUR_AGENT_FAKE_OMIT_REQUIRE_RCH_CLI" && *value == "1");
 
     let mut command = Command::new("bash");
     command
@@ -9944,11 +9942,11 @@ fn run_orchestrate_with_fake_toolchain_with_env(
         .env("PERF_OUTPUT_DIR", &output_dir)
         .env("PERF_FAULT_INJECTION_ROOT", &fault_injection_root)
         .env(
-            "PI_FAKE_PERF_BENCH_INVOCATION_MARKER",
+            "RECUR_AGENT_FAKE_PERF_BENCH_INVOCATION_MARKER",
             target_dir.join("perf-bench-invoked"),
         )
         .env(
-            "PI_FAKE_GIT_REV_PARSE_STATE_FILE",
+            "RECUR_AGENT_FAKE_GIT_REV_PARSE_STATE_FILE",
             target_dir.join("git-rev-parse-count"),
         )
         .env("CI_CORRELATION_ID", FAKE_ORCHESTRATE_CORRELATION_ID);
@@ -9960,7 +9958,7 @@ fn run_orchestrate_with_fake_toolchain_with_env(
     }
     if extra_env
         .iter()
-        .any(|(key, value)| *key == "PI_FAKE_PERF_ONLY" && *value == "1")
+        .any(|(key, value)| *key == "RECUR_AGENT_FAKE_PERF_ONLY" && *value == "1")
     {
         command.arg("--suite").arg("perf_bench_harness");
     }
@@ -9979,8 +9977,8 @@ fn run_orchestrate_with_fake_toolchain() -> (std::process::Output, PathBuf) {
 #[test]
 fn orchestrate_rejects_failed_persistence_summary_for_phase5() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_FAILED_PERSISTENCE_SUMMARY", "1"),
-        ("PI_FAKE_PERSISTENCE_CASE_EXIT_69", "1"),
+        ("RECUR_AGENT_FAKE_FAILED_PERSISTENCE_SUMMARY", "1"),
+        ("RECUR_AGENT_FAKE_PERSISTENCE_CASE_EXIT_69", "1"),
     ]);
     assert!(
         !output.status.success(),
@@ -10021,7 +10019,7 @@ fn orchestrate_rejects_failed_persistence_summary_for_phase5() {
 #[test]
 fn orchestrate_preserves_summary_validation_failure_with_zero_case_exit() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_PERSISTENCE_SUMMARY_ONLY_FAILURE",
+        "RECUR_AGENT_FAKE_PERSISTENCE_SUMMARY_ONLY_FAILURE",
         "1",
     )]);
     assert!(
@@ -10057,7 +10055,7 @@ fn orchestrate_preserves_summary_validation_failure_with_zero_case_exit() {
 #[test]
 fn orchestrate_rejects_persistence_summary_without_completion_manifest() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_MISSING_PERSISTENCE_MANIFEST",
+        "RECUR_AGENT_FAKE_MISSING_PERSISTENCE_MANIFEST",
         "1",
     )]);
     assert!(
@@ -10091,7 +10089,7 @@ fn orchestrate_rejects_persistence_summary_without_completion_manifest() {
 #[test]
 fn orchestrate_rejects_persistence_summary_that_breaks_manifest_binding() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_TAMPER_PERSISTENCE_SUMMARY_AFTER_MANIFEST",
+        "RECUR_AGENT_FAKE_TAMPER_PERSISTENCE_SUMMARY_AFTER_MANIFEST",
         "1",
     )]);
     assert!(
@@ -10124,8 +10122,10 @@ fn orchestrate_rejects_persistence_summary_that_breaks_manifest_binding() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_refuses_portable_extension_shim_as_legacy_release_comparator() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_PORTABLE_LEGACY_SHIM", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_PORTABLE_LEGACY_SHIM",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "portable callback-shim timings must not satisfy strict cross-runtime claims"
@@ -10168,7 +10168,7 @@ fn orchestrate_refuses_portable_extension_shim_as_legacy_release_comparator() {
 #[test]
 fn orchestrate_rejects_incomplete_legacy_runtime_workload_coverage() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_DROP_LEGACY_BENCH_COVERAGE",
+        "RECUR_AGENT_FAKE_DROP_LEGACY_BENCH_COVERAGE",
         "1",
     )]);
     assert!(
@@ -10195,8 +10195,10 @@ fn orchestrate_rejects_incomplete_legacy_runtime_workload_coverage() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_rejects_current_run_idle_rss_over_budget_for_phase5() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_IDLE_RSS_OVER_BUDGET", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_IDLE_RSS_OVER_BUDGET",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict orchestration must fail when current-run idle RSS exceeds 50 MiB"
@@ -10233,7 +10235,7 @@ fn orchestrate_rejects_current_run_idle_rss_over_budget_for_phase5() {
 #[test]
 fn orchestrate_rejects_foreign_persistence_summary_source() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_FOREIGN_PERSISTENCE_SOURCE",
+        "RECUR_AGENT_FAKE_FOREIGN_PERSISTENCE_SOURCE",
         "1",
     )]);
     assert!(
@@ -10296,7 +10298,7 @@ fn orchestrate_rch_perf_harness_retrieves_nextest_artifact() {
             .expect("retrieved extension benchmark artifact must be non-empty"),
     )
     .expect("retrieved extension benchmark artifact must contain JSONL");
-    assert_eq!(first_row["schema"].as_str(), Some("pi.ext.rust_bench.v1"));
+    assert_eq!(first_row["schema"].as_str(), Some("ra.ext.rust_bench.v1"));
     assert_eq!(
         first_row["env"]["git_commit"].as_str(),
         Some(FAKE_ORCHESTRATE_SOURCE_COMMIT),
@@ -10375,8 +10377,10 @@ fn orchestrate_rch_perf_harness_retrieves_nextest_artifact() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_rejects_missing_rch_pijs_pair_before_producer_admission() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_DROP_RCH_PIJS_ARTIFACT", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_DROP_RCH_PIJS_ARTIFACT",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict full orchestration must reject a successful remote command with no PiJS JSONL"
@@ -10410,10 +10414,10 @@ fn orchestrate_rejects_missing_rch_pijs_pair_before_producer_admission() {
 #[test]
 fn orchestrate_default_rch_perf_harness_uses_clean_fail_closed_runner() {
     let (output, _temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
-        ("PI_FAKE_RCH_CHECK_OK", "1"),
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
+        ("RECUR_AGENT_FAKE_RCH_CHECK_OK", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
     ]);
     assert_orchestrate_success(&output);
 }
@@ -10422,10 +10426,10 @@ fn orchestrate_default_rch_perf_harness_uses_clean_fail_closed_runner() {
 #[test]
 fn orchestrate_env_only_remote_requirement_selects_clean_runner() {
     let (output, _temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
+        ("RECUR_AGENT_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
         ("RCH_REQUIRE_REMOTE", "1"),
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
     ]);
     assert_orchestrate_success(&output);
 }
@@ -10434,11 +10438,11 @@ fn orchestrate_env_only_remote_requirement_selects_clean_runner() {
 #[test]
 fn orchestrate_env_only_remote_requirement_rejects_local_runner() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
+        ("RECUR_AGENT_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
         ("RCH_REQUIRE_REMOTE", "1"),
         ("PERF_CARGO_RUNNER", "local"),
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
     ]);
     assert!(
         !output.status.success(),
@@ -10463,11 +10467,11 @@ fn orchestrate_env_only_remote_requirement_rejects_local_runner() {
 #[test]
 fn orchestrate_env_only_remote_requirement_rejects_auto_runner() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
+        ("RECUR_AGENT_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
         ("RCH_REQUIRE_REMOTE", "1"),
         ("PERF_CARGO_RUNNER", "auto"),
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
     ]);
     assert!(
         !output.status.success(),
@@ -10492,9 +10496,9 @@ fn orchestrate_env_only_remote_requirement_rejects_auto_runner() {
 #[test]
 fn orchestrate_explicit_quick_suite_forwards_benchmark_controls() {
     let (output, _temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
-        ("PI_FAKE_REQUIRE_BENCH_CONTROLS", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_REQUIRE_BENCH_CONTROLS", "1"),
         ("BENCH_ITERATIONS", "1"),
     ]);
     assert_orchestrate_success(&output);
@@ -10504,8 +10508,8 @@ fn orchestrate_explicit_quick_suite_forwards_benchmark_controls() {
 #[test]
 fn orchestrate_partial_suite_records_post_generation_skip_without_package() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
     ]);
     assert_orchestrate_success(&output);
 
@@ -10576,7 +10580,7 @@ fn orchestrate_partial_suite_records_post_generation_skip_without_package() {
 #[test]
 fn orchestrate_full_suite_rejects_local_exclusive_evidence_runner() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
+        ("RECUR_AGENT_FAKE_OMIT_REQUIRE_RCH_CLI", "1"),
         ("PERF_CARGO_RUNNER", "local"),
     ]);
     assert!(!output.status.success());
@@ -10641,7 +10645,7 @@ fn orchestrate_full_suite_rejects_iteration_override() {
 #[test]
 fn orchestrate_rejects_non_positive_build_jobs_before_remote_invocation() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
         ("PERF_BUILD_JOBS", "0"),
     ]);
     assert!(
@@ -10667,7 +10671,7 @@ fn orchestrate_rejects_non_positive_build_jobs_before_remote_invocation() {
 #[test]
 fn orchestrate_rejects_path_unsafe_correlation_id_before_remote_invocation() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
         ("CI_CORRELATION_ID", "../escaped-run"),
     ]);
     assert!(
@@ -10693,7 +10697,7 @@ fn orchestrate_rejects_path_unsafe_correlation_id_before_remote_invocation() {
 #[test]
 fn orchestrate_rejects_non_perf_rch_extension_profile_before_invocation() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
         ("PERF_PROFILE", "release"),
     ]);
     assert!(
@@ -10718,8 +10722,10 @@ fn orchestrate_rejects_non_perf_rch_extension_profile_before_invocation() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_rejects_rch_local_fallback_marker() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_RCH_LOCAL_FALLBACK", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_RCH_LOCAL_FALLBACK",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "local fallback must not satisfy remote benchmark acceptance"
@@ -10746,7 +10752,7 @@ fn orchestrate_rejects_rch_local_fallback_marker() {
 #[test]
 fn orchestrate_rejects_stale_benchmark_invocation_id() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_STALE_RCH_EXTENSION_ARTIFACT",
+        "RECUR_AGENT_FAKE_STALE_RCH_EXTENSION_ARTIFACT",
         "1",
     )]);
     assert!(
@@ -10774,7 +10780,7 @@ fn orchestrate_rejects_stale_benchmark_invocation_id() {
 #[test]
 fn orchestrate_rejects_unbound_benchmark_config_hash() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_INVALID_RCH_EXTENSION_CONFIG_HASH",
+        "RECUR_AGENT_FAKE_INVALID_RCH_EXTENSION_CONFIG_HASH",
         "1",
     )]);
     assert!(
@@ -10802,7 +10808,7 @@ fn orchestrate_rejects_unbound_benchmark_config_hash() {
 #[test]
 fn orchestrate_rejects_benchmark_binary_from_non_perf_path() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_WRONG_RCH_EXTENSION_BINARY_PROFILE",
+        "RECUR_AGENT_FAKE_WRONG_RCH_EXTENSION_BINARY_PROFILE",
         "1",
     )]);
     assert!(
@@ -10830,7 +10836,7 @@ fn orchestrate_rejects_benchmark_binary_from_non_perf_path() {
 #[test]
 fn orchestrate_rch_perf_harness_fails_when_nextest_artifact_is_missing() {
     let (output, _temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_DROP_RCH_EXTENSION_ARTIFACT",
+        "RECUR_AGENT_FAKE_DROP_RCH_EXTENSION_ARTIFACT",
         "1",
     )]);
     assert!(
@@ -10852,9 +10858,9 @@ fn orchestrate_rch_perf_harness_fails_when_nextest_artifact_is_missing() {
 #[test]
 fn orchestrate_rch_perf_harness_rejects_incomplete_scenario_coverage() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_DROP_RCH_EXTENSION_COVERAGE", "1"),
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_PROFILE_QUICK", "1"),
+        ("RECUR_AGENT_FAKE_DROP_RCH_EXTENSION_COVERAGE", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PROFILE_QUICK", "1"),
     ]);
     assert!(
         !output.status.success(),
@@ -10881,7 +10887,7 @@ fn orchestrate_rch_perf_harness_rejects_incomplete_scenario_coverage() {
 #[test]
 fn orchestrate_rejects_incomplete_nightly_extension_harness_manifest_coverage() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_DROP_EXT_BENCH_HARNESS_COVERAGE",
+        "RECUR_AGENT_FAKE_DROP_EXT_BENCH_HARNESS_COVERAGE",
         "1",
     )]);
     assert!(
@@ -10914,8 +10920,10 @@ fn orchestrate_rejects_incomplete_nightly_extension_harness_manifest_coverage() 
 #[cfg(unix)]
 #[test]
 fn orchestrate_rejects_extension_budget_report_not_derived_from_jsonl() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_CORRUPT_EXT_BENCH_BUDGET", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_CORRUPT_EXT_BENCH_BUDGET",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "an extension budget report that disagrees with its JSONL must fail admission"
@@ -10941,7 +10949,7 @@ fn orchestrate_rejects_extension_budget_report_not_derived_from_jsonl() {
 #[test]
 fn orchestrate_rch_perf_harness_refuses_preexisting_nextest_artifact() {
     let (output, _temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_PRECREATE_RCH_EXTENSION_ARTIFACT",
+        "RECUR_AGENT_FAKE_PRECREATE_RCH_EXTENSION_ARTIFACT",
         "1",
     )]);
     assert!(
@@ -10963,7 +10971,7 @@ fn orchestrate_rch_perf_harness_refuses_preexisting_nextest_artifact() {
 #[test]
 fn orchestrate_rch_perf_harness_rejects_wrong_source_commit() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_WRONG_RCH_EXTENSION_COMMIT",
+        "RECUR_AGENT_FAKE_WRONG_RCH_EXTENSION_COMMIT",
         "1",
     )]);
     assert!(
@@ -10991,8 +10999,10 @@ fn orchestrate_rch_perf_harness_rejects_wrong_source_commit() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_rch_perf_harness_rejects_unknown_source_commit() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_GIT_IDENTITY_UNAVAILABLE", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_GIT_IDENTITY_UNAVAILABLE",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict RCH orchestration must reject an unavailable Git commit identity"
@@ -11016,7 +11026,7 @@ fn orchestrate_rch_perf_harness_rejects_unknown_source_commit() {
 #[test]
 fn orchestrate_rch_perf_harness_rejects_dirty_source_tree() {
     let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_GIT_DIRTY", "1")]);
+        run_orchestrate_with_fake_toolchain_with_env(&[("RECUR_AGENT_FAKE_GIT_DIRTY", "1")]);
     assert!(
         !output.status.success(),
         "strict RCH orchestration must reject a dirty source tree"
@@ -11039,8 +11049,10 @@ fn orchestrate_rch_perf_harness_rejects_dirty_source_tree() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_rch_perf_harness_rejects_unavailable_git_status() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_GIT_STATUS_UNAVAILABLE", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_GIT_STATUS_UNAVAILABLE",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict RCH orchestration must reject an unavailable Git status"
@@ -11064,8 +11076,8 @@ fn orchestrate_rch_perf_harness_rejects_unavailable_git_status() {
 #[test]
 fn orchestrate_rch_perf_harness_rejects_head_drift_before_invocation() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
-        ("PI_FAKE_GIT_DRIFT_FROM_REV_PARSE_CALL", "4"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_GIT_DRIFT_FROM_REV_PARSE_CALL", "4"),
     ]);
     assert!(
         !output.status.success(),
@@ -11094,14 +11106,14 @@ fn orchestrate_rch_perf_harness_rejects_head_drift_after_invocation() {
     // call count: every source-identity fence the orchestrator gains shifts
     // the count and turns a post-invocation drift into a pre-invocation one.
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[
-        ("PI_FAKE_PERF_ONLY", "1"),
+        ("RECUR_AGENT_FAKE_PERF_ONLY", "1"),
         // Keyed on the invocation marker, not on the stdout capture. The
         // orchestrator's `>"$result_dir/stdout.log"` redirect creates that file
         // before the command runs, so the old trigger drifted HEAD ahead of the
         // rch stub's source-pin check: the run died with exit 67 and the
         // benchmark never executed, which is a pre-invocation drift despite the
         // name. The marker is written by the benchmark case itself.
-        ("PI_FAKE_GIT_DRIFT_AFTER_BENCH_INVOCATION", "1"),
+        ("RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_BENCH_INVOCATION", "1"),
     ]);
     assert!(
         !output.status.success(),
@@ -11132,7 +11144,7 @@ fn orchestrate_rch_perf_harness_rejects_head_drift_after_invocation() {
 #[test]
 fn orchestrate_rejects_head_drift_before_post_generation_staging() {
     let (output, _) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE",
+        "RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE",
         "results/phase1_matrix_validation.json",
     )]);
     assert!(!output.status.success());
@@ -11156,7 +11168,7 @@ fn orchestrate_rejects_head_drift_before_post_generation_staging() {
 #[test]
 fn orchestrate_rejects_head_drift_before_checksums() {
     let (output, _) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE",
+        "RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE",
         "results/perf_budget_preflight.json",
     )]);
     assert!(!output.status.success());
@@ -11175,7 +11187,7 @@ fn orchestrate_rejects_head_drift_before_checksums() {
 #[test]
 fn orchestrate_rejects_post_generation_consumer_package_mutation() {
     let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_MUTATE_POST_GENERATION_PACKAGE",
+        "RECUR_AGENT_FAKE_MUTATE_POST_GENERATION_PACKAGE",
         "1",
     )]);
     assert!(
@@ -11194,7 +11206,7 @@ fn orchestrate_rejects_post_generation_consumer_package_mutation() {
         fs::read_to_string(temp_root.join("run/results/perf_budgets_post_generation/stdout.log"))
             .unwrap_or_default();
     assert!(
-        consumer_stdout.contains("pi.perf.fake_post_generation_invocation.v1"),
+        consumer_stdout.contains("ra.perf.fake_post_generation_invocation.v1"),
         "the mutation fixture must prove the remote consumer reached the exact budget test: {consumer_stdout}\n{combined}"
     );
     assert!(
@@ -11208,7 +11220,7 @@ fn orchestrate_rejects_post_generation_consumer_package_mutation() {
 #[test]
 fn orchestrate_rejects_head_drift_before_final_success() {
     let (output, _) = run_orchestrate_with_fake_toolchain_with_env(&[(
-        "PI_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE",
+        "RECUR_AGENT_FAKE_GIT_DRIFT_AFTER_OUTPUT_RELATIVE",
         "checksums.sha256",
     )]);
     assert!(!output.status.success());
@@ -11807,7 +11819,7 @@ fn orchestrate_generates_phase1_matrix_validation_artifact() {
         .lines()
         .find_map(|line| serde_json::from_str::<Value>(line).ok())
         .filter(|value| {
-            value["schema"].as_str() == Some("pi.perf.fake_post_generation_invocation.v1")
+            value["schema"].as_str() == Some("ra.perf.fake_post_generation_invocation.v1")
         })
         .expect("post-generation stdout must prove current-evidence consumption");
     assert_eq!(
@@ -11957,7 +11969,7 @@ fn assert_orchestrate_rejects_scenario_mutation(
 #[test]
 fn orchestrate_rejects_foreign_source_lineage_before_finalization() {
     assert_orchestrate_rejects_scenario_mutation(
-        "PI_FAKE_INJECT_FOREIGN_SCENARIO_ROW",
+        "RECUR_AGENT_FAKE_INJECT_FOREIGN_SCENARIO_ROW",
         "correlation_id_mismatch",
         Some("orchestration_correlation_id mismatch"),
     );
@@ -11967,7 +11979,7 @@ fn orchestrate_rejects_foreign_source_lineage_before_finalization() {
 #[test]
 fn orchestrate_rejects_stale_same_lineage_before_finalization() {
     assert_orchestrate_rejects_scenario_mutation(
-        "PI_FAKE_INJECT_STALE_SCENARIO_ROW",
+        "RECUR_AGENT_FAKE_INJECT_STALE_SCENARIO_ROW",
         "timestamp_before_run_start",
         None,
     );
@@ -11977,7 +11989,7 @@ fn orchestrate_rejects_stale_same_lineage_before_finalization() {
 #[test]
 fn orchestrate_rejects_malformed_source_row_before_finalization() {
     assert_orchestrate_rejects_scenario_mutation(
-        "PI_FAKE_INJECT_MALFORMED_SCENARIO_ROW",
+        "RECUR_AGENT_FAKE_INJECT_MALFORMED_SCENARIO_ROW",
         "invalid_json",
         Some("invalid JSON"),
     );
@@ -11986,8 +11998,10 @@ fn orchestrate_rejects_malformed_source_row_before_finalization() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_phase1_matrix_rejects_synthetic_seed_rows_as_release_evidence() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_SYNTHETIC_MATRIX_EVIDENCE", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_SYNTHETIC_MATRIX_EVIDENCE",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "synthetic inferred matrix seeds must not satisfy strict Phase-5 admission"
@@ -12047,8 +12061,10 @@ fn orchestrate_phase1_matrix_rejects_synthetic_seed_rows_as_release_evidence() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_phase1_matrix_treats_missing_index_as_incomplete() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_DROP_INDEX_STAGE_SAMPLE", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_DROP_INDEX_STAGE_SAMPLE",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict orchestration must fail when a required stage sample is missing"
@@ -12296,7 +12312,7 @@ fn orchestrate_weighted_attribution_computes_with_two_pass_cells_and_one_dropped
 
     // Two cells at the same scale, both passing, on the two required
     // partitions. The `long_session` cell is missing `index_ms` — the same drop
-    // that `PI_FAKE_DROP_INDEX_STAGE_SAMPLE` performs — and its
+    // that `RECUR_AGENT_FAKE_DROP_INDEX_STAGE_SAMPLE` performs — and its
     // `total_stage_ms` is the sum of the stages it still has, which is how
     // orchestrate.sh derives that field upstream.
     let request = json!({
@@ -12439,8 +12455,10 @@ fn orchestrate_weighted_attribution_computes_with_two_pass_cells_and_one_dropped
 #[cfg(unix)]
 #[test]
 fn orchestrate_phase1_matrix_treats_missing_swarm_metrics_as_incomplete() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_DROP_SWARM_METRICS", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_DROP_SWARM_METRICS",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict orchestration must fail when required swarm metrics are missing"
@@ -12495,8 +12513,10 @@ fn orchestrate_phase1_matrix_treats_missing_swarm_metrics_as_incomplete() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_phase1_matrix_reports_zero_stage_total_as_invalid() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_ZERO_STAGE_SAMPLE", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_ZERO_STAGE_SAMPLE",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict orchestration must fail when a required stage breakdown sums to zero"
@@ -12540,8 +12560,10 @@ fn orchestrate_phase1_matrix_reports_zero_stage_total_as_invalid() {
 #[cfg(unix)]
 #[test]
 fn orchestrate_phase1_weighted_attribution_missing_when_no_stage_cells_are_valid() {
-    let (output, temp_root) =
-        run_orchestrate_with_fake_toolchain_with_env(&[("PI_FAKE_DROP_ALL_STAGE_SAMPLES", "1")]);
+    let (output, temp_root) = run_orchestrate_with_fake_toolchain_with_env(&[(
+        "RECUR_AGENT_FAKE_DROP_ALL_STAGE_SAMPLES",
+        "1",
+    )]);
     assert!(
         !output.status.success(),
         "strict orchestration must fail when every stage attribution is missing"
@@ -12624,8 +12646,8 @@ fn validate_rust_bench_schema() {
         );
         assert_eq!(
             event.get("schema").and_then(Value::as_str),
-            Some("pi.ext.rust_bench.v1"),
-            "rust bench should use pi.ext.rust_bench.v1 schema"
+            Some("ra.ext.rust_bench.v1"),
+            "rust bench should use ra.ext.rust_bench.v1 schema"
         );
     }
     eprintln!("[schema] Validated {} rust bench events", events.len());
@@ -12667,8 +12689,8 @@ fn validate_legacy_bench_schema() {
         );
         assert_eq!(
             event.get("schema").and_then(Value::as_str),
-            Some("pi.ext.legacy_bench.v1"),
-            "legacy bench should use pi.ext.legacy_bench.v1 schema"
+            Some("ra.ext.legacy_bench.v1"),
+            "legacy bench should use ra.ext.legacy_bench.v1 schema"
         );
     }
     eprintln!("[schema] Validated {} legacy bench events", events.len());
@@ -12808,7 +12830,7 @@ fn jsonl_records_have_stable_key_ordering() {
 fn generate_schema_doc() {
     if !schema_doc_generation_requested() {
         eprintln!(
-            "[schema] Documentation generation skipped; set PI_GENERATE_BENCH_SCHEMA_DOCS=1 to write tracked schema files"
+            "[schema] Documentation generation skipped; set RECUR_AGENT_GENERATE_BENCH_SCHEMA_DOCS=1 to write tracked schema files"
         );
         return;
     }
@@ -12848,11 +12870,11 @@ fn generate_schema_doc() {
     // Per-schema required fields
     md.push_str("## Required Fields by Schema\n\n");
 
-    md.push_str("### `pi.ext.rust_bench.v1`\n\n");
+    md.push_str("### `ra.ext.rust_bench.v1`\n\n");
     md.push_str("| Field | Type | Description |\n");
     md.push_str("|---|---|---|\n");
-    md.push_str("| `schema` | string | Always `\"pi.ext.rust_bench.v1\"` |\n");
-    md.push_str("| `runtime` | string | Always `\"pi_agent_rust\"` |\n");
+    md.push_str("| `schema` | string | Always `\"ra.ext.rust_bench.v1\"` |\n");
+    md.push_str("| `runtime` | string | Always `\"recur_agent\"` |\n");
     md.push_str(
         "| `scenario` | string | Benchmark scenario (e.g., `ext_load_init/load_init_cold`) |\n",
     );
@@ -12864,12 +12886,12 @@ fn generate_schema_doc() {
     md.push_str("| `per_call_us` | float | Per-call latency in microseconds |\n");
     md.push_str("| `calls_per_sec` | float | Throughput (calls per second) |\n\n");
 
-    md.push_str("### `pi.ext.legacy_bench.v1`\n\n");
-    md.push_str("Same structure as `pi.ext.rust_bench.v1` with:\n");
+    md.push_str("### `ra.ext.legacy_bench.v1`\n\n");
+    md.push_str("Same structure as `ra.ext.rust_bench.v1` with:\n");
     md.push_str("- `runtime` = `\"legacy_pi_mono\"`\n");
     md.push_str("- `node` object: `{version, platform, arch}`\n\n");
 
-    md.push_str("### `pi.perf.workload.v1`\n\n");
+    md.push_str("### `ra.perf.workload.v1`\n\n");
     md.push_str("| Field | Type | Description |\n");
     md.push_str("|---|---|---|\n");
     for field in WORKLOAD_REQUIRED {
@@ -12887,17 +12909,17 @@ fn generate_schema_doc() {
     }
     md.push('\n');
 
-    md.push_str("### `pi.perf.budget_summary.v2`\n\n");
+    md.push_str("### `ra.perf.budget_summary.v2`\n\n");
     md.push_str(
         "Each `budgets` entry requires `name`, `category`, `metric`, `unit`, `threshold`, `comparison`, `ci_enforced`, and `methodology`. `comparison` is the exact enum `maximum` (`actual <= threshold`) or `minimum` (`actual >= threshold`); consumers must never infer direction from a budget name. Blanket performance claims are authorized only when strict, source-bound, same-run evidence gives every declared budget data and PASS status with zero data-contract failures; aggregate `budget_data_missing` and `budget_failed` blockers prevent non-CI results from escaping that rule. Incomplete lineage produces a canonical all-`NO_DATA` blocked sentinel without inspecting ambient artifacts, target paths, or mtimes. Inventory SHA-256 uses compact JSON in producer declaration order and the listed field order, with every threshold rendered using exactly six decimal places. The canonical v0.2.0 digest is `4e24380af0ca4fe8fd94850d63e607868d15d704a42d434bdb1c762e7e327663`.\n\n",
     );
 
     let protocol_contract = canonical_protocol_contract();
 
-    md.push_str("### `pi.bench.protocol.v1`\n\n");
+    md.push_str("### `ra.bench.protocol.v1`\n\n");
     md.push_str("| Field | Type | Description |\n");
     md.push_str("|---|---|---|\n");
-    md.push_str("| `schema` | string | Always `\"pi.bench.protocol.v1\"` |\n");
+    md.push_str("| `schema` | string | Always `\"ra.bench.protocol.v1\"` |\n");
     md.push_str("| `version` | string | Protocol version used by all benchmark harnesses |\n");
     md.push_str("| `partition_tags` | string[] | Must include `matched-state` and `realistic` |\n");
     md.push_str(
@@ -13027,7 +13049,7 @@ fn generate_schema_doc() {
 
     // Write machine-readable schema registry
     let registry = json!({
-        "schema": "pi.bench.schema_registry.v1",
+        "schema": "ra.bench.schema_registry.v1",
         "schemas": SCHEMAS.iter().map(|(name, desc)| json!({
             "name": name,
             "description": desc,

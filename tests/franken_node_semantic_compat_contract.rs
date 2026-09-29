@@ -58,7 +58,7 @@ fn semantic_compat_contract_has_expected_schema_and_bead_linkage() {
     let contract = load_contract();
     assert_eq!(
         contract["schema"],
-        Value::String("pi.frankennode.semantic_compatibility_matrix_contract.v1".to_string()),
+        Value::String("ra.frankennode.semantic_compatibility_matrix_contract.v1".to_string()),
         "semantic compatibility contract schema mismatch"
     );
 
@@ -950,7 +950,7 @@ fn evaluate_executable_semantic_matrix(contract: &Value, rows: &[Value]) -> Valu
     }
 
     serde_json::json!({
-        "schema": "pi.frankennode.semantic_compatibility_matrix_report.v1",
+        "schema": "ra.frankennode.semantic_compatibility_matrix_report.v1",
         "summary": {
             "release_gate_status": if blocking_reasons.is_empty() { "ready" } else { "blocked" },
             "total_rows": rows.len(),
@@ -1037,7 +1037,7 @@ fn semantic_compat_executable_harness_reports_ready_when_high_rows_exact_with_li
     let report = evaluate_executable_semantic_matrix(&contract, &rows);
     assert_eq!(
         report["schema"],
-        Value::String("pi.frankennode.semantic_compatibility_matrix_report.v1".to_string()),
+        Value::String("ra.frankennode.semantic_compatibility_matrix_report.v1".to_string()),
         "executable harness must emit expected report schema"
     );
     assert_eq!(

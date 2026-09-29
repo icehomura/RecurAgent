@@ -3,7 +3,7 @@
 //! Validates that performance baselines have acceptable variance for truthful
 //! progress claims. Provides statistical primitives (confidence intervals,
 //! coefficient of variation, variance classification) and produces structured
-//! JSONL evidence conforming to `pi.perf.baseline_variance.v1`.
+//! JSONL evidence conforming to `ra.perf.baseline_variance.v1`.
 //!
 //! Run:
 //! ```bash
@@ -26,9 +26,9 @@ use std::path::{Path, PathBuf};
 
 // ─── Schema Constants ───────────────────────────────────────────────────────
 
-const BASELINE_VARIANCE_SCHEMA: &str = "pi.perf.baseline_variance.v1";
+const BASELINE_VARIANCE_SCHEMA: &str = "ra.perf.baseline_variance.v1";
 const BASELINE_VARIANCE_VERSION: &str = "1.0.0";
-const EVIDENCE_ADJUDICATION_MATRIX_SCHEMA: &str = "pi.qa.evidence_adjudication_matrix.v1";
+const EVIDENCE_ADJUDICATION_MATRIX_SCHEMA: &str = "ra.qa.evidence_adjudication_matrix.v1";
 
 // ─── Statistical Primitives ─────────────────────────────────────────────────
 
@@ -334,7 +334,7 @@ fn output_dir() -> PathBuf {
                         .map(PathBuf::from)
                         .filter(|path| !path.as_os_str().is_empty())
                         .unwrap_or_else(std::env::temp_dir)
-                        .join("pi_agent_rust")
+                        .join("recur_agent")
                         .join("baseline_variance")
                 },
                 |dir| {
@@ -672,12 +672,12 @@ fn inline_json_parse_variance_is_acceptable() {
 
     // JSON parse should have low/medium variance in a controlled environment.
     // The class is a property of the measurement environment, so it is only
-    // enforced in the perf lane (`PI_PERF_STRICT=1`, set by
+    // enforced in the perf lane (`RECUR_AGENT_PERF_STRICT=1`, set by
     // scripts/perf/orchestrate.sh); the shared DSR gate workers measured a CV
     // of 0.32 on 2026-09-02 with nothing wrong in the code. Outside the perf
     // lane the class is still measured and recorded in the evidence below.
     let var_class = VarianceClass::from_cv(stats.coefficient_of_variation);
-    if std::env::var("PI_PERF_STRICT").is_ok_and(|v| v == "1") {
+    if std::env::var("RECUR_AGENT_PERF_STRICT").is_ok_and(|v| v == "1") {
         assert!(
             var_class.is_acceptable(),
             "JSON parse variance class '{}' (CV={:.4}) should be acceptable (low or medium)",
@@ -686,7 +686,7 @@ fn inline_json_parse_variance_is_acceptable() {
         );
     } else if !var_class.is_acceptable() {
         eprintln!(
-            "  NOTE: variance class '{}' (CV={:.4}) is only enforced with PI_PERF_STRICT=1",
+            "  NOTE: variance class '{}' (CV={:.4}) is only enforced with RECUR_AGENT_PERF_STRICT=1",
             stats.variance_class, stats.coefficient_of_variation
         );
     }
@@ -870,7 +870,7 @@ fn evidence_adjudication_matrix_schema_has_core_relationships() {
         .expect("must have schema_relationships array");
 
     let evidence_to_adjudication = relationships.iter().any(|rel| {
-        rel["from_schema"] == "pi.qa.evidence_contract.v1"
+        rel["from_schema"] == "ra.qa.evidence_contract.v1"
             && rel["to_schema"] == EVIDENCE_ADJUDICATION_MATRIX_SCHEMA
             && rel["join_field"] == "correlation_id"
     });
@@ -880,7 +880,7 @@ fn evidence_adjudication_matrix_schema_has_core_relationships() {
     );
 
     let run_manifest_to_adjudication = relationships.iter().any(|rel| {
-        rel["from_schema"] == "pi.perf.run_manifest.v1"
+        rel["from_schema"] == "ra.perf.run_manifest.v1"
             && rel["to_schema"] == EVIDENCE_ADJUDICATION_MATRIX_SCHEMA
             && rel["join_field"] == "correlation_id"
     });

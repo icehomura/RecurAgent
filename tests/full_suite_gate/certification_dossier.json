@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.certification_dossier.v1",
+  "schema": "ra.qa.certification_dossier.v1",
   "generated_at": "2026-08-04T23:06:43.632Z",
   "bead": "bd-1f42.8.10",
   "verdict": "pass_with_residuals",
@@ -71,7 +71,7 @@
     "blocking_total": 14
   },
   "opportunity_matrix_contract": {
-    "schema_expected": "pi.perf.opportunity_matrix.v1",
+    "schema_expected": "ra.perf.opportunity_matrix.v1",
     "artifact_path": "tests/perf/reports/opportunity_matrix.json",
     "artifact_present": true,
     "contract_valid": true,

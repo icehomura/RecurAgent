@@ -8,8 +8,8 @@ const CONTRACT_PATH: &str = "docs/contracts/runtime-intelligence-closeout-gate-c
 const EVIDENCE_PATH: &str = "docs/evidence/runtime-intelligence-closeout-gate.json";
 const RUNBOOK_PATH: &str = "docs/swarm-operations-runbook.md";
 const README_PATH: &str = "README.md";
-const EXPECTED_CONTRACT_SCHEMA: &str = "pi.runtime_intelligence.closeout_gate_contract.v1";
-const EXPECTED_EVIDENCE_SCHEMA: &str = "pi.runtime_intelligence.closeout_gate.v1";
+const EXPECTED_CONTRACT_SCHEMA: &str = "ra.runtime_intelligence.closeout_gate_contract.v1";
+const EXPECTED_EVIDENCE_SCHEMA: &str = "ra.runtime_intelligence.closeout_gate.v1";
 const EXPECTED_PURPOSE: &str =
     "prompt_to_artifact_runtime_intelligence_closeout_gate_not_source_of_truth";
 

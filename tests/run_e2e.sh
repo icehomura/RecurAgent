@@ -126,7 +126,7 @@ fi
 require_cmd cargo
 require_cmd jq
 
-MODELS_PATH="${PI_MODELS_PATH:-$HOME/.pi/agent/models.json}"
+MODELS_PATH="${RECUR_AGENT_MODELS_PATH:-$HOME/.ra/agent/models.json}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="${ROOT}/tests/e2e_results/${TIMESTAMP}"
 mkdir -p "$OUT_DIR"
@@ -186,8 +186,8 @@ for provider in "${TARGET_PROVIDERS[@]}"; do
   set +e
   if [[ "$RECORD_MODE" -eq 1 ]]; then
     CI_E2E_TESTS=1 \
-      PI_LIVE_E2E_PROVIDER="$provider" \
-      PI_E2E_EXPORT_DIR="$export_dir" \
+      RECUR_AGENT_LIVE_E2E_PROVIDER="$provider" \
+      RECUR_AGENT_E2E_EXPORT_DIR="$export_dir" \
       TEST_LOG_JSONL_PATH="$test_log" \
       TEST_ARTIFACT_INDEX_PATH="$artifact_index" \
       VCR_MODE=record \
@@ -195,8 +195,8 @@ for provider in "${TARGET_PROVIDERS[@]}"; do
       >"$cargo_output" 2>&1
   else
     CI_E2E_TESTS=1 \
-      PI_LIVE_E2E_PROVIDER="$provider" \
-      PI_E2E_EXPORT_DIR="$export_dir" \
+      RECUR_AGENT_LIVE_E2E_PROVIDER="$provider" \
+      RECUR_AGENT_E2E_EXPORT_DIR="$export_dir" \
       TEST_LOG_JSONL_PATH="$test_log" \
       TEST_ARTIFACT_INDEX_PATH="$artifact_index" \
       cargo test --test e2e_live_harness e2e_live_provider_harness_smoke -- --nocapture \
@@ -215,7 +215,7 @@ for provider in "${TARGET_PROVIDERS[@]}"; do
       [[ -f "$cassette_path" ]] || continue
       cp "$cassette_path" "${cassette_dir}/$(basename "$cassette_path")"
     done < <(jq -r '
-      select((.schema == "pi.test.log.v1" or .schema == "pi.test.log.v2") and .type == "log")
+      select((.schema == "ra.test.log.v1" or .schema == "ra.test.log.v2") and .type == "log")
       | .context.vcr_path // empty
     ' "$test_log")
   fi

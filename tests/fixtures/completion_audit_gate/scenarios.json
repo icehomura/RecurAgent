@@ -1,10 +1,10 @@
 {
-  "schema": "pi.completion_audit.closeout_gate_fixtures.v1",
+  "schema": "ra.completion_audit.closeout_gate_fixtures.v1",
   "scenarios": [
     {
       "id": "pass",
       "audit": {
-        "schema": "pi.completion_audit.v1",
+        "schema": "ra.completion_audit.v1",
         "overall_status": "complete",
         "completion_allowed": true,
         "requirements": [
@@ -36,7 +36,7 @@
     {
       "id": "missing_push",
       "audit": {
-        "schema": "pi.completion_audit.v1",
+        "schema": "ra.completion_audit.v1",
         "overall_status": "blocked",
         "completion_allowed": false,
         "requirements": [
@@ -63,7 +63,7 @@
     {
       "id": "failed_command",
       "audit": {
-        "schema": "pi.completion_audit.v1",
+        "schema": "ra.completion_audit.v1",
         "overall_status": "blocked",
         "completion_allowed": false,
         "requirements": [
@@ -96,7 +96,7 @@
     {
       "id": "proxy_only",
       "audit": {
-        "schema": "pi.completion_audit.v1",
+        "schema": "ra.completion_audit.v1",
         "overall_status": "incomplete",
         "completion_allowed": false,
         "requirements": [
@@ -128,7 +128,7 @@
     {
       "id": "missing_artifact_and_gap",
       "audit": {
-        "schema": "pi.completion_audit.v1",
+        "schema": "ra.completion_audit.v1",
         "overall_status": "blocked",
         "completion_allowed": false,
         "requirements": [

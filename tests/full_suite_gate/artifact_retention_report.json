@@ -34,7 +34,7 @@
     "testing_policy": "docs/testing-policy.md"
   },
   "generated_at": "2026-08-04T22:32:18.254593818+00:00",
-  "schema": "pi.ci.artifact_retention_report.v1",
+  "schema": "ra.ci.artifact_retention_report.v1",
   "triage_artifacts": {
     "evidence_contract": "tests/e2e_results/<ts>/evidence_contract.json",
     "failure_digest": "tests/e2e_results/<ts>/<suite>/failure_digest.json",

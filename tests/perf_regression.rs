@@ -25,7 +25,7 @@ mod common;
 
 use chrono::{SecondsFormat, Utc};
 use common::harness::TestHarness;
-use pi::perf_build;
+use ra::perf_build;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -42,7 +42,7 @@ use sysinfo::System;
 /// Serialize perf-sensitive tests to avoid scheduler noise.
 static PERF_LOCK: Mutex<()> = Mutex::new(());
 const PERF_RELEASE_BINARY_PATH_ENV: &str = "PERF_RELEASE_BINARY_PATH";
-const PI_PERF_STRICT_ENV: &str = "PI_PERF_STRICT";
+const RECUR_AGENT_PERF_STRICT_ENV: &str = "RECUR_AGENT_PERF_STRICT";
 
 fn recover_poisoned_mutex_guard<'a, T>(
     lock: &'a Mutex<T>,
@@ -107,7 +107,7 @@ fn perf_strict_mode_from(raw: Option<&str>) -> bool {
 }
 
 fn perf_strict_mode() -> bool {
-    let strict_raw = std::env::var(PI_PERF_STRICT_ENV).ok();
+    let strict_raw = std::env::var(RECUR_AGENT_PERF_STRICT_ENV).ok();
     perf_strict_mode_from(strict_raw.as_deref())
 }
 
@@ -156,12 +156,12 @@ fn build_pi_binary_candidates(
 
 fn pi_binary_candidates() -> Vec<PathBuf> {
     let target_dir = target_dir();
-    let cargo_bin_override = std::env::var_os("CARGO_BIN_EXE_pi").map(PathBuf::from);
+    let cargo_bin_override = std::env::var_os("CARGO_BIN_EXE_ra").map(PathBuf::from);
     let detected_profile = perf_build::detect_build_profile();
     build_pi_binary_candidates(&target_dir, cargo_bin_override, &detected_profile)
 }
 
-/// Find the first available `pi` binary from test/build-profile candidates.
+/// Find the first available `ra` binary from test/build-profile candidates.
 fn pi_binary() -> Option<PathBuf> {
     first_existing_candidate(pi_binary_candidates())
 }
@@ -278,7 +278,7 @@ fn sha256_short(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
     let result = hasher.finalize();
-    pi::package_manager::hex_encode(&result)[..16].to_string()
+    ra::package_manager::hex_encode(&result)[..16].to_string()
 }
 
 // ─── Statistics ──────────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ fn startup_version_latency() {
     let samples = measure_startup(&binary, &["--version"], startup_runs(), warmup_runs());
     assert!(
         !samples.is_empty(),
-        "pi --version produced no successful runs"
+        "ra --version produced no successful runs"
     );
 
     let stats = compute_stats(&samples);
@@ -494,7 +494,7 @@ fn startup_version_latency() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "startup_version_latency".to_string(),
         category: "startup".to_string(),
         budget_name: "startup_version_p95".to_string(),
@@ -558,7 +558,7 @@ fn startup_help_latency() {
     harness.log().info("measure", "Measuring --help startup");
 
     let samples = measure_startup(&binary, &["--help"], startup_runs(), warmup_runs());
-    assert!(!samples.is_empty(), "pi --help produced no successful runs");
+    assert!(!samples.is_empty(), "ra --help produced no successful runs");
 
     let stats = compute_stats(&samples);
     let p95 = stats.p95_ms;
@@ -573,7 +573,7 @@ fn startup_help_latency() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "startup_help_latency".to_string(),
         category: "startup".to_string(),
         budget_name: "startup_help_p95".to_string(),
@@ -624,7 +624,7 @@ fn idle_memory_rss() {
         .log()
         .info("measure", "Measuring idle RSS of pi process");
 
-    // Spawn pi --version and measure its peak RSS
+    // Spawn ra --version and measure its peak RSS
     // We use /usr/bin/time if available for accurate maxrss
     let rss_mb = measure_process_rss(&binary, &["--version"]);
 
@@ -636,7 +636,7 @@ fn idle_memory_rss() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "idle_memory_rss".to_string(),
         category: "memory".to_string(),
         budget_name: "idle_memory_rss".to_string(),
@@ -762,7 +762,7 @@ fn memory_sustained_load_growth() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "memory_sustained_load_growth".to_string(),
         category: "memory".to_string(),
         budget_name: "sustained_load_rss_growth".to_string(),
@@ -813,7 +813,7 @@ fn binary_size_check() {
             Err(err) => {
                 harness.log().info(
                     "missing_release_binary",
-                    format!("strict_mode=true env={PI_PERF_STRICT_ENV} checked={checked}"),
+                    format!("strict_mode=true env={RECUR_AGENT_PERF_STRICT_ENV} checked={checked}"),
                 );
                 assert!(!strict_mode, "{err}");
                 return;
@@ -831,7 +831,7 @@ fn binary_size_check() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "binary_size_check".to_string(),
         category: "binary".to_string(),
         budget_name: "binary_size_release".to_string(),
@@ -919,7 +919,7 @@ fn protocol_parse_latency() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "protocol_parse_latency".to_string(),
         category: "protocol".to_string(),
         budget_name: "protocol_parse_p99".to_string(),
@@ -1007,7 +1007,7 @@ fn sse_parse_throughput() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "sse_parse_throughput".to_string(),
         category: "protocol".to_string(),
         budget_name: "sse_parse_throughput".to_string(),
@@ -1075,7 +1075,7 @@ fn config_parse_latency() {
             "disabled": []
         },
         "extensions": {
-            "paths": ["/home/user/.pi/extensions"]
+            "paths": ["/home/user/.ra/extensions"]
         }
     });
     let config_str = serde_json::to_string(&config).unwrap();
@@ -1105,7 +1105,7 @@ fn config_parse_latency() {
 
     let env = collect_fingerprint();
     let record = PerfRecord {
-        schema: "pi.perf.regression.v1".to_string(),
+        schema: "ra.perf.regression.v1".to_string(),
         test: "config_parse_latency".to_string(),
         category: "startup".to_string(),
         budget_name: "config_parse_p99".to_string(),
@@ -1224,7 +1224,7 @@ fn generate_regression_report() {
 
     // JSON summary
     let summary = json!({
-        "schema": "pi.perf.regression_summary.v1",
+        "schema": "ra.perf.regression_summary.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "tests": records.len(),
         "pass": pass_count,

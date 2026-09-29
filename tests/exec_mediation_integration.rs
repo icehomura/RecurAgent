@@ -5,7 +5,7 @@
 //! classification, exec mediation evaluation, secret broker detection and
 //! redaction, ledger entry accumulation, and artifact export.
 
-use pi::extensions::{
+use ra::extensions::{
     DangerousCommandClass, ExecMediationArtifact, ExecMediationLedgerEntry, ExecMediationPolicy,
     ExecMediationResult, ExecRiskTier, ExtensionManager, ExtensionPolicy, PolicyProfile,
     SecretBrokerArtifact, SecretBrokerLedgerEntry, SecretBrokerPolicy, classify_dangerous_command,
@@ -585,7 +585,7 @@ fn manager_records_exec_mediation_entries() {
     });
 
     let artifact = manager.exec_mediation_artifact();
-    assert_eq!(artifact.schema, "pi.ext.exec_mediation_ledger.v1");
+    assert_eq!(artifact.schema, "ra.ext.exec_mediation_ledger.v1");
     assert_eq!(artifact.entry_count, 2);
     assert_eq!(artifact.entries.len(), 2);
     assert_eq!(artifact.entries[0].ts_ms, 1000);
@@ -613,7 +613,7 @@ fn manager_records_secret_broker_entries() {
     });
 
     let artifact = manager.secret_broker_artifact();
-    assert_eq!(artifact.schema, "pi.ext.secret_broker_ledger.v1");
+    assert_eq!(artifact.schema, "ra.ext.secret_broker_ledger.v1");
     assert_eq!(artifact.entry_count, 2);
     assert!(!artifact.entries[0].redacted);
     assert!(artifact.entries[1].redacted);

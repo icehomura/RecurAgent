@@ -7,13 +7,13 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::{
-    PiJsRuntimeConfig, RepairMode, RepairPattern, extract_import_names, generate_monorepo_stub,
+use ra::extensions_js::{
+    RaJsRuntimeConfig, RepairMode, RepairPattern, extract_import_names, generate_monorepo_stub,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use std::sync::Arc;
 
 // ─── Test Infrastructure ─────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ fn create_repair_runtime(
     let cwd = harness.temp_dir().to_path_buf();
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         repair_mode: mode,
         ..Default::default()
@@ -501,7 +501,7 @@ fn repair_mode_auto_strict_applies_all() {
 
 #[test]
 fn safe_patterns_in_auto_safe() {
-    use pi::extensions_js::RepairRisk;
+    use ra::extensions_js::RepairRisk;
     assert_eq!(RepairPattern::DistToSrc.risk(), RepairRisk::Safe);
     assert_eq!(RepairPattern::MissingAsset.risk(), RepairRisk::Safe);
     assert_eq!(
@@ -512,7 +512,7 @@ fn safe_patterns_in_auto_safe() {
 
 #[test]
 fn aggressive_patterns_require_strict() {
-    use pi::extensions_js::RepairRisk;
+    use ra::extensions_js::RepairRisk;
     assert_eq!(RepairPattern::MonorepoEscape.risk(), RepairRisk::Aggressive);
     assert_eq!(RepairPattern::MissingNpmDep.risk(), RepairRisk::Aggressive);
     assert_eq!(RepairPattern::ExportShape.risk(), RepairRisk::Aggressive);

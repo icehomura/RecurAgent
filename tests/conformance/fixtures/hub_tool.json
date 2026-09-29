@@ -13,7 +13,7 @@
       "expected": {
         "content_regex": "^(No supervised services this session\\.|[0-9]+ service\\(s\\):)",
         "details_exact": {
-          "schema": "pi.hub.service.v1"
+          "schema": "ra.hub.service.v1"
         }
       }
     },

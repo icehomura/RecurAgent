@@ -6,7 +6,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use pi::validation_broker::{
+use ra::validation_broker::{
     VALIDATION_BROKER_CLI_PLAN_SCHEMA, VALIDATION_BROKER_CLI_STATUS_SCHEMA,
     VALIDATION_BROKER_DECISION_SCHEMA, ValidationAdmissionPolicy,
     ValidationAdmissionRequestContext, ValidationBrokerInputParts, ValidationBrokerInputSnapshot,
@@ -33,7 +33,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn test_temp_dir() -> Result<TempDir, std::io::Error> {
@@ -179,11 +179,11 @@ fn base_request(slot_id: &str) -> ValidationSlotRequest {
     let mut environment = BTreeMap::new();
     environment.insert(
         "CARGO_TARGET_DIR".to_string(),
-        "/data/tmp/pi_agent_rust_cargo/codex/target".to_string(),
+        "/data/tmp/recur_agent_cargo/codex/target".to_string(),
     );
     environment.insert(
         "TMPDIR".to_string(),
-        "/data/tmp/pi_agent_rust_cargo/codex/tmp".to_string(),
+        "/data/tmp/recur_agent_cargo/codex/tmp".to_string(),
     );
 
     ValidationSlotRequest {
@@ -199,11 +199,11 @@ fn base_request(slot_id: &str) -> ValidationSlotRequest {
             "--all-targets".to_string(),
         ],
         command_class: "cargo_check".to_string(),
-        cwd: "/data/projects/pi_agent_rust".to_string(),
+        cwd: "/data/projects/recur_agent".to_string(),
         git_head: "3048e53f3".to_string(),
         feature_flags: vec!["default".to_string()],
-        target_dir: "/data/tmp/pi_agent_rust_cargo/codex/target".to_string(),
-        tmpdir: "/data/tmp/pi_agent_rust_cargo/codex/tmp".to_string(),
+        target_dir: "/data/tmp/recur_agent_cargo/codex/target".to_string(),
+        tmpdir: "/data/tmp/recur_agent_cargo/codex/tmp".to_string(),
         runner: "rch_required".to_string(),
         rust_toolchain: Some("nightly".to_string()),
         rch_job_id: None,
@@ -227,17 +227,17 @@ fn admission_context(slot_id: &str) -> ValidationAdmissionRequestContext {
     }
 }
 
-fn provenance(source: &str) -> Result<ValidationSourceProvenance, pi::error::Error> {
+fn provenance(source: &str) -> Result<ValidationSourceProvenance, ra::error::Error> {
     ValidationSourceProvenance::new(
         source,
         vec![source.to_string(), "--json".to_string()],
-        "/data/projects/pi_agent_rust",
+        "/data/projects/recur_agent",
         START,
         Some(format!("artifacts/{source}.json")),
     )
 }
 
-fn healthy_inputs() -> Result<ValidationBrokerInputSnapshot, pi::error::Error> {
+fn healthy_inputs() -> Result<ValidationBrokerInputSnapshot, ra::error::Error> {
     let rch = normalize_rch_queue_text(
         provenance("rch")?,
         "Build Queue\n  - 1 Active Build(s)\n  - 0 Queued Build(s)\nWorker Availability\n  -> 4 / 18 slots free\n",
@@ -1000,7 +1000,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
     artifact_entries.push(json!({
         "id": "validation_slot_records",
         "path": status_store_path.display().to_string(),
-        "artifact_schema": "pi.validation_broker.slot_store.record.v1",
+        "artifact_schema": "ra.validation_broker.slot_store.record.v1",
         "evidence_kind": "validation_slot_records",
     }));
 
@@ -1036,7 +1036,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
         runpack
             .pointer("/doctor_swarm/validation_broker/schema")
             .and_then(Value::as_str),
-        Some("pi.doctor.validation_broker_posture.v1")
+        Some("ra.doctor.validation_broker_posture.v1")
     );
     assert_eq!(
         runpack
@@ -1059,7 +1059,7 @@ fn validation_broker_no_mock_e2e_harness_emits_decisions_and_runpack_projection(
     artifact_entries.push(json!({
         "id": "operator_runpack_json",
         "path": runpack_path.display().to_string(),
-        "artifact_schema": "pi.swarm.operator_runpack.v1",
+        "artifact_schema": "ra.swarm.operator_runpack.v1",
         "evidence_kind": "runpack_projection",
     }));
     artifact_entries.push(json!({

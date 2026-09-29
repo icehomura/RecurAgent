@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.rpc_differential_scenarios.v1",
+  "schema": "ra.dropin.rpc_differential_scenarios.v1",
   "bead": "bd-lnmtp.2.3",
   "description": "Deterministic JSON/RPC differential harness scenarios for the G05 command and event surface. Each scenario is matched against docs/dropin-rpc-surface-diff.json and canonicalized before comparison so object key order cannot hide drift.",
   "canonicalization": {

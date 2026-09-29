@@ -10,11 +10,11 @@
 //! - Diffs are grouped by `event` and correlation IDs to speed triage.
 //!
 //! **Normalization rules are defined in the canonical contract** at
-//! [`pi::conformance::normalization`].  This test file delegates to that
+//! [`ra::conformance::normalization`].  This test file delegates to that
 //! module so there is one source of truth.
 #![forbid(unsafe_code)]
 
-use pi::conformance::normalization::{
+use ra::conformance::normalization::{
     self, NormalizationContext, PLACEHOLDER_ARTIFACT_ID, PLACEHOLDER_HOST,
     PLACEHOLDER_PI_MONO_ROOT, PLACEHOLDER_RUN_ID, PLACEHOLDER_SESSION_ID, PLACEHOLDER_SPAN_ID,
     PLACEHOLDER_TIMESTAMP, PLACEHOLDER_TRACE_ID, is_path_key, path_suffix_match,
@@ -125,7 +125,7 @@ fn parse_and_normalize_jsonl(
         let parsed: Value = serde_json::from_str(line)
             .map_err(|err| format!("line {idx}: JSON parse error: {err}"))?;
         let normalized = normalize_ext_log_line(parsed, ctx);
-        if std::env::var_os("PI_TEST_MODE").is_some() {
+        if std::env::var_os("RECUR_AGENT_TEST_MODE").is_some() {
             trace!(
                 target: "ext_conformance.normalize",
                 line = idx + 1,
@@ -173,7 +173,7 @@ fn normalizes_dynamic_fields_paths_and_ansi() {
     let cwd = Path::new("/tmp/pi_ext_conformance");
     let ctx = NormalizationContext::from_cwd(cwd);
     let original = json!({
-        "schema": "pi.ext.log.v1",
+        "schema": "ra.ext.log.v1",
         "ts": "2026-02-03T03:01:02.123Z",
         "level": "info",
         "event": "tool_call.start",
@@ -213,15 +213,18 @@ fn normalizes_dynamic_fields_paths_and_ansi() {
 
     let msg = normalized["message"].as_str().unwrap_or_default();
     // Windows PathBuf::join uses backslash, so accept both separators
-    assert!(msg.contains("<PI_MONO_ROOT>/file.txt") || msg.contains("<PI_MONO_ROOT>\\file.txt"),);
+    assert!(
+        msg.contains("<RECUR_AGENT_MONO_ROOT>/file.txt")
+            || msg.contains("<RECUR_AGENT_MONO_ROOT>\\file.txt"),
+    );
     assert!(!msg.contains(&cwd.display().to_string()));
     assert!(!msg.contains("\u{1b}["));
     assert!(msg.contains("ERR"));
 
     let path = normalized["data"]["path"].as_str().unwrap_or_default();
     assert!(
-        path.contains("<PI_MONO_ROOT>/dir/sub/file.rs")
-            || path.contains("<PI_MONO_ROOT>\\dir\\sub\\file.rs"),
+        path.contains("<RECUR_AGENT_MONO_ROOT>/dir/sub/file.rs")
+            || path.contains("<RECUR_AGENT_MONO_ROOT>\\dir\\sub\\file.rs"),
     );
     assert!(!path.contains(&cwd.display().to_string()));
 
@@ -259,10 +262,10 @@ fn diff_key_prefers_most_specific_correlation_id() {
 fn diff_normalized_jsonl_treats_dynamic_fields_as_equal() {
     let cwd = Path::new("/tmp/pi_ext_conformance");
     let expected = r#"
-{"schema":"pi.ext.log.v1","ts":"2026-02-03T03:01:02.123Z","level":"info","event":"tool_call.start","message":"opened /tmp/pi_ext_conformance/file.txt","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","session_id":"sess-a","run_id":"run-a"},"source":{"component":"runtime","host":"a","pid":1}}
+{"schema":"ra.ext.log.v1","ts":"2026-02-03T03:01:02.123Z","level":"info","event":"tool_call.start","message":"opened /tmp/pi_ext_conformance/file.txt","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","session_id":"sess-a","run_id":"run-a"},"source":{"component":"runtime","host":"a","pid":1}}
 "#;
     let actual = r#"
-{"schema":"pi.ext.log.v1","ts":"2026-02-03T03:01:02.999Z","level":"info","event":"tool_call.start","message":"opened /tmp/pi_ext_conformance/file.txt","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","session_id":"sess-b","run_id":"run-b"},"source":{"component":"runtime","host":"b","pid":9999}}
+{"schema":"ra.ext.log.v1","ts":"2026-02-03T03:01:02.999Z","level":"info","event":"tool_call.start","message":"opened /tmp/pi_ext_conformance/file.txt","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","session_id":"sess-b","run_id":"run-b"},"source":{"component":"runtime","host":"b","pid":9999}}
 "#;
 
     diff_normalized_jsonl(expected, actual, cwd).unwrap();
@@ -289,15 +292,15 @@ fn ui_method_aliases_normalize_identically_in_jsonl_diff() {
 fn trace_viewer_renders_pretty_and_exports_jsonl() {
     let mut log_file = NamedTempFile::new().expect("temp log file");
 
-    let line1 = r#"{"schema":"pi.ext.log.v1","ts":"2026-02-03T03:01:02.123Z","level":"info","event":"capture","message":"capture.start","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","run_id":"run-123"},"source":{"component":"capture","pid":42},"data":{"started_at":"2026-02-03T03:01:02.123Z","provider":"openai","model":"gpt-4o-mini"}}"#;
-    let line2 = r#"{"schema":"pi.ext.log.v1","ts":"2026-02-03T03:01:02.456Z","level":"debug","event":"tool_call.start","message":"read.start","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","tool_call_id":"tool-42"},"source":{"component":"runtime","pid":4242},"data":{"tool":"read","path":"/repo/README.md"}}"#;
-    let line3 = r#"{"schema":"pi.ext.log.v1","ts":"2026-02-03T03:01:02.999Z","level":"error","event":"hostcall.error","message":"capability denied","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","host_call_id":"host-7","trace_id":"trace-xyz"},"source":{"component":"runtime","pid":4242},"data":{"capability":"fs.read","scope":"repo","hint":"Add fs.read capability to manifest."}}"#;
+    let line1 = r#"{"schema":"ra.ext.log.v1","ts":"2026-02-03T03:01:02.123Z","level":"info","event":"capture","message":"capture.start","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","run_id":"run-123"},"source":{"component":"capture","pid":42},"data":{"started_at":"2026-02-03T03:01:02.123Z","provider":"openai","model":"gpt-4o-mini"}}"#;
+    let line2 = r#"{"schema":"ra.ext.log.v1","ts":"2026-02-03T03:01:02.456Z","level":"debug","event":"tool_call.start","message":"read.start","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","tool_call_id":"tool-42"},"source":{"component":"runtime","pid":4242},"data":{"tool":"read","path":"/repo/README.md"}}"#;
+    let line3 = r#"{"schema":"ra.ext.log.v1","ts":"2026-02-03T03:01:02.999Z","level":"error","event":"hostcall.error","message":"capability denied","correlation":{"extension_id":"ext.demo","scenario_id":"scn-001","host_call_id":"host-7","trace_id":"trace-xyz"},"source":{"component":"runtime","pid":4242},"data":{"capability":"fs.read","scope":"repo","hint":"Add fs.read capability to manifest."}}"#;
 
     writeln!(log_file, "{line1}").expect("write log line1");
     writeln!(log_file, "{line2}").expect("write log line2");
     writeln!(log_file, "{line3}").expect("write log line3");
 
-    let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_pi_legacy_capture"));
+    let binary_path = PathBuf::from(env!("CARGO_BIN_EXE_ra_legacy_capture"));
 
     let pretty = Command::new(&binary_path)
         .args([
@@ -362,30 +365,30 @@ fn regression_dynamic_resources_path_suffix_matching() {
 
     // Suffix matching works for each file
     assert!(path_suffix_match(
-        "/home/user/.pi/extensions/dynamic-resources/dynamic.md",
+        "/home/user/.ra/extensions/dynamic-resources/dynamic.md",
         "dynamic.md"
     ));
     assert!(path_suffix_match(
-        "/home/user/.pi/extensions/dynamic-resources/SKILL.md",
+        "/home/user/.ra/extensions/dynamic-resources/SKILL.md",
         "SKILL.md"
     ));
     assert!(path_suffix_match(
-        "/home/user/.pi/extensions/dynamic-resources/dynamic.json",
+        "/home/user/.ra/extensions/dynamic-resources/dynamic.json",
         "dynamic.json"
     ));
 
     // Verify the actual fixture values would match
     let actual_paths = [
         (
-            "/home/user/.pi/extensions/dynamic-resources/dynamic.md",
+            "/home/user/.ra/extensions/dynamic-resources/dynamic.md",
             "dynamic.md",
         ),
         (
-            "/home/user/.pi/extensions/dynamic-resources/SKILL.md",
+            "/home/user/.ra/extensions/dynamic-resources/SKILL.md",
             "SKILL.md",
         ),
         (
-            "/home/user/.pi/extensions/dynamic-resources/dynamic.json",
+            "/home/user/.ra/extensions/dynamic-resources/dynamic.json",
             "dynamic.json",
         ),
     ];
@@ -513,7 +516,7 @@ fn regression_dynamic_resources_full_normalization_pipeline() {
     let contract = normalization::NormalizationContract::default();
 
     let input = json!({
-        "schema": "pi.ext.log.v1",
+        "schema": "ra.ext.log.v1",
         "ts": "2026-02-03T12:37:19.100Z",
         "event": "resources_discover",
         "message": format!("discovered {} resources", cwd.display()),
@@ -539,7 +542,7 @@ fn regression_dynamic_resources_full_normalization_pipeline() {
         PLACEHOLDER_SESSION_ID
     );
 
-    // Paths in data should be rewritten to use PI_MONO_ROOT placeholder
+    // Paths in data should be rewritten to use RECUR_AGENT_MONO_ROOT placeholder
     let prompt_paths = normalized["data"]["promptPaths"]
         .as_array()
         .expect("promptPaths array");

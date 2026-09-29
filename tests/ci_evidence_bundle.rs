@@ -23,7 +23,7 @@
 //!   cargo test --test `ci_evidence_bundle` -- --nocapture
 //!
 //! Regenerate the tracked bundle explicitly with:
-//!   `PI_GENERATE_EVIDENCE_BUNDLE=1 cargo test --test ci_evidence_bundle build_evidence_bundle -- --exact --nocapture`
+//!   `RECUR_AGENT_GENERATE_EVIDENCE_BUNDLE=1 cargo test --test ci_evidence_bundle build_evidence_bundle -- --exact --nocapture`
 
 use serde_json::Value;
 use sha1::Sha1;
@@ -31,7 +31,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-const GENERATE_EVIDENCE_BUNDLE_ENV: &str = "PI_GENERATE_EVIDENCE_BUNDLE";
+const GENERATE_EVIDENCE_BUNDLE_ENV: &str = "RECUR_AGENT_GENERATE_EVIDENCE_BUNDLE";
 
 fn evidence_bundle_generation_enabled(raw: Option<&str>) -> bool {
     raw == Some("1")
@@ -112,8 +112,8 @@ tests/ext_conformance/reports/conformance_summary.json | \
 tests/perf/reports/stress_triage.json";
 const PERF3X_LINEAGE_MAX_ARTIFACT_SPAN_DAYS: i64 = 14;
 const PARAMETER_SWEEPS_MISSING_DIAGNOSTIC: &str = "parameter_sweeps artifact not found (expected tests/perf/reports, tests/perf/runs/results, or tests/e2e_results/*/results)";
-const MUST_PASS_GATE_SCHEMA: &str = "pi.ext.must_pass_gate.v1";
-const MUST_PASS_EVENT_SCHEMA: &str = "pi.ext.gate_event.v1";
+const MUST_PASS_GATE_SCHEMA: &str = "ra.ext.must_pass_gate.v1";
+const MUST_PASS_EVENT_SCHEMA: &str = "ra.ext.gate_event.v1";
 const MUST_PASS_INCLUSION_PATH: &str = "docs/extension-inclusion-list.json";
 const MUST_PASS_MANIFEST_PATH: &str = "tests/ext_conformance/VALIDATED_MANIFEST.json";
 const MUST_PASS_VERDICT_PATH: &str =
@@ -384,7 +384,7 @@ const ARTIFACT_SOURCES: &[ArtifactSource] = &[
         label: "High-value suite artifact inventory",
         category: "traceability",
         path: "docs/evidence/high-value-suite-artifact-inventory.json",
-        expected_schema: Some("pi.traceability.high_value_suite_artifact_inventory.v1"),
+        expected_schema: Some("ra.traceability.high_value_suite_artifact_inventory.v1"),
         is_directory: false,
         required: true,
     },
@@ -475,7 +475,7 @@ fn authoritative_must_pass_ids(
 ) -> Result<BTreeSet<String>, String> {
     let inclusion: AuthoritativeInclusionList = serde_json::from_slice(inclusion_contents)
         .map_err(|err| format!("invalid {MUST_PASS_INCLUSION_PATH}: {err}"))?;
-    if inclusion.schema != "pi.ext.inclusion_list.v1" {
+    if inclusion.schema != "ra.ext.inclusion_list.v1" {
         return Err(format!(
             "unexpected schema in {MUST_PASS_INCLUSION_PATH}: {}",
             inclusion.schema
@@ -1170,7 +1170,7 @@ fn tracked_must_pass_source_records(
 
 fn source_tree_sha256(records: &[(String, String, String)]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(b"pi.ext.must_pass_source_tree.v2\0");
+    hasher.update(b"ra.ext.must_pass_source_tree.v2\0");
     for (path, mode, blob) in records {
         hasher.update(path.as_bytes());
         hasher.update([0]);
@@ -1179,7 +1179,7 @@ fn source_tree_sha256(records: &[(String, String, String)]) -> String {
         hasher.update(blob.as_bytes());
         hasher.update([0]);
     }
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
@@ -1189,13 +1189,13 @@ fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
             let mut hasher = Sha1::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         64 => {
             let mut hasher = Sha256::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         length => Err(format!("unsupported Git object ID length: {length}")),
     }
@@ -1293,8 +1293,8 @@ fn current_must_pass_source_bindings(root: &Path) -> Result<MustPassSourceBindin
     Ok(MustPassSourceBindings {
         git_commit,
         source_tree_sha256: source_tree_sha256(&records),
-        inclusion_sha256: pi::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
-        manifest_sha256: pi::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
+        inclusion_sha256: ra::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
+        manifest_sha256: ra::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
         inclusion_contents,
         manifest_contents,
         tracked_paths: records.into_iter().map(|record| record.0).collect(),
@@ -2366,7 +2366,7 @@ fn build_evidence_bundle() {
     };
 
     let bundle = EvidenceBundle {
-        schema: "pi.ci.evidence_bundle.v1".to_string(),
+        schema: "ra.ci.evidence_bundle.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         git_ref: git_ref.clone(),
         ci_run_id: ci_run_id.clone(),
@@ -2395,7 +2395,7 @@ fn build_evidence_bundle() {
     let mut event_lines: Vec<String> = Vec::new();
     for section in &sections {
         let line = serde_json::json!({
-            "schema": "pi.ci.evidence_bundle_event.v1",
+            "schema": "ra.ci.evidence_bundle_event.v1",
             "section_id": section.id,
             "category": section.category,
             "status": section.status,
@@ -2575,8 +2575,8 @@ fn evidence_bundle_index_schema() {
     // Validate schema.
     assert_eq!(
         val.get("schema").and_then(Value::as_str),
-        Some("pi.ci.evidence_bundle.v1"),
-        "Bundle index must have schema pi.ci.evidence_bundle.v1"
+        Some("ra.ci.evidence_bundle.v1"),
+        "Bundle index must have schema ra.ci.evidence_bundle.v1"
     );
 
     // Must have sections array.
@@ -3007,7 +3007,7 @@ fn must_pass_validation_fixture() -> MustPassValidationFixture {
         .collect::<Vec<_>>();
     let inclusion_entry = |(id, _): &(String, u64)| serde_json::json!({"id": id});
     let inclusion = serde_json::json!({
-        "schema": "pi.ext.inclusion_list.v1",
+        "schema": "ra.ext.inclusion_list.v1",
         "summary": {
             "tier1_count": CURRENT_TIER1_TOTAL,
             "tier1_review_count": CURRENT_MUST_PASS_TOTAL - CURRENT_TIER1_TOTAL,
@@ -3040,8 +3040,8 @@ fn must_pass_validation_fixture() -> MustPassValidationFixture {
         git_commit: "0123456789abcdef0123456789abcdef01234567".to_string(),
         source_tree_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             .to_string(),
-        inclusion_sha256: pi::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
-        manifest_sha256: pi::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
+        inclusion_sha256: ra::package_manager::hex_encode(&Sha256::digest(&inclusion_contents)),
+        manifest_sha256: ra::package_manager::hex_encode(&Sha256::digest(&manifest_contents)),
         inclusion_contents,
         manifest_contents,
         tracked_paths: entries
@@ -3112,7 +3112,7 @@ fn update_fixture_inclusion_binding(fixture: &mut MustPassValidationFixture, val
     fixture.bindings.inclusion_contents =
         serde_json::to_vec(value).expect("serialize mutated inclusion fixture");
     fixture.bindings.inclusion_sha256 =
-        pi::package_manager::hex_encode(&Sha256::digest(&fixture.bindings.inclusion_contents));
+        ra::package_manager::hex_encode(&Sha256::digest(&fixture.bindings.inclusion_contents));
     fixture.payload["inclusion_sha256"] = Value::String(fixture.bindings.inclusion_sha256.clone());
     for event in &mut fixture.events {
         event["inclusion_sha256"] = Value::String(fixture.bindings.inclusion_sha256.clone());
@@ -3124,7 +3124,7 @@ fn update_fixture_manifest_binding(fixture: &mut MustPassValidationFixture, valu
     fixture.bindings.manifest_contents =
         serde_json::to_vec(value).expect("serialize mutated manifest fixture");
     fixture.bindings.manifest_sha256 =
-        pi::package_manager::hex_encode(&Sha256::digest(&fixture.bindings.manifest_contents));
+        ra::package_manager::hex_encode(&Sha256::digest(&fixture.bindings.manifest_contents));
     fixture.payload["manifest_sha256"] = Value::String(fixture.bindings.manifest_sha256.clone());
     for event in &mut fixture.events {
         event["manifest_sha256"] = Value::String(fixture.bindings.manifest_sha256.clone());
@@ -3146,7 +3146,7 @@ fn validate_must_pass_gate_payload_accepts_exact_authoritative_evidence() {
 #[test]
 fn validate_must_pass_gate_payload_rejects_non_exact_schema() {
     let mut fixture = must_pass_validation_fixture();
-    fixture.payload["schema"] = Value::String("pi.ext.must_pass_gate.v1.extra".to_string());
+    fixture.payload["schema"] = Value::String("ra.ext.must_pass_gate.v1.extra".to_string());
     let error = validate_must_pass_fixture(&fixture)
         .expect_err("a prefix match must not satisfy the exact verdict schema");
     assert!(error.contains("schema must be exactly"), "{error}");
@@ -3360,7 +3360,7 @@ fn validate_must_pass_gate_payload_rejects_malformed_manifest() {
 #[test]
 fn validate_perf_comparison_payload_accepts_current_shape() {
     let payload = serde_json::json!({
-        "schema": "pi.ext.perf_comparison.v1",
+        "schema": "ra.ext.perf_comparison.v1",
         "generated_at": "2026-02-17T03:00:00.000Z",
         "summary": {
             "overall_verdict": "faster",
@@ -3381,7 +3381,7 @@ fn validate_perf_comparison_payload_accepts_current_shape() {
 #[test]
 fn validate_perf_comparison_payload_rejects_missing_overall_verdict() {
     let payload = serde_json::json!({
-        "schema": "pi.ext.perf_comparison.v1",
+        "schema": "ra.ext.perf_comparison.v1",
         "generated_at": "2026-02-17T03:00:00.000Z",
         "summary": {
             "faster_count": 7,
@@ -3401,7 +3401,7 @@ fn validate_perf_comparison_payload_rejects_missing_overall_verdict() {
 #[test]
 fn validate_parameter_sweeps_payload_accepts_current_shape() {
     let payload = serde_json::json!({
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "generated_at": "2026-02-17T03:00:00.000Z",
         "readiness": {
             "status": "ready",
@@ -3423,7 +3423,7 @@ fn validate_parameter_sweeps_payload_accepts_current_shape() {
 #[test]
 fn validate_parameter_sweeps_payload_rejects_unknown_readiness_status() {
     let payload = serde_json::json!({
-        "schema": "pi.perf.parameter_sweeps.v1",
+        "schema": "ra.perf.parameter_sweeps.v1",
         "generated_at": "2026-02-17T03:00:00.000Z",
         "readiness": {
             "status": "unknown",
@@ -3645,7 +3645,7 @@ fn collect_section_rejects_artifact_paths_that_escape_through_symlinks() {
     std::fs::create_dir_all(&outside).expect("create outside artifact fixture root");
     write_fixture_json(
         &outside.join("artifact.json"),
-        &serde_json::json!({"schema": "pi.test.v1"}),
+        &serde_json::json!({"schema": "ra.test.v1"}),
     );
     symlink(&outside, root.join("linked")).expect("create repository artifact symlink fixture");
     let source = ArtifactSource {
@@ -3700,7 +3700,7 @@ fn collect_section_parameter_sweeps_uses_discovered_artifact_path() {
     write_fixture_json(
         &discovered_path,
         &serde_json::json!({
-            "schema": "pi.perf.parameter_sweeps.v1",
+            "schema": "ra.perf.parameter_sweeps.v1",
             "generated_at": "2026-02-17T04:00:00.000Z",
             "readiness": {
                 "status": "blocked",

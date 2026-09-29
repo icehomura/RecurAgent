@@ -11,7 +11,7 @@ SKILL_SMOKE="${ROOT}/scripts/skill-smoke.sh"
 # install.sh's own lock-directory validator correctly rejects as unsafe
 # (`*//*` in validate_options), so test_installer_retain_temp_mode_preserves_
 # owned_scratch and test_stale_lock_recovery_preserves_the_old_lock_receipt
-# both failed with "PI_INSTALLER_LOCK_DIR is unsafe" on darwin and passed on
+# both failed with "RECUR_AGENT_INSTALLER_LOCK_DIR is unsafe" on darwin and passed on
 # linux. The installer was right; the harness was building the bad path.
 INSTALLER_REGRESSION_TMPDIR="${TMPDIR:-/tmp}"
 WORK_ROOT="${INSTALLER_REGRESSION_TMPDIR%/}/pi-installer-regression-$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -565,7 +565,7 @@ run_installer() {
   local out="${dir}/output.log"
   local rc_file="${dir}/exit_code"
   local path_value="${dir}/fakebin:/usr/bin:/bin"
-  local run_cwd="${PI_INSTALLER_TEST_CWD:-$PWD}"
+  local run_cwd="${RECUR_AGENT_INSTALLER_TEST_CWD:-$PWD}"
 
   (
     set +e
@@ -725,8 +725,8 @@ test_installer_retain_temp_mode_preserves_owned_scratch() {
   lock_dir="${dir}/retained-install.lock.d"
   mkdir -p "$retained_tmp"
 
-  PI_INSTALLER_RETAIN_TEMP=1 \
-  PI_INSTALLER_LOCK_DIR="$lock_dir" \
+  RECUR_AGENT_INSTALLER_RETAIN_TEMP=1 \
+  RECUR_AGENT_INSTALLER_LOCK_DIR="$lock_dir" \
   TMPDIR="$retained_tmp" \
   run_installer "$dir" \
     --yes --no-gum --offline \
@@ -737,7 +737,7 @@ test_installer_retain_temp_mode_preserves_owned_scratch() {
     --no-completions \
     --no-agent-skills
 
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   assert_exit_code "$dir" 0
   [ -x "$installed" ] || {
     echo "retain-temp install did not produce the requested binary" >&2
@@ -769,8 +769,8 @@ test_stale_lock_recovery_preserves_the_old_lock_receipt() {
   mkdir -p "$retained_tmp" "$lock_dir"
   printf '99999999\n' > "$lock_dir/pid"
 
-  PI_INSTALLER_RETAIN_TEMP=1 \
-  PI_INSTALLER_LOCK_DIR="$lock_dir" \
+  RECUR_AGENT_INSTALLER_RETAIN_TEMP=1 \
+  RECUR_AGENT_INSTALLER_LOCK_DIR="$lock_dir" \
   TMPDIR="$retained_tmp" \
   run_installer "$dir" \
     --yes --no-gum --offline \
@@ -812,11 +812,11 @@ test_lock_override_rejects_ambiguous_lexical_paths() {
     "${dir}/install.lock.d/.." \
     "${dir}//install.lock.d" \
     "${dir}/install.lock.d/../other.lock.d"; do
-    PI_INSTALLER_LOCK_DIR="$unsafe_lock" \
+    RECUR_AGENT_INSTALLER_LOCK_DIR="$unsafe_lock" \
     run_installer "$dir" --yes --no-gum
 
     assert_exit_code "$dir" 1
-    assert_output_contains "$dir" "PI_INSTALLER_LOCK_DIR is unsafe"
+    assert_output_contains "$dir" "RECUR_AGENT_INSTALLER_LOCK_DIR is unsafe"
   done
 }
 
@@ -911,7 +911,7 @@ test_offline_tarball_mode_installs_local_artifact() {
     --no-completions \
     --no-agent-skills
 
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
 
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Offline artifact mode enabled"
@@ -961,7 +961,7 @@ test_offline_relative_tarball_path_is_accepted() {
       --no-agent-skills
   )
 
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   assert_exit_code "$dir" 0
   [ -x "$installed" ] || { echo "expected installed binary at ${installed}" >&2; return 1; }
 }
@@ -1072,7 +1072,7 @@ test_rosetta_prefers_arm64_artifact_naming() {
 test_wsl_detection_warning_is_emitted() {
   local dir artifact artifact_url checksum
   # install.sh only probes for WSL inside `if [ "$OS" = "linux" ]`, so
-  # PI_INSTALLER_TEST_FORCE_WSL is inert on darwin and the warning can never be
+  # RECUR_AGENT_INSTALLER_TEST_FORCE_WSL is inert on darwin and the warning can never be
   # emitted there. Forcing this case to "pass" off Linux would assert nothing.
   require_linux || return $?
   dir="$(case_dir "wsl-detection-warning")"
@@ -1083,7 +1083,7 @@ test_wsl_detection_warning_is_emitted() {
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
 
-  PI_INSTALLER_TEST_FORCE_WSL=1 \
+  RECUR_AGENT_INSTALLER_TEST_FORCE_WSL=1 \
   run_installer "$dir" \
     --yes --no-gum --offline \
     --version v9.9.9 \
@@ -1106,7 +1106,7 @@ test_installer_creates_rpi_alias_when_available() {
   write_artifact_binary "$artifact" "unsupported"
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
-  install_bin="${dir}/dest/pi"
+  install_bin="${dir}/dest/ra"
   compat_alias="${dir}/dest/rpi"
 
   run_installer "$dir" \
@@ -1122,7 +1122,7 @@ test_installer_creates_rpi_alias_when_available() {
   assert_output_contains "$dir" "Alias:     installed (rpi -> ${install_bin})"
   [ -x "$install_bin" ] || { echo "expected installed binary at ${install_bin}" >&2; return 1; }
   [ -x "$compat_alias" ] || { echo "expected compatibility alias at ${compat_alias}" >&2; return 1; }
-  grep -Fq "pi_agent_rust installer managed alias" "$compat_alias" || {
+  grep -Fq "recur_agent installer managed alias" "$compat_alias" || {
     echo "expected managed alias marker in ${compat_alias}" >&2
     return 1
   }
@@ -1167,7 +1167,7 @@ test_legacy_agent_settings_cleanup_is_safe_and_idempotent() {
   dir="$(case_dir "legacy-agent-settings-cleanup")"
   write_existing_pi_stub "$dir"
 
-  install_bin="${dir}/dest/pi"
+  install_bin="${dir}/dest/ra"
   claude_settings="${dir}/home/.claude/settings.json"
   gemini_settings="${dir}/home/.gemini/settings.json"
   mkdir -p "$(dirname "$claude_settings")" "$(dirname "$gemini_settings")"
@@ -1276,7 +1276,7 @@ test_legacy_cleanup_skips_unexpected_settings_paths() {
   dir="$(case_dir "legacy-agent-settings-unexpected-path")"
   write_existing_pi_stub "$dir"
 
-  install_bin="${dir}/dest/pi"
+  install_bin="${dir}/dest/ra"
   unexpected_settings="${dir}/home/custom/settings.json"
   mkdir -p "$(dirname "$unexpected_settings")"
   cat > "$unexpected_settings" <<JSON
@@ -1357,11 +1357,11 @@ test_agent_skills_install_by_default() {
   [ -f "$codex_commands" ] || { echo "missing Codex commands reference: $codex_commands" >&2; return 1; }
   [ -f "$claude_debugging" ] || { echo "missing Claude debugging reference: $claude_debugging" >&2; return 1; }
   [ -f "$codex_debugging" ] || { echo "missing Codex debugging reference: $codex_debugging" >&2; return 1; }
-  grep -Fq "pi_agent_rust installer managed skill" "$claude_skill" || {
+  grep -Fq "recur_agent installer managed skill" "$claude_skill" || {
     echo "missing managed marker in Claude skill" >&2
     return 1
   }
-  grep -Fq "pi_agent_rust installer managed skill" "$codex_skill" || {
+  grep -Fq "recur_agent installer managed skill" "$codex_skill" || {
     echo "missing managed marker in Codex skill" >&2
     return 1
   }
@@ -1396,7 +1396,7 @@ SKILL
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
 
-  PI_INSTALLER_TEST_CWD="${dir}/shadow" run_installer "$dir" \
+  RECUR_AGENT_INSTALLER_TEST_CWD="${dir}/shadow" run_installer "$dir" \
     --yes --no-gum --offline \
     --version v9.9.9 \
     --dest "${dir}/dest" \
@@ -1494,11 +1494,11 @@ test_skill_copy_failure_preserves_existing_managed_skills() {
   codex_skill="${dir}/home/.codex/skills/pi-agent-rust/SKILL.md"
   mkdir -p "$(dirname "$claude_skill")" "$(dirname "$codex_skill")"
   cat > "$claude_skill" <<'SKILL'
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 # OLD CLAUDE SKILL
 SKILL
   cat > "$codex_skill" <<'SKILL'
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 # OLD CODEX SKILL
 SKILL
 
@@ -1573,7 +1573,7 @@ test_uninstall_removes_only_installer_managed_skills() {
   mkdir -p "$(dirname "$managed_skill")" "$(dirname "$custom_skill")"
 
   cat > "$managed_skill" <<'SKILL'
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 # Managed skill
 SKILL
   cat > "$custom_skill" <<'SKILL'
@@ -1605,7 +1605,7 @@ test_uninstall_removes_recorded_rpi_alias() {
 
   cat > "$alias_path" <<'ALIAS'
 #!/usr/bin/env bash
-# pi_agent_rust installer managed alias
+# recur_agent installer managed alias
 set -euo pipefail
 exec /tmp/pi "$@"
 ALIAS
@@ -1630,7 +1630,7 @@ test_uninstall_cleans_legacy_agent_settings_hooks() {
   local dir state_file install_bin claude_settings gemini_settings
   dir="$(case_dir "uninstall-legacy-agent-settings-cleanup")"
 
-  install_bin="${dir}/dest/pi"
+  install_bin="${dir}/dest/ra"
   claude_settings="${dir}/home/.claude/settings.json"
   gemini_settings="${dir}/home/.gemini/settings.json"
   mkdir -p "$(dirname "$claude_settings")" "$(dirname "$gemini_settings")"
@@ -1732,11 +1732,11 @@ test_uninstall_uses_recorded_skill_paths() {
   mkdir -p "$(dirname "$managed_claude")" "$(dirname "$managed_codex")"
 
   cat > "$managed_claude" <<'SKILL'
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 # Managed Claude skill
 SKILL
   cat > "$managed_codex" <<'SKILL'
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 # Managed Codex skill (recorded path)
 SKILL
 
@@ -1771,7 +1771,7 @@ test_uninstall_skips_unexpected_skill_paths() {
   mkdir -p "$unexpected_dir"
 
   cat > "$unexpected_skill" <<'SKILL'
-<!-- pi_agent_rust installer managed skill -->
+<!-- recur_agent installer managed skill -->
 # Managed marker on unexpected path
 SKILL
 
@@ -1876,7 +1876,7 @@ test_local_checksum_copy_failure_fails_closed() {
   artifact_url="file://${artifact}"
   checksum_file="${dir}/fixtures/pi-fixture.sha256"
   printf '%s  %s\n' "$(sha256_file "$artifact")" "pi-fixture" > "$checksum_file"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   printf 'existing-destination-sentinel\n' > "$installed"
   chmod +x "$installed"
 
@@ -1933,7 +1933,7 @@ test_release_install_uses_dsr_asset_sidecar_when_manifest_absent() {
     echo "canonical DSR sidecar success unnecessarily probed legacy SHA256SUMS" >&2
     return 1
   fi
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   [ -x "$installed" ] || { echo "expected installed binary at ${installed}" >&2; return 1; }
 }
 
@@ -1968,7 +1968,7 @@ test_release_install_falls_back_to_legacy_manifest_when_sidecar_absent() {
   assert_output_contains "$dir" "Checksum:  verified (SHA256SUMS)"
   grep -Fq -- "/pi-linux-amd64.tar.xz.sha256" "$curl_log"
   grep -Fq -- "/SHA256SUMS" "$curl_log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   [ -x "$installed" ] || { echo "expected installed binary at ${installed}" >&2; return 1; }
 }
 
@@ -1982,7 +1982,7 @@ test_release_install_without_any_checksum_fails_closed() {
   artifact="${dir}/fixtures/pi"
   archive="${dir}/fixtures/pi-linux-amd64.tar.xz"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   write_artifact_binary "$artifact" "unsupported"
   tar -cJf "$archive" -C "${dir}/fixtures" pi
   printf 'existing-destination-sentinel\n' > "$installed"
@@ -2018,7 +2018,7 @@ test_release_install_rejects_wrong_dsr_asset_sidecar() {
   archive="${dir}/fixtures/pi-linux-amd64.tar.xz"
   sidecar="${archive}.sha256"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   write_artifact_binary "$artifact" "unsupported"
   tar -cJf "$archive" -C "${dir}/fixtures" pi
   printf '%064d  %s\n' 0 "pi-linux-amd64.tar.xz" > "$sidecar"
@@ -2056,7 +2056,7 @@ test_release_install_rejects_misbound_dsr_sidecar_without_legacy_fallback() {
   archive="${dir}/fixtures/pi-linux-amd64.tar.xz"
   sidecar="${archive}.sha256"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   write_artifact_binary "$artifact" "unsupported"
   tar -cJf "$archive" -C "${dir}/fixtures" pi
   checksum="$(sha256_file "$archive")"
@@ -2107,7 +2107,7 @@ test_release_install_does_not_downgrade_on_sidecar_transport_failure() {
   sidecar="${archive}.sha256"
   manifest="${dir}/fixtures/SHA256SUMS"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   write_artifact_binary "$artifact" "unsupported"
   tar -cJf "$archive" -C "${dir}/fixtures" pi
   checksum="$(sha256_file "$archive")"
@@ -2152,7 +2152,7 @@ test_release_install_does_not_downgrade_on_artifact_transport_failure() {
   artifact="${dir}/fixtures/pi"
   archive="${dir}/fixtures/pi-linux-amd64.tar.xz"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   write_artifact_binary "$artifact" "unsupported"
   tar -cJf "$archive" -C "${dir}/fixtures" pi
   printf 'existing-destination-sentinel\n' > "$installed"
@@ -2200,7 +2200,7 @@ test_release_install_distinguishes_manifest_transport_failure_from_absence() {
   artifact="${dir}/fixtures/pi"
   archive="${dir}/fixtures/pi-linux-amd64.tar.xz"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   write_artifact_binary "$artifact" "unsupported"
   tar -cJf "$archive" -C "${dir}/fixtures" pi
   printf 'existing-destination-sentinel\n' > "$installed"
@@ -2238,7 +2238,7 @@ test_release_install_rejects_checksum_verified_broken_canonical_archive() {
   archive="${dir}/fixtures/pi-linux-amd64.tar.xz"
   sidecar="${archive}.sha256"
   curl_log="${dir}/curl.log"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   printf 'not-an-xz-archive\n' > "$archive"
   checksum="$(sha256_file "$archive")"
   printf '%s  %s\n' "$checksum" "pi-linux-amd64.tar.xz" > "$sidecar"
@@ -2311,11 +2311,11 @@ test_explicit_sigstore_bundle_without_cosign_fails_closed() {
   checksum="$(sha256_file "$artifact")"
   bundle="${dir}/fixtures/pi-fixture.sigstore.json"
   printf '{"mediaType":"application/vnd.dev.sigstore.bundle+json;version=0.3"}\n' > "$bundle"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   printf 'existing-destination-sentinel\n' > "$installed"
   chmod +x "$installed"
 
-  PI_INSTALLER_COSIGN_BIN="${dir}/fixtures/definitely-missing-cosign" \
+  RECUR_AGENT_INSTALLER_COSIGN_BIN="${dir}/fixtures/definitely-missing-cosign" \
   run_installer "$dir" \
     --yes --no-gum --offline \
     --version v9.9.9 \
@@ -2345,7 +2345,7 @@ test_explicit_sigstore_bundle_fetch_failure_fails_closed() {
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
   missing_bundle="${dir}/fixtures/missing.sigstore.json"
-  installed="${dir}/dest/pi"
+  installed="${dir}/dest/ra"
   printf 'existing-destination-sentinel\n' > "$installed"
   chmod +x "$installed"
 
@@ -2477,7 +2477,7 @@ test_completions_unsupported_build_soft_skip() {
 
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Shell completions: skipped (binary has no completion subcommand)"
-  assert_output_contains "$dir" "Shell:     skipped (unsupported by this pi build)"
+  assert_output_contains "$dir" "Shell:     skipped (unsupported by this ra build)"
 }
 
 test_completions_generation_failure_recorded() {
@@ -2521,7 +2521,7 @@ test_completions_success_writes_file() {
     --checksum "${checksum}" \
     --completions bash
 
-  completion_file="${dir}/data/bash-completion/completions/pi"
+  completion_file="${dir}/data/bash-completion/completions/ra"
 
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Installed bash completions to"
@@ -2555,7 +2555,7 @@ test_completions_help_discovery_path_succeeds() {
     --checksum "${checksum}" \
     --completions bash
 
-  completion_file="${dir}/data/bash-completion/completions/pi"
+  completion_file="${dir}/data/bash-completion/completions/ra"
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Installed bash completions to"
   assert_output_contains "$dir" "Shell:     installed (bash)"
@@ -2580,7 +2580,7 @@ test_completions_help_inconclusive_falls_back_to_probe() {
     --checksum "${checksum}" \
     --completions bash
 
-  completion_file="${dir}/data/bash-completion/completions/pi"
+  completion_file="${dir}/data/bash-completion/completions/ra"
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Installed bash completions to"
   assert_output_contains "$dir" "Shell:     installed (bash)"
@@ -2597,7 +2597,7 @@ test_completions_help_conclusive_no_command_skips_fast() {
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
 
-  PI_INSTALLER_COMPLETION_PROBE_TIMEOUT=1 \
+  RECUR_AGENT_INSTALLER_COMPLETION_PROBE_TIMEOUT=1 \
   STUB_COMPLETION_SLEEP_SECS=3 \
   run_installer "$dir" \
     --yes --no-gum --offline \
@@ -2609,7 +2609,7 @@ test_completions_help_conclusive_no_command_skips_fast() {
 
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Shell completions: skipped (binary has no completion subcommand)"
-  assert_output_contains "$dir" "Shell:     skipped (unsupported by this pi build)"
+  assert_output_contains "$dir" "Shell:     skipped (unsupported by this ra build)"
 }
 
 test_completions_internal_timeout_fallback_succeeds() {
@@ -2631,7 +2631,7 @@ test_completions_internal_timeout_fallback_succeeds() {
     --checksum "${checksum}" \
     --completions bash
 
-  completion_file="${dir}/data/bash-completion/completions/pi"
+  completion_file="${dir}/data/bash-completion/completions/ra"
   assert_exit_code "$dir" 0
   assert_output_contains "$dir" "Installed bash completions to"
   assert_output_contains "$dir" "Shell:     installed (bash)"
@@ -2648,7 +2648,7 @@ test_completions_probe_timeout_is_non_fatal() {
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
 
-  PI_INSTALLER_COMPLETION_PROBE_TIMEOUT=1 \
+  RECUR_AGENT_INSTALLER_COMPLETION_PROBE_TIMEOUT=1 \
   STUB_COMPLETION_SLEEP_SECS=3 \
   run_installer "$dir" \
     --yes --no-gum --offline \
@@ -2673,7 +2673,7 @@ test_completions_generation_timeout_is_non_fatal() {
   artifact_url="file://${artifact}"
   checksum="$(sha256_file "$artifact")"
 
-  PI_INSTALLER_COMPLETION_CMD_TIMEOUT=1 \
+  RECUR_AGENT_INSTALLER_COMPLETION_CMD_TIMEOUT=1 \
   STUB_COMPLETION_SLEEP_SECS=3 \
   run_installer "$dir" \
     --yes --no-gum --offline \
@@ -2710,7 +2710,7 @@ test_release_binary_needing_newer_glibc_is_not_installed() {
   assert_exit_code "$dir" 1
   assert_output_contains "$dir" "The release binary needs glibc 2.39 but this system has:"
   assert_output_contains "$dir" "Offline mode cannot fall back to a source build"
-  if [ -e "${dir}/dest/pi" ]; then
+  if [ -e "${dir}/dest/ra" ]; then
     echo "an unloadable release binary must not be installed" >&2
     return 1
   fi
@@ -2737,8 +2737,8 @@ test_release_binary_needing_newer_glibc_custom_artifact_has_no_source_fallback()
   assert_exit_code "$dir" 1
   assert_output_contains "$dir" "The release binary needs glibc 2.39 but this system has:"
   assert_output_contains "$dir" "Custom artifact cannot run here"
-  assert_output_not_contains "$dir" "Building pi from source"
-  if [ -e "${dir}/dest/pi" ]; then
+  assert_output_not_contains "$dir" "Building ra from source"
+  if [ -e "${dir}/dest/ra" ]; then
     echo "an unloadable custom artifact must not be installed" >&2
     return 1
   fi
@@ -2765,7 +2765,7 @@ test_glibc_guard_ignores_unrelated_startup_failures() {
 
   assert_exit_code "$dir" 0
   assert_output_not_contains "$dir" "needs glibc"
-  [ -x "${dir}/dest/pi" ] || {
+  [ -x "${dir}/dest/ra" ] || {
     echo "an unrelated --version failure must keep the previous install behavior" >&2
     return 1
   }
@@ -2792,7 +2792,7 @@ test_glibc_guard_only_applies_on_linux() {
 
   assert_exit_code "$dir" 0
   assert_output_not_contains "$dir" "needs glibc"
-  [ -x "${dir}/dest/pi" ] || {
+  [ -x "${dir}/dest/ra" ] || {
     echo "the glibc guard must not run on non-Linux hosts" >&2
     return 1
   }
@@ -2812,10 +2812,10 @@ test_probe_timeout_with_broken_wrapper_preserves_existing_install() {
   write_hanging_artifact "$artifact"
   checksum="$(sha256_file "$artifact")"
 
-  printf 'EXISTING-INSTALL-MARKER\n' > "${dir}/dest/pi"
-  marker_before="$(sha256_file "${dir}/dest/pi")"
+  printf 'EXISTING-INSTALL-MARKER\n' > "${dir}/dest/ra"
+  marker_before="$(sha256_file "${dir}/dest/ra")"
 
-  PI_INSTALLER_PROBE_TIMEOUT=2 \
+  RECUR_AGENT_INSTALLER_PROBE_TIMEOUT=2 \
   run_installer "$dir" \
     --yes --no-gum --offline \
     --version v9.9.9 \
@@ -2828,7 +2828,7 @@ test_probe_timeout_with_broken_wrapper_preserves_existing_install() {
   assert_output_contains "$dir" "Compatibility probe for the release binary timed out"
   assert_output_contains "$dir" "leaving the current installation untouched"
   local marker_after
-  marker_after="$(sha256_file "${dir}/dest/pi")"
+  marker_after="$(sha256_file "${dir}/dest/ra")"
   if [ "$marker_after" != "$marker_before" ]; then
     echo "an inconclusive probe must preserve the existing executable" >&2
     return 1
@@ -2861,7 +2861,7 @@ test_missing_interpreter_child127_falls_back_with_distinct_diagnostic() {
   assert_exit_code "$dir" 1
   assert_output_contains "$dir" "missing ELF interpreter and cannot start on this system"
   assert_output_contains "$dir" "Offline mode cannot fall back to a source build"
-  if [ -e "${dir}/dest/pi" ]; then
+  if [ -e "${dir}/dest/ra" ]; then
     echo "an interpreter-broken release binary must not be installed" >&2
     return 1
   fi
@@ -2891,7 +2891,7 @@ test_glibcxx_only_diagnostic_names_component() {
   assert_exit_code "$dir" 1
   assert_output_contains "$dir" "requires libstdc++ symbol version GLIBCXX_3.4.32"
   assert_output_not_contains "$dir" "needs glibc"
-  if [ -e "${dir}/dest/pi" ]; then
+  if [ -e "${dir}/dest/ra" ]; then
     echo "a libstdc++-broken release binary must not be installed" >&2
     return 1
   fi
@@ -2920,7 +2920,7 @@ test_cxxabi_only_diagnostic_names_component() {
   assert_exit_code "$dir" 1
   assert_output_contains "$dir" "requires libstdc++ runtime symbol CXXABI_1.3.15"
   assert_output_not_contains "$dir" "needs glibc"
-  if [ -e "${dir}/dest/pi" ]; then
+  if [ -e "${dir}/dest/ra" ]; then
     echo "a CXXABI-broken release binary must not be installed" >&2
     return 1
   fi

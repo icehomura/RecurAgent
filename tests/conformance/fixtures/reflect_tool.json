@@ -21,7 +21,7 @@
       "expected": {
         "content_exact": "Fixture synthesis cites memory [1].",
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "question": "How should Cargo checks run?",
           "citations": [1]
         },
@@ -38,7 +38,7 @@
       "expected": {
         "is_error": false,
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "citations": [],
           "sourceMemoryIds": []
         }

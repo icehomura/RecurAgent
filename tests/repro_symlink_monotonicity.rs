@@ -1,6 +1,6 @@
 // The single test here builds a symlinked root, so the whole file is Unix-only.
 #[cfg(unix)]
-use pi::extensions_js::verify_repair_monotonicity;
+use ra::extensions_js::verify_repair_monotonicity;
 #[cfg(unix)]
 use std::fs;
 #[cfg(unix)]

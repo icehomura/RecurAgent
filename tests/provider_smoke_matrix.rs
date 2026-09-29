@@ -16,13 +16,13 @@ mod common;
 
 use common::{MockHttpResponse, TestHarness};
 use futures::StreamExt;
-use pi::model::{Message, UserContent, UserMessage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, StreamEvent, StreamOptions};
-use pi::provider_metadata::{
+use ra::model::{Message, UserContent, UserMessage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, StreamEvent, StreamOptions};
+use ra::provider_metadata::{
     PROVIDER_METADATA, ProviderOnboardingMode, canonical_provider_id, provider_routing_defaults,
 };
-use pi::providers::create_provider;
+use ra::providers::create_provider;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -73,7 +73,7 @@ fn request_header(headers: &[(String, String)], key: &str) -> Option<String> {
 }
 
 fn drive_to_done(
-    provider: Arc<dyn pi::provider::Provider>,
+    provider: Arc<dyn ra::provider::Provider>,
     context: Context<'static>,
     options: StreamOptions,
 ) {
@@ -1036,7 +1036,7 @@ fn smoke_report_artifact() {
     }
 
     let report = serde_json::json!({
-        "schema": "pi.smoke_matrix.v1",
+        "schema": "ra.smoke_matrix.v1",
         "total": total,
         "route_pass": route_pass,
         "stream_pass": stream_pass,
@@ -1073,7 +1073,7 @@ fn smoke_report_artifact() {
 fn run_smoke_stream(
     harness: &TestHarness,
     provider_id: &str,
-    defaults: pi::provider_metadata::ProviderRoutingDefaults,
+    defaults: ra::provider_metadata::ProviderRoutingDefaults,
 ) -> bool {
     let server = harness.start_mock_http_server();
     let safe_id = provider_id.replace('-', "_");

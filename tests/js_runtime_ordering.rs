@@ -1,47 +1,47 @@
 //! Unit tests: JS runtime + shims + event loop ordering (bd-39u).
 //!
-//! These tests exercise the `PiJsRuntime` through its public API only,
+//! These tests exercise the `RaJsRuntime` through its public API only,
 //! verifying promise bridge behavior, hostcall completion ordering,
 //! timer scheduling, and event loop semantics.
 #![forbid(unsafe_code)]
-#![allow(clippy::future_not_send)] // PiJsRuntime is single-threaded (QuickJS) and not Send/Sync.
+#![allow(clippy::future_not_send)] // RaJsRuntime is single-threaded (QuickJS) and not Send/Sync.
 
 mod common;
 
 use common::TestHarness;
-use pi::extensions_js::{PiJsRuntime, PiJsRuntimeConfig, PiJsRuntimeLimits};
-use pi::scheduler::{DeterministicClock, HostcallOutcome};
+use ra::extensions_js::{RaJsRuntime, RaJsRuntimeConfig, RaJsRuntimeLimits};
+use ra::scheduler::{DeterministicClock, HostcallOutcome};
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Create a `PiJsRuntime` with a deterministic clock starting at 0.
+/// Create a `RaJsRuntime` with a deterministic clock starting at 0.
 async fn make_runtime() -> (
-    PiJsRuntime<Arc<DeterministicClock>>,
+    RaJsRuntime<Arc<DeterministicClock>>,
     Arc<DeterministicClock>,
 ) {
     let clock = Arc::new(DeterministicClock::new(0));
-    let runtime = PiJsRuntime::with_clock(Arc::clone(&clock))
+    let runtime = RaJsRuntime::with_clock(Arc::clone(&clock))
         .await
         .expect("create runtime");
     (runtime, clock)
 }
 
-/// Create a `PiJsRuntime` with custom limits and a deterministic clock.
+/// Create a `RaJsRuntime` with custom limits and a deterministic clock.
 async fn make_runtime_with_limits(
-    limits: PiJsRuntimeLimits,
+    limits: RaJsRuntimeLimits,
 ) -> (
-    PiJsRuntime<Arc<DeterministicClock>>,
+    RaJsRuntime<Arc<DeterministicClock>>,
     Arc<DeterministicClock>,
 ) {
     let clock = Arc::new(DeterministicClock::new(0));
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         limits,
         ..Default::default()
     };
-    let runtime = PiJsRuntime::with_clock_and_config(Arc::clone(&clock), config)
+    let runtime = RaJsRuntime::with_clock_and_config(Arc::clone(&clock), config)
         .await
         .expect("create runtime");
     (runtime, clock)
@@ -49,7 +49,7 @@ async fn make_runtime_with_limits(
 
 /// Eval JS that stores a global variable and then read it back via eval assertion.
 async fn get_global_json(
-    runtime: &PiJsRuntime<Arc<DeterministicClock>>,
+    runtime: &RaJsRuntime<Arc<DeterministicClock>>,
     name: &str,
 ) -> serde_json::Value {
     // Copy the value to a known temporary variable, then read it back via a round-trip.
@@ -90,7 +90,7 @@ async fn get_global_json(
 
 /// Assert a global JS variable equals an expected JSON value.
 async fn assert_global(
-    runtime: &PiJsRuntime<Arc<DeterministicClock>>,
+    runtime: &RaJsRuntime<Arc<DeterministicClock>>,
     name: &str,
     expected: serde_json::Value,
 ) {
@@ -275,7 +275,7 @@ fn out_of_order_hostcall_completion_delivers_correctly() {
 fn hostcall_timeout_rejects_with_timeout_code() {
     let _harness = TestHarness::new("hostcall_timeout_rejects_with_timeout_code");
     futures::executor::block_on(async {
-        let (runtime, clock) = make_runtime_with_limits(PiJsRuntimeLimits {
+        let (runtime, clock) = make_runtime_with_limits(RaJsRuntimeLimits {
             hostcall_timeout_ms: Some(100),
             ..Default::default()
         })
@@ -308,7 +308,7 @@ fn hostcall_timeout_rejects_with_timeout_code() {
 fn multiple_hostcalls_all_timeout() {
     let _harness = TestHarness::new("multiple_hostcalls_all_timeout");
     futures::executor::block_on(async {
-        let (runtime, clock) = make_runtime_with_limits(PiJsRuntimeLimits {
+        let (runtime, clock) = make_runtime_with_limits(RaJsRuntimeLimits {
             hostcall_timeout_ms: Some(50),
             ..Default::default()
         })
@@ -342,7 +342,7 @@ fn multiple_hostcalls_all_timeout() {
 fn late_completion_after_timeout_is_ignored() {
     let _harness = TestHarness::new("late_completion_after_timeout_is_ignored");
     futures::executor::block_on(async {
-        let (runtime, clock) = make_runtime_with_limits(PiJsRuntimeLimits {
+        let (runtime, clock) = make_runtime_with_limits(RaJsRuntimeLimits {
             hostcall_timeout_ms: Some(50),
             ..Default::default()
         })
@@ -681,7 +681,7 @@ fn microtasks_drain_before_next_macrotask() {
 fn interrupt_budget_aborts_infinite_loop() {
     let _harness = TestHarness::new("interrupt_budget_aborts_infinite_loop");
     futures::executor::block_on(async {
-        let (runtime, _clock) = make_runtime_with_limits(PiJsRuntimeLimits {
+        let (runtime, _clock) = make_runtime_with_limits(RaJsRuntimeLimits {
             interrupt_budget: Some(0),
             ..Default::default()
         })
@@ -822,7 +822,7 @@ fn now_ms_tracks_clock() {
 fn hostcall_kinds_are_correctly_classified() {
     let _harness = TestHarness::new("hostcall_kinds_classified");
     futures::executor::block_on(async {
-        use pi::extensions_js::HostcallKind;
+        use ra::extensions_js::HostcallKind;
 
         let (runtime, _clock) = make_runtime().await;
 

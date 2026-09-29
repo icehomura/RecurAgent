@@ -1,6 +1,6 @@
 //! TUI interactive E2E tests via tmux capture with deterministic artifacts.
 //!
-//! These tests launch the `pi` binary in a tmux session, drive scripted
+//! These tests launch the `ra` binary in a tmux session, drive scripted
 //! interactions (prompts, slash commands, key sequences), capture pane output
 //! per step, and emit JSONL artifacts for CI diffing.
 //!
@@ -18,12 +18,12 @@ mod common;
 use clap::Parser as _;
 use common::run_async;
 use common::tmux::TuiSession;
-use pi::app::build_system_prompt;
-use pi::cli;
-use pi::model::ContentBlock;
-use pi::session::SESSION_VERSION;
-use pi::tools::{ReadTool, Tool};
-use pi::vcr::{
+use ra::app::build_system_prompt;
+use ra::cli;
+use ra::model::ContentBlock;
+use ra::session::SESSION_VERSION;
+use ra::tools::{ReadTool, Tool};
+use ra::vcr::{
     Cassette, Interaction, RecordedRequest, RecordedResponse, VCR_ENV_DIR, VCR_ENV_MODE,
 };
 use serde_json::{Value, json};
@@ -104,7 +104,7 @@ impl TmuxE2eLock {
         let thread_guard = TMUX_E2E_IN_PROCESS_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let path = std::env::temp_dir().join("pi_agent_rust.tmux-e2e.lock");
+        let path = std::env::temp_dir().join("recur_agent.tmux-e2e.lock");
         let file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -165,7 +165,7 @@ fn setup_config_ui_fixture(session: &TuiSession, package_name: &str) -> PathBuf 
     }))
     .expect("serialize config UI settings");
 
-    let project_settings = session.harness.temp_dir().join(".pi").join("settings.json");
+    let project_settings = session.harness.temp_dir().join(".ra").join("settings.json");
     fs::create_dir_all(
         project_settings
             .parent()
@@ -252,7 +252,7 @@ fn build_vcr_system_prompt_for_args(
         true,
         true,
         None,
-        &pi::config::Config::default(),
+        &ra::config::Config::default(),
     )
     .expect("build vcr system prompt")
 }
@@ -272,8 +272,8 @@ fn vcr_anthropic_tool_schemas(cwd: &Path) -> Vec<Value> {
     args.extend(vcr_interactive_args());
     let cli = cli::Cli::try_parse_from(args).expect("parse vcr cli args");
     let enabled = cli.enabled_tools();
-    let config = pi::config::Config::default();
-    let registry = pi::tools::ToolRegistry::new(&enabled, cwd, Some(&config));
+    let config = ra::config::Config::default();
+    let registry = ra::tools::ToolRegistry::new(&enabled, cwd, Some(&config));
     let mut schemas: Vec<Value> = registry
         .tools()
         .iter()
@@ -289,7 +289,7 @@ fn vcr_anthropic_tool_schemas(cwd: &Path) -> Vec<Value> {
     // `submit_plan` is appended by main.rs via `agent.extend_tools` after
     // registry construction ("always registered — self-errors outside plan
     // mode"), so it is part of the live schema too.
-    let submit_plan = pi::plan::SubmitPlanTool::new(pi::plan::PlanState::new(), false);
+    let submit_plan = ra::plan::SubmitPlanTool::new(ra::plan::PlanState::new(), false);
     schemas.push(json!({
         "name": submit_plan.name(),
         "description": submit_plan.description(),
@@ -1448,14 +1448,14 @@ E2E-only skill used by tests.
         .harness
         .record_artifact("skill.valid.SKILL.md", &skill_path);
 
-    let project_pi_dir = session.harness.temp_dir().join(".pi");
+    let project_pi_dir = session.harness.temp_dir().join(".ra");
     let global_agent_dir = session.harness.temp_dir().join("env").join("agent");
 
-    let snapshot_pi_after_add = session.harness.temp_path("snapshot.pi.after_add.txt");
+    let snapshot_pi_after_add = session.harness.temp_path("snapshot.ra.after_add.txt");
     write_dir_snapshot(&project_pi_dir, &snapshot_pi_after_add);
     session
         .harness
-        .record_artifact("snapshot.pi.after_add.txt", &snapshot_pi_after_add);
+        .record_artifact("snapshot.ra.after_add.txt", &snapshot_pi_after_add);
 
     let snapshot_agent_after_add = session.harness.temp_path("snapshot.agent.after_add.txt");
     write_dir_snapshot(&global_agent_dir, &snapshot_agent_after_add);
@@ -1514,11 +1514,11 @@ Invalid skill (missing description) to trigger diagnostics.
         .harness
         .record_artifact("skill.invalid.SKILL.md", &skill_path);
 
-    let snapshot_pi_after_invalid = session.harness.temp_path("snapshot.pi.after_invalid.txt");
+    let snapshot_pi_after_invalid = session.harness.temp_path("snapshot.ra.after_invalid.txt");
     write_dir_snapshot(&project_pi_dir, &snapshot_pi_after_invalid);
     session
         .harness
-        .record_artifact("snapshot.pi.after_invalid.txt", &snapshot_pi_after_invalid);
+        .record_artifact("snapshot.ra.after_invalid.txt", &snapshot_pi_after_invalid);
 
     // Reload again and confirm diagnostics are surfaced.
     let pane = session.send_text_and_wait(
@@ -1851,8 +1851,8 @@ fn e2e_tui_basic_chat_vcr() {
     let cassette_dir_str = cassette_dir.display().to_string();
     session.set_env(VCR_ENV_MODE, "playback");
     session.set_env(VCR_ENV_DIR, &cassette_dir_str);
-    session.set_env("PI_VCR_TEST_NAME", VCR_BASIC_CHAT_TEST_NAME);
-    session.set_env("PI_TEST_MODE", "1");
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_BASIC_CHAT_TEST_NAME);
+    session.set_env("RECUR_AGENT_TEST_MODE", "1");
     session.set_env("VCR_DEBUG_BODY", "1");
     session.set_env("VCR_DEBUG_BODY_FILE", "/tmp/vcr_debug_bodies.txt");
 
@@ -1879,7 +1879,7 @@ fn e2e_tui_basic_chat_vcr() {
 
     // Write stderr log path for the binary
     let stderr_log = session.harness.temp_path("pi-stderr.log");
-    session.set_env("PI_STDERR_LOG", &stderr_log.display().to_string());
+    session.set_env("RECUR_AGENT_STDERR_LOG", &stderr_log.display().to_string());
     session.set_env("RUST_LOG", "debug");
 
     session.harness.section("launch");
@@ -2007,8 +2007,8 @@ fn e2e_tui_rich_markdown_response_uses_chrome_renderer() {
 
     session.set_env(VCR_ENV_MODE, "playback");
     session.set_env(VCR_ENV_DIR, &cassette_dir.display().to_string());
-    session.set_env("PI_VCR_TEST_NAME", VCR_RICH_MARKDOWN_TEST_NAME);
-    session.set_env("PI_TEST_MODE", "1");
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_RICH_MARKDOWN_TEST_NAME);
+    session.set_env("RECUR_AGENT_TEST_MODE", "1");
 
     session.launch(&vcr_interactive_args_no_tools());
     session.wait_and_capture("startup", "Welcome to Pi!", STARTUP_TIMEOUT);
@@ -2066,8 +2066,8 @@ fn e2e_tui_stream_scroll_and_finalize_vcr() {
     let cassette_dir_str = cassette_dir.display().to_string();
     session.set_env(VCR_ENV_MODE, "playback");
     session.set_env(VCR_ENV_DIR, &cassette_dir_str);
-    session.set_env("PI_VCR_TEST_NAME", VCR_SCROLL_FINALIZE_TEST_NAME);
-    session.set_env("PI_TEST_MODE", "1");
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_SCROLL_FINALIZE_TEST_NAME);
+    session.set_env("RECUR_AGENT_TEST_MODE", "1");
     session.set_env("VCR_DEBUG_BODY", "1");
 
     session.harness.section("launch");
@@ -2176,9 +2176,9 @@ fn e2e_tui_vcr_tool_read() {
     let cassette_dir_str = cassette_dir.display().to_string();
     session.set_env(VCR_ENV_MODE, "playback");
     session.set_env(VCR_ENV_DIR, &cassette_dir_str);
-    session.set_env("PI_VCR_TEST_NAME", VCR_TEST_NAME);
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_TEST_NAME);
     session.set_env("VCR_DEBUG_BODY", "1");
-    session.set_env("PI_TEST_MODE", "1");
+    session.set_env("RECUR_AGENT_TEST_MODE", "1");
 
     session.launch(&vcr_interactive_args());
     session.wait_and_capture("startup", "Welcome to Pi!", STARTUP_TIMEOUT);
@@ -2296,12 +2296,12 @@ fn e2e_tui_full_interactive_loop() {
     let cassette_dir_str = cassette_dir.display().to_string();
     session.set_env(VCR_ENV_MODE, "playback");
     session.set_env(VCR_ENV_DIR, &cassette_dir_str);
-    session.set_env("PI_VCR_TEST_NAME", VCR_TEST_NAME);
-    session.set_env("PI_TEST_MODE", "1");
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_TEST_NAME);
+    session.set_env("RECUR_AGENT_TEST_MODE", "1");
     session.set_env("VCR_DEBUG_BODY", "1");
 
     let stderr_log = session.harness.temp_path("pi-stderr.log");
-    session.set_env("PI_STDERR_LOG", &stderr_log.display().to_string());
+    session.set_env("RECUR_AGENT_STDERR_LOG", &stderr_log.display().to_string());
     session.set_env("RUST_LOG", "debug");
 
     // ── Step 1: Launch and verify startup ──
@@ -3083,8 +3083,8 @@ fn e2e_scenario_error_api_failure() {
         .args(&vcr_interactive_args_no_tools())
         .env(VCR_ENV_MODE, "playback")
         .env(VCR_ENV_DIR, &cassette_dir.display().to_string())
-        .env("PI_VCR_TEST_NAME", test_name)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_VCR_TEST_NAME", test_name)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .step(
             ScenarioStep::wait("Welcome to Pi!")
                 .label("startup")
@@ -3225,8 +3225,8 @@ fn e2e_scenario_session_persistence_and_tree() {
         .args(&vcr_interactive_args_no_tools())
         .env(VCR_ENV_MODE, "playback")
         .env(VCR_ENV_DIR, &cassette_dir.display().to_string())
-        .env("PI_VCR_TEST_NAME", VCR_BASIC_CHAT_TEST_NAME)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_VCR_TEST_NAME", VCR_BASIC_CHAT_TEST_NAME)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .step(
             ScenarioStep::wait("Welcome to Pi!")
                 .label("startup")
@@ -3357,8 +3357,8 @@ fn e2e_scenario_session_restore_explicit_path() {
         .arg(&session_path_str)
         .arg("--system-prompt")
         .arg("pi e2e session restore harness")
-        .env("PI_SESSIONS_DIR", &sessions_dir_str)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_SESSIONS_DIR", &sessions_dir_str)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .step(
             ScenarioStep::wait("Persist:")
                 .label("startup")
@@ -3441,8 +3441,8 @@ fn e2e_scenario_tool_chain_read_response() {
         .file(SAMPLE_FILE_NAME, SAMPLE_FILE_CONTENT)
         .env(VCR_ENV_MODE, "playback")
         .env(VCR_ENV_DIR, &cassette_dir.display().to_string())
-        .env("PI_VCR_TEST_NAME", VCR_TEST_NAME)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_VCR_TEST_NAME", VCR_TEST_NAME)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .step(
             ScenarioStep::wait("Welcome to Pi!")
                 .label("startup")
@@ -3509,8 +3509,8 @@ fn e2e_scenario_tool_chain_multi_turn() {
         .args(&vcr_interactive_args())
         .env(VCR_ENV_MODE, "playback")
         .env(VCR_ENV_DIR, &cassette_dir.display().to_string())
-        .env("PI_VCR_TEST_NAME", VCR_MULTI_TOOL_CHAIN_TEST_NAME)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_VCR_TEST_NAME", VCR_MULTI_TOOL_CHAIN_TEST_NAME)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .step(
             ScenarioStep::wait("Welcome to Pi!")
                 .label("startup")
@@ -3712,8 +3712,8 @@ fn e2e_scenario_prompt_loop_multi_round() {
         .args(&vcr_interactive_args_no_tools())
         .env(VCR_ENV_MODE, "playback")
         .env(VCR_ENV_DIR, &cassette_dir.display().to_string())
-        .env("PI_VCR_TEST_NAME", test_name)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_VCR_TEST_NAME", test_name)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .step(
             ScenarioStep::wait("Welcome to Pi!")
                 .label("startup")
@@ -3909,7 +3909,7 @@ fn e2e_scenario_replay_manifest_roundtrip() {
     let manifest = ReplayManifest::from_run(&scenario, &mock_transcript, 42, None);
 
     // Verify manifest fields
-    assert_eq!(manifest.schema, "pi.test.replay.v1");
+    assert_eq!(manifest.schema, "ra.test.replay.v1");
     assert_eq!(manifest.scenario_name, "manifest_roundtrip");
     assert_eq!(manifest.seed, 42);
     assert_eq!(manifest.original_run_id, "test-run-abc");
@@ -4047,7 +4047,7 @@ fn e2e_scenario_divergence_detection() {
     // Case 6: divergence_summary formatting
     let divs = detect_divergences(&original, &replay_fail);
     let manifest = ReplayManifest {
-        schema: "pi.test.replay.v1".to_string(),
+        schema: "ra.test.replay.v1".to_string(),
         scenario_name: "test".to_string(),
         seed: 42,
         args: vec![],
@@ -4255,7 +4255,7 @@ fn e2e_scenario_exit_strategy_roundtrip() {
 // obvious.
 // ============================================================================
 
-/// Recorded-template match with the same semantics as `pi::vcr`:
+/// Recorded-template match with the same semantics as `ra::vcr`:
 /// object keys in `recorded` must match (incoming may have extras), arrays
 /// are strict length + per-element, scalars strict equality.
 fn vcr_template_matches(recorded: &Value, incoming: &Value) -> bool {
@@ -4296,10 +4296,10 @@ fn vcr_tool_read_cassette_template_matches_provider_request() {
     // Mirror the interactive binary's first-turn request for the same CLI
     // args (`vcr_interactive_args`): anthropic provider, read tool only,
     // thinking off, prompt-cache retention default (short).
-    let provider = pi::providers::anthropic::AnthropicProvider::new(VCR_MODEL);
-    let tools: Vec<pi::provider::ToolDef> = vcr_anthropic_tool_schemas(&workdir)
+    let provider = ra::providers::anthropic::AnthropicProvider::new(VCR_MODEL);
+    let tools: Vec<ra::provider::ToolDef> = vcr_anthropic_tool_schemas(&workdir)
         .iter()
-        .map(|schema| pi::provider::ToolDef {
+        .map(|schema| ra::provider::ToolDef {
             name: schema["name"].as_str().unwrap_or_default().to_string(),
             description: schema["description"]
                 .as_str()
@@ -4308,19 +4308,19 @@ fn vcr_tool_read_cassette_template_matches_provider_request() {
             parameters: schema["input_schema"].clone(),
         })
         .collect();
-    let messages = vec![pi::model::Message::User(pi::model::UserMessage {
-        content: pi::model::UserContent::Text(VCR_PROMPT.to_string()),
+    let messages = vec![ra::model::Message::User(ra::model::UserMessage {
+        content: ra::model::UserContent::Text(VCR_PROMPT.to_string()),
         timestamp: 0,
     })];
-    let context = pi::provider::Context {
+    let context = ra::provider::Context {
         system_prompt: Some(std::borrow::Cow::Borrowed(system_prompt.as_str())),
         messages: std::borrow::Cow::Owned(messages),
         tools: std::borrow::Cow::Owned(tools),
     };
-    let options = pi::provider::StreamOptions {
-        cache_retention: pi::provider::CacheRetention::Short,
+    let options = ra::provider::StreamOptions {
+        cache_retention: ra::provider::CacheRetention::Short,
         max_tokens: Some(VCR_MODEL_MAX_TOKENS),
-        thinking_level: Some(pi::model::ThinkingLevel::Off),
+        thinking_level: Some(ra::model::ThinkingLevel::Off),
         ..Default::default()
     };
     let actual = serde_json::to_value(provider.build_request(&context, &options))
@@ -4552,8 +4552,8 @@ fn e2e_tui_tool_call_stress_scroll_stays_functional() {
     let cassette_dir_str = cassette_dir.display().to_string();
     session.set_env(VCR_ENV_MODE, "playback");
     session.set_env(VCR_ENV_DIR, &cassette_dir_str);
-    session.set_env("PI_VCR_TEST_NAME", VCR_STRESS_TEST_NAME);
-    session.set_env("PI_TEST_MODE", "1");
+    session.set_env("RECUR_AGENT_VCR_TEST_NAME", VCR_STRESS_TEST_NAME);
+    session.set_env("RECUR_AGENT_TEST_MODE", "1");
 
     session.launch(&vcr_interactive_args());
     session.wait_and_capture("startup", "Welcome to Pi!", STARTUP_TIMEOUT);

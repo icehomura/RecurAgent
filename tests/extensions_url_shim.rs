@@ -6,11 +6,11 @@
 
 use std::sync::Arc;
 
-use pi::extensions_js::{PiJsRuntime, PiJsRuntimeConfig};
-use pi::scheduler::DeterministicClock;
+use ra::extensions_js::{RaJsRuntime, RaJsRuntimeConfig};
+use ra::scheduler::DeterministicClock;
 
-fn default_config() -> PiJsRuntimeConfig {
-    PiJsRuntimeConfig {
+fn default_config() -> RaJsRuntimeConfig {
+    RaJsRuntimeConfig {
         cwd: "/test".to_string(),
         ..Default::default()
     }
@@ -19,7 +19,7 @@ fn default_config() -> PiJsRuntimeConfig {
 #[test]
 fn url_parses_full_url() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -68,7 +68,7 @@ fn url_parses_full_url() {
 #[test]
 fn url_search_params_basic_ops() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -119,7 +119,7 @@ fn url_search_params_basic_ops() {
 #[test]
 fn url_file_url_to_path() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -150,7 +150,7 @@ fn url_file_url_to_path() {
 #[test]
 fn url_parse_and_resolve() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -183,7 +183,7 @@ fn url_parse_and_resolve() {
 #[test]
 fn url_to_json_returns_href() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -213,7 +213,7 @@ fn url_to_json_returns_href() {
 #[test]
 fn url_simple_no_port() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )

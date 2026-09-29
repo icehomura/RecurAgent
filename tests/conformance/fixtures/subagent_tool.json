@@ -10,7 +10,7 @@
       "setup": [
         {
           "type": "create_file",
-          "path": ".pi/agents/scout.md",
+          "path": ".ra/agents/scout.md",
           "content": "---\nname: scout\ndescription: Hermetic conformance scout\n---\nReturn the fixture result.\n"
         },
         {
@@ -30,7 +30,7 @@
       "expected": {
         "content_contains": ["## scout", "fixture child result"],
         "details": {
-          "schema": "pi.subagent.result.v2",
+          "schema": "ra.subagent.result.v2",
           "mode": "single",
           "sessionIsolation": "ephemeral_no_session",
           "results": [
@@ -51,7 +51,7 @@
       "setup": [
         {
           "type": "create_file",
-          "path": ".pi/agents/scout.md",
+          "path": ".ra/agents/scout.md",
           "content": "---\nname: scout\ndescription: Hermetic conformance scout\n---\nReturn the fixture result.\n"
         },
         {

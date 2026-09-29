@@ -1,5 +1,5 @@
 {
-  "schema": "pi.swarm.replay_trace.v1",
+  "schema": "ra.swarm.replay_trace.v1",
   "trace_id": "golden-swarm-replay-normalized",
   "generated_at": "2026-05-13T18:40:00Z",
   "contract_version": "1.0.0",
@@ -177,7 +177,7 @@
       },
       "payload": {
         "artifact_path": "tests/golden_corpus/swarm_replay_trace/normalized_trace.json",
-        "artifact_schema": "pi.swarm.replay_trace.v1",
+        "artifact_schema": "ra.swarm.replay_trace.v1",
         "verdict": "pass",
         "command": "cargo test --test swarm_replay_ingestor"
       }

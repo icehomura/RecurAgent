@@ -13,7 +13,7 @@
       "expected": {
         "content_exact": "Lesson captured [1].",
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "promoted": null
         },
         "details_contains": ["Pin the exact source base for every remote proof.", "lesson", "learn"]
@@ -30,7 +30,7 @@
       "expected": {
         "content_exact": "Lesson captured [1].",
         "details_exact": {
-          "schema": "pi.memory.v1",
+          "schema": "ra.memory.v1",
           "promoted": null
         },
         "details_contains": [

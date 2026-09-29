@@ -9,24 +9,24 @@ use asupersync::sync::Mutex;
 use bubbletea::{Cmd, KeyMsg, KeyType, Message, Model as BubbleteaModel, QuitMsg};
 use common::TestHarness;
 use futures::stream;
-use pi::agent::{Agent, AgentConfig};
-use pi::config::{Config, TerminalSettings};
-use pi::extensions::{
+use ra::agent::{Agent, AgentConfig};
+use ra::config::{Config, TerminalSettings};
+use ra::extensions::{
     ExtensionManager, ExtensionUiRequest, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::interactive::{ConversationMessage, MessageRole, PendingInput, PiApp, PiMsg};
-use pi::keybindings::KeyBindings;
-use pi::mcp::McpManager;
-use pi::model::{
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::interactive::{ConversationMessage, MessageRole, PendingInput, RaApp, RaMsg};
+use ra::keybindings::KeyBindings;
+use ra::mcp::McpManager;
+use ra::model::{
     AssistantMessage, ContentBlock, Cost, ImageContent, StopReason, StreamEvent, TextContent,
     Usage, UserContent,
 };
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
-use pi::resources::{ResourceCliOptions, ResourceLoader};
-use pi::session::{Session, SessionEntry, SessionMessage, encode_cwd};
-use pi::tools::ToolRegistry;
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
+use ra::resources::{ResourceCliOptions, ResourceLoader};
+use ra::session::{Session, SessionEntry, SessionMessage, encode_cwd};
+use ra::tools::ToolRegistry;
 use regex::Regex;
 use serde_json::json;
 use std::collections::HashMap;
@@ -65,7 +65,7 @@ fn test_runtime_handle() -> asupersync::runtime::RuntimeHandle {
 /// JSONL logging helper for test events.
 fn log_test_event(test_name: &str, event: &str, data: &serde_json::Value) {
     let entry = serde_json::json!({
-        "schema": "pi.test.tui_state.v1",
+        "schema": "ra.test.tui_state.v1",
         "test": test_name,
         "event": event,
         "timestamp_ms": std::time::SystemTime::now()
@@ -95,8 +95,8 @@ impl Provider for DummyProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         Ok(Box::pin(stream::empty()))
     }
@@ -145,7 +145,7 @@ fn build_app_with_session(
     harness: &TestHarness,
     pending_inputs: Vec<PendingInput>,
     session: Session,
-) -> PiApp {
+) -> RaApp {
     build_app_with_session_and_config(harness, pending_inputs, session, Config::default())
 }
 
@@ -154,7 +154,7 @@ fn build_app_with_session_and_config(
     pending_inputs: Vec<PendingInput>,
     session: Session,
     config: Config,
-) -> PiApp {
+) -> RaApp {
     let config = common::hermetic_interactive_config(config);
     let cwd = harness.temp_dir().to_path_buf();
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -178,7 +178,7 @@ fn build_app_with_session_and_config(
     let (messages, usage) = conversation_from_session(&session);
     let session = Arc::new(Mutex::new(session));
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -210,7 +210,7 @@ fn build_app_with_session_and_events_and_extension(
     session: Session,
     config: Config,
     extension_source: &str,
-) -> (PiApp, mpsc::Receiver<PiMsg>) {
+) -> (RaApp, mpsc::Receiver<RaMsg>) {
     let (app, event_rx, _manager) = build_app_with_extension_and_mcp(
         harness,
         pending_inputs,
@@ -233,7 +233,7 @@ fn build_app_with_extension_and_mcp(
     config: Config,
     extension_source: &str,
     mcp_manager: Option<Arc<McpManager>>,
-) -> (PiApp, mpsc::Receiver<PiMsg>, ExtensionManager) {
+) -> (RaApp, mpsc::Receiver<RaMsg>, ExtensionManager) {
     let config = common::hermetic_interactive_config(config);
     let cwd = harness.temp_dir().to_path_buf();
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -261,7 +261,7 @@ fn build_app_with_extension_and_mcp(
     let ext_entry_path = harness.create_file("extensions/ext.mjs", extension_source.as_bytes());
 
     let tools_for_ext = Arc::new(ToolRegistry::new(&[], &cwd, Some(&config)));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -286,7 +286,7 @@ fn build_app_with_extension_and_mcp(
         }
     });
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -320,7 +320,7 @@ fn build_app_with_models(
     model_scope: Vec<ModelEntry>,
     available_models: Vec<ModelEntry>,
     keybindings: KeyBindings,
-) -> PiApp {
+) -> RaApp {
     let config = common::hermetic_interactive_config(config);
     let cwd = harness.temp_dir().to_path_buf();
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -341,7 +341,7 @@ fn build_app_with_models(
     let (messages, usage) = conversation_from_session(&session);
     let session = Arc::new(Mutex::new(session));
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -368,7 +368,7 @@ fn build_app_with_models(
 }
 
 fn read_project_settings_json(harness: &TestHarness) -> serde_json::Value {
-    let path = harness.temp_dir().join(".pi/settings.json");
+    let path = harness.temp_dir().join(".ra/settings.json");
     let content = std::fs::read_to_string(&path).expect("read settings.json");
     serde_json::from_str(&content).expect("parse settings.json")
 }
@@ -378,7 +378,7 @@ fn build_app_with_session_and_events(
     harness: &TestHarness,
     pending_inputs: Vec<PendingInput>,
     session: Session,
-) -> (PiApp, mpsc::Receiver<PiMsg>) {
+) -> (RaApp, mpsc::Receiver<RaMsg>) {
     build_app_with_session_and_events_and_config(
         harness,
         pending_inputs,
@@ -393,7 +393,7 @@ fn build_app_with_session_and_events_and_config(
     pending_inputs: Vec<PendingInput>,
     session: Session,
     config: Config,
-) -> (PiApp, mpsc::Receiver<PiMsg>) {
+) -> (RaApp, mpsc::Receiver<RaMsg>) {
     let config = common::hermetic_interactive_config(config);
     let cwd = harness.temp_dir().to_path_buf();
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -417,7 +417,7 @@ fn build_app_with_session_and_events_and_config(
     let (messages, usage) = conversation_from_session(&session);
     let session = Arc::new(Mutex::new(session));
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         session,
         config,
@@ -443,7 +443,7 @@ fn build_app_with_session_and_events_and_config(
     (app, event_rx)
 }
 
-fn build_app(harness: &TestHarness, pending_inputs: Vec<PendingInput>) -> PiApp {
+fn build_app(harness: &TestHarness, pending_inputs: Vec<PendingInput>) -> RaApp {
     build_app_with_session(harness, pending_inputs, Session::in_memory())
 }
 
@@ -680,10 +680,10 @@ fn create_session_on_disk_with_id(
 
 #[allow(dead_code)]
 fn wait_for_pi_msgs(
-    event_rx: &mut mpsc::Receiver<PiMsg>,
+    event_rx: &mut mpsc::Receiver<RaMsg>,
     timeout: Duration,
-    predicate: impl Fn(&[PiMsg]) -> bool,
-) -> Vec<PiMsg> {
+    predicate: impl Fn(&[RaMsg]) -> bool,
+) -> Vec<RaMsg> {
     let start = Instant::now();
     let mut events = Vec::new();
     loop {
@@ -775,7 +775,7 @@ fn log_auth_test_event(test_name: &str, event: &str, data: serde_json::Value) {
         .expect("clock should be after epoch")
         .as_millis();
     let entry = json!({
-        "schema": "pi.test.auth_event.v1",
+        "schema": "ra.test.auth_event.v1",
         "test": test_name,
         "event": event,
         "timestamp_ms": timestamp_ms,
@@ -818,7 +818,7 @@ fn log_perf_test_event(test_name: &str, event: &str, data: serde_json::Value) {
         .expect("clock should be after epoch")
         .as_millis();
     let entry = json!({
-        "schema": "pi.test.perf_event.v1",
+        "schema": "ra.test.perf_event.v1",
         "test": test_name,
         "event": event,
         "timestamp_ms": timestamp_ms,
@@ -830,7 +830,7 @@ fn log_perf_test_event(test_name: &str, event: &str, data: serde_json::Value) {
     );
 }
 
-fn log_initial_state(harness: &TestHarness, app: &PiApp) {
+fn log_initial_state(harness: &TestHarness, app: &RaApp) {
     let view = normalize_view(&BubbleteaModel::view(app));
     let mode = if view.contains(MULTI_LINE_HINT) {
         "multi"
@@ -848,7 +848,7 @@ fn log_initial_state(harness: &TestHarness, app: &PiApp) {
     });
 }
 
-fn apply_msg(harness: &TestHarness, app: &mut PiApp, label: &str, msg: Message) -> StepOutcome {
+fn apply_msg(harness: &TestHarness, app: &mut RaApp, label: &str, msg: Message) -> StepOutcome {
     let before = normalize_view(&BubbleteaModel::view(app));
     harness.log().info_ctx("input", label, |ctx| {
         ctx.push((
@@ -885,13 +885,13 @@ fn apply_msg(harness: &TestHarness, app: &mut PiApp, label: &str, msg: Message) 
     }
 }
 
-fn apply_pi(harness: &TestHarness, app: &mut PiApp, label: &str, msg: PiMsg) -> StepOutcome {
+fn apply_pi(harness: &TestHarness, app: &mut RaApp, label: &str, msg: RaMsg) -> StepOutcome {
     apply_msg(harness, app, label, Message::new(msg))
 }
 
 fn apply_conversation_reset(
     harness: &TestHarness,
-    app: &mut PiApp,
+    app: &mut RaApp,
     label: &str,
     messages: Vec<ConversationMessage>,
     usage: Usage,
@@ -908,7 +908,7 @@ fn apply_conversation_reset(
         harness,
         app,
         label,
-        PiMsg::ConversationReset {
+        RaMsg::ConversationReset {
             session_id,
             messages,
             usage,
@@ -917,7 +917,7 @@ fn apply_conversation_reset(
     )
 }
 
-fn apply_key(harness: &TestHarness, app: &mut PiApp, label: &str, key: KeyMsg) -> StepOutcome {
+fn apply_key(harness: &TestHarness, app: &mut RaApp, label: &str, key: KeyMsg) -> StepOutcome {
     apply_msg(harness, app, label, Message::new(key))
 }
 
@@ -1006,7 +1006,7 @@ fn assert_cmd_is_quit(harness: &TestHarness, mut step: StepOutcome) {
     }
 }
 
-fn type_text(harness: &TestHarness, app: &mut PiApp, text: &str) -> StepOutcome {
+fn type_text(harness: &TestHarness, app: &mut RaApp, text: &str) -> StepOutcome {
     apply_key(
         harness,
         app,
@@ -1015,11 +1015,11 @@ fn type_text(harness: &TestHarness, app: &mut PiApp, text: &str) -> StepOutcome 
     )
 }
 
-fn press_enter(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_enter(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:Enter", KeyMsg::from_type(KeyType::Enter))
 }
 
-fn press_shift_enter(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_shift_enter(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(
         harness,
         app,
@@ -1028,7 +1028,7 @@ fn press_shift_enter(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
     )
 }
 
-fn press_alt_enter(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_alt_enter(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(
         harness,
         app,
@@ -1037,43 +1037,43 @@ fn press_alt_enter(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
     )
 }
 
-fn press_esc(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_esc(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:Esc", KeyMsg::from_type(KeyType::Esc))
 }
 
-fn press_ctrlc(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_ctrlc(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:CtrlC", KeyMsg::from_type(KeyType::CtrlC))
 }
 
-fn press_ctrld(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_ctrld(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:CtrlD", KeyMsg::from_type(KeyType::CtrlD))
 }
 
-fn press_ctrlt(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_ctrlt(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:CtrlT", KeyMsg::from_type(KeyType::CtrlT))
 }
 
-fn press_ctrlp(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_ctrlp(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:CtrlP", KeyMsg::from_type(KeyType::CtrlP))
 }
 
-fn press_ctrlo(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_ctrlo(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:CtrlO", KeyMsg::from_type(KeyType::CtrlO))
 }
 
-fn press_up(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_up(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:Up", KeyMsg::from_type(KeyType::Up))
 }
 
-fn press_down(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_down(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:Down", KeyMsg::from_type(KeyType::Down))
 }
 
-fn press_pgup(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_pgup(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:PgUp", KeyMsg::from_type(KeyType::PgUp))
 }
 
-fn press_pgdown(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_pgdown(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(
         harness,
         app,
@@ -1082,19 +1082,19 @@ fn press_pgdown(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
     )
 }
 
-fn press_left(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_left(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:Left", KeyMsg::from_type(KeyType::Left))
 }
 
-fn press_tab(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_tab(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:Tab", KeyMsg::from_type(KeyType::Tab))
 }
 
-fn press_f1(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_f1(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:F1", KeyMsg::from_type(KeyType::F1))
 }
 
-fn press_f2(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_f2(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:F2", KeyMsg::from_type(KeyType::F2))
 }
 
@@ -1397,8 +1397,8 @@ fn tui_state_history_up_shows_last_submitted_input() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(stop)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(stop)",
+        RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -1420,8 +1420,8 @@ fn tui_state_history_down_clears_input_after_history_up() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(stop)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(stop)",
+        RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -1445,7 +1445,7 @@ fn tui_state_pageup_changes_scroll_percent_when_scrollable() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset(many)",
+        "RaMsg::ConversationReset(many)",
         messages,
         Usage::default(),
         None,
@@ -1474,7 +1474,7 @@ fn tui_state_pagedown_restores_scroll_percent_when_scrollable() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset(many)",
+        "RaMsg::ConversationReset(many)",
         messages,
         Usage::default(),
         None,
@@ -1492,7 +1492,7 @@ fn tui_state_agent_start_enters_processing() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    let step = apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    let step = apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     assert_after_contains(&harness, &step, "Processing...");
 }
 
@@ -1504,7 +1504,7 @@ fn tui_state_pending_message_queue_shows_steering_preview_while_busy() {
     log_initial_state(&harness, &app);
 
     type_text(&harness, &mut app, "queued steering");
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
 
     let step = press_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "Pending:");
@@ -1519,7 +1519,7 @@ fn tui_state_pending_message_queue_shows_follow_up_preview_while_busy() {
     log_initial_state(&harness, &app);
 
     type_text(&harness, &mut app, "queued follow-up");
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
 
     let step = press_alt_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "Pending:");
@@ -1532,12 +1532,12 @@ fn tui_state_text_delta_renders_while_processing() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::TextDelta",
-        PiMsg::TextDelta("hello".to_string()),
+        "RaMsg::TextDelta",
+        RaMsg::TextDelta("hello".to_string()),
     );
     assert_after_contains(&harness, &step, "Assistant:");
     assert_after_contains(&harness, &step, "hello");
@@ -1550,7 +1550,7 @@ fn tui_state_text_delta_long_response_stays_scrolled_to_bottom() {
     app.set_terminal_size(80, 12);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let streamed = (1..=80)
         .map(|idx| format!("stream line {idx:03}"))
         .collect::<Vec<_>>()
@@ -1558,8 +1558,8 @@ fn tui_state_text_delta_long_response_stays_scrolled_to_bottom() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::TextDelta(long)",
-        PiMsg::TextDelta(streamed),
+        "RaMsg::TextDelta(long)",
+        RaMsg::TextDelta(streamed),
     );
 
     let percent = parse_scroll_percent(&step.after).expect("expected scroll indicator");
@@ -1583,7 +1583,7 @@ fn tui_state_text_delta_preserves_manual_scroll_position() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset(history)",
+        "RaMsg::ConversationReset(history)",
         messages,
         Usage::default(),
         None,
@@ -1596,7 +1596,7 @@ fn tui_state_text_delta_preserves_manual_scroll_position() {
         "Expected to leave bottom after PgUp, got {pgup_percent}%"
     );
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let streamed = (1..=40)
         .map(|idx| format!("delta {idx:03}"))
         .collect::<Vec<_>>()
@@ -1604,8 +1604,8 @@ fn tui_state_text_delta_preserves_manual_scroll_position() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::TextDelta(long)",
-        PiMsg::TextDelta(streamed),
+        "RaMsg::TextDelta(long)",
+        RaMsg::TextDelta(streamed),
     );
 
     let after_percent = parse_scroll_percent(&step.after).expect("expected scroll indicator");
@@ -1621,12 +1621,12 @@ fn tui_state_thinking_delta_renders_while_processing() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ThinkingDelta",
-        PiMsg::ThinkingDelta("hmm".to_string()),
+        "RaMsg::ThinkingDelta",
+        RaMsg::ThinkingDelta("hmm".to_string()),
     );
     assert_after_contains(&harness, &step, "Thinking:");
     assert_after_contains(&harness, &step, "hmm");
@@ -1643,12 +1643,12 @@ fn tui_state_hide_thinking_block_hides_thinking_until_toggled() {
         build_app_with_session_and_config(&harness, Vec::new(), Session::in_memory(), config);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ThinkingDelta(hidden)",
-        PiMsg::ThinkingDelta("hmm".to_string()),
+        "RaMsg::ThinkingDelta(hidden)",
+        RaMsg::ThinkingDelta("hmm".to_string()),
     );
     assert_after_not_contains(&harness, &step, "Thinking:");
     assert_after_not_contains(&harness, &step, "hmm");
@@ -1667,8 +1667,8 @@ fn tui_state_tool_start_shows_running_tool_status() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1685,8 +1685,8 @@ fn tui_state_tool_update_does_not_emit_output_until_tool_end() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1694,8 +1694,8 @@ fn tui_state_tool_update_does_not_emit_output_until_tool_end() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("file contents"))],
@@ -1714,8 +1714,8 @@ fn tui_state_tool_end_appends_tool_output_message() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1723,8 +1723,8 @@ fn tui_state_tool_end_appends_tool_output_message() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("file contents"))],
@@ -1734,8 +1734,8 @@ fn tui_state_tool_end_appends_tool_output_message() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -1755,8 +1755,8 @@ fn tui_state_tool_update_with_diff_details_appends_diff_block() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1764,8 +1764,8 @@ fn tui_state_tool_update_with_diff_details_appends_diff_block() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -1779,8 +1779,8 @@ fn tui_state_tool_update_with_diff_details_appends_diff_block() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -1812,8 +1812,8 @@ fn tui_state_tool_update_with_large_diff_shows_truncation_indicator() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1821,8 +1821,8 @@ fn tui_state_tool_update_with_large_diff_shows_truncation_indicator() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+large-diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+large-diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -1834,8 +1834,8 @@ fn tui_state_tool_update_with_large_diff_shows_truncation_indicator() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -1883,8 +1883,8 @@ fn tui_state_tool_update_with_diff_without_replace_message_uses_generic_header()
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1892,8 +1892,8 @@ fn tui_state_tool_update_with_diff_without_replace_message_uses_generic_header()
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+generic-diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+generic-diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("Edit completed."))],
@@ -1905,8 +1905,8 @@ fn tui_state_tool_update_with_diff_without_replace_message_uses_generic_header()
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -1930,8 +1930,8 @@ fn tui_state_tool_update_with_details_and_no_content_renders_pretty_json() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1939,8 +1939,8 @@ fn tui_state_tool_update_with_details_and_no_content_renders_pretty_json() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read+details-only)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read+details-only)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: Vec::new(),
@@ -1953,8 +1953,8 @@ fn tui_state_tool_update_with_details_and_no_content_renders_pretty_json() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -1977,8 +1977,8 @@ fn tui_state_tool_output_over_threshold_auto_collapses_with_preview() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -1986,8 +1986,8 @@ fn tui_state_tool_output_over_threshold_auto_collapses_with_preview() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) large-output",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) large-output",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(30)))],
@@ -1997,8 +1997,8 @@ fn tui_state_tool_output_over_threshold_auto_collapses_with_preview() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2023,8 +2023,8 @@ fn tui_state_tool_output_at_threshold_stays_expanded() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2032,8 +2032,8 @@ fn tui_state_tool_output_at_threshold_stays_expanded() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) threshold-output",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) threshold-output",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(19)))],
@@ -2043,8 +2043,8 @@ fn tui_state_tool_output_at_threshold_stays_expanded() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2065,8 +2065,8 @@ fn tui_state_expand_tools_reexpands_auto_collapsed_blocks() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2074,8 +2074,8 @@ fn tui_state_expand_tools_reexpands_auto_collapsed_blocks() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) large-output",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) large-output",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(30)))],
@@ -2085,8 +2085,8 @@ fn tui_state_expand_tools_reexpands_auto_collapsed_blocks() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2129,8 +2129,8 @@ fn tui_state_expand_tools_toggles_tool_output_visibility() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2138,8 +2138,8 @@ fn tui_state_expand_tools_toggles_tool_output_visibility() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("file contents"))],
@@ -2149,8 +2149,8 @@ fn tui_state_expand_tools_toggles_tool_output_visibility() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2189,8 +2189,8 @@ fn tui_state_terminal_show_images_false_hides_images_in_tool_output() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2198,8 +2198,8 @@ fn tui_state_terminal_show_images_false_hides_images_in_tool_output() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![
@@ -2215,8 +2215,8 @@ fn tui_state_terminal_show_images_false_hides_images_in_tool_output() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2248,8 +2248,8 @@ fn tui_state_terminal_show_images_true_shows_image_placeholders_in_tool_output()
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2257,8 +2257,8 @@ fn tui_state_terminal_show_images_true_shows_image_placeholders_in_tool_output()
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![
@@ -2274,8 +2274,8 @@ fn tui_state_terminal_show_images_true_shows_image_placeholders_in_tool_output()
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2315,8 +2315,8 @@ fn tui_state_terminal_show_images_false_reports_multiple_hidden_images() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2324,8 +2324,8 @@ fn tui_state_terminal_show_images_false_reports_multiple_hidden_images() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) two-images",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) two-images",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![
@@ -2345,8 +2345,8 @@ fn tui_state_terminal_show_images_false_reports_multiple_hidden_images() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2377,8 +2377,8 @@ fn tui_state_terminal_show_images_false_still_renders_tool_output_when_only_imag
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -2386,8 +2386,8 @@ fn tui_state_terminal_show_images_false_still_renders_tool_output_when_only_imag
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) image-only",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) image-only",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Image(ImageContent {
@@ -2400,8 +2400,8 @@ fn tui_state_terminal_show_images_false_still_renders_tool_output_when_only_imag
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -2420,18 +2420,18 @@ fn tui_state_agent_done_appends_assistant_message_and_updates_usage() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::TextDelta",
-        PiMsg::TextDelta("final".to_string()),
+        "RaMsg::TextDelta",
+        RaMsg::TextDelta("final".to_string()),
     );
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(stop+usage)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(stop+usage)",
+        RaMsg::AgentDone {
             usage: Some(sample_usage(5, 7)),
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -2452,19 +2452,19 @@ fn tui_state_agent_done_replaces_stream_buffer_without_duplicate_marker() {
 
     let final_marker: &str = "FINAL-MARKER-AGENT-DONE";
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let streamed = format!("{}\n{final_marker}", numbered_lines(80));
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::TextDelta(long+marker)",
-        PiMsg::TextDelta(streamed),
+        "RaMsg::TextDelta(long+marker)",
+        RaMsg::TextDelta(streamed),
     );
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(stop)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(stop)",
+        RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -2490,12 +2490,12 @@ fn tui_state_agent_done_aborted_sets_status_message() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(aborted)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(aborted)",
+        RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Aborted,
             error_message: None,
@@ -2511,12 +2511,12 @@ fn tui_state_agent_done_error_without_response_adds_error_message() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(error,no-response)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(error,no-response)",
+        RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Error,
             error_message: Some("boom".to_string()),
@@ -2539,18 +2539,18 @@ fn tui_state_agent_done_error_with_response_keeps_partial_text_and_one_error_car
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::TextDelta",
-        PiMsg::TextDelta("partial".to_string()),
+        "RaMsg::TextDelta",
+        RaMsg::TextDelta("partial".to_string()),
     );
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(error,with-response)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(error,with-response)",
+        RaMsg::AgentDone {
             usage: None,
             stop_reason: StopReason::Error,
             error_message: Some("boom".to_string()),
@@ -2567,12 +2567,12 @@ fn tui_state_agent_error_adds_system_error_message_and_returns_idle() {
     let mut app = build_app(&harness, Vec::new());
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentError",
-        PiMsg::AgentError("boom".to_string()),
+        "RaMsg::AgentError",
+        RaMsg::AgentError("boom".to_string()),
     );
     assert_after_contains(&harness, &step, "Error: boom");
     assert_after_contains(&harness, &step, SINGLE_LINE_HINT);
@@ -2587,8 +2587,8 @@ fn tui_state_system_message_adds_system_message() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::System",
-        PiMsg::System("hello".to_string()),
+        "RaMsg::System",
+        RaMsg::System("hello".to_string()),
     );
     assert_after_contains(&harness, &step, "hello");
 }
@@ -2604,7 +2604,7 @@ fn tui_state_conversation_reset_replaces_messages_sets_usage_and_status() {
     let step = apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset",
+        "RaMsg::ConversationReset",
         messages,
         sample_usage(11, 22),
         Some("reset ok".to_string()),
@@ -2626,8 +2626,8 @@ fn tui_state_resources_reloaded_sets_status_message() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ResourcesReloaded",
-        PiMsg::ResourcesReloaded {
+        "RaMsg::ResourcesReloaded",
+        RaMsg::ResourcesReloaded {
             resources,
             status: "reloaded".to_string(),
             diagnostics: None,
@@ -2642,7 +2642,7 @@ fn tui_state_run_pending_text_submits_next_input() {
     let mut app = build_app(&harness, vec![PendingInput::Text("hello".to_string())]);
     log_initial_state(&harness, &app);
 
-    let step = apply_pi(&harness, &mut app, "PiMsg::RunPending", PiMsg::RunPending);
+    let step = apply_pi(&harness, &mut app, "RaMsg::RunPending", RaMsg::RunPending);
     assert_after_contains(&harness, &step, "You: hello");
     assert_after_contains(&harness, &step, "Processing...");
 }
@@ -2658,7 +2658,7 @@ fn tui_state_run_pending_content_submits_next_input() {
     );
     log_initial_state(&harness, &app);
 
-    let step = apply_pi(&harness, &mut app, "PiMsg::RunPending", PiMsg::RunPending);
+    let step = apply_pi(&harness, &mut app, "RaMsg::RunPending", RaMsg::RunPending);
     assert_after_contains(&harness, &step, "You: hello");
     assert_after_contains(&harness, &step, "Processing...");
 }
@@ -2677,8 +2677,8 @@ fn tui_state_system_message_appends_without_processing() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::System",
-        PiMsg::System(message.to_string()),
+        "RaMsg::System",
+        RaMsg::System(message.to_string()),
     );
     assert_after_contains(&harness, &step, message);
     assert_after_not_contains(&harness, &step, "Processing...");
@@ -2778,8 +2778,8 @@ fn tui_refresh_failure_shows_recovery_message() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::System",
-        PiMsg::System(recovery.to_string()),
+        "RaMsg::System",
+        RaMsg::System(recovery.to_string()),
     );
     assert_after_contains(&harness, &step, "/login anthropic");
     assert_after_not_contains(&harness, &step, "Processing...");
@@ -2901,7 +2901,7 @@ fn tui_state_slash_theme_lists_and_switches() {
     let step = press_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "Switched to theme: light");
 
-    let settings_path = harness.temp_path(".pi/settings.json");
+    let settings_path = harness.temp_path(".ra/settings.json");
     let settings = fs::read_to_string(settings_path).expect("read settings.json");
     assert!(
         settings.contains("\"theme\": \"light\""),
@@ -2925,7 +2925,7 @@ fn tui_state_slash_theme_auto_detects_and_persists_the_auto_spec() {
     // line always names the auto spec plus the detected built-in.
     assert_after_contains(&harness, &step, "Switched to theme: auto (detected: ");
 
-    let settings_path = harness.temp_path(".pi/settings.json");
+    let settings_path = harness.temp_path(".ra/settings.json");
     let settings = fs::read_to_string(settings_path).expect("read settings.json");
     assert!(
         settings.contains("\"theme\": \"auto\""),
@@ -3330,8 +3330,8 @@ fn tui_state_slash_history_shows_previous_inputs() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentError",
-        PiMsg::AgentError("boom".to_string()),
+        "RaMsg::AgentError",
+        RaMsg::AgentError("boom".to_string()),
     );
 
     type_text(&harness, &mut app, "/history");
@@ -3372,18 +3372,18 @@ fn tui_state_slash_settings_opens_selector_and_restores_editor() {
     assert_after_contains(&harness, &step, "light (built-in)");
     assert_after_not_contains(&harness, &step, SINGLE_LINE_HINT);
 
-    // Switch to `light` and ensure it persists to .pi/settings.json.
+    // Switch to `light` and ensure it persists to .ra/settings.json.
     press_down(&harness, &mut app);
     let step = press_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "Switched to theme: light");
     assert_after_contains(&harness, &step, SINGLE_LINE_HINT);
 
-    let settings_path = harness.temp_dir().join(".pi/settings.json");
+    let settings_path = harness.temp_dir().join(".ra/settings.json");
     let content = std::fs::read_to_string(&settings_path).expect("read settings.json");
     let value: serde_json::Value = serde_json::from_str(&content).expect("parse settings.json");
     assert_eq!(value["theme"], "light");
 
-    // Reopen and toggle a delivery mode (should persist to .pi/settings.json).
+    // Reopen and toggle a delivery mode (should persist to .ra/settings.json).
     type_text(&harness, &mut app, "/settings");
     let step = press_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "steeringMode:");
@@ -3392,7 +3392,7 @@ fn tui_state_slash_settings_opens_selector_and_restores_editor() {
     let step = press_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "Updated steeringMode: all");
 
-    let settings_path = harness.temp_dir().join(".pi/settings.json");
+    let settings_path = harness.temp_dir().join(".ra/settings.json");
     let content = std::fs::read_to_string(&settings_path).expect("read settings.json");
     let value: serde_json::Value = serde_json::from_str(&content).expect("parse settings.json");
     assert_eq!(value["steeringMode"], "all");
@@ -3430,7 +3430,7 @@ fn tui_state_slash_settings_quiet_startup_persists_and_overrides_global() {
     let step = press_enter(&harness, &mut app);
     assert_after_contains(&harness, &step, "Updated quietStartup: on");
 
-    let settings_path = harness.temp_dir().join(".pi/settings.json");
+    let settings_path = harness.temp_dir().join(".ra/settings.json");
     let content = std::fs::read_to_string(&settings_path).expect("read settings.json");
     let value: serde_json::Value = serde_json::from_str(&content).expect("parse settings.json");
     assert_eq!(value["quiet_startup"], json!(true));
@@ -3504,13 +3504,13 @@ fn tui_state_slash_share_reports_error_when_gh_missing() {
     // Under load, async command execution plus shell startup for fake `gh`
     // can exceed 1s before AgentError is emitted.
     let events = wait_for_pi_msgs(&mut event_rx, SHARE_EVENT_TIMEOUT, |msgs| {
-        msgs.iter().any(|msg| matches!(msg, PiMsg::AgentError(_)))
+        msgs.iter().any(|msg| matches!(msg, RaMsg::AgentError(_)))
     });
     let error = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::AgentError(_)))
+        .find(|msg| matches!(msg, RaMsg::AgentError(_)))
         .expect("expected AgentError for missing gh");
-    let step = apply_pi(&harness, &mut app, "PiMsg::AgentError", error);
+    let step = apply_pi(&harness, &mut app, "RaMsg::AgentError", error);
     assert_after_contains(&harness, &step, "GitHub CLI `gh` not found");
     assert_after_contains(&harness, &step, "https://cli.github.com");
 }
@@ -3542,13 +3542,13 @@ fn tui_state_slash_share_reports_error_when_gh_not_authenticated() {
     assert_after_contains(&harness, &step, "Sharing session...");
 
     let events = wait_for_pi_msgs(&mut event_rx, SHARE_EVENT_TIMEOUT, |msgs| {
-        msgs.iter().any(|msg| matches!(msg, PiMsg::AgentError(_)))
+        msgs.iter().any(|msg| matches!(msg, RaMsg::AgentError(_)))
     });
     let error = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::AgentError(_)))
+        .find(|msg| matches!(msg, RaMsg::AgentError(_)))
         .expect("expected AgentError for unauthenticated gh");
-    let step = apply_pi(&harness, &mut app, "PiMsg::AgentError", error);
+    let step = apply_pi(&harness, &mut app, "RaMsg::AgentError", error);
     assert_after_contains(&harness, &step, "`gh` is not authenticated.");
     assert_after_contains(&harness, &step, "Run `gh auth login` to authenticate");
 }
@@ -3585,13 +3585,13 @@ fn tui_state_slash_share_reports_parse_error_and_cleans_temp_file() {
     assert_after_contains(&harness, &step, "Sharing session...");
 
     let events = wait_for_pi_msgs(&mut event_rx, SHARE_EVENT_TIMEOUT, |msgs| {
-        msgs.iter().any(|msg| matches!(msg, PiMsg::AgentError(_)))
+        msgs.iter().any(|msg| matches!(msg, RaMsg::AgentError(_)))
     });
     let error = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::AgentError(_)))
+        .find(|msg| matches!(msg, RaMsg::AgentError(_)))
         .expect("expected AgentError for gist parse failure");
-    let step = apply_pi(&harness, &mut app, "PiMsg::AgentError", error);
+    let step = apply_pi(&harness, &mut app, "RaMsg::AgentError", error);
     assert_after_contains(
         &harness,
         &step,
@@ -3646,13 +3646,13 @@ fn tui_state_slash_share_creates_gist_and_reports_urls_and_cleans_temp_file() {
     // Full-suite parallel load can delay command completion past 1s.
     let events = wait_for_pi_msgs(&mut event_rx, SHARE_EVENT_TIMEOUT, |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::System(_)) || matches!(msg, PiMsg::AgentError(_)))
+            .any(|msg| matches!(msg, RaMsg::System(_)) || matches!(msg, RaMsg::AgentError(_)))
     });
     let msg = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::System(_)) || matches!(msg, PiMsg::AgentError(_)))
+        .find(|msg| matches!(msg, RaMsg::System(_)) || matches!(msg, RaMsg::AgentError(_)))
         .expect("expected share result");
-    let step = apply_pi(&harness, &mut app, "PiMsg share result", msg);
+    let step = apply_pi(&harness, &mut app, "RaMsg share result", msg);
     assert_after_contains(&harness, &step, "Created secret gist");
     assert_after_contains(
         &harness,
@@ -3726,13 +3726,13 @@ fn tui_state_slash_share_is_cancellable_and_cleans_temp_file() {
 
     let events = wait_for_pi_msgs(&mut event_rx, SHARE_EVENT_TIMEOUT, |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::System(message) if message.contains("Share cancelled")))
+            .any(|msg| matches!(msg, RaMsg::System(message) if message.contains("Share cancelled")))
     });
     let msg = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::System(message) if message.contains("Share cancelled")))
+        .find(|msg| matches!(msg, RaMsg::System(message) if message.contains("Share cancelled")))
         .expect("expected Share cancelled message");
-    let step = apply_pi(&harness, &mut app, "PiMsg::System", msg);
+    let step = apply_pi(&harness, &mut app, "RaMsg::System", msg);
     assert_after_contains(&harness, &step, "Share cancelled");
 
     let recorded = fs::read_to_string(&record_path).expect("read record path");
@@ -3830,13 +3830,13 @@ fn tui_state_slash_share_includes_gist_description() {
 
     let events = wait_for_pi_msgs(&mut event_rx, SHARE_EVENT_TIMEOUT, |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::System(_)) || matches!(msg, PiMsg::AgentError(_)))
+            .any(|msg| matches!(msg, RaMsg::System(_)) || matches!(msg, RaMsg::AgentError(_)))
     });
     let msg = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::System(_)) || matches!(msg, PiMsg::AgentError(_)))
+        .find(|msg| matches!(msg, RaMsg::System(_)) || matches!(msg, RaMsg::AgentError(_)))
         .expect("expected share result");
-    apply_pi(&harness, &mut app, "PiMsg share result", msg);
+    apply_pi(&harness, &mut app, "RaMsg share result", msg);
 
     // Verify the mock gh received --desc with session name
     let recorded_args = fs::read_to_string(&args_record).expect("read recorded args");
@@ -3863,7 +3863,7 @@ fn tui_state_slash_share_queued_while_processing() {
     log_initial_state(&harness, &app);
 
     // Simulate processing state by sending AgentStart.
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
 
     // During processing, typing /share and pressing Enter queues the input.
     type_text(&harness, &mut app, "/share");
@@ -3917,13 +3917,13 @@ fn tui_state_slash_resume_selects_latest_session_and_loads_messages() {
 
     let events = wait_for_pi_msgs(&mut event_rx, Duration::from_secs(10), |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+            .any(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
     });
     let reset = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+        .find(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
         .expect("expected ConversationReset after resume");
-    let step = apply_pi(&harness, &mut app, "PiMsg::ConversationReset", reset);
+    let step = apply_pi(&harness, &mut app, "RaMsg::ConversationReset", reset);
     assert_after_contains(&harness, &step, "Session resumed");
     assert_after_contains(&harness, &step, "Newer session message");
 }
@@ -3960,13 +3960,13 @@ fn tui_state_slash_resume_filters_sessions_from_typed_query() {
 
     let events = wait_for_pi_msgs(&mut event_rx, Duration::from_secs(10), |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+            .any(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
     });
     let reset = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+        .find(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
         .expect("expected ConversationReset after filtered resume");
-    let step = apply_pi(&harness, &mut app, "PiMsg::ConversationReset", reset);
+    let step = apply_pi(&harness, &mut app, "RaMsg::ConversationReset", reset);
     assert_after_contains(&harness, &step, "Session resumed");
     assert_after_contains(&harness, &step, "Older session message");
 }
@@ -4025,13 +4025,13 @@ export default function init(pi) {
     assert_after_contains(&harness, &step, "Loading session...");
 
     let events = wait_for_pi_msgs(&mut event_rx, EXTENSION_HOOK_WAIT, |msgs| {
-        msgs.iter().any(|msg| matches!(msg, PiMsg::System(_)))
+        msgs.iter().any(|msg| matches!(msg, RaMsg::System(_)))
     });
     let system = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::System(_)))
+        .find(|msg| matches!(msg, RaMsg::System(_)))
         .expect("expected System message after cancelled resume");
-    let step = apply_pi(&harness, &mut app, "PiMsg::System", system);
+    let step = apply_pi(&harness, &mut app, "RaMsg::System", system);
     assert_after_contains(&harness, &step, "Session switch cancelled by extension");
     assert_after_not_contains(&harness, &step, "Session resumed");
     assert_after_not_contains(&harness, &step, "Newer session message");
@@ -4070,13 +4070,13 @@ export default function init(pi) {
 
     let events = wait_for_pi_msgs(&mut event_rx, EXTENSION_HOOK_WAIT, |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+            .any(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
     });
     let reset = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+        .find(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
         .expect("expected ConversationReset after resume");
-    let step = apply_pi(&harness, &mut app, "PiMsg::ConversationReset", reset);
+    let step = apply_pi(&harness, &mut app, "RaMsg::ConversationReset", reset);
     assert_after_contains(&harness, &step, "Session resumed");
     assert_after_contains(&harness, &step, "Newer session message");
 }
@@ -4115,7 +4115,7 @@ fn tui_state_slash_copy_reports_clipboard_unavailable_or_success() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset",
+        "RaMsg::ConversationReset",
         messages,
         Usage::default(),
         None,
@@ -4179,7 +4179,7 @@ fn tui_state_slash_clear_clears_conversation_and_sets_status() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset",
+        "RaMsg::ConversationReset",
         vec![user_msg("hello")],
         Usage::default(),
         None,
@@ -4200,7 +4200,7 @@ fn tui_state_slash_new_resets_conversation_and_sets_status() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset",
+        "RaMsg::ConversationReset",
         vec![user_msg("hello"), assistant_msg("world")],
         sample_usage(12, 34),
         Some("old".to_string()),
@@ -4237,7 +4237,7 @@ export default function init(pi) {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset",
+        "RaMsg::ConversationReset",
         vec![user_msg("hello"), assistant_msg("world")],
         sample_usage(12, 34),
         None,
@@ -4247,13 +4247,13 @@ export default function init(pi) {
     press_enter(&harness, &mut app);
 
     let events = wait_for_pi_msgs(&mut event_rx, EXTENSION_HOOK_WAIT, |msgs| {
-        msgs.iter().any(|msg| matches!(msg, PiMsg::System(_)))
+        msgs.iter().any(|msg| matches!(msg, RaMsg::System(_)))
     });
     let system = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::System(_)))
+        .find(|msg| matches!(msg, RaMsg::System(_)))
         .expect("expected System message after cancelled new");
-    let step = apply_pi(&harness, &mut app, "PiMsg::System", system);
+    let step = apply_pi(&harness, &mut app, "RaMsg::System", system);
     assert_after_contains(&harness, &step, "Session switch cancelled by extension");
     assert_after_contains(&harness, &step, "You: hello");
     assert_after_contains(&harness, &step, "world");
@@ -4282,7 +4282,7 @@ export default function init(pi) {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset",
+        "RaMsg::ConversationReset",
         vec![user_msg("hello"), assistant_msg("world")],
         sample_usage(12, 34),
         None,
@@ -4293,20 +4293,20 @@ export default function init(pi) {
 
     let events = wait_for_pi_msgs(&mut event_rx, EXTENSION_HOOK_WAIT, |msgs| {
         msgs.iter()
-            .any(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+            .any(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
     });
     let reset = events
         .into_iter()
-        .find(|msg| matches!(msg, PiMsg::ConversationReset { .. }))
+        .find(|msg| matches!(msg, RaMsg::ConversationReset { .. }))
         .expect("expected ConversationReset after new session");
-    let step = apply_pi(&harness, &mut app, "PiMsg::ConversationReset", reset);
+    let step = apply_pi(&harness, &mut app, "RaMsg::ConversationReset", reset);
     assert_after_contains(&harness, &step, "Started new session");
     assert_after_not_contains(&harness, &step, "You: hello");
     assert_after_not_contains(&harness, &step, "world");
 }
 
 /// bd-8m21l / bd-z7267: the classic TUI's turn tasks call
-/// `pi::mcp::sync_extension_registrations` right after locking the agent, so a
+/// `ra::mcp::sync_extension_registrations` right after locking the agent, so a
 /// server an extension registers after startup (what the `registerMcpServer`
 /// hostcall does) reaches the App's MCP manager at the next turn: once, with
 /// extension provenance, pending trust (nothing mounts), and never twice.
@@ -4321,7 +4321,7 @@ fn tui_state_late_extension_mcp_registration_reaches_the_manager_at_the_next_tur
     let global_dir = harness.temp_path("mcp-global");
     fs::create_dir_all(&global_dir).expect("create MCP global dir");
     let mcp_manager = Arc::new(
-        pi::mcp::McpManager::bootstrap(&cwd, &global_dir, &[], true)
+        ra::mcp::McpManager::bootstrap(&cwd, &global_dir, &[], true)
             .expect("bootstrap MCP manager"),
     );
     let extension_source = r"
@@ -4358,18 +4358,18 @@ export default function init(pi) {}
         "the extension snapshot alone must not reach the MCP manager"
     );
 
-    let run_turn = |app: &mut PiApp, event_rx: &mut mpsc::Receiver<PiMsg>, label: &str| {
+    let run_turn = |app: &mut RaApp, event_rx: &mut mpsc::Receiver<RaMsg>, label: &str| {
         type_text(&harness, app, "hello");
         press_enter(&harness, app);
         let events = wait_for_pi_msgs(event_rx, Duration::from_secs(10), |msgs| {
             msgs.iter()
-                .any(|msg| matches!(msg, PiMsg::AgentDone { .. }))
+                .any(|msg| matches!(msg, RaMsg::AgentDone { .. }))
         });
         let done = events
             .into_iter()
-            .find(|msg| matches!(msg, PiMsg::AgentDone { .. }))
+            .find(|msg| matches!(msg, RaMsg::AgentDone { .. }))
             .unwrap_or_else(|| panic!("expected AgentDone after {label}"));
-        apply_pi(&harness, app, "PiMsg::AgentDone", done);
+        apply_pi(&harness, app, "RaMsg::AgentDone", done);
     };
 
     run_turn(&mut app, &mut event_rx, "the first turn");
@@ -4506,10 +4506,10 @@ fn tui_state_slash_fork_creates_session_and_prefills_editor() {
     let events = wait_for_pi_msgs(&mut event_rx, Duration::from_secs(6), |msgs| {
         let has_reset = msgs
             .iter()
-            .any(|msg| matches!(msg, PiMsg::ConversationReset { .. }));
+            .any(|msg| matches!(msg, RaMsg::ConversationReset { .. }));
         let has_editor = msgs
             .iter()
-            .any(|msg| matches!(msg, PiMsg::SetEditorText { .. }));
+            .any(|msg| matches!(msg, RaMsg::SetEditorText { .. }));
         has_reset && has_editor
     });
 
@@ -4518,9 +4518,9 @@ fn tui_state_slash_fork_creates_session_and_prefills_editor() {
     let mut fork_err = None;
     for msg in events {
         match msg {
-            PiMsg::ConversationReset { .. } => reset_msg = Some(msg),
-            PiMsg::SetEditorText { .. } => editor_msg = Some(msg),
-            PiMsg::AgentError(err) => {
+            RaMsg::ConversationReset { .. } => reset_msg = Some(msg),
+            RaMsg::SetEditorText { .. } => editor_msg = Some(msg),
+            RaMsg::AgentError(err) => {
                 fork_err = Some(err);
             }
             _ => {}
@@ -4529,11 +4529,11 @@ fn tui_state_slash_fork_creates_session_and_prefills_editor() {
     assert!(fork_err.is_none(), "Unexpected fork error: {fork_err:?}");
 
     let reset = reset_msg.expect("expected ConversationReset after fork");
-    let step = apply_pi(&harness, &mut app, "PiMsg::ConversationReset", reset);
+    let step = apply_pi(&harness, &mut app, "RaMsg::ConversationReset", reset);
     assert_after_contains(&harness, &step, "Forked new session from Child message");
 
     let editor = editor_msg.expect("expected SetEditorText after fork");
-    let step = apply_pi(&harness, &mut app, "PiMsg::SetEditorText", editor);
+    let step = apply_pi(&harness, &mut app, "RaMsg::SetEditorText", editor);
     assert_after_contains(&harness, &step, "Child message");
 
     let repo_cwd = std::env::current_dir().expect("cwd");
@@ -4564,8 +4564,8 @@ fn tui_state_extension_ui_notify_adds_system_message() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(notify)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(notify)",
+        RaMsg::ExtensionUiRequest(request),
     );
     assert_after_contains(&harness, &step, "Extension notify (info): Heads up hello");
 }
@@ -4586,8 +4586,8 @@ fn tui_state_extension_ui_confirm_prompt_then_yes_sets_extensions_disabled_statu
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(confirm)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(confirm)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     type_text(&harness, &mut app, "yes");
@@ -4617,8 +4617,8 @@ fn tui_state_extension_ui_select_invalid_sets_status_and_keeps_prompt() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(select)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(select)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     type_text(&harness, &mut app, "99");
@@ -4655,8 +4655,8 @@ fn tui_state_tool_update_with_progress_shows_elapsed_and_lines() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -4666,8 +4666,8 @@ fn tui_state_tool_update_with_progress_shows_elapsed_and_lines() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) with progress",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) with progress",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("some output"))],
@@ -4696,8 +4696,8 @@ fn tui_state_tool_progress_hidden_under_one_second() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -4707,8 +4707,8 @@ fn tui_state_tool_progress_hidden_under_one_second() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) sub-second",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) sub-second",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("quick"))],
@@ -4738,8 +4738,8 @@ fn tui_state_tool_update_without_progress_keeps_spinner_without_metrics() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -4748,8 +4748,8 @@ fn tui_state_tool_update_without_progress_keeps_spinner_without_metrics() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) no-progress",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) no-progress",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("still running"))],
@@ -4774,8 +4774,8 @@ fn tui_state_tool_progress_reset_on_new_tool_start() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -4783,8 +4783,8 @@ fn tui_state_tool_progress_reset_on_new_tool_start() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) progress",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) progress",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("out"))],
@@ -4802,8 +4802,8 @@ fn tui_state_tool_progress_reset_on_new_tool_start() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash)",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -4813,8 +4813,8 @@ fn tui_state_tool_progress_reset_on_new_tool_start() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-2".to_string(),
         },
@@ -4836,8 +4836,8 @@ fn tui_state_tool_update_with_progress_shows_bytes_when_lines_missing() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -4846,8 +4846,8 @@ fn tui_state_tool_update_with_progress_shows_bytes_when_lines_missing() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) byte-only progress",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) byte-only progress",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("byte-only progress"))],
@@ -4875,8 +4875,8 @@ fn tui_state_tool_update_with_progress_shows_timeout_suffix() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -4885,8 +4885,8 @@ fn tui_state_tool_update_with_progress_shows_timeout_suffix() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) timeout progress",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) timeout progress",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("timeout progress"))],
@@ -4942,8 +4942,8 @@ fn tui_state_capability_prompt_shows_overlay() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Modal should render with key elements.
@@ -4964,8 +4964,8 @@ fn tui_state_capability_prompt_navigate_buttons() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Default focus on first button (Allow Once).  Press Right to move to Allow Always.
@@ -4997,8 +4997,8 @@ fn tui_state_capability_prompt_escape_denies() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Press Escape to deny.
@@ -5023,8 +5023,8 @@ fn tui_state_capability_prompt_enter_confirms() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Press Enter to confirm the default (Allow Once).
@@ -5057,8 +5057,8 @@ fn tui_state_generic_confirm_not_intercepted_as_capability() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(generic confirm)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(generic confirm)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Should NOT show the capability overlay — should fall through to the text-based flow.
@@ -5076,8 +5076,8 @@ fn tui_state_capability_prompt_blocks_regular_input() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Try typing regular text — should NOT appear in input area because modal is active.
@@ -5098,8 +5098,8 @@ fn tui_state_capability_prompt_tab_cycles_buttons() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Tab cycles forward through buttons.
@@ -5146,8 +5146,8 @@ fn tui_state_capability_prompt_shows_auto_deny_timer() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     // Auto-deny timer should be visible (default 30s).
@@ -5169,8 +5169,8 @@ fn tui_state_capability_prompt_shows_description() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ExtensionUiRequest(capability)",
-        PiMsg::ExtensionUiRequest(request),
+        "RaMsg::ExtensionUiRequest(capability)",
+        RaMsg::ExtensionUiRequest(request),
     );
 
     assert_after_contains(&harness, &step, "fancy-ext");
@@ -5209,8 +5209,8 @@ fn tui_grad_branch_picker_blocked_during_processing() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5268,8 +5268,8 @@ fn tui_grad_cycle_sibling_blocked_during_processing() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5670,8 +5670,8 @@ fn tui_grad_diff_pure_addition_renders_only_plus_lines() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5679,8 +5679,8 @@ fn tui_grad_diff_pure_addition_renders_only_plus_lines() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+add-only-diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+add-only-diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -5694,8 +5694,8 @@ fn tui_grad_diff_pure_addition_renders_only_plus_lines() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -5717,8 +5717,8 @@ fn tui_grad_diff_pure_removal_renders_only_minus_lines() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5726,8 +5726,8 @@ fn tui_grad_diff_pure_removal_renders_only_minus_lines() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+remove-only-diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+remove-only-diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -5741,8 +5741,8 @@ fn tui_grad_diff_pure_removal_renders_only_minus_lines() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -5764,8 +5764,8 @@ fn tui_grad_diff_multiline_replacement_preserves_context() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5773,8 +5773,8 @@ fn tui_grad_diff_multiline_replacement_preserves_context() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+context-diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+context-diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -5788,8 +5788,8 @@ fn tui_grad_diff_multiline_replacement_preserves_context() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -5812,8 +5812,8 @@ fn tui_grad_diff_tool_error_omits_diff() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5821,8 +5821,8 @@ fn tui_grad_diff_tool_error_omits_diff() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+error)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+error)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -5834,8 +5834,8 @@ fn tui_grad_diff_tool_error_omits_diff() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit) error",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit) error",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: true,
@@ -5858,8 +5858,8 @@ fn tui_grad_diff_no_diff_key_shows_plain_output() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5867,8 +5867,8 @@ fn tui_grad_diff_no_diff_key_shows_plain_output() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) plain",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) plain",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -5880,8 +5880,8 @@ fn tui_grad_diff_no_diff_key_shows_plain_output() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash)",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -5906,8 +5906,8 @@ fn tui_grad_progress_shows_metrics_when_elapsed_over_one_second() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(grep)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(grep)",
+        RaMsg::ToolStart {
             name: "grep".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5915,8 +5915,8 @@ fn tui_grad_progress_shows_metrics_when_elapsed_over_one_second() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(grep) with-progress",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(grep) with-progress",
+        RaMsg::ToolUpdate {
             name: "grep".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("searching..."))],
@@ -5944,8 +5944,8 @@ fn tui_grad_progress_shows_timeout_when_present() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5953,8 +5953,8 @@ fn tui_grad_progress_shows_timeout_when_present() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) with-timeout",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) with-timeout",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("running long command"))],
@@ -5986,8 +5986,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -5995,8 +5995,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) small",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) small",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("short output"))],
@@ -6006,8 +6006,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6017,8 +6017,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::AgentDone(stop)",
-        PiMsg::AgentDone {
+        "RaMsg::AgentDone(stop)",
+        RaMsg::AgentDone {
             usage: Some(sample_usage(5, 7)),
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -6029,8 +6029,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-2".to_string(),
         },
@@ -6038,8 +6038,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) large",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) large",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-2".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(30)))],
@@ -6049,8 +6049,8 @@ fn tui_grad_collapse_multiple_tools_mixed_sizes() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash)",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-2".to_string(),
             is_error: false,
@@ -6074,8 +6074,8 @@ fn tui_grad_collapse_global_toggle_affects_all_tool_blocks() {
         apply_pi(
             &harness,
             &mut app,
-            &format!("PiMsg::ToolStart(read) tool-{i}"),
-            PiMsg::ToolStart {
+            &format!("RaMsg::ToolStart(read) tool-{i}"),
+            RaMsg::ToolStart {
                 name: "read".to_string(),
                 tool_id: format!("tool-{i}"),
             },
@@ -6083,8 +6083,8 @@ fn tui_grad_collapse_global_toggle_affects_all_tool_blocks() {
         apply_pi(
             &harness,
             &mut app,
-            &format!("PiMsg::ToolUpdate(read) tool-{i}"),
-            PiMsg::ToolUpdate {
+            &format!("RaMsg::ToolUpdate(read) tool-{i}"),
+            RaMsg::ToolUpdate {
                 name: "read".to_string(),
                 tool_id: format!("tool-{i}"),
                 content: vec![ContentBlock::Text(TextContent::new(format!(
@@ -6096,8 +6096,8 @@ fn tui_grad_collapse_global_toggle_affects_all_tool_blocks() {
         apply_pi(
             &harness,
             &mut app,
-            &format!("PiMsg::ToolEnd(read) tool-{i}"),
-            PiMsg::ToolEnd {
+            &format!("RaMsg::ToolEnd(read) tool-{i}"),
+            RaMsg::ToolEnd {
                 name: "read".to_string(),
                 tool_id: format!("tool-{i}"),
                 is_error: false,
@@ -6138,8 +6138,8 @@ fn tui_grad_collapse_auto_collapsed_shows_preview_line_count() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6147,8 +6147,8 @@ fn tui_grad_collapse_auto_collapsed_shows_preview_line_count() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) 25-lines",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) 25-lines",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(25)))],
@@ -6158,8 +6158,8 @@ fn tui_grad_collapse_auto_collapsed_shows_preview_line_count() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash)",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6185,8 +6185,8 @@ fn tui_grad_image_default_config_shows_images() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6194,8 +6194,8 @@ fn tui_grad_image_default_config_shows_images() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read) with-image",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read) with-image",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![
@@ -6211,8 +6211,8 @@ fn tui_grad_image_default_config_shows_images() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6242,8 +6242,8 @@ fn tui_grad_image_mixed_content_with_show_images_false_preserves_text() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6251,8 +6251,8 @@ fn tui_grad_image_mixed_content_with_show_images_false_preserves_text() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) text+images",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) text+images",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![
@@ -6273,8 +6273,8 @@ fn tui_grad_image_mixed_content_with_show_images_false_preserves_text() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash)",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6301,8 +6301,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6310,8 +6310,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("fn main() {}"))],
@@ -6321,8 +6321,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6334,8 +6334,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-2".to_string(),
         },
@@ -6343,8 +6343,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-2".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -6358,8 +6358,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-2".to_string(),
             is_error: false,
@@ -6371,8 +6371,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-3".to_string(),
         },
@@ -6380,8 +6380,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) large",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) large",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-3".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(30)))],
@@ -6391,8 +6391,8 @@ fn tui_grad_integration_multiple_tools_in_sequence() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash)",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-3".to_string(),
             is_error: false,
@@ -6423,8 +6423,8 @@ fn tui_grad_integration_branching_with_tool_diffs() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6432,8 +6432,8 @@ fn tui_grad_integration_branching_with_tool_diffs() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -6447,8 +6447,8 @@ fn tui_grad_integration_branching_with_tool_diffs() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6470,8 +6470,8 @@ fn tui_grad_integration_tool_error_then_success_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6479,8 +6479,8 @@ fn tui_grad_integration_tool_error_then_success_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit) error-content",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit) error-content",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -6492,8 +6492,8 @@ fn tui_grad_integration_tool_error_then_success_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit) error",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit) error",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: true,
@@ -6505,8 +6505,8 @@ fn tui_grad_integration_tool_error_then_success_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-2".to_string(),
         },
@@ -6514,8 +6514,8 @@ fn tui_grad_integration_tool_error_then_success_sequence() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+diff) retry",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+diff) retry",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-2".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -6529,8 +6529,8 @@ fn tui_grad_integration_tool_error_then_success_sequence() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit) success",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit) success",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-2".to_string(),
             is_error: false,
@@ -6552,8 +6552,8 @@ fn tui_grad_integration_diff_with_collapse_toggle() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(edit)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(edit)",
+        RaMsg::ToolStart {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -6569,8 +6569,8 @@ fn tui_grad_integration_diff_with_collapse_toggle() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(edit+large-diff)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(edit+large-diff)",
+        RaMsg::ToolUpdate {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -6582,8 +6582,8 @@ fn tui_grad_integration_diff_with_collapse_toggle() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(edit)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(edit)",
+        RaMsg::ToolEnd {
             name: "edit".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -6605,7 +6605,7 @@ fn tui_grad_integration_diff_with_collapse_toggle() {
 // Model selector overlay tests
 // ===========================================================================
 
-fn press_ctrll(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn press_ctrll(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_key(harness, app, "key:CtrlL", KeyMsg::from_type(KeyType::CtrlL))
 }
 
@@ -7085,12 +7085,12 @@ fn tui_state_ctrlt_thinking_visible_hidden_visible_cycle() {
     log_initial_state(&harness, &app);
 
     // Generate thinking content while processing.
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ThinkingDelta(visible)",
-        PiMsg::ThinkingDelta("deep thought".to_string()),
+        "RaMsg::ThinkingDelta(visible)",
+        RaMsg::ThinkingDelta("deep thought".to_string()),
     );
     // Thinking is visible by default.
     assert_after_contains(&harness, &step, "Thinking:");
@@ -7116,8 +7116,8 @@ fn tui_state_tool_error_output_collapse_toggle() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(bash)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(bash)",
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-err-1".to_string(),
         },
@@ -7125,8 +7125,8 @@ fn tui_state_tool_error_output_collapse_toggle() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(bash) error-output",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(bash) error-output",
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-err-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -7138,8 +7138,8 @@ fn tui_state_tool_error_output_collapse_toggle() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(bash) is_error",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(bash) is_error",
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-err-1".to_string(),
             is_error: true,
@@ -7170,8 +7170,8 @@ fn tui_state_multiple_tool_blocks_collapse_together() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -7179,8 +7179,8 @@ fn tui_state_multiple_tool_blocks_collapse_together() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("contents of file A"))],
@@ -7190,8 +7190,8 @@ fn tui_state_multiple_tool_blocks_collapse_together() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -7203,8 +7203,8 @@ fn tui_state_multiple_tool_blocks_collapse_together() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(grep)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(grep)",
+        RaMsg::ToolStart {
             name: "grep".to_string(),
             tool_id: "tool-2".to_string(),
         },
@@ -7212,8 +7212,8 @@ fn tui_state_multiple_tool_blocks_collapse_together() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(grep)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(grep)",
+        RaMsg::ToolUpdate {
             name: "grep".to_string(),
             tool_id: "tool-2".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -7225,8 +7225,8 @@ fn tui_state_multiple_tool_blocks_collapse_together() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(grep)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(grep)",
+        RaMsg::ToolEnd {
             name: "grep".to_string(),
             tool_id: "tool-2".to_string(),
             is_error: false,
@@ -7256,20 +7256,20 @@ fn tui_state_thinking_and_tool_toggles_independent() {
     log_initial_state(&harness, &app);
 
     // Generate thinking content.
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ThinkingDelta",
-        PiMsg::ThinkingDelta("reasoning step".to_string()),
+        "RaMsg::ThinkingDelta",
+        RaMsg::ThinkingDelta("reasoning step".to_string()),
     );
 
     // Tool output.
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
         },
@@ -7277,8 +7277,8 @@ fn tui_state_thinking_and_tool_toggles_independent() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("file data"))],
@@ -7288,8 +7288,8 @@ fn tui_state_thinking_and_tool_toggles_independent() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "tool-1".to_string(),
             is_error: false,
@@ -7389,7 +7389,7 @@ fn tui_state_model_selector_blocked_during_processing() {
     log_initial_state(&harness, &app);
 
     // Simulate agent processing state.
-    apply_pi(&harness, &mut app, "PiMsg::AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "RaMsg::AgentStart", RaMsg::AgentStart);
 
     // Ctrl+L while processing should be blocked.
     let step = press_ctrll(&harness, &mut app);
@@ -7527,8 +7527,8 @@ fn tui_perf_memory_pressure_forces_degraded() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolStart(read)",
-        PiMsg::ToolStart {
+        "RaMsg::ToolStart(read)",
+        RaMsg::ToolStart {
             name: "read".to_string(),
             tool_id: "perf-tool-1".to_string(),
         },
@@ -7536,8 +7536,8 @@ fn tui_perf_memory_pressure_forces_degraded() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolUpdate(read)",
-        PiMsg::ToolUpdate {
+        "RaMsg::ToolUpdate(read)",
+        RaMsg::ToolUpdate {
             name: "read".to_string(),
             tool_id: "perf-tool-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -7549,8 +7549,8 @@ fn tui_perf_memory_pressure_forces_degraded() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::ToolEnd(read)",
-        PiMsg::ToolEnd {
+        "RaMsg::ToolEnd(read)",
+        RaMsg::ToolEnd {
             name: "read".to_string(),
             tool_id: "perf-tool-1".to_string(),
             is_error: false,
@@ -7628,8 +7628,8 @@ fn tui_perf_memory_critical_forces_emergency() {
         apply_pi(
             &harness,
             &mut app,
-            &format!("PiMsg::SystemNote({idx})"),
-            PiMsg::SystemNote(format!("critical message {idx}")),
+            &format!("RaMsg::SystemNote({idx})"),
+            RaMsg::SystemNote(format!("critical message {idx}")),
         );
     }
 
@@ -7709,7 +7709,7 @@ fn tui_perf_degraded_mode_skips_markdown_cache() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset(cache+tools)",
+        "RaMsg::ConversationReset(cache+tools)",
         messages,
         Usage::default(),
         None,
@@ -7787,7 +7787,7 @@ fn tui_perf_emergency_mode_raw_text_no_cache() {
     apply_conversation_reset(
         &harness,
         &mut app,
-        "PiMsg::ConversationReset(cache-critical)",
+        "RaMsg::ConversationReset(cache-critical)",
         messages,
         Usage::default(),
         None,
@@ -7840,8 +7840,8 @@ fn tui_perf_emergency_mode_raw_text_no_cache() {
     apply_pi(
         &harness,
         &mut app,
-        "PiMsg::SystemNote(post-critical)",
-        PiMsg::SystemNote("post-critical-marker".to_string()),
+        "RaMsg::SystemNote(post-critical)",
+        RaMsg::SystemNote("post-critical-marker".to_string()),
     );
     let post_note = normalize_view(&BubbleteaModel::view(&app));
     assert!(
@@ -7871,18 +7871,18 @@ fn tui_perf_emergency_mode_raw_text_no_cache() {
 // ============================================================================
 
 /// Helper: stream enough content to make the viewport scrollable, then finalize.
-fn fill_viewport_with_stream(harness: &TestHarness, app: &mut PiApp, line_count: usize) {
-    apply_pi(harness, app, "AgentStart", PiMsg::AgentStart);
+fn fill_viewport_with_stream(harness: &TestHarness, app: &mut RaApp, line_count: usize) {
+    apply_pi(harness, app, "AgentStart", RaMsg::AgentStart);
     let content = numbered_lines(line_count);
-    apply_pi(harness, app, "TextDelta(long)", PiMsg::TextDelta(content));
+    apply_pi(harness, app, "TextDelta(long)", RaMsg::TextDelta(content));
 }
 
-fn finalize_agent(harness: &TestHarness, app: &mut PiApp) -> StepOutcome {
+fn finalize_agent(harness: &TestHarness, app: &mut RaApp) -> StepOutcome {
     apply_pi(
         harness,
         app,
         "AgentDone(stop)",
-        PiMsg::AgentDone {
+        RaMsg::AgentDone {
             usage: Some(sample_usage(10, 20)),
             stop_reason: StopReason::Stop,
             error_message: None,
@@ -7951,12 +7951,12 @@ fn tui_scroll_pageup_during_stream_disables_auto_follow() {
     log_initial_state(&harness, &app);
 
     // Start streaming and add enough content to scroll.
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta(initial)",
-        PiMsg::TextDelta(numbered_lines(80)),
+        RaMsg::TextDelta(numbered_lines(80)),
     );
 
     // Scroll up while streaming.
@@ -7972,7 +7972,7 @@ fn tui_scroll_pageup_during_stream_disables_auto_follow() {
         &harness,
         &mut app,
         "TextDelta(more)",
-        PiMsg::TextDelta("\nExtra line A\nExtra line B\nExtra line C".to_string()),
+        RaMsg::TextDelta("\nExtra line A\nExtra line B\nExtra line C".to_string()),
     );
     let view_after_more = normalize_view(&BubbleteaModel::view(&app));
     let pct_after_more =
@@ -7990,12 +7990,12 @@ fn tui_scroll_follows_tail_by_default_during_stream() {
     app.set_terminal_size(80, 20);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta(initial)",
-        PiMsg::TextDelta(numbered_lines(80)),
+        RaMsg::TextDelta(numbered_lines(80)),
     );
 
     // Without user scroll intervention, should stay at bottom.
@@ -8008,7 +8008,7 @@ fn tui_scroll_follows_tail_by_default_during_stream() {
         &harness,
         &mut app,
         "TextDelta(more)",
-        PiMsg::TextDelta("\nAdded line 81\nAdded line 82".to_string()),
+        RaMsg::TextDelta("\nAdded line 81\nAdded line 82".to_string()),
     );
     let view2 = normalize_view(&BubbleteaModel::view(&app));
     let pct2 = parse_scroll_percent(&view2).expect("scroll pct after more");
@@ -8029,12 +8029,12 @@ fn tui_system_message_restores_tail_visibility_after_user_scrolls_up() {
     }
     code_block.push_str("```\n");
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta(code block)",
-        PiMsg::TextDelta(code_block),
+        RaMsg::TextDelta(code_block),
     );
     let _ = finalize_agent(&harness, &mut app);
 
@@ -8051,8 +8051,8 @@ fn tui_system_message_restores_tail_visibility_after_user_scrolls_up() {
     let step = apply_pi(
         &harness,
         &mut app,
-        "PiMsg::System",
-        PiMsg::System(marker.to_string()),
+        "RaMsg::System",
+        RaMsg::System(marker.to_string()),
     );
 
     assert_after_contains(&harness, &step, marker);
@@ -8073,12 +8073,12 @@ fn tui_agent_done_final_message_visible_after_finalization() {
     log_initial_state(&harness, &app);
 
     let unique_text = "UNIQUE-FINAL-RESPONSE-abcdef123456";
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta",
-        PiMsg::TextDelta(unique_text.to_string()),
+        RaMsg::TextDelta(unique_text.to_string()),
     );
 
     let step = finalize_agent(&harness, &mut app);
@@ -8103,12 +8103,12 @@ fn tui_agent_done_no_duplicate_streaming_and_finalized_content() {
     log_initial_state(&harness, &app);
 
     let marker = "DEDUP-MARKER-xyz789";
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta",
-        PiMsg::TextDelta(marker.to_string()),
+        RaMsg::TextDelta(marker.to_string()),
     );
     let step = finalize_agent(&harness, &mut app);
 
@@ -8135,12 +8135,12 @@ fn tui_agent_done_long_response_stays_scrolled_to_bottom() {
     long_response.push('\n');
     long_response.push_str(tail_marker);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta(long)",
-        PiMsg::TextDelta(long_response),
+        RaMsg::TextDelta(long_response),
     );
     let step = finalize_agent(&harness, &mut app);
 
@@ -8170,12 +8170,12 @@ fn tui_agent_done_user_scrolled_up_preserves_position() {
     }
     code_block.push_str("```\n");
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta(long-code)",
-        PiMsg::TextDelta(code_block),
+        RaMsg::TextDelta(code_block),
     );
 
     // User scrolls up many pages to get well away from the bottom.
@@ -8236,18 +8236,18 @@ fn tui_agent_done_with_thinking_no_stale_thinking_block() {
     // Toggle thinking visibility.
     press_ctrlt(&harness, &mut app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "ThinkingDelta",
-        PiMsg::ThinkingDelta("Let me think step by step...".to_string()),
+        RaMsg::ThinkingDelta("Let me think step by step...".to_string()),
     );
     apply_pi(
         &harness,
         &mut app,
         "TextDelta",
-        PiMsg::TextDelta("Here is the answer.".to_string()),
+        RaMsg::TextDelta("Here is the answer.".to_string()),
     );
 
     let step = finalize_agent(&harness, &mut app);
@@ -8270,12 +8270,12 @@ fn tui_scroll_re_enables_follow_when_pagedown_reaches_bottom() {
     app.set_terminal_size(80, 20);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "TextDelta(initial)",
-        PiMsg::TextDelta(numbered_lines(80)),
+        RaMsg::TextDelta(numbered_lines(80)),
     );
 
     // Scroll up.
@@ -8291,7 +8291,7 @@ fn tui_scroll_re_enables_follow_when_pagedown_reaches_bottom() {
         &harness,
         &mut app,
         "TextDelta(more)",
-        PiMsg::TextDelta("\nRe-follow line A\nRe-follow line B".to_string()),
+        RaMsg::TextDelta("\nRe-follow line A\nRe-follow line B".to_string()),
     );
     let view = normalize_view(&BubbleteaModel::view(&app));
     let pct = parse_scroll_percent(&view).expect("pct");
@@ -8359,7 +8359,7 @@ fn tui_perf_cache_feeds_prefix() {
         &harness,
         &mut app,
         "TextDelta(streaming-word)",
-        PiMsg::TextDelta("streaming-word".to_string()),
+        RaMsg::TextDelta("streaming-word".to_string()),
     );
 
     assert!(
@@ -8432,7 +8432,7 @@ fn tui_perf_streaming_to_cache_transition() {
         &harness,
         &mut app,
         "TextDelta(response)",
-        PiMsg::TextDelta(streaming_content.to_string()),
+        RaMsg::TextDelta(streaming_content.to_string()),
     );
 
     let during_streaming = app.build_conversation_content();
@@ -8447,7 +8447,7 @@ fn tui_perf_streaming_to_cache_transition() {
         &harness,
         &mut app,
         "AgentDone(stop)",
-        PiMsg::AgentDone {
+        RaMsg::AgentDone {
             usage: Some(Usage {
                 input: 100,
                 output: 50,
@@ -8721,7 +8721,7 @@ struct SurfaceProbe {
 
 impl SurfaceProbe {
     #[allow(clippy::cast_possible_truncation)]
-    fn sample_view(&mut self, app: &PiApp) -> String {
+    fn sample_view(&mut self, app: &RaApp) -> String {
         let start = Instant::now();
         let view = BubbleteaModel::view(app);
         self.view_samples_us
@@ -8733,9 +8733,9 @@ impl SurfaceProbe {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    fn sample_update<F>(&mut self, app: &mut PiApp, update: F)
+    fn sample_update<F>(&mut self, app: &mut RaApp, update: F)
     where
-        F: FnOnce(&mut PiApp),
+        F: FnOnce(&mut RaApp),
     {
         let start = Instant::now();
         update(app);
@@ -8803,7 +8803,7 @@ fn assert_view_bounded(surface: &str, view: &str, terminal_height: usize) {
     );
 }
 
-const TUI_PERF_ARTIFACT_GENERATION_ENV: &str = "PI_GENERATE_TUI_PERF_ARTIFACTS";
+const TUI_PERF_ARTIFACT_GENERATION_ENV: &str = "RECUR_AGENT_GENERATE_TUI_PERF_ARTIFACTS";
 
 fn tui_perf_artifact_generation_enabled() -> bool {
     let Some(value) = std::env::var_os(TUI_PERF_ARTIFACT_GENERATION_ENV) else {
@@ -9136,7 +9136,7 @@ fn tui_perf_large_session_frame_budget_surfaces_emit_evidence() {
     );
 
     let evidence = json!({
-        "schema": "pi.test.large_session_tui_frame_budget.v1",
+        "schema": "ra.test.large_session_tui_frame_budget.v1",
         "test": "tui_perf_large_session_frame_budget_surfaces_emit_evidence",
         "frame_budget_us": 16_667,
         "redaction": {
@@ -9301,7 +9301,7 @@ fn tui_perf_e2e_long_conversation_responsiveness() {
     validate_or_write_perf_artifact(
         "long_conversation_responsiveness.jsonl",
         &[json!({
-            "schema": "pi.test.perf_event.v1",
+            "schema": "ra.test.perf_event.v1",
             "test": "tui_perf_e2e_long_conversation_responsiveness",
             "event": "frame_times",
             "data": {
@@ -9518,7 +9518,7 @@ fn tui_frame_budget_snapshot_covers_large_session_surfaces() {
         tree_snapshot,
     ];
     for snapshot in &snapshots {
-        assert_eq!(snapshot["schema"], "pi.tui.frame_budget.v1");
+        assert_eq!(snapshot["schema"], "ra.tui.frame_budget.v1");
         assert_eq!(snapshot["budget_us"], 16_667);
         assert!(
             snapshot["samples"]["frame"]["count"].as_u64().unwrap_or(0) > 0,
@@ -9584,7 +9584,7 @@ fn tui_perf_e2e_streaming_with_history() {
     let _ = BubbleteaModel::view(&app);
     let _ = BubbleteaModel::view(&app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
 
     let token_count = 50;
     let mut per_token_times_us = Vec::with_capacity(token_count);
@@ -9593,7 +9593,7 @@ fn tui_perf_e2e_streaming_with_history() {
             &harness,
             &mut app,
             &format!("TextDelta(token-{i})"),
-            PiMsg::TextDelta(format!("token-{i} ")),
+            RaMsg::TextDelta(format!("token-{i} ")),
         );
         let start = Instant::now();
         let _ = BubbleteaModel::view(&app);
@@ -9638,7 +9638,7 @@ fn tui_perf_e2e_streaming_with_history() {
     validate_or_write_perf_artifact(
         "streaming_with_history.jsonl",
         &[json!({
-            "schema": "pi.test.perf_event.v1",
+            "schema": "ra.test.perf_event.v1",
             "test": "tui_perf_e2e_streaming_with_history",
             "event": "streaming_performance",
             "data": {
@@ -9688,7 +9688,7 @@ fn tui_perf_e2e_degradation_under_load() {
             &harness,
             &mut app,
             &format!("ToolStart(tool-{idx})"),
-            PiMsg::ToolStart {
+            RaMsg::ToolStart {
                 name: format!("read-{idx}"),
                 tool_id: format!("e2e-tool-{idx}"),
             },
@@ -9697,7 +9697,7 @@ fn tui_perf_e2e_degradation_under_load() {
             &harness,
             &mut app,
             &format!("ToolUpdate(tool-{idx})"),
-            PiMsg::ToolUpdate {
+            RaMsg::ToolUpdate {
                 name: format!("read-{idx}"),
                 tool_id: format!("e2e-tool-{idx}"),
                 content: vec![ContentBlock::Text(TextContent::new(format!(
@@ -9711,7 +9711,7 @@ fn tui_perf_e2e_degradation_under_load() {
             &harness,
             &mut app,
             &format!("ToolEnd(tool-{idx})"),
-            PiMsg::ToolEnd {
+            RaMsg::ToolEnd {
                 name: format!("read-{idx}"),
                 tool_id: format!("e2e-tool-{idx}"),
                 is_error: false,
@@ -9776,7 +9776,7 @@ fn tui_perf_e2e_degradation_under_load() {
     validate_or_write_perf_artifact(
         "degradation_under_load.jsonl",
         &[json!({
-            "schema": "pi.test.perf_event.v1",
+            "schema": "ra.test.perf_event.v1",
             "test": "tui_perf_e2e_degradation_under_load",
             "event": "degradation_cycle",
             "data": {
@@ -9935,7 +9935,7 @@ fn tui_perf_e2e_memory_pressure_response() {
     validate_or_write_perf_artifact(
         "memory_pressure_response.jsonl",
         &[json!({
-            "schema": "pi.test.perf_event.v1",
+            "schema": "ra.test.perf_event.v1",
             "test": "tui_perf_e2e_memory_pressure_response",
             "event": "pressure_response",
             "data": {
@@ -9988,14 +9988,14 @@ fn validate_or_write_perf_artifact(filename: &str, entries: &[serde_json::Value]
 // bugs: "lots of tool calls freeze/scramble the UI", "auto-scroll is weird").
 // ============================================================================
 
-/// Drive one complete tool cycle through the `PiMsg` pipeline.
-fn run_tool_cycle(harness: &TestHarness, app: &mut PiApp, idx: usize, output_lines: usize) {
+/// Drive one complete tool cycle through the `RaMsg` pipeline.
+fn run_tool_cycle(harness: &TestHarness, app: &mut RaApp, idx: usize, output_lines: usize) {
     let tool_id = format!("stress-tool-{idx}");
     apply_pi(
         harness,
         app,
         "ToolStart(bash)",
-        PiMsg::ToolStart {
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: tool_id.clone(),
         },
@@ -10004,7 +10004,7 @@ fn run_tool_cycle(harness: &TestHarness, app: &mut PiApp, idx: usize, output_lin
         harness,
         app,
         "ToolInvocation(bash)",
-        PiMsg::ToolInvocation {
+        RaMsg::ToolInvocation {
             tool_id: tool_id.clone(),
             summary: format!("echo stress-{idx}"),
         },
@@ -10013,7 +10013,7 @@ fn run_tool_cycle(harness: &TestHarness, app: &mut PiApp, idx: usize, output_lin
         harness,
         app,
         "ToolUpdate(bash)",
-        PiMsg::ToolUpdate {
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: tool_id.clone(),
             content: vec![ContentBlock::Text(TextContent::new(numbered_lines(
@@ -10026,7 +10026,7 @@ fn run_tool_cycle(harness: &TestHarness, app: &mut PiApp, idx: usize, output_lin
         harness,
         app,
         "ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id,
             is_error: false,
@@ -10052,7 +10052,7 @@ fn tui_tool_end_preserves_scroll_position_when_scrolled_up() {
     assert!(pct_before < 100, "should be scrolled up before tool runs");
 
     // A tool completes while the user is reading earlier output.
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     run_tool_cycle(&harness, &mut app, 0, 30);
 
     let pct_after = parse_scroll_percent(&normalize_view(&BubbleteaModel::view(&app)))
@@ -10076,7 +10076,7 @@ fn tui_tool_end_follows_tail_when_at_bottom() {
         .expect("scroll indicator at bottom");
     assert_eq!(pct_before, 100, "should start at the bottom");
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     run_tool_cycle(&harness, &mut app, 0, 30);
 
     let pct_after = parse_scroll_percent(&normalize_view(&BubbleteaModel::view(&app)))
@@ -10094,7 +10094,7 @@ fn tui_stress_many_tool_calls_stays_consistent() {
     app.set_terminal_size(100, 30);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
 
     // Phase 1: 150 sequential tool cycles with non-trivial output while the
     // user follows the tail. The view must keep rendering and stay pinned to
@@ -10151,12 +10151,12 @@ fn tui_tool_invocation_summary_visible_in_status_and_transcript() {
     app.set_terminal_size(100, 30);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "ToolStart(bash)",
-        PiMsg::ToolStart {
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "tool-cmd-1".to_string(),
         },
@@ -10165,7 +10165,7 @@ fn tui_tool_invocation_summary_visible_in_status_and_transcript() {
         &harness,
         &mut app,
         "ToolInvocation(bash)",
-        PiMsg::ToolInvocation {
+        RaMsg::ToolInvocation {
             tool_id: "tool-cmd-1".to_string(),
             summary: "cargo test --lib".to_string(),
         },
@@ -10178,7 +10178,7 @@ fn tui_tool_invocation_summary_visible_in_status_and_transcript() {
         &harness,
         &mut app,
         "ToolUpdate(bash)",
-        PiMsg::ToolUpdate {
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "tool-cmd-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("test result: ok."))],
@@ -10189,7 +10189,7 @@ fn tui_tool_invocation_summary_visible_in_status_and_transcript() {
         &harness,
         &mut app,
         "ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "tool-cmd-1".to_string(),
             is_error: false,
@@ -10212,12 +10212,12 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
     app.set_terminal_size(100, 30);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "ToolStart(a)",
-        PiMsg::ToolStart {
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "par-a".to_string(),
         },
@@ -10226,7 +10226,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolInvocation(a)",
-        PiMsg::ToolInvocation {
+        RaMsg::ToolInvocation {
             tool_id: "par-a".to_string(),
             summary: "echo A".to_string(),
         },
@@ -10235,7 +10235,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolStart(b)",
-        PiMsg::ToolStart {
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "par-b".to_string(),
         },
@@ -10244,7 +10244,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolInvocation(b)",
-        PiMsg::ToolInvocation {
+        RaMsg::ToolInvocation {
             tool_id: "par-b".to_string(),
             summary: "echo B".to_string(),
         },
@@ -10255,7 +10255,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolUpdate(a)",
-        PiMsg::ToolUpdate {
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "par-a".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("output-from-A"))],
@@ -10266,7 +10266,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolEnd(a)",
-        PiMsg::ToolEnd {
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "par-a".to_string(),
             is_error: false,
@@ -10281,7 +10281,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolUpdate(b)",
-        PiMsg::ToolUpdate {
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "par-b".to_string(),
             content: vec![ContentBlock::Text(TextContent::new("output-from-B"))],
@@ -10292,7 +10292,7 @@ fn tui_tool_invocation_summary_never_mislabels_interleaved_tools() {
         &harness,
         &mut app,
         "ToolEnd(b)",
-        PiMsg::ToolEnd {
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "par-b".to_string(),
             is_error: false,
@@ -10312,12 +10312,12 @@ fn tui_tool_output_ansi_escapes_are_sanitized() {
     app.set_terminal_size(100, 30);
     log_initial_state(&harness, &app);
 
-    apply_pi(&harness, &mut app, "AgentStart", PiMsg::AgentStart);
+    apply_pi(&harness, &mut app, "AgentStart", RaMsg::AgentStart);
     apply_pi(
         &harness,
         &mut app,
         "ToolStart(bash)",
-        PiMsg::ToolStart {
+        RaMsg::ToolStart {
             name: "bash".to_string(),
             tool_id: "ansi-1".to_string(),
         },
@@ -10326,7 +10326,7 @@ fn tui_tool_output_ansi_escapes_are_sanitized() {
         &harness,
         &mut app,
         "ToolUpdate(bash ansi)",
-        PiMsg::ToolUpdate {
+        RaMsg::ToolUpdate {
             name: "bash".to_string(),
             tool_id: "ansi-1".to_string(),
             content: vec![ContentBlock::Text(TextContent::new(
@@ -10339,7 +10339,7 @@ fn tui_tool_output_ansi_escapes_are_sanitized() {
         &harness,
         &mut app,
         "ToolEnd(bash)",
-        PiMsg::ToolEnd {
+        RaMsg::ToolEnd {
             name: "bash".to_string(),
             tool_id: "ansi-1".to_string(),
             is_error: false,

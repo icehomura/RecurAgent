@@ -14,7 +14,7 @@ const SURFACE_DIFF: &str = include_str!("../docs/dropin-rpc-surface-diff.json");
 const SCENARIOS: &str =
     include_str!("dropin_rpc_differential/fixtures/g05_rpc_surface_scenarios.json");
 const RPC_RESPONSE_TIMEOUT: Duration = Duration::from_secs(15);
-const PI_TEST_RUNNER: &str = env!("CARGO_BIN_EXE_pi");
+const RECUR_AGENT_TEST_RUNNER: &str = env!("CARGO_BIN_EXE_ra");
 const RPC_TEST_PROVIDER: &str = "ollama";
 const RPC_TEST_MODEL: &str = "qwen2.5:0.5b";
 
@@ -194,10 +194,10 @@ fn g05_rpc_differential_fixture_covers_matched_surface() {
     let surface: Value = serde_json::from_str(SURFACE_DIFF).expect("surface diff JSON");
     let scenarios: Value = serde_json::from_str(SCENARIOS).expect("scenario fixture JSON");
 
-    assert_eq!(surface["schema"], "pi.dropin.rpc_surface_diff.v1");
+    assert_eq!(surface["schema"], "ra.dropin.rpc_surface_diff.v1");
     assert_eq!(
         scenarios["schema"],
-        "pi.dropin.rpc_differential_scenarios.v1"
+        "ra.dropin.rpc_differential_scenarios.v1"
     );
     assert_eq!(scenarios["bead"], "bd-lnmtp.2.3");
 
@@ -303,7 +303,7 @@ struct RpcDifferentialTester {
 impl RpcDifferentialTester {
     fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let temp_dir = tempfile::tempdir()?;
-        let rust_pi_path = PathBuf::from(PI_TEST_RUNNER);
+        let rust_pi_path = PathBuf::from(RECUR_AGENT_TEST_RUNNER);
 
         Ok(Self {
             temp_dir,
@@ -312,7 +312,7 @@ impl RpcDifferentialTester {
     }
 
     fn execute_rust_command(&self, input: &Value) -> Result<Value, Box<dyn std::error::Error>> {
-        let mut child = Command::new(PI_TEST_RUNNER)
+        let mut child = Command::new(RECUR_AGENT_TEST_RUNNER)
             .args([
                 "--mode",
                 "rpc",
@@ -326,19 +326,19 @@ impl RpcDifferentialTester {
                 "--no-themes",
             ])
             .env(
-                "PI_CODING_AGENT_DIR",
+                "RECUR_AGENT_DIR",
                 self.temp_dir.path().join("agent").as_os_str(),
             )
             .env(
-                "PI_CONFIG_PATH",
+                "RECUR_AGENT_CONFIG_PATH",
                 self.temp_dir.path().join("settings.json").as_os_str(),
             )
             .env(
-                "PI_SESSIONS_DIR",
+                "RECUR_AGENT_SESSIONS_DIR",
                 self.temp_dir.path().join("sessions").as_os_str(),
             )
             .env(
-                "PI_PACKAGE_DIR",
+                "RECUR_AGENT_PACKAGE_DIR",
                 self.temp_dir.path().join("packages").as_os_str(),
             )
             .current_dir(self.temp_dir.path())

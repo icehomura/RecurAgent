@@ -18,11 +18,11 @@
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::{Value, json};
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -86,7 +86,7 @@ fn report_dir() -> PathBuf {
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(std::env::temp_dir);
-    base.join("pi_agent_rust").join("event_dispatch_latency")
+    base.join("recur_agent").join("event_dispatch_latency")
 }
 
 fn percentile_index(len: usize, numerator: usize, denominator: usize) -> usize {
@@ -184,7 +184,7 @@ fn load_synthetic_extensions(sources: &[(String, String)]) -> LoadedExtensions {
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
     let manager = ExtensionManager::new();
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -272,7 +272,7 @@ fn measure_event_latency(
 
 fn result_to_jsonl(result: &LatencyResult) -> Value {
     json!({
-        "schema": "pi.ext.event_dispatch_latency.v1",
+        "schema": "ra.ext.event_dispatch_latency.v1",
         "ts": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
         "event": result.event,
         "extensions": result.extensions,
@@ -591,7 +591,7 @@ fn real_extension_dispatch_latency() {
     let cwd = project_root();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
     let manager = ExtensionManager::new();
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -714,7 +714,7 @@ fn generate_latency_report() {
 
     // Build summary report
     let report = json!({
-        "schema": "pi.ext.event_dispatch_report.v1",
+        "schema": "ra.ext.event_dispatch_report.v1",
         "generated_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         "budget_us": P99_BUDGET_US,
         "records": all_records.len(),

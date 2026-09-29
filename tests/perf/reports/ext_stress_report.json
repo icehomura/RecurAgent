@@ -275,5 +275,5 @@
     ]
   },
   "run_id": "jade-tower-bounded-20260508T0643Z",
-  "schema": "pi.ext.stress_profile.v1"
+  "schema": "ra.ext.stress_profile.v1"
 }

@@ -6,8 +6,8 @@ use common::TestHarness;
 #[cfg(unix)]
 use common::harness::MockHttpResponse;
 use common::logging::validate_jsonl_v2_only;
-use pi::btw::BTW_SYSTEM_PROMPT;
-use pi::subagents::TanCompletion;
+use ra::btw::BTW_SYSTEM_PROMPT;
+use ra::subagents::TanCompletion;
 #[cfg(unix)]
 use std::path::{Path, PathBuf};
 #[cfg(unix)]
@@ -186,11 +186,20 @@ fn e2e_tan_runs_in_background_and_delivers_at_next_turn_boundary() {
     )
     .expect("write settings");
 
-    session.set_env("PI_CODING_AGENT_DIR", &coding_dir.display().to_string());
-    session.set_env("PI_CONFIG_PATH", &settings_path.display().to_string());
-    session.set_env("PI_SESSIONS_DIR", &sessions_dir.display().to_string());
-    session.set_env("PI_PACKAGE_DIR", &packages_dir.display().to_string());
-    session.set_env("PI_NO_AUTO_UPDATE_CHECK", "1");
+    session.set_env("RECUR_AGENT_DIR", &coding_dir.display().to_string());
+    session.set_env(
+        "RECUR_AGENT_CONFIG_PATH",
+        &settings_path.display().to_string(),
+    );
+    session.set_env(
+        "RECUR_AGENT_SESSIONS_DIR",
+        &sessions_dir.display().to_string(),
+    );
+    session.set_env(
+        "RECUR_AGENT_PACKAGE_DIR",
+        &packages_dir.display().to_string(),
+    );
+    session.set_env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1");
     session.launch(&[
         "--provider",
         "parent",

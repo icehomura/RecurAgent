@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-practical-finish-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.practical_finish_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.practical_finish_contract.v1";
 const REQUIRED_GATE_CONTRACTS: &[&str] = &[
     "docs/franken-node-runtime-substrate-contract.json",
     "docs/franken-node-security-sandbox-contract.json",

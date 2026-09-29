@@ -8,7 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use pi::validation_broker::{
+use ra::validation_broker::{
     VALIDATION_BROKER_CLI_PLAN_SCHEMA, VALIDATION_BROKER_CLI_STATUS_SCHEMA,
     ValidationAdmissionPolicy, ValidationAdmissionRequestContext, ValidationBrokerInputParts,
     ValidationBrokerInputSnapshot, ValidationSlotArtifact, ValidationSlotLease,
@@ -27,8 +27,8 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 const START: &str = "2026-05-14T07:00:00Z";
 const HEARTBEAT: &str = "2026-05-14T07:05:00Z";
 const PLAN_AT: &str = "2026-05-14T08:30:00Z";
-const RUNPACK_SCHEMA: &str = "pi.swarm.operator_runpack.v1";
-const DOCTOR_VALIDATION_BROKER_SCHEMA: &str = "pi.doctor.validation_broker_posture.v1";
+const RUNPACK_SCHEMA: &str = "ra.swarm.operator_runpack.v1";
+const DOCTOR_VALIDATION_BROKER_SCHEMA: &str = "ra.doctor.validation_broker_posture.v1";
 const E2E_EVENT_SCHEMA: &str = "pi.validation_broker.e2e.event.v1";
 const E2E_MANIFEST_SCHEMA: &str = "pi.validation_broker.e2e.artifact_manifest.v1";
 
@@ -147,7 +147,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn test_temp_dir() -> Result<TempDir, io::Error> {
@@ -309,7 +309,7 @@ fn run_doctor_json(store_path: &Path, out_json: &Path) -> TestResult<Value> {
     command
         .current_dir(repo_root())
         .args(["doctor", "--only", "swarm", "--format", "json"])
-        .env("PI_VALIDATION_BROKER_STORE", store_path)
+        .env("RECUR_AGENT_VALIDATION_BROKER_STORE", store_path)
         .env("CARGO_TARGET_DIR", &target_dir)
         .env("TMPDIR", &tmpdir)
         .env_remove("ANTHROPIC_API_KEY")
@@ -358,7 +358,7 @@ fn fault_event_scenario_ids(event_log_path: &str) -> TestResult<BTreeSet<String>
         })?;
         require(
             event.get("schema").and_then(Value::as_str)
-                == Some("pi.validation_broker.fault_event.v1"),
+                == Some("ra.validation_broker.fault_event.v1"),
             format!("fault event line {} has wrong schema", index + 1),
         )?;
         let scenario_id = event
@@ -379,11 +379,11 @@ fn base_request(slot_id: &str) -> ValidationSlotRequest {
     let mut environment = BTreeMap::new();
     environment.insert(
         "CARGO_TARGET_DIR".to_string(),
-        "/data/tmp/pi_agent_rust_cargo/e2e/target".to_string(),
+        "/data/tmp/recur_agent_cargo/e2e/target".to_string(),
     );
     environment.insert(
         "TMPDIR".to_string(),
-        "/data/tmp/pi_agent_rust_cargo/e2e/tmp".to_string(),
+        "/data/tmp/recur_agent_cargo/e2e/tmp".to_string(),
     );
 
     ValidationSlotRequest {
@@ -399,11 +399,11 @@ fn base_request(slot_id: &str) -> ValidationSlotRequest {
             "--all-targets".to_string(),
         ],
         command_class: "cargo_check".to_string(),
-        cwd: "/data/projects/pi_agent_rust".to_string(),
+        cwd: "/data/projects/recur_agent".to_string(),
         git_head: "validation-broker-e2e-head".to_string(),
         feature_flags: vec!["default".to_string()],
-        target_dir: "/data/tmp/pi_agent_rust_cargo/e2e/target".to_string(),
-        tmpdir: "/data/tmp/pi_agent_rust_cargo/e2e/tmp".to_string(),
+        target_dir: "/data/tmp/recur_agent_cargo/e2e/target".to_string(),
+        tmpdir: "/data/tmp/recur_agent_cargo/e2e/tmp".to_string(),
         runner: "rch_required".to_string(),
         rust_toolchain: Some("nightly".to_string()),
         rch_job_id: Some("rch-job-validation-broker-e2e".to_string()),
@@ -607,7 +607,7 @@ fn build_input_snapshot(
         scratch_headroom,
         agent_mail,
     })
-    .map_err(|err: pi::error::Error| {
+    .map_err(|err: ra::error::Error| {
         test_error(format!(
             "input snapshot failed for {}: {err}",
             scenario_dir.display()
@@ -619,7 +619,7 @@ fn provenance(source: &str, path: &Path) -> TestResult<ValidationSourceProvenanc
     ValidationSourceProvenance::new(
         source,
         vec![source.to_string(), "--json".to_string()],
-        "/data/projects/pi_agent_rust",
+        "/data/projects/recur_agent",
         PLAN_AT,
         Some(path.display().to_string()),
     )
@@ -674,14 +674,14 @@ fn beads_value(state: &str) -> Value {
 fn agent_mail_value(state: &str) -> Value {
     match state {
         "unavailable" => json!({
-            "schema": "pi.agent_mail.robot_status.v1",
+            "schema": "ra.agent_mail.robot_status.v1",
             "generated_at": PLAN_AT,
             "status": "error",
             "health_level": "red",
             "issue": "database schema missing required tables"
         }),
         _ => json!({
-            "schema": "pi.agent_mail.robot_status.v1",
+            "schema": "ra.agent_mail.robot_status.v1",
             "generated_at": PLAN_AT,
             "status": "ok",
             "health_level": "green"
@@ -737,7 +737,7 @@ fn fault_slot_request(
     match slot.equivalence.as_str() {
         "matching" => {}
         "target_dir_mismatch" => {
-            slot_request.target_dir = "/data/tmp/pi_agent_rust_cargo/other/target".to_string();
+            slot_request.target_dir = "/data/tmp/recur_agent_cargo/other/target".to_string();
         }
         other => {
             return Err(test_error(format!(
@@ -1045,7 +1045,7 @@ fn write_runpack_sources(root: &Path, doctor_path: &Path, broker_status_path: &P
     write_json(
         &root.join("claim-readiness.json"),
         &json!({
-            "schema": "pi.swarm.claim_readiness_report.v1",
+            "schema": "ra.swarm.claim_readiness_report.v1",
             "overall_status": "ready",
             "max_age_days": 14,
             "artifact_statuses": [{
@@ -1061,7 +1061,7 @@ fn write_runpack_sources(root: &Path, doctor_path: &Path, broker_status_path: &P
     write_json(
         &root.join("smoke-summary.json"),
         &json!({
-            "schema": "pi.swarm.smoke_harness.v1",
+            "schema": "ra.swarm.smoke_harness.v1",
             "status": "pass",
             "correlation_id": "validation-broker-e2e",
             "reservation_ids": [],
@@ -1079,7 +1079,7 @@ fn write_runpack_sources(root: &Path, doctor_path: &Path, broker_status_path: &P
     write_json(
         &root.join("activity-digest.json"),
         &json!({
-            "schema": "pi.swarm.activity_digest.v1",
+            "schema": "ra.swarm.activity_digest.v1",
             "saturation": {
                 "saturated": false,
                 "signals": [],
@@ -1092,17 +1092,17 @@ fn write_runpack_sources(root: &Path, doctor_path: &Path, broker_status_path: &P
     write_json(
         &root.join("cargo-admission.json"),
         &json!({
-            "schema": "pi.cargo_headroom.admission.v1",
+            "schema": "ra.cargo_headroom.admission.v1",
             "decision": "admit",
             "reason": "validation_broker_e2e_fixture",
             "requested_runner": "rch",
             "resolved_runner": "rch",
             "command_class": "heavy",
             "allow_local_fallback": false,
-            "cargo_target_dir": "/data/tmp/pi_agent_rust_cargo/e2e/target",
-            "tmpdir": "/data/tmp/pi_agent_rust_cargo/e2e/tmp",
+            "cargo_target_dir": "/data/tmp/recur_agent_cargo/e2e/target",
+            "tmpdir": "/data/tmp/recur_agent_cargo/e2e/tmp",
             "rch_queue_forecast": {
-                "schema": "pi.cargo_headroom.rch_queue_forecast.v1",
+                "schema": "ra.cargo_headroom.rch_queue_forecast.v1",
                 "status": "ok",
                 "recommended_action": "proceed",
                 "reason": "validation_broker_e2e",
@@ -1131,7 +1131,7 @@ fn write_runpack_sources(root: &Path, doctor_path: &Path, broker_status_path: &P
     write_json(
         &root.join("git-status.json"),
         &json!({
-            "schema": "pi.swarm.git_context.v1",
+            "schema": "ra.swarm.git_context.v1",
             "generated_at": PLAN_AT,
             "branch": "main",
             "head": "validation-broker-e2e-head",
@@ -1219,7 +1219,7 @@ fn write_artifact_manifest(
             "source_events": "tests/golden_corpus/validation_broker/fault_events.jsonl",
             "artifacts": [
                 {"id": "events_jsonl", "path": events_path.display().to_string(), "schema": E2E_EVENT_SCHEMA},
-                {"id": "doctor_projection", "path": doctor_path.display().to_string(), "schema": "pi.doctor.report.v1"},
+                {"id": "doctor_projection", "path": doctor_path.display().to_string(), "schema": "ra.doctor.report.v1"},
                 {"id": "operator_runpack", "path": runpack_path.display().to_string(), "schema": RUNPACK_SCHEMA},
                 {"id": "validation_broker_status", "path": broker_status_path.display().to_string(), "schema": VALIDATION_BROKER_CLI_STATUS_SCHEMA}
             ],
@@ -1234,7 +1234,7 @@ fn validation_broker_fault_corpus_runs_through_cli_doctor_and_runpack() -> TestR
     let temp = test_temp_dir()?;
     let corpus = load_fault_corpus()?;
     require(
-        corpus.schema == "pi.validation_broker.fault_corpus.v1",
+        corpus.schema == "ra.validation_broker.fault_corpus.v1",
         "fault corpus schema",
     )?;
     let event_scenario_ids = fault_event_scenario_ids(&corpus.event_log_path)?;
@@ -1424,7 +1424,7 @@ fn validation_broker_e2e_fails_closed_on_missing_and_malformed_artifacts() -> Te
     let bad_broker_path = artifacts.scenario_dir.join("bad-validation-broker.json");
     write_json(
         &bad_broker_path,
-        &json!({"schema": "pi.validation_broker.unknown.v1"}),
+        &json!({"schema": "ra.validation_broker.unknown.v1"}),
     )?;
     let doctor_path = artifacts.scenario_dir.join("doctor.json");
     write_json(&doctor_path, &json!({"overall": "pass", "findings": []}))?;

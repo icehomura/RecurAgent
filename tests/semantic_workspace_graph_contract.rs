@@ -114,9 +114,9 @@ fn semantic_workspace_graph_contract_exists_and_has_expected_identity() -> TestR
     require_str_field(
         &contract,
         "schema",
-        "pi.semantic_workspace_graph.contract.v1",
+        "ra.semantic_workspace_graph.contract.v1",
     )?;
-    require_str_field(&contract, "graph_schema", "pi.semantic_workspace_graph.v1")?;
+    require_str_field(&contract, "graph_schema", "ra.semantic_workspace_graph.v1")?;
     require_str_field(&contract, "bead_id", "bd-ircr3.1")?;
     require_str_field(&contract, "parent_bead_id", "bd-ircr3")?;
 

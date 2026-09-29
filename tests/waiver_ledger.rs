@@ -156,8 +156,8 @@ fn contract_file_matches_schema_and_policy() -> Result<(), Box<dyn Error>> {
 
     assert_eq!(
         contract.get("schema").and_then(Value::as_str),
-        Some("pi.waiver.ledger.contract.v1"),
-        "contract schema must be pi.waiver.ledger.contract.v1"
+        Some("ra.waiver.ledger.contract.v1"),
+        "contract schema must be ra.waiver.ledger.contract.v1"
     );
     assert_eq!(
         contract.get("bead_id").and_then(Value::as_str),
@@ -197,8 +197,8 @@ fn evidence_file_matches_schema_and_references_contract() -> Result<(), Box<dyn 
 
     assert_eq!(
         evidence.get("schema").and_then(Value::as_str),
-        Some("pi.waiver.ledger.v1"),
-        "evidence schema must be pi.waiver.ledger.v1"
+        Some("ra.waiver.ledger.v1"),
+        "evidence schema must be ra.waiver.ledger.v1"
     );
     assert_eq!(
         evidence.get("contract_path").and_then(Value::as_str),

@@ -1,7 +1,7 @@
 # Operator Handoff Summary
 
 - Status: blocked
-- Project: pi_agent_rust
+- Project: recur_agent
 - Branch: main
 - Head: abc1234
 - Generated: [GENERATED_AT]

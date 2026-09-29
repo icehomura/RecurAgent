@@ -48,7 +48,7 @@ fn franken_node_claim_contract_has_expected_schema_and_version() {
     let contract = load_contract();
     assert_eq!(
         contract["schema"],
-        Value::String("pi.frankennode.claim_gating_contract.v1".to_string()),
+        Value::String("ra.frankennode.claim_gating_contract.v1".to_string()),
         "unexpected schema identifier for franken-node claim contract"
     );
 

@@ -2,7 +2,7 @@
 //!
 //! Runs cold start, warm start, tool call overhead, and event hook dispatch
 //! scenarios against real extensions from the conformance artifact corpus.
-//! Emits JSONL records using `pi.ext.rust_bench.v1` schema with environment
+//! Emits JSONL records using `ra.ext.rust_bench.v1` schema with environment
 //! fingerprint for repeatable, machine-readable performance tracking.
 //!
 //! Environment variables:
@@ -35,12 +35,12 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::perf_build;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::perf_build;
+use ra::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sysinfo::System;
@@ -418,10 +418,10 @@ fn validate_bench_jsonl(content: &str, expected_extensions: &[String]) -> Result
         let record: BenchRecord = serde_json::from_str(line).map_err(|error| {
             format!("line {}: invalid benchmark record: {error}", line_index + 1)
         })?;
-        if record.schema != "pi.ext.rust_bench.v1" {
+        if record.schema != "ra.ext.rust_bench.v1" {
             return Err(format!("line {}: unexpected schema", line_index + 1));
         }
-        if record.runtime != "pi_agent_rust" {
+        if record.runtime != "recur_agent" {
             return Err(format!("line {}: unexpected runtime", line_index + 1));
         }
         if record.run_id != record.correlation_id {
@@ -592,7 +592,7 @@ fn create_runtime_and_load(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -684,7 +684,7 @@ fn run_cold_start(
 
         let manager = ExtensionManager::new();
         let tools = Arc::new(ToolRegistry::new(&[], cwd, None));
-        let js_config = PiJsRuntimeConfig {
+        let js_config = RaJsRuntimeConfig {
             cwd: cwd.display().to_string(),
             ..Default::default()
         };
@@ -741,7 +741,7 @@ fn run_warm_start(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -952,7 +952,7 @@ fn bench_extension_scenarios() {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "standalone".to_string());
-    let benchmark_run_id = std::env::var("PI_BENCH_RUN_ID")
+    let benchmark_run_id = std::env::var("RECUR_AGENT_BENCH_RUN_ID")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| format!("{correlation_id}:{now}"));
@@ -1012,8 +1012,8 @@ fn bench_extension_scenarios() {
             );
 
             records.push(BenchRecord {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 run_id: correlation_id.clone(),
                 correlation_id: correlation_id.clone(),
                 benchmark_run_id: benchmark_run_id.clone(),
@@ -1053,8 +1053,8 @@ fn bench_extension_scenarios() {
             );
 
             records.push(BenchRecord {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 run_id: correlation_id.clone(),
                 correlation_id: correlation_id.clone(),
                 benchmark_run_id: benchmark_run_id.clone(),
@@ -1097,8 +1097,8 @@ fn bench_extension_scenarios() {
             );
 
             records.push(BenchRecord {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 run_id: correlation_id.clone(),
                 correlation_id: correlation_id.clone(),
                 benchmark_run_id: benchmark_run_id.clone(),
@@ -1140,8 +1140,8 @@ fn bench_extension_scenarios() {
             );
 
             records.push(BenchRecord {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 run_id: correlation_id.clone(),
                 correlation_id: correlation_id.clone(),
                 benchmark_run_id: benchmark_run_id.clone(),
@@ -1292,8 +1292,8 @@ fn bench_jsonl_schema_validation_is_non_vacuous() {
     };
     fixture_env.config_hash = env_config_hash(&fixture_env);
     let record = BenchRecord {
-        schema: "pi.ext.rust_bench.v1".to_string(),
-        runtime: "pi_agent_rust".to_string(),
+        schema: "ra.ext.rust_bench.v1".to_string(),
+        runtime: "recur_agent".to_string(),
         run_id: "test-correlation".to_string(),
         correlation_id: "test-correlation".to_string(),
         benchmark_run_id: "test-benchmark-run".to_string(),
@@ -1429,7 +1429,7 @@ for ((i=1; i<=$#; i++)); do
     fi
   fi
 done
-if [[ "${PI_FAKE_FAIL_JEMALLOC:-0}" == "1" ]]; then
+if [[ "${RECUR_AGENT_FAKE_FAIL_JEMALLOC:-0}" == "1" ]]; then
   prev=""
   for arg in "$@"; do
     if [[ "$arg" == "--features=jemalloc" || "$arg" == "--features=jemalloc,"* ]]; then
@@ -1469,7 +1469,7 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-printf '{"schema":"pi.perf.synthetic_workload.v1","iterations":%s,"tool_calls":%s}\n' "$iterations" "$tool_calls"
+printf '{"schema":"ra.perf.synthetic_workload.v1","iterations":%s,"tool_calls":%s}\n' "$iterations" "$tool_calls"
 EOS
 chmod +x "$bin"
 "#;
@@ -1581,7 +1581,7 @@ fn run_bench_workloads_with_config(
         .env("HYPERFINE_WARMUP", "0")
         .env("HYPERFINE_RUNS", "1")
         .env(
-            "PI_FAKE_FAIL_JEMALLOC",
+            "RECUR_AGENT_FAKE_FAIL_JEMALLOC",
             if fail_jemalloc_build { "1" } else { "0" },
         )
         .output()
@@ -1723,7 +1723,7 @@ fn pgo_compare_mode_emits_delta_artifact_and_comparison_event() {
             .expect("parse pgo delta artifact json");
     assert_eq!(
         delta_payload.get("schema").and_then(Value::as_str),
-        Some("pi.perf.pgo_comparison.v1")
+        Some("ra.perf.pgo_comparison.v1")
     );
 
     let events = load_jsonl(&events_path);
@@ -1766,7 +1766,7 @@ fn allocator_summary_artifact_emits_schema_and_recommendation() {
 
     assert_eq!(
         summary_payload.get("schema").and_then(Value::as_str),
-        Some("pi.perf.allocator_strategy_summary.v1")
+        Some("ra.perf.allocator_strategy_summary.v1")
     );
     assert!(
         summary_payload

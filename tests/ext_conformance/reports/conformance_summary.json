@@ -54,6 +54,6 @@
     }
   },
   "run_id": "local-20260918T184124350Z",
-  "schema": "pi.ext.conformance_summary.v2",
+  "schema": "ra.ext.conformance_summary.v2",
   "source_tree_sha256": "c1ad831715a18eb1acfe0648aa22f4cbb00d247da1d7522d903c5a5ceb08412e"
 }

@@ -112,11 +112,11 @@ impl PiEnv {
                 "search for async rust",
             ])
             .env("HOME", self.root.join("home"))
-            .env("PI_CODING_AGENT_DIR", self.root.join("agent"))
-            .env("PI_CONFIG_PATH", self.root.join("settings.json"))
-            .env("PI_SESSIONS_DIR", self.root.join("sessions"))
-            .env("PI_PACKAGE_DIR", self.root.join("packages"))
-            .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+            .env("RECUR_AGENT_DIR", self.root.join("agent"))
+            .env("RECUR_AGENT_CONFIG_PATH", self.root.join("settings.json"))
+            .env("RECUR_AGENT_SESSIONS_DIR", self.root.join("sessions"))
+            .env("RECUR_AGENT_PACKAGE_DIR", self.root.join("packages"))
+            .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -213,14 +213,14 @@ fn e2e_chain_falls_through_failing_provider_to_next() {
         ],
     );
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let child = env.spawn(
         &binary,
         &[
             ("TAVILY_API_KEY", "tavily-test".to_string()),
             ("BRAVE_API_KEY", "brave-test".to_string()),
-            ("PI_WEBSEARCH_BASE_TAVILY", server.base_url()),
-            ("PI_WEBSEARCH_BASE_BRAVE", server.base_url()),
+            ("RECUR_AGENT_WEBSEARCH_BASE_TAVILY", server.base_url()),
+            ("RECUR_AGENT_WEBSEARCH_BASE_BRAVE", server.base_url()),
         ],
     );
     let (stdout, stderr) = run_to_finish(child, 90);
@@ -287,10 +287,10 @@ fn e2e_keyless_path_with_no_keys() {
         ],
     );
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let child = env.spawn(
         &binary,
-        &[("PI_WEBSEARCH_BASE_DUCKDUCKGO", server.base_url())],
+        &[("RECUR_AGENT_WEBSEARCH_BASE_DUCKDUCKGO", server.base_url())],
     );
     let (stdout, stderr) = run_to_finish(child, 90);
     harness.log().info_ctx("verify", "process finished", |ctx| {
@@ -360,14 +360,14 @@ fn e2e_provider_pin_uses_only_that_rung() {
         ],
     );
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let child = env.spawn(
         &binary,
         &[
             ("TAVILY_API_KEY", "tavily-test".to_string()),
             ("BRAVE_API_KEY", "brave-test".to_string()),
-            ("PI_WEBSEARCH_BASE_TAVILY", server.base_url()),
-            ("PI_WEBSEARCH_BASE_BRAVE", server.base_url()),
+            ("RECUR_AGENT_WEBSEARCH_BASE_TAVILY", server.base_url()),
+            ("RECUR_AGENT_WEBSEARCH_BASE_BRAVE", server.base_url()),
         ],
     );
     let (stdout, _stderr) = run_to_finish(child, 90);

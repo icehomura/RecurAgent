@@ -22,20 +22,20 @@ mod common;
 use asupersync::sync::Mutex as AsyncMutex;
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::auth::AuthStorage;
-use pi::compaction::ResolvedCompactionSettings;
-use pi::config::Config;
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::auth::AuthStorage;
+use ra::compaction::ResolvedCompactionSettings;
+use ra::config::Config;
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ThinkingLevel,
     UserContent, UserMessage,
 };
-use pi::models::{ModelEntry, ModelRegistry};
-use pi::provider::{Context, InputType, Model, ModelCost, StreamOptions};
-use pi::resources::ResourceLoader;
-use pi::rpc::{RpcOptions, run as run_rpc};
-use pi::session::{Session, SessionEntry};
-use pi::tools::ToolRegistry;
+use ra::models::{ModelEntry, ModelRegistry};
+use ra::provider::{Context, InputType, Model, ModelCost, StreamOptions};
+use ra::resources::ResourceLoader;
+use ra::rpc::{RpcOptions, run as run_rpc};
+use ra::session::{Session, SessionEntry};
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
@@ -134,7 +134,7 @@ struct CaptureProvider {
 
 #[async_trait::async_trait]
 #[allow(clippy::unnecessary_literal_bound)]
-impl pi::provider::Provider for CaptureProvider {
+impl ra::provider::Provider for CaptureProvider {
     fn name(&self) -> &str {
         "capture"
     }
@@ -151,8 +151,8 @@ impl pi::provider::Provider for CaptureProvider {
         &self,
         context: &Context<'_>,
         options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         {
             let mut capture = self.capture.lock().expect("capture");
@@ -202,7 +202,7 @@ impl pi::provider::Provider for CaptureProvider {
 
 fn build_agent(
     root: &Path,
-    keywords: Option<pi::magic_keywords::KeywordSettings>,
+    keywords: Option<ra::magic_keywords::KeywordSettings>,
 ) -> (Agent, Arc<Mutex<Capture>>) {
     let capture = Arc::new(Mutex::new(Capture::default()));
     let provider = Arc::new(CaptureProvider {
@@ -210,7 +210,7 @@ fn build_agent(
         first_call_entered: Mutex::new(None),
         first_call_gate: Mutex::new(None),
     });
-    let tools = ToolRegistry::new(&[], root, None::<&pi::config::Config>);
+    let tools = ToolRegistry::new(&[], root, None::<&ra::config::Config>);
     let config = AgentConfig {
         system_prompt: Some("base prompt".to_string()),
         keyword_settings: keywords,
@@ -230,7 +230,7 @@ fn build_gated_agent(
         first_call_entered: Mutex::new(Some(first_call_entered)),
         first_call_gate: Mutex::new(Some(first_call_gate)),
     });
-    let tools = ToolRegistry::new(&[], root, None::<&pi::config::Config>);
+    let tools = ToolRegistry::new(&[], root, None::<&ra::config::Config>);
     let config = AgentConfig {
         system_prompt: Some("base prompt".to_string()),
         ..AgentConfig::default()
@@ -428,7 +428,7 @@ fn settings_disable_keywords() {
     let case = "settings_disable_keywords";
     let harness = TestHarness::new(case);
     let root = harness.temp_path(".");
-    let settings = pi::magic_keywords::KeywordSettings {
+    let settings = ra::magic_keywords::KeywordSettings {
         ultrathink: Some(false),
         orchestrate: Some(false),
         workflowz: Some(false),
@@ -529,7 +529,7 @@ fn block_keyword_activation_persists_in_session_custom_entry() {
     harness
         .log()
         .info("verify", format!("telemetry: {telemetry}"));
-    assert_eq!(telemetry["schema"], json!("pi.magic_keyword.v1"));
+    assert_eq!(telemetry["schema"], json!("ra.magic_keyword.v1"));
     assert_eq!(telemetry["word"], json!("ultrathink"));
     assert_eq!(telemetry["action"], json!("ultrathink"));
     let persisted_path = guard.path.clone().expect("autosave created session file");
@@ -547,7 +547,7 @@ fn block_keyword_activation_persists_in_session_custom_entry() {
                     SessionEntry::Custom(custom)
                         if custom.custom_type == "magic_keyword"
                             && custom.data.as_ref().is_some_and(|data| {
-                                data["schema"] == json!("pi.magic_keyword.v1")
+                                data["schema"] == json!("ra.magic_keyword.v1")
                                     && data["word"] == json!("ultrathink")
                                     && data["action"] == json!("ultrathink")
                             })
@@ -672,7 +672,7 @@ fn rpc_prompt_observes_clamped_thinking_directive_and_telemetry() {
             SessionEntry::Custom(custom)
                 if custom.custom_type == "magic_keyword"
                     && custom.data.as_ref().is_some_and(|data| {
-                        data["schema"] == json!("pi.magic_keyword.v1")
+                        data["schema"] == json!("ra.magic_keyword.v1")
                             && data["word"] == json!("ultrathink")
                     })
         )
@@ -962,22 +962,22 @@ fn rpc_queued_steering_and_follow_up_keyword_provenance() {
         activations,
         vec![
             (
-                Some("pi.magic_keyword.v1".to_string()),
+                Some("ra.magic_keyword.v1".to_string()),
                 Some("ultrathink".to_string()),
                 Some("ultrathink".to_string()),
             ),
             (
-                Some("pi.magic_keyword.v1".to_string()),
+                Some("ra.magic_keyword.v1".to_string()),
                 Some("workflowz".to_string()),
                 Some("workflowz".to_string()),
             ),
             (
-                Some("pi.magic_keyword.v1".to_string()),
+                Some("ra.magic_keyword.v1".to_string()),
                 Some("workflowz".to_string()),
                 Some("workflowz".to_string()),
             ),
             (
-                Some("pi.magic_keyword.v1".to_string()),
+                Some("ra.magic_keyword.v1".to_string()),
                 Some("orchestrate".to_string()),
                 Some("orchestrate".to_string()),
             ),

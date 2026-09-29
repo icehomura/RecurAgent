@@ -17,19 +17,19 @@
 //!   cargo test --test sec_compatibility_conformance -- --nocapture
 //!
 //! Regenerate the tracked verdict explicitly with:
-//!   PI_GENERATE_SEC_CONFORMANCE_VERDICT=1 cargo test --test sec_compatibility_conformance generate_sec_conformance_verdict -- --exact --nocapture
+//!   RECUR_AGENT_GENERATE_SEC_CONFORMANCE_VERDICT=1 cargo test --test sec_compatibility_conformance generate_sec_conformance_verdict -- --exact --nocapture
 
 mod common;
 
 use common::TestHarness;
-use pi::extensions::{
+use ra::extensions::{
     ALL_CAPABILITIES, CompatibilityScanner, ExtensionManager, ExtensionOverride, ExtensionPolicy,
     ExtensionPolicyMode, ExtensionTrustState, PolicyDecision, PolicyExplanation, PolicyProfile,
     RuntimeRiskConfig,
 };
 use std::collections::BTreeMap;
 
-const GENERATE_SEC_CONFORMANCE_VERDICT_ENV: &str = "PI_GENERATE_SEC_CONFORMANCE_VERDICT";
+const GENERATE_SEC_CONFORMANCE_VERDICT_ENV: &str = "RECUR_AGENT_GENERATE_SEC_CONFORMANCE_VERDICT";
 
 fn sec_conformance_verdict_generation_enabled(raw: Option<&str>) -> bool {
     raw == Some("1")
@@ -117,7 +117,7 @@ fn build_verdict(checks: &[ConformanceCheck], generated_at: String) -> SecConfor
     };
 
     SecConformanceVerdict {
-        schema: "pi.sec.compatibility_conformance.v1".to_string(),
+        schema: "ra.sec.compatibility_conformance.v1".to_string(),
         generated_at,
         bead: "bd-1a2cu".to_string(),
         verdict: verdict.to_string(),
@@ -133,7 +133,7 @@ fn build_verdict(checks: &[ConformanceCheck], generated_at: String) -> SecConfor
 }
 
 fn validate_verdict_payload(report: &SecConformanceVerdict, checks: &[ConformanceCheck]) -> String {
-    assert_eq!(report.schema, "pi.sec.compatibility_conformance.v1");
+    assert_eq!(report.schema, "ra.sec.compatibility_conformance.v1");
     assert!(!report.generated_at.is_empty(), "generated_at must be set");
     assert_eq!(report.bead, "bd-1a2cu");
     assert_eq!(report.total, checks.len());
@@ -1023,7 +1023,7 @@ fn generate_sec_conformance_verdict() {
 
         // Default = Pending
         let default_ok =
-            manager.trust_state(ext_id) == pi::extensions::ExtensionTrustState::Pending;
+            manager.trust_state(ext_id) == ra::extensions::ExtensionTrustState::Pending;
         checks.push(ConformanceCheck {
             id: "trust_default_pending".to_string(),
             category: "trust_lifecycle".to_string(),
@@ -1036,7 +1036,7 @@ fn generate_sec_conformance_verdict() {
         // Accept → Acknowledged
         manager.record_trust_onboarding(ext_id, "low", true, "user:test");
         let ack_ok =
-            manager.trust_state(ext_id) == pi::extensions::ExtensionTrustState::Acknowledged;
+            manager.trust_state(ext_id) == ra::extensions::ExtensionTrustState::Acknowledged;
         checks.push(ConformanceCheck {
             id: "trust_accept_acknowledged".to_string(),
             category: "trust_lifecycle".to_string(),
@@ -1049,7 +1049,7 @@ fn generate_sec_conformance_verdict() {
         // Promote → Trusted
         manager.promote_trust(ext_id);
         let trusted_ok =
-            manager.trust_state(ext_id) == pi::extensions::ExtensionTrustState::Trusted;
+            manager.trust_state(ext_id) == ra::extensions::ExtensionTrustState::Trusted;
         checks.push(ConformanceCheck {
             id: "trust_promote_trusted".to_string(),
             category: "trust_lifecycle".to_string(),

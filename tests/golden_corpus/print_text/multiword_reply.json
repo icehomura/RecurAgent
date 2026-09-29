@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "print_text_multiword_reply",
   "surface": "print_text",
   "description": "Print mode: multi-word reply streamed in chunks",

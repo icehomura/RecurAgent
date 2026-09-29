@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/contracts/swarm-replay-closeout-gate-contract.json";
 const EVIDENCE_PATH: &str = "docs/evidence/swarm-replay-closeout-gate.json";
-const EXPECTED_CONTRACT_SCHEMA: &str = "pi.swarm.replay_closeout_gate_contract.v1";
-const EXPECTED_EVIDENCE_SCHEMA: &str = "pi.swarm.replay_closeout_gate.v1";
+const EXPECTED_CONTRACT_SCHEMA: &str = "ra.swarm.replay_closeout_gate_contract.v1";
+const EXPECTED_EVIDENCE_SCHEMA: &str = "ra.swarm.replay_closeout_gate.v1";
 const EXPECTED_PURPOSE: &str = "prompt_to_artifact_swarm_replay_closeout_gate_not_source_of_truth";
 
 type TestResult = Result<(), String>;

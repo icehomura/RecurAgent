@@ -1,4 +1,4 @@
-use pi::hostcall_queue::{
+use ra::hostcall_queue::{
     BravoBiasMode, ContentionSample, ContentionSignature, HostcallQueueEnqueueResult,
     HostcallQueueMode, HostcallRequestQueue, QueueTenant, S3FifoFallbackReason, S3FifoMode,
 };
@@ -163,7 +163,7 @@ fn hostcall_swarm_report_path() -> PathBuf {
     }
 
     std::env::temp_dir()
-        .join("pi_agent_rust")
+        .join("recur_agent")
         .join("hostcall_admission_swarm_profile.json")
 }
 
@@ -533,7 +533,7 @@ fn swarm_64_core_hostcall_admission_profile_fails_closed_on_tail_and_starvation(
     };
     std::fs::create_dir_all(report_parent)?;
     let report = json!({
-        "schema": "pi.ext.hostcall_admission_swarm_profile.v1",
+        "schema": "ra.ext.hostcall_admission_swarm_profile.v1",
         "agents": SWARM_AGENTS,
         "hostcalls_per_agent": SWARM_HOSTCALLS_PER_AGENT,
         "fast_capacity": SWARM_FAST_CAPACITY,

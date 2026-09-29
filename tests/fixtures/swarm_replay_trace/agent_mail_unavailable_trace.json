@@ -1,5 +1,5 @@
 {
-  "schema": "pi.swarm.replay_trace.v1",
+  "schema": "ra.swarm.replay_trace.v1",
   "trace_id": "fixture-agent-mail-unavailable",
   "generated_at": "2026-05-13T17:30:00Z",
   "contract_version": "1.0.0",
@@ -249,7 +249,7 @@
       },
       "payload": {
         "artifact_path": "docs/contracts/swarm-replay-trace-contract.json",
-        "artifact_schema": "pi.swarm.replay_trace_contract.v1",
+        "artifact_schema": "ra.swarm.replay_trace_contract.v1",
         "verdict": "fixture",
         "command": "rch exec -- cargo test --test swarm_replay_trace_contract -- --nocapture"
       }

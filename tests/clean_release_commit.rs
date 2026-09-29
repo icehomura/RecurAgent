@@ -37,7 +37,7 @@ fn test_dropin_certification_contract_schema_and_gates() {
     let raw = fs::read_to_string(contract_path).expect("read dropin contract");
     let parsed: Value = serde_json::from_str(&raw).expect("parse dropin contract JSON");
 
-    assert_eq!(parsed["schema"], "pi.dropin.certification_contract.v1");
+    assert_eq!(parsed["schema"], "ra.dropin.certification_contract.v1");
     assert_eq!(parsed["status"], "active_blocking_policy");
 
     let hard_gates = parsed["hard_gates"]
@@ -83,7 +83,7 @@ fn test_clean_release_commit_script_execution() {
     );
 
     let parsed: Value = serde_json::from_str(&stdout).expect("parse script JSON output");
-    assert_eq!(parsed["schema"], "pi.release.clean_commit_check.v1");
+    assert_eq!(parsed["schema"], "ra.release.clean_commit_check.v1");
     assert!(parsed["is_clean_release_commit"].is_boolean());
 
     finish_case(&harness, "clean_release_commit_script");

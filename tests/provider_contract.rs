@@ -15,10 +15,10 @@
 mod common;
 
 use futures::StreamExt;
-use pi::http::client::Client;
-use pi::model::{Message, StopReason, StreamEvent, UserContent, UserMessage};
-use pi::provider::{Context, Provider, StreamOptions, ToolDef};
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::http::client::Client;
+use ra::model::{Message, StopReason, StreamEvent, UserContent, UserMessage};
+use ra::provider::{Context, Provider, StreamOptions, ToolDef};
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::{Value, json};
 use std::env;
 use std::path::PathBuf;
@@ -380,10 +380,10 @@ macro_rules! error_auth_contract {
 // Provider constructors that accept a VCR recorder
 // ═══════════════════════════════════════════════════════════════════════
 
-use pi::providers::anthropic::AnthropicProvider;
-use pi::providers::cohere::CohereProvider;
-use pi::providers::gemini::GeminiProvider;
-use pi::providers::openai::OpenAIProvider;
+use ra::providers::anthropic::AnthropicProvider;
+use ra::providers::cohere::CohereProvider;
+use ra::providers::gemini::GeminiProvider;
+use ra::providers::openai::OpenAIProvider;
 
 fn anthropic_with_vcr(vcr: VcrRecorder) -> Arc<dyn Provider> {
     let client = Client::new().with_vcr(vcr);

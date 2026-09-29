@@ -6,8 +6,8 @@
 
 mod common;
 
-use pi::http::client::Client;
-use pi::http::proxy::{HttpSettings, ProxyConfig, install};
+use ra::http::client::Client;
+use ra::http::proxy::{HttpSettings, ProxyConfig, install};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::sync::{Mutex, MutexGuard, OnceLock, mpsc};

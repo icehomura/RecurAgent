@@ -4,7 +4,7 @@
 //! lldb-dap lanes: full launch → breakpoint → stack/scopes/variables →
 //! step → evaluate → terminate round trip on a fixture C binary, plus
 //! attach-by-pid on a sleeping fixture. Live lanes skip honestly when no
-//! adapter exists, and `PI_DEBUG_REQUIRE_LLDB=1` turns the skip into a loud
+//! adapter exists, and `RECUR_AGENT_DEBUG_REQUIRE_LLDB=1` turns the skip into a loud
 //! failure.
 //!
 //! Logging: structured JSONL per tests/common/logging.rs, v2-validated,
@@ -14,7 +14,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -23,7 +23,7 @@ fn first_text(output: &ToolOutput) -> &str {
         .content
         .iter()
         .find_map(|block| match block {
-            pi::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+            ra::model::ContentBlock::Text(text) => Some(text.text.as_str()),
             _ => None,
         })
         .unwrap_or("")
@@ -66,7 +66,7 @@ fn debug_tool_registry(cwd: &Path) -> ToolRegistry {
     ToolRegistry::new(&["debug"], cwd, None)
 }
 
-fn execute_debug(registry: &ToolRegistry, input: Value) -> Result<ToolOutput, pi::error::Error> {
+fn execute_debug(registry: &ToolRegistry, input: Value) -> Result<ToolOutput, ra::error::Error> {
     let tool = registry
         .tools()
         .iter()
@@ -108,7 +108,8 @@ fn lldb_dap_command() -> Option<String> {
 }
 
 fn lldb_required() -> bool {
-    std::env::var("PI_DEBUG_REQUIRE_LLDB").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+    std::env::var("RECUR_AGENT_DEBUG_REQUIRE_LLDB")
+        .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
 }
 
 /// Live-lane gate: true when an adapter exists; skip honestly otherwise,
@@ -119,7 +120,7 @@ fn live_lane_or_skip(harness: &TestHarness, case: &str) -> bool {
     }
     assert!(
         !lldb_required(),
-        "PI_DEBUG_REQUIRE_LLDB is set but no lldb-dap found; \
+        "RECUR_AGENT_DEBUG_REQUIRE_LLDB is set but no lldb-dap found; \
          refusing to let case '{case}' skip its proof"
     );
     harness.log().info(
@@ -210,7 +211,7 @@ fn debug_registered_and_gated_by_tools() {
     let without = ToolRegistry::new(&["read"], &harness.temp_path("."), None);
     assert!(!without.tools().iter().any(|tool| tool.name() == "debug"));
     let default = ToolRegistry::new(
-        &pi::xdev::default_enabled_tools(),
+        &ra::xdev::default_enabled_tools(),
         &harness.temp_path("."),
         None,
     );
@@ -346,7 +347,7 @@ fn debugpy_full_debug_round_trip() {
     if !debugpy_available() {
         assert!(
             !lldb_required(),
-            "PI_DEBUG_REQUIRE_LLDB is set but debugpy is missing; refusing to skip the proof"
+            "RECUR_AGENT_DEBUG_REQUIRE_LLDB is set but debugpy is missing; refusing to skip the proof"
         );
         harness
             .log()

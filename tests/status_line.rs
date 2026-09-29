@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::status_line::{
+use ra::status_line::{
     PowerlineStatusLine, StatusContext, StatusLinePreset, compute_session_accent_hue,
 };
 
@@ -31,7 +31,7 @@ fn test_status_line_presets_rendering() {
         model: "claude-3-7-sonnet",
         thinking_level: Some("high"),
         mode: "agent",
-        cwd: "pi_agent_rust",
+        cwd: "recur_agent",
         git_branch: Some("main"),
         git_dirty: false,
         context_pct: 35,
@@ -64,7 +64,7 @@ fn test_responsive_priority_dropping() {
         model: "gpt-4o",
         thinking_level: None,
         mode: "plan",
-        cwd: "/Users/dev/projects/pi_agent_rust/src",
+        cwd: "/Users/dev/projects/recur_agent/src",
         git_branch: Some("feat/powerline"),
         git_dirty: true,
         context_pct: 75,

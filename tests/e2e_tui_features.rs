@@ -1,6 +1,6 @@
 //! E2E tests for TUI features: scoped-models, share command, pattern validation.
 //!
-//! These tests launch the `pi` binary in a tmux session, drive scripted
+//! These tests launch the `ra` binary in a tmux session, drive scripted
 //! interactions, capture pane output, and emit JSONL artifacts for CI diffing.
 //!
 //! Run:
@@ -77,7 +77,7 @@ struct TmuxE2eLock(std::fs::File);
 
 impl TmuxE2eLock {
     fn acquire() -> Self {
-        let path = std::env::temp_dir().join("pi_agent_rust.tmux-e2e-features.lock");
+        let path = std::env::temp_dir().join("recur_agent.tmux-e2e-features.lock");
         let file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -168,8 +168,8 @@ fn e2e_tui_share_creates_secret_gist_with_visibility_warning() {
     let gh_path = write_mock_gh_script(&mock_bin, gist_url);
 
     // Write project settings with gh_path pointing to our mock.
-    let pi_dir = session.harness.temp_path(".pi");
-    fs::create_dir_all(&pi_dir).expect("create .pi");
+    let pi_dir = session.harness.temp_path(".ra");
+    fs::create_dir_all(&pi_dir).expect("create .ra");
     let settings = json!({
         "ghPath": gh_path.display().to_string()
     });
@@ -179,16 +179,16 @@ fn e2e_tui_share_creates_secret_gist_with_visibility_warning() {
     )
     .expect("write settings.json");
 
-    // Override PI_CONFIG_PATH so the binary reads our settings.json
-    // (TuiSession defaults PI_CONFIG_PATH to env_root/config.toml).
+    // Override RECUR_AGENT_CONFIG_PATH so the binary reads our settings.json
+    // (TuiSession defaults RECUR_AGENT_CONFIG_PATH to env_root/config.toml).
     session.set_env(
-        "PI_CONFIG_PATH",
+        "RECUR_AGENT_CONFIG_PATH",
         &pi_dir.join("settings.json").display().to_string(),
     );
-    // `.pi/settings.json` inside the tmux working directory is a workspace
+    // `.ra/settings.json` inside the tmux working directory is a workspace
     // trust surface; without the automation override the classic TUI shows
     // the trust prompt instead of the welcome banner.
-    session.set_env("PI_WORKSPACE_TRUST", "trusted");
+    session.set_env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
 
     session.harness.section("launch");
     session.launch(&minimal_interactive_args());
@@ -292,8 +292,8 @@ fn e2e_tui_share_rejects_public_argument_without_invoking_gh() {
     let gist_url = "https://gist.github.com/testuser/e2e_public_456";
     let gh_path = write_mock_gh_script(&mock_bin, gist_url);
 
-    let pi_dir = session.harness.temp_path(".pi");
-    fs::create_dir_all(&pi_dir).expect("create .pi");
+    let pi_dir = session.harness.temp_path(".ra");
+    fs::create_dir_all(&pi_dir).expect("create .ra");
     let settings = json!({
         "ghPath": gh_path.display().to_string()
     });
@@ -303,15 +303,15 @@ fn e2e_tui_share_rejects_public_argument_without_invoking_gh() {
     )
     .expect("write settings.json");
 
-    // Override PI_CONFIG_PATH so the binary reads our settings.json.
+    // Override RECUR_AGENT_CONFIG_PATH so the binary reads our settings.json.
     session.set_env(
-        "PI_CONFIG_PATH",
+        "RECUR_AGENT_CONFIG_PATH",
         &pi_dir.join("settings.json").display().to_string(),
     );
-    // `.pi/settings.json` inside the tmux working directory is a workspace
+    // `.ra/settings.json` inside the tmux working directory is a workspace
     // trust surface; without the automation override the classic TUI shows
     // the trust prompt instead of the welcome banner.
-    session.set_env("PI_WORKSPACE_TRUST", "trusted");
+    session.set_env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
 
     session.harness.section("launch");
     session.launch(&minimal_interactive_args());
@@ -360,8 +360,8 @@ fn e2e_tui_share_missing_gh_shows_install_instructions() {
     log_test_event(test_name, "test_start", &json!({}));
 
     // Point gh_path to a non-existent binary.
-    let pi_dir = session.harness.temp_path(".pi");
-    fs::create_dir_all(&pi_dir).expect("create .pi");
+    let pi_dir = session.harness.temp_path(".ra");
+    fs::create_dir_all(&pi_dir).expect("create .ra");
     let settings = json!({
         "ghPath": session.harness.temp_path("nonexistent_gh").display().to_string()
     });
@@ -371,15 +371,15 @@ fn e2e_tui_share_missing_gh_shows_install_instructions() {
     )
     .expect("write settings.json");
 
-    // Override PI_CONFIG_PATH so the binary reads our settings.json.
+    // Override RECUR_AGENT_CONFIG_PATH so the binary reads our settings.json.
     session.set_env(
-        "PI_CONFIG_PATH",
+        "RECUR_AGENT_CONFIG_PATH",
         &pi_dir.join("settings.json").display().to_string(),
     );
-    // `.pi/settings.json` inside the tmux working directory is a workspace
+    // `.ra/settings.json` inside the tmux working directory is a workspace
     // trust surface; without the automation override the classic TUI shows
     // the trust prompt instead of the welcome banner.
-    session.set_env("PI_WORKSPACE_TRUST", "trusted");
+    session.set_env("RECUR_AGENT_WORKSPACE_TRUST", "trusted");
 
     session.harness.section("launch");
     session.launch(&minimal_interactive_args());

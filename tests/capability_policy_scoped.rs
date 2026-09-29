@@ -14,14 +14,14 @@
 use std::future::Future;
 
 use asupersync::runtime::RuntimeBuilder;
-use pi::config::{Config, ExtensionPolicyConfig};
-use pi::connectors::http::HttpConnector;
-use pi::extensions::{
+use ra::config::{Config, ExtensionPolicyConfig};
+use ra::connectors::http::HttpConnector;
+use ra::extensions::{
     Capability, ExtensionManager, ExtensionOverride, ExtensionPolicy, ExtensionPolicyMode,
     HostCallContext, HostCallErrorCode, HostCallPayload, PolicyDecision, PolicyProfile,
     dispatch_host_call_shared, required_capability_for_host_call,
 };
-use pi::tools::ToolRegistry;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use tempfile::tempdir;
 
@@ -550,7 +550,7 @@ mod permission_management {
     use super::*;
 
     // Note: ExtensionManager::new() loads persisted permissions from
-    // ~/.pi/agent/permissions.json. Tests must not assume a clean state.
+    // ~/.ra/agent/permissions.json. Tests must not assume a clean state.
 
     #[test]
     fn reset_all_then_list_is_empty() {

@@ -34,15 +34,15 @@ mod common;
 use async_trait::async_trait;
 use common::{TestHarness, run_async};
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::error::{Error, Result};
-use pi::model::{
+use ra::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::error::{Error, Result};
+use ra::model::{
     AssistantMessage, ContentBlock, Message, StopReason, StreamEvent, TextContent, ToolCall, Usage,
 };
-use pi::provider::{Context, Provider, StreamOptions};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::provider::{Context, Provider, StreamOptions};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::path::Path;
 use std::pin::Pin;

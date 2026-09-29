@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::markdown_rich::{
+use ra::markdown_rich::{
     HighlightLanguage, format_osc8_link, latex_to_unicode, render_hex_swatches,
     render_mermaid_diagram,
 };

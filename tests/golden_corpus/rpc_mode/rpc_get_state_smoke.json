@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "rpc_mode_get_state_smoke",
   "surface": "rpc_mode",
   "description": "RPC mode smoke: get_state command returns successful response envelope",

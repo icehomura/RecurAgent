@@ -1,10 +1,10 @@
 {
-  "schema": "pi.swarm.budget_lease_simulator_fixtures.v1",
+  "schema": "ra.swarm.budget_lease_simulator_fixtures.v1",
   "scenarios": [
     {
       "id": "fair_allocation",
       "input": {
-        "schema": "pi.swarm.budget_lease_request.v1",
+        "schema": "ra.swarm.budget_lease_request.v1",
         "generated_at": "2026-05-16T00:00:00+00:00",
         "lease_ttl_seconds": 1800,
         "budgets": {
@@ -118,7 +118,7 @@
     {
       "id": "over_commit_rejection",
       "input": {
-        "schema": "pi.swarm.budget_lease_request.v1",
+        "schema": "ra.swarm.budget_lease_request.v1",
         "generated_at": "2026-05-16T00:00:00+00:00",
         "budgets": {
           "tool_invocations": 10
@@ -162,7 +162,7 @@
     {
       "id": "stale_lease_expiry",
       "input": {
-        "schema": "pi.swarm.budget_lease_request.v1",
+        "schema": "ra.swarm.budget_lease_request.v1",
         "generated_at": "2026-05-16T00:00:00+00:00",
         "budgets": {
           "rch_slots": 2
@@ -206,7 +206,7 @@
     {
       "id": "mixed_priority_agents",
       "input": {
-        "schema": "pi.swarm.budget_lease_request.v1",
+        "schema": "ra.swarm.budget_lease_request.v1",
         "generated_at": "2026-05-16T00:00:00+00:00",
         "budgets": {
           "provider_tokens": 100
@@ -256,7 +256,7 @@
     {
       "id": "rch_saturation",
       "input": {
-        "schema": "pi.swarm.budget_lease_request.v1",
+        "schema": "ra.swarm.budget_lease_request.v1",
         "generated_at": "2026-05-16T00:00:00+00:00",
         "budgets": {
           "rch_slots": 4
@@ -299,7 +299,7 @@
     {
       "id": "provider_budget_exhaustion",
       "input": {
-        "schema": "pi.swarm.budget_lease_request.v1",
+        "schema": "ra.swarm.budget_lease_request.v1",
         "generated_at": "2026-05-16T00:00:00+00:00",
         "budgets": {
           "provider_spend_microusd": 0

@@ -4,12 +4,12 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::hostcall_egraph::{
+use ra::hostcall_egraph::{
     HostcallEGraphEngine, RULE_DROP_ROUNDTRIP_CONVERT, RULE_FUSE_MARSHAL_VALIDATE,
     RULE_FUSE_TYPED_PIPELINE, SaturationLimits, SaturationOutcome, canonical_plan,
     typed_plan_with_roundtrip,
 };
-use pi::hostcall_rewrite::HostcallRewritePlanKind;
+use ra::hostcall_rewrite::HostcallRewritePlanKind;
 
 fn finish_case(harness: &TestHarness, case: &str) {
     harness

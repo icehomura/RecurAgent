@@ -1,4 +1,4 @@
-use pi::validation_broker::{
+use ra::validation_broker::{
     ValidationSlotArtifact, ValidationSlotLease, ValidationSlotRequest, ValidationSlotStore,
 };
 use serde_json::Value;
@@ -13,17 +13,17 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const SWARM_TEMP_DIR_SCHEMA: &str = "pi.doctor.swarm_temp_dir.v1";
-const SWARM_RESOURCE_PREFLIGHT_SCHEMA: &str = "pi.doctor.swarm_resource_preflight.v1";
-const SWARM_LANE_PLACEMENT_SCHEMA: &str = "pi.doctor.swarm_lane_placement.v1";
+const SWARM_TEMP_DIR_SCHEMA: &str = "ra.doctor.swarm_temp_dir.v1";
+const SWARM_RESOURCE_PREFLIGHT_SCHEMA: &str = "ra.doctor.swarm_resource_preflight.v1";
+const SWARM_LANE_PLACEMENT_SCHEMA: &str = "ra.doctor.swarm_lane_placement.v1";
 // Read only by the Unix-gated degraded-mailbox case, which chmods a mailbox
 // directory to provoke the finding.
 #[cfg(unix)]
-const SWARM_MAIL_DEGRADED_SCHEMA: &str = "pi.doctor.agent_mail_degraded_mode.v1";
-const SWARM_CONTEXT_INTELLIGENCE_SCHEMA: &str = "pi.doctor.context_intelligence_posture.v1";
-const SWARM_VALIDATION_BROKER_SCHEMA: &str = "pi.doctor.validation_broker_posture.v1";
-const SWARM_INCIDENT_DIAGNOSTICS_SCHEMA: &str = "pi.doctor.swarm_incident_diagnostics.v1";
-const SWARM_TEMP_EXPECTED_ROOT: &str = "/data/tmp/pi_agent_rust_cargo";
+const SWARM_MAIL_DEGRADED_SCHEMA: &str = "ra.doctor.agent_mail_degraded_mode.v1";
+const SWARM_CONTEXT_INTELLIGENCE_SCHEMA: &str = "ra.doctor.context_intelligence_posture.v1";
+const SWARM_VALIDATION_BROKER_SCHEMA: &str = "ra.doctor.validation_broker_posture.v1";
+const SWARM_INCIDENT_DIAGNOSTICS_SCHEMA: &str = "ra.doctor.swarm_incident_diagnostics.v1";
+const SWARM_TEMP_EXPECTED_ROOT: &str = "/data/tmp/recur_agent_cargo";
 const SWARM_TEMP_WARN_AVAILABLE_KB: u64 = 10 * 1024 * 1024;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -89,7 +89,7 @@ fn field_u64(value: &Value, key: &str) -> TestResult<u64> {
 
 fn run_doctor_json(env_overrides: &[(&str, Option<&str>)]) -> TestResult<Value> {
     let cwd = create_swarm_temp_test_dir(Path::new("/tmp"), "cwd")?;
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pi")); // ubs:ignore false positive: Cargo provides the compiled test binary path.
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ra")); // ubs:ignore false positive: Cargo provides the compiled test binary path.
     command
         .args(["doctor", "--only", "swarm", "--format", "json"])
         .current_dir(cwd)
@@ -99,8 +99,8 @@ fn run_doctor_json(env_overrides: &[(&str, Option<&str>)]) -> TestResult<Value> 
         .env_remove("GROQ_API_KEY")
         .env_remove("KIMI_API_KEY")
         .env_remove("AZURE_OPENAI_API_KEY")
-        .env_remove("PI_VALIDATION_BROKER_STORE")
-        .env_remove("PI_DOCTOR_LOGICAL_CPU_CORES")
+        .env_remove("RECUR_AGENT_VALIDATION_BROKER_STORE")
+        .env_remove("RECUR_AGENT_DOCTOR_LOGICAL_CPU_CORES")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -135,7 +135,7 @@ fn run_doctor_json(env_overrides: &[(&str, Option<&str>)]) -> TestResult<Value> 
 
 fn run_doctor_text(env_overrides: &[(&str, Option<&str>)]) -> TestResult<String> {
     let cwd = create_swarm_temp_test_dir(Path::new("/tmp"), "text-cwd")?;
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pi")); // ubs:ignore false positive: Cargo provides the compiled test binary path.
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ra")); // ubs:ignore false positive: Cargo provides the compiled test binary path.
     command
         .args(["doctor", "--only", "swarm", "--format", "text"])
         .current_dir(cwd)
@@ -145,8 +145,8 @@ fn run_doctor_text(env_overrides: &[(&str, Option<&str>)]) -> TestResult<String>
         .env_remove("GROQ_API_KEY")
         .env_remove("KIMI_API_KEY")
         .env_remove("AZURE_OPENAI_API_KEY")
-        .env_remove("PI_VALIDATION_BROKER_STORE")
-        .env_remove("PI_DOCTOR_LOGICAL_CPU_CORES")
+        .env_remove("RECUR_AGENT_VALIDATION_BROKER_STORE")
+        .env_remove("RECUR_AGENT_DOCTOR_LOGICAL_CPU_CORES")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -309,11 +309,11 @@ fn validation_broker_request(slot_id: &str) -> ValidationSlotRequest {
     let mut environment = BTreeMap::new();
     environment.insert(
         "CARGO_TARGET_DIR".to_string(),
-        "/data/tmp/pi_agent_rust_cargo/codex/target".to_string(),
+        "/data/tmp/recur_agent_cargo/codex/target".to_string(),
     );
     environment.insert(
         "TMPDIR".to_string(),
-        "/data/tmp/pi_agent_rust_cargo/codex/tmp".to_string(),
+        "/data/tmp/recur_agent_cargo/codex/tmp".to_string(),
     );
 
     ValidationSlotRequest {
@@ -329,11 +329,11 @@ fn validation_broker_request(slot_id: &str) -> ValidationSlotRequest {
             "--all-targets".to_string(),
         ],
         command_class: "cargo_check".to_string(),
-        cwd: "/data/projects/pi_agent_rust".to_string(),
+        cwd: "/data/projects/recur_agent".to_string(),
         git_head: "cf653c29b5836afabf979bb44325d4712de7088d".to_string(),
         feature_flags: vec!["default".to_string()],
-        target_dir: "/data/tmp/pi_agent_rust_cargo/codex/target".to_string(),
-        tmpdir: "/data/tmp/pi_agent_rust_cargo/codex/tmp".to_string(),
+        target_dir: "/data/tmp/recur_agent_cargo/codex/target".to_string(),
+        tmpdir: "/data/tmp/recur_agent_cargo/codex/tmp".to_string(),
         runner: "rch_required".to_string(),
         rust_toolchain: Some("nightly".to_string()),
         rch_job_id: Some("rch-job-doctor".to_string()),
@@ -617,7 +617,10 @@ fn doctor_swarm_validation_broker_json_reports_missing_configured_store() -> Tes
     let report = run_doctor_json(&[
         ("CARGO_TARGET_DIR", None),
         ("TMPDIR", None),
-        ("PI_VALIDATION_BROKER_STORE", Some(missing_store.as_str())),
+        (
+            "RECUR_AGENT_VALIDATION_BROKER_STORE",
+            Some(missing_store.as_str()),
+        ),
     ])?;
     let finding = finding_by_schema(&report, SWARM_VALIDATION_BROKER_SCHEMA)?;
     require_eq(field_str(finding, "severity")?, "warn", "severity")?;
@@ -665,7 +668,10 @@ fn doctor_swarm_validation_broker_json_reports_stale_slot_posture() -> TestResul
     let report = run_doctor_json(&[
         ("CARGO_TARGET_DIR", None),
         ("TMPDIR", None),
-        ("PI_VALIDATION_BROKER_STORE", Some(store_path.as_str())),
+        (
+            "RECUR_AGENT_VALIDATION_BROKER_STORE",
+            Some(store_path.as_str()),
+        ),
     ])?;
     let finding = finding_by_schema(&report, SWARM_VALIDATION_BROKER_SCHEMA)?;
     require_eq(field_str(finding, "severity")?, "warn", "severity")?;
@@ -972,6 +978,10 @@ fn doctor_swarm_temp_dir_json_freezes_root_posture() -> TestResult {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // 106 lines: the fixture setup (22)
+// interleaves with the assertions, so extracting either half would need a
+// ten-field struct and would split the scenario away from what it checks.
+// The codebase already carries ~300 of these allows for linear tests.
 fn doctor_swarm_resource_preflight_json_reports_constrained_profile() -> TestResult {
     let root = create_swarm_temp_test_dir(Path::new("/tmp"), "constrained-resource-fixture")?;
     let (target_dir, target_exists) = create_expected_root_test_dir("constrained-target")?;
@@ -999,13 +1009,19 @@ fn doctor_swarm_resource_preflight_json_reports_constrained_profile() -> TestRes
     let report = run_doctor_json(&[
         ("CARGO_TARGET_DIR", Some(target_dir.as_str())),
         ("TMPDIR", Some(tmp_dir.as_str())),
-        ("PI_DOCTOR_CGROUP_CPU_MAX_PATH", Some(cpu_max.as_str())),
-        ("PI_DOCTOR_CPUSET_CPUS_PATH", Some(cpuset.as_str())),
-        ("PI_DOCTOR_NUMA_ONLINE_PATH", Some(numa.as_str())),
-        ("PI_DOCTOR_CGROUP_MEMORY_MAX_PATH", Some(memory.as_str())),
-        ("PI_DOCTOR_MEMINFO_PATH", Some(meminfo.as_str())),
-        ("PI_DOCTOR_LOGICAL_CPU_CORES", Some("4")),
-        ("PI_DOCTOR_LOCAL_BUILD_PROCESS_COUNT", Some("0")),
+        (
+            "RECUR_AGENT_DOCTOR_CGROUP_CPU_MAX_PATH",
+            Some(cpu_max.as_str()),
+        ),
+        ("RECUR_AGENT_DOCTOR_CPUSET_CPUS_PATH", Some(cpuset.as_str())),
+        ("RECUR_AGENT_DOCTOR_NUMA_ONLINE_PATH", Some(numa.as_str())),
+        (
+            "RECUR_AGENT_DOCTOR_CGROUP_MEMORY_MAX_PATH",
+            Some(memory.as_str()),
+        ),
+        ("RECUR_AGENT_DOCTOR_MEMINFO_PATH", Some(meminfo.as_str())),
+        ("RECUR_AGENT_DOCTOR_LOGICAL_CPU_CORES", Some("4")),
+        ("RECUR_AGENT_DOCTOR_LOCAL_BUILD_PROCESS_COUNT", Some("0")),
     ])?;
     let finding = finding_by_schema(&report, SWARM_RESOURCE_PREFLIGHT_SCHEMA)?;
     let data = field(finding, "data")?;
@@ -1103,13 +1119,19 @@ fn doctor_swarm_resource_preflight_json_reports_high_capacity_profile() -> TestR
     let report = run_doctor_json(&[
         ("CARGO_TARGET_DIR", Some(target_dir.as_str())),
         ("TMPDIR", Some(tmp_dir.as_str())),
-        ("PI_DOCTOR_CGROUP_CPU_MAX_PATH", Some(cpu_max.as_str())),
-        ("PI_DOCTOR_CPUSET_CPUS_PATH", Some(cpuset.as_str())),
-        ("PI_DOCTOR_NUMA_ONLINE_PATH", Some(numa.as_str())),
-        ("PI_DOCTOR_CGROUP_MEMORY_MAX_PATH", Some(memory.as_str())),
-        ("PI_DOCTOR_MEMINFO_PATH", Some(meminfo.as_str())),
-        ("PI_DOCTOR_LOGICAL_CPU_CORES", Some("64")),
-        ("PI_DOCTOR_LOCAL_BUILD_PROCESS_COUNT", Some("0")),
+        (
+            "RECUR_AGENT_DOCTOR_CGROUP_CPU_MAX_PATH",
+            Some(cpu_max.as_str()),
+        ),
+        ("RECUR_AGENT_DOCTOR_CPUSET_CPUS_PATH", Some(cpuset.as_str())),
+        ("RECUR_AGENT_DOCTOR_NUMA_ONLINE_PATH", Some(numa.as_str())),
+        (
+            "RECUR_AGENT_DOCTOR_CGROUP_MEMORY_MAX_PATH",
+            Some(memory.as_str()),
+        ),
+        ("RECUR_AGENT_DOCTOR_MEMINFO_PATH", Some(meminfo.as_str())),
+        ("RECUR_AGENT_DOCTOR_LOGICAL_CPU_CORES", Some("64")),
+        ("RECUR_AGENT_DOCTOR_LOCAL_BUILD_PROCESS_COUNT", Some("0")),
     ])?;
     let finding = finding_by_schema(&report, SWARM_RESOURCE_PREFLIGHT_SCHEMA)?;
     let data = field(finding, "data")?;
@@ -1185,12 +1207,24 @@ fn doctor_swarm_resource_preflight_json_reports_unknown_topology_lane_plan() -> 
     let report = run_doctor_json(&[
         ("CARGO_TARGET_DIR", Some(target_dir.as_str())),
         ("TMPDIR", Some(tmp_dir.as_str())),
-        ("PI_DOCTOR_CGROUP_CPU_MAX_PATH", Some(cpu_max.as_str())),
-        ("PI_DOCTOR_CPUSET_CPUS_PATH", Some(missing_cpuset.as_str())),
-        ("PI_DOCTOR_NUMA_ONLINE_PATH", Some(missing_numa.as_str())),
-        ("PI_DOCTOR_CGROUP_MEMORY_MAX_PATH", Some(memory.as_str())),
-        ("PI_DOCTOR_MEMINFO_PATH", Some(meminfo.as_str())),
-        ("PI_DOCTOR_LOCAL_BUILD_PROCESS_COUNT", Some("0")),
+        (
+            "RECUR_AGENT_DOCTOR_CGROUP_CPU_MAX_PATH",
+            Some(cpu_max.as_str()),
+        ),
+        (
+            "RECUR_AGENT_DOCTOR_CPUSET_CPUS_PATH",
+            Some(missing_cpuset.as_str()),
+        ),
+        (
+            "RECUR_AGENT_DOCTOR_NUMA_ONLINE_PATH",
+            Some(missing_numa.as_str()),
+        ),
+        (
+            "RECUR_AGENT_DOCTOR_CGROUP_MEMORY_MAX_PATH",
+            Some(memory.as_str()),
+        ),
+        ("RECUR_AGENT_DOCTOR_MEMINFO_PATH", Some(meminfo.as_str())),
+        ("RECUR_AGENT_DOCTOR_LOCAL_BUILD_PROCESS_COUNT", Some("0")),
     ])?;
     let finding = finding_by_schema(&report, SWARM_RESOURCE_PREFLIGHT_SCHEMA)?;
     let data = field(finding, "data")?;

@@ -6,12 +6,12 @@
 
 #![allow(clippy::similar_names)]
 
-use pi::compaction::CompactionRenderMode;
-use pi::compaction_snap::{
+use ra::compaction::CompactionRenderMode;
+use ra::compaction_snap::{
     COMPACTION_SUMMARY_PREFIX, COMPACTION_SUMMARY_SUFFIX, SnapFrame, SnapPayload, attach_frames,
     frames_from_details, png_encode, render_frames, strip_snapcompact_images,
 };
-use pi::model::{ContentBlock, ImageContent, Message, TextContent, UserContent, UserMessage};
+use ra::model::{ContentBlock, ImageContent, Message, TextContent, UserContent, UserMessage};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
@@ -157,7 +157,7 @@ fn details_round_trip_preserves_payload_and_other_keys() {
         "readFiles": ["src/auth.rs"],
         "modifiedFiles": [],
     });
-    let merged = pi::compaction_snap::payload_to_details(Some(existing), &payload);
+    let merged = ra::compaction_snap::payload_to_details(Some(existing), &payload);
 
     // Unrelated detail keys survive the merge alongside the snapcompact key.
     let files = merged
@@ -169,7 +169,7 @@ fn details_round_trip_preserves_payload_and_other_keys() {
     let extracted = frames_from_details(Some(&merged)).expect("schema-valid payload extracts");
     assert_eq!(
         extracted.schema,
-        pi::compaction_snap::SNAPCOMPACT_DETAILS_SCHEMA
+        ra::compaction_snap::SNAPCOMPACT_DETAILS_SCHEMA
     );
     assert_eq!(extracted.frames.len(), payload.frames.len());
 
@@ -269,7 +269,7 @@ fn strip_removes_only_compaction_summary_images() {
 
     assert_eq!(
         strip_snapcompact_images(&mut msgs, true),
-        pi::compaction_snap::StripStats::default()
+        ra::compaction_snap::StripStats::default()
     );
 }
 
@@ -282,8 +282,8 @@ fn user_blocks(m: &Message) -> &UserContent {
 
 #[test]
 fn budget_accounting_counts_attached_frame_tokens() {
-    use pi::compaction::estimate_entries_context_tokens;
-    use pi::session::{EntryBase, MessageEntry, SessionEntry, SessionMessage};
+    use ra::compaction::estimate_entries_context_tokens;
+    use ra::session::{EntryBase, MessageEntry, SessionEntry, SessionMessage};
 
     fn base(id: &str) -> EntryBase {
         EntryBase {

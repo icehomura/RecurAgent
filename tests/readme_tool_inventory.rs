@@ -213,7 +213,7 @@ fn readme_essential_bullet_matches_default_tiers() {
     listed.extend(memory_bank_names(&section));
     let essential_by_code: BTreeSet<String> = listed
         .iter()
-        .filter(|name| pi::xdev::default_tier(name) == pi::xdev::LoadMode::Essential)
+        .filter(|name| ra::xdev::default_tier(name) == ra::xdev::LoadMode::Essential)
         .cloned()
         .collect();
     assert_eq!(
@@ -238,7 +238,7 @@ fn readme_default_list_count_matches_code() {
         .expect("default-list count parses"); // ubs:ignore test assertion
     assert_eq!(
         stated,
-        pi::xdev::default_enabled_tools().len(),
+        ra::xdev::default_enabled_tools().len(),
         "README default `--tools` count must match xdev::default_enabled_tools()"
     );
 }

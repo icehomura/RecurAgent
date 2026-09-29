@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_simple_event_stream",
   "surface": "json_mode",
   "description": "JSON mode: verifies session header and complete event lifecycle",

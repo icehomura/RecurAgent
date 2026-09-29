@@ -12,7 +12,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-pub const RELEASE_EVIDENCE_LEDGER_SCHEMA: &str = "pi.release_evidence.ledger.v1";
+pub const RELEASE_EVIDENCE_LEDGER_SCHEMA: &str = "ra.release_evidence.ledger.v1";
 pub const GENESIS_PREV_HASH: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -231,7 +231,7 @@ pub fn verify_ledger(
     };
 
     VerificationReport {
-        schema: "pi.release_evidence.verification_report.v1".to_string(),
+        schema: "ra.release_evidence.verification_report.v1".to_string(),
         status,
         entry_count: ledger.entries.len(),
         head_hash: ledger.head_hash.clone(),
@@ -252,8 +252,8 @@ fn contract_file_matches_schema_and_policy() -> Result<(), Box<dyn Error>> {
 
     assert_eq!(
         contract.get("schema").and_then(Value::as_str),
-        Some("pi.release_evidence.ledger.contract.v1"),
-        "contract schema must be pi.release_evidence.ledger.contract.v1"
+        Some("ra.release_evidence.ledger.contract.v1"),
+        "contract schema must be ra.release_evidence.ledger.contract.v1"
     );
     assert_eq!(
         contract.get("bead_id").and_then(Value::as_str),

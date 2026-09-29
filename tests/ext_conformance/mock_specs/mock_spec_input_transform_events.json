@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.mock_spec.v1",
+  "schema": "ra.ext.mock_spec.v1",
   "extension_id": "input-transform",
   "description": "Fires the input-transform input event through the TS mock-spec harness.",
   "ui": {

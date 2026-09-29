@@ -19,8 +19,8 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::model::ContentBlock;
-use pi::tools::{ToolOutput, ToolRegistry};
+use ra::model::ContentBlock;
+use ra::tools::{ToolOutput, ToolRegistry};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
@@ -52,11 +52,11 @@ fn probe_rust_analyzer(command: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-/// Discover a working rust-analyzer command. Order: `PI_LSP_RUST_ANALYZER`
+/// Discover a working rust-analyzer command. Order: `RECUR_AGENT_LSP_RUST_ANALYZER`
 /// override, `rust-analyzer` on PATH, `$HOME/.cargo/bin/rust-analyzer` (the
 /// rustup default — job environments with a minimal PATH still find it).
 fn rust_analyzer_command() -> Option<String> {
-    if let Ok(override_cmd) = std::env::var("PI_LSP_RUST_ANALYZER") {
+    if let Ok(override_cmd) = std::env::var("RECUR_AGENT_LSP_RUST_ANALYZER") {
         return probe_rust_analyzer(&override_cmd).then_some(override_cmd);
     }
     if probe_rust_analyzer("rust-analyzer") {
@@ -77,25 +77,25 @@ fn rust_analyzer_available() -> bool {
 }
 
 /// Whether the live lane must run (skip becomes a loud failure). Set
-/// `PI_LSP_TEST_REQUIRE_RA=1` in environments that guarantee the binary.
+/// `RECUR_AGENT_LSP_TEST_REQUIRE_RA=1` in environments that guarantee the binary.
 fn rust_analyzer_required() -> bool {
-    std::env::var("PI_LSP_TEST_REQUIRE_RA")
+    std::env::var("RECUR_AGENT_LSP_TEST_REQUIRE_RA")
         .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
 }
 
 /// Config with the discovered rust-analyzer command injected (spawn must
 /// use the same binary the probe found, even on minimal-PATH job runners).
-fn ra_config(command: &str) -> pi::config::Config {
+fn ra_config(command: &str) -> ra::config::Config {
     let mut servers = std::collections::HashMap::new();
     servers.insert(
         "rust-analyzer".to_string(),
-        pi::config::LspServerSettings {
+        ra::config::LspServerSettings {
             command: Some(command.to_string()),
             ..Default::default()
         },
     );
-    pi::config::Config {
-        lsp: Some(pi::config::LspSettings {
+    ra::config::Config {
+        lsp: Some(ra::config::LspSettings {
             servers: Some(servers),
             ..Default::default()
         }),
@@ -117,7 +117,7 @@ fn block_on_local<Fut: Future>(future: Fut) -> Fut::Output {
     runtime.block_on(future)
 }
 
-fn execute_lsp(registry: &ToolRegistry, input: Value) -> Result<ToolOutput, pi::error::Error> {
+fn execute_lsp(registry: &ToolRegistry, input: Value) -> Result<ToolOutput, ra::error::Error> {
     let tool = registry
         .tools()
         .iter()
@@ -158,7 +158,7 @@ fn skip_without_rust_analyzer(harness: &TestHarness) -> bool {
     let home = std::env::var("HOME").unwrap_or_else(|_| "<unset>".to_string());
     assert!(
         !rust_analyzer_required(),
-        "PI_LSP_TEST_REQUIRE_RA is set but rust-analyzer is not installed; \
+        "RECUR_AGENT_LSP_TEST_REQUIRE_RA is set but rust-analyzer is not installed; \
          refusing to let the e2e lane skip its proof. \
          Diagnostics: PATH={path_env} HOME={home}"
     );
@@ -285,7 +285,7 @@ fn e2e_lsp_rename_compile_proof() {
 /// Phase 4: surface-agnostic parity. Interactive, print, RPC, and ACP hosts
 /// all construct their tool registries through `ToolRegistry::new`; two
 /// independent registries must execute the same call identically.
-fn prove_surface_parity(root: &Path, config: &pi::config::Config, registry: &ToolRegistry) {
+fn prove_surface_parity(root: &Path, config: &ra::config::Config, registry: &ToolRegistry) {
     let second = ToolRegistry::new(&["lsp"], root, Some(config));
     let input = json!({
         "action": "definition",

@@ -44,7 +44,7 @@ fn conformance_harness_contract_has_expected_schema_version_and_bead_linkage() {
 
     assert_eq!(
         contract["schema"],
-        Value::String("pi.frankennode.executable_conformance_harness_contract.v1".to_string()),
+        Value::String("ra.frankennode.executable_conformance_harness_contract.v1".to_string()),
         "schema mismatch for executable conformance-harness contract"
     );
 

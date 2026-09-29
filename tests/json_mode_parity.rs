@@ -12,13 +12,13 @@
 mod common;
 
 use common::TestHarness;
-use pi::agent::{AgentEvent, TURN_LATENCY_BREAKDOWN_SCHEMA_V1, TurnLatencyBreakdown};
-use pi::extensions::{ExtensionEventName, ExtensionUiRequest, extension_event_from_agent};
-use pi::model::{
+use ra::agent::{AgentEvent, TURN_LATENCY_BREAKDOWN_SCHEMA_V1, TurnLatencyBreakdown};
+use ra::extensions::{ExtensionEventName, ExtensionUiRequest, extension_event_from_agent};
+use ra::model::{
     AssistantMessage, AssistantMessageEvent, ContentBlock, ImageContent, Message, StopReason,
     TextContent, ThinkingContent, ToolCall, Usage,
 };
-use pi::tools::ToolOutput;
+use ra::tools::ToolOutput;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -84,8 +84,8 @@ fn test_assistant_message() -> AssistantMessage {
 }
 
 fn test_user_message() -> Message {
-    Message::User(pi::model::UserMessage {
-        content: pi::model::UserContent::Text("test prompt".to_string()),
+    Message::User(ra::model::UserMessage {
+        content: ra::model::UserContent::Text("test prompt".to_string()),
         timestamp: 1_700_000_000,
     })
 }
@@ -1050,7 +1050,7 @@ fn json_parity_no_snake_case_leak() {
 fn json_parity_session_header_schema() {
     let harness = TestHarness::new("json_parity_session_header_schema");
 
-    let header = pi::session::SessionHeader::new();
+    let header = ra::session::SessionHeader::new();
     let json = serde_json::to_value(&header).expect("serialize header");
 
     assert_eq!(json["type"], "session");
@@ -1094,10 +1094,10 @@ fn json_parity_startup_error_record_schema() {
     let harness = TestHarness::new("json_parity_startup_error_record_schema");
 
     let error =
-        pi::error::Error::auth("No API key found for provider anthropic (set ANTHROPIC_API_KEY)");
-    let record = pi::error_hints::fatal_error_record(
-        pi::error_hints::error_code(&error),
-        pi::error_hints::FATAL_ERROR_PHASE_STARTUP,
+        ra::error::Error::auth("No API key found for provider anthropic (set ANTHROPIC_API_KEY)");
+    let record = ra::error_hints::fatal_error_record(
+        ra::error_hints::error_code(&error),
+        ra::error_hints::FATAL_ERROR_PHASE_STARTUP,
         &error.to_string(),
         1,
     );
@@ -1120,11 +1120,11 @@ fn json_parity_startup_error_record_schema() {
         "the record's field set is the contract"
     );
     assert_eq!(
-        pi::error_hints::FATAL_ERROR_RECORD_TYPE,
+        ra::error_hints::FATAL_ERROR_RECORD_TYPE,
         "error",
         "hosts key on the literal type string"
     );
-    assert_eq!(pi::error_hints::FATAL_ERROR_PHASE_RUN, "run");
+    assert_eq!(ra::error_hints::FATAL_ERROR_PHASE_RUN, "run");
 
     // The record's type string is reserved: no AgentEvent serializes as it.
     for event in [
@@ -2324,7 +2324,7 @@ fn json_parity_extension_event_round_trip() {
 #[test]
 fn json_parity_ui_response_value_variant() {
     let harness = TestHarness::new("json_parity_ui_response_value_variant");
-    let resp = pi::extensions::ExtensionUiResponse {
+    let resp = ra::extensions::ExtensionUiResponse {
         id: "sel-1".to_string(),
         value: Some(json!("option_b")),
         cancelled: false,
@@ -2346,7 +2346,7 @@ fn json_parity_ui_response_value_variant() {
 fn json_parity_ui_response_confirmed_variant() {
     let harness = TestHarness::new("json_parity_ui_response_confirmed_variant");
 
-    let confirmed = pi::extensions::ExtensionUiResponse {
+    let confirmed = ra::extensions::ExtensionUiResponse {
         id: "cfm-1".to_string(),
         value: Some(json!(true)),
         cancelled: false,
@@ -2354,7 +2354,7 @@ fn json_parity_ui_response_confirmed_variant() {
     assert_eq!(confirmed.value, Some(json!(true)));
     assert!(!confirmed.cancelled);
 
-    let denied = pi::extensions::ExtensionUiResponse {
+    let denied = ra::extensions::ExtensionUiResponse {
         id: "cfm-2".to_string(),
         value: Some(json!(false)),
         cancelled: false,
@@ -2373,7 +2373,7 @@ fn json_parity_ui_response_confirmed_variant() {
 #[test]
 fn json_parity_ui_response_cancelled_variant() {
     let harness = TestHarness::new("json_parity_ui_response_cancelled_variant");
-    let resp = pi::extensions::ExtensionUiResponse {
+    let resp = ra::extensions::ExtensionUiResponse {
         id: "inp-1".to_string(),
         value: None,
         cancelled: true,
@@ -2393,14 +2393,14 @@ fn json_parity_ui_response_cancelled_variant() {
 #[test]
 fn json_parity_ui_response_text_value() {
     let harness = TestHarness::new("json_parity_ui_response_text_value");
-    let input_resp = pi::extensions::ExtensionUiResponse {
+    let input_resp = ra::extensions::ExtensionUiResponse {
         id: "inp-1".to_string(),
         value: Some(json!("user-typed-text")),
         cancelled: false,
     };
     assert_eq!(input_resp.value, Some(json!("user-typed-text")));
 
-    let editor_resp = pi::extensions::ExtensionUiResponse {
+    let editor_resp = ra::extensions::ExtensionUiResponse {
         id: "edt-1".to_string(),
         value: Some(json!("edited prompt content")),
         cancelled: false,
@@ -3940,8 +3940,8 @@ fn json_parity_agent_end_message_ordering() {
 
     let msgs: Vec<Message> = (0..5)
         .map(|i| {
-            Message::User(pi::model::UserMessage {
-                content: pi::model::UserContent::Text(format!("message {i}")),
+            Message::User(ra::model::UserMessage {
+                content: ra::model::UserContent::Text(format!("message {i}")),
                 timestamp: 1_700_000_000 + i64::from(i),
             })
         })
@@ -4100,7 +4100,7 @@ fn json_parity_extension_event_payload_all_forwarded() {
 fn json_parity_session_header_defaults() {
     let harness = TestHarness::new("json_parity_session_header_defaults");
 
-    let header = pi::session::SessionHeader::new();
+    let header = ra::session::SessionHeader::new();
     let json = serde_json::to_value(&header).expect("serialize");
 
     // Required fields must be present.

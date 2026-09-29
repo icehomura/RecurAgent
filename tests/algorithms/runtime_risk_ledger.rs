@@ -1,4 +1,4 @@
-use pi::extensions::{
+use ra::extensions::{
     RUNTIME_RISK_CALIBRATION_SCHEMA_VERSION, RUNTIME_RISK_LEDGER_SCHEMA_VERSION,
     RUNTIME_RISK_REPLAY_SCHEMA_VERSION, RuntimeRiskActionValue, RuntimeRiskCalibrationObjective,
     RuntimeRiskCalibrationReport, RuntimeRiskExpectedLossEvidence,
@@ -233,7 +233,7 @@ fn ledger_entry(index: usize, case: &LedgerCase) -> RuntimeRiskLedgerArtifactEnt
         conformal_quantile: 0.95,
         drift_detected: false,
         outcome_error_code: case.outcome_error_code.map(ToString::to_string),
-        explanation_schema: "pi.ext.runtime_risk_explanation.v1".to_string(),
+        explanation_schema: "ra.ext.runtime_risk_explanation.v1".to_string(),
         explanation_level: RuntimeRiskExplanationLevelValue::Standard,
         explanation_summary: format!("synthetic explanation for {}", case.call_id),
         top_contributors: vec![RuntimeRiskExplanationContributor {

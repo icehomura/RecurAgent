@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-pub const VARIANCE_CONTRACT_SCHEMA: &str = "pi.perf.variance_gating.contract.v1";
-pub const VARIANCE_ARTIFACT_SCHEMA: &str = "pi.perf.variance_gate_report.v1";
-pub const HOST_TOPOLOGY_SCHEMA: &str = "pi.perf.host_topology_fingerprint.v1";
+pub const VARIANCE_CONTRACT_SCHEMA: &str = "ra.perf.variance_gating.contract.v1";
+pub const VARIANCE_ARTIFACT_SCHEMA: &str = "ra.perf.variance_gate_report.v1";
+pub const HOST_TOPOLOGY_SCHEMA: &str = "ra.perf.host_topology_fingerprint.v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HostTopologyFingerprint {
@@ -289,7 +289,7 @@ pub fn verify_variance_artifact(
     };
 
     VerificationReport {
-        schema: "pi.perf.variance_gate.verification_report.v1".to_string(),
+        schema: "ra.perf.variance_gate.verification_report.v1".to_string(),
         status,
         evaluated_budgets: artifact.results.len(),
         accepted_budgets: accepted,

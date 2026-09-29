@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_stdin_whitespace_header_only",
   "surface": "json_mode_stdin",
   "description": "JSON mode stdin edge case: whitespace-only stdin is trimmed away and emits only session header",

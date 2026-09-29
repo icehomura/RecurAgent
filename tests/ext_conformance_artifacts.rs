@@ -1,4 +1,4 @@
-use pi::extensions::CompatibilityScanner;
+use ra::extensions::CompatibilityScanner;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -380,13 +380,13 @@ fn test_ext_conformance_artifacts_match_manifest_checksums() {
 #[test]
 fn test_ext_conformance_artifact_provenance_matches_master_catalog_checksums() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let artifacts_root = std::env::var("PI_TEST_ARTIFACTS_ROOT").map_or_else(
+    let artifacts_root = std::env::var("RECUR_AGENT_TEST_ARTIFACTS_ROOT").map_or_else(
         |_| repo_root.join("tests/ext_conformance/artifacts"),
         PathBuf::from,
     );
 
     // Verify tree completeness first (bd-s7hzz)
-    pi::conformance::snapshot::verify_tree_completeness(
+    ra::conformance::snapshot::verify_tree_completeness(
         repo_root,
         "tests/ext_conformance/artifacts",
     )
@@ -944,7 +944,7 @@ fn test_ext_conformance_pinned_sample_compat_ledger_snapshot() {
         .collect::<Vec<_>>();
     ids.sort();
 
-    let mut ledgers: BTreeMap<String, pi::extensions::CompatLedger> = BTreeMap::new();
+    let mut ledgers: BTreeMap<String, ra::extensions::CompatLedger> = BTreeMap::new();
     for id in ids {
         let artifact_dir = repo_root.join("tests/ext_conformance/artifacts").join(&id);
         assert!(
@@ -1269,7 +1269,7 @@ fn test_scan_all_ts_entry_points() {
     let manifest_path = artifacts_dir.join("entry-point-scan.json");
     let json = serde_json::to_string_pretty(&results).expect("serialize scan results");
     let generate = matches!(
-        std::env::var("PI_GENERATE_EXT_ENTRY_SCAN").as_deref(),
+        std::env::var("RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN").as_deref(),
         Ok("1")
     );
     if generate {
@@ -1311,7 +1311,7 @@ fn test_scan_all_ts_entry_points() {
     if generate {
         eprintln!("Manifest:        {}", manifest_path.display());
     } else {
-        eprintln!("Manifest:        not written (set PI_GENERATE_EXT_ENTRY_SCAN=1)");
+        eprintln!("Manifest:        not written (set RECUR_AGENT_GENERATE_EXT_ENTRY_SCAN=1)");
     }
 
     // Sanity: we should have a reasonable number of entry points.
@@ -1869,7 +1869,7 @@ fn find_entry_point(ext_dir: &Path, artifacts_dir: &Path) -> Option<String> {
 #[test]
 fn test_generate_validated_manifest() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let artifacts_dir = std::env::var("PI_TEST_ARTIFACTS_ROOT").map_or_else(
+    let artifacts_dir = std::env::var("RECUR_AGENT_TEST_ARTIFACTS_ROOT").map_or_else(
         |_| repo_root.join("tests/ext_conformance/artifacts"),
         PathBuf::from,
     );
@@ -1954,18 +1954,18 @@ fn test_generate_validated_manifest() {
         extensions: entries,
     };
 
-    let manifest_path = std::env::var("PI_TEST_MANIFEST_PATH").map_or_else(
+    let manifest_path = std::env::var("RECUR_AGENT_TEST_MANIFEST_PATH").map_or_else(
         |_| repo_root.join("tests/ext_conformance/VALIDATED_MANIFEST.json"),
         PathBuf::from,
     );
     let json = serde_json::to_string_pretty(&manifest).expect("serialize manifest");
     let generate = matches!(
-        std::env::var("PI_GENERATE_VALIDATED_MANIFEST").as_deref(),
+        std::env::var("RECUR_AGENT_GENERATE_VALIDATED_MANIFEST").as_deref(),
         Ok("1")
     );
     if generate {
         // Enforce tree completeness before writing the manifest (bd-s7hzz)
-        pi::conformance::snapshot::verify_tree_completeness(
+        ra::conformance::snapshot::verify_tree_completeness(
             repo_root,
             "tests/ext_conformance/artifacts",
         )
@@ -1981,7 +1981,7 @@ fn test_generate_validated_manifest() {
         assert_eq!(
             committed, computed,
             "committed validated manifest is stale; regenerate explicitly with \
-             PI_GENERATE_VALIDATED_MANIFEST=1 cargo test \
+             RECUR_AGENT_GENERATE_VALIDATED_MANIFEST=1 cargo test \
              --test ext_conformance_artifacts test_generate_validated_manifest -- --exact"
         );
     }
@@ -2168,18 +2168,18 @@ fn test_tier_classification_logic() {
 /// - Checksums match actual artifacts on disk
 #[test]
 fn test_snapshot_protocol_provenance_entries_valid() {
-    use pi::conformance::snapshot::{
+    use ra::conformance::snapshot::{
         SourceTier, digest_artifact_dir as lib_digest, validate_directory, validate_id,
     };
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let artifacts_root = std::env::var("PI_TEST_ARTIFACTS_ROOT").map_or_else(
+    let artifacts_root = std::env::var("RECUR_AGENT_TEST_ARTIFACTS_ROOT").map_or_else(
         |_| repo_root.join("tests/ext_conformance/artifacts"),
         PathBuf::from,
     );
 
     // Verify tree completeness first (bd-s7hzz)
-    pi::conformance::snapshot::verify_tree_completeness(
+    ra::conformance::snapshot::verify_tree_completeness(
         repo_root,
         "tests/ext_conformance/artifacts",
     )
@@ -2239,7 +2239,7 @@ fn test_snapshot_protocol_provenance_entries_valid() {
 /// to the test-local implementation, ensuring protocol consistency.
 #[test]
 fn test_snapshot_protocol_digest_matches_local_implementation() {
-    use pi::conformance::snapshot::digest_artifact_dir as lib_digest;
+    use ra::conformance::snapshot::digest_artifact_dir as lib_digest;
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let artifacts_root = repo_root.join("tests/ext_conformance/artifacts");

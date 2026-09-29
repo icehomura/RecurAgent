@@ -1,5 +1,5 @@
 {
-  "action_plan_schema": "pi.swarm.action_plan.v1",
+  "action_plan_schema": "ra.swarm.action_plan.v1",
   "decision": {
     "admit_coordination_work": false,
     "admit_new_implementation": false,
@@ -205,7 +205,7 @@
         "title": "Reopen only after confirmation"
       }
     ],
-    "schema": "pi.swarm.work_admission_dry_run_executor.v1",
+    "schema": "ra.swarm.work_admission_dry_run_executor.v1",
     "source_action_plan_decision": "wait_for_pressure",
     "status": "wait",
     "summary": {
@@ -237,7 +237,7 @@
       },
       {
         "classification": "would_execute",
-        "command": "pi doctor --only swarm --format json",
+        "command": "ra doctor --only swarm --format json",
         "command_purpose": "Refresh swarm resource preflight",
         "dry_run_only": true,
         "evidence_paths": [
@@ -299,7 +299,7 @@
   },
   "failure_actions": [
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "agent_mail",
       "escalation": "Run repair only after the dry-run output is understood; continue with Beads assignment as the temporary coordination lock.",
       "evidence_paths": [
@@ -331,7 +331,7 @@
       "title": "Agent Mail database schema is missing required tables"
     },
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "rch",
       "escalation": "If saturation persists, split validation by surface or pause heavy cargo work instead of allowing local fallback.",
       "evidence_paths": [
@@ -363,7 +363,7 @@
       "title": "RCH queue is saturated; do not start broad cargo validation"
     },
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "agent_mail",
       "escalation": "Do not assume reservation writes landed while Mail is degraded; use Beads status and narrow file surfaces until Mail is healthy.",
       "evidence_paths": [
@@ -395,7 +395,7 @@
       "title": "Agent Mail is degraded or read-only"
     },
     {
-      "catalog_schema": "pi.swarm.failure_action_catalog.v1",
+      "catalog_schema": "ra.swarm.failure_action_catalog.v1",
       "category": "beads",
       "escalation": "Do not force-release reservations or alter another agent's files unless Mail or recent commits confirm the claim is abandoned.",
       "evidence_paths": [
@@ -443,7 +443,7 @@
     "no_source_mutation": true
   },
   "generated_at": "[TIMESTAMP]",
-  "input_pack_schema": "pi.swarm.autopilot_input_pack.v1",
+  "input_pack_schema": "ra.swarm.autopilot_input_pack.v1",
   "purpose": "fail_closed_swarm_work_admission_gate_not_source_of_truth",
   "redaction_summary": {
     "fields": [
@@ -452,8 +452,8 @@
     ],
     "redacted_count": 2
   },
-  "schema": "pi.swarm.work_admission_gate.v1",
-  "source_plan_schema": "pi.swarm.autopilot_plan.v1",
+  "schema": "ra.swarm.work_admission_gate.v1",
+  "source_plan_schema": "ra.swarm.autopilot_plan.v1",
   "source_signals": {
     "agent_mail": {
       "fallback_action": "use_beads_soft_lock",

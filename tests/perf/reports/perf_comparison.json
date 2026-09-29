@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.perf_comparison.v1",
+  "schema": "ra.ext.perf_comparison.v1",
   "generated_at": "2026-02-01T01:16:17Z",
   "summary": {
     "faster_count": 0,

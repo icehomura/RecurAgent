@@ -6,17 +6,17 @@
 mod common;
 
 use common::{TestHarness, run_async};
-use pi::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
-use pi::config::Config;
-use pi::http::client::Client;
-use pi::model::{ContentBlock, Message, StopReason, TextContent};
-use pi::provider::StreamOptions;
-use pi::providers::anthropic::AnthropicProvider;
-use pi::providers::openai::OpenAIProvider;
-use pi::session::Session;
-use pi::tools::ToolRegistry;
-use pi::turn_recovery::TurnRecoveryMode;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::agent::{Agent, AgentConfig, AgentEvent, AgentSession};
+use ra::config::Config;
+use ra::http::client::Client;
+use ra::model::{ContentBlock, Message, StopReason, TextContent};
+use ra::provider::StreamOptions;
+use ra::providers::anthropic::AnthropicProvider;
+use ra::providers::openai::OpenAIProvider;
+use ra::session::Session;
+use ra::tools::ToolRegistry;
+use ra::turn_recovery::TurnRecoveryMode;
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::json;
 use std::fs::File;
 use std::io::Write as _;
@@ -219,7 +219,7 @@ fn agent_loop_openai_vcr_basic() {
             agent,
             session,
             true,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
 
         let timeline: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
@@ -409,7 +409,7 @@ fn agent_loop_anthropic_simple_text() {
             agent,
             session,
             true,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
 
         let timeline: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
@@ -516,7 +516,7 @@ fn agent_loop_anthropic_error_stream() {
             agent,
             session,
             true,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
 
         let timeline: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
@@ -606,7 +606,7 @@ fn agent_loop_anthropic_tool_call_stop() {
             agent,
             session,
             true,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
 
         let timeline: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));

@@ -8,11 +8,11 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::{PiJsRuntimeConfig, RepairMode};
-use pi::tools::ToolRegistry;
+use ra::extensions_js::{RaJsRuntimeConfig, RepairMode};
+use ra::tools::ToolRegistry;
 use std::sync::Arc;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ fn create_runtime(
     let cwd = harness.temp_dir().to_path_buf();
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         repair_mode: mode,
         ..Default::default()

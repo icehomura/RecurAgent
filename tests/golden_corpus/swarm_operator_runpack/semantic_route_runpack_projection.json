@@ -34,7 +34,7 @@
       "command_templates": [
         {
           "action": "block",
-          "command": "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets",
+          "command": "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets",
           "group_id": "all_targets_check",
           "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
           "rank": 1,
@@ -77,7 +77,7 @@
         "all_targets_check"
       ],
       "route_status": "blocked",
-      "schema": "pi.validation.semantic_route_plan.v1",
+      "schema": "ra.validation.semantic_route_plan.v1",
       "source_bead": "bd-semantic-blocked",
       "source_path": "[WORKSPACE]/semantic-route-blocked.json",
       "status": "ok",
@@ -163,7 +163,7 @@
         "fast_script_checks"
       ],
       "route_status": "degraded",
-      "schema": "pi.validation.semantic_route_plan.v1",
+      "schema": "ra.validation.semantic_route_plan.v1",
       "source_bead": "bd-semantic-degraded",
       "source_path": "[WORKSPACE]/semantic-route-degraded.json",
       "status": "ok",
@@ -210,7 +210,7 @@
       "command_templates": [
         {
           "action": "would_run",
-          "command": "rch exec -- env CARGO_TARGET_DIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[PI_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets",
+          "command": "rch exec -- env CARGO_TARGET_DIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/target TMPDIR=[RECUR_AGENT_AGENT_CARGO_TMP]/${USER:-agent}/tmp cargo check --all-targets",
           "group_id": "all_targets_check",
           "local_fallback_rejection_reason": "RCH-required validation must not fail open into a local cargo build.",
           "rank": 1,
@@ -244,7 +244,7 @@
         "all_targets_check"
       ],
       "route_status": "ready",
-      "schema": "pi.validation.semantic_route_plan.v1",
+      "schema": "ra.validation.semantic_route_plan.v1",
       "source_bead": "bd-semantic-healthy",
       "source_path": "[WORKSPACE]/semantic-route-healthy.json",
       "status": "ok",
@@ -258,5 +258,5 @@
       }
     }
   },
-  "schema": "pi.swarm.semantic_route_runpack_projection_golden.v1"
+  "schema": "ra.swarm.semantic_route_runpack_projection_golden.v1"
 }

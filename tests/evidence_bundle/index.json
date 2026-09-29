@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ci.evidence_bundle.v1",
+  "schema": "ra.ci.evidence_bundle.v1",
   "generated_at": "2026-08-28T09:26:54.643358Z",
   "git_ref": "e178a73d4",
   "ci_run_id": "local-bundle-fix-20260828T092654Z",
@@ -10,7 +10,7 @@
       "category": "conformance",
       "status": "present",
       "artifact_path": "tests/ext_conformance/reports/conformance_summary.json",
-      "schema": "pi.ext.conformance_summary.v2",
+      "schema": "ra.ext.conformance_summary.v2",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 1058
@@ -21,7 +21,7 @@
       "category": "conformance",
       "status": "present",
       "artifact_path": "tests/ext_conformance/reports/conformance_baseline.json",
-      "schema": "pi.ext.conformance_baseline.v2",
+      "schema": "ra.ext.conformance_baseline.v2",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 5170
@@ -32,7 +32,7 @@
       "category": "conformance",
       "status": "present",
       "artifact_path": "tests/ext_conformance/reports/regression_verdict.json",
-      "schema": "pi.ext.regression_verdict.v1",
+      "schema": "ra.ext.regression_verdict.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 1658
@@ -43,7 +43,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "tests/ext_conformance/reports/gate/must_pass_gate_verdict.json",
-      "schema": "pi.ext.must_pass_gate.v1",
+      "schema": "ra.ext.must_pass_gate.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 4613
@@ -54,7 +54,7 @@
       "category": "conformance",
       "status": "missing",
       "artifact_path": "tests/ext_conformance/reports/provider_compat_matrix.json",
-      "schema": "pi.ext.provider_compat.v1",
+      "schema": "ra.ext.provider_compat.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -64,7 +64,7 @@
       "category": "conformance",
       "status": "missing",
       "artifact_path": "tests/ext_conformance/reports/scenario/scenario_report.json",
-      "schema": "pi.ext.scenario_conformance.v1",
+      "schema": "ra.ext.scenario_conformance.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -74,7 +74,7 @@
       "category": "conformance",
       "status": "present",
       "artifact_path": "tests/ext_conformance/reports/journeys/journey_report.json",
-      "schema": "pi.ext.journey_report.v1",
+      "schema": "ra.ext.journey_report.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 679
@@ -85,7 +85,7 @@
       "category": "conformance",
       "status": "missing",
       "artifact_path": "tests/ext_conformance/reports/conformance_pass_rate_artifact.json",
-      "schema": "pi.ext.pass_rate.v1",
+      "schema": "ra.ext.pass_rate.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -95,7 +95,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "tests/full_suite_gate/full_suite_verdict.json",
-      "schema": "pi.ci.full_suite_gate.v1",
+      "schema": "ra.ci.full_suite_gate.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 8109
@@ -106,7 +106,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "tests/full_suite_gate/certification_verdict.json",
-      "schema": "pi.ci.certification_verdict.v1",
+      "schema": "ra.ci.certification_verdict.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 9048
@@ -117,7 +117,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "tests/full_suite_gate/certification_dossier.json",
-      "schema": "pi.ci.certification_dossier.v1",
+      "schema": "ra.ci.certification_dossier.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 8189
@@ -128,7 +128,7 @@
       "category": "performance",
       "status": "present",
       "artifact_path": "tests/perf/reports/budget_summary.json",
-      "schema": "pi.perf.budget_summary.v1",
+      "schema": "ra.perf.budget_summary.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 15223
@@ -150,7 +150,7 @@
       "category": "performance",
       "status": "present",
       "artifact_path": "tests/perf/reports/release_evidence/idle_memory_rss.json",
-      "schema": "pi.perf.idle_memory_rss.v1",
+      "schema": "ra.perf.idle_memory_rss.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 1138
@@ -161,7 +161,7 @@
       "category": "performance",
       "status": "present",
       "artifact_path": "tests/perf/reports/release_evidence/binary_size.json",
-      "schema": "pi.perf.binary_size.v1",
+      "schema": "ra.perf.binary_size.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 688
@@ -172,7 +172,7 @@
       "category": "diagnostics",
       "status": "missing",
       "artifact_path": "tests/ci_strict_gates_results.json",
-      "schema": "pi.ci.strict_gates.v1",
+      "schema": "ra.ci.strict_gates.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -182,7 +182,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "tests/cross_platform_reports/linux/platform_report.json",
-      "schema": "pi.ci.cross_platform.v1",
+      "schema": "ra.ci.cross_platform.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 4205
@@ -193,7 +193,7 @@
       "category": "diagnostics",
       "status": "missing",
       "artifact_path": "tests/ci_artifact_retention_report.json",
-      "schema": "pi.ci.artifact_retention.v1",
+      "schema": "ra.ci.artifact_retention.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -203,7 +203,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "tests/evidence_bundle/index.json",
-      "schema": "pi.ci.evidence_bundle.v1",
+      "schema": "ra.ci.evidence_bundle.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 10529
@@ -214,7 +214,7 @@
       "category": "conformance",
       "status": "missing",
       "artifact_path": "tests/ci_conformance_retry_report.json",
-      "schema": "pi.ci.conformance_retry.v1",
+      "schema": "ra.ci.conformance_retry.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -224,7 +224,7 @@
       "category": "diagnostics",
       "status": "missing",
       "artifact_path": "tests/ci_run_summary.json",
-      "schema": "pi.ci.run_summary.v1",
+      "schema": "ra.ci.run_summary.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -234,7 +234,7 @@
       "category": "diagnostics",
       "status": "missing",
       "artifact_path": "tests/ci_full_suite_gate_report.json",
-      "schema": "pi.ci.full_suite_gate_report.v1",
+      "schema": "ra.ci.full_suite_gate_report.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -244,7 +244,7 @@
       "category": "diagnostics",
       "status": "missing",
       "artifact_path": "tests/ci_evidence_bundle_artifact.json",
-      "schema": "pi.ci.evidence_bundle_artifact.v1",
+      "schema": "ra.ci.evidence_bundle_artifact.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -254,7 +254,7 @@
       "category": "diagnostics",
       "status": "missing",
       "artifact_path": "tests/ci_full_suite_gate_artifact.json",
-      "schema": "pi.ci.full_suite_gate_artifact.v1",
+      "schema": "ra.ci.full_suite_gate_artifact.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -264,7 +264,7 @@
       "category": "conformance",
       "status": "missing",
       "artifact_path": "tests/ci_conformance_retry_artifact.json",
-      "schema": "pi.ci.conformance_retry_artifact.v1",
+      "schema": "ra.ci.conformance_retry_artifact.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -274,7 +274,7 @@
       "category": "diagnostics",
       "status": "present",
       "artifact_path": "docs/non-mock-rubric.json",
-      "schema": "pi.ci.non_mock.v1",
+      "schema": "ra.ci.non_mock.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 16034
@@ -285,7 +285,7 @@
       "category": "performance",
       "status": "present",
       "artifact_path": "tests/perf/reports/stress_triage.json",
-      "schema": "pi.perf.stress_triage.v1",
+      "schema": "ra.perf.stress_triage.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 4829
@@ -296,7 +296,7 @@
       "category": "conformance",
       "status": "missing",
       "artifact_path": "tests/ext_conformance/reports/failure_dossiers.json",
-      "schema": "pi.ext.failure_dossiers.v1",
+      "schema": "ra.ext.failure_dossiers.v1",
       "file_count": 0,
       "total_bytes": 0
     },
@@ -306,7 +306,7 @@
       "category": "performance",
       "status": "present",
       "artifact_path": "tests/perf/reports/snapcompact_retention_eval.json",
-      "schema": "pi.perf.snapcompact.v1",
+      "schema": "ra.perf.snapcompact.v1",
       "diagnostics": null,
       "file_count": 1,
       "total_bytes": 429

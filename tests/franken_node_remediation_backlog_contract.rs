@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 const CONTRACT_PATH: &str = "docs/franken-node-remediation-backlog-contract.json";
-const EXPECTED_SCHEMA: &str = "pi.frankennode.remediation_backlog_contract.v1";
+const EXPECTED_SCHEMA: &str = "ra.frankennode.remediation_backlog_contract.v1";
 const REQUIRED_TELEMETRY_SOURCES: &[&str] = &[
     "compatibility_doctor_reports",
     "shadow_canary_divergence_events",

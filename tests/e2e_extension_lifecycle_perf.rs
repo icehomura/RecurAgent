@@ -15,11 +15,11 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -138,7 +138,7 @@ fn setup_manager_with_extension(
     let cwd = harness.temp_dir().to_path_buf();
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -190,7 +190,7 @@ fn make_record(
         0.0
     };
     LifecycleRecord {
-        schema: "pi.ext.lifecycle_perf.v1".to_string(),
+        schema: "ra.ext.lifecycle_perf.v1".to_string(),
         extension: ext.to_string(),
         phase: phase.to_string(),
         iterations,
@@ -214,7 +214,7 @@ fn phase_cold_load(
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -408,7 +408,7 @@ fn collect_diagnostics(ext_name: &str, manager: &ExtensionManager) -> Diagnostic
         });
 
     DiagnosticsRecord {
-        schema: "pi.ext.lifecycle_diagnostics.v1".to_string(),
+        schema: "ra.ext.lifecycle_diagnostics.v1".to_string(),
         extension: ext_name.to_string(),
         risk_ledger_entries: risk_ledger.entries.len(),
         hostcall_telemetry_entries: telemetry.entries.len(),
@@ -691,7 +691,7 @@ fn per_extension_diagnostics_collected() {
         let json_val = serde_json::to_value(&diag).expect("serialize diagnostics");
         assert_eq!(
             json_val.get("schema").and_then(Value::as_str),
-            Some("pi.ext.lifecycle_diagnostics.v1")
+            Some("ra.ext.lifecycle_diagnostics.v1")
         );
         assert_eq!(
             json_val.get("extension").and_then(Value::as_str),
@@ -800,7 +800,7 @@ fn jsonl_output_schema_completeness() {
     let diag_count = records
         .iter()
         .filter(|r| {
-            r.get("schema").and_then(Value::as_str) == Some("pi.ext.lifecycle_diagnostics.v1")
+            r.get("schema").and_then(Value::as_str) == Some("ra.ext.lifecycle_diagnostics.v1")
         })
         .count();
     assert!(
@@ -903,7 +903,7 @@ fn setup_composed_manager(
     let cwd = harness.temp_dir().to_path_buf();
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -966,7 +966,7 @@ fn interference_single_vs_composed() {
         baselines.insert(ext_name.to_string(), rec.clone());
 
         records.push(json!({
-            "schema": "pi.ext.interference.v1",
+            "schema": "ra.ext.interference.v1",
             "phase": "baseline_single",
             "extension": ext_name,
             "extension_count": 1,
@@ -1006,7 +1006,7 @@ fn interference_single_vs_composed() {
     );
 
     records.push(json!({
-        "schema": "pi.ext.interference.v1",
+        "schema": "ra.ext.interference.v1",
         "phase": "composed",
         "extension": "composed",
         "extension_count": specs.len(),
@@ -1063,7 +1063,7 @@ fn interference_single_vs_composed() {
     );
 
     records.push(json!({
-        "schema": "pi.ext.interference.v1",
+        "schema": "ra.ext.interference.v1",
         "phase": "interference_delta",
         "extension": "composed",
         "extension_count": specs.len(),
@@ -1111,7 +1111,7 @@ fn interference_single_vs_composed() {
     for record in &records {
         assert_eq!(
             record.get("schema").and_then(Value::as_str),
-            Some("pi.ext.interference.v1"),
+            Some("ra.ext.interference.v1"),
             "interference record must keep schema contract"
         );
         let Some(phase) = record.get("phase").and_then(Value::as_str) else {
@@ -1241,7 +1241,7 @@ fn per_extension_tool_isolation() {
             rec.p50_us, rec.p95_us
         );
         records.push(json!({
-            "schema": "pi.ext.isolation.v1",
+            "schema": "ra.ext.isolation.v1",
             "phase": "isolated_tool_call",
             "extension": ext_name,
             "extension_count": 1,
@@ -1297,7 +1297,7 @@ fn per_extension_tool_isolation() {
         };
 
         records.push(json!({
-            "schema": "pi.ext.isolation.v1",
+            "schema": "ra.ext.isolation.v1",
             "phase": "composed_tool_call",
             "extension": ext_name,
             "extension_count": specs.len(),
@@ -1368,7 +1368,7 @@ fn interference_scaling_by_count() {
         );
 
         records.push(json!({
-            "schema": "pi.ext.scaling.v1",
+            "schema": "ra.ext.scaling.v1",
             "extension_count": count,
             "extensions": &all_names[..count],
             "iterations": iterations,
@@ -1431,7 +1431,7 @@ fn measure_phase_latencies(
         let cwd = harness.temp_dir().to_path_buf();
         let mgr = ExtensionManager::new();
         let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-        let js_cfg = PiJsRuntimeConfig {
+        let js_cfg = RaJsRuntimeConfig {
             cwd: cwd.display().to_string(),
             ..Default::default()
         };
@@ -1511,7 +1511,7 @@ fn measure_composed_phase_latencies(
         let cwd = harness.temp_dir().to_path_buf();
         let mgr = ExtensionManager::new();
         let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-        let js_cfg = PiJsRuntimeConfig {
+        let js_cfg = RaJsRuntimeConfig {
             cwd: cwd.display().to_string(),
             ..Default::default()
         };
@@ -1600,7 +1600,7 @@ fn stage_decomposition_composed_vs_isolated() {
                 rec.p50_us, rec.p95_us
             );
             records.push(json!({
-                "schema": "pi.ext.decomposition.v1",
+                "schema": "ra.ext.decomposition.v1",
                 "mode": "single",
                 "extension": ext_name,
                 "phase": phase,
@@ -1629,7 +1629,7 @@ fn stage_decomposition_composed_vs_isolated() {
             rec.p50_us, rec.p95_us
         );
         records.push(json!({
-            "schema": "pi.ext.decomposition.v1",
+            "schema": "ra.ext.decomposition.v1",
             "mode": "composed",
             "extension": "composed",
             "extension_count": specs.len(),
@@ -1705,7 +1705,7 @@ fn stage_decomposition_composed_vs_isolated() {
         }
 
         phase_ratios.push(json!({
-            "schema": "pi.ext.decomposition.v1",
+            "schema": "ra.ext.decomposition.v1",
             "mode": "ratio",
             "phase": phase,
             "avg_single_p50_us": avg_single_p50,
@@ -1720,7 +1720,7 @@ fn stage_decomposition_composed_vs_isolated() {
 
     if !worst_phase.is_empty() {
         records.push(json!({
-            "schema": "pi.ext.decomposition.v1",
+            "schema": "ra.ext.decomposition.v1",
             "mode": "summary",
             "worst_interference_phase": worst_phase,
             "worst_p50_ratio": worst_ratio,
@@ -1789,7 +1789,7 @@ fn pairwise_extension_contention_matrix() {
         );
         baselines.insert(name.clone(), rec.clone());
         records.push(json!({
-            "schema": "pi.ext.contention.v1",
+            "schema": "ra.ext.contention.v1",
             "phase": "baseline",
             "extensions": [name],
             "p50_us": rec.p50_us,
@@ -1840,7 +1840,7 @@ fn pairwise_extension_contention_matrix() {
 
             pair_ratios.push((name_a.clone(), name_b.clone(), p50_ratio, p95_ratio));
             records.push(json!({
-                "schema": "pi.ext.contention.v1",
+                "schema": "ra.ext.contention.v1",
                 "phase": "pair",
                 "extensions": [name_a, name_b],
                 "pair": pair_label,
@@ -1864,7 +1864,7 @@ fn pairwise_extension_contention_matrix() {
 
     if let Some((ext_a, ext_b, ratio, tail)) = hottest {
         records.push(json!({
-            "schema": "pi.ext.contention.v1",
+            "schema": "ra.ext.contention.v1",
             "phase": "summary",
             "hottest_pair": format!("{ext_a}+{ext_b}"),
             "hottest_p50_ratio": ratio,
@@ -2091,7 +2091,7 @@ fn regression_gate_structured_report() {
 
     let all_pass = gate_failures.is_empty();
     let report = json!({
-        "schema": "pi.ext.regression_gate.v1",
+        "schema": "ra.ext.regression_gate.v1",
         "verdict": if all_pass { "pass" } else { "fail" },
         "extension_count": specs.len(),
         "iterations": iterations,

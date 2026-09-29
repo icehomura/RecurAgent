@@ -1,8 +1,8 @@
-use pi::compaction::{ResolvedCompactionSettings, prepare_compaction};
-use pi::model::{
+use ra::compaction::{ResolvedCompactionSettings, prepare_compaction};
+use ra::model::{
     AssistantMessage, ContentBlock, Cost, StopReason, TextContent, Usage, UserContent,
 };
-use pi::session::{EntryBase, MessageEntry, SessionEntry, SessionMessage};
+use ra::session::{EntryBase, MessageEntry, SessionEntry, SessionMessage};
 
 #[test]
 fn test_compaction_usage_double_counting_bug() {

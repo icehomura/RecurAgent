@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.must_pass_gate.v1",
+  "schema": "ra.ext.must_pass_gate.v1",
   "generated_at": "2026-08-28T05:24:42.067278Z",
   "run_id": "local-bundle-fix-20260828T050000Z",
   "correlation_id": "bundle-fix-local-bundle-fix-20260828T050000Z",

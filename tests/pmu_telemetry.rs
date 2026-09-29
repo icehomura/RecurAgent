@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::pmu_telemetry::{
+use ra::pmu_telemetry::{
     PMU_TELEMETRY_SCHEMA, PmuOpportunityRanker, PmuRegressionBudget, PmuSample,
 };
 

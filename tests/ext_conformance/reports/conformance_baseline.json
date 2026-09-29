@@ -1,5 +1,5 @@
 {
-  "schema": "pi.ext.conformance_baseline.v2",
+  "schema": "ra.ext.conformance_baseline.v2",
   "generated_at": "2026-08-04T03:26:54Z",
   "git_ref": "d0df6e21",
   "extension_conformance": {
@@ -179,7 +179,7 @@
     "triage": "tests/ext_conformance/reports/smoke_triage.json"
   },
   "exception_policy": {
-    "schema": "pi.ext.exception_policy.v1",
+    "schema": "ra.ext.exception_policy.v1",
     "generated_at": "2026-08-04T03:26:54Z",
     "required_fields": [
       "id",

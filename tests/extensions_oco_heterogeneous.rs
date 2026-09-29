@@ -12,12 +12,12 @@
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{
+use ra::extensions::{
     ExtensionBudgetControllerConfig, ExtensionEventName, ExtensionManager, ExtensionPolicy,
     HostcallReactorConfig, JsExtensionLoadSpec,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -159,7 +159,7 @@ fn load_extensions_with_oco_mode(
     let cwd = project_root();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
     let manager = ExtensionManager::new();
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -168,7 +168,7 @@ fn load_extensions_with_oco_mode(
         let manager = manager.clone();
         let tools = Arc::clone(&tools);
         async move {
-            pi::extensions::JsExtensionRuntimeHandle::start_with_policy(
+            ra::extensions::JsExtensionRuntimeHandle::start_with_policy(
                 js_config,
                 tools,
                 manager,
@@ -349,7 +349,7 @@ fn shutdown(manager: ExtensionManager) {
 }
 
 fn strict_oco_gate_enabled() -> bool {
-    std::env::var("PI_OCO_HETEROGENEOUS_STRICT").is_ok_and(|value| {
+    std::env::var("RECUR_AGENT_OCO_HETEROGENEOUS_STRICT").is_ok_and(|value| {
         let normalized = value.trim().to_ascii_lowercase();
         matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
     })

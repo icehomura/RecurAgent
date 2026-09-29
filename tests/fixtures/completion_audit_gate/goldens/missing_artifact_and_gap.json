@@ -25,11 +25,11 @@
     "Create or correct the missing artifact path, then regenerate the audit.",
     "Close the gap or create an active owner bead before closeout."
   ],
-  "schema": "pi.completion_audit.closeout_gate.v1",
+  "schema": "ra.completion_audit.closeout_gate.v1",
   "source": {
     "completion_allowed": false,
     "overall_status": "blocked",
-    "schema": "pi.completion_audit.v1"
+    "schema": "ra.completion_audit.v1"
   },
   "source_boundaries": {
     "deletes_files": false,

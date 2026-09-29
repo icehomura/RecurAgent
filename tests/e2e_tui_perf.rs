@@ -11,7 +11,7 @@
 //!
 //! Run:
 //!   cargo test --test `e2e_tui_perf` -- --nocapture
-//!   `PI_PERF_TELEMETRY=1` cargo test --test `e2e_tui_perf` -- --nocapture
+//!   `RECUR_AGENT_PERF_TELEMETRY=1` cargo test --test `e2e_tui_perf` -- --nocapture
 
 #![allow(
     clippy::cast_precision_loss,
@@ -28,16 +28,16 @@ use asupersync::sync::Mutex;
 use bubbletea::{KeyMsg, KeyType, Message, Model as BubbleteaModel};
 use common::harness::TestHarness;
 use futures::stream;
-use pi::agent::{Agent, AgentConfig};
-use pi::config::Config;
-use pi::interactive::{ConversationMessage, MessageRole, PiApp, PiMsg};
-use pi::keybindings::KeyBindings;
-use pi::model::{StreamEvent, Usage};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
-use pi::resources::{ResourceCliOptions, ResourceLoader};
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::agent::{Agent, AgentConfig};
+use ra::config::Config;
+use ra::interactive::{ConversationMessage, MessageRole, RaApp, RaMsg};
+use ra::keybindings::KeyBindings;
+use ra::model::{StreamEvent, Usage};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, Provider, StreamOptions};
+use ra::resources::{ResourceCliOptions, ResourceLoader};
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
@@ -75,8 +75,8 @@ impl Provider for DummyProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         Ok(Box::pin(stream::empty()))
     }
@@ -111,7 +111,7 @@ fn dummy_model_entry() -> ModelEntry {
     }
 }
 
-fn build_perf_app(harness: &TestHarness, messages: Vec<ConversationMessage>) -> PiApp {
+fn build_perf_app(harness: &TestHarness, messages: Vec<ConversationMessage>) -> RaApp {
     let cwd = harness.temp_dir().to_path_buf();
     let config = common::hermetic_interactive_config(Config::default());
     let tools = ToolRegistry::new(&[], &cwd, Some(&config));
@@ -131,7 +131,7 @@ fn build_perf_app(harness: &TestHarness, messages: Vec<ConversationMessage>) -> 
     let model_entry = dummy_model_entry();
     let (event_tx, _event_rx) = mpsc::channel(1024);
 
-    let mut app = PiApp::new(
+    let mut app = RaApp::new(
         agent,
         Arc::new(Mutex::new(Session::in_memory())),
         config,
@@ -179,7 +179,7 @@ impl MockRssReader {
     }
 }
 
-const TUI_PERF_ARTIFACT_GENERATION_ENV: &str = "PI_GENERATE_TUI_PERF_ARTIFACTS";
+const TUI_PERF_ARTIFACT_GENERATION_ENV: &str = "RECUR_AGENT_GENERATE_TUI_PERF_ARTIFACTS";
 
 fn tui_perf_artifact_generation_enabled() -> bool {
     let Some(value) = std::env::var_os(TUI_PERF_ARTIFACT_GENERATION_ENV) else {
@@ -228,8 +228,8 @@ fn validate_perf_log_jsonl(payload: &str) {
         assert!(
             matches!(
                 (schema, record_type),
-                (Some("pi.test.log.v2"), Some("log"))
-                    | (Some("pi.test.artifact.v1"), Some("artifact"))
+                (Some("ra.test.log.v2"), Some("log"))
+                    | (Some("ra.test.artifact.v1"), Some("artifact"))
             ),
             "perf log JSONL record {} must be a v2 log or v1 artifact record",
             index + 1
@@ -565,14 +565,14 @@ fn e2e_perf_streaming_with_history() {
     // Start streaming: simulate agent starting a response
     BubbleteaModel::update(
         &mut app,
-        Message::new(PiMsg::TextDelta("Starting response...".to_string())),
+        Message::new(RaMsg::TextDelta("Starting response...".to_string())),
     );
 
     // Measure frame times during streaming (simulating 50 tokens)
     let mut streaming_times = Vec::with_capacity(50);
     for token_idx in 0..50 {
         let token = format!(" token_{token_idx}");
-        BubbleteaModel::update(&mut app, Message::new(PiMsg::TextDelta(token)));
+        BubbleteaModel::update(&mut app, Message::new(RaMsg::TextDelta(token)));
 
         let start = Instant::now();
         let _view = BubbleteaModel::view(&app);

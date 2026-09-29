@@ -13,11 +13,11 @@
   "decision": "closeout_blocked",
   "generated_at": "[GENERATED_AT]",
   "operator_next_actions": ["Fix or rerun the failed command and include its passing transcript."],
-  "schema": "pi.completion_audit.closeout_gate.v1",
+  "schema": "ra.completion_audit.closeout_gate.v1",
   "source": {
     "completion_allowed": false,
     "overall_status": "blocked",
-    "schema": "pi.completion_audit.v1"
+    "schema": "ra.completion_audit.v1"
   },
   "source_boundaries": {
     "deletes_files": false,

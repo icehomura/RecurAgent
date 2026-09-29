@@ -4,21 +4,21 @@ mod common;
 
 use common::{MockHttpResponse, TestHarness};
 use futures::StreamExt;
-use pi::Error;
-use pi::auth::{AuthCredential, AuthStorage};
-use pi::model::{Message, UserContent, UserMessage};
-use pi::models::{ModelEntry, ModelRegistry};
-use pi::provider::{
+use proptest::prelude::*;
+use ra::Error;
+use ra::auth::{AuthCredential, AuthStorage};
+use ra::model::{Message, UserContent, UserMessage};
+use ra::models::{ModelEntry, ModelRegistry};
+use ra::provider::{
     Api, CacheRetention, Context, InputType, KnownProvider, Model, ModelCost, StreamEvent,
     StreamOptions, ToolDef,
 };
-use pi::provider_metadata::{
+use ra::provider_metadata::{
     canonical_provider_id, provider_auth_env_keys, provider_routing_defaults,
 };
-use pi::providers::{
+use ra::providers::{
     create_provider, normalize_cohere_base, normalize_openai_base, normalize_openai_responses_base,
 };
-use proptest::prelude::*;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -123,7 +123,7 @@ fn request_header(headers: &[(String, String)], key: &str) -> Option<String> {
 }
 
 fn drive_provider_stream_to_done(
-    provider: Arc<dyn pi::provider::Provider>,
+    provider: Arc<dyn ra::provider::Provider>,
     context: Context<'static>,
     options: StreamOptions,
 ) {
@@ -142,7 +142,7 @@ fn drive_provider_stream_to_done(
 }
 
 fn expect_provider_stream_start_error(
-    provider: Arc<dyn pi::provider::Provider>,
+    provider: Arc<dyn ra::provider::Provider>,
     context: Context<'static>,
     options: StreamOptions,
 ) -> Error {

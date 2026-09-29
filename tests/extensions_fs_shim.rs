@@ -6,11 +6,11 @@
 
 use std::sync::Arc;
 
-use pi::extensions_js::{PiJsRuntime, PiJsRuntimeConfig};
-use pi::scheduler::DeterministicClock;
+use ra::extensions_js::{RaJsRuntime, RaJsRuntimeConfig};
+use ra::scheduler::DeterministicClock;
 
-fn default_config() -> PiJsRuntimeConfig {
-    PiJsRuntimeConfig {
+fn default_config() -> RaJsRuntimeConfig {
+    RaJsRuntimeConfig {
         cwd: "/test".to_string(),
         ..Default::default()
     }
@@ -23,7 +23,7 @@ fn default_config() -> PiJsRuntimeConfig {
 #[test]
 fn fs_write_read_roundtrip() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -64,7 +64,7 @@ fn fs_write_read_roundtrip() {
 #[test]
 fn fs_stat_object_shape() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -121,7 +121,7 @@ fn fs_stat_object_shape() {
 #[test]
 fn fs_readdir_with_filetypes() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -181,7 +181,7 @@ fn fs_readdir_with_filetypes() {
 #[test]
 fn fs_mkdir_unlink_rmdir() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -229,7 +229,7 @@ fn fs_mkdir_unlink_rmdir() {
 #[test]
 fn fs_rename_and_copy() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -278,7 +278,7 @@ fn fs_rename_and_copy() {
 #[test]
 fn fs_append_file() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -313,7 +313,7 @@ fn fs_append_file() {
 #[test]
 fn fs_rm_recursive() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -354,7 +354,7 @@ fn fs_rm_recursive() {
 #[test]
 fn fs_access_sync() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -396,7 +396,7 @@ fn fs_access_sync() {
 #[test]
 fn fs_promises_read_write() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -434,7 +434,7 @@ fn fs_promises_read_write() {
 #[test]
 fn fs_promises_module_direct() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -473,7 +473,7 @@ fn fs_promises_module_direct() {
 #[test]
 fn fs_promises_copy_rename() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -513,7 +513,7 @@ fn fs_promises_copy_rename() {
 #[test]
 fn fs_symlink_readlink_and_dirent_semantics() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -613,7 +613,7 @@ fn fs_symlink_readlink_and_dirent_semantics() {
 #[test]
 fn fs_callback_read_write() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -657,7 +657,7 @@ fn fs_callback_read_write() {
 #[test]
 fn fs_callback_stat_readdir_mkdir_unlink() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -718,7 +718,7 @@ fn fs_callback_stat_readdir_mkdir_unlink() {
 #[test]
 fn fs_callback_lstat_rmdir_rm() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -774,7 +774,7 @@ fn fs_callback_lstat_rmdir_rm() {
 #[test]
 fn fs_callback_rename_copy_append() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -864,7 +864,7 @@ fn fs_callback_rename_copy_append() {
 #[test]
 fn fs_constants() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -904,7 +904,7 @@ fn fs_constants() {
 #[test]
 fn fs_mkdtemp() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -941,7 +941,7 @@ fn fs_mkdtemp() {
 #[test]
 fn fs_enoent_errors() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -998,7 +998,7 @@ fn fs_enoent_errors() {
 #[test]
 fn fs_path_normalization() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -1040,7 +1040,7 @@ fn fs_path_normalization() {
 #[test]
 fn fs_stream_facades() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -1088,7 +1088,7 @@ fn fs_stream_facades() {
 #[test]
 fn fs_watch_stubs() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -1156,7 +1156,7 @@ fn fs_watch_stubs() {
 #[test]
 fn fs_fd_stubs() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -1241,7 +1241,7 @@ fn fs_stat_host_fallback() {
         let mut config = default_config();
         config.cwd = temp_dir.path().display().to_string();
         let runtime =
-            PiJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
+            RaJsRuntime::with_clock_and_config(Arc::new(DeterministicClock::new(0)), config)
                 .await
                 .expect("create runtime");
 
@@ -1312,7 +1312,7 @@ fn fs_stat_host_fallback() {
 #[test]
 fn fs_promises_append_file() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )
@@ -1346,7 +1346,7 @@ fn fs_promises_append_file() {
 #[test]
 fn fs_default_export_complete() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock_and_config(
+        let runtime = RaJsRuntime::with_clock_and_config(
             Arc::new(DeterministicClock::new(0)),
             default_config(),
         )

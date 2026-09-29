@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "json_mode_no_input_header_only",
   "surface": "json_mode",
   "description": "JSON mode with no message input: should emit only session header line and exit 0",

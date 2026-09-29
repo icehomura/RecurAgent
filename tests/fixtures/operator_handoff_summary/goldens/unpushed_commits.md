@@ -1,7 +1,7 @@
 # Operator Handoff Summary
 
 - Status: watch
-- Project: pi_agent_rust
+- Project: recur_agent
 - Branch: main
 - Head: def5678
 - Generated: [GENERATED_AT]

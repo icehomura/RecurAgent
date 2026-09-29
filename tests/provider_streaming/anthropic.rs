@@ -7,11 +7,11 @@ use super::{
 };
 use crate::common::TestHarness;
 use chrono::{SecondsFormat, Utc};
-use pi::http::client::Client;
-use pi::model::{Message, StopReason, ThinkingLevel, UserContent};
-use pi::provider::{CacheRetention, Context, Provider, StreamOptions, ThinkingBudgets, ToolDef};
-use pi::providers::anthropic::AnthropicProvider;
-use pi::vcr::{Cassette, Interaction, RecordedRequest, RecordedResponse, VcrMode, VcrRecorder};
+use ra::http::client::Client;
+use ra::model::{Message, StopReason, ThinkingLevel, UserContent};
+use ra::provider::{CacheRetention, Context, Provider, StreamOptions, ThinkingBudgets, ToolDef};
+use ra::providers::anthropic::AnthropicProvider;
+use ra::vcr::{Cassette, Interaction, RecordedRequest, RecordedResponse, VcrMode, VcrRecorder};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;

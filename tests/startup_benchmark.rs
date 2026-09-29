@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-pub const STARTUP_CONTRACT_SCHEMA: &str = "pi.perf.startup_benchmark.contract.v1";
-pub const STARTUP_ARTIFACT_SCHEMA: &str = "pi.perf.startup_benchmark.v1";
+pub const STARTUP_CONTRACT_SCHEMA: &str = "ra.perf.startup_benchmark.contract.v1";
+pub const STARTUP_ARTIFACT_SCHEMA: &str = "ra.perf.startup_benchmark.v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HostEnvironmentFingerprint {

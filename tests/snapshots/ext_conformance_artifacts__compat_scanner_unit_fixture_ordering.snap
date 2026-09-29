@@ -4,7 +4,7 @@ assertion_line: 78
 expression: text
 ---
 {
-  "schema": "pi.ext.compat_ledger.v1",
+  "schema": "ra.ext.compat_ledger.v1",
   "capabilities": [
     {
       "capability": "env",

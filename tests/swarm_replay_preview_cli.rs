@@ -19,7 +19,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn binary_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pi"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra"))
 }
 
 fn read_json_value(path: &Path) -> Result<Value, Box<dyn std::error::Error>> {
@@ -112,7 +112,7 @@ fn swarm_replay_preview_json_validates_and_writes_outputs() -> TestResult {
     validate_preview(&preview)?;
     assert_eq!(
         preview.pointer("/schema").and_then(Value::as_str),
-        Some("pi.swarm.replay_preview.v1")
+        Some("ra.swarm.replay_preview.v1")
     );
     assert_eq!(
         preview

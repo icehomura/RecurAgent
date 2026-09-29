@@ -6,17 +6,17 @@
 
 | Schema | Description |
 |---|---|
-| `pi.bench.protocol.v1` | Canonical benchmark protocol contract (partitions, datasets, metadata, replay inputs) |
-| `pi.ext.rust_bench.v1` | Rust QuickJS extension benchmark event (load, tool call, event hook) |
-| `pi.ext.legacy_bench.v1` | Legacy pi-mono (Node.js) extension benchmark event |
-| `pi.perf.workload.v1` | PiJS workload harness output (tool call throughput) |
-| `pi.perf.budget.v1` | Performance budget check result |
-| `pi.perf.budget_summary.v2` | Strict provenance-bound budget summary with per-budget results and claim readiness |
-| `pi.ext.conformance_report.v2` | Per-extension conformance report event |
-| `pi.ext.conformance_summary.v2` | Aggregate conformance summary with per-tier breakdowns |
-| `pi.perf.extension_benchmark_stratification.v1` | Layered extension benchmark artifact linking cold-load, per-call, and full E2E evidence with claim-integrity guards |
+| `ra.bench.protocol.v1` | Canonical benchmark protocol contract (partitions, datasets, metadata, replay inputs) |
+| `ra.ext.rust_bench.v1` | Rust QuickJS extension benchmark event (load, tool call, event hook) |
+| `ra.ext.legacy_bench.v1` | Legacy pi-mono (Node.js) extension benchmark event |
+| `ra.perf.workload.v1` | PiJS workload harness output (tool call throughput) |
+| `ra.perf.budget.v1` | Performance budget check result |
+| `ra.perf.budget_summary.v2` | Strict provenance-bound budget summary with per-budget results and claim readiness |
+| `ra.ext.conformance_report.v2` | Per-extension conformance report event |
+| `ra.ext.conformance_summary.v2` | Aggregate conformance summary with per-tier breakdowns |
+| `ra.perf.extension_benchmark_stratification.v1` | Layered extension benchmark artifact linking cold-load, per-call, and full E2E evidence with claim-integrity guards |
 | `pi.perf.phase1_matrix_validation.v1` | Phase-1 realistic/matched-state matrix validation with stage attribution and release-gate readiness |
-| `pi.resource_governor.admission.v1` | Host-scale resource-governor admission decision telemetry for swarm pressure control |
+| `ra.resource_governor.admission.v1` | Host-scale resource-governor admission decision telemetry for swarm pressure control |
 
 ## Environment Fingerprint
 
@@ -36,12 +36,12 @@ Every benchmark record SHOULD include an `env` object with:
 
 ## Required Fields by Schema
 
-### `pi.ext.rust_bench.v1`
+### `ra.ext.rust_bench.v1`
 
 | Field | Type | Description |
 |---|---|---|
-| `schema` | string | Always `"pi.ext.rust_bench.v1"` |
-| `runtime` | string | Always `"pi_agent_rust"` |
+| `schema` | string | Always `"ra.ext.rust_bench.v1"` |
+| `runtime` | string | Always `"recur_agent"` |
 | `scenario` | string | Benchmark scenario (e.g., `ext_load_init/load_init_cold`) |
 | `extension` | string | Extension ID being benchmarked |
 | `runs` | integer | Number of runs (load scenarios) |
@@ -51,13 +51,13 @@ Every benchmark record SHOULD include an `env` object with:
 | `per_call_us` | float | Per-call latency in microseconds |
 | `calls_per_sec` | float | Throughput (calls per second) |
 
-### `pi.ext.legacy_bench.v1`
+### `ra.ext.legacy_bench.v1`
 
-Same structure as `pi.ext.rust_bench.v1` with:
+Same structure as `ra.ext.rust_bench.v1` with:
 - `runtime` = `"legacy_pi_mono"`
 - `node` object: `{version, platform, arch}`
 
-### `pi.perf.workload.v1`
+### `ra.perf.workload.v1`
 
 | Field | Type | Description |
 |---|---|---|
@@ -69,15 +69,15 @@ Same structure as `pi.ext.rust_bench.v1` with:
 | `per_call_us` | number | Per-call latency in microseconds |
 | `calls_per_sec` | number | Throughput (calls per second) |
 
-### `pi.perf.budget_summary.v2`
+### `ra.perf.budget_summary.v2`
 
 Each `budgets` entry requires `name`, `category`, `metric`, `unit`, `threshold`, `comparison`, `ci_enforced`, and `methodology`. `comparison` is the exact enum `maximum` (`actual <= threshold`) or `minimum` (`actual >= threshold`); consumers must never infer direction from a budget name. Blanket performance claims are authorized only when strict, source-bound, same-run evidence gives every declared budget data and PASS status with zero data-contract failures; aggregate `budget_data_missing` and `budget_failed` blockers prevent non-CI results from escaping that rule. Incomplete lineage produces a canonical all-`NO_DATA` blocked sentinel without inspecting ambient artifacts, target paths, or mtimes. Inventory SHA-256 uses compact JSON in producer declaration order and the listed field order, with every threshold rendered using exactly six decimal places. The canonical v0.2.0 digest is `4e24380af0ca4fe8fd94850d63e607868d15d704a42d434bdb1c762e7e327663`.
 
-### `pi.bench.protocol.v1`
+### `ra.bench.protocol.v1`
 
 | Field | Type | Description |
 |---|---|---|
-| `schema` | string | Always `"pi.bench.protocol.v1"` |
+| `schema` | string | Always `"ra.bench.protocol.v1"` |
 | `version` | string | Protocol version used by all benchmark harnesses |
 | `partition_tags` | string[] | Must include `matched-state` and `realistic` |
 | `realistic_session_sizes` | integer[] | Canonical matrix: 100k, 200k, 500k, 1M, 5M |

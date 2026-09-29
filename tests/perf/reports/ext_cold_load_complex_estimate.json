@@ -1,5 +1,5 @@
 {
-  "schema": "pi.perf.criterion_estimate.v1",
+  "schema": "ra.perf.criterion_estimate.v1",
   "generated_at": "2026-08-28T09:17:31.022310+00:00",
   "fixture": "pirate",
   "budget_name": "ext_cold_load_complex_p95",

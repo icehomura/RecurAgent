@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "print_text_unicode_reply",
   "surface": "print_text",
   "description": "Print mode: reply containing Unicode characters (CJK, emoji, diacritics)",

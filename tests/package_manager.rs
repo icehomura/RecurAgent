@@ -4,7 +4,7 @@ mod common;
 
 use asupersync::runtime::RuntimeBuilder;
 use common::TestHarness;
-use pi::package_manager::{
+use ra::package_manager::{
     PackageManager, PackageScope, ResolveExtensionSourcesOptions, ResolveRoots, ResolvedResource,
     ResourceOrigin,
 };
@@ -120,7 +120,7 @@ fn installed_path_resolves_project_and_user_scopes_without_external_commands() {
         });
     assert_eq!(
         npm_project,
-        cwd.join(".pi")
+        cwd.join(".ra")
             .join("npm")
             .join("node_modules")
             .join("react")
@@ -139,7 +139,7 @@ fn installed_path_resolves_project_and_user_scopes_without_external_commands() {
         });
     assert_eq!(
         git_project,
-        cwd.join(".pi")
+        cwd.join(".ra")
             .join("git")
             .join("github.com")
             .join("example-org")
@@ -152,7 +152,7 @@ fn installed_path_resolves_project_and_user_scopes_without_external_commands() {
     harness.log().info_ctx("installed_path", "git user", |ctx| {
         ctx.push(("path".into(), git_user.display().to_string()));
     });
-    let expected_suffix = Path::new(".pi")
+    let expected_suffix = Path::new(".ra")
         .join("agent")
         .join("git")
         .join("github.com")
@@ -175,11 +175,11 @@ fn resolve_with_roots_auto_discovery_ignores_parent_gitignore() {
     let harness = TestHarness::new("resolve_with_roots_auto_discovery_ignores_parent_gitignore");
 
     let cwd = harness.create_dir("cwd");
-    std::fs::write(cwd.join(".gitignore"), ".pi\n").expect("write .gitignore");
+    std::fs::write(cwd.join(".gitignore"), ".ra\n").expect("write .gitignore");
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = harness.create_dir("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
     std::fs::create_dir_all(&project_base_dir).expect("create project base dir");
 
     let global_settings_path = global_base_dir.join("settings.json");
@@ -219,7 +219,7 @@ fn resolve_with_roots_applies_auto_discovery_override_patterns() {
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = harness.create_dir("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
     std::fs::create_dir_all(&project_base_dir).expect("create project base dir");
 
     let global_settings_path = global_base_dir.join("settings.json");
@@ -313,7 +313,7 @@ fn resolve_with_roots_applies_package_filters_and_prefers_project_package() {
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = harness.create_dir("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
     std::fs::create_dir_all(&project_base_dir).expect("create project base dir");
 
     let global_settings_path = global_base_dir.join("settings.json");
@@ -658,7 +658,7 @@ fn resolve_with_roots_auto_discovers_extension_directory_entries() {
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = harness.create_dir("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
     std::fs::create_dir_all(&project_base_dir).expect("create project base dir");
 
     let global_settings_path = global_base_dir.join("settings.json");
@@ -716,7 +716,7 @@ fn resolve_with_roots_auto_discovers_extension_directory_index_fallback() {
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = harness.create_dir("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
     std::fs::create_dir_all(&project_base_dir).expect("create project base dir");
 
     let global_settings_path = global_base_dir.join("settings.json");
@@ -760,7 +760,7 @@ fn resolve_with_roots_auto_discovery_follows_symlink_extension_dirs() {
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = harness.create_dir("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
     std::fs::create_dir_all(&project_base_dir).expect("create project base dir");
 
     let global_settings_path = global_base_dir.join("settings.json");
@@ -852,7 +852,7 @@ fn resolve_with_roots_fixture_project_package_overrides_global_and_filters_resou
     let manager = PackageManager::new(cwd.clone());
 
     let global_base_dir = dest_root.join("global");
-    let project_base_dir = cwd.join(".pi");
+    let project_base_dir = cwd.join(".ra");
 
     let roots = ResolveRoots {
         project_settings_enabled: true,

@@ -18,7 +18,7 @@ fn cooperative_priority_lane_evidence_is_claim_gated_no_go() -> Result<(), Box<d
 
     assert_eq!(
         evidence.get("schema").and_then(Value::as_str),
-        Some("pi.scheduler.cooperative_priority_lane_evaluation.v1")
+        Some("ra.scheduler.cooperative_priority_lane_evaluation.v1")
     );
     assert_eq!(
         evidence.get("bead_id").and_then(Value::as_str),

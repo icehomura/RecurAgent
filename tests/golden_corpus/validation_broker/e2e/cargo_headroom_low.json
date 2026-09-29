@@ -1,5 +1,5 @@
 {
-  "schema": "pi.cargo_headroom.fixture.v1",
+  "schema": "ra.cargo_headroom.fixture.v1",
   "generated_at": "2026-05-14T08:30:00Z",
   "available_bytes": 1000,
   "required_bytes": 5000000000

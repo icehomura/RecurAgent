@@ -10,11 +10,11 @@
 
 mod common;
 
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -29,7 +29,7 @@ fn load_js_extension(harness: &common::TestHarness, source: &str) -> ExtensionMa
 
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -420,7 +420,7 @@ fn no_cancellation_when_no_hooks_registered() {
 
 #[test]
 fn session_before_switch_event_serialization() {
-    use pi::extension_events::ExtensionEvent;
+    use ra::extension_events::ExtensionEvent;
 
     let event = ExtensionEvent::SessionBeforeSwitch {
         current_session: Some("session-1".to_string()),
@@ -446,7 +446,7 @@ fn session_before_switch_event_serialization() {
 
 #[test]
 fn session_before_fork_event_serialization() {
-    use pi::extension_events::ExtensionEvent;
+    use ra::extension_events::ExtensionEvent;
 
     let event = ExtensionEvent::SessionBeforeFork {
         current_session: None,

@@ -6,19 +6,19 @@ use asupersync::sync::Mutex;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::Stream;
-use pi::agent::{Agent, AgentConfig, AgentSession, SemanticContextBundleInjection};
-use pi::compaction::ResolvedCompactionSettings;
-use pi::model::{AssistantMessage, ContentBlock, Message, StopReason, TextContent, Usage};
-use pi::provider::{Context, Provider, StreamEvent, StreamOptions};
-use pi::semantic_workspace_graph::{
+use ra::agent::{Agent, AgentConfig, AgentSession, SemanticContextBundleInjection};
+use ra::compaction::ResolvedCompactionSettings;
+use ra::model::{AssistantMessage, ContentBlock, Message, StopReason, TextContent, Usage};
+use ra::provider::{Context, Provider, StreamEvent, StreamOptions};
+use ra::semantic_workspace_graph::{
     BeadActionabilityStatus, ContextArtifactCacheScope, ContextArtifactCacheStatus,
     ContextBundleBudget, ContextBundleCacheProbe, ContextBundleRequest, EvidenceFreshnessStatus,
     GraphInputStatus, RedactionStatus, SemanticContextBundlePlanner, SemanticEdgeType,
     SemanticNodeType, SemanticWorkspaceGraph, SemanticWorkspaceGraphBuildOptions,
     SemanticWorkspaceGraphBuilder, classify_evidence_freshness, normalize_context_artifact_path,
 };
-use pi::session::Session;
-use pi::tools::ToolRegistry;
+use ra::session::Session;
+use ra::tools::ToolRegistry;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::error::Error;
@@ -98,12 +98,12 @@ fn canonical_dropin_contract_fixture() -> serde_json::Value {
         })
         .collect::<Vec<_>>();
     json!({
-        "schema": "pi.dropin.certification_contract.v1",
+        "schema": "ra.dropin.certification_contract.v1",
         "hard_gates": hard_gates,
         "release_process_enforcement": {
             "verdict_artifact_contract": {
                 "path": "docs/evidence/dropin-certification-verdict.json",
-                "schema": "pi.dropin.certification_verdict.v1",
+                "schema": "ra.dropin.certification_verdict.v1",
                 "required_fields": [
                     "git_commit",
                     "generated_at_utc",
@@ -137,14 +137,14 @@ fn canonical_certification_lane_fixture(generated_at: &str) -> TestResult<serde_
         .count();
     let total_gates = gates.len();
     Ok(json!({
-        "schema": "pi.ci.certification_lane.v1",
+        "schema": "ra.ci.certification_lane.v1",
         "lane": "full",
         "generated_at": generated_at,
         "verdict": "pass",
         "policy": "Full certification: all blocking gates must pass for release. Waived gates are tracked but do not block. Expired waivers fail the waiver_lifecycle gate.",
         "gates": gates,
         "waiver_audit": {
-            "schema": "pi.ci.waiver_audit.v1",
+            "schema": "ra.ci.waiver_audit.v1",
             "generated_at": generated_at,
             "total_waivers": 0,
             "active": 0,
@@ -247,7 +247,7 @@ fn install_canonical_dropin_claim_fixture_with_lane(
         })
         .collect::<Vec<_>>();
     let verdict = json!({
-        "schema": "pi.dropin.certification_verdict.v1",
+        "schema": "ra.dropin.certification_verdict.v1",
         "git_commit": source_commit,
         "generated_at_utc": "2026-05-13T00:00:00Z",
         "overall_verdict": "CERTIFIED",
@@ -256,7 +256,7 @@ fn install_canonical_dropin_claim_fixture_with_lane(
         "evidence_index": evidence_index,
         "source": {
             "certification_lane_artifact": "tests/full_suite_gate/certification_verdict.json",
-            "lane_schema": "pi.ci.certification_lane.v1",
+            "lane_schema": "ra.ci.certification_lane.v1",
             "lane_verdict": "pass"
         },
         "claim_surface": "release_facing"
@@ -489,7 +489,7 @@ Parity ledger claims cite docs/evidence/dropin-parity-gap-ledger.json.
         root,
         "docs/evidence/dropin-certification-verdict.json",
         r#"{
-  "schema": "pi.dropin.certification_verdict.v1",
+  "schema": "ra.dropin.certification_verdict.v1",
   "generated_at": "2026-01-01T00:00:00Z",
   "overall_verdict": "CERTIFIED",
   "claim_surface": "release_facing"
@@ -504,7 +504,7 @@ Parity ledger claims cite docs/evidence/dropin-parity-gap-ledger.json.
         root,
         "docs/evidence/extension-health-delta-failure-disposition.json",
         r#"{
-  "schema": "pi.ext.health_delta_failure_disposition.v1",
+  "schema": "ra.ext.health_delta_failure_disposition.v1",
   "generated_at": "2026-05-13T00:00:00Z",
   "source_report_generated_at": "2026-05-13T00:00:00Z",
   "claim_surface": "release_facing"
@@ -514,7 +514,7 @@ Parity ledger claims cite docs/evidence/dropin-parity-gap-ledger.json.
         root,
         "docs/evidence/dropin-parity-gap-ledger.json",
         r#"{
-  "schema": "pi.dropin.parity_gap_ledger.v1",
+  "schema": "ra.dropin.parity_gap_ledger.v1",
   "generated_at_utc": "2026-05-13T00:00:00Z",
   "claim_surface": "release_facing",
   "gaps": []
@@ -524,7 +524,7 @@ Parity ledger claims cite docs/evidence/dropin-parity-gap-ledger.json.
         root,
         "docs/evidence/uncertified.json",
         r#"{
-  "schema": "pi.dropin_certification.verdict.v1",
+  "schema": "ra.dropin_certification.verdict.v1",
   "generated_at": "2026-05-13T00:00:00Z",
   "overall_verdict": "NOT_CERTIFIED",
   "claim_surface": "release_facing"
@@ -642,7 +642,7 @@ This fixture gives the semantic context planner a large deterministic workspace.
             &format!("docs/evidence/context_budget_{idx:03}.json"),
             &format!(
                 r#"{{
-  "schema": "pi.context.fixture_evidence.v1",
+  "schema": "ra.context.fixture_evidence.v1",
   "generated_at": "2026-05-13T00:00:00Z",
   "module": "{module}",
   "claim_surface": "internal_perf_budget"
@@ -719,7 +719,7 @@ fn add_sensitive_context_fixtures(root: &Path) -> TestResult {
         root,
         "tests/fixtures/vcr/oauth_refresh_sensitive.json",
         r#"{
-  "schema": "pi.vcr.fixture.v1",
+  "schema": "ra.vcr.fixture.v1",
   "generated_at": "2026-05-13T00:00:00Z",
   "authorization": "Bearer sk-secret",
   "request": {"body": {"prompt": "hidden prompt"}},
@@ -788,7 +788,7 @@ impl Provider for ContextE2eProvider {
         &self,
         context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<Pin<Box<dyn Stream<Item = pi::error::Result<StreamEvent>> + Send>>> {
+    ) -> ra::error::Result<Pin<Box<dyn Stream<Item = ra::error::Result<StreamEvent>> + Send>>> {
         match self.calls.lock() {
             Ok(calls) => calls,
             Err(poisoned) => poisoned.into_inner(),
@@ -845,7 +845,7 @@ fn node_with_source<'a>(
     graph: &'a SemanticWorkspaceGraph,
     node_type: SemanticNodeType,
     source_path: &str,
-) -> TestResult<&'a pi::semantic_workspace_graph::SemanticGraphNode> {
+) -> TestResult<&'a ra::semantic_workspace_graph::SemanticGraphNode> {
     graph
         .nodes
         .iter()
@@ -900,7 +900,7 @@ fn bead_status(
 }
 
 fn bundle_golden_summary(
-    bundle: &pi::semantic_workspace_graph::SemanticContextBundle,
+    bundle: &ra::semantic_workspace_graph::SemanticContextBundle,
 ) -> serde_json::Value {
     json!({
         "selected": bundle
@@ -1045,7 +1045,7 @@ fn semantic_perf_budget_fixture() -> serde_json::Value {
         .filter(|budget| budget["ci_enforced"].as_bool() == Some(true))
         .count();
     json!({
-        "schema": "pi.perf.budget_summary.v2",
+        "schema": "ra.perf.budget_summary.v2",
         "generated_at": "2026-05-13T00:00:00.000Z",
         "source_commit": "0123456789abcdef0123456789abcdef01234567",
         "run_id": "fixture-run",
@@ -1128,7 +1128,7 @@ fn evidence_ingestion_rejects_invalid_utf8_without_lossy_replacement() -> TestRe
         &full_path,
         b"{\"schema\":\"fixture.invalid_utf8.v1\",\"value\":\"\xff\"}",
     )?;
-    let expected_sha256 = pi::package_manager::hex_encode(&Sha256::digest(fs::read(&full_path)?));
+    let expected_sha256 = ra::package_manager::hex_encode(&Sha256::digest(fs::read(&full_path)?));
 
     let graph = build_fixture_graph(temp.path())?;
     let node = node_with_source(&graph, SemanticNodeType::EvidenceArtifact, path)?;
@@ -1195,7 +1195,7 @@ fn noncanonical_dropin_verdict_schema_never_admits_or_gains_claim_score() -> Tes
         temp.path(),
         shadow_path,
         &serde_json::to_string_pretty(&json!({
-            "schema": "pi.dropin.certification_verdict.v1",
+            "schema": "ra.dropin.certification_verdict.v1",
             "generated_at_utc": "2026-05-13T00:00:00Z",
             "overall_verdict": "CERTIFIED",
             "claim_surface": "release_facing"
@@ -1520,7 +1520,7 @@ fn canonical_dropin_verdict_requires_actual_passing_lane_bytes() -> TestResult {
         match mutation {
             "minimal_pass" => {
                 lane = json!({
-                "schema": "pi.ci.certification_lane.v1",
+                "schema": "ra.ci.certification_lane.v1",
                 "lane": "full",
                 "verdict": "pass"
                 });
@@ -1560,7 +1560,7 @@ fn canonical_dropin_verdict_requires_actual_passing_lane_bytes() -> TestResult {
                 lane["gates"][0]["status"] = json!("fail");
                 lane["gates"][0]["detail"] = json!("forged waiver");
                 lane["waiver_audit"] = json!({
-                    "schema": "pi.ci.waiver_audit.v1",
+                    "schema": "ra.ci.waiver_audit.v1",
                     "generated_at": "2026-05-13T00:00:00.000Z",
                     "total_waivers": 1,
                     "active": 1,
@@ -2042,7 +2042,7 @@ fn performance_budget_freshness_requires_current_global_claim_readiness() -> Tes
     };
 
     let mut legacy = semantic_perf_budget_fixture();
-    legacy["schema"] = json!("pi.perf.budget_summary.v1");
+    legacy["schema"] = json!("ra.perf.budget_summary.v1");
     let legacy_classification = classify_evidence_freshness(&legacy, &options);
     assert_eq!(legacy_classification.0, EvidenceFreshnessStatus::Malformed);
     assert!(!legacy_classification.1);
@@ -2094,7 +2094,7 @@ fn performance_budget_freshness_requires_current_global_claim_readiness() -> Tes
     );
 
     let historical = json!({
-        "schema": "pi.perf.budget_summary.v1",
+        "schema": "ra.perf.budget_summary.v1",
         "generated_at": "2026-05-13T00:00:00Z",
         "claim_surface": "historical_snapshot"
     });
@@ -2740,7 +2740,7 @@ edition = "2024"
     Ok(())
 }
 
-const HOSTILE_GIT_CHILD_ROOT: &str = "PI_SEMANTIC_HOSTILE_GIT_CHILD_ROOT";
+const HOSTILE_GIT_CHILD_ROOT: &str = "RECUR_AGENT_SEMANTIC_HOSTILE_GIT_CHILD_ROOT";
 
 #[test]
 fn performance_budget_source_binding_hostile_git_environment_child() -> TestResult {
@@ -3192,7 +3192,7 @@ fn planner_emits_budgeted_golden_bundles_for_core_task_shapes() -> TestResult {
             "selected": [
                 {
                     "path": "docs/evidence/extension-health-delta-failure-disposition.json",
-                    "title": "pi.ext.health_delta_failure_disposition.v1",
+                    "title": "ra.ext.health_delta_failure_disposition.v1",
                     "reason": "query_match,current_release_claim_evidence"
                 },
                 {
@@ -3478,9 +3478,9 @@ fn large_workspace_context_planner_budget_artifact_is_deterministic_under_random
     let artifact_dir = target_dir.join("perf");
     fs::create_dir_all(&artifact_dir)?;
     let summary_bytes = serde_json::to_vec(&bundle_summary)?;
-    let summary_sha256 = pi::package_manager::hex_encode(&Sha256::digest(&summary_bytes));
+    let summary_sha256 = ra::package_manager::hex_encode(&Sha256::digest(&summary_bytes));
     let artifact = json!({
-        "schema": "pi.semantic_context.performance_budget.v1",
+        "schema": "ra.semantic_context.performance_budget.v1",
         "generated_at": "2026-05-13T00:00:00Z",
         "run_id": "semantic-context-large-workspace-regression",
         "correlation_id": "semantic-context-large-workspace-regression",
@@ -3524,7 +3524,7 @@ fn large_workspace_context_planner_budget_artifact_is_deterministic_under_random
     let persisted: serde_json::Value = serde_json::from_slice(&fs::read(&artifact_path)?)?;
     assert_eq!(
         persisted["schema"],
-        json!("pi.semantic_context.performance_budget.v1")
+        json!("ra.semantic_context.performance_budget.v1")
     );
     assert_eq!(
         persisted["environment"]["cargo_target_dir"],
@@ -3704,7 +3704,7 @@ fn no_mock_context_intelligence_e2e_logs_and_replays_real_workspace() -> TestRes
         assert!(!context_content.contains("hidden token"));
 
         let session_path = {
-            let cx = pi::agent_cx::AgentCx::for_request();
+            let cx = ra::agent_cx::AgentCx::for_request();
             let session = session
                 .lock(cx.cx())
                 .await

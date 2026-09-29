@@ -55,23 +55,23 @@ const REDACTION_KEYS: [&str; 10] = [
 
 /// Deprecated: new tests MUST use v2. This constant exists only for backward-compat
 /// validation of existing test data. See DISC-021 / bd-38m8w.
-const TEST_LOG_SCHEMA_V1: &str = "pi.test.log.v1";
+const TEST_LOG_SCHEMA_V1: &str = "ra.test.log.v1";
 /// Canonical log schema for all new test JSONL records.
-pub const TEST_LOG_SCHEMA_V2: &str = "pi.test.log.v2";
+pub const TEST_LOG_SCHEMA_V2: &str = "ra.test.log.v2";
 /// Canonical artifact index schema for JSONL artifact records.
-pub const TEST_ARTIFACT_SCHEMA_V1: &str = "pi.test.artifact.v1";
+pub const TEST_ARTIFACT_SCHEMA_V1: &str = "ra.test.artifact.v1";
 /// Canonical evidence contract schema for aggregate e2e run evidence.
-pub const EVIDENCE_CONTRACT_SCHEMA_V1: &str = "pi.qa.evidence_contract.v1";
+pub const EVIDENCE_CONTRACT_SCHEMA_V1: &str = "ra.qa.evidence_contract.v1";
 /// Canonical failure digest schema used for failing suites.
 pub const FAILURE_DIGEST_SCHEMA_V1: &str = "pi.e2e.failure_digest.v1";
 /// Versioned parity test/logging contract identifier.
-pub const PARITY_TEST_LOGGING_CONTRACT_SCHEMA_V1: &str = "pi.parity.test_logging_contract.v1";
+pub const PARITY_TEST_LOGGING_CONTRACT_SCHEMA_V1: &str = "ra.parity.test_logging_contract.v1";
 /// Unified structured logging contract tying all schemas together (bd-3ar8v.1.7).
-pub const EVIDENCE_LOGGING_CONTRACT_SCHEMA_V1: &str = "pi.test.evidence_logging_contract.v1";
+pub const EVIDENCE_LOGGING_CONTRACT_SCHEMA_V1: &str = "ra.test.evidence_logging_contract.v1";
 /// Performance evidence record schema for PERF-3X beads (bd-3ar8v.1.7).
-pub const PERF_EVIDENCE_SCHEMA_V1: &str = "pi.perf.evidence.v1";
+pub const PERF_EVIDENCE_SCHEMA_V1: &str = "ra.perf.evidence.v1";
 /// Bead-to-test coverage link schema for coverage auditing (bd-3ar8v.1.7).
-pub const BEAD_COVERAGE_SCHEMA_V1: &str = "pi.perf.bead_coverage.v1";
+pub const BEAD_COVERAGE_SCHEMA_V1: &str = "ra.perf.bead_coverage.v1";
 const TEST_LOG_SCHEMA: &str = TEST_LOG_SCHEMA_V2;
 const TEST_ARTIFACT_SCHEMA: &str = TEST_ARTIFACT_SCHEMA_V1;
 const PLACEHOLDER_TIMESTAMP: &str = "<TIMESTAMP>";
@@ -238,7 +238,7 @@ impl ArtifactEntry {
 /// bd-3ar8v.1.3 (`NO_DATA` → hard failure).
 #[derive(Debug, Clone, Serialize)]
 pub struct PerfEvidenceRecord {
-    /// Schema identifier (always `pi.perf.evidence.v1`).
+    /// Schema identifier (always `ra.perf.evidence.v1`).
     pub schema: &'static str,
     /// Bead ID this evidence is linked to.
     pub bead_id: String,
@@ -302,7 +302,7 @@ impl PerfEvidenceRecord {
 /// Maps a bead to the test files and log artifacts that prove its implementation.
 #[derive(Debug, Clone, Serialize)]
 pub struct BeadCoverageLink {
-    /// Schema identifier (always `pi.perf.bead_coverage.v1`).
+    /// Schema identifier (always `ra.perf.bead_coverage.v1`).
     pub schema: &'static str,
     /// Bead ID being linked.
     pub bead_id: String,
@@ -988,7 +988,7 @@ impl TestLogger {
     /// Dump logs and artifacts as JSONL (one JSON object per line).
     ///
     /// This output is intended for machine parsing and deterministic diffs. It:
-    /// - includes a schema tag (`pi.test.log.v2` / `pi.test.artifact.v1`)
+    /// - includes a schema tag (`ra.test.log.v2` / `ra.test.artifact.v1`)
     /// - includes sequence numbers + ISO-8601 timestamps
     /// - uses elapsed milliseconds for ordering
     ///
@@ -1057,7 +1057,7 @@ impl TestLogger {
                 );
                 seq = seq.saturating_add(1);
                 let line = serde_json::to_string(&record)
-                    .unwrap_or_else(|_| "{\"schema\":\"pi.test.log.v2\"}".to_string());
+                    .unwrap_or_else(|_| "{\"schema\":\"ra.test.log.v2\"}".to_string());
                 out.push_str(&line);
                 out.push('\n');
             }
@@ -1074,7 +1074,7 @@ impl TestLogger {
             );
             seq = seq.saturating_add(1);
             let line = serde_json::to_string(&record)
-                .unwrap_or_else(|_| "{\"schema\":\"pi.test.artifact.v1\"}".to_string());
+                .unwrap_or_else(|_| "{\"schema\":\"ra.test.artifact.v1\"}".to_string());
             out.push_str(&line);
             out.push('\n');
         }
@@ -1365,18 +1365,18 @@ fn write_string_to_path(path: &Path, contents: &str) -> std::io::Result<()> {
 // JSONL Schema Validation
 // ============================================================================
 
-/// Required fields for a `pi.test.log.v1` JSONL record.
+/// Required fields for a `ra.test.log.v1` JSONL record.
 const LOG_RECORD_V1_REQUIRED_FIELDS: [&str; 8] = [
     "schema", "type", "seq", "ts", "t_ms", "level", "category", "message",
 ];
 
-/// Required fields for a `pi.test.log.v2` JSONL record.
+/// Required fields for a `ra.test.log.v2` JSONL record.
 /// V2 adds `trace_id` as a required field; `span_id` and `parent_span_id` are optional.
 const LOG_RECORD_V2_REQUIRED_FIELDS: [&str; 9] = [
     "schema", "type", "trace_id", "seq", "ts", "t_ms", "level", "category", "message",
 ];
 
-/// Required fields for a `pi.test.artifact.v1` JSONL record.
+/// Required fields for a `ra.test.artifact.v1` JSONL record.
 const ARTIFACT_RECORD_REQUIRED_FIELDS: [&str; 7] =
     ["schema", "type", "seq", "ts", "t_ms", "name", "path"];
 
@@ -1421,9 +1421,9 @@ pub fn validate_jsonl_line(line: &str, line_number: usize) -> Result<(), JsonlVa
 
     let schema = obj.get("schema").and_then(|v| v.as_str()).unwrap_or("");
     let required: &[&str] = match schema {
-        "pi.test.log.v1" => &LOG_RECORD_V1_REQUIRED_FIELDS,
-        "pi.test.log.v2" => &LOG_RECORD_V2_REQUIRED_FIELDS,
-        "pi.test.artifact.v1" => &ARTIFACT_RECORD_REQUIRED_FIELDS,
+        "ra.test.log.v1" => &LOG_RECORD_V1_REQUIRED_FIELDS,
+        "ra.test.log.v2" => &LOG_RECORD_V2_REQUIRED_FIELDS,
+        "ra.test.artifact.v1" => &ARTIFACT_RECORD_REQUIRED_FIELDS,
         _ => {
             return Err(JsonlValidationError {
                 line: line_number,
@@ -1473,7 +1473,7 @@ pub fn validate_jsonl_line(line: &str, line_number: usize) -> Result<(), JsonlVa
     }
 
     // V2 type checks for correlation fields.
-    if schema == "pi.test.log.v2" {
+    if schema == "ra.test.log.v2" {
         if let Some(trace_id) = obj.get("trace_id")
             && !trace_id.is_string()
         {
@@ -1515,7 +1515,7 @@ pub fn validate_jsonl_line(line: &str, line_number: usize) -> Result<(), JsonlVa
     Ok(())
 }
 
-/// Validate a single JSONL line, rejecting deprecated `pi.test.log.v1` records.
+/// Validate a single JSONL line, rejecting deprecated `ra.test.log.v1` records.
 ///
 /// New test code MUST use v2. This function enforces that: v1 log records produce
 /// an error, while v2 log and v1 artifact records pass normally. Use the standard
@@ -1544,7 +1544,7 @@ pub fn validate_jsonl_line_v2_only(
     Ok(())
 }
 
-/// Validate every non-empty line in a JSONL string, rejecting `pi.test.log.v1`.
+/// Validate every non-empty line in a JSONL string, rejecting `ra.test.log.v1`.
 ///
 /// Like [`validate_jsonl`] but enforces v2-only for log records. Use this for
 /// new test code. See DISC-021 / bd-38m8w.
@@ -1688,7 +1688,7 @@ impl std::fmt::Display for ArtifactPathWarning {
 
 /// Cross-validate artifact-index JSONL paths against the filesystem.
 ///
-/// Parses each `pi.test.artifact.v1` record and checks that the `path` field
+/// Parses each `ra.test.artifact.v1` record and checks that the `path` field
 /// resolves to an existing file, either as an absolute path or relative to
 /// `artifact_dir`. Returns a list of warnings for paths that don't resolve.
 ///
@@ -2095,19 +2095,19 @@ mod tests {
 
     #[test]
     fn validate_jsonl_valid_log_record() {
-        let record = r#"{"schema":"pi.test.log.v1","type":"log","seq":1,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"level":"info","category":"setup","message":"hello"}"#;
+        let record = r#"{"schema":"ra.test.log.v1","type":"log","seq":1,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"level":"info","category":"setup","message":"hello"}"#;
         assert!(validate_jsonl_line(record, 1).is_ok());
     }
 
     #[test]
     fn validate_jsonl_valid_artifact_record() {
-        let record = r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":2,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"name":"trace","path":"/tmp/trace.json"}"#;
+        let record = r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":2,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"name":"trace","path":"/tmp/trace.json"}"#;
         assert!(validate_jsonl_line(record, 1).is_ok());
     }
 
     #[test]
     fn validate_jsonl_rejects_unknown_schema() {
-        let record = r#"{"schema":"pi.test.unknown.v2","type":"log","seq":1,"ts":"x","t_ms":0}"#;
+        let record = r#"{"schema":"ra.test.unknown.v2","type":"log","seq":1,"ts":"x","t_ms":0}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "schema");
         assert!(err.message.contains("unknown schema"));
@@ -2116,7 +2116,7 @@ mod tests {
     #[test]
     fn validate_jsonl_rejects_missing_required_field() {
         // Missing "message" field for a log record.
-        let record = r#"{"schema":"pi.test.log.v1","type":"log","seq":1,"ts":"x","t_ms":0,"level":"info","category":"setup"}"#;
+        let record = r#"{"schema":"ra.test.log.v1","type":"log","seq":1,"ts":"x","t_ms":0,"level":"info","category":"setup"}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "message");
         assert!(err.message.contains("required field missing"));
@@ -2124,7 +2124,7 @@ mod tests {
 
     #[test]
     fn validate_jsonl_rejects_wrong_type_for_seq() {
-        let record = r#"{"schema":"pi.test.log.v1","type":"log","seq":"not-a-number","ts":"x","t_ms":0,"level":"info","category":"setup","message":"hi"}"#;
+        let record = r#"{"schema":"ra.test.log.v1","type":"log","seq":"not-a-number","ts":"x","t_ms":0,"level":"info","category":"setup","message":"hi"}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "seq");
         assert!(err.message.contains("expected number"));
@@ -2174,7 +2174,7 @@ mod tests {
 
     #[test]
     fn validate_jsonl_batch_collects_all_errors() {
-        let bad_content = "{broken}\n[1,2]\n{\"schema\":\"pi.test.log.v1\",\"type\":\"log\",\"seq\":1,\"ts\":\"x\",\"t_ms\":0,\"level\":\"info\",\"category\":\"c\",\"message\":\"m\"}\n";
+        let bad_content = "{broken}\n[1,2]\n{\"schema\":\"ra.test.log.v1\",\"type\":\"log\",\"seq\":1,\"ts\":\"x\",\"t_ms\":0,\"level\":\"info\",\"category\":\"c\",\"message\":\"m\"}\n";
         let errors = validate_jsonl(bad_content);
         // First two lines are bad, third is valid.
         assert_eq!(errors.len(), 2);
@@ -2573,7 +2573,7 @@ mod tests {
         let record: serde_json::Value =
             serde_json::from_str(jsonl.lines().next().unwrap()).unwrap();
         assert_eq!(record["trace_id"].as_str().unwrap(), logger.trace_id());
-        assert_eq!(record["schema"], "pi.test.log.v2");
+        assert_eq!(record["schema"], "ra.test.log.v2");
     }
 
     #[test]
@@ -2725,21 +2725,21 @@ mod tests {
 
     #[test]
     fn v2_schema_rejects_non_string_trace_id() {
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","trace_id":123,"seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","trace_id":123,"seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "trace_id");
     }
 
     #[test]
     fn v2_schema_rejects_non_string_span_id() {
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","span_id":42,"seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","span_id":42,"seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "span_id");
     }
 
     #[test]
     fn v2_schema_rejects_missing_trace_id() {
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "trace_id");
         assert!(err.message.contains("required field missing"));
@@ -2748,7 +2748,7 @@ mod tests {
     #[test]
     fn v1_schema_still_validates() {
         // V1 records should still pass validation (backward compat).
-        let record = r#"{"schema":"pi.test.log.v1","type":"log","seq":1,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"level":"info","category":"setup","message":"hello"}"#;
+        let record = r#"{"schema":"ra.test.log.v1","type":"log","seq":1,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"level":"info","category":"setup","message":"hello"}"#;
         assert!(validate_jsonl_line(record, 1).is_ok());
     }
 
@@ -2758,7 +2758,7 @@ mod tests {
 
     #[test]
     fn v2_only_rejects_v1_log_schema() {
-        let record = r#"{"schema":"pi.test.log.v1","type":"log","seq":1,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"level":"info","category":"setup","message":"hello"}"#;
+        let record = r#"{"schema":"ra.test.log.v1","type":"log","seq":1,"ts":"2026-01-01T00:00:00.000Z","t_ms":0,"level":"info","category":"setup","message":"hello"}"#;
         let err = validate_jsonl_line_v2_only(record, 1).unwrap_err();
         assert_eq!(err.field, "schema");
         assert!(
@@ -2769,23 +2769,23 @@ mod tests {
 
     #[test]
     fn v2_only_accepts_v2_log_schema() {
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         assert!(validate_jsonl_line_v2_only(record, 1).is_ok());
     }
 
     #[test]
     fn v2_only_accepts_artifact_v1_schema() {
         // Artifact schema is v1 and that's correct (not deprecated).
-        let record = r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"trace","path":"/tmp/t.json"}"#;
+        let record = r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":1,"ts":"x","t_ms":0,"name":"trace","path":"/tmp/t.json"}"#;
         assert!(validate_jsonl_line_v2_only(record, 1).is_ok());
     }
 
     #[test]
     fn v2_only_batch_rejects_mixed_v1_v2() {
         let content = [
-            r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"ok"}"#,
-            r#"{"schema":"pi.test.log.v1","type":"log","seq":2,"ts":"x","t_ms":0,"level":"info","category":"c","message":"bad"}"#,
-            r#"{"schema":"pi.test.artifact.v1","type":"artifact","seq":3,"ts":"x","t_ms":0,"name":"a","path":"/tmp/a"}"#,
+            r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"ok"}"#,
+            r#"{"schema":"ra.test.log.v1","type":"log","seq":2,"ts":"x","t_ms":0,"level":"info","category":"c","message":"bad"}"#,
+            r#"{"schema":"ra.test.artifact.v1","type":"artifact","seq":3,"ts":"x","t_ms":0,"name":"a","path":"/tmp/a"}"#,
         ]
         .join("\n");
 
@@ -2872,20 +2872,20 @@ mod tests {
     #[test]
     fn ci_correlation_id_in_jsonl_passes_validation() {
         // A v2 record with ci_correlation_id as a string should validate.
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","ci_correlation_id":"run-42","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","ci_correlation_id":"run-42","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         assert!(validate_jsonl_line(record, 1).is_ok());
     }
 
     #[test]
     fn ci_correlation_id_without_value_passes_validation() {
         // A v2 record without ci_correlation_id should also validate.
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         assert!(validate_jsonl_line(record, 1).is_ok());
     }
 
     #[test]
     fn v2_schema_rejects_non_string_ci_correlation_id() {
-        let record = r#"{"schema":"pi.test.log.v2","type":"log","trace_id":"abc","ci_correlation_id":123,"seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
+        let record = r#"{"schema":"ra.test.log.v2","type":"log","trace_id":"abc","ci_correlation_id":123,"seq":1,"ts":"x","t_ms":0,"level":"info","category":"c","message":"m"}"#;
         let err = validate_jsonl_line(record, 1).unwrap_err();
         assert_eq!(err.field, "ci_correlation_id");
     }

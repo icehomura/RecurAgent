@@ -1,7 +1,7 @@
 {
-  "schema": "pi.swarm.replay_trace.fixture_suite.v1",
-  "contract_schema": "pi.swarm.replay_trace_contract.v1",
-  "trace_schema": "pi.swarm.replay_trace.v1",
+  "schema": "ra.swarm.replay_trace.fixture_suite.v1",
+  "contract_schema": "ra.swarm.replay_trace_contract.v1",
+  "trace_schema": "ra.swarm.replay_trace.v1",
   "fixture_suite_id": "swarm-replay-source-inventory-scenarios",
   "scenarios": [
     {
@@ -42,12 +42,12 @@
         }
       ],
       "trace": {
-        "schema": "pi.swarm.replay_trace.v1",
+        "schema": "ra.swarm.replay_trace.v1",
         "trace_id": "fixture-agent-mail-unavailable",
         "generated_at": "2026-05-13T17:30:00Z",
         "workspace": {
-          "repo": "pi_agent_rust",
-          "root": "/data/projects/pi_agent_rust",
+          "repo": "recur_agent",
+          "root": "/data/projects/recur_agent",
           "git_commit": "fixture"
         },
         "sources": [
@@ -93,7 +93,7 @@
               "generated_at": "2026-05-13T17:30:00Z",
               "command": "mcp_agent_mail.health_check",
               "git_commit": "fixture",
-              "workspace_root": "/data/projects/pi_agent_rust"
+              "workspace_root": "/data/projects/recur_agent"
             },
             "redaction": {
               "state": "sensitive_omitted",
@@ -129,7 +129,7 @@
               "generated_at": "2026-05-13T17:31:00Z",
               "command": "br ready --json",
               "git_commit": "fixture",
-              "workspace_root": "/data/projects/pi_agent_rust"
+              "workspace_root": "/data/projects/recur_agent"
             },
             "redaction": {
               "state": "none",
@@ -166,7 +166,7 @@
               "generated_at": "2026-05-13T17:32:00Z",
               "command": "rch status --json",
               "git_commit": "fixture",
-              "workspace_root": "/data/projects/pi_agent_rust"
+              "workspace_root": "/data/projects/recur_agent"
             },
             "redaction": {
               "state": "redacted",
@@ -200,9 +200,9 @@
               "sha256": "fixture-doctor-sha256",
               "captured_at": "2026-05-13T17:33:00Z",
               "generated_at": "2026-05-13T17:33:00Z",
-              "command": "pi doctor --only swarm --format json",
+              "command": "ra doctor --only swarm --format json",
               "git_commit": "fixture",
-              "workspace_root": "/data/projects/pi_agent_rust"
+              "workspace_root": "/data/projects/recur_agent"
             },
             "redaction": {
               "state": "redacted",
@@ -270,12 +270,12 @@
         }
       ],
       "trace": {
-        "schema": "pi.swarm.replay_trace.v1",
+        "schema": "ra.swarm.replay_trace.v1",
         "trace_id": "fixture-malformed-rch-snapshot",
         "generated_at": "2026-05-13T17:40:00Z",
         "workspace": {
-          "repo": "pi_agent_rust",
-          "root": "/data/projects/pi_agent_rust",
+          "repo": "recur_agent",
+          "root": "/data/projects/recur_agent",
           "git_commit": "fixture"
         },
         "sources": [
@@ -303,7 +303,7 @@
               "generated_at": "2026-05-13T17:40:00Z",
               "command": "rch status --json",
               "git_commit": "fixture",
-              "workspace_root": "/data/projects/pi_agent_rust"
+              "workspace_root": "/data/projects/recur_agent"
             },
             "redaction": {
               "state": "redacted",

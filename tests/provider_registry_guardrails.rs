@@ -15,7 +15,7 @@ mod common;
 
 use chrono::{SecondsFormat, Utc};
 use common::harness::TestHarness;
-use pi::provider_metadata::{
+use ra::provider_metadata::{
     PROVIDER_METADATA, canonical_provider_id, provider_auth_env_keys, provider_metadata,
     provider_routing_defaults,
 };
@@ -35,10 +35,10 @@ const LOOKUP_P99_US_DEFAULT: f64 = 40.0;
 const FOOTPRINT_MB_DEFAULT: f64 = 1.0;
 const RSS_DELTA_MB_DEFAULT: f64 = 8.0;
 
-const STARTUP_P95_MS_ENV: &str = "PI_PROVIDER_REGISTRY_STARTUP_P95_MS";
-const LOOKUP_P99_US_ENV: &str = "PI_PROVIDER_REGISTRY_LOOKUP_P99_US";
-const FOOTPRINT_MB_ENV: &str = "PI_PROVIDER_REGISTRY_FOOTPRINT_MB";
-const RSS_DELTA_MB_ENV: &str = "PI_PROVIDER_REGISTRY_RSS_DELTA_MB";
+const STARTUP_P95_MS_ENV: &str = "RECUR_AGENT_PROVIDER_REGISTRY_STARTUP_P95_MS";
+const LOOKUP_P99_US_ENV: &str = "RECUR_AGENT_PROVIDER_REGISTRY_LOOKUP_P99_US";
+const FOOTPRINT_MB_ENV: &str = "RECUR_AGENT_PROVIDER_REGISTRY_FOOTPRINT_MB";
+const RSS_DELTA_MB_ENV: &str = "RECUR_AGENT_PROVIDER_REGISTRY_RSS_DELTA_MB";
 
 #[derive(Debug, Clone, Serialize)]
 struct GuardrailEvent {
@@ -315,7 +315,7 @@ fn provider_registry_startup_and_lookup_guardrails() {
     );
 
     let startup_event = GuardrailEvent {
-        schema: "pi.provider_registry.guardrail.v1",
+        schema: "ra.provider_registry.guardrail.v1",
         test: "provider_registry_startup_and_lookup_guardrails",
         metric: "startup_index_build_p95_ms",
         actual: startup_p95_ms,
@@ -339,7 +339,7 @@ fn provider_registry_startup_and_lookup_guardrails() {
     emit_guardrail_event(&startup_event);
 
     let lookup_event = GuardrailEvent {
-        schema: "pi.provider_registry.guardrail.v1",
+        schema: "ra.provider_registry.guardrail.v1",
         test: "provider_registry_startup_and_lookup_guardrails",
         metric: "provider_lookup_p99_us",
         actual: lookup_p99_us,
@@ -433,7 +433,7 @@ fn provider_registry_memory_guardrails() {
         .info("measure", "measured provider registry memory footprint");
 
     let event = GuardrailEvent {
-        schema: "pi.provider_registry.guardrail.v1",
+        schema: "ra.provider_registry.guardrail.v1",
         test: "provider_registry_memory_guardrails",
         metric: "provider_registry_footprint_mb",
         actual: estimated_mb,

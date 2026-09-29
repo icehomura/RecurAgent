@@ -94,7 +94,7 @@ Residuals:
 
 ## Opportunity Matrix Contract
 
-- Expected schema: `pi.perf.opportunity_matrix.v1`
+- Expected schema: `ra.perf.opportunity_matrix.v1`
 - Artifact path: `tests/perf/reports/opportunity_matrix.json`
 - Artifact present: `true`
 - Contract valid: `true`

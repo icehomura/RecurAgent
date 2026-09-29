@@ -1,7 +1,7 @@
 //! Black-box CLI scenario runner for E2E tests.
 //!
 //! Provides a declarative, parameterized harness that:
-//! - Spawns the `pi` binary in a tmux session
+//! - Spawns the `ra` binary in a tmux session
 //! - Drives it through a sequence of steps (send text, send key, wait)
 //! - Assigns correlation IDs to each step for cross-log tracing
 //! - Emits structured JSONL transcripts for replay and diff tooling
@@ -12,7 +12,7 @@
 //! let scenario = CliScenario::new("basic_chat")
 //!     .arg("--no-tools")
 //!     .arg("--no-extensions")
-//!     .env("PI_TEST_MODE", "1")
+//!     .env("RECUR_AGENT_TEST_MODE", "1")
 //!     .step(ScenarioStep::send_text("Hello", "Hello").label("greeting"))
 //!     .step(ScenarioStep::wait("response text").timeout_secs(30))
 //!     .exit(ExitStrategy::Graceful);
@@ -138,7 +138,7 @@ pub struct VcrConfig {
     pub test_name: String,
 }
 
-/// File to create in the scenario working directory before launching `pi`.
+/// File to create in the scenario working directory before launching `ra`.
 #[derive(Clone, Debug)]
 pub struct ScenarioFile {
     pub path: PathBuf,
@@ -439,7 +439,7 @@ impl ScenarioRunner {
         if let Some(vcr) = &scenario.vcr {
             session.set_env("VCR_MODE", "playback");
             session.set_env("VCR_CASSETTE_DIR", &vcr.cassette_dir.display().to_string());
-            session.set_env("PI_VCR_TEST_NAME", &vcr.test_name);
+            session.set_env("RECUR_AGENT_VCR_TEST_NAME", &vcr.test_name);
         }
 
         // Launch
@@ -567,7 +567,7 @@ impl ScenarioRunner {
         // Write TUI step artifacts first
         session.write_artifacts();
 
-        let session_root = scenario.env.get("PI_SESSIONS_DIR").map_or_else(
+        let session_root = scenario.env.get("RECUR_AGENT_SESSIONS_DIR").map_or_else(
             || session.harness.temp_dir().join("env").join("sessions"),
             PathBuf::from,
         );
@@ -726,7 +726,7 @@ pub struct ReplayDivergence {
     pub severity: String,
 }
 
-const REPLAY_MANIFEST_SCHEMA: &str = "pi.test.replay.v1";
+const REPLAY_MANIFEST_SCHEMA: &str = "ra.test.replay.v1";
 
 impl ReplayManifest {
     /// Build a manifest from a completed scenario run.

@@ -13,11 +13,11 @@
 //!   `cargo test --test ext_load_time_benchmark --features ext-conformance -- --nocapture`
 //!
 //! Environment variables:
-//!   `PI_LOAD_BENCH_ITERATIONS`  - iterations per extension (default: 100)
-//!   `PI_LOAD_BENCH_WARMUP`      - warmup loads before warm-start sampling (default: 1)
-//!   `PI_LOAD_BENCH_BUDGET_MS`   - P99 budget in ms (default: 100)
-//!   `PI_LOAD_BENCH_SCOPE`       - "all" (default) or "official"
-//!   `PI_LOAD_BENCH_MAX`         - limit to first N extensions after filtering
+//!   `RECUR_AGENT_LOAD_BENCH_ITERATIONS`  - iterations per extension (default: 100)
+//!   `RECUR_AGENT_LOAD_BENCH_WARMUP`      - warmup loads before warm-start sampling (default: 1)
+//!   `RECUR_AGENT_LOAD_BENCH_BUDGET_MS`   - P99 budget in ms (default: 100)
+//!   `RECUR_AGENT_LOAD_BENCH_SCOPE`       - "all" (default) or "official"
+//!   `RECUR_AGENT_LOAD_BENCH_MAX`         - limit to first N extensions after filtering
 
 mod common;
 
@@ -27,30 +27,30 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::tools::ToolRegistry;
 use serde_json::Value;
 use std::sync::Arc;
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 fn iterations() -> usize {
-    std::env::var("PI_LOAD_BENCH_ITERATIONS")
+    std::env::var("RECUR_AGENT_LOAD_BENCH_ITERATIONS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(100)
 }
 
 fn warmup_iterations() -> usize {
-    std::env::var("PI_LOAD_BENCH_WARMUP")
+    std::env::var("RECUR_AGENT_LOAD_BENCH_WARMUP")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(1)
 }
 
 fn p99_budget_ms() -> u64 {
-    std::env::var("PI_LOAD_BENCH_BUDGET_MS")
+    std::env::var("RECUR_AGENT_LOAD_BENCH_BUDGET_MS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(100)
@@ -63,7 +63,7 @@ enum BenchScope {
 }
 
 fn scope() -> BenchScope {
-    match std::env::var("PI_LOAD_BENCH_SCOPE")
+    match std::env::var("RECUR_AGENT_LOAD_BENCH_SCOPE")
         .ok()
         .unwrap_or_else(|| "all".to_string())
         .trim()
@@ -76,12 +76,12 @@ fn scope() -> BenchScope {
 }
 
 fn max_extensions() -> Option<usize> {
-    std::env::var("PI_LOAD_BENCH_MAX")
+    std::env::var("RECUR_AGENT_LOAD_BENCH_MAX")
         .ok()
         .and_then(|v| v.parse().ok())
         // Legacy alias (prior to scope support).
         .or_else(|| {
-            std::env::var("PI_OFFICIAL_MAX")
+            std::env::var("RECUR_AGENT_OFFICIAL_MAX")
                 .ok()
                 .and_then(|v| v.parse().ok())
         })
@@ -288,7 +288,7 @@ fn benchmark_extension(entry: &ManifestEntry, warmup: usize, n: usize) -> ExtLoa
     let _ = std::fs::create_dir_all(&cwd);
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };

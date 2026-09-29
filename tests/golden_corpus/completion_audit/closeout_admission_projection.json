@@ -47,7 +47,7 @@
       },
       "operator_next_actions": [],
       "read_only": true,
-      "schema": "pi.completion_audit.closeout_admission_evidence.v1",
+      "schema": "ra.completion_audit.closeout_admission_evidence.v1",
       "source_bead": {
         "assignee": "FixtureAgent",
         "close_reason": "Completed with direct evidence: commit abc1234, pushed ref, self-test, and audit artifacts.",
@@ -152,7 +152,7 @@
       "text": "Inspect or update `scripts/build_completion_audit.py`"
     }
   ],
-  "schema": "pi.completion_audit.v1",
+  "schema": "ra.completion_audit.v1",
   "summary": {
     "contradiction": 0,
     "covered": 7,

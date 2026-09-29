@@ -72,7 +72,7 @@ avoid the probe entirely for one API, narrow `responsesCompactApis`.
 From npm (recommended):
 
 ```bash
-pi install npm:@lll9p/pi-better-compaction
+ra install npm:@lll9p/pi-better-compaction
 ```
 
 Try it for a single run without installing:
@@ -86,7 +86,7 @@ From a checkout (development):
 ```bash
 git clone https://github.com/lll9p/pi-better-compaction.git
 cd pi-better-compaction
-pi install .
+ra install .
 ```
 
 After installation, run `/reload`.
@@ -96,7 +96,7 @@ After installation, run `/reload`.
 Single source, merged over built-in defaults:
 
 ```
-~/.pi/agent/extensions/pi-better-compaction/config.json
+~/.ra/agent/extensions/pi-better-compaction/config.json
 ```
 
 A missing file silently uses the defaults below. The extension never writes this file for you.
@@ -116,7 +116,7 @@ A missing file silently uses the defaults below. The extension never writes this
   "logProviderPayloads": false,
   "logCompactResponses": false,
   "redactSensitiveData": true,
-  "artifactRoot": "~/.pi/agent/artifacts/pi-better-compaction"
+  "artifactRoot": "~/.ra/agent/artifacts/pi-better-compaction"
 }
 ```
 
@@ -132,7 +132,7 @@ A missing file silently uses the defaults below. The extension never writes this
 | `logProviderPayloads` | `false` | Write `before_provider_request` payload artifacts. |
 | `logCompactResponses` | `false` | Write compact endpoint request/response artifacts. |
 | `redactSensitiveData` | `true` | Redact secrets in artifacts. Keep on. |
-| `artifactRoot` | `~/.pi/agent/artifacts/pi-better-compaction` | Debug artifact root. `~/` and relative paths (resolved against the config dir) are supported. |
+| `artifactRoot` | `~/.ra/agent/artifacts/pi-better-compaction` | Debug artifact root. `~/` and relative paths (resolved against the config dir) are supported. |
 
 ### Codex-aligned compact request
 

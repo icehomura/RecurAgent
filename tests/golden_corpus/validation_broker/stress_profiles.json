@@ -1,5 +1,5 @@
 {
-  "schema": "pi.validation_broker.stress_profile_corpus.v1",
+  "schema": "ra.validation_broker.stress_profile_corpus.v1",
   "generated_at_utc": "2026-05-14T08:30:00Z",
   "budgets": {
     "max_plan_latency_ms": 20,

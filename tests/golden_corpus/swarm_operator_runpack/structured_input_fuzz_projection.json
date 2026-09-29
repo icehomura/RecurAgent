@@ -19,7 +19,7 @@
     {
       "boundary": "json_payload_from_stdout/load_json_source/redact_json",
       "details": {
-        "parsed_schema": "pi.swarm.structured_fuzz.nested_tool_payload.v1",
+        "parsed_schema": "ra.swarm.structured_fuzz.nested_tool_payload.v1",
         "redacted_count": 3,
         "redacted_fields": [
           "nested_tool_payload.events[0].arguments.api_key",
@@ -36,7 +36,7 @@
     {
       "boundary": "canonicalize_for_golden",
       "details": {
-        "cargo_tmp_path": "[PI_AGENT_CARGO_TMP]/test/target",
+        "cargo_tmp_path": "[RECUR_AGENT_AGENT_CARGO_TMP]/test/target",
         "data_tmp_path": "[DATA_TMP]/pi-agent/fuzz-artifact.json",
         "git_sha_text": "[GIT_SHA]",
         "home_path": "[HOME]/.config/pi/settings.json",
@@ -155,6 +155,6 @@
     "unsupported_schema_fail_closed",
     "ambiguous_command_fail_closed"
   ],
-  "schema": "pi.swarm.structured_input_fuzz_harness.v1",
+  "schema": "ra.swarm.structured_input_fuzz_harness.v1",
   "status": "pass"
 }

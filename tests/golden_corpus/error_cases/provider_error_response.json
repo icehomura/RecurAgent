@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "error_provider_error_response",
   "surface": "error_cases",
   "description": "Error: provider returns HTTP 429 rate limit error",

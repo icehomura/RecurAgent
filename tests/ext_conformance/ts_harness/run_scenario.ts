@@ -71,9 +71,9 @@ interface ScenarioInput {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PI_MONO_ROOT = path.resolve(__dirname, "../../../legacy_pi_mono_code/pi-mono");
+const RECUR_AGENT_MONO_ROOT = path.resolve(__dirname, "../../../legacy_pi_mono_code/pi-mono");
 
-const loaderPath = path.join(PI_MONO_ROOT, "packages/coding-agent/dist/core/extensions/loader.js");
+const loaderPath = path.join(RECUR_AGENT_MONO_ROOT, "packages/coding-agent/dist/core/extensions/loader.js");
 
 const originalConsole = {
   log: console.log.bind(console),
@@ -86,8 +86,8 @@ console.warn = () => {};
 console.error = () => {};
 
 function applyDeterministicGlobals() {
-  const timeRaw = process.env.PI_DETERMINISTIC_TIME_MS;
-  const stepRaw = process.env.PI_DETERMINISTIC_TIME_STEP_MS;
+  const timeRaw = process.env.RECUR_AGENT_DETERMINISTIC_TIME_MS;
+  const stepRaw = process.env.RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS;
   if (timeRaw && timeRaw.trim().length > 0) {
     const base = Number(timeRaw);
     if (Number.isFinite(base)) {
@@ -117,8 +117,8 @@ function applyDeterministicGlobals() {
       (globalThis as any).Date = DeterministicDate;
     }
   }
-  const randRaw = process.env.PI_DETERMINISTIC_RANDOM;
-  const randSeedRaw = process.env.PI_DETERMINISTIC_RANDOM_SEED;
+  const randRaw = process.env.RECUR_AGENT_DETERMINISTIC_RANDOM;
+  const randSeedRaw = process.env.RECUR_AGENT_DETERMINISTIC_RANDOM_SEED;
   if (randRaw && randRaw.trim().length > 0) {
     const value = Number(randRaw);
     if (Number.isFinite(value)) {
@@ -134,13 +134,13 @@ function applyDeterministicGlobals() {
       };
     }
   }
-  const detCwd = process.env.PI_DETERMINISTIC_CWD;
+  const detCwd = process.env.RECUR_AGENT_DETERMINISTIC_CWD;
   if (detCwd && detCwd.trim().length > 0) {
     try {
       Object.defineProperty(process, "cwd", { value: () => detCwd, configurable: true });
     } catch {}
   }
-  const detHome = process.env.PI_DETERMINISTIC_HOME;
+  const detHome = process.env.RECUR_AGENT_DETERMINISTIC_HOME;
   if (detHome && detHome.trim().length > 0) {
     try {
       process.env.HOME = detHome;

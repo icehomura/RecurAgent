@@ -20,7 +20,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 // The single definition lives in src/; see its doc for why three copies
 // of this number was itself a defect (bd-649i1).
-use pi::semantic_workspace_graph::PERF_CANONICAL_BUDGET_INVENTORY_SHA256;
+use ra::semantic_workspace_graph::PERF_CANONICAL_BUDGET_INVENTORY_SHA256;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -145,12 +145,18 @@ fn require_json(relative: &str) -> Value {
 
 fn require_text(relative: &str) -> String {
     let path = repo_root().join(relative);
+    // Normalize CRLF -> LF: several callers parse these files as text and
+    // search for multi-line markers with `\n` (e.g. release_gate_embedded_python).
+    // On a checkout with `core.autocrlf = true` the working tree is CRLF while
+    // the committed blob is LF, which would otherwise make those searches fail
+    // for a reason unrelated to what they assert.
     std::fs::read_to_string(&path)
+        .map(|text| text.replace("\r\n", "\n"))
         .unwrap_or_else(|err| format!("__UNREADABLE_TEXT_FILE__ {relative}: {err}"))
 }
 
 const FRANKEN_NODE_CLAIM_CONTRACT_PATH: &str = "docs/franken-node-claim-gating-contract.json";
-const FRANKEN_NODE_CLAIM_CONTRACT_SCHEMA: &str = "pi.frankennode.claim_gating_contract.v1";
+const FRANKEN_NODE_CLAIM_CONTRACT_SCHEMA: &str = "ra.frankennode.claim_gating_contract.v1";
 const FRANKEN_NODE_REQUIRED_TIER_IDS: &[&str] = &[
     "TIER-1-EXTENSION-HOST-PARITY",
     "TIER-2-TARGETED-RUNTIME-PARITY",
@@ -183,7 +189,7 @@ const FRANKEN_NODE_TIER3_REQUIRED_EVIDENCE_TOKENS: &[&str] = &[
     "runtime-substrate generalization evidence for bd-3ar8v.7.5",
     "multi-tier execution engine evidence for bd-3ar8v.7.6",
     "compatibility remediation backlog generator evidence for bd-3ar8v.7.16",
-    "crate reintegration evidence into pi_agent_rust",
+    "crate reintegration evidence into recur_agent",
 ];
 
 fn collect_non_empty_string_array(
@@ -652,7 +658,7 @@ fn release_publication_never_builds_with_the_registry_token() {
     let workflow = require_text(".github/workflows/release.yml");
     assert_eq!(
         workflow
-            .matches("PI_CRATES_IO_RELEASE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}")
+            .matches("RECUR_AGENT_CRATES_IO_RELEASE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}")
             .count(),
         1,
         "the registry secret must be injected into exactly one workflow step"
@@ -678,23 +684,24 @@ fn release_publication_never_builds_with_the_registry_token() {
         .and_then(|suffix| suffix.split_once("\n      - name:").map(|(step, _)| step))
         .expect("release workflow must retain the checksum-gated publication step");
     assert!(
-        publish_step.contains("PI_CRATES_IO_RELEASE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}"),
+        publish_step
+            .contains("RECUR_AGENT_CRATES_IO_RELEASE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}"),
         "publication step must receive the registry credential only in its secret-scoped environment"
     );
     let token_capture = publish_step
         .find(concat!(
             "release_crates_io_token=\"$",
-            "{PI_CRATES_IO_RELEASE_TOKEN:-}\""
+            "{RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}\""
         ))
         .expect("publication step must capture the injected token in a shell-only variable");
     let token_unset = publish_step
-        .find("unset PI_CRATES_IO_RELEASE_TOKEN")
+        .find("unset RECUR_AGENT_CRATES_IO_RELEASE_TOKEN")
         .expect("publication step must remove the exported token before invoking subprocesses");
     let crate_reverification = publish_step
         .find("actual_crate_sha=\"$(sha256sum")
         .expect("publication step must reverify the crate after narrowing token scope");
     let token_handoff = publish_step
-        .find("PI_CRATES_IO_RELEASE_TOKEN=\"$release_crates_io_token\"")
+        .find("RECUR_AGENT_CRATES_IO_RELEASE_TOKEN=\"$release_crates_io_token\"")
         .expect("publication step must hand the token only to the publish process");
     let cargo_publish = publish_step
         .find("cargo publish")
@@ -704,16 +711,16 @@ fn release_publication_never_builds_with_the_registry_token() {
         .map(|offset| token_handoff + offset)
         .expect("publication step must clear its shell-only token after Cargo returns");
     let receipt_validation = publish_step
-        .find("if [ -f \"$PI_CREDENTIAL_RECEIPT\"")
+        .find("if [ -f \"$RECUR_AGENT_CREDENTIAL_RECEIPT\"")
         .expect("publication step must validate the credential receipt after token clearing");
     assert!(
         publish_step.contains(concat!(
             "run: |\n          set -euo pipefail\n          set +x\n          ",
             "release_crates_io_token=\"$",
-            "{PI_CRATES_IO_RELEASE_TOKEN:-}\""
+            "{RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}\""
         ),) && publish_step.contains("export -n release_crates_io_token")
             && publish_step
-                .matches("PI_CRATES_IO_RELEASE_TOKEN=\"$release_crates_io_token\"")
+                .matches("RECUR_AGENT_CRATES_IO_RELEASE_TOKEN=\"$release_crates_io_token\"")
                 .count()
                 == 1
             && token_capture < token_unset
@@ -758,7 +765,7 @@ fn release_publication_never_builds_with_the_registry_token() {
         .expect("manual lane must require a registry token before its first subprocess");
     let manual_token_unset = manual_lane
         .find(
-            "builtin unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN \\\n  PI_CRATES_IO_RELEASE_TOKEN",
+            "builtin unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN \\\n  RECUR_AGENT_CRATES_IO_RELEASE_TOKEN",
         )
         .expect("manual lane must remove every exported registry-token spelling");
     let manual_token_length = manual_lane
@@ -785,12 +792,14 @@ fn release_publication_never_builds_with_the_registry_token() {
     );
     assert!(
         manual_lane.contains("builtin export -n release_crates_io_token")
-            && !manual_lane.contains("PI_CRATES_IO_RELEASE_TOKEN=\"$release_crates_io_token\"")
+            && !manual_lane
+                .contains("RECUR_AGENT_CRATES_IO_RELEASE_TOKEN=\"$release_crates_io_token\"")
             && manual_lane.contains("builtin printf '%s\\n' \"$controller_token\" |")
             && manual_lane.contains("\"$release_bash_path\" --noprofile --norc -c")
-            && manual_lane.contains("[[ -z \"${PI_CRATES_IO_RELEASE_TOKEN:-}\" ]]")
+            && manual_lane.contains("[[ -z \"${RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}\" ]]")
             && manual_lane.contains("IFS= read -r scoped_release_token")
-            && manual_lane.contains("export PI_CRATES_IO_RELEASE_TOKEN=\"$scoped_release_token\"",)
+            && manual_lane
+                .contains("export RECUR_AGENT_CRATES_IO_RELEASE_TOKEN=\"$scoped_release_token\"",)
             && manual_lane.contains("unset scoped_release_token")
             && manual_lane.contains("exec 0</dev/null"),
         "manual release must pass the token through an anonymous pipe into exactly one clean child, never argv"
@@ -826,7 +835,7 @@ fn release_publication_never_builds_with_the_registry_token() {
             && !publisher_setup.contains("env -u CARGO_REGISTRY_TOKEN"),
         "publisher dry-run and configuration proofs must not inherit operator home or credentials"
     );
-    let workflow_sha256 = pi::package_manager::hex_encode(&Sha256::digest(workflow.as_bytes()));
+    let workflow_sha256 = ra::package_manager::hex_encode(&Sha256::digest(workflow.as_bytes()));
     assert!(
         runbook.contains(&workflow_sha256),
         "manual release workflow pin must match the exact reviewed workflow bytes"
@@ -862,7 +871,7 @@ fn release_publication_never_builds_with_the_registry_token() {
         }
     }
     let provider_sha256 =
-        pi::package_manager::hex_encode(&Sha256::digest(provider_source.as_bytes()));
+        ra::package_manager::hex_encode(&Sha256::digest(provider_source.as_bytes()));
     assert!(
         runbook.contains(&provider_sha256),
         "manual release provider pin must match the exact extracted provider bytes"
@@ -910,7 +919,7 @@ fn release_publication_never_builds_with_the_registry_token() {
         .map(|offset| clean_child + offset)
         .expect("clean publisher child must read the token from its pipe");
     let token_export = scoped_handoff[token_read..]
-        .find("export PI_CRATES_IO_RELEASE_TOKEN=\"$scoped_release_token\"")
+        .find("export RECUR_AGENT_CRATES_IO_RELEASE_TOKEN=\"$scoped_release_token\"")
         .map(|offset| token_read + offset)
         .expect("clean publisher child must export the token only after reading it");
     let stdin_close = scoped_handoff[token_export..]
@@ -975,10 +984,10 @@ fn manual_release_token_handoff_is_not_argv_and_propagates_publish_failure() {
             r#"#!/bin/bash
 set -euo pipefail
 expected_token='fake release token +=:_[]/7391'
-test "${{PI_CRATES_IO_RELEASE_TOKEN:-}}" = "$expected_token"
-test "${{PI_EXPECTED_CRATE_NAME:-}}" = pi_agent_rust
-test "${{PI_EXPECTED_CRATE_VERSION:-}}" = 0.2.0
-test "${{PI_EXPECTED_CRATE_SHA256:-}}" = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+test "${{RECUR_AGENT_CRATES_IO_RELEASE_TOKEN:-}}" = "$expected_token"
+test "${{RECUR_AGENT_EXPECTED_CRATE_NAME:-}}" = recur_agent
+test "${{RECUR_AGENT_EXPECTED_CRATE_VERSION:-}}" = 0.2.0
+test "${{RECUR_AGENT_EXPECTED_CRATE_SHA256:-}}" = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 test "$#" -eq 11
 test "$1" = publish
 test "$2" = --manifest-path
@@ -993,7 +1002,7 @@ case "$cmdline" in *"$expected_token"*) exit 91 ;; esac
 stdin_target="$(readlink "/proc/$$/fd/0")"
 test "$stdin_target" = /dev/null
 printf 'token_exact=yes\nargv_token=no\nstdin=%s\n' "$stdin_target" \
-  > "$PI_CREDENTIAL_RECEIPT"
+  > "$RECUR_AGENT_CREDENTIAL_RECEIPT"
 case "$3" in *failure.toml) exit 47 ;; esac
 {empty}"#,
             empty = "",
@@ -1011,7 +1020,7 @@ case "$3" in *failure.toml) exit 47 ;; esac
 release_crates_io_token="${{CARGO_REGISTRY_TOKEN:-}}"
 test -n "$release_crates_io_token"
 export -n release_crates_io_token
-unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN PI_CRATES_IO_RELEASE_TOKEN
+unset CARGO_REGISTRY_TOKEN CARGO_REGISTRIES_CRATES_IO_TOKEN RECUR_AGENT_CRATES_IO_RELEASE_TOKEN
 fixture_dir="$1"
 success_receipt="$2"
 failure_receipt="$3"
@@ -1672,8 +1681,8 @@ fn manual_release_retries_use_fresh_attempts_and_exact_success_receipts() {
     );
     for retained_installer_control in [
         "TMPDIR=\"$installer_root/tmp\"",
-        "PI_INSTALLER_RETAIN_TEMP=1",
-        "PI_INSTALLER_LOCK_DIR=\"$installer_lock\"",
+        "RECUR_AGENT_INSTALLER_RETAIN_TEMP=1",
+        "RECUR_AGENT_INSTALLER_LOCK_DIR=\"$installer_lock\"",
         "test -d \"$installer_lock\" && test ! -L \"$installer_lock\"",
         "test -f \"$installer_lock/pid\" && test ! -L \"$installer_lock/pid\"",
         "Retaining installer temporary directory:",
@@ -1778,7 +1787,7 @@ fn agent_release_profile_guidance_matches_cargo_and_readme() {
         "AGENTS.md must not describe jemalloc as enabled by default"
     );
     assert!(
-        agents.contains("<48 MiB") && readme.contains("48.0 MiB"),
+        agents.contains("<96 MiB") && readme.contains("96.0 MiB"),
         "AGENTS.md and README.md must agree on the release binary size budget"
     );
 }
@@ -1806,7 +1815,7 @@ fn parameter_sweeps_artifact_is_present_and_parseable() {
     let (artifact, sweeps) = require_parameter_sweeps();
     let schema = sweeps.get("schema").and_then(Value::as_str).unwrap_or("");
     assert_eq!(
-        schema, "pi.perf.parameter_sweeps.v1",
+        schema, "ra.perf.parameter_sweeps.v1",
         "parameter sweeps schema mismatch in {artifact}"
     );
 }
@@ -1827,7 +1836,7 @@ fn opportunity_matrix_artifact_is_present_and_parseable() {
         .and_then(Value::as_str)
         .unwrap_or("");
     assert_eq!(
-        schema, "pi.perf.opportunity_matrix.v1",
+        schema, "ra.perf.opportunity_matrix.v1",
         "opportunity matrix schema mismatch in {artifact}"
     );
 }
@@ -1996,8 +2005,8 @@ fn assert_orchestrate_parameter_sweeps_contract_tokens() {
         .expect("scripts/perf/orchestrate.sh should be readable");
     for token in [
         "parameter_sweeps.json",
-        "\"pi.perf.parameter_sweeps.v1\"",
-        "\"parameter_sweeps\": \"pi.perf.parameter_sweeps.v1\"",
+        "\"ra.perf.parameter_sweeps.v1\"",
+        "\"parameter_sweeps\": \"ra.perf.parameter_sweeps.v1\"",
         "phase1_matrix_validation.weighted_bottleneck_attribution",
         "weighted_bottleneck_guided_grid",
         "manifest[\"parameter_sweeps\"]",
@@ -2014,7 +2023,7 @@ fn assert_orchestrate_opportunity_matrix_contract_tokens() {
         .expect("scripts/perf/orchestrate.sh should be readable");
     for token in [
         "\"opportunity_matrix\"",
-        "\"pi.perf.opportunity_matrix.v1\"",
+        "\"ra.perf.opportunity_matrix.v1\"",
         "\"generated_at\"",
         "\"source_identity\"",
         "\"readiness\"",
@@ -2759,7 +2768,7 @@ fn failure_count_within_release_threshold() {
 // place.
 const MANUAL_RELEASE_LANE_HEADING: &str = "## Historical manual no-Actions procedure (retired)";
 const MANUAL_RELEASE_LANE_END_HEADING: &str = "## Pre-release flow (rc)";
-const PERF_BUDGET_SUMMARY_SCHEMA: &str = "pi.perf.budget_summary.v2";
+const PERF_BUDGET_SUMMARY_SCHEMA: &str = "ra.perf.budget_summary.v2";
 const PERF_TOP_LEVEL_FIELDS: &[&str] = &[
     "schema",
     "generated_at",
@@ -2905,7 +2914,7 @@ fn validate_perf_measurement_control_source(
             }
         }
         "idle_memory_rss" => {
-            if fields.len() != 7 || fields[0] != "idle_rss_v1" || fields[3] != "process=pi" {
+            if fields.len() != 7 || fields[0] != "idle_rss_v1" || fields[3] != "process=ra" {
                 return Err("idle_memory_rss has a malformed measurement proof".to_string());
             }
             let control_sha256 = perf_proof_field(&fields, 1, "control_sha256=")?;
@@ -3153,7 +3162,7 @@ fn perf_budget_inventory_sha256(budgets: &[Value]) -> Result<String, String> {
         .map_err(|err| format!("failed to serialize canonical budget inventory: {err}"))?;
     }
     canonical.push(']');
-    Ok(pi::package_manager::hex_encode(&Sha256::digest(
+    Ok(ra::package_manager::hex_encode(&Sha256::digest(
         canonical.as_bytes(),
     )))
 }
@@ -3633,8 +3642,25 @@ fn perf_git_stdout_at(context: &PerformanceGitContext, args: &[&str]) -> Result<
         .map_err(|err| format!("git {} output was not UTF-8: {err}", args.join(" ")))
 }
 
+/// `std::fs::canonicalize` yields a `\\?\` verbatim path on Windows, and `git`
+/// rejects verbatim paths passed to `--git-dir` / `--work-tree` ("fatal: not a
+/// git repository"). Strip the prefix so the fixture can drive a real git
+/// process on every platform. UNC verbatim paths (`\\?\UNC\...`) are left as-is
+/// because mapping them back is not a local rewrite and the fixture never
+/// produces them.
+fn canonicalize_for_git(path: &Path) -> std::io::Result<PathBuf> {
+    let canonical = std::fs::canonicalize(path)?;
+    #[cfg(windows)]
+    if let Some(stripped) = canonical.to_string_lossy().strip_prefix(r"\\?\") {
+        if !stripped.starts_with("UNC\\") {
+            return Ok(PathBuf::from(stripped));
+        }
+    }
+    Ok(canonical)
+}
+
 fn performance_git_context(root: &Path) -> Result<PerformanceGitContext, String> {
-    let worktree = std::fs::canonicalize(root)
+    let worktree = canonicalize_for_git(root)
         .map_err(|err| format!("performance repository root is unavailable: {err}"))?;
     let marker = worktree.join(".git");
     let marker_metadata = std::fs::symlink_metadata(&marker)
@@ -3643,7 +3669,7 @@ fn performance_git_context(root: &Path) -> Result<PerformanceGitContext, String>
         return Err("performance repository .git marker must not be a symlink".to_string());
     }
     let git_dir = if marker_metadata.is_dir() {
-        std::fs::canonicalize(&marker)
+        canonicalize_for_git(&marker)
             .map_err(|err| format!("performance repository git directory is invalid: {err}"))?
     } else if marker_metadata.is_file() {
         let marker_text = std::fs::read_to_string(&marker)
@@ -3669,7 +3695,7 @@ fn performance_git_context(root: &Path) -> Result<PerformanceGitContext, String>
                 "performance repository gitfile target must be a non-symlink directory".to_string(),
             );
         }
-        std::fs::canonicalize(candidate)
+        canonicalize_for_git(&candidate)
             .map_err(|err| format!("performance repository gitfile target is invalid: {err}"))?
     } else {
         return Err(
@@ -3679,13 +3705,17 @@ fn performance_git_context(root: &Path) -> Result<PerformanceGitContext, String>
 
     let context = PerformanceGitContext { worktree, git_dir };
     let top_level = perf_git_stdout_at(&context, &["rev-parse", "--show-toplevel"])?;
-    let canonical_top_level = std::fs::canonicalize(&top_level)
+    // Both sides go through the same normalizer: `git` reports a `C:\...` path
+    // on Windows while our stored side has the verbatim prefix stripped, so a
+    // raw comparison would fail on formatting alone. Comparing normalized forms
+    // keeps this an identity check, not a tautology.
+    let canonical_top_level = canonicalize_for_git(Path::new(&top_level))
         .map_err(|err| format!("performance repository top level is invalid: {err}"))?;
     if canonical_top_level != context.worktree {
         return Err("performance repository worktree identity mismatch".to_string());
     }
     let reported_git_dir = perf_git_stdout_at(&context, &["rev-parse", "--absolute-git-dir"])?;
-    let canonical_reported_git_dir = std::fs::canonicalize(&reported_git_dir).map_err(|err| {
+    let canonical_reported_git_dir = canonicalize_for_git(Path::new(&reported_git_dir)).map_err(|err| {
         format!("performance repository reported git directory is invalid: {err}")
     })?;
     if canonical_reported_git_dir != context.git_dir {
@@ -3790,8 +3820,12 @@ fn contained_regular_artifact_path(
         }
     }
 
-    let canonical_artifact = std::fs::canonicalize(&candidate)
+    let canonical_artifact = canonicalize_for_git(&candidate)
         .map_err(|err| format!("performance summary path could not be resolved: {err}"))?;
+    // `context.worktree` has already been normalized by `performance_git_context`,
+    // so normalize this side the same way before the containment check; a raw
+    // comparison would reject every path on Windows purely because of the
+    // verbatim prefix. Containment is still genuinely asserted.
     if !canonical_artifact.starts_with(&context.worktree) {
         return Err("performance summary path escapes the repository root".to_string());
     }
@@ -4057,7 +4091,7 @@ where
         .ok()
         .zip(std::fs::canonicalize(repo_root()).ok())
         .is_some_and(|(a, b)| a == b)
-        && std::env::var("PI_PROVIDER_REPLAY_GIT_COMMIT").is_ok_and(|expected| {
+        && std::env::var("RECUR_AGENT_PROVIDER_REPLAY_GIT_COMMIT").is_ok_and(|expected| {
             let expected = expected.trim();
             !expected.is_empty()
                 && performance_git_context(root)
@@ -4324,7 +4358,7 @@ fn claim_ready_performance_summary_fixture(now: DateTime<Utc>) -> Value {
             }
             Some("idle_memory_rss") => {
                 result["source"] = json!(format!(
-                    "fixture://idle-rss#control=idle_rss_v1;control_sha256={proof_hash};pid=4242;process=pi;allocator=system;binary_sha256={proof_hash};rss_bytes=52428800"
+                    "fixture://idle-rss#control=idle_rss_v1;control_sha256={proof_hash};pid=4242;process=ra;allocator=system;binary_sha256={proof_hash};rss_bytes=52428800"
                 ));
             }
             Some("ext_cold_load_simple_p95" | "ext_cold_load_complex_p95") => {
@@ -4436,7 +4470,7 @@ fn retained_performance_binding_fixture(packaged_evidence: bool) -> (PathBuf, St
     // (/var -> /private/var, /tmp -> /private/tmp). The embedded validators
     // canonicalize the repository root strictly, so hand them a fixture root
     // whose supplied path already equals its canonical form.
-    let base = std::fs::canonicalize(&base).expect("canonicalize release-gate fixture base");
+    let base = canonicalize_for_git(&base).expect("canonicalize release-gate fixture base");
     let root = base.join(format!("fixture-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(root.join("src")).expect("create fixture source directory");
     std::fs::create_dir_all(root.join("tests/perf/reports"))
@@ -4552,7 +4586,7 @@ fn e2e_source_snapshot_from_clean_checkout(root: &Path, source_commit: &str) -> 
     }
     format!(
         "sha256:{}",
-        pi::package_manager::hex_encode(&digest.finalize())
+        ra::package_manager::hex_encode(&digest.finalize())
     )
 }
 
@@ -4565,7 +4599,7 @@ fn retained_e2e_evidence_fixture() -> (PathBuf, PathBuf) {
     // (/var -> /private/var, /tmp -> /private/tmp). The embedded validators
     // canonicalize the repository root strictly, so hand them a fixture root
     // whose supplied path already equals its canonical form.
-    let base = std::fs::canonicalize(&base).expect("canonicalize release-gate fixture base");
+    let base = canonicalize_for_git(&base).expect("canonicalize release-gate fixture base");
     let root = base.join(format!("e2e-fixture-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(root.join("src")).expect("create E2E fixture source directory");
     std::fs::write(
@@ -4658,7 +4692,7 @@ fn retained_e2e_evidence_fixture() -> (PathBuf, PathBuf) {
         .expect("write E2E output log");
         std::fs::write(
             directory.join("test-log.jsonl"),
-            "{\"schema\":\"pi.test.log.v1\",\"category\":\"harness\",\"message\":\"fixture\"}\n",
+            "{\"schema\":\"ra.test.log.v1\",\"category\":\"harness\",\"message\":\"fixture\"}\n",
         )
         .expect("write E2E structured test log");
         std::fs::write(directory.join("artifact-index.jsonl"), b"")
@@ -4671,7 +4705,7 @@ fn retained_e2e_evidence_fixture() -> (PathBuf, PathBuf) {
             let bytes = std::fs::read(&path).expect("read E2E fixture diagnostic");
             json!({
                 "path": path,
-                "sha256": format!("sha256:{}", pi::package_manager::hex_encode(&Sha256::digest(&bytes))),
+                "sha256": format!("sha256:{}", ra::package_manager::hex_encode(&Sha256::digest(&bytes))),
                 "size_bytes": bytes.len()
             })
         };
@@ -4707,7 +4741,7 @@ fn retained_e2e_evidence_fixture() -> (PathBuf, PathBuf) {
             "schema": "pi.e2e.diagnostic_artifacts.v1",
             "output_log": {
                 "path": lib_dir.join("output.log"),
-                "sha256": format!("sha256:{}", pi::package_manager::hex_encode(&Sha256::digest(&lib_output))),
+                "sha256": format!("sha256:{}", ra::package_manager::hex_encode(&Sha256::digest(&lib_output))),
                 "size_bytes": lib_output.len()
             },
             "test_log_jsonl": null,
@@ -5032,7 +5066,7 @@ fn retained_e2e_evidence_fixture() -> (PathBuf, PathBuf) {
         (
             evidence_dir.join("evidence_contract.json"),
             json!({
-                "schema": "pi.evidence.contract.v1",
+                "schema": "ra.evidence.contract.v1",
                 "generated_at": generated_at,
                 "profile": "ci",
                 "strict_conformance": false,
@@ -5119,7 +5153,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     // (/var -> /private/var, /tmp -> /private/tmp). The embedded validators
     // canonicalize the repository root strictly, so hand them a fixture root
     // whose supplied path already equals its canonical form.
-    let base = std::fs::canonicalize(&base).expect("canonicalize release-gate fixture base");
+    let base = canonicalize_for_git(&base).expect("canonicalize release-gate fixture base");
     let root = base.join(format!(
         "conformance-binding-fixture-{}",
         uuid::Uuid::new_v4()
@@ -5208,7 +5242,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
         &["ls-tree", "-r", "-z", "--full-tree", &source_commit],
     )
     .expect("capture conformance fixture source tree");
-    let source_tree_sha256 = pi::package_manager::hex_encode(&Sha256::digest(source_tree));
+    let source_tree_sha256 = ra::package_manager::hex_encode(&Sha256::digest(source_tree));
     let generated = Utc::now();
     let generated_seconds = generated.to_rfc3339_opts(SecondsFormat::Secs, true);
     let generated_millis = generated.to_rfc3339_opts(SecondsFormat::Millis, true);
@@ -5217,7 +5251,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     std::fs::write(
         reports.join("load_time_benchmark.json"),
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ext.load_time_benchmark.v1",
+            "schema": "ra.ext.load_time_benchmark.v1",
             "generated_at": generated_seconds,
             "counts": {"total": 2, "ts_success": 2, "rust_success": 2, "paired": 2},
             "results": [
@@ -5241,7 +5275,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     std::fs::write(
         reports.join("scenario_conformance.json"),
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ext.scenario_conformance.v1",
+            "schema": "ra.ext.scenario_conformance.v1",
             "generated_at": generated_seconds,
             "counts": {"total": 2, "pass": 2, "fail": 0, "error": 0, "skip": 0},
             "pass_rate_pct": 100.0,
@@ -5268,7 +5302,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     std::fs::write(
         reports.join("smoke_triage.json"),
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ext.smoke_triage.v1",
+            "schema": "ra.ext.smoke_triage.v1",
             "generated_at": generated_seconds,
             "counts": {"total": 2, "pass": 2, "fail": 0, "error": 0, "skip": 0},
             "pass_rate_pct": 100.0,
@@ -5298,7 +5332,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
         .enumerate()
         .map(|(index, extension_id)| {
             serde_json::to_string(&json!({
-                "schema": "pi.ext.parity.v1",
+                "schema": "ra.ext.parity.v1",
                 "ts": generated_millis,
                 "run_id": "fixture-parity-run",
                 "extension_id": extension_id,
@@ -5322,7 +5356,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     std::fs::write(parity_dir.join("parity_events.jsonl"), parity_events)
         .expect("write parity fixture events");
     let negative_event = serde_json::to_string(&json!({
-        "schema": "pi.ext.negative_conformance.v1",
+        "schema": "ra.ext.negative_conformance.v1",
         "ts": generated_millis,
         "test_name": "empty_cap_strict",
         "capability": "",
@@ -5340,7 +5374,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     std::fs::write(
         negative_dir.join("triage.json"),
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ext.negative_triage.v1",
+            "schema": "ra.ext.negative_triage.v1",
             "generated_at": generated_seconds,
             "counts": {"total": 1, "pass": 1, "fail": 0},
             "pass_rate_pct": 100.0
@@ -5385,7 +5419,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
         .iter()
         .map(|extension_id| {
             serde_json::to_string(&json!({
-                "schema": "pi.ext.conformance_report.v2",
+                "schema": "ra.ext.conformance_report.v2",
                 "ts": generated_millis.clone(),
                 "extension_id": extension_id,
                 "version": null,
@@ -5427,7 +5461,7 @@ fn retained_conformance_evidence_fixture() -> (PathBuf, PathBuf, String) {
     std::fs::write(
         &summary_path,
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ext.conformance_summary.v2",
+            "schema": "ra.ext.conformance_summary.v2",
             "generated_at": generated_seconds,
             "run_id": "fixture-run",
             "correlation_id": "fixture-correlation",
@@ -5799,7 +5833,7 @@ fn retained_dropin_evidence_fixture() -> (PathBuf, PathBuf, PathBuf) {
     // (/var -> /private/var, /tmp -> /private/tmp). The embedded validators
     // canonicalize the repository root strictly, so hand them a fixture root
     // whose supplied path already equals its canonical form.
-    let base = std::fs::canonicalize(&base).expect("canonicalize release-gate fixture base");
+    let base = canonicalize_for_git(&base).expect("canonicalize release-gate fixture base");
     let root = base.join(format!("dropin-binding-fixture-{}", uuid::Uuid::new_v4()));
     let contract_path = root.join("docs/contracts/dropin-certification-contract.json");
     let verdict_path = root.join("docs/evidence/dropin-certification-verdict.json");
@@ -5828,7 +5862,7 @@ fn retained_dropin_evidence_fixture() -> (PathBuf, PathBuf, PathBuf) {
                         "blocking_reasons",
                         "evidence_index"
                     ],
-                    "schema": "pi.dropin.certification_verdict.v1",
+                    "schema": "ra.dropin.certification_verdict.v1",
                     "path": "docs/evidence/dropin-certification-verdict.json"
                 }
             }
@@ -5841,7 +5875,7 @@ fn retained_dropin_evidence_fixture() -> (PathBuf, PathBuf, PathBuf) {
     std::fs::write(
         &verdict_path,
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.dropin.certification_verdict.v1",
+            "schema": "ra.dropin.certification_verdict.v1",
             "git_commit": source_commit,
             "generated_at_utc": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
             "overall_verdict": "NOT_CERTIFIED",
@@ -5867,7 +5901,7 @@ fn retained_certified_dropin_lane_fixture(
     // (/var -> /private/var, /tmp -> /private/tmp). The embedded validators
     // canonicalize the repository root strictly, so hand them a fixture root
     // whose supplied path already equals its canonical form.
-    let base = std::fs::canonicalize(&base).expect("canonicalize release-gate fixture base");
+    let base = canonicalize_for_git(&base).expect("canonicalize release-gate fixture base");
     let root = base.join(format!(
         "certified-dropin-lane-fixture-{}",
         uuid::Uuid::new_v4()
@@ -5978,14 +6012,14 @@ fn retained_certified_dropin_lane_fixture(
     std::fs::write(
         &lane_path,
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ci.certification_lane.v1",
+            "schema": "ra.ci.certification_lane.v1",
             "lane": "full",
             "generated_at": lane_generated_at,
             "verdict": actual_lane_verdict,
             "policy": "Full certification: all blocking gates must pass for release. Waived gates are tracked but do not block. Expired waivers fail the waiver_lifecycle gate.",
             "gates": lane_gates,
             "waiver_audit": {
-                "schema": "pi.ci.waiver_audit.v1",
+                "schema": "ra.ci.waiver_audit.v1",
                 "generated_at": lane_generated_at,
                 "total_waivers": 0,
                 "active": 0,
@@ -6030,7 +6064,7 @@ fn retained_certified_dropin_lane_fixture(
     std::fs::write(
         &verdict_path,
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.dropin.certification_verdict.v1",
+            "schema": "ra.dropin.certification_verdict.v1",
             "git_commit": source_commit,
             "generated_at_utc": lane_generated_at,
             "overall_verdict": "CERTIFIED",
@@ -6039,7 +6073,7 @@ fn retained_certified_dropin_lane_fixture(
             "evidence_index": evidence_index,
             "source": {
                 "certification_lane_artifact": "tests/full_suite_gate/certification_verdict.json",
-                "lane_schema": "pi.ci.certification_lane.v1",
+                "lane_schema": "ra.ci.certification_lane.v1",
                 "lane_verdict": "pass"
             }
         }))
@@ -6328,7 +6362,7 @@ fn release_gate_embedded_e2e_validator_binds_the_exact_parsed_bytes() {
     let wrapper = wrapper_dir.join("git");
     std::fs::write(
         &wrapper,
-        "#!/bin/sh\nif [ ! -f \"$PI_E2E_RESTORE_MARKER\" ]; then\n  case \" $* \" in\n    *\" rev-parse --verify HEAD^{commit} \"*)\n      cp \"$PI_E2E_ORIGINAL\" \"$PI_E2E_TARGET\" || exit 97\n      : > \"$PI_E2E_RESTORE_MARKER\" || exit 98\n      ;;\n  esac\nfi\nexec \"$PI_E2E_REAL_GIT\" \"$@\"\n",
+        "#!/bin/sh\nif [ ! -f \"$RECUR_AGENT_E2E_RESTORE_MARKER\" ]; then\n  case \" $* \" in\n    *\" rev-parse --verify HEAD^{commit} \"*)\n      cp \"$RECUR_AGENT_E2E_ORIGINAL\" \"$RECUR_AGENT_E2E_TARGET\" || exit 97\n      : > \"$RECUR_AGENT_E2E_RESTORE_MARKER\" || exit 98\n      ;;\n  esac\nfi\nexec \"$RECUR_AGENT_E2E_REAL_GIT\" \"$@\"\n",
     )
     .expect("write E2E Git wrapper");
     let mut permissions = std::fs::metadata(&wrapper)
@@ -6346,10 +6380,10 @@ fn release_gate_embedded_e2e_validator_binds_the_exact_parsed_bytes() {
         release_gate_python_command(marker, &[root_arg, evidence_arg, "168"]);
     command
         .env("PATH", wrapped_path)
-        .env("PI_E2E_REAL_GIT", &real_git)
-        .env("PI_E2E_ORIGINAL", &original_path)
-        .env("PI_E2E_TARGET", &summary_path)
-        .env("PI_E2E_RESTORE_MARKER", marker_path);
+        .env("RECUR_AGENT_E2E_REAL_GIT", &real_git)
+        .env("RECUR_AGENT_E2E_ORIGINAL", &original_path)
+        .env("RECUR_AGENT_E2E_TARGET", &summary_path)
+        .env("RECUR_AGENT_E2E_RESTORE_MARKER", marker_path);
     let output = run_release_gate_python(command, &program);
     assert!(
         output.status.success(),
@@ -6730,7 +6764,7 @@ fn release_gate_embedded_conformance_validator_rechecks_final_bytes() {
     let wrapper = wrapper_dir.join("git");
     std::fs::write(
         &wrapper,
-        "#!/bin/sh\ncase \" $* \" in\n  *\" rev-parse --verify HEAD^{commit} \"*)\n    count=0\n    if [ -f \"$PI_CONFORMANCE_COUNT\" ]; then IFS= read -r count < \"$PI_CONFORMANCE_COUNT\"; fi\n    count=$((count + 1))\n    printf '%s\\n' \"$count\" > \"$PI_CONFORMANCE_COUNT\" || exit 97\n    if [ \"$count\" -eq 2 ]; then printf ' ' >> \"$PI_CONFORMANCE_TARGET\" || exit 98; fi\n    ;;\nesac\nexec \"$PI_CONFORMANCE_REAL_GIT\" \"$@\"\n",
+        "#!/bin/sh\ncase \" $* \" in\n  *\" rev-parse --verify HEAD^{commit} \"*)\n    count=0\n    if [ -f \"$RECUR_AGENT_CONFORMANCE_COUNT\" ]; then IFS= read -r count < \"$RECUR_AGENT_CONFORMANCE_COUNT\"; fi\n    count=$((count + 1))\n    printf '%s\\n' \"$count\" > \"$RECUR_AGENT_CONFORMANCE_COUNT\" || exit 97\n    if [ \"$count\" -eq 2 ]; then printf ' ' >> \"$RECUR_AGENT_CONFORMANCE_TARGET\" || exit 98; fi\n    ;;\nesac\nexec \"$RECUR_AGENT_CONFORMANCE_REAL_GIT\" \"$@\"\n",
     )
     .expect("write conformance final Git wrapper");
     let mut permissions = std::fs::metadata(&wrapper)
@@ -6756,9 +6790,9 @@ fn release_gate_embedded_conformance_validator_rechecks_final_bytes() {
     let (mut command, program) = release_gate_python_command(marker, &args);
     command
         .env("PATH", wrapped_path)
-        .env("PI_CONFORMANCE_REAL_GIT", real_git)
-        .env("PI_CONFORMANCE_COUNT", counter)
-        .env("PI_CONFORMANCE_TARGET", &summary_path);
+        .env("RECUR_AGENT_CONFORMANCE_REAL_GIT", real_git)
+        .env("RECUR_AGENT_CONFORMANCE_COUNT", counter)
+        .env("RECUR_AGENT_CONFORMANCE_TARGET", &summary_path);
     let output = run_release_gate_python(command, &program);
     assert!(
         !output.status.success(),
@@ -6825,7 +6859,7 @@ fn release_gate_embedded_dropin_validator_binds_parsed_bytes_and_modes() {
         let wrapper = wrapper_dir.join("git");
         std::fs::write(
             &wrapper,
-            "#!/bin/sh\ncase \" $* \" in\n  *\" rev-parse --verify HEAD^{commit} \"*)\n    if [ ! -f \"$PI_DROPIN_RESTORE_MARKER\" ]; then\n      cp \"$PI_DROPIN_ORIGINAL\" \"$PI_DROPIN_TARGET\" || exit 97\n      : > \"$PI_DROPIN_RESTORE_MARKER\" || exit 98\n    fi\n    ;;\nesac\nexec \"$PI_DROPIN_REAL_GIT\" \"$@\"\n",
+            "#!/bin/sh\ncase \" $* \" in\n  *\" rev-parse --verify HEAD^{commit} \"*)\n    if [ ! -f \"$RECUR_AGENT_DROPIN_RESTORE_MARKER\" ]; then\n      cp \"$RECUR_AGENT_DROPIN_ORIGINAL\" \"$RECUR_AGENT_DROPIN_TARGET\" || exit 97\n      : > \"$RECUR_AGENT_DROPIN_RESTORE_MARKER\" || exit 98\n    fi\n    ;;\nesac\nexec \"$RECUR_AGENT_DROPIN_REAL_GIT\" \"$@\"\n",
         )
         .expect("write drop-in Git wrapper");
         let mut wrapper_permissions = std::fs::metadata(&wrapper)
@@ -6843,10 +6877,10 @@ fn release_gate_embedded_dropin_validator_binds_parsed_bytes_and_modes() {
         let (mut command, program) = release_gate_python_command(marker, &args);
         command
             .env("PATH", wrapped_path)
-            .env("PI_DROPIN_REAL_GIT", real_git)
-            .env("PI_DROPIN_ORIGINAL", &original_path)
-            .env("PI_DROPIN_TARGET", &target)
-            .env("PI_DROPIN_RESTORE_MARKER", restore_marker);
+            .env("RECUR_AGENT_DROPIN_REAL_GIT", real_git)
+            .env("RECUR_AGENT_DROPIN_ORIGINAL", &original_path)
+            .env("RECUR_AGENT_DROPIN_TARGET", &target)
+            .env("RECUR_AGENT_DROPIN_RESTORE_MARKER", restore_marker);
         let output = run_release_gate_python(command, &program);
         assert!(
             output.status.success(),
@@ -6949,7 +6983,7 @@ fn release_gate_embedded_dropin_validator_rejects_skeletal_stale_and_contradicto
     std::fs::write(
         skeletal_root.join("tests/full_suite_gate/certification_verdict.json"),
         serde_json::to_vec_pretty(&json!({
-            "schema": "pi.ci.certification_lane.v1",
+            "schema": "ra.ci.certification_lane.v1",
             "verdict": "pass"
         }))
         .expect("serialize skeletal lane"),
@@ -7291,7 +7325,7 @@ fn release_gate_embedded_dropin_validator_rejects_future_and_stale_evidence() {
     // See retained_performance_binding_fixture: keep the supplied fixture root
     // equal to its canonical form so macOS TMPDIR symlinks do not trip the
     // embedded validators' strict path binding.
-    let base = std::fs::canonicalize(&base).expect("canonicalize release-gate fixture base");
+    let base = canonicalize_for_git(&base).expect("canonicalize release-gate fixture base");
     let root = base.join(format!("dropin-fixture-{}", uuid::Uuid::new_v4()));
     let contract_path = root.join("docs/contracts/dropin-certification-contract.json");
     let verdict_path = root.join("docs/evidence/dropin-certification-verdict.json");
@@ -7312,7 +7346,7 @@ fn release_gate_embedded_dropin_validator_rejects_future_and_stale_evidence() {
                         "blocking_reasons",
                         "evidence_index"
                     ],
-                    "schema": "pi.dropin.certification_verdict.v1",
+                    "schema": "ra.dropin.certification_verdict.v1",
                     "path": "docs/evidence/dropin-certification-verdict.json"
                 }
             }
@@ -7321,7 +7355,7 @@ fn release_gate_embedded_dropin_validator_rejects_future_and_stale_evidence() {
     )
     .expect("write drop-in contract fixture");
     let mut verdict = json!({
-        "schema": "pi.dropin.certification_verdict.v1",
+        "schema": "ra.dropin.certification_verdict.v1",
         "git_commit": "a".repeat(40),
         "generated_at_utc": (Utc::now() + Duration::minutes(6)).to_rfc3339_opts(SecondsFormat::Secs, true),
         "overall_verdict": "NOT_CERTIFIED",
@@ -7723,17 +7757,17 @@ set -eu
 case " $* " in
   *" rev-parse --verify HEAD^{commit} "*)
     count=0
-    if [ -f "$PI_RELEASE_GATE_TEST_COUNTER" ]; then
-      count=$(sed -n '1p' "$PI_RELEASE_GATE_TEST_COUNTER")
+    if [ -f "$RECUR_AGENT_RELEASE_GATE_TEST_COUNTER" ]; then
+      count=$(sed -n '1p' "$RECUR_AGENT_RELEASE_GATE_TEST_COUNTER")
     fi
     count=$((count + 1))
-    printf '%s\n' "$count" > "$PI_RELEASE_GATE_TEST_COUNTER"
+    printf '%s\n' "$count" > "$RECUR_AGENT_RELEASE_GATE_TEST_COUNTER"
     if [ "$count" -eq 2 ]; then
-      printf 'pub fn mutated_after_initial_hash() {}\n' > "$PI_RELEASE_GATE_TEST_MUTATION_TARGET"
+      printf 'pub fn mutated_after_initial_hash() {}\n' > "$RECUR_AGENT_RELEASE_GATE_TEST_MUTATION_TARGET"
     fi
     ;;
 esac
-exec "$PI_RELEASE_GATE_TEST_REAL_GIT" "$@"
+exec "$RECUR_AGENT_RELEASE_GATE_TEST_REAL_GIT" "$@"
 "#,
     )
     .expect("write snapshot Git wrapper");
@@ -7757,9 +7791,12 @@ exec "$PI_RELEASE_GATE_TEST_REAL_GIT" "$@"
         release_gate_python_command("capture_repository_snapshot() {", &[root_arg]);
     command
         .env("PATH", wrapped_path)
-        .env("PI_RELEASE_GATE_TEST_COUNTER", &counter)
-        .env("PI_RELEASE_GATE_TEST_MUTATION_TARGET", &mutation_target)
-        .env("PI_RELEASE_GATE_TEST_REAL_GIT", &real_git);
+        .env("RECUR_AGENT_RELEASE_GATE_TEST_COUNTER", &counter)
+        .env(
+            "RECUR_AGENT_RELEASE_GATE_TEST_MUTATION_TARGET",
+            &mutation_target,
+        )
+        .env("RECUR_AGENT_RELEASE_GATE_TEST_REAL_GIT", &real_git);
     let output = run_release_gate_python(command, &program);
     assert!(
         !output.status.success(),
@@ -7819,9 +7856,9 @@ fn performance_source_binding_rejects_packaged_evidence_followup() {
 
 #[test]
 fn performance_source_binding_scrubs_hostile_git_environment() {
-    const CHILD_FLAG: &str = "PI_RELEASE_GATE_HOSTILE_GIT_CHILD";
-    const ROOT_ENV: &str = "PI_RELEASE_GATE_HOSTILE_GIT_ROOT";
-    const SOURCE_ENV: &str = "PI_RELEASE_GATE_HOSTILE_GIT_SOURCE";
+    const CHILD_FLAG: &str = "RECUR_AGENT_RELEASE_GATE_HOSTILE_GIT_CHILD";
+    const ROOT_ENV: &str = "RECUR_AGENT_RELEASE_GATE_HOSTILE_GIT_ROOT";
+    const SOURCE_ENV: &str = "RECUR_AGENT_RELEASE_GATE_HOSTILE_GIT_SOURCE";
 
     if std::env::var_os(CHILD_FLAG).is_some() {
         let root = PathBuf::from(std::env::var_os(ROOT_ENV).expect("child fixture root"));
@@ -8404,7 +8441,7 @@ fn release_gate_exposes_performance_claim_policy_in_report() {
     let script = require_text("scripts/release_gate.sh");
     for required in [
         "RELEASE_GATE_REQUIRE_PERFORMANCE_CLAIM_READY",
-        "pi.perf.budget_summary.v2",
+        "ra.perf.budget_summary.v2",
         "performance_claim_readiness",
         "performance_claim_canonical_contract",
         "run_id and correlation_id must both be null or match",

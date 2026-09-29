@@ -1,11 +1,11 @@
-//! Integration tests for prioritized code review with ship verdict (`/review` and `pi review`) (bd-cv653.3.11).
+//! Integration tests for prioritized code review with ship verdict (`/review` and `ra review`) (bd-cv653.3.11).
 
 use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
-use pi::commit_split::DiffParser;
-use pi::review::{
+use ra::commit_split::DiffParser;
+use ra::review::{
     CodeReviewer, REVIEW_SCHEMA, ReviewDeduplicator, ReviewFinding, ReviewOptions, ReviewReport,
     ReviewRuleEngine, ReviewSeverity, ReviewVerdict,
 };
@@ -107,7 +107,7 @@ fn test_report_formatting_schema_and_json() {
                 suggestion: None,
             },
         ],
-        stats: pi::review::ReviewStats {
+        stats: ra::review::ReviewStats {
             files_analyzed: 1,
             hunks_analyzed: 1,
             findings_count: 2,
@@ -130,7 +130,7 @@ fn test_report_formatting_schema_and_json() {
     assert!(txt.contains("🔴 BLOCK"));
 
     let json_str = report.format_json().expect("serialize json");
-    assert!(json_str.contains("\"schema\": \"pi.review.v1\""));
+    assert!(json_str.contains("\"schema\": \"ra.review.v1\""));
     assert!(json_str.contains("\"verdict\": \"BLOCK\""));
 }
 

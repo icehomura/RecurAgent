@@ -12,8 +12,8 @@ use common::{
     default_cost_thresholds, find_unredacted_keys, run_live_provider_target, validate_jsonl,
     write_live_provider_runs_jsonl,
 };
-use pi::model::Usage;
-use pi::provider::ModelCost;
+use ra::model::Usage;
+use ra::provider::ModelCost;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -52,11 +52,11 @@ const LIVE_TARGETS: [LiveProviderTarget; 6] = [
     LiveProviderTarget::new("deepseek", "DEEPSEEK_TEST_MODEL", &[], LIVE_SHORT_PROMPT),
 ];
 
-const LIVE_PROVIDER_RESULT_SCHEMA: &str = "pi.test.live.result.v1";
-const LIVE_PROVIDER_COST_SCHEMA: &str = "pi.test.live.cost.v1";
+const LIVE_PROVIDER_RESULT_SCHEMA: &str = "ra.test.live.result.v1";
+const LIVE_PROVIDER_COST_SCHEMA: &str = "ra.test.live.cost.v1";
 const REDACTED_VALUE: &str = "[REDACTED]";
-const LIVE_PROVIDER_FILTER_ENV: &str = "PI_LIVE_E2E_PROVIDER";
-const LIVE_EXPORT_DIR_ENV: &str = "PI_E2E_EXPORT_DIR";
+const LIVE_PROVIDER_FILTER_ENV: &str = "RECUR_AGENT_LIVE_E2E_PROVIDER";
+const LIVE_EXPORT_DIR_ENV: &str = "RECUR_AGENT_E2E_EXPORT_DIR";
 
 const SENSITIVE_KEY_FRAGMENTS: [&str; 10] = [
     "api_key",
@@ -871,7 +871,7 @@ fn e2e_live_provider_harness_smoke() {
 
             assert!(
                 attempted > 0,
-                "CI_E2E_TESTS=1 but no providers were runnable. Ensure ~/.pi/agent/models.json and API keys are configured."
+                "CI_E2E_TESTS=1 but no providers were runnable. Ensure ~/.ra/agent/models.json and API keys are configured."
             );
             assert!(
                 failed.is_empty(),

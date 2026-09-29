@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 // Data structures for ingesting benchmark artifacts
 // ---------------------------------------------------------------------------
 
-/// A single legacy benchmark event (schema: `pi.ext.legacy_bench.v1`).
+/// A single legacy benchmark event (schema: `ra.ext.legacy_bench.v1`).
 #[derive(Debug, Deserialize)]
 struct LegacyBench {
     scenario: String,
@@ -273,7 +273,7 @@ fn perf_comparison_report_dir(root: &Path) -> (PathBuf, ReportOutputMode) {
 
     let base = env_path("TMPDIR").unwrap_or_else(std::env::temp_dir);
     (
-        base.join("pi_agent_rust").join("perf_comparison_smoke"),
+        base.join("recur_agent").join("perf_comparison_smoke"),
         ReportOutputMode::TempSmoke,
     )
 }
@@ -688,7 +688,7 @@ fn build_report(
     };
 
     ComparisonReport {
-        schema: "pi.ext.perf_comparison.v1".into(),
+        schema: "ra.ext.perf_comparison.v1".into(),
         generated_at: now_iso(),
         summary: ComparisonSummary {
             faster_count: faster,
@@ -720,7 +720,7 @@ fn write_report_outputs(report: &ComparisonReport, report_dir: &Path) {
         events.push('\n');
     }
     let summary_event = serde_json::json!({
-        "schema": "pi.ext.perf_comparison_summary.v1",
+        "schema": "ra.ext.perf_comparison_summary.v1",
         "generated_at": report.generated_at,
         "faster": report.summary.faster_count,
         "slower": report.summary.slower_count,

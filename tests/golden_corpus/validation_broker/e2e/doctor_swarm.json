@@ -1,5 +1,5 @@
 {
-  "schema": "pi.doctor.report.v1",
+  "schema": "ra.doctor.report.v1",
   "generated_at": "2026-05-14T08:30:00Z",
   "overall": "warn",
   "summary": {
@@ -23,7 +23,7 @@
       "detail": "reservation token=fixture-secret-value expires soon",
       "remediation": "Renew active reservations before long-running validation",
       "data": {
-        "schema": "pi.doctor.agent_mail_build_slots.v1",
+        "schema": "ra.doctor.agent_mail_build_slots.v1",
         "active": 1,
         "expiring_soon": 1
       },
@@ -36,7 +36,7 @@
       "detail": "store=validation-slots.jsonl slots=3 active=1 reusable=1 stale_warnings=1 duplicate_opportunities=1",
       "remediation": "Recover stale validation slots through owner-visible broker workflow",
       "data": {
-        "schema": "pi.doctor.validation_broker_posture.v1",
+        "schema": "ra.doctor.validation_broker_posture.v1",
         "mode": "advisory_projection",
         "mutation_performed": false,
         "source_status": {
@@ -48,7 +48,7 @@
           "path": "tests/golden_corpus/validation_broker/e2e/validation-slots.jsonl",
           "configured": true,
           "exists": true,
-          "schema": "pi.validation_broker.slot_store.v1",
+          "schema": "ra.validation_broker.slot_store.v1",
           "status": "available",
           "total_records": 5,
           "total_slots": 3,

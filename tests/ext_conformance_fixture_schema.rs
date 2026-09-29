@@ -9,8 +9,8 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const EXT_FIXTURE_SCHEMA: &str = "pi.ext.legacy_fixtures.v1";
-const EXT_SCENARIO_SCHEMA: &str = "pi.ext.scenario_fixture.v1";
+const EXT_FIXTURE_SCHEMA: &str = "ra.ext.legacy_fixtures.v1";
+const EXT_SCENARIO_SCHEMA: &str = "ra.ext.scenario_fixture.v1";
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/ext_conformance/fixtures")
@@ -358,7 +358,7 @@ fn ext_conformance_fixture_validation_rejects_missing_schema() {
 #[test]
 fn ext_conformance_fixture_validation_rejects_scenario_missing_source_path() {
     let value = serde_json::json!({
-        "schema": "pi.ext.scenario_fixture.v1",
+        "schema": "ra.ext.scenario_fixture.v1",
         "extension": {"id":"minimal","source": {}},
         "scenarios": [{"id":"scn-1","kind":"tool","summary":"x","tool_name":"hello"}]
     });
@@ -372,7 +372,7 @@ fn ext_conformance_fixture_validation_rejects_scenario_missing_source_path() {
 #[test]
 fn ext_conformance_fixture_validation_rejects_scenario_missing_summary() {
     let value = serde_json::json!({
-        "schema": "pi.ext.scenario_fixture.v1",
+        "schema": "ra.ext.scenario_fixture.v1",
         "extension": {"id":"minimal","source": {"path":"tests/ext_conformance/artifacts/base_fixtures/minimal_tool/index.ts"}},
         "scenarios": [{"id":"scn-1","kind":"tool","tool_name":"hello"}]
     });

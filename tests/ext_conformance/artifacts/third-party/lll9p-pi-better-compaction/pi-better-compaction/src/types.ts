@@ -2,7 +2,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { CompactionEntry, CompactionResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const EXTENSION_ID = "pi-better-compaction";
-export const DEFAULT_ARTIFACT_ROOT = "~/.pi/agent/artifacts/pi-better-compaction";
+export const DEFAULT_ARTIFACT_ROOT = "~/.ra/agent/artifacts/pi-better-compaction";
 export const REDACTED_VALUE = "[REDACTED]";
 /**
  * APIs the extension knows how to build a `/responses/compact` URL for.

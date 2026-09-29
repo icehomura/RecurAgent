@@ -10,7 +10,7 @@
 
 use std::process::{Command, Stdio};
 
-use pi::agent_hub::{self, ChildStatus};
+use ra::agent_hub::{self, ChildStatus};
 
 /// Serialize registry-mutating tests: the registry is process-global.
 static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -69,7 +69,7 @@ fn kill_terminates_real_process_tree() {
 
     // The operator kill path: tree signal + registry settle (mirrors
     // HubTool::dispatch_agent "kill").
-    pi::tools::kill_process_group_tree(Some(pid));
+    ra::tools::kill_process_group_tree(Some(pid));
     reg.mark_killed(&entry.id);
     // Reap the killed child so the probe below sees no zombie.
     let _ = child.wait();

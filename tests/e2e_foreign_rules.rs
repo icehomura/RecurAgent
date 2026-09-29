@@ -9,7 +9,7 @@ mod common;
 
 use clap::Parser as _;
 use common::TestHarness;
-use pi::context_files::{ScopedRuleMatcher, discover_foreign_rules};
+use ra::context_files::{ScopedRuleMatcher, discover_foreign_rules};
 use std::path::{Path, PathBuf};
 
 fn write_fixture_workspace(harness: &TestHarness) -> Vec<PathBuf> {
@@ -169,10 +169,10 @@ fn build_system_prompt_includes_imported_rules_block() {
     let root = harness.temp_dir();
 
     let rules = discover_foreign_rules(root);
-    let cli = pi::cli::Cli::parse_from(["pi", "--system-prompt", "BASE PROMPT"]);
+    let cli = ra::cli::Cli::parse_from(["pi", "--system-prompt", "BASE PROMPT"]);
     let global_dir = harness.create_dir("hermetic-global");
     let package_dir = harness.create_dir("hermetic-package");
-    let prompt = pi::app::build_system_prompt(
+    let prompt = ra::app::build_system_prompt(
         &cli,
         root,
         &["read"],
@@ -182,7 +182,7 @@ fn build_system_prompt_includes_imported_rules_block() {
         true, // test_mode keeps ambient ancestor context out; rules are explicit
         true,
         Some(&rules),
-        &pi::config::Config::default(),
+        &ra::config::Config::default(),
     )
     .expect("build system prompt with imported rules");
 

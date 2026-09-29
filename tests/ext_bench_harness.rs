@@ -7,9 +7,9 @@
 //!
 //! ## Modes
 //!
-//! - `PI_BENCH_MODE=pr`      — diverse subset (10 extensions, 10 iterations) for PR CI
-//! - `PI_BENCH_MODE=nightly`  — full corpus (all safe extensions, 100 iterations)
-//! - `PI_BENCH_MODE=custom`   — use `PI_BENCH_MAX` and `PI_BENCH_ITERATIONS`
+//! - `RECUR_AGENT_BENCH_MODE=pr`      — diverse subset (10 extensions, 10 iterations) for PR CI
+//! - `RECUR_AGENT_BENCH_MODE=nightly`  — full corpus (all safe extensions, 100 iterations)
+//! - `RECUR_AGENT_BENCH_MODE=custom`   — use `RECUR_AGENT_BENCH_MAX` and `RECUR_AGENT_BENCH_ITERATIONS`
 //!
 //! ## PR Subset Selection Policy (bd-2mb1)
 //!
@@ -19,7 +19,7 @@
 //! - 2 npm extensions (1 with commands, 1 with events)
 //! - Remaining slots filled from safe pool in manifest order
 //!
-//! Per-extension timeout: `PI_BENCH_TIMEOUT_SECS` (default 30s) aborts slow extensions.
+//! Per-extension timeout: `RECUR_AGENT_BENCH_TIMEOUT_SECS` (default 30s) aborts slow extensions.
 //!
 //! ## Scenarios
 //!
@@ -38,21 +38,21 @@
 //!
 //! ```bash
 //! # PR mode (quick)
-//! PI_BENCH_MODE=pr cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
+//! RECUR_AGENT_BENCH_MODE=pr cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 //!
 //! # Nightly mode (full)
-//! PI_BENCH_MODE=nightly cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
+//! RECUR_AGENT_BENCH_MODE=nightly cargo test --test ext_bench_harness --features ext-conformance -- --nocapture
 //! ```
 
 mod common;
 
 use chrono::{SecondsFormat, Utc};
-use pi::extensions::{
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::perf_build;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::perf_build;
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -72,7 +72,7 @@ enum BenchMode {
 }
 
 fn bench_mode() -> BenchMode {
-    match std::env::var("PI_BENCH_MODE")
+    match std::env::var("RECUR_AGENT_BENCH_MODE")
         .unwrap_or_else(|_| "pr".to_string())
         .trim()
         .to_ascii_lowercase()
@@ -85,7 +85,7 @@ fn bench_mode() -> BenchMode {
 }
 
 fn max_extensions() -> usize {
-    std::env::var("PI_BENCH_MAX")
+    std::env::var("RECUR_AGENT_BENCH_MAX")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(|| match bench_mode() {
@@ -96,7 +96,7 @@ fn max_extensions() -> usize {
 }
 
 fn iterations() -> usize {
-    std::env::var("PI_BENCH_ITERATIONS")
+    std::env::var("RECUR_AGENT_BENCH_ITERATIONS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(|| match bench_mode() {
@@ -107,7 +107,7 @@ fn iterations() -> usize {
 }
 
 fn event_dispatch_count() -> usize {
-    std::env::var("PI_BENCH_EVENT_COUNT")
+    std::env::var("RECUR_AGENT_BENCH_EVENT_COUNT")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(|| match bench_mode() {
@@ -119,7 +119,7 @@ fn event_dispatch_count() -> usize {
 
 /// Per-extension timeout: if a single extension's benchmark exceeds this, skip it.
 fn per_extension_timeout() -> Duration {
-    let secs: u64 = std::env::var("PI_BENCH_TIMEOUT_SECS")
+    let secs: u64 = std::env::var("RECUR_AGENT_BENCH_TIMEOUT_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(30);
@@ -485,8 +485,8 @@ fn bench_cold_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
 
     if !entry_file.exists() {
         return ScenarioResult {
-            schema: "pi.ext.rust_bench.v1".to_string(),
-            runtime: "pi_agent_rust".to_string(),
+            schema: "ra.ext.rust_bench.v1".to_string(),
+            runtime: "recur_agent".to_string(),
             scenario: "cold_load".to_string(),
             extension: entry.id.clone(),
             group: group.to_string(),
@@ -502,8 +502,8 @@ fn bench_cold_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
         Ok(s) => s,
         Err(e) => {
             return ScenarioResult {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 scenario: "cold_load".to_string(),
                 extension: entry.id.clone(),
                 group: group.to_string(),
@@ -519,7 +519,7 @@ fn bench_cold_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
     let cwd = std::env::temp_dir().join(format!("pi-bench-{}", entry.id.replace('/', "_")));
     let _ = std::fs::create_dir_all(&cwd);
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -582,8 +582,8 @@ fn bench_cold_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
 
     let success = samples_us.len() == n;
     ScenarioResult {
-        schema: "pi.ext.rust_bench.v1".to_string(),
-        runtime: "pi_agent_rust".to_string(),
+        schema: "ra.ext.rust_bench.v1".to_string(),
+        runtime: "recur_agent".to_string(),
         scenario: "cold_load".to_string(),
         extension: entry.id.clone(),
         group: group.to_string(),
@@ -605,8 +605,8 @@ fn bench_warm_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
         Ok(s) => s,
         Err(e) => {
             return ScenarioResult {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 scenario: "warm_load".to_string(),
                 extension: entry.id.clone(),
                 group: group.to_string(),
@@ -622,7 +622,7 @@ fn bench_warm_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
     let cwd = std::env::temp_dir().join(format!("pi-bench-warm-{}", entry.id.replace('/', "_")));
     let _ = std::fs::create_dir_all(&cwd);
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -637,8 +637,8 @@ fn bench_warm_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
         Ok(rt) => rt,
         Err(e) => {
             return ScenarioResult {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 scenario: "warm_load".to_string(),
                 extension: entry.id.clone(),
                 group: group.to_string(),
@@ -665,8 +665,8 @@ fn bench_warm_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
             }
         });
         return ScenarioResult {
-            schema: "pi.ext.rust_bench.v1".to_string(),
-            runtime: "pi_agent_rust".to_string(),
+            schema: "ra.ext.rust_bench.v1".to_string(),
+            runtime: "recur_agent".to_string(),
             scenario: "warm_load".to_string(),
             extension: entry.id.clone(),
             group: group.to_string(),
@@ -706,8 +706,8 @@ fn bench_warm_load(entry: &ManifestEntry, n: usize, env: &EnvFingerprint) -> Sce
 
     let success = samples_us.len() == n;
     ScenarioResult {
-        schema: "pi.ext.rust_bench.v1".to_string(),
-        runtime: "pi_agent_rust".to_string(),
+        schema: "ra.ext.rust_bench.v1".to_string(),
+        runtime: "recur_agent".to_string(),
         scenario: "warm_load".to_string(),
         extension: entry.id.clone(),
         group: group.to_string(),
@@ -746,8 +746,8 @@ fn bench_event_dispatch(
         .count();
     if entries.is_empty() || count == 0 || agent_start_subscriber_count == 0 {
         return ScenarioResult {
-            schema: "pi.ext.rust_bench.v1".to_string(),
-            runtime: "pi_agent_rust".to_string(),
+            schema: "ra.ext.rust_bench.v1".to_string(),
+            runtime: "recur_agent".to_string(),
             scenario: "event_dispatch".to_string(),
             extension: format!("{}_extensions", entries.len()),
             group: "aggregate".to_string(),
@@ -769,8 +769,8 @@ fn bench_event_dispatch(
             Ok(spec) => specs.push(spec),
             Err(error) => {
                 return ScenarioResult {
-                    schema: "pi.ext.rust_bench.v1".to_string(),
-                    runtime: "pi_agent_rust".to_string(),
+                    schema: "ra.ext.rust_bench.v1".to_string(),
+                    runtime: "recur_agent".to_string(),
                     scenario: "event_dispatch".to_string(),
                     extension: format!("{}_extensions", entries.len()),
                     group: "aggregate".to_string(),
@@ -791,7 +791,7 @@ fn bench_event_dispatch(
     let cwd = std::env::temp_dir().join("pi-bench-event-dispatch");
     let _ = std::fs::create_dir_all(&cwd);
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let js_config = PiJsRuntimeConfig {
+    let js_config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         ..Default::default()
     };
@@ -806,8 +806,8 @@ fn bench_event_dispatch(
         Ok(rt) => rt,
         Err(e) => {
             return ScenarioResult {
-                schema: "pi.ext.rust_bench.v1".to_string(),
-                runtime: "pi_agent_rust".to_string(),
+                schema: "ra.ext.rust_bench.v1".to_string(),
+                runtime: "recur_agent".to_string(),
                 scenario: "event_dispatch".to_string(),
                 extension: format!("{}_extensions", entries.len()),
                 group: "aggregate".to_string(),
@@ -833,8 +833,8 @@ fn bench_event_dispatch(
             }
         });
         return ScenarioResult {
-            schema: "pi.ext.rust_bench.v1".to_string(),
-            runtime: "pi_agent_rust".to_string(),
+            schema: "ra.ext.rust_bench.v1".to_string(),
+            runtime: "recur_agent".to_string(),
             scenario: "event_dispatch".to_string(),
             extension: format!("{loaded_count}_extensions"),
             group: "aggregate".to_string(),
@@ -883,8 +883,8 @@ fn bench_event_dispatch(
     });
 
     ScenarioResult {
-        schema: "pi.ext.rust_bench.v1".to_string(),
-        runtime: "pi_agent_rust".to_string(),
+        schema: "ra.ext.rust_bench.v1".to_string(),
+        runtime: "recur_agent".to_string(),
         scenario: "event_dispatch".to_string(),
         extension: format!("{loaded_count}_extensions"),
         group: "aggregate".to_string(),
@@ -1419,7 +1419,7 @@ fn ext_bench_harness() {
     // ── Report ──
 
     let report = HarnessReport {
-        schema: "pi.bench.harness_report.v1".to_string(),
+        schema: "ra.bench.harness_report.v1".to_string(),
         generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
         mode: mode_str.to_string(),
         config: HarnessConfig {

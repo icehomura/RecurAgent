@@ -1,15 +1,15 @@
 //! Tests for streaming hostcall delivery via the `QuickJS` bridge.
 //!
-//! These are integration tests, so they only use `PiJsRuntime`'s public API.
+//! These are integration tests, so they only use `RaJsRuntime`'s public API.
 //! We validate streaming semantics by having JS report observed chunks back
 //! to the host via `pi.tool("__report", ...)` hostcalls.
 
-use pi::extensions_js::{HostcallKind, HostcallRequest, PiJsRuntime};
-use pi::scheduler::{DeterministicClock, HostcallOutcome};
+use ra::extensions_js::{HostcallKind, HostcallRequest, RaJsRuntime};
+use ra::scheduler::{DeterministicClock, HostcallOutcome};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 
-fn drain_one(runtime: &PiJsRuntime<DeterministicClock>) -> HostcallRequest {
+fn drain_one(runtime: &RaJsRuntime<DeterministicClock>) -> HostcallRequest {
     let mut queue = runtime.drain_hostcall_requests();
     queue
         .pop_front()
@@ -93,7 +93,7 @@ fn exec_call_ids(
 }
 
 fn complete_expected_tools_unordered(
-    runtime: &PiJsRuntime<DeterministicClock>,
+    runtime: &RaJsRuntime<DeterministicClock>,
     context: &str,
     expected: &[(&str, Value)],
 ) {
@@ -131,7 +131,7 @@ fn complete_expected_tools_unordered(
 
 #[allow(clippy::future_not_send)]
 async fn emit_left_nonfinal_chunk_and_ack(
-    runtime: &PiJsRuntime<DeterministicClock>,
+    runtime: &RaJsRuntime<DeterministicClock>,
     left_call: &str,
 ) {
     runtime.complete_hostcall(
@@ -158,7 +158,7 @@ async fn emit_left_nonfinal_chunk_and_ack(
 }
 
 #[allow(clippy::future_not_send)]
-async fn emit_b_nonfinal_chunk_and_ack(runtime: &PiJsRuntime<DeterministicClock>, call_b: &str) {
+async fn emit_b_nonfinal_chunk_and_ack(runtime: &RaJsRuntime<DeterministicClock>, call_b: &str) {
     runtime.complete_hostcall(
         call_b.to_string(),
         HostcallOutcome::StreamChunk {
@@ -177,7 +177,7 @@ async fn emit_b_nonfinal_chunk_and_ack(runtime: &PiJsRuntime<DeterministicClock>
 }
 
 #[allow(clippy::future_not_send)]
-async fn emit_a_error_and_ack(runtime: &PiJsRuntime<DeterministicClock>, call_a: &str) {
+async fn emit_a_error_and_ack(runtime: &RaJsRuntime<DeterministicClock>, call_a: &str) {
     runtime.complete_hostcall(
         call_a.to_string(),
         HostcallOutcome::Error {
@@ -200,7 +200,7 @@ async fn emit_a_error_and_ack(runtime: &PiJsRuntime<DeterministicClock>, call_a:
 #[test]
 fn streaming_async_iterator_delivers_chunks() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -284,7 +284,7 @@ globalThis.done = false;
 #[test]
 fn streaming_error_mid_stream_reports_error() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -350,7 +350,7 @@ fn streaming_error_mid_stream_reports_error() {
 #[test]
 fn streaming_nonfinal_keeps_call_pending() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -390,7 +390,7 @@ fn streaming_nonfinal_keeps_call_pending() {
 #[test]
 fn streaming_callback_receives_chunks() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -477,7 +477,7 @@ fn streaming_callback_receives_chunks() {
 #[test]
 fn streaming_interleaved_error_does_not_stall_sibling_callback_stream() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 
@@ -546,7 +546,7 @@ fn streaming_interleaved_error_does_not_stall_sibling_callback_stream() {
 #[test]
 fn streaming_interleaved_finalization_preserves_pending_count_invariants() {
     futures::executor::block_on(async {
-        let runtime = PiJsRuntime::with_clock(DeterministicClock::new(0))
+        let runtime = RaJsRuntime::with_clock(DeterministicClock::new(0))
             .await
             .expect("create runtime");
 

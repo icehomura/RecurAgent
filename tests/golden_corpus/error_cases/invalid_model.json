@@ -1,5 +1,5 @@
 {
-  "schema": "pi.golden_corpus.v1",
+  "schema": "ra.golden_corpus.v1",
   "scenario": "error_invalid_model",
   "surface": "error_cases",
   "description": "Error: invalid/unknown model ID should produce a clear error",

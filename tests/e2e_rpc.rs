@@ -15,25 +15,25 @@ mod common;
 
 use common::TestHarness;
 use futures::StreamExt;
-use pi::agent::{Agent, AgentConfig, AgentSession};
-use pi::auth::AuthStorage;
-use pi::config::Config;
-use pi::extensions::{ExtensionManager, ExtensionRegion, ExtensionUiRequest};
-use pi::http::client::Client;
+use ra::agent::{Agent, AgentConfig, AgentSession};
+use ra::auth::AuthStorage;
+use ra::config::Config;
+use ra::extensions::{ExtensionManager, ExtensionRegion, ExtensionUiRequest};
+use ra::http::client::Client;
 #[cfg(unix)]
-use pi::model::Message;
-use pi::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
-use pi::models::ModelEntry;
-use pi::provider::{Context, InputType, Model, ModelCost, Provider, StreamEvent, StreamOptions};
-use pi::providers::openai::OpenAIProvider;
-use pi::resources::ResourceLoader;
-use pi::rpc::{RpcOptions, RpcScopedModel, run};
+use ra::model::Message;
+use ra::model::{AssistantMessage, ContentBlock, StopReason, TextContent, Usage, UserContent};
+use ra::models::ModelEntry;
+use ra::provider::{Context, InputType, Model, ModelCost, Provider, StreamEvent, StreamOptions};
+use ra::providers::openai::OpenAIProvider;
+use ra::resources::ResourceLoader;
+use ra::rpc::{RpcOptions, RpcScopedModel, run};
 #[cfg(unix)]
-use pi::session::SessionEntry;
-use pi::session::{Session, SessionMessage};
-use pi::session_index::SessionIndex;
-use pi::tools::ToolRegistry;
-use pi::vcr::{VcrMode, VcrRecorder};
+use ra::session::SessionEntry;
+use ra::session::{Session, SessionMessage};
+use ra::session_index::SessionIndex;
+use ra::tools::ToolRegistry;
+use ra::vcr::{VcrMode, VcrRecorder};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -106,7 +106,7 @@ fn build_agent_session(session: Session, cassette_dir: &Path) -> AgentSession {
         agent,
         session,
         false,
-        pi::compaction::ResolvedCompactionSettings::default(),
+        ra::compaction::ResolvedCompactionSettings::default(),
     )
 }
 
@@ -162,8 +162,8 @@ impl Provider for KeylessReplayProvider {
         &self,
         _context: &Context<'_>,
         _options: &StreamOptions,
-    ) -> pi::error::Result<
-        std::pin::Pin<Box<dyn futures::Stream<Item = pi::error::Result<StreamEvent>> + Send>>,
+    ) -> ra::error::Result<
+        std::pin::Pin<Box<dyn futures::Stream<Item = ra::error::Result<StreamEvent>> + Send>>,
     > {
         let partial = self.message("", StopReason::Stop);
         let done = self.message("keyless replay response", StopReason::Stop);
@@ -193,7 +193,7 @@ fn build_persistent_keyless_agent_session(session: Session, cwd: &Path) -> Agent
         agent,
         session,
         true,
-        pi::compaction::ResolvedCompactionSettings::default(),
+        ra::compaction::ResolvedCompactionSettings::default(),
     )
 }
 
@@ -856,36 +856,41 @@ fn rpc_concurrent_keyless_swarm_e2e_preserves_session_index_and_filesystem_state
 }
 
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_HARNESS_SCHEMA: &str = "pi.rpc.crash_interrupt_recovery_soak.v1";
+const CRASH_INTERRUPT_RECOVERY_HARNESS_SCHEMA: &str = "ra.rpc.crash_interrupt_recovery_soak.v1";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_WORKER_SCHEMA: &str = "pi.rpc.crash_interrupt_recovery_worker.v1";
+const CRASH_INTERRUPT_RECOVERY_WORKER_SCHEMA: &str = "ra.rpc.crash_interrupt_recovery_worker.v1";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_WORKER_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_WORKER";
+const CRASH_INTERRUPT_RECOVERY_WORKER_ENV: &str = "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_WORKER";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_ROLE_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_ROLE";
+const CRASH_INTERRUPT_RECOVERY_ROLE_ENV: &str = "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_ROLE";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_CYCLE_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_CYCLE";
+const CRASH_INTERRUPT_RECOVERY_CYCLE_ENV: &str = "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_CYCLE";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_MODE_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_MODE";
+const CRASH_INTERRUPT_RECOVERY_MODE_ENV: &str = "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_MODE";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_SESSIONS_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_SESSIONS_ROOT";
+const CRASH_INTERRUPT_RECOVERY_SESSIONS_ENV: &str =
+    "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_SESSIONS_ROOT";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_ARTIFACT_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_ARTIFACT_DIR";
+const CRASH_INTERRUPT_RECOVERY_ARTIFACT_ENV: &str =
+    "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_ARTIFACT_DIR";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_PROJECT_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_PROJECT_DIR";
+const CRASH_INTERRUPT_RECOVERY_PROJECT_ENV: &str =
+    "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_PROJECT_DIR";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_READY_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_READY_PATH";
+const CRASH_INTERRUPT_RECOVERY_READY_ENV: &str = "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_READY_PATH";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_SUMMARY_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_SUMMARY_PATH";
+const CRASH_INTERRUPT_RECOVERY_SUMMARY_ENV: &str =
+    "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_SUMMARY_PATH";
 #[cfg(unix)]
-const CRASH_INTERRUPT_RECOVERY_SESSION_ENV: &str = "PI_CRASH_INTERRUPT_RECOVERY_SESSION_PATH";
-/// How long the crash/interrupt recovery cases wait on the real `pi` binary.
+const CRASH_INTERRUPT_RECOVERY_SESSION_ENV: &str =
+    "RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_SESSION_PATH";
+/// How long the crash/interrupt recovery cases wait on the real `ra` binary.
 ///
 /// These are the only cases here that spawn the shipped binary, drive a bash
 /// tool call through it, and then wait on the filesystem for a persisted
 /// session. 45 seconds was enough in isolation and not enough in the lane:
 /// `rpc_binary_sigint_exits_orderly_and_preserves_session` failed the first
-/// complete test run with "timed out waiting for pi --rpc to persist the SIGINT
+/// complete test run with "timed out waiting for ra --rpc to persist the SIGINT
 /// fixture", and passes on its own (173 of 173, run 20260910T032641-68164).
 /// Hundreds of test binaries run concurrently there, and process spawn plus a
 /// tool call plus a session write does not fit a 45 second budget under that
@@ -975,12 +980,12 @@ fn crash_interrupt_recovery_schedule() -> Vec<CrashInterruptRecoveryMode> {
         CrashInterruptRecoveryMode::Sigint,
         CrashInterruptRecoveryMode::Sighup,
     ];
-    let configured_cycles = std::env::var("PI_CRASH_INTERRUPT_RECOVERY_CYCLES")
+    let configured_cycles = std::env::var("RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_CYCLES")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .filter(|value| *value > 0);
     let cycle_count = configured_cycles.unwrap_or_else(|| {
-        if std::env::var_os("PI_CRASH_INTERRUPT_RECOVERY_LONG").is_some() {
+        if std::env::var_os("RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_LONG").is_some() {
             base.len() * 3
         } else {
             base.len()
@@ -1984,7 +1989,7 @@ fn crash_interrupt_recovery_soak_harness_survives_signals_and_restarts() -> std:
     let summary_path = harness.temp_path("crash-interrupt-recovery-soak-summary.json");
     let summary = json!({
         "schema": CRASH_INTERRUPT_RECOVERY_HARNESS_SCHEMA,
-        "mode": if std::env::var_os("PI_CRASH_INTERRUPT_RECOVERY_LONG").is_some() {
+        "mode": if std::env::var_os("RECUR_AGENT_CRASH_INTERRUPT_RECOVERY_LONG").is_some() {
             "long"
         } else {
             "ci"
@@ -2017,7 +2022,7 @@ fn rpc_binary_sigint_exits_orderly_and_preserves_session() -> std::io::Result<()
     std::fs::create_dir_all(&agent_dir)?;
     std::fs::create_dir_all(&package_dir)?;
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_pi")); // ubs:ignore Cargo-provided test binary path, not user input.
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ra")); // ubs:ignore Cargo-provided test binary path, not user input.
     command
         .args([
             "--rpc",
@@ -2033,11 +2038,11 @@ fn rpc_binary_sigint_exits_orderly_and_preserves_session() -> std::io::Result<()
             "--session-dir",
         ])
         .arg(&sessions_root)
-        .env("PI_CODING_AGENT_DIR", &agent_dir)
-        .env("PI_CONFIG_PATH", &config_path)
-        .env("PI_SESSIONS_DIR", &sessions_root)
-        .env("PI_PACKAGE_DIR", &package_dir)
-        .env("PI_TEST_MODE", "1")
+        .env("RECUR_AGENT_DIR", &agent_dir)
+        .env("RECUR_AGENT_CONFIG_PATH", &config_path)
+        .env("RECUR_AGENT_SESSIONS_DIR", &sessions_root)
+        .env("RECUR_AGENT_PACKAGE_DIR", &package_dir)
+        .env("RECUR_AGENT_TEST_MODE", "1")
         .current_dir(&project_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2080,13 +2085,13 @@ fn rpc_binary_sigint_exits_orderly_and_preserves_session() -> std::io::Result<()
         if let Some(status) = worker.child.try_wait()? {
             let (stdout, stderr) = collect_crash_interrupt_worker_output(&mut worker);
             return Err(std::io::Error::other(format!(
-                "pi --rpc exited before persisting the SIGINT fixture: status={status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+                "ra --rpc exited before persisting the SIGINT fixture: status={status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
             )));
         }
         if started_at.elapsed() > CRASH_INTERRUPT_RECOVERY_DEFAULT_TIMEOUT {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
-                "timed out waiting for pi --rpc to persist the SIGINT fixture",
+                "timed out waiting for ra --rpc to persist the SIGINT fixture",
             ));
         }
         std::thread::sleep(Duration::from_millis(20));
@@ -2099,17 +2104,17 @@ fn rpc_binary_sigint_exits_orderly_and_preserves_session() -> std::io::Result<()
         wait_crash_interrupt_recovery_worker(worker, CRASH_INTERRUPT_RECOVERY_DEFAULT_TIMEOUT);
     assert!(
         !result.timed_out,
-        "real pi --rpc SIGINT shutdown timed out: {}",
+        "real ra --rpc SIGINT shutdown timed out: {}",
         result.stderr
     );
     assert_eq!(
         result.exit_signal, None,
-        "real pi --rpc must handle SIGINT instead of dying by signal: stdout={} stderr={}",
+        "real ra --rpc must handle SIGINT instead of dying by signal: stdout={} stderr={}",
         result.stdout, result.stderr
     );
     assert_eq!(
         result.exit_code, 0,
-        "real pi --rpc SIGINT shutdown should succeed: stdout={} stderr={}",
+        "real ra --rpc SIGINT shutdown should succeed: stdout={} stderr={}",
         result.stdout, result.stderr
     );
 
@@ -2936,7 +2941,7 @@ fn rpc_bash_persistence_failure_reports_real_backlog_without_retryable_error() {
             agent,
             Arc::clone(&session),
             true,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
         let options = build_options(&handle, harness.temp_path("auth.json"), vec![], vec![]);
         let (in_tx, in_rx) = asupersync::channel::mpsc::channel::<String>(16);
@@ -5473,12 +5478,12 @@ fn rpc_late_extension_mcp_registration_reaches_the_session_at_the_next_prompt() 
             agent,
             session,
             false,
-            pi::compaction::ResolvedCompactionSettings::default(),
+            ra::compaction::ResolvedCompactionSettings::default(),
         );
         let manager = ExtensionManager::default();
         agent_session.extensions = Some(ExtensionRegion::new(manager.clone()));
         let mcp_manager = Arc::new(
-            pi::mcp::McpManager::bootstrap(&cwd, &global_dir, &[], true)
+            ra::mcp::McpManager::bootstrap(&cwd, &global_dir, &[], true)
                 .expect("bootstrap MCP manager"),
         );
         agent_session.set_mcp_manager(Arc::clone(&mcp_manager));

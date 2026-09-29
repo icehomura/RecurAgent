@@ -10,7 +10,7 @@
 //!
 //! Report generation is deliberately opt-in because the outputs are tracked
 //! release evidence. Run it only from a clean source commit with:
-//! `PI_GENERATE_CONFORMANCE_REPORT=1 cargo test --locked --test conformance_report generate_conformance_report -- --exact --nocapture`
+//! `RECUR_AGENT_GENERATE_CONFORMANCE_REPORT=1 cargo test --locked --test conformance_report generate_conformance_report -- --exact --nocapture`
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,7 @@ fn provenance_path() -> PathBuf {
 }
 
 static CONFORMANCE_REPORT_IO_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-const GENERATE_CONFORMANCE_REPORT_ENV: &str = "PI_GENERATE_CONFORMANCE_REPORT";
+const GENERATE_CONFORMANCE_REPORT_ENV: &str = "RECUR_AGENT_GENERATE_CONFORMANCE_REPORT";
 
 fn report_generation_requested(value: Option<&str>) -> bool {
     value.is_some_and(|candidate| candidate.trim() == "1")
@@ -61,13 +61,13 @@ fn git_blob_oid(contents: &[u8], oid_hex_len: usize) -> Result<String, String> {
             let mut hasher = sha1::Sha1::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         64 => {
             let mut hasher = Sha256::new();
             hasher.update(header.as_bytes());
             hasher.update(contents);
-            Ok(pi::package_manager::hex_encode(&hasher.finalize()))
+            Ok(ra::package_manager::hex_encode(&hasher.finalize()))
         }
         length => Err(format!("unsupported Git object ID length: {length}")),
     }
@@ -223,7 +223,7 @@ fn release_source_provenance(
             String::from_utf8_lossy(&tree.stderr).trim()
         ));
     }
-    let source_tree_sha256 = pi::package_manager::hex_encode(&Sha256::digest(&tree.stdout));
+    let source_tree_sha256 = ra::package_manager::hex_encode(&Sha256::digest(&tree.stdout));
 
     let index = git_output(root, &["ls-files", "--stage", "-z"])?;
     if !index.status.success() {
@@ -333,7 +333,7 @@ struct ProvenanceItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TrendReport {
-    schema: String, // "pi.ext.conformance_trend.v1"
+    schema: String, // "ra.ext.conformance_trend.v1"
     history: Vec<TrendEntry>,
 }
 
@@ -588,12 +588,12 @@ fn update_trend_report(summary: &Value, reports: &Path) {
         read_json_file(&trend_path)
             .and_then(|v| serde_json::from_value::<TrendReport>(v).ok())
             .unwrap_or_else(|| TrendReport {
-                schema: "pi.ext.conformance_trend.v1".to_string(),
+                schema: "ra.ext.conformance_trend.v1".to_string(),
                 history: Vec::new(),
             })
     } else {
         TrendReport {
-            schema: "pi.ext.conformance_trend.v1".to_string(),
+            schema: "ra.ext.conformance_trend.v1".to_string(),
             history: Vec::new(),
         }
     };
@@ -973,7 +973,7 @@ fn generate_markdown(
     md.push_str("cargo test --test extensions_policy_negative\n\n");
     md.push_str("# 2. Generate this consolidated report\n");
     md.push_str(
-        "PI_GENERATE_CONFORMANCE_REPORT=1 cargo test --locked --test conformance_report generate_conformance_report -- --exact --nocapture\n",
+        "RECUR_AGENT_GENERATE_CONFORMANCE_REPORT=1 cargo test --locked --test conformance_report generate_conformance_report -- --exact --nocapture\n",
     );
     md.push_str("```\n\n");
     md.push_str("Report files:\n");
@@ -1057,7 +1057,7 @@ fn generate_conformance_report_impl() {
         let parity_log = report_log_rel_path("parity", &ext.id);
         let fixture = fixture_rel_path(&ext.id);
         let entry = json!({
-            "schema": "pi.ext.conformance_report.v2",
+            "schema": "ra.ext.conformance_report.v2",
             "ts": Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
             "extension_id": ext.id,
             "version": provenance_versions.get(&ext.id),
@@ -1157,7 +1157,7 @@ fn generate_conformance_report_impl() {
     let summary_now = Utc::now();
     let (summary_run_id, summary_correlation_id) = current_conformance_summary_lineage(summary_now);
     let summary = json!({
-        "schema": "pi.ext.conformance_summary.v2",
+        "schema": "ra.ext.conformance_summary.v2",
         "generated_at": summary_now.to_rfc3339_opts(SecondsFormat::Secs, true),
         "run_id": summary_run_id,
         "correlation_id": summary_correlation_id,
@@ -1600,7 +1600,7 @@ fn exception_policy_covers_full_conformance_failures() {
 
     assert_eq!(
         exception_policy.get("schema").and_then(Value::as_str),
-        Some("pi.ext.exception_policy.v1"),
+        Some("ra.ext.exception_policy.v1"),
         "unexpected exception policy schema"
     );
 

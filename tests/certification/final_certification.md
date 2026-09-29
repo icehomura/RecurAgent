@@ -1,6 +1,6 @@
 # Final QA Certification Report
 
-**Schema**: pi.qa.final_certification.v1
+**Schema**: ra.qa.final_certification.v1
 **Generated**: 2026-08-04T12:34:04Z
 **Certification Verdict**: FAIL
 
@@ -8,7 +8,7 @@
 
 | Gate | Bead | Status | Artifact | Detail |
 |------|------|--------|----------|--------|
-| non_mock_compliance | bd-1f42.2.6 | PASS | docs/non-mock-rubric.json | Non-mock rubric present: pi.qa.non_mock_rubric.v1 |
+| non_mock_compliance | bd-1f42.2.6 | PASS | docs/non-mock-rubric.json | Non-mock rubric present: ra.qa.non_mock_rubric.v1 |
 | e2e_evidence | bd-1f42.3 | FAIL | tests/ext_conformance/reports/conformance_summary.json | Current conformance incomplete: 60/226 tested, 166 not exercised |
 | must_pass_208 | bd-1f42.4 | FAIL | tests/ext_conformance/reports/gate/must_pass_gate_verdict.json | 123/123 must-pass artifact says pass, but certification requires at least 208 passing items |
 | evidence_bundle | bd-1f42.6.8 | FAIL | tests/evidence_bundle/index.json | Evidence bundle incomplete or missing (insufficient, artifacts=2004) |

@@ -2,7 +2,7 @@
 
 use tempfile::tempdir;
 
-use pi::stream_rules::{
+use ra::stream_rules::{
     GrievancesLedger, RollingStreamMatcher, StreamChannel, StreamRule, StreamRuleStore, TtsrAction,
     TtsrCoordinator,
 };

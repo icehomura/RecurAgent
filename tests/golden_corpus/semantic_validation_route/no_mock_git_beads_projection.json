@@ -112,7 +112,7 @@
       "heavy_group_count": 0,
       "required_group_ids": ["fast_script_checks", "evidence_regeneration"]
     },
-    "schema": "pi.validation.semantic_route_plan.v1",
+    "schema": "ra.validation.semantic_route_plan.v1",
     "source_bead": "bd-no-mock",
     "status": "degraded",
     "summary": {
@@ -166,7 +166,7 @@
   },
   "proof_memory_source": "fixture_stale_proof_memory",
   "rch_source": "fixture_scheduler_with_rch_groups",
-  "schema": "pi.validation.semantic_route_plan.no_mock_git_beads.v1",
+  "schema": "ra.validation.semantic_route_plan.no_mock_git_beads.v1",
   "status": "pass",
   "workspace_kind": "temporary_git_repo_with_beads_jsonl",
   "workspace_path_redacted": "[TMP]/pi_semantic_route_no_mock_*"

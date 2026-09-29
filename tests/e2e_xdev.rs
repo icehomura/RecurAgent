@@ -94,7 +94,7 @@ fn e2e_rpc_session_discovers_runs_and_promotes_via_xdev() {
     )
     .expect("write fixture");
 
-    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pi"));
+    let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
     let mut command = Command::new(binary);
     command
         .args([
@@ -108,11 +108,11 @@ fn e2e_rpc_session_discovers_runs_and_promotes_via_xdev() {
         ])
         .current_dir(&workspace)
         .env("HOME", root.join("home"))
-        .env("PI_CODING_AGENT_DIR", root.join("agent"))
-        .env("PI_CONFIG_PATH", root.join("settings.json"))
-        .env("PI_SESSIONS_DIR", root.join("sessions"))
-        .env("PI_PACKAGE_DIR", root.join("packages"))
-        .env("PI_NO_AUTO_UPDATE_CHECK", "1")
+        .env("RECUR_AGENT_DIR", root.join("agent"))
+        .env("RECUR_AGENT_CONFIG_PATH", root.join("settings.json"))
+        .env("RECUR_AGENT_SESSIONS_DIR", root.join("sessions"))
+        .env("RECUR_AGENT_PACKAGE_DIR", root.join("packages"))
+        .env("RECUR_AGENT_NO_AUTO_UPDATE_CHECK", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -127,7 +127,7 @@ fn e2e_rpc_session_discovers_runs_and_promotes_via_xdev() {
         command.env_remove(key);
     }
 
-    harness.log().info("action", "spawning pi --mode rpc");
+    harness.log().info("action", "spawning ra --mode rpc");
     let mut child = command.spawn().expect("spawn pi rpc");
     {
         let stdin = child.stdin.as_mut().expect("stdin");

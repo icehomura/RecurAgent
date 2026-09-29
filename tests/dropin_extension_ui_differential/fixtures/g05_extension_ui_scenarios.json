@@ -1,5 +1,5 @@
 {
-  "schema": "pi.dropin.extension_ui_differential_scenarios.v1",
+  "schema": "ra.dropin.extension_ui_differential_scenarios.v1",
   "bead": "bd-lnmtp.2.4",
   "description": "Extension UI request/response round-trip differential scenarios covering prompt types, timeout, abort, and concurrent prompt ordering for G05 parity validation.",
   "canonicalization": {

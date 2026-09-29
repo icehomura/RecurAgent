@@ -17,12 +17,12 @@
 //! - Trace log correlation for debugging persistence failures
 
 use asupersync::runtime::RuntimeBuilder;
-use pi::model::UserContent;
-use pi::session::{AutosaveDurabilityMode, Session, SessionMessage};
+use ra::model::UserContent;
+use ra::session::{AutosaveDurabilityMode, Session, SessionMessage};
 // Only the Unix-gated autosave-queue fault case drives a flush trigger.
 #[cfg(unix)]
-use pi::session::AutosaveFlushTrigger;
-use pi::session_store_v2::SessionStoreV2;
+use ra::session::AutosaveFlushTrigger;
+use ra::session_store_v2::SessionStoreV2;
 use serde_json::json;
 use std::future::Future;
 use std::io::Write as _;
@@ -82,9 +82,9 @@ impl Drop for UnixModeGuard {
 }
 
 #[cfg(unix)]
-fn assert_permission_denied(error: &pi::Error) {
+fn assert_permission_denied(error: &ra::Error) {
     let kind = match error {
-        pi::Error::Io(io_error) => Some(io_error.kind()),
+        ra::Error::Io(io_error) => Some(io_error.kind()),
         _ => None,
     };
     assert_eq!(
@@ -276,7 +276,7 @@ fn fault_inject_multi_phase_append_crash_recover_continue() {
     assert!(
         rewrite_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected rewrite error: {rewrite_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -293,7 +293,7 @@ fn fault_inject_multi_phase_append_crash_recover_continue() {
     assert!(
         append_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected append error: {append_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -380,7 +380,7 @@ fn fault_inject_checkpoint_heals_corruption_via_header_dirty() {
     assert!(
         error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected error: {error}\nTrace:\n{}",
         trace.dump()
     );
@@ -784,7 +784,7 @@ fn fault_inject_rapid_crash_recover_cycles() {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
             "cycle {cycle}: unexpected error: {error}\nTrace:\n{}",
             trace.dump(),
         );
@@ -796,7 +796,7 @@ fn fault_inject_rapid_crash_recover_cycles() {
         assert!(
             error
                 .to_string()
-                .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+                .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
             "cycle {cycle}: unexpected append error: {error}\nTrace:\n{}",
             trace.dump(),
         );
@@ -878,7 +878,7 @@ fn fault_inject_header_dirty_forces_clean_rewrite() {
     assert!(
         error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected error: {error}\nTrace:\n{}",
         trace.dump()
     );
@@ -1126,7 +1126,7 @@ fn fault_inject_mixed_entry_types_through_crash_cycle() {
     assert!(
         rewrite_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected rewrite error: {rewrite_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -1137,7 +1137,7 @@ fn fault_inject_mixed_entry_types_through_crash_cycle() {
     assert!(
         append_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected append error: {append_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -1193,7 +1193,7 @@ fn fault_inject_corruption_healed_at_checkpoint() {
     assert!(
         append_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected append error: {append_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -1209,7 +1209,7 @@ fn fault_inject_corruption_healed_at_checkpoint() {
     assert!(
         checkpoint_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected checkpoint error: {checkpoint_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -1344,7 +1344,7 @@ fn fault_inject_save_idempotency_after_recovery() {
     assert!(
         first_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected first error: {first_error}\nTrace:\n{}",
         trace.dump()
     );
@@ -1360,7 +1360,7 @@ fn fault_inject_save_idempotency_after_recovery() {
     assert!(
         second_error
             .to_string()
-            .contains("PI_SESSION_SOURCE_INTEGRITY_FAILED"),
+            .contains("RECUR_AGENT_SESSION_SOURCE_INTEGRITY_FAILED"),
         "unexpected second error: {second_error}\nTrace:\n{}",
         trace.dump()
     );

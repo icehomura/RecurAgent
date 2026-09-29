@@ -5,11 +5,11 @@
 {"id":"bd-3ar8v.7.10","status":"open","issue_type":"task","title":"[FrankenNode] Build benchmark/resource gate suite versus Node and Bun across macro workloads","labels":["benchmarks","franken-node","gates"]}
 {"id":"bd-3ar8v.7.11","status":"open","issue_type":"task","title":"[FrankenNode] Build unified test certification stack (unit+e2e+conformance+security+perf)","labels":["certification","franken-node","testing"]}
 {"id":"bd-3ar8v.7.12","status":"open","issue_type":"task","title":"[FrankenNode] Declare practical-finish checkpoint and docs-last handoff","labels":["docs-last","franken-node","release"]}
-{"id":"bd-3ar8v.7.13","status":"open","issue_type":"task","title":"[FrankenNode] Integrate /dp/franken_node runtime crate into pi_agent_rust and retire duplicate runtime paths","labels":["franken-node","migration","pi-agent-rust-integration"]}
+{"id":"bd-3ar8v.7.13","status":"open","issue_type":"task","title":"[FrankenNode] Integrate /dp/franken_node runtime crate into recur_agent and retire duplicate runtime paths","labels":["franken-node","migration","pi-agent-rust-integration"]}
 {"id":"bd-3ar8v.7.14","status":"open","issue_type":"task","title":"[FrankenNode] Build migration assistant and compatibility doctor for Node/Bun users","labels":["franken-node","migration","ux"]}
 {"id":"bd-3ar8v.7.15","status":"open","issue_type":"task","title":"[FrankenNode] Implement shadow-canary dual-run rollout with automatic divergence rollback","labels":["franken-node","rollout","safety"]}
 {"id":"bd-3ar8v.7.16","status":"open","issue_type":"task","title":"[FrankenNode] Build compatibility remediation backlog generator from real package telemetry","labels":["franken-node","prioritization","telemetry"]}
-{"id":"bd-3ar8v.7.2","status":"open","issue_type":"task","title":"[FrankenNode] Extract reusable runtime kernel crates from pi_agent_rust core","labels":["architecture","crates","franken-node"]}
+{"id":"bd-3ar8v.7.2","status":"open","issue_type":"task","title":"[FrankenNode] Extract reusable runtime kernel crates from recur_agent core","labels":["architecture","crates","franken-node"]}
 {"id":"bd-3ar8v.7.3","status":"open","issue_type":"task","title":"[FrankenNode] Build Node/Bun semantic compatibility matrix and executable conformance harness","labels":["compatibility","conformance","franken-node"]}
 {"id":"bd-3ar8v.7.4","status":"open","issue_type":"task","title":"[FrankenNode] Implement package/ecosystem interoperability layer (CJS/ESM/npm)","labels":["ecosystem","franken-node","interop"]}
 {"id":"bd-3ar8v.7.5","status":"open","issue_type":"task","title":"[FrankenNode] Generalize extension-hosting architecture into full runtime execution substrate","labels":["franken-node","runtime-core","substrate"]}

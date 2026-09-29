@@ -507,7 +507,7 @@ fn high_value_artifact_inventory_covers_required_lanes() {
     let inventory = load_json_value(&root, HIGH_VALUE_ARTIFACT_INVENTORY);
     assert_eq!(
         inventory["schema"],
-        "pi.traceability.high_value_suite_artifact_inventory.v1"
+        "ra.traceability.high_value_suite_artifact_inventory.v1"
     );
 
     let suites = inventory["selected_suites"]
@@ -599,7 +599,7 @@ fn ubs_extension_runtime_noise_baseline_classifies_blocking_categories() {
     let baseline = load_json_value(&root, UBS_EXTENSION_RUNTIME_NOISE_BASELINE);
     assert_eq!(
         baseline["schema"],
-        "pi.ubs.extension_runtime_noise_baseline.v1"
+        "ra.ubs.extension_runtime_noise_baseline.v1"
     );
     assert_eq!(baseline["bead_id"], "bd-wv10l");
     assert!(

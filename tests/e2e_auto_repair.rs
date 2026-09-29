@@ -11,9 +11,9 @@
 
 mod common;
 
-use pi::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
-use pi::extensions_js::{ExtensionRepairEvent, PiJsRuntimeConfig, RepairMode};
-use pi::tools::ToolRegistry;
+use ra::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
+use ra::extensions_js::{ExtensionRepairEvent, RaJsRuntimeConfig, RepairMode};
+use ra::tools::ToolRegistry;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -150,7 +150,7 @@ fn load_one(entry: &ManifestEntry, mode: RepairMode) -> ExtResult {
     let _ = std::fs::create_dir_all(&cwd);
 
     let tools = Arc::new(ToolRegistry::new(&[], &cwd, None));
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         cwd: cwd.display().to_string(),
         repair_mode: mode,
         ..Default::default()
@@ -290,7 +290,7 @@ fn summarize(results: &[ExtResult]) -> AutoRepairSummary {
     }
 
     AutoRepairSummary {
-        schema: "pi.ext.auto_repair_summary.v1".to_string(),
+        schema: "ra.ext.auto_repair_summary.v1".to_string(),
         generated_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         total: results.len(),
         loaded,
@@ -566,7 +566,7 @@ fn report_structure_is_valid() {
     let parsed: serde_json::Value = serde_json::from_str(&json_str).expect("parse back");
     assert_eq!(
         parsed["schema"].as_str().unwrap(),
-        "pi.ext.auto_repair_summary.v1"
+        "ra.ext.auto_repair_summary.v1"
     );
     assert!(parsed["total"].as_u64().unwrap() > 0);
     assert!(!parsed["per_extension"].as_array().unwrap().is_empty());

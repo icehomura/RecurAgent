@@ -14,16 +14,16 @@ import { fileURLToPath } from "node:url";
 // Resolve pi-mono root relative to this script's location
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PI_MONO_ROOT = path.resolve(__dirname, "../../../legacy_pi_mono_code/pi-mono");
+const RECUR_AGENT_MONO_ROOT = path.resolve(__dirname, "../../../legacy_pi_mono_code/pi-mono");
 
 // Import directly from the built loader to avoid pulling in the full package
 // (which transitively requires AWS/Smithy/etc)
-const loaderPath = path.join(PI_MONO_ROOT, "packages/coding-agent/dist/core/extensions/loader.js");
+const loaderPath = path.join(RECUR_AGENT_MONO_ROOT, "packages/coding-agent/dist/core/extensions/loader.js");
 const { loadExtensions } = await import(loaderPath);
 
 function applyDeterministicGlobals() {
-  const timeRaw = process.env.PI_DETERMINISTIC_TIME_MS;
-  const stepRaw = process.env.PI_DETERMINISTIC_TIME_STEP_MS;
+  const timeRaw = process.env.RECUR_AGENT_DETERMINISTIC_TIME_MS;
+  const stepRaw = process.env.RECUR_AGENT_DETERMINISTIC_TIME_STEP_MS;
   if (timeRaw && timeRaw.trim().length > 0) {
     const base = Number(timeRaw);
     if (Number.isFinite(base)) {
@@ -54,8 +54,8 @@ function applyDeterministicGlobals() {
     }
   }
 
-  const randRaw = process.env.PI_DETERMINISTIC_RANDOM;
-  const randSeedRaw = process.env.PI_DETERMINISTIC_RANDOM_SEED;
+  const randRaw = process.env.RECUR_AGENT_DETERMINISTIC_RANDOM;
+  const randSeedRaw = process.env.RECUR_AGENT_DETERMINISTIC_RANDOM_SEED;
   if (randRaw && randRaw.trim().length > 0) {
     const value = Number(randRaw);
     if (Number.isFinite(value)) {
@@ -72,7 +72,7 @@ function applyDeterministicGlobals() {
     }
   }
 
-  const detCwd = process.env.PI_DETERMINISTIC_CWD;
+  const detCwd = process.env.RECUR_AGENT_DETERMINISTIC_CWD;
   if (detCwd && detCwd.trim().length > 0) {
     try {
       Object.defineProperty(process, "cwd", {
@@ -82,7 +82,7 @@ function applyDeterministicGlobals() {
     } catch {}
   }
 
-  const detHome = process.env.PI_DETERMINISTIC_HOME;
+  const detHome = process.env.RECUR_AGENT_DETERMINISTIC_HOME;
   if (detHome && detHome.trim().length > 0) {
     try {
       process.env.HOME = detHome;
@@ -100,9 +100,9 @@ async function main() {
   }
 
   const extensionPath = path.resolve(args[0]);
-  const envCwd = process.env.PI_DETERMINISTIC_CWD;
+  const envCwd = process.env.RECUR_AGENT_DETERMINISTIC_CWD;
   const cwd = args[1] ? path.resolve(args[1]) : envCwd ? path.resolve(envCwd) : process.cwd();
-  const timeoutMs = Number(process.env.PI_TS_ORACLE_TIMEOUT_MS ?? "20000");
+  const timeoutMs = Number(process.env.RECUR_AGENT_TS_ORACLE_TIMEOUT_MS ?? "20000");
 
   try {
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;

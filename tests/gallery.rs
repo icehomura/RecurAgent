@@ -4,7 +4,7 @@ mod common;
 
 use common::TestHarness;
 use common::logging::validate_jsonl_v2_only;
-use pi::gallery::{GalleryCategory, GalleryMatrix};
+use ra::gallery::{GalleryCategory, GalleryMatrix};
 
 fn finish_case(harness: &TestHarness, case: &str) {
     harness
@@ -26,7 +26,7 @@ fn test_gallery_matrix_schema_and_categories() {
     let harness = TestHarness::new("gallery_matrix_schema");
 
     let matrix = GalleryMatrix::new();
-    assert_eq!(matrix.schema, "pi.gallery.matrix.v1");
+    assert_eq!(matrix.schema, "ra.gallery.matrix.v1");
     assert!(matrix.items.len() >= 6);
 
     let has_tool_card = matrix
@@ -52,7 +52,7 @@ fn test_gallery_matrix_schema_and_categories() {
     assert!(has_delight);
 
     let report_json = matrix.render_report_json();
-    assert!(report_json.contains("pi.gallery.matrix.v1"));
+    assert!(report_json.contains("ra.gallery.matrix.v1"));
 
     finish_case(&harness, "gallery_matrix_schema");
 }

@@ -2,7 +2,7 @@
 //!
 //! Executes cold start, warm start, tool call, and event hook dispatch scenarios
 //! for a configurable set of extensions. Emits JSONL records conforming to the
-//! `pi.ext.rust_bench.v1` schema with environment fingerprinting.
+//! `ra.ext.rust_bench.v1` schema with environment fingerprinting.
 //!
 //! Run with: `cargo test --test bench_scenario_runner -- --nocapture`
 //!
@@ -18,13 +18,13 @@
 
 use chrono::{SecondsFormat, Utc};
 use futures::executor::block_on;
-use pi::error::Result;
-use pi::extensions::{
+use ra::error::Result;
+use ra::extensions::{
     ExtensionEventName, ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle,
 };
-use pi::extensions_js::PiJsRuntimeConfig;
-use pi::perf_build;
-use pi::tools::ToolRegistry;
+use ra::extensions_js::RaJsRuntimeConfig;
+use ra::perf_build;
+use ra::tools::ToolRegistry;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -43,7 +43,7 @@ use sysinfo::System;
 /// Extensions to benchmark (name, artifact dir name).
 /// Must be >=3 per bd-m5jp acceptance criteria.
 const BENCH_EXTENSIONS: &[&str] = &["hello", "pirate", "diff"];
-const BENCH_PROTOCOL_SCHEMA: &str = "pi.bench.protocol.v1";
+const BENCH_PROTOCOL_SCHEMA: &str = "ra.bench.protocol.v1";
 const BENCH_PROTOCOL_VERSION: &str = "1.0.0";
 const PARTITION_MATCHED_STATE: &str = "matched-state";
 const PARTITION_REALISTIC: &str = "realistic";
@@ -125,7 +125,7 @@ fn classify_regression_evidence(eligibility: RegressionEligibility<'_>) -> Regre
 fn sha256_hex(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
-    pi::package_manager::hex_encode(&hasher.finalize())
+    ra::package_manager::hex_encode(&hasher.finalize())
 }
 
 fn is_full_git_sha(value: &str) -> bool {
@@ -465,7 +465,7 @@ struct BenchRuntime {
 async fn new_runtime(js_cwd: &str, disk_cache_dir: Option<PathBuf>) -> Result<BenchRuntime> {
     let manager = ExtensionManager::new();
     let tools = Arc::new(ToolRegistry::new(&[], Path::new(js_cwd), None));
-    let config = PiJsRuntimeConfig {
+    let config = RaJsRuntimeConfig {
         cwd: js_cwd.to_string(),
         disk_cache_dir,
         ..Default::default()
@@ -516,7 +516,7 @@ async fn resolve_extension_callable(
         return Ok(("command".to_string(), command_name.to_string()));
     }
 
-    Err(pi::error::Error::extension(format!(
+    Err(ra::error::Error::extension(format!(
         "No callable tool/command registered for extension: {extension_id}"
     )))
 }
@@ -537,7 +537,7 @@ async fn scenario_cold_start(
         load_extension(&runtime, spec).await?;
         timings.push(start.elapsed());
         if !runtime.manager.shutdown(Duration::from_secs(5)).await {
-            return Err(pi::error::Error::extension(
+            return Err(ra::error::Error::extension(
                 "benchmark runtime did not shut down after cold start",
             ));
         }
@@ -545,8 +545,8 @@ async fn scenario_cold_start(
 
     let stats = compute_stats(&timings);
     Ok(json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "cold_start",
         "extension": spec.extension_id,
         "runs": runs,
@@ -574,7 +574,7 @@ async fn scenario_warm_start(
     let runtime = new_runtime(js_cwd, Some(warm_cache_dir.clone())).await?;
     load_extension(&runtime, spec).await?;
     if !runtime.manager.shutdown(Duration::from_secs(5)).await {
-        return Err(pi::error::Error::extension(
+        return Err(ra::error::Error::extension(
             "benchmark warmup runtime did not shut down",
         ));
     }
@@ -588,7 +588,7 @@ async fn scenario_warm_start(
         load_extension(&warm_rt, spec).await?;
         timings.push(start.elapsed());
         if !warm_rt.manager.shutdown(Duration::from_secs(5)).await {
-            return Err(pi::error::Error::extension(
+            return Err(ra::error::Error::extension(
                 "benchmark runtime did not shut down after warm start",
             ));
         }
@@ -596,8 +596,8 @@ async fn scenario_warm_start(
 
     let stats = compute_stats(&timings);
     Ok(json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "warm_start",
         "extension": spec.extension_id,
         "runs": runs,
@@ -633,7 +633,7 @@ async fn scenario_tool_call(
     for _ in 0..iterations {
         if started_at.elapsed() >= budget {
             let _ = runtime.manager.shutdown(Duration::from_secs(5)).await;
-            return Err(pi::error::Error::extension(format!(
+            return Err(ra::error::Error::extension(format!(
                 "tool-call benchmark timed out after {}ms",
                 budget.as_millis()
             )));
@@ -674,7 +674,7 @@ async fn scenario_tool_call(
     }
     let elapsed = started_at.elapsed();
     if !runtime.manager.shutdown(Duration::from_secs(5)).await {
-        return Err(pi::error::Error::extension(
+        return Err(ra::error::Error::extension(
             "benchmark runtime did not shut down after callable dispatch",
         ));
     }
@@ -685,8 +685,8 @@ async fn scenario_tool_call(
     let calls_per_sec = iters_f / elapsed.as_secs_f64().max(1e-12);
 
     Ok(json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "tool_call",
         "extension": spec.extension_id,
         "iterations": iterations,
@@ -724,7 +724,7 @@ async fn scenario_event_dispatch(
     for _ in 0..iterations {
         if started_at.elapsed() >= budget {
             let _ = runtime.manager.shutdown(Duration::from_secs(5)).await;
-            return Err(pi::error::Error::extension(format!(
+            return Err(ra::error::Error::extension(format!(
                 "event-dispatch benchmark timed out after {}ms",
                 budget.as_millis()
             )));
@@ -747,7 +747,7 @@ async fn scenario_event_dispatch(
     }
     let elapsed = started_at.elapsed();
     if !runtime.manager.shutdown(Duration::from_secs(5)).await {
-        return Err(pi::error::Error::extension(
+        return Err(ra::error::Error::extension(
             "benchmark runtime did not shut down after event dispatch",
         ));
     }
@@ -757,8 +757,8 @@ async fn scenario_event_dispatch(
     let per_call_us = elapsed_us / iters_f;
 
     Ok(json!({
-        "schema": "pi.ext.rust_bench.v1",
-        "runtime": "pi_agent_rust",
+        "schema": "ra.ext.rust_bench.v1",
+        "runtime": "recur_agent",
         "scenario": "event_dispatch",
         "extension": spec.extension_id,
         "iterations": iterations,
@@ -803,8 +803,8 @@ fn phase1_matrix_seed_rows(env: &Value) -> Vec<Value> {
                 "{partition}/{SYNTHETIC_MEASUREMENT_CONTRACT_VERSION}/session_{session_messages}"
             );
             rows.push(json!({
-                "schema": "pi.ext.rust_bench.v1",
-                "runtime": "pi_agent_rust",
+                "schema": "ra.ext.rust_bench.v1",
+                "runtime": "recur_agent",
                 "scenario": MATRIX_SCENARIO_SESSION_WORKLOAD,
                 "extension": "core",
                 "partition": partition,
@@ -1301,7 +1301,7 @@ fn assert_records_have_schema(records: &[Value]) {
     for record in records {
         assert_eq!(
             record.get("schema").and_then(Value::as_str),
-            Some("pi.ext.rust_bench.v1"),
+            Some("ra.ext.rust_bench.v1"),
             "record missing schema: {record}"
         );
     }
@@ -1362,7 +1362,7 @@ fn run_scenario_suite_and_emit_jsonl() {
 }
 
 fn emit_legacy_runtime_comparison_if_requested() {
-    if std::env::var("PI_BENCH_LEGACY_RUNTIMES").as_deref() != Ok("1") {
+    if std::env::var("RECUR_AGENT_BENCH_LEGACY_RUNTIMES").as_deref() != Ok("1") {
         return;
     }
 

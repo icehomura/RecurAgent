@@ -84,11 +84,11 @@ fn counting_taxonomy_contract_declares_required_dimensions_and_labels() {
 
     assert_eq!(
         contract["schema"].as_str(),
-        Some("pi.qa.counting_taxonomy_contract.v1")
+        Some("ra.qa.counting_taxonomy_contract.v1")
     );
     assert_eq!(
         contract["taxonomy_schema"].as_str(),
-        Some("pi.qa.counting_taxonomy.v1")
+        Some("ra.qa.counting_taxonomy.v1")
     );
 
     let dimensions = contract["required_dimensions"]
@@ -152,7 +152,7 @@ fn parity_evidence_emits_counting_taxonomy_and_validator_accepts() {
         .expect("counting_taxonomy must exist");
     assert_eq!(
         taxonomy.get("schema").and_then(Value::as_str),
-        Some("pi.qa.counting_taxonomy.v1")
+        Some("ra.qa.counting_taxonomy.v1")
     );
 
     let dimensions = taxonomy
