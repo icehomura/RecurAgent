@@ -209,6 +209,8 @@ pub enum ResourceOperationKind {
     Events,
     /// Extension log/telemetry hostcall.
     Log,
+    /// Extension capability-filesystem hostcall.
+    Fs,
     /// Unknown or future hostcall kind.
     Unknown,
 }
@@ -2565,6 +2567,7 @@ fn parse_operation_kind(value: &str) -> Option<ResourceOperationKind> {
         "session" => Some(ResourceOperationKind::Session),
         "ui" => Some(ResourceOperationKind::Ui),
         "events" | "event" => Some(ResourceOperationKind::Events),
+        "fs" | "filesystem" => Some(ResourceOperationKind::Fs),
         "log" => Some(ResourceOperationKind::Log),
         "unknown" => Some(ResourceOperationKind::Unknown),
         _ => None,
@@ -3531,6 +3534,7 @@ mod tests {
             ResourceOperationKind::Session => "session",
             ResourceOperationKind::Ui => "ui",
             ResourceOperationKind::Events => "events",
+            ResourceOperationKind::Fs => "fs",
             ResourceOperationKind::Log => "log",
             ResourceOperationKind::Unknown => "unknown",
         }

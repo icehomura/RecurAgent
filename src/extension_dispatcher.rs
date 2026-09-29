@@ -24,9 +24,9 @@ use crate::error::Result;
 use crate::extensions::EXTENSION_EVENT_TIMEOUT_MS;
 use crate::extensions::{
     DangerousCommandClass, ExecMediationResult, ExtensionBody, ExtensionMessage, ExtensionPolicy,
-    ExtensionSession, ExtensionUiRequest, ExtensionUiResponse, HostCallError, HostCallErrorCode,
-    HostCallPayload, HostResultPayload, HostStreamChunk, PROTOCOL_VERSION, PolicyCheck,
-    PolicyDecision, PolicyProfile, PolicySnapshot, classify_ui_hostcall_error,
+    ExtensionSession, ExtensionUiRequest, ExtensionUiResponse, FsConnector, FsScopes, HostCallError,
+    HostCallErrorCode, HostCallPayload, HostResultPayload, HostStreamChunk, PROTOCOL_VERSION,
+    PolicyCheck, PolicyDecision, PolicyProfile, PolicySnapshot, classify_ui_hostcall_error,
     evaluate_exec_mediation, hash_canonical_json, required_capability_for_host_call_static,
     ui_response_value_for_op, validate_host_call,
 };
@@ -1169,6 +1169,8 @@ fn is_shadow_safe_request(request: &HostcallRequest) -> bool {
         HostcallKind::Session { op } => shadow_safe_session_op(op),
         HostcallKind::Events { op } => shadow_safe_events_op(op),
         HostcallKind::Tool { name } => shadow_safe_tool(name),
+        // fs mutates the workspace, so it is never safe to shadow-run.
+        HostcallKind::Fs { .. } => false,
         HostcallKind::Http
         | HostcallKind::Exec { .. }
         | HostcallKind::Ui { .. }
@@ -1252,6 +1254,7 @@ fn hostcall_io_hint(kind: &HostcallKind) -> HostcallIoHint {
         | HostcallKind::Ui { .. }
         | HostcallKind::Events { .. }
         | HostcallKind::Log => HostcallIoHint::CpuBound,
+        HostcallKind::Fs { .. } => HostcallIoHint::IoHeavy,
     }
 }
 
@@ -1263,6 +1266,7 @@ const fn resource_operation_kind(kind: &HostcallKind) -> ResourceOperationKind {
         HostcallKind::Session { .. } => ResourceOperationKind::Session,
         HostcallKind::Ui { .. } => ResourceOperationKind::Ui,
         HostcallKind::Events { .. } => ResourceOperationKind::Events,
+        HostcallKind::Fs { .. } => ResourceOperationKind::Fs,
         HostcallKind::Log => ResourceOperationKind::Log,
     }
 }
@@ -1290,6 +1294,8 @@ fn estimated_hostcall_output_bytes(request: &HostcallRequest) -> u64 {
         | HostcallKind::Ui { .. }
         | HostcallKind::Events { .. }
         | HostcallKind::Log => 0,
+        // fs returns file content, bounded by the same read cap the tool uses.
+        HostcallKind::Fs { .. } => crate::tools::READ_TOOL_MAX_BYTES,
     }
 }
 
@@ -1398,7 +1404,7 @@ fn protocol_params_from_request(request: &HostcallRequest) -> Value {
             Value::Object(object)
         }
         HostcallKind::Http | HostcallKind::Log => request.payload.clone(),
-        HostcallKind::Session { op } | HostcallKind::Ui { op } | HostcallKind::Events { op } => {
+        HostcallKind::Session { op } | HostcallKind::Ui { op } | HostcallKind::Events { op } | HostcallKind::Fs { op } => {
             let mut object = match &request.payload {
                 Value::Object(map) => clone_payload_object_without_key(map, "op"),
                 Value::Null => serde_json::Map::new(),
@@ -2027,6 +2033,7 @@ const fn hostcall_kind_label(kind: &HostcallKind) -> &'static str {
         HostcallKind::Session { .. } => "session",
         HostcallKind::Ui { .. } => "ui",
         HostcallKind::Events { .. } => "events",
+        HostcallKind::Fs { .. } => "fs",
         HostcallKind::Log => "log",
     }
 }
@@ -2493,6 +2500,10 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
                     &request.payload,
                 )
                 .await
+            }
+            HostcallKind::Fs { op } => {
+                self.dispatch_fs_ref(&request.call_id, op, &request.payload, request.extension_id.as_deref())
+                    .await
             }
             HostcallKind::Log => {
                 tracing::info!(
@@ -3774,6 +3785,58 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
     ) -> HostcallOutcome {
         self.dispatch_events_ref(call_id, extension_id, op, &payload)
             .await
+    }
+
+    /// Dispatch a `pi.fs(op, args)` hostcall through the capability filesystem.
+    ///
+    /// Scopes are derived from this dispatcher's workspace root rather than
+    /// from the payload, so an extension cannot widen its own reach by
+    /// supplying a path. Op parsing and the required capability both come from
+    /// `FsOp`, keeping one source of truth for the op table.
+    async fn dispatch_fs_ref(
+        &self,
+        _call_id: &str,
+        op: &str,
+        payload: &Value,
+        extension_id: Option<&str>,
+    ) -> HostcallOutcome {
+        let Some(fs_op) = crate::extensions::FsOp::parse(op) else {
+            return HostcallOutcome::Error {
+                code: "invalid_request".to_string(),
+                message: format!("Unsupported fs op: {op}"),
+            };
+        };
+        let scopes = match FsScopes::for_cwd(&self.cwd) {
+            Ok(scopes) => scopes,
+            Err(err) => {
+                return HostcallOutcome::Error {
+                    code: "invalid_request".to_string(),
+                    message: format!("fs hostcall could not resolve the workspace root: {err}"),
+                };
+            }
+        };
+        let connector = match FsConnector::new(&self.cwd, self.policy.clone(), scopes) {
+            Ok(connector) => connector,
+            Err(err) => {
+                return HostcallOutcome::Error {
+                    code: "invalid_request".to_string(),
+                    message: format!("fs hostcall could not initialise the connector: {err}"),
+                };
+            }
+        };
+        // The connector's own op table is authoritative; `fs_op` was parsed only
+        // to reject unknown ops before touching the filesystem.
+        let _ = fs_op;
+        let call = HostCallPayload {
+            call_id: _call_id.to_string(),
+            method: "fs".to_string(),
+            capability: "fs".to_string(),
+            params: payload.clone(),
+            timeout_ms: None,
+            cancel_token: None,
+            context: None,
+        };
+        crate::extensions::host_result_to_outcome(connector.handle_host_call(&call, extension_id))
     }
 
     #[allow(clippy::future_not_send)]

@@ -77,7 +77,7 @@ macro_rules! compressed_js_literal {
 // ============================================================================
 
 use crate::extensions::{
-    ExecMediationResult, ExtensionPolicy, ExtensionPolicyMode, SecretBrokerPolicy,
+    ExecMediationResult, ExtensionPolicy, ExtensionPolicyMode, FsOp, SecretBrokerPolicy,
     SessionActionOrigin, evaluate_exec_mediation,
 };
 
@@ -187,6 +187,8 @@ pub enum HostcallKind {
     Ui { op: String },
     /// pi.events(op, args) - event operations
     Events { op: String },
+    /// pi.fs(op, args) - capability filesystem rooted at the workspace
+    Fs { op: String },
     /// pi.log(entry) - structured log emission
     Log,
 }
@@ -299,6 +301,7 @@ impl HostcallRequest {
             HostcallKind::Session { .. } => "session",
             HostcallKind::Ui { .. } => "ui",
             HostcallKind::Events { .. } => "events",
+            HostcallKind::Fs { .. } => "fs",
             HostcallKind::Log => "log",
         }
     }
@@ -312,6 +315,9 @@ impl HostcallRequest {
             HostcallKind::Session { .. } => "session",
             HostcallKind::Ui { .. } => "ui",
             HostcallKind::Events { .. } => "events",
+            // An unrecognised op falls back to the write capability so a typo
+            // cannot silently downgrade to read-only checking.
+            HostcallKind::Fs { op } => FsOp::parse(op).map_or("write", FsOp::required_capability),
             HostcallKind::Log => "log",
         }
     }
@@ -346,6 +352,7 @@ impl HostcallRequest {
             | HostcallKind::Ui { .. }
             | HostcallKind::Events { .. }
             | HostcallKind::Log => HostcallIoHint::Unknown,
+            HostcallKind::Fs { .. } => HostcallIoHint::IoHeavy,
         }
     }
 
@@ -383,7 +390,8 @@ impl HostcallRequest {
             HostcallKind::Http | HostcallKind::Log => self.payload.clone(),
             HostcallKind::Session { op }
             | HostcallKind::Ui { op }
-            | HostcallKind::Events { op } => canonical_op_params(op, &self.payload),
+            | HostcallKind::Events { op }
+            | HostcallKind::Fs { op } => canonical_op_params(op, &self.payload),
         }
     }
 
@@ -19002,6 +19010,54 @@ impl<C: SchedulerClock + 'static> RaJsRuntime<C> {
                     }),
                 )?;
 
+                // __pi_fs_native(op, args) -> call_id
+                // Same enqueue path as __pi_session_native; the workspace root
+                // and capability checks live Rust-side in FsConnector.
+                global.set(
+                    "__pi_fs_native",
+                    Func::from({
+                        let queue = hostcall_queue.clone();
+                        let tracker = hostcall_tracker.clone();
+                        let scheduler = Rc::clone(&scheduler);
+                        let active_origin = Rc::clone(&active_session_action_origin);
+                        let hostcalls_total = Arc::clone(&hostcalls_total);
+                        let trace_seq = Arc::clone(&trace_seq);
+                        move |ctx: Ctx<'_>,
+                              op: String,
+                              args: Value<'_>|
+                              -> rquickjs::Result<String> {
+                            let payload = js_to_json(&args)?;
+                            let call_id = format!("call-{}", generate_call_id());
+                            hostcalls_total.fetch_add(1, AtomicOrdering::SeqCst);
+                            let trace_id = trace_seq.fetch_add(1, AtomicOrdering::SeqCst);
+                            let enqueued_at_ms = scheduler.borrow().now_ms();
+                            let timeout_ms = default_hostcall_timeout_ms.filter(|ms| *ms > 0);
+                            let timer_id =
+                                timeout_ms.map(|ms| scheduler.borrow_mut().set_timeout(ms));
+                            tracker
+                                .borrow_mut()
+                                .register(
+                                    call_id.clone(),
+                                    timer_id,
+                                    enqueued_at_ms,
+                                    active_origin.borrow().clone(),
+                                );
+                            let extension_id = current_extension_id(&ctx);
+                            let request = HostcallRequest {
+                                call_id: call_id.clone(),
+                                kind: HostcallKind::Fs { op },
+                                payload,
+                                trace_id,
+                                extension_id,
+                            };
+                            enqueue_hostcall_request_with_backpressure(
+                                &queue, &tracker, &scheduler, request,
+                            );
+                            Ok(call_id)
+                        }
+                    }),
+                )?;
+
                 // __pi_process_cwd_native() -> String
                 global.set(
                     "__pi_process_cwd_native",
@@ -23129,6 +23185,18 @@ const __pi_exec_hostcall = __pi_make_hostcall(__pi_exec_native);
 	pi.env = {
 	    get: __pi_env_get,
 	};
+
+	// Capability filesystem rooted at the workspace. Callable for the raw
+	// hostcall form (`pi.fs('read', {path})`), with one method per documented
+	// op so `pi.fs.read(path)` also works. `ra.fs` is the same object.
+	pi.fs = __pi_make_hostcall(__pi_fs_native);
+	pi.fs.read = (path, options = {}) => pi.fs('read', Object.assign({ path }, options));
+	pi.fs.list = (path, options = {}) => pi.fs('list', Object.assign({ path }, options));
+	pi.fs.stat = (path, options = {}) => pi.fs('stat', Object.assign({ path }, options));
+	pi.fs.write = (path, content, options = {}) =>
+	    pi.fs('write', Object.assign({ path, content }, options));
+	pi.fs.mkdir = (path, options = {}) => pi.fs('mkdir', Object.assign({ path }, options));
+	pi.fs.delete = (path, options = {}) => pi.fs('delete', Object.assign({ path }, options));
 
 pi.process = {
     cwd: __pi_process_cwd_native(),

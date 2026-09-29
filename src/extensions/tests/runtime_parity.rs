@@ -20,6 +20,7 @@ fn js_hostcall_log_defaults_correlation_and_succeeds() {
         manager_snapshot: Arc::clone(&manager.snapshot),
         manager_snapshot_version: Arc::clone(&manager.snapshot_version),
         http: Arc::new(crate::connectors::http::HttpConnector::with_defaults()),
+        cwd: cwd.display().to_string(),
         policy: ExtensionPolicy {
             mode: ExtensionPolicyMode::Permissive,
             max_memory_mb: 256,
@@ -67,6 +68,7 @@ fn js_hostcall_log_missing_required_fields_is_invalid_request() {
         manager_snapshot: Arc::clone(&manager.snapshot),
         manager_snapshot_version: Arc::clone(&manager.snapshot_version),
         http: Arc::new(crate::connectors::http::HttpConnector::with_defaults()),
+        cwd: cwd.display().to_string(),
         policy: ExtensionPolicy {
             mode: ExtensionPolicyMode::Permissive,
             max_memory_mb: 256,
@@ -116,6 +118,7 @@ fn js_hostcall_unknown_tool_returns_invalid_request() {
         manager_snapshot: Arc::clone(&manager.snapshot),
         manager_snapshot_version: Arc::clone(&manager.snapshot_version),
         http: Arc::new(crate::connectors::http::HttpConnector::with_defaults()),
+        cwd: cwd.display().to_string(),
         policy: ExtensionPolicy {
             mode: ExtensionPolicyMode::Permissive,
             max_memory_mb: 256,
@@ -167,6 +170,7 @@ fn js_hostcall_tool_execution_failure_maps_to_taxonomy() {
         manager_snapshot: Arc::clone(&manager.snapshot),
         manager_snapshot_version: Arc::clone(&manager.snapshot_version),
         http: Arc::new(crate::connectors::http::HttpConnector::with_defaults()),
+        cwd: cwd.display().to_string(),
         policy: ExtensionPolicy {
             mode: ExtensionPolicyMode::Permissive,
             max_memory_mb: 256,
@@ -237,6 +241,7 @@ fn js_hostcall_manager_shutdown_maps_to_denied() {
         manager_snapshot: dead_snapshot,
         manager_snapshot_version: dead_version,
         http,
+        cwd: cwd.display().to_string(),
         policy: ExtensionPolicy {
             mode: ExtensionPolicyMode::Permissive,
             max_memory_mb: 256,
@@ -286,6 +291,7 @@ fn js_hostcall_all_error_codes_are_taxonomy_only() {
         manager_snapshot: Arc::clone(&manager.snapshot),
         manager_snapshot_version: Arc::clone(&manager.snapshot_version),
         http: Arc::new(crate::connectors::http::HttpConnector::with_defaults()),
+        cwd: cwd.display().to_string(),
         policy: ExtensionPolicy {
             mode: ExtensionPolicyMode::Strict,
             max_memory_mb: 256,
@@ -736,6 +742,7 @@ fn parity_js_conversion_vs_protocol() {
         manager_snapshot: Arc::clone(&manager.snapshot),
         manager_snapshot_version: Arc::clone(&manager.snapshot_version),
         http: Arc::new(HttpConnector::with_defaults()),
+        cwd: cwd.display().to_string(),
         policy: permissive_policy(),
         interceptor: None,
     };

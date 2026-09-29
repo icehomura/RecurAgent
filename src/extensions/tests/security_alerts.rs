@@ -1573,6 +1573,7 @@ fn js_runtime_pump_once_exec_streaming_large_output_completes_without_deadlock()
             manager_snapshot: Arc::clone(&manager.snapshot),
             manager_snapshot_version: Arc::clone(&manager.snapshot_version),
             http: Arc::new(HttpConnector::with_defaults()),
+            cwd: dir.path().display().to_string(),
             policy: ExtensionPolicy {
                 mode: ExtensionPolicyMode::Permissive,
                 max_memory_mb: 256,

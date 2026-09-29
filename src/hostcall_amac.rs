@@ -66,6 +66,10 @@ pub enum AmacGroupKey {
     Http,
     /// UI operations - typically sequential.
     Ui,
+    /// Filesystem reads (read, list, stat) - batchable IO.
+    FsRead,
+    /// Filesystem mutations (write, mkdir, delete) - must preserve order.
+    FsWrite,
     /// Log operations - fire-and-forget, trivially batchable.
     Log,
 }
@@ -93,6 +97,17 @@ impl AmacGroupKey {
             HostcallKind::Exec { .. } => Self::Exec,
             HostcallKind::Http => Self::Http,
             HostcallKind::Ui { .. } => Self::Ui,
+            // Reuse the connector's own op table instead of a fourth copy of
+            // it: a read-capability op is batchable, anything else serializes.
+            HostcallKind::Fs { op } => {
+                if crate::extensions::FsOp::parse(op)
+                    .is_some_and(|fs_op| fs_op.required_capability() == "read")
+                {
+                    Self::FsRead
+                } else {
+                    Self::FsWrite
+                }
+            }
             HostcallKind::Log => Self::Log,
         }
     }
@@ -103,7 +118,7 @@ impl AmacGroupKey {
     pub const fn interleave_safe(&self) -> bool {
         matches!(
             self,
-            Self::SessionRead | Self::EventRead | Self::Tool | Self::Http | Self::Log
+            Self::SessionRead | Self::EventRead | Self::Tool | Self::Http | Self::Log | Self::FsRead
         )
     }
 
@@ -114,8 +129,10 @@ impl AmacGroupKey {
         match self {
             Self::Http => 90,              // Network IO = high stall
             Self::Tool | Self::Exec => 70, // File IO or subprocess
+            Self::FsRead => 65,            // File IO, read-only
             Self::SessionRead => 50,       // In-memory but large working set
             Self::EventRead => 40,         // Small working set, fast
+            Self::FsWrite => 35,           // File IO, but serialized
             Self::SessionWrite => 30,
             Self::EventWrite => 20,
             Self::Ui => 10,

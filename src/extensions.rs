@@ -11032,6 +11032,10 @@ struct JsRuntimeHost {
     manager_snapshot_version: Arc<AtomicU64>,
     http: Arc<HttpConnector>,
     policy: ExtensionPolicy,
+    /// Workspace root for the `fs` hostcall method. Captured once at runtime
+    /// boot so `pi.fs.*` resolves inside the project the session was started
+    /// in, never in an extension-supplied directory.
+    cwd: String,
     interceptor: Option<Arc<dyn HostcallInterceptor>>,
 }
 
@@ -11727,6 +11731,8 @@ impl JsExtensionRuntimeHandle {
         apply_env_capability(&mut config, &policy);
 
         let manager_ref = Arc::downgrade(&manager.inner);
+        // Captured before `config` is moved into the runtime thread.
+        let fs_cwd = config.cwd.clone();
         let host = JsRuntimeHost {
             tools: tools.into(),
             manager_ref: manager_ref.clone(),
@@ -11734,6 +11740,7 @@ impl JsExtensionRuntimeHandle {
             manager_snapshot_version: Arc::clone(&manager.snapshot_version),
             http: Arc::new(HttpConnector::with_defaults()),
             policy,
+            cwd: fs_cwd,
             interceptor,
         };
 
@@ -17964,6 +17971,14 @@ async fn dispatch_hostcall_with_runtime(
     // Convert JS request to canonical payload.
     let canonical = hostcall_request_to_payload(&request);
 
+    // `fs` is dispatched here rather than through the shared ABI table because
+    // its connector needs the workspace root, which the shared `HostCallContext`
+    // deliberately does not carry. The scopes are derived from that root, so an
+    // extension cannot widen its own reach by supplying a path.
+    if canonical.method.trim().eq_ignore_ascii_case("fs") {
+        return dispatch_hostcall_fs(host, &canonical, request.extension_id.as_deref());
+    }
+
     // Build the shared dispatch context from the JsRuntimeHost. The registry
     // snapshot is taken per call so tools mounted after the runtime booted
     // are visible to this hostcall.
@@ -17984,6 +17999,39 @@ async fn dispatch_hostcall_with_runtime(
     // Dispatch through the shared ABI and convert back to JS outcome.
     let result = dispatch_host_call_shared(&ctx, canonical).await;
     host_result_to_outcome(result)
+}
+
+/// Dispatch a `method=fs` hostcall through the capability filesystem.
+///
+/// Scopes are derived from the workspace root captured on the host, so the
+/// extension cannot widen its own reach via the payload. Ops, their required
+/// capabilities, and their errors are owned by [`FsConnector`]; this function
+/// only supplies the root and maps the result back to a JS outcome.
+fn dispatch_hostcall_fs(
+    host: &JsRuntimeHost,
+    call: &HostCallPayload,
+    extension_id: Option<&str>,
+) -> HostcallOutcome {
+    let root = Path::new(&host.cwd);
+    let scopes = match FsScopes::for_cwd(root) {
+        Ok(scopes) => scopes,
+        Err(err) => {
+            return HostcallOutcome::Error {
+                code: "invalid_request".to_string(),
+                message: format!("fs hostcall could not resolve the workspace root: {err}"),
+            };
+        }
+    };
+    let connector = match FsConnector::new(root, host.policy.clone(), scopes) {
+        Ok(connector) => connector,
+        Err(err) => {
+            return HostcallOutcome::Error {
+                code: "invalid_request".to_string(),
+                message: format!("fs hostcall could not initialise the connector: {err}"),
+            };
+        }
+    };
+    host_result_to_outcome(connector.handle_host_call(call, extension_id))
 }
 
 #[allow(clippy::future_not_send)]

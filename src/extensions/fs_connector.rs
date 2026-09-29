@@ -27,7 +27,7 @@ mod atomic_write;
 // ============================================================================
 
 impl FsOp {
-    pub(super) fn parse(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
         let value = value.trim();
         if value.eq_ignore_ascii_case("read") {
             Some(Self::Read)
@@ -49,7 +49,7 @@ impl FsOp {
         }
     }
 
-    pub(super) const fn required_capability(self) -> &'static str {
+    pub const fn required_capability(self) -> &'static str {
         match self {
             Self::Read | Self::List | Self::Stat => "read",
             Self::Write | Self::Mkdir | Self::Delete => "write",
