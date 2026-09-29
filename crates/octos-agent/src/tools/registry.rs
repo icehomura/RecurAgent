@@ -139,6 +139,11 @@ pub enum ToolOrigin {
     Plugin,
     /// Provided by an MCP server.
     Mcp,
+    /// An app tool a host registered for a host-owned app peer; every call
+    /// is routed to the host connection (UPCR-2026-035). A tool says so
+    /// itself ([`Tool::origin`]), so it is recorded whichever `register*`
+    /// call adds it.
+    HostRouted,
 }
 
 /// Names of compiled-in tools that no plugin may register (and no MCP server
@@ -635,6 +640,9 @@ impl ToolRegistry {
         let name = tool.name().to_string();
         let origin = if self.plugin_tools.contains(&name) {
             ToolOrigin::Plugin
+        } else if origin == ToolOrigin::Builtin {
+            // A tool that declares a non-built-in origin keeps it.
+            tool.origin()
         } else {
             origin
         };

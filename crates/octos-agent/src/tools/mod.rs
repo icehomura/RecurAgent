@@ -439,6 +439,14 @@ pub struct ToolApprovalRequest {
     pub body: String,
     pub command: Option<String>,
     pub cwd: Option<String>,
+    /// This approval covers exactly this call: a remembered approval scope
+    /// (`approve_for_tool`, `approve_for_session`, …) must neither answer it
+    /// nor be recorded from it. Set by host-routed app tools (UPCR-2026-035),
+    /// whose approvals carry the exact arguments.
+    pub once_only: bool,
+    /// A host-routed app tool's call (UPCR-2026-035): the owning app, the
+    /// tool, the exact arguments and the caller, for the host's own sheet.
+    pub host_tool: Option<octos_core::ui_protocol::ApprovalHostToolDetails>,
 }
 
 /// Decision returned to a blocked tool after client approval handling.
@@ -802,6 +810,13 @@ pub trait Tool: Send + Sync {
     fn blocks_on_human_input(&self) -> bool {
         false
     }
+
+    /// Where the tool's code runs ([`ToolOrigin`]). The registry records it
+    /// at registration, so a filter can select by origin instead of by
+    /// name. Default: [`ToolOrigin::Builtin`].
+    fn origin(&self) -> ToolOrigin {
+        ToolOrigin::Builtin
+    }
 }
 
 // Tool registry (extracted to its own module)
@@ -855,6 +870,7 @@ pub mod message;
 pub mod peer_close;
 pub mod peer_gather;
 pub mod peer_handoff;
+pub mod peer_host_tool;
 pub mod peer_list;
 pub mod peer_respond;
 pub mod peer_send_input;
@@ -927,6 +943,10 @@ pub use peer_close::{PeerCloseCallback, PeerCloseTool};
 pub use peer_gather::{PeerGatherCallback, PeerGatherTool};
 pub use peer_handoff::{
     PeerHandoffCallback, PeerHandoffRequest, PeerHandoffStaged, PeerHandoffTool,
+};
+pub use peer_host_tool::{
+    HOST_TOOL_MAX_ARGS_BYTES, HostRoutedTool, HostToolAudit, HostToolCall, HostToolCallOutcome,
+    HostToolCaller, HostToolConfirm, HostToolDecl, HostToolRisk, HostToolRouter, OccurrenceClaim,
 };
 pub use peer_list::{PeerListCallback, PeerListTool};
 pub use peer_respond::{
