@@ -75,6 +75,9 @@ const ESSENTIAL_DEFAULTS: &[&str] = &[
     // Zero-parameter clock read (gh #207, #103); cheaper to keep in the schema than
     // to make the model discover it through xdev before every date/time question.
     "current_time",
+    // Reading JSON is common enough (session files, tool output, fixtures) that
+    // the model should not have to shell out to a `jq` binary that may be absent.
+    "json_query",
 ];
 
 /// Tools that are opt-in ONLY (never in the default enabled set, never
@@ -173,6 +176,7 @@ pub fn builtin_one_liner(name: &str) -> Option<&'static str> {
         "current_time" => {
             "Return the host's current wall-clock time: UTC and local ISO-8601 timestamps, UTC offset,…"
         }
+        "json_query" => "Query a JSON document with a jq filter (no `jq` binary needed)",
         _ => return None,
     })
 }

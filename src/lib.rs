@@ -136,6 +136,7 @@ pub mod crash;
 #[doc(hidden)]
 pub mod crypto_shim;
 pub mod current_time;
+pub mod json_query;
 pub mod dag_scheduler;
 pub mod dag_tool;
 // Always declared: the module is dual-mode internally (its non-feature

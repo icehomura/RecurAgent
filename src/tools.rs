@@ -5474,6 +5474,7 @@ impl ToolRegistry {
         "browser",
         "computer",
         "current_time",
+        "json_query",
         "debug",
         "edit",
         "eval",
@@ -5616,6 +5617,9 @@ impl ToolRegistry {
                 // implementation lives in `crate::current_time`.
                 "current_time" => {
                     tools.push(Box::new(crate::current_time::CurrentTimeTool::new()));
+                }
+                "json_query" => {
+                    tools.push(Box::new(crate::json_query::JsonQueryTool::new()));
                 }
                 "security_scan" => {
                     tools.push(Box::new(crate::security_scan::SecurityScanTool::new(cwd)));
