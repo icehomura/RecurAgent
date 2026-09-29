@@ -1,20 +1,20 @@
 [package]
-name = "pi_agent_rust"
+name = "recur_agent"
 version = "0.6.1"
 edition = "2024"
 rust-version = "1.95"
-description = "Native AI coding agent CLI - Rust port of Pi Agent"
+description = "Native AI coding agent CLI - Recur Agent"
 authors = ["Jeffrey Emanuel"]
 license-file = "LICENSE"
-repository = "https://github.com/Dicklesworthstone/pi_agent_rust"
-homepage = "https://github.com/Dicklesworthstone/pi_agent_rust"
-documentation = "https://docs.rs/pi_agent_rust"
+repository = "https://github.com/icehomura/RecurAgent"
+homepage = "https://github.com/icehomura/RecurAgent"
+documentation = "https://docs.rs/recur_agent"
 readme = "README.md"
 keywords = ["ai", "cli", "coding-agent", "llm", "anthropic"]
 categories = ["command-line-utilities", "development-tools"]
 autobins = false
 # Binary organization per bd-uuwgi.1/bd-uuwgi.2 classification:
-# - SHIPPING: src/main.rs (pi) - main CLI binary
+# - SHIPPING: src/main.rs (ra) - main CLI binary
 # - INTERNAL/OPT-IN: src/bin/pi_legacy_capture.rs (pending RULE 1 approval)
 # - DEV-ONLY: moved to examples/ (23 files: ext_*, test_*, debug utilities)
 include = [
@@ -39,34 +39,34 @@ include = [
 ]
 
 [lib]
-name = "pi"
+name = "ra"
 path = "src/lib.rs"
 
 [[bin]]
-name = "pi"
+name = "ra"
 path = "src/main.rs"
-# The `pi` binary is the interactive terminal front-end; it requires the full
+# The `ra` binary is the interactive terminal front-end; it requires the full
 # TUI stack (crossterm + charmed_rust). `tui` is in the default feature set, so
-# `cargo build` still produces `pi` with no extra flags. A `--no-default-features`
+# `cargo build` still produces `ra` with no extra flags. A `--no-default-features`
 # build correctly skips the binary while the library still compiles for SDK
 # consumers that do not want the terminal stack.
 required-features = ["tui"]
 
 # RETIRABLE internal conformance utility (pending RULE 1 approval). Keeping it
 # behind a non-default feature prevents an ordinary `cargo install
-# pi_agent_rust` from installing this unsupported executable. Repository gates
+# recur_agent` from installing this unsupported executable. Repository gates
 # that exercise it explicitly enable `internal-legacy-capture`; the matching
-# integration test is gated below so CARGO_BIN_EXE_pi_legacy_capture is defined
+# integration test is gated below so CARGO_BIN_EXE_ra_legacy_capture is defined
 # whenever that test is compiled.
 [[bin]]
-name = "pi_legacy_capture"
+name = "ra_legacy_capture"
 path = "src/bin/pi_legacy_capture.rs"
 required-features = ["internal-legacy-capture"]
 
 # DEV-ONLY MCP fixture server (bd-cv653.6.1): speaks the MCP stdio handshake
 # with canned tools for the mcp e2e lanes. Never shipped to end users.
 [[bin]]
-name = "pi_mcp_fixture"
+name = "ra_mcp_fixture"
 path = "src/bin/pi_mcp_fixture.rs"
 required-features = ["internal-mcp-fixture"]
 
@@ -222,7 +222,7 @@ async-trait = "0.1"
 
 # URL reads (bd-cv653.2.2): HTML reader-mode conversion + PDF text extraction
 # htmd is lean and always on; pdf-extract adds ~6 MiB so it is opt-in
-# (release binary size budget, 22 MiB). `full` includes it.
+# (release binary size budget, 96 MiB). `full` includes it.
 htmd = "0.5.5"
 pdf-extract = { version = "0.12", optional = true }
 
@@ -265,7 +265,7 @@ bubbles = { package = "charmed-bubbles", version = "0.2.0", optional = true }
 glamour = { package = "charmed-glamour", version = "0.2.4", optional = true }
 # unicode-width / textwrap are TUI-layout helpers consumed only by the
 # interactive render code, so they are gated with the rest of the TUI stack.
-unicode-width = { version = "0.2", optional = true }
+unicode-width = "0.2"
 textwrap = { version = "0.16", optional = true }
 arboard = { version = "3.6.1", optional = true }
 
@@ -299,8 +299,10 @@ crossbeam-queue = "0.3"
 # force-enables the extension vtabs, and serde_json's `preserve_order` no
 # longer leaks into pi's dependency graph (bd-nhm45). Size note: the vtab
 # decoupling reclaimed ~nothing (lto=true had already dead-stripped them);
-# the 26 MiB budget (src/perf_build.rs BINARY_SIZE_RELEASE_BUDGET_MB) stands
-# with darwin-arm64 release at 24.59 MiB (bd-2ohw2).
+# the 96 MiB budget (src/perf_build.rs BINARY_SIZE_RELEASE_BUDGET_MB) stands
+# with darwin-arm64 release at 24.59 MiB as of the v0.3.0 wave (bd-2ohw2) —
+# the budget was later raised to 96 MiB on 2026-09-29, so that figure is now
+# headroom rather than a near-limit reading.
 # MOVED 0.3.5 -> 0.3.13 -> 0.3.14 on 2026-09-01: 0.3.12/0.3.13 carry the
 # fsqlite GH#399 cross-process WAL corruption-fix wave (reader-slot
 # registration, checkpoint horizon gating, generation-boundary pool drop)
@@ -346,6 +348,10 @@ ast-grep-language = { version = "0.40", default-features = false, features = [
     "tree-sitter-go",
 ] }
 unicode-normalization = "0.1"
+# Legacy text decoding for the `read` tool's `encoding` param (BOM sniffing +
+# GBK/Big5/UTF-16). Already in the graph transitively via grep-searcher, so
+# this promotion adds no new crate.
+encoding_rs = "0.8"
 xxhash-rust = { version = "0.8", features = ["xxh32"] }
 similar = "2"
 sysinfo = "0.39.6"
@@ -493,20 +499,19 @@ url-pdf = ["dep:pdf-extract"]
 profiler = ["dep:pprof"]
 
 # Interactive terminal front-end (crossterm + charmed_rust stack). Enabled by
-# default so CLI users get an identical `pi` binary with no action required.
+# default so CLI users get an identical `ra` binary with no action required.
 # Disabling it (`--no-default-features`) lets SDK/library consumers compile the
-# `pi` library without the terminal UI dependencies.
+# `ra` library without the terminal UI dependencies.
 tui = [
     "dep:crossterm",
     "dep:bubbletea",
     "dep:lipgloss",
     "dep:bubbles",
     "dep:glamour",
-    "dep:unicode-width",
     "dep:textwrap",
 ]
 # FrankenTUI migration stack (bd-cv653.9.1): default-OFF while the interactive
-# runtime is ported. Requires `tui` because the bridge reuses PiMsg and the
+# runtime is ported. Requires `tui` because the bridge reuses RaMsg and the
 # existing agent-event plumbing during coexistence.
 ftui = ["dep:ftui", "dep:ftui-extras", "tui"]
 image-resize = ["image"]
@@ -517,7 +522,7 @@ syntax-highlighting = ["rich_rust/syntax"]
 ext-conformance = []
 fuzzing = []
 # Internal-only legacy capture utility. This is deliberately non-default so
-# end-user `cargo install` installs only the supported `pi` executable. The
+# end-user `cargo install` installs only the supported `ra` executable. The
 # single integration test that executes it is gated at the test-function level
 # so the rest of that target remains in ordinary test runs.
 internal-legacy-capture = []
@@ -526,7 +531,7 @@ internal-legacy-capture = []
 internal-persistence-fault-injection = []
 # Internal-only MCP fixture server (bd-cv653.6.1): a tiny stdio JSON-RPC
 # binary used by the MCP client e2e lanes. Non-default so end-user installs
-# only get `pi`.
+# only get `ra`.
 internal-mcp-fixture = []
 # Opt-in loom model-checking lane. These tests are excluded from default
 # all-target gates because loom explores scheduler interleavings aggressively.

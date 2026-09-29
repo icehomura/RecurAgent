@@ -51,7 +51,7 @@ PKG_CONFIG_PATH = { value = "/usr/local/libdata/pkgconfig", force = false }
 # lazily, so threads that never need it pay nothing. `force = false` leaves an
 # operator free to raise it further from the environment.
 #
-# This reaches only processes cargo launches; a shipped `pi` binary is
+# This reaches only processes cargo launches; a shipped `ra` binary is
 # unaffected.
 RUST_MIN_STACK = { value = "16777216", force = false }
 
@@ -61,3 +61,24 @@ RUST_MIN_STACK = { value = "16777216", force = false }
 # rust-lld ships with the pinned toolchain and drives MSVC links natively.
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
+# Main-thread stack reserve.
+#
+# MSVC/rust-lld default to a 1 MiB PE StackReserve, which this binary overflows
+# before it can even answer `--version` (measured: StackReserve 1048576,
+# `thread 'main' has overflowed its stack`). `RUST_MIN_STACK` above only sizes
+# threads *spawned* by the process — it never applies to `main` — so the
+# reserve has to come from the linker. 8 MiB matches the project's other
+# deep-frame reservations (16 MiB for spawned threads, `SQLITE_THREAD_STACK_BYTES`).
+rustflags = ["-C", "link-arg=/STACK:8388608"]
+
+# Build artifacts live off the system drive.
+#
+# C: reached 100% (0 bytes free) and `cargo clean` reclaimed 99.2 GiB across
+# 35,511 files: this repo has 381 test targets, and on MSVC each build hash
+# directory carries a ~248 MB exe plus a ~787 MB PDB. Pointing `target-dir`
+# at the scratch drive keeps the system volume free without giving up any
+# profile or incremental caching.
+#
+# Delete this `[build]` section to fall back to the in-repo `target/`.
+[build]
+target-dir = "D:/cargo-target/pi_agent"
