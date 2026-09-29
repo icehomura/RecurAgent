@@ -279,6 +279,48 @@ pub const fn redistributable(license: &License) -> Redistributable {
     }
 }
 
+/// How far a license's copyleft obligations reach.
+///
+/// Deliberately a separate axis from [`Redistributable`], which answers
+/// "may this artifact enter the corpus at all?". This answers "how much do we
+/// owe downstream", which is the distinction AGPL draws against GPL: AGPL-3.0
+/// sec.13 reaches remote network users, so a hosted unmodified deployment is
+/// enough to trigger disclosure, whereas GPL's sec.6 obligations only arise
+/// when a copy is conveyed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CopyleftClass {
+    /// No copyleft obligation recognized (permissive, public-domain, or not
+    /// yet identified -- `Unknown` lands here rather than being guessed at).
+    None,
+    /// GPL / LGPL / MPL: disclosure is owed when a copy is conveyed.
+    /// Serving the binary over a network, unmodified, does not trigger it.
+    Reciprocal,
+    /// AGPL-3.0: everything [`CopyleftClass::Reciprocal`] asks for, plus the
+    /// network-use clause. Stricter than GPL.
+    NetworkStrong,
+}
+
+/// Classify how far a license's copyleft obligations reach.
+#[must_use]
+pub const fn copyleft_class(license: &License) -> CopyleftClass {
+    match license {
+        License::Agpl3 => CopyleftClass::NetworkStrong,
+        License::Gpl2 | License::Gpl3 | License::Lgpl21 | License::Mpl2 => {
+            CopyleftClass::Reciprocal
+        }
+        License::Mit
+        | License::Apache2
+        | License::Isc
+        | License::Bsd2
+        | License::Bsd3
+        | License::Unlicense
+        | License::Cc0
+        | License::Unknown
+        | License::Custom(_) => CopyleftClass::None,
+    }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Security screening
 // ────────────────────────────────────────────────────────────────────────────
@@ -393,7 +435,14 @@ pub fn screen_extensions(inputs: &[ScreeningInput], task_id: &str) -> ScreeningR
         let notes = match redist {
             Redistributable::Yes => format!("{spdx}: permissive, freely redistributable"),
             Redistributable::Copyleft => {
-                format!("{spdx}: copyleft, must preserve license in redistribution")
+                if matches!(copyleft_class(&license), CopyleftClass::NetworkStrong) {
+                    format!(
+                        "{spdx}: copyleft, network-use clause (AGPL-3.0 sec.13) is stricter \
+                         than GPL; must preserve license and offer source to remote users"
+                    )
+                } else {
+                    format!("{spdx}: copyleft, must preserve license in redistribution")
+                }
             }
             Redistributable::Unknown => "License unknown; manual review required".to_string(),
             Redistributable::No => "Restricted license; excluded from corpus".to_string(),
@@ -522,6 +571,35 @@ mod tests {
         assert_eq!(redistributable(&License::Agpl3), Redistributable::Copyleft);
         assert_eq!(redistributable(&License::Lgpl21), Redistributable::Copyleft);
         assert_eq!(redistributable(&License::Mpl2), Redistributable::Copyleft);
+    }
+
+    #[test]
+    fn copyleft_class_separates_agpl_from_gpl() {
+        // AGPL must be distinguishable from GPL on the network-use axis even
+        // though both sit under `Redistributable::Copyleft`.
+        assert_eq!(
+            copyleft_class(&License::Agpl3),
+            CopyleftClass::NetworkStrong
+        );
+        assert_eq!(copyleft_class(&License::Gpl3), CopyleftClass::Reciprocal);
+        assert_eq!(copyleft_class(&License::Gpl2), CopyleftClass::Reciprocal);
+        assert_eq!(copyleft_class(&License::Lgpl21), CopyleftClass::Reciprocal);
+        assert_eq!(copyleft_class(&License::Mpl2), CopyleftClass::Reciprocal);
+        assert_eq!(copyleft_class(&License::Mit), CopyleftClass::None);
+        assert_eq!(copyleft_class(&License::Unknown), CopyleftClass::None);
+    }
+
+    #[test]
+    fn agpl_screening_note_flags_network_use() {
+        let inputs = [ScreeningInput {
+            canonical_id: "agpl".to_string(),
+            known_license: Some("AGPL-3.0".to_string()),
+            source_tier: None,
+        }];
+        let report = screen_extensions(&inputs, "agpl-note-test");
+        let v = &report.verdicts[0];
+        assert_eq!(v.redistributable, Redistributable::Copyleft);
+        assert!(v.notes.contains("network-use"), "got: {}", v.notes);
     }
 
     #[test]
