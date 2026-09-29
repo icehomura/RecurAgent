@@ -42,7 +42,7 @@ You want an AI coding assistant in your terminal, but existing tools are:
 
 ## The Solution
 
-**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 42 built-in tools (20 in the default `--tools` list; 14 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
+**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 43 built-in tools (21 in the default `--tools` list; 15 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
 
 ### Current product direction
 
@@ -487,7 +487,7 @@ ra "Write a quicksort implementation"
 
 Watch the response appear incrementally, with thinking blocks shown inline.
 
-### 42 Built-in Tools
+### 43 Built-in Tools
 
 Tools are tiered so the model's live schema stays small while everything
 remains reachable. The tier table lives in `src/xdev.rs`; the default
@@ -495,7 +495,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 
 - **Essential** (always in the provider schema): `read`, `write`, `edit`,
   `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`,
-  `web_search`, `submit_plan`, `current_time`, `xdev`
+  `web_search`, `submit_plan`, `current_time`, `json_query`, `xdev`
 - **Discoverable** (registered, hidden from the schema until promoted via
   `xdev list/describe/run/promote`): `ast_grep`, `ast_edit`, `lsp`,
   `debug`, `manage_skill` — plus the memory-bank tools (`retain`,
@@ -504,7 +504,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 - **Default-enabled**: `jobs` (background bash job control), `hub` (PTY
   service supervision), and `run_code` (programmatic tool orchestration),
   alongside the essential tier. The default `--tools`
-  list names 20 tools; the registry always adds `manage_skill` and, when any
+  list names 21 tools; the registry always adds `manage_skill` and, when any
   discoverable tool is enabled, the `xdev` dispatcher
 - **`--tools` opt-in extras**: `eval`, `github`, `security_scan`
 - **Skills**: `skills_list` and `skill_view` are always registered (read-only
@@ -531,6 +531,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 | `ask` / `todo` | Structured mid-turn option cards; persistent session task list |
 | `submit_plan` | Submit a completed plan for approval when plan mode is active |
 | `current_time` | The host's wall-clock time: UTC and local ISO-8601 timestamps, the UTC offset, Unix epoch seconds, weekday, and ISO week (the local zone follows `TZ`); takes no arguments. The system prompt carries only the date so the cached prefix stays stable; this tool is the clock |
+| `json_query` | Query a JSON document with a jq filter, in-process (linked `jaq`, no `jq` binary needed). Takes the document inline or as a file path; returns one line per output value |
 | `xdev` | Dispatcher exposing the discoverable tier (`list/describe/run/promote`) |
 | `ast_grep` / `ast_edit` | Structural code search and rewrite |
 | `lsp` / `debug` | Language-server (14 ops) and DAP debugging (29 ops) bridges |
@@ -542,7 +543,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 | `manage_skill` + memory tools | Managed skills CRUD; opt-in project memory bank |
 | `skills_list` / `skill_view` | Read-only skill index and skill reader (progressive disclosure L1/L2); always registered |
 | `skill_hub_search` / `skill_hub_install` | Search and quarantined-install skills from the remote hub; opt-in via `skillHub.enable` |
-| `browser` | Headless Chromium automation over CDP (navigate, snapshot, click, type, screenshot) with a domain allowlist; settings-gated |
+| `browser` | Headless Chromium automation over CDP with a domain allowlist; settings-gated. Beyond the core loop (navigate, snapshot, click, type, screenshot, PDF, upload/download) it reads and writes cookies and web storage, surfaces page console output and uncaught exceptions, emulates devices/geolocation/offline, drives HTML5 drag-and-drop, intercepts network requests by rule, and records DevTools traces |
 | `computer` | Desktop automation (displays, windows, screenshots, mouse/keyboard, clipboard); mutating actions require approval; settings-gated |
 | `inspect_image` / `generate_image` / `tts` | Vision analysis of local images, image generation/editing, and text-to-speech through provider adapters; settings-gated |
 | `read_media` | Attaches a local video/audio file (mp4, webm, mov, mp3, wav, m4a, ogg, flac) as an inline media block. Gemini, Gemini CLI, and Vertex Gemini models receive it natively as `inline_data`; every other provider sees `[media omitted: <name>, <mime>, <size>]`. Hard cap 5 MiB per file (`media.maxBytes`); settings-gated |
@@ -1318,7 +1319,7 @@ This is a second comparison pass focused on high-impact architectural deltas and
 |------|---------------------------------------------|------------------|----------------------------|
 | **Distribution model** | npm package (`npm install -g @mariozechner/pi-coding-agent`) | Single Rust binary (`ra`) | Remove Node runtime dependency and improve startup/deployment portability |
 | **Execution surfaces** | Interactive + print + JSON mode + RPC + SDK | Interactive + print + JSON mode + RPC + Rust SDK | Rust SDK provides idiomatic companion API for embedding Pi programmatically (documented in `docs/sdk.md`) |
-| **Default built-in tool posture** | Defaults to `read/write/edit/bash` (others available) | Fourteen Essential-tier built-ins always in the schema (`read/write/edit/bash/grep/find/ls/hashline_edit/ask/todo/web_search/submit_plan/current_time/xdev`), with a discoverable tier behind the `xdev` dispatcher | Keep common code-navigation, shell, and edit workflows available without extra configuration while bounding schema size |
+| **Default built-in tool posture** | Defaults to `read/write/edit/bash` (others available) | Fifteen Essential-tier built-ins always in the schema (`read/write/edit/bash/grep/find/ls/hashline_edit/ask/todo/web_search/submit_plan/current_time/json_query/xdev`), with a discoverable tier behind the `xdev` dispatcher | Keep common code-navigation, shell, and edit workflows available without extra configuration while bounding schema size |
 | **Extension trust model** | Extension/package model documented as full system access | Embedded runtime with capability-gated hostcalls and policy profiles | Reduce ambient authority and make extension behavior auditable/deny-by-default |
 | **Session architecture emphasis** | JSONL tree session model and branch navigation | JSONL v3 tree + derived SQLite metadata index + default-enabled SQLite session backend support | Bound eligible resume/lookups and coordinate multi-instance access |
 | **Streaming transport stack** | Node runtime networking stack | Purpose-built HTTP/TLS client + custom SSE parser on asupersync | Tighter control over chunking, parsing, and failure handling in long streams |
@@ -3017,7 +3018,7 @@ A: Yes. Point any provider at a custom base URL via `models.json`. Pi normalizes
 | **Startup** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Memory** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Providers** | 11 native provider implementation modules + OpenAI-compatible presets | Anthropic | Many | Many |
-| **Tools** | 42 built-in (20 in the default `--tools` list) | Many | File-focused | IDE-integrated |
+| **Tools** | 43 built-in (21 in the default `--tools` list) | Many | File-focused | IDE-integrated |
 | **Sessions** | JSONL tree | Proprietary | Git-based | Proprietary |
 | **Open source** | Yes | Yes | Yes | No |
 
