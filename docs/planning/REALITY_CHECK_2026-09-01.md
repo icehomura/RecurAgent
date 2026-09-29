@@ -645,7 +645,7 @@ extension with a reason); the release-binary E2E lane (README "Extension
 Validation Pipeline" step 3/4) executed once on the v0.4.x binary.
 
 **Success criteria.**
-- [ ] `pi.perf.provider_live_e2e.v1` artifact with 11 entries, each
+- [ ] `ra.perf.provider_live_e2e.v1` artifact with 11 entries, each
       `status: pass`, `git_commit` = release SHA, credentials resolved from
       env (never stored).
 - [ ] `must_pass_gate_verdict.json` `status: pass` from a clean checkout
@@ -1142,7 +1142,7 @@ bd-0x31m. Run19 evidence for all of the above is recorded on the beads.
 4. `tests/perf/reports/budget_summary.json` at S: header == rows, no
    synthetic sources, `claim_readiness.status` ∈ {ready, ready_with_advisories}
    or waivers with expiry.
-5. `pi.perf.provider_live_e2e.v1` at S: 11/11 pass;
+5. `ra.perf.provider_live_e2e.v1` at S: 11/11 pass;
    `must_pass_gate_verdict.json` pass from a clean checkout.
 6. GH #195/#198/#182/#207/#178/#167 closed or answered with a bead id and
    release.

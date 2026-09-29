@@ -140,8 +140,8 @@
         }
       ],
       "schema_tags": [
-        "pi.ext.conformance_event",
-        "pi.ext.parity_event",
+        "ra.ext.conformance_event",
+        "ra.ext.parity_event",
         "ra.test.log.v2"
       ],
       "deterministic_replay_command": "./scripts/ext_quality_pipeline.sh --require-rch",

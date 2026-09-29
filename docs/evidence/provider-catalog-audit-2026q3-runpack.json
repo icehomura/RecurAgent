@@ -1,5 +1,5 @@
 {
-  "schema": "pi.evidence.provider_catalog_audit_2026q3.v1",
+  "schema": "ra.evidence.provider_catalog_audit_2026q3.v1",
   "generated_at": "2026-08-28T05:27:58.167869+00:00",
   "bead": "bd-provider-catalog-audit-2026q3-wzjtm",
   "verdict": "structural_audit_complete_live_validation_pending",

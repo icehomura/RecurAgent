@@ -59,7 +59,7 @@
         "required": ["schema", "required_fields"],
         "additionalProperties": false,
         "properties": {
-          "schema": { "type": "string", "const": "pi.perf.phase1_matrix_validation.v1" },
+          "schema": { "type": "string", "const": "ra.perf.phase1_matrix_validation.v1" },
           "required_fields": {
             "type": "array", "uniqueItems": true, "minItems": 6, "maxItems": 6,
             "items": { "type": "string", "enum": ["schema", "generated_at", "correlation_id", "scale_points", "weighted_attribution", "confidence_intervals_95"] }

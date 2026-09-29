@@ -1,5 +1,5 @@
 {
-  "schema": "pi.perf.provider_live_e2e.v1",
+  "schema": "ra.perf.provider_live_e2e.v1",
   "generated_at": "2026-08-28T05:30:00.901953+00:00",
   "verdict": "binary_missing",
   "providers": [

@@ -1,7 +1,7 @@
 {
-  "schema": "pi.swarm.incident_replay_e2e_contract.v1",
-  "evidence_schema": "pi.swarm.incident_replay_e2e.v1",
-  "event_schema": "pi.swarm.incident_replay_e2e.event.v1",
+  "schema": "ra.swarm.incident_replay_e2e_contract.v1",
+  "evidence_schema": "ra.swarm.incident_replay_e2e.v1",
+  "event_schema": "ra.swarm.incident_replay_e2e.event.v1",
   "contract_version": "1.0.0",
   "bead_id": "bd-9yq7i.7",
   "purpose": "no_mock_incident_replay_e2e_operator_evidence_not_release_claim",

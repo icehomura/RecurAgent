@@ -1,5 +1,5 @@
 {
-  "schema": "pi.qa.provider_e2e_artifact_contract.v1",
+  "schema": "ra.qa.provider_e2e_artifact_contract.v1",
   "bead": "bd-3uqg.14.3.3",
   "generated_at": "2026-02-13",
   "description": "Defines enforceable structured logging and artifact requirements for provider e2e workflows. Each claim must be backed by executable validation in tests/validate_e2e_artifact_schema.rs.",

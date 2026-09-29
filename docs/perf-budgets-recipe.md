@@ -216,7 +216,7 @@ non-zero exit as a recipe-audit failure.
 
 The phase-1 matrix validation
 (`tests/perf/reports/phase1_matrix_validation.json`,
-schema `pi.perf.phase1_matrix_validation.v1`) requires:
+schema `ra.perf.phase1_matrix_validation.v1`) requires:
 
 - Five scale points: 100k, 500k, 1M, 2M, 5M tokens.
 - Per-scale weighted-contribution attribution

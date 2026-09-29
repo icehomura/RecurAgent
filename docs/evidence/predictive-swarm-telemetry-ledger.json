@@ -33,7 +33,7 @@
       "id": "rpc_swarm_e2e",
       "path": "stale-rpc-swarm-e2e.json",
       "status": "ok",
-      "schema": "pi.rpc.concurrent_swarm_e2e.v1",
+      "schema": "ra.rpc.concurrent_swarm_e2e.v1",
       "timestamp": "2026-05-07T09:00:00+00:00",
       "freshness_hours": 48,
       "freshness_classification": "historical_snapshot",
@@ -189,7 +189,7 @@
           "id": "rpc_swarm_e2e",
           "path": "stale-rpc-swarm-e2e.json",
           "status": "ok",
-          "schema": "pi.rpc.concurrent_swarm_e2e.v1",
+          "schema": "ra.rpc.concurrent_swarm_e2e.v1",
           "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "freshness": "current",
           "timestamp": "2026-05-09T09:00:00+00:00"

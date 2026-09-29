@@ -171,7 +171,7 @@ rch exec -- cargo test --test ci_full_suite_gate -- full_certification --nocaptu
 
 Treat benchmark outcomes as definitive only when all required artifacts are present and schema-valid:
 
-- `tests/perf/reports/phase1_matrix_validation.json` (`pi.perf.phase1_matrix_validation.v1`)
+- `tests/perf/reports/phase1_matrix_validation.json` (`ra.perf.phase1_matrix_validation.v1`)
 - `tests/full_suite_gate/full_suite_verdict.json`
 - `tests/full_suite_gate/certification_verdict.json`
 - `tests/full_suite_gate/extension_remediation_backlog.json` (`ra.qa.extension_remediation_backlog.v1`)

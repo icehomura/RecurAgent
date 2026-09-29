@@ -1,5 +1,5 @@
 {
-  "schema": "pi.evidence.ri_phase1_recipe_audit_runpack.v1",
+  "schema": "ra.evidence.ri_phase1_recipe_audit_runpack.v1",
   "generated_at": "2026-09-22T04:16:31.3NZ",
   "workdir": "/Users/jemanuel/projects/pi-dsr-pinned",
   "dsr": "/Users/jemanuel/projects/doodlestein_self_releaser/dsr",

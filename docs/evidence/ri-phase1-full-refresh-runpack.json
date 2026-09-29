@@ -1,5 +1,5 @@
 {
-  "schema": "pi.evidence.ri_phase1_full_refresh_runpack.v1",
+  "schema": "ra.evidence.ri_phase1_full_refresh_runpack.v1",
   "generated_at": "2026-08-28T05:34:06.373775+00:00",
   "bead": "bd-ri-phase1-full-refresh-rndeg",
   "verdict": "scripts_and_schemas_shipped_dsr_run_blocked_on_rch",

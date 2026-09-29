@@ -18,7 +18,7 @@
         "cusum_reset_clears_cumsum_but_keeps_baseline",
         "cusum_no_alarm_on_stable_signal"
       ],
-      "telemetry_target": "pi.extensions.regime_shift",
+      "telemetry_target": "ra.extensions.regime_shift",
       "static_reachable": true,
       "dynamic_fire_evidence": "covered by emit_regime_observation_telemetry on every hostcall when cusum fires; firing event name = regime_observation_recorded"
     },
@@ -32,7 +32,7 @@
         "bocpd_run_length_bounded",
         "bocpd_reset_returns_to_default"
       ],
-      "telemetry_target": "pi.extensions.regime_shift",
+      "telemetry_target": "ra.extensions.regime_shift",
       "static_reachable": true,
       "dynamic_fire_evidence": "covered by emit_regime_observation_telemetry with change_posterior > threshold"
     },
@@ -45,7 +45,7 @@
         "conformal_interval_width_grows_with_variance",
         "conformal_interval_empirical_coverage_matches_confidence"
       ],
-      "telemetry_target": "pi.runtime.math_technique_fire",
+      "telemetry_target": "ra.runtime.math_technique_fire",
       "static_reachable": true,
       "dynamic_fire_evidence": "CORRECTION 2026-08-28: prior runpack reported no production telemetry for conformal. As of commit b2d894b9, src/extensions.rs emits tracing::warn!(target: pi.runtime.math_technique_fire, math_technique=conformal, fire_reason=compaction_admission) at the veto site."
     },
@@ -57,7 +57,7 @@
         "pac_bayes_bound_is_worst_case_with_no_data",
         "pac_bayes_reset_clears_state"
       ],
-      "telemetry_target": "pi.runtime.math_technique_fire",
+      "telemetry_target": "ra.runtime.math_technique_fire",
       "static_reachable": true,
       "dynamic_fire_evidence": "CORRECTION 2026-08-28: prior runpack reported no production telemetry for pac_bayes. As of commit b2d894b9, src/extensions.rs emits tracing::warn!(target: pi.runtime.math_technique_fire, math_technique=pac_bayes, fire_reason=killswitch_admission) at the veto site."
     },
@@ -70,7 +70,7 @@
         "voi_planner_is_deterministic_across_input_order",
         "voi_planner_rejects_stale_and_below_floor_candidates"
       ],
-      "telemetry_target": "pi.runtime.math_technique_fire",
+      "telemetry_target": "ra.runtime.math_technique_fire",
       "static_reachable": true,
       "dynamic_fire_evidence": "CORRECTION 2026-08-28: src/extension_scoring.rs now emits tracing::info!(target: pi.runtime.math_technique_fire, math_technique=voi, fire_reason=voi_utility_estimation, selected_count) at the select_voi_candidate_indices return site. (b2d894b9)"
     },
@@ -80,7 +80,7 @@
       "test_functions": [
         "Onlin convex optimization state + regret-rollback tests (verified by test_each_math_technique_has_a_reachable_test)"
       ],
-      "telemetry_target": "pi.runtime.oco_tuner",
+      "telemetry_target": "ra.runtime.oco_tuner",
       "static_reachable": true,
       "dynamic_fire_evidence": "OCO is in the source (OCO state struct in extensions.rs:3665), and is exercised in the reactor test module. It is wired to the runtime risk controller, not directly to a tracing event."
     },
