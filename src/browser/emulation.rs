@@ -42,6 +42,20 @@ fn error(message: impl Into<String>) -> Error {
     Error::tool("browser", message)
 }
 
+/// The origin of the tab's current page, for permission grants.
+///
+/// `Browser.grantPermissions` takes an origin, not a full URL, and rejects
+/// `about:blank` (which has no origin), so an unroutable page yields `None`
+/// rather than an error — the caller still gets the geolocation override.
+async fn page_origin(owner: &AgentCx, cdp: &mut Cdp) -> Result<Option<String>> {
+    let href = cdp
+        .evaluate(owner, "location.origin")
+        .await
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_string));
+    Ok(href.filter(|origin| origin.starts_with("http") && origin != "null"))
+}
+
 /// Validate the arguments for an emulation action.
 pub(super) fn validate(args: &Value) -> Result<()> {
     let object = args
@@ -123,6 +137,10 @@ pub(super) async fn execute(
             true,
         )
         .await?;
+        // Drop the geolocation grant too, or the next page keeps a permission
+        // the caller asked to have cleared.
+        cdp.call(owner, "Browser.resetPermissions", json!({}), false)
+            .await?;
         cdp.call(
             owner,
             "Network.emulateNetworkConditions",
@@ -180,6 +198,21 @@ pub(super) async fn execute(
             .get("longitude")
             .and_then(Value::as_f64)
             .ok_or_else(|| error("latitude requires longitude"))?;
+        // Granting the permission is part of setting a location, not a separate
+        // opt-in: an override the page is not allowed to read is a silent
+        // no-op, and a caller who asked for a location plainly wants it visible.
+        // `Browser.grantPermissions` is a browser-level command, so it is sent
+        // without the page flag.
+        let origin = page_origin(owner, cdp).await?;
+        if let Some(origin) = origin.as_deref() {
+            cdp.call(
+                owner,
+                "Browser.grantPermissions",
+                json!({"origin": origin, "permissions": ["geolocation"]}),
+                false,
+            )
+            .await?;
+        }
         cdp.call(
             owner,
             "Emulation.setGeolocationOverride",

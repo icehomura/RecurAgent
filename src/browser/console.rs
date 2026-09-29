@@ -11,7 +11,7 @@
 //! without limit.
 
 use super::cdp::Cdp;
-use super::{output, required};
+use super::output;
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
 use crate::tools::ToolOutput;
