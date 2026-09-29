@@ -1,5 +1,5 @@
 {
-  "schema": "pi.verify.shard_manifest.v1",
+  "schema": "ra.verify.shard_manifest.v1",
   "generated_at": "20260824T074259Z",
   "profile": "focused",
   "artifact_dir": "/Users/jemanuel/projects/pi_agent_rust/tests/e2e_results/20260824T074259Z",

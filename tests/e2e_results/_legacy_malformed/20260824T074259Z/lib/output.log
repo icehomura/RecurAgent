@@ -3856,7 +3856,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (swarm-replay-preview)
 _arguments "${_arguments_options[@]}" : \
-'--trace=[Normalized pi.swarm.replay_trace.v1 JSON to replay]:TRACE:_default' \
+'--trace=[Normalized ra.swarm.replay_trace.v1 JSON to replay]:TRACE:_default' \
 '*--policy=[Baseline policy to compare; repeatable, defaults to all built-in policies]:POLICIES:_default' \
 '--format=[Output format for stdout when no output path is supplied]:FORMAT:(text json)' \
 '--out-json=[Write schema-governed preview JSON; refuses to overwrite]:OUT_JSON:_default' \
@@ -5192,7 +5192,7 @@ json\t''"
 complete -c pi -n "__fish_pi_using_subcommand swarm-progress" -l out-json -d 'Write schema-governed progress SLO JSON; refuses to overwrite' -r
 complete -c pi -n "__fish_pi_using_subcommand swarm-progress" -l out-text -d 'Write concise progress SLO text; refuses to overwrite' -r
 complete -c pi -n "__fish_pi_using_subcommand swarm-progress" -s h -l help -d 'Print help'
-complete -c pi -n "__fish_pi_using_subcommand swarm-replay-preview" -l trace -d 'Normalized pi.swarm.replay_trace.v1 JSON to replay' -r
+complete -c pi -n "__fish_pi_using_subcommand swarm-replay-preview" -l trace -d 'Normalized ra.swarm.replay_trace.v1 JSON to replay' -r
 complete -c pi -n "__fish_pi_using_subcommand swarm-replay-preview" -l policy -d 'Baseline policy to compare; repeatable, defaults to all built-in policies' -r
 complete -c pi -n "__fish_pi_using_subcommand swarm-replay-preview" -l format -d 'Output format for stdout when no output path is supplied' -r -f -a "text\t''
 json\t''"
