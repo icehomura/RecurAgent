@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Free disk space
@@ -64,7 +64,7 @@ jobs:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
 
       - name: Install system deps
@@ -102,7 +102,7 @@ jobs:
       - name: Check public API SemVer compatibility
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
-          manifest-path: pi_agent_rust/Cargo.toml
+          manifest-path: RecurAgent/Cargo.toml
           package: pi_agent_rust
           baseline-rev: ${{ steps.baseline.outputs.rev }}
           rust-toolchain: nightly-2026-07-05

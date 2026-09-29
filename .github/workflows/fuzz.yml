@@ -56,13 +56,13 @@ jobs:
           - fuzz_extension_payload
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
 
       - name: Install Rust toolchain (nightly)
         uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # pinned 2026-08-04
@@ -159,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-crash-quick-${{ matrix.target }}-${{ github.run_id }}
-          path: pi_agent_rust/fuzz/artifacts/${{ matrix.target }}/
+          path: RecurAgent/fuzz/artifacts/${{ matrix.target }}/
           if-no-files-found: ignore
           retention-days: 30
 
@@ -182,13 +182,13 @@ jobs:
           - fuzz_message_deser
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
 
       - name: Install Rust toolchain (nightly)
         uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # pinned 2026-08-04
@@ -217,7 +217,7 @@ jobs:
       - name: Restore nightly corpus cache
         uses: actions/cache@v4
         with:
-          path: pi_agent_rust/fuzz/corpus/${{ matrix.target }}
+          path: RecurAgent/fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
           restore-keys: |
             fuzz-corpus-${{ matrix.target }}-
@@ -293,7 +293,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-crash-nightly-${{ matrix.target }}-${{ github.run_id }}
-          path: pi_agent_rust/fuzz/artifacts/${{ matrix.target }}/
+          path: RecurAgent/fuzz/artifacts/${{ matrix.target }}/
           if-no-files-found: ignore
           retention-days: 30
 
@@ -302,7 +302,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
-          path: pi_agent_rust/fuzz/corpus/${{ matrix.target }}/
+          path: RecurAgent/fuzz/corpus/${{ matrix.target }}/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -316,7 +316,7 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     env:
       FUZZ_TARGET: fuzz_sse_parser
@@ -325,7 +325,7 @@ jobs:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
 
       - name: Install Rust toolchain (nightly)
         uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # pinned 2026-08-04

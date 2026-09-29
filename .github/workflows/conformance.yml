@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
 
     strategy:
@@ -129,7 +129,7 @@ jobs:
         if: env.SHOULD_RUN == 'true'
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
 
       - name: Checkout asupersync
         if: env.SHOULD_RUN == 'true'
@@ -178,7 +178,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            pi_agent_rust/target/
+            RecurAgent/target/
           key: conformance-${{ runner.os }}-${{ hashFiles('pi_agent_rust/Cargo.lock') }}
           restore-keys: conformance-${{ runner.os }}-
 
@@ -190,7 +190,7 @@ jobs:
 
       - name: Install pi-mono dependencies
         if: env.SHOULD_RUN == 'true'
-        working-directory: pi_agent_rust/legacy_pi_mono_code/pi-mono
+        working-directory: RecurAgent/legacy_pi_mono_code/pi-mono
         run: npm ci
 
       - name: Symlink bun for conformance tests

@@ -26,7 +26,7 @@ jobs:
       CI_GATE_MAX_NA_COUNT: ${{ vars.CI_GATE_MAX_NA_COUNT || '170' }}
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Free disk space [linux]
@@ -48,7 +48,7 @@ jobs:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
 
       - name: PR Definition-of-Done evidence guard [linux]
@@ -1648,7 +1648,7 @@ jobs:
           path: |
             pi_agent_rust/llvm-cov-summary.txt
             pi_agent_rust/lcov.info
-            pi_agent_rust/target/llvm-cov/html
+            RecurAgent/target/llvm-cov/html
 
       - name: Upload conformance reports
         if: runner.os == 'Linux' && always()
@@ -1690,13 +1690,13 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
 
       - name: Install Rust toolchain (nightly)
@@ -1780,16 +1780,16 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
       SHARD_ARTIFACT_DIR: ${{ github.workspace }}/pi_agent_rust/tests/e2e_results/ci-shards/${{ matrix.shard.name }}
       SHARD_CORRELATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard.name }}
-      CARGO_TARGET_DIR: ${{ github.workspace }}/pi_agent_rust/target/ci-shards/${{ matrix.shard.name }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/RecurAgent/target/ci-shards/${{ matrix.shard.name }}
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
 
       - name: Install system deps (fd, rg)
@@ -1896,7 +1896,7 @@ jobs:
               TEST_LOG_JSONL_PATH="$SHARD_ARTIFACT_DIR/test-log.jsonl" \
               TEST_ARTIFACT_INDEX_PATH="$SHARD_ARTIFACT_DIR/artifact-index.jsonl" \
               RUST_LOG=info \
-              cargo build --locked --bin pi
+              cargo build --locked --bin ra
               TEST_LOG_JSONL_PATH="$SHARD_ARTIFACT_DIR/test-log.jsonl" \
               TEST_ARTIFACT_INDEX_PATH="$SHARD_ARTIFACT_DIR/artifact-index.jsonl" \
               RUST_LOG=info \
@@ -2498,13 +2498,13 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@v4
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
 
       - name: Install Rust toolchain (nightly)

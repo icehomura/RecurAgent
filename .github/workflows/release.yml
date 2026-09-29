@@ -193,14 +193,14 @@ jobs:
       - name: Checkout release tag for commit resolution
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: refs/tags/${{ steps.tag.outputs.tag }}
 
       - name: Freeze release source commit
         id: source
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
@@ -263,13 +263,13 @@ jobs:
       CARGO_INCREMENTAL: "0"
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
@@ -425,13 +425,13 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
@@ -511,13 +511,13 @@ jobs:
       RUST_BACKTRACE: "1"
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
@@ -655,7 +655,7 @@ jobs:
           key: release-${{ needs.plan.outputs.commit }}-${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --locked --bin pi --target "${{ matrix.target }}"
+        run: cargo build --release --locked --bin ra --target "${{ matrix.target }}"
 
       - name: Execute native release binary smoke test
         env:
@@ -666,9 +666,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$RELEASE_RUNNER_OS" = "Windows" ]; then
-            binary="target/${RELEASE_TARGET}/release/pi.exe"
+            binary="target/${RELEASE_TARGET}/release/ra.exe"
           else
-            binary="target/${RELEASE_TARGET}/release/pi"
+            binary="target/${RELEASE_TARGET}/release/ra"
           fi
           output="$("$binary" --version)"
           if command -v python3 >/dev/null 2>&1; then
@@ -684,11 +684,16 @@ jobs:
           output = os.environ["VERSION_OUTPUT"]
           expected_version = os.environ["RELEASE_VERSION"]
           expected_commit = os.environ["RELEASE_COMMIT"]
-          match = re.fullmatch(r"pi ([^ ]+) \(([0-9a-f]{40}) ([^)]+)\)", output)
+          # The banner abbreviates the sha (VERSION_SHA_WIDTH in src/main.rs), so
+          # accept any git-style width instead of pinning 9: a future width change
+          # must not silently re-break the release gate.
+          match = re.fullmatch(r"ra ([^ ]+) \(([0-9a-f]{7,40}) ([^)]+)\)", output)
           if match is None:
               raise SystemExit(f"native release binary returned malformed version output: {output!r}")
           version, commit, timestamp = match.groups()
-          if version != expected_version or commit != expected_commit:
+          # expected_commit is the full 40-char frozen commit; the banner carries
+          # only its abbreviated prefix, so pin identity by prefix.
+          if version != expected_version or not expected_commit.startswith(commit):
               raise SystemExit(
                   "native release identity differs from the frozen version/commit: "
                   f"version={version!r} commit={commit!r}"
@@ -792,7 +797,7 @@ jobs:
           STAGE_NAME="pi-${{ needs.plan.outputs.version }}-${{ matrix.target }}"
           STAGE_DIR="${RUNNER_TEMP}/${STAGE_NAME}"
           mkdir "$STAGE_DIR"
-          cp "target/${{ matrix.target }}/release/pi" "$STAGE_DIR/"
+          cp "target/${{ matrix.target }}/release/ra" "$STAGE_DIR/"
           cp LICENSE README.md "$STAGE_DIR/"
 
           tar -C "$RUNNER_TEMP" -cJf "dist/${{ matrix.asset }}.tar.xz" "$STAGE_NAME"
@@ -807,7 +812,7 @@ jobs:
           $stageName = "pi-${{ needs.plan.outputs.version }}-${{ matrix.target }}"
           $stageDir = Join-Path $env:RUNNER_TEMP $stageName
           New-Item -ItemType Directory -Path $stageDir
-          Copy-Item "target/${{ matrix.target }}/release/pi.exe" "$stageDir/"
+          Copy-Item "target/${{ matrix.target }}/release/ra.exe" "$stageDir/"
           Copy-Item "LICENSE" "$stageDir/"
           Copy-Item "README.md" "$stageDir/"
 
@@ -926,7 +931,7 @@ jobs:
               else f"{os.environ['RELEASE_ASSET']}.tar.xz"
           )
           binary = Path("target") / os.environ["RELEASE_TARGET"] / "release" / (
-              "pi.exe" if is_windows else "pi"
+              "ra.exe" if is_windows else "ra"
           )
           max_binary_bytes = 48 * 1024 * 1024
           binary_size = binary.stat().st_size
@@ -1014,7 +1019,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist-${{ matrix.target }}
-          path: pi_agent_rust/dist/*
+          path: RecurAgent/dist/*
           if-no-files-found: error
 
   release:
@@ -1034,13 +1039,13 @@ jobs:
       - name: Checkout (for install script + changelog)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
 
       - name: Verify frozen release source
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
@@ -1177,7 +1182,7 @@ jobs:
 
           def archive_binary(archive_path, target):
               root_name = f"pi-{version}-{target}"
-              binary_name = "pi.exe" if target.endswith("windows-msvc") else "pi"
+              binary_name = "ra.exe" if target.endswith("windows-msvc") else "ra"
               expected_files = {
                   f"{root_name}/{binary_name}",
                   f"{root_name}/LICENSE",
@@ -1372,7 +1377,7 @@ jobs:
               if manifest.get("archive") != expected_archive:
                   fail(f"{manifest_path} archive digest/size binding failed")
               binary_bytes = archive_binary(archive_path, target)
-              binary_name = "pi.exe" if runner_os == "Windows" else "pi"
+              binary_name = "ra.exe" if runner_os == "Windows" else "ra"
               expected_binary = {"name": binary_name, "sha256": sha256(binary_bytes), "size": len(binary_bytes)}
               if manifest.get("binary") != expected_binary:
                   fail(f"{manifest_path} extracted binary digest/size binding failed")
@@ -1700,7 +1705,7 @@ jobs:
           PY
 
       - name: Revalidate frozen source before draft creation
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
@@ -1884,7 +1889,7 @@ jobs:
           PY
 
       - name: Revalidate frozen source before draft handoff
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
@@ -2053,7 +2058,7 @@ jobs:
           PY
 
       - name: Revalidate frozen source after draft handoff
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
@@ -2088,13 +2093,13 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout frozen release commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
@@ -2488,13 +2493,13 @@ jobs:
       HAS_CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout frozen release commit without credentials
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
@@ -3175,7 +3180,7 @@ jobs:
       - name: Checkout frozen release commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
@@ -3187,7 +3192,7 @@ jobs:
           path: publication
 
       - name: Revalidate annotated tag and synchronized branches before publication
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
@@ -3445,7 +3450,7 @@ jobs:
           PY
 
       - name: Revalidate release source after final publication
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}

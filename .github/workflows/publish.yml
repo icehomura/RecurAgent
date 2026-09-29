@@ -71,14 +71,14 @@ jobs:
       - name: Checkout release tag for commit resolution
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: refs/tags/${{ steps.tag.outputs.tag }}
 
       - name: Freeze release source commit
         id: source
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
@@ -133,13 +133,13 @@ jobs:
     if: ${{ needs.plan.outputs.prerelease == 'false' }}
     defaults:
       run:
-        working-directory: pi_agent_rust
+        working-directory: RecurAgent
         shell: bash
     steps:
       - name: Checkout pi_agent_rust
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          path: pi_agent_rust
+          path: RecurAgent
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.plan.outputs.commit }}
