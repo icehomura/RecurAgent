@@ -15,7 +15,9 @@
 //! with it; everything else keeps the identifiable octos client. The
 //! private-address protection is the same as `ReqwestFetch`'s: the URL is
 //! checked and DNS resolved (fail closed) before the request, and the
-//! connection is pinned to the checked addresses. Redirects are not
+//! connection is pinned to the checked addresses. Proxies too: like the
+//! plain client, it follows the proxy environment (`https_proxy`,
+//! `all_proxy`, `no_proxy`), so every engine leaves through the same egress. Redirects are not
 //! followed: a redirect is reported as the page the request ended on
 //! (`x-octos-final-url`), which is how an engine recognises Google's
 //! `/sorry/` page. Challenges are never solved; the engine is suspended.
@@ -109,7 +111,6 @@ async fn legacy_mobile(req: HttpRequest) -> Result<HttpResponse, String> {
     let client = wreq::Client::builder()
         .emulation(emulation)
         .redirect(wreq::redirect::Policy::none())
-        .no_proxy()
         .timeout(req.timeout)
         .connect_timeout(Duration::from_secs(10).min(req.timeout))
         .resolve_to_addrs(host.clone(), addrs.iter().copied())

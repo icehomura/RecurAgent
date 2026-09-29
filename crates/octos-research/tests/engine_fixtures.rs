@@ -139,6 +139,7 @@ async fn replay(engine: &str, case: &Path) {
     // the query) answers `empty`; every other case `ok`.
     let want_status = match doc["expect_status"].as_str() {
         Some("challenge") => EngineStatus::Challenge,
+        Some("error") => EngineStatus::Error,
         Some(other) => panic!("{}: unknown expect_status {other}", case.display()),
         None if doc["expect"].as_array().is_some_and(|e| e.is_empty()) => EngineStatus::Empty,
         None => EngineStatus::Ok,

@@ -59,13 +59,16 @@ pub const AGENT_TOKEN: &str = "octos-research";
 /// browser.
 pub const USER_AGENT: &str = "octos-research/1.0 (+https://github.com/octos-org/octos)";
 
-/// Environment variable that opts in to scraping search-engine results
-/// pages: the keyless DuckDuckGo HTML endpoint and the Bing results page
-/// rendered in headless Chrome. **On by default** (OctoSense ADR 0002 §6:
-/// general web search for a personal assistant); set it to
-/// `0`/`false`/`no`/`off` to turn results-page search off. It is always
-/// honest: identifiable User-Agent, no stealth, no CAPTCHA solving; a
-/// challenge page ends that provider's attempt.
+/// Environment variable for results-page search: the metasearch's engines
+/// that read search engines' own pages (DuckDuckGo, Bing, Bing News, Brave,
+/// Google). **On by default** (OctoSense ADR 0002 §6 as amended: search the
+/// way SearXNG does, no person in the loop); set it to `0`/`false`/`no`/
+/// `off` to turn it off. Most of these engines identify as octos. Google's
+/// page answers only a browser-like client, so its engine is fetched with
+/// the `legacy_mobile` client (a feature-phone User-Agent over a Chrome TLS
+/// fingerprint, as SearXNG does; see `metasearch::impersonate`). No CAPTCHA
+/// is solved: a challenge suspends that engine. Search engines' terms may
+/// not allow automated queries (Google and Bing: high risk).
 pub const SERP_SCRAPE_ENV: &str = "OCTOS_ALLOW_SERP_SCRAPE";
 
 /// Earlier name of [`SERP_SCRAPE_ENV`], still honoured as an alias.
@@ -86,8 +89,8 @@ pub fn respect_robots(lookup: impl Fn(&str) -> Option<String>) -> bool {
         .unwrap_or(false)
 }
 
-/// Person's-browser mode for results pages that need a real browser
-/// (Google): `auto` (default) | `window` | `headless` | `off`. See
+/// Person's-browser mode for engines that render pages in a real browser
+/// (`google_cse`): `off` (default) | `auto` | `window` | `headless`. See
 /// `octos_research::browser` (feature `browser`).
 pub const BROWSER_ENV: &str = "OCTOS_BROWSER";
 
@@ -104,7 +107,7 @@ pub const BROWSER_SEARCH_NOTICE: &str = "Some results were loaded in the octos b
 /// (e.g. `http://127.0.0.1:8888`).
 pub const SEARXNG_URL_ENV: &str = "SEARXNG_URL";
 
-/// Whether results-page search (DuckDuckGo HTML, Bing in a browser) is on.
+/// Whether results-page search (see [`SERP_SCRAPE_ENV`]) is on.
 /// Unset: on (the default, OctoSense ADR 0002 §6 amendment). Set: on only
 /// for `1`/`true`/`yes`/`on`; any other value, including an empty or
 /// unrecognised one, turns it **off**, so a mistyped opt-out fails safe.
@@ -131,10 +134,12 @@ pub fn serp_scrape_default_notice(lookup: impl Fn(&str) -> Option<String>) -> Op
         .iter()
         .all(|k| lookup(k).is_none());
     unset.then_some(
-        "Results-page search (DuckDuckGo's HTML page, Bing in headless Chrome) is now on by \
-         default for general web results (OctoSense ADR 0002 amendment). Search engines' terms \
-         may not allow automated queries (Bing: high risk; DuckDuckGo: its robots.txt allows \
-         the HTML page, its terms promise nothing). Set OCTOS_ALLOW_SERP_SCRAPE=0 to turn it off.",
+        "Results-page search (DuckDuckGo, Bing, Brave and Google results pages) is on by \
+         default for general web results, the way SearXNG searches (OctoSense ADR 0002 \
+         amendment). Google's page is fetched with a browser-like client (a feature-phone \
+         User-Agent over a Chrome TLS fingerprint). Search engines' terms may not allow \
+         automated queries (Google and Bing: high risk; DuckDuckGo: its robots.txt allows the \
+         HTML page, its terms promise nothing). Set OCTOS_ALLOW_SERP_SCRAPE=0 to turn it off.",
     )
 }
 
@@ -153,12 +158,12 @@ pub fn no_results_message(query: &str, tried: &[String]) -> String {
          SERPER_API_KEY, TAVILY_API_KEY, YDC_API_KEY or PERPLEXITY_API_KEY) or set \
          {SEARXNG_URL_ENV} to a self-hosted SearXNG instance (with the `json` format \
          enabled). For news, use category \"news\" or a recent `since`. Results-page \
-         search (DuckDuckGo, Bing; an interim layer until the metasearch's own \
-         results-page engines replace it) is on unless {SERP_SCRAPE_ENV}=0; if it was \
-         tried, the engines may have answered with a challenge page, which octos does \
-         not bypass. Note: search engines' terms may not allow automated queries \
-         (Bing: high risk; DuckDuckGo: its robots.txt allows the HTML page, its terms \
-         promise nothing).\n"
+         search (DuckDuckGo, Bing, Brave and Google results pages, the way SearXNG \
+         searches) is on unless {SERP_SCRAPE_ENV}=0; an engine that answered with a \
+         challenge page is suspended for a while (octos does not solve challenges). Note: \
+         search engines' terms may not allow automated queries (Google and Bing: high \
+         risk; DuckDuckGo: its robots.txt allows the HTML page, its terms promise \
+         nothing).\n"
     )
 }
 
