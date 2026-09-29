@@ -279,13 +279,13 @@ pub const IMAGE_MAX_BYTES: usize = 4_718_592;
 pub const DEFAULT_BASH_TIMEOUT_SECS: u64 = 120;
 
 const BASH_TERMINATE_GRACE_SECS: u64 = 5;
-const BASH_CANCELLATION_SCHEMA_V1: &str = "pi.tool.bash.cancellation.v1";
+const BASH_CANCELLATION_SCHEMA_V1: &str = "ra.tool.bash.cancellation.v1";
 
 /// Hard limit for bash output file size (1GB) to prevent disk exhaustion DoS.
 pub(crate) const BASH_FILE_LIMIT_BYTES: usize = 1024 * 1024 * 1024; // 1 GiB
 
-const TOOL_OUTPUT_ARTIFACT_SCHEMA_V1: &str = "pi.tool_output_artifact.v1";
-const TOOL_OUTPUT_ARTIFACT_REDACTION_POLICY_V1: &str = "pi.tool_output_artifact.redaction.v1";
+const TOOL_OUTPUT_ARTIFACT_SCHEMA_V1: &str = "ra.tool_output_artifact.v1";
+const TOOL_OUTPUT_ARTIFACT_REDACTION_POLICY_V1: &str = "ra.tool_output_artifact.redaction.v1";
 const TOOL_OUTPUT_ARTIFACT_RETENTION_CLASS: &str = "session_scoped_temp_evidence";
 const TOOL_OUTPUT_ARTIFACT_SPILLOVER_REASON: &str = "sourceBytesExceededPreviewThreshold";
 const TOOL_OUTPUT_ARTIFACT_THRESHOLD_BYTES: usize = DEFAULT_MAX_BYTES;
@@ -1030,7 +1030,7 @@ struct RedactedToolOutputArtifact {
 }
 
 fn tool_output_artifact_root() -> PathBuf {
-    std::env::var_os("PI_TOOL_OUTPUT_ARTIFACT_DIR").map_or_else(
+    std::env::var_os("RECUR_AGENT_TOOL_OUTPUT_ARTIFACT_DIR").map_or_else(
         || Config::global_dir().join("tool-output-artifacts"),
         PathBuf::from,
     )
@@ -4171,18 +4171,18 @@ async fn ensure_parent_allows_creation(path: &Path) -> std::io::Result<()> {
 }
 
 /// Same scoping contract as `enforce_cwd_scope`, but also accepts paths under
-/// the configured pi-agent directory (`Config::global_dir()`, default
-/// `~/.pi/agent/`, override via `PI_CODING_AGENT_DIR`).
+/// the configured ra-agent directory (`Config::global_dir()`, default
+/// `~/.ra/agent/`, override via `RECUR_AGENT_DIR`).
 ///
 /// Read access is broadened so the model can fetch the bodies of skill files,
 /// prompt templates, and other resources that ship under the agent dir
 /// without needing to fall back to a `bash cat`. Write/edit/grep/find/list
 /// stay strictly cwd-only — broadening write access would let a misbehaving
 /// model persist instructions into the agent dir, which is a much higher-
-/// risk surface than the read case warrants. See pi_agent_rust#71.
+/// risk surface than the read case warrants. See recur_agent#71.
 ///
 /// Symlink escapes remain blocked because `safe_canonicalize` resolves
-/// symlinks before the prefix check, so e.g. `~/.pi/agent/skills/foo/SKILL.md`
+/// symlinks before the prefix check, so e.g. `~/.ra/agent/skills/foo/SKILL.md`
 /// pointing at `/etc/passwd` resolves to `/etc/passwd` and fails the prefix
 /// test against both cwd and agent dir.
 fn enforce_read_scope_with_roots(
@@ -4918,7 +4918,13 @@ fn append_image_file_ref(out: &mut String, path: &Path, note: Option<&str>) {
 }
 
 fn append_text_file_block(out: &mut String, path: &Path, bytes: &[u8]) {
-    let content = String::from_utf8_lossy(bytes);
+    // `@file` arguments carry no `encoding` argument, so a byte-order mark is
+    // the only declaration available; without one the legacy lossy-UTF-8
+    // decode is preserved.
+    let content = match resolve_text_encoding(None, bytes) {
+        Ok(Some(encoding)) => encoding_rs::Encoding::decode(encoding, bytes).0,
+        _ => String::from_utf8_lossy(bytes),
+    };
     let path_str = escaped_file_tag_name(path);
     let _ = writeln!(out, "<file name=\"{path_str}\">");
 
@@ -5447,7 +5453,7 @@ impl ToolRegistry {
     /// Every name `--tools` will honour.
     ///
     /// The match in [`Self::with_mutation_recorder`] ends in `_ => {}`, so a
-    /// name it does not know is dropped without a word: `pi --tools
+    /// name it does not know is dropped without a word: `ra --tools
     /// completely_made_up` starts an agent with no tools at all and says
     /// nothing, and `--tools read,bsah,edit` quietly hands the model two tools
     /// instead of three. This list is what [`unknown_tool_names`] measures a
@@ -5483,6 +5489,7 @@ impl ToolRegistry {
         "lsp",
         "read",
         "read_media",
+        "run_code",
         "security_scan",
         "subagent",
         "tts",
@@ -5492,6 +5499,7 @@ impl ToolRegistry {
         "ask",
         "todo",
         "submit_plan",
+        "dag",
     ];
 
     /// Tools pi provides that `--tools` does not select, and what decides them.
@@ -5513,6 +5521,22 @@ impl ToolRegistry {
         (
             "manage_skill",
             "always registered; it cannot touch user-authored skills, so it needs no opt-in",
+        ),
+        (
+            "skills_list",
+            "always registered; read-only skill index for progressive disclosure (M2)",
+        ),
+        (
+            "skill_view",
+            "always registered; read-only skill reader (L1/L2) paired with skills_list (M2)",
+        ),
+        (
+            "skill_hub_search",
+            "opt-in via settings `skillHub.enable`; searches the remote hub (M8)",
+        ),
+        (
+            "skill_hub_install",
+            "opt-in via settings `skillHub.enable`; quarantined remote install (M8)",
         ),
         ("retain", MEMORY_BANK_HOW),
         ("recall", MEMORY_BANK_HOW),
@@ -5598,6 +5622,21 @@ impl ToolRegistry {
                 }
                 "web_search" => tools.push(Box::new(crate::web_search::WebSearchTool::new())),
                 "eval" => tools.push(Box::new(crate::eval::EvalTool::new(cwd))),
+                // M6 PTC: one round-trip programmatic tool orchestration.
+                // Defaults on (see xdev::default_enabled_tools), no opt-in gate.
+                // The bridge tools reuse the registry's own read/grep/find/ls,
+                // so they must receive the same workspace + search backend as
+                // the direct-call tools above (otherwise their path/backend
+                // policy silently diverges from a direct `read`).
+                "run_code" => tools.push(Box::new(
+                    crate::ptc_bridge::RunCodeTool::new(cwd)
+                        .with_workspace(workspace.clone())
+                        .with_read_config(
+                            search_backend_from_config(config),
+                            image_auto_resize,
+                            block_images,
+                        ),
+                )),
                 "github" => tools.push(Box::new(crate::github::GithubTool::new(
                     cwd,
                     config.and_then(|c| c.gh_path.as_deref()),
@@ -5791,6 +5830,23 @@ impl ToolRegistry {
         // manage_skill (bd-cv653.4.2): CRUD over the isolated managed-skills
         // dir; always available — it can never touch user-authored skills.
         tools.push(Box::new(ManageSkillTool));
+
+        // Progressive disclosure (M2): skills_list gives the L0 index, and
+        // skill_view loads one skill's body on demand (L1) or reads a single
+        // L2 auxiliary file (references/templates/scripts). All are read-only
+        // info tools, so they ship enabled alongside manage_skill.
+        tools.push(Box::new(SkillsListTool::new(cwd.to_path_buf())));
+        tools.push(Box::new(SkillViewTool::new(cwd.to_path_buf())));
+
+        // Skill hub (M8): remote discovery + gated install. Off by default
+        // (opt-in) — the network fetch and the write are both new behaviour,
+        // so `skillHub.enable` in settings (or `RECUR_AGENT_SKILL_HUB=1`) must be set
+        // before either tool is registered.
+        let hub_settings = crate::skill_hub::settings_from_disk(cwd);
+        if crate::skill_hub::hub_tools_enabled(hub_settings.as_ref()) {
+            tools.push(Box::new(SkillHubSearchTool::new()));
+            tools.push(Box::new(SkillHubInstallTool::new()));
+        }
 
         // Tool load modes (bd-cv653.1.6): register the xdev dispatcher when
         // the enabled set contains discoverable-tier tools and `xdev` itself
@@ -6059,6 +6115,21 @@ impl SharedToolRegistry {
         self.inner.version.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// A non-owning handle for tools that need the live registry without
+    /// creating an Arc cycle (`registry → mounted tool → registry`).
+    /// Rebuild an owning handle with [`Self::upgrade`] at execution time.
+    #[must_use]
+    pub fn downgrade(&self) -> std::sync::Weak<SharedToolRegistryInner> {
+        Arc::downgrade(&self.inner)
+    }
+
+    /// Rebuild an owning handle from [`Self::downgrade`]; `None` once the
+    /// registry has been dropped.
+    #[must_use]
+    pub fn upgrade(weak: &std::sync::Weak<SharedToolRegistryInner>) -> Option<Self> {
+        weak.upgrade().map(|inner| Self { inner })
+    }
+
     /// Publish a modified registry: shallow-copy the current snapshot, apply
     /// `mutate`, and swap the result in atomically.
     pub fn update(&self, mutate: impl FnOnce(&mut ToolRegistry)) {
@@ -6112,6 +6183,12 @@ struct ReadInput {
     limit: Option<i64>,
     #[serde(default)]
     hashline: bool,
+    /// Charset used to decode text files: a WHATWG encoding label
+    /// (`"gbk"`, `"big5"`, `"utf-16le"`, `"shift_jis"`, `"latin1"`, ...) or
+    /// `"auto"` to sniff a BOM only. Absent leaves the file on the lossy
+    /// UTF-8 path.
+    #[serde(default)]
+    encoding: Option<String>,
 }
 
 pub struct ReadTool {
@@ -6216,6 +6293,33 @@ where
         }
     })
     .await
+}
+
+/// Resolve the charset a text payload is decoded with.
+///
+/// Precedence matches the `read` tool contract: an explicit `encoding`
+/// argument wins (the literal `"auto"` means "sniff only"), then a byte-order
+/// mark. `Ok(None)` means neither applied, which leaves callers on the legacy
+/// lossy-UTF-8 behaviour — byte for byte what unlabelled ASCII/UTF-8 input
+/// produced before. Unknown labels are rejected rather than silently ignored:
+/// a wrong guess is worse than mojibake because it is invisible.
+///
+/// No statistical auto-detection is attempted. Local files carry no TLD or
+/// language hints, and a wrong GBK/Shift_JIS guess on a short sample is
+/// silent corruption, so detection stops at what the file itself declares.
+fn resolve_text_encoding(
+    requested: Option<&str>,
+    head: &[u8],
+) -> std::result::Result<Option<&'static encoding_rs::Encoding>, String> {
+    if let Some(label) = requested {
+        let label = label.trim();
+        if !label.is_empty() && !label.eq_ignore_ascii_case("auto") {
+            return encoding_rs::Encoding::for_label(label.as_bytes())
+                .map(Some)
+                .ok_or_else(|| format!("unknown `encoding` label: {label}"));
+        }
+    }
+    Ok(encoding_rs::Encoding::for_bom(head).map(|(encoding, _)| encoding))
 }
 
 impl ReadTool {
@@ -6414,6 +6518,10 @@ impl Tool for ReadTool {
                 "hashline": {
                     "type": "boolean",
                     "description": "When true, output each line as N#AB:content where N is the line number and AB is a content hash. Use with hashline_edit tool for precise edits."
+                },
+                "encoding": {
+                    "type": "string",
+                    "description": "Character encoding of a text file, as a WHATWG label (e.g. \"gbk\", \"big5\", \"utf-16le\", \"shift_jis\", \"latin1\"). Use \"auto\" to decode by byte-order mark only. Omit for UTF-8. Pass this for non-UTF-8 files: the default decodes undecodable bytes to U+FFFD replacement characters."
                 }
             },
             "required": ["path"]
@@ -6517,6 +6625,12 @@ impl Tool for ReadTool {
             }
         }
         let initial_bytes = &buffer[..initial_read];
+
+        // An explicit `encoding` argument, or a byte-order mark, selects the
+        // charset the text path decodes with. Without either, the legacy
+        // lossy-UTF-8 path below is preserved byte for byte.
+        let text_encoding = resolve_text_encoding(input.encoding.as_deref(), initial_bytes)
+            .map_err(Error::validation)?;
 
         if let Some(mime_type) = detect_supported_image_mime_type_from_bytes(initial_bytes) {
             if self.block_images {
@@ -6650,21 +6764,65 @@ impl Tool for ReadTool {
         let mut last_byte_was_newline = false;
         let mut pending_cr = false;
 
+        // A resolved charset is transcoded chunk by chunk before the line
+        // scan: UTF-16/UTF-32 put their line terminators inside multi-byte
+        // code units, so windowing has to run on decoded text. Input with
+        // neither an `encoding` argument nor a BOM (`text_encoding == None`)
+        // keeps scanning the raw bytes exactly as before. The decode buffer
+        // is four times the read chunk, comfortably above the widest
+        // expansion any WHATWG encoding can produce, so `OutputFull` is
+        // unreachable.
+        let mut text_decoder = text_encoding.map(encoding_rs::Encoding::new_decoder);
+        let mut decoded_chunk = vec![0u8; buf.len().saturating_mul(4).saturating_add(16)];
+        // Bytes the decoder held back because they end inside a code unit;
+        // they are kept at the front of `buf` for the next read.
+        let mut carry = 0usize;
+
         // We need to track total_lines accurately for the output.
         // We will respect MAX_BYTES for *collected* content, but continue scanning for line counts
         // so pagination metadata is correct.
         let mut total_bytes_read = 0u64;
 
         loop {
-            let n = read_some(&mut file, &mut buf)
-                .await
-                .map_err(|e| Error::tool("read", e.to_string()))?;
-            if n == 0 {
-                break;
-            }
-            total_bytes_read = total_bytes_read.saturating_add(n as u64);
+            // With a resolved charset the raw bytes are read into the tail of
+            // `buf` behind any code-unit tail the decoder held back, decoded
+            // into `decoded_chunk`, and the already-consumed prefix is dropped.
+            let scan_bytes = if let Some(decoder) = text_decoder.as_mut() {
+                let n = read_some(&mut file, &mut buf[carry..])
+                    .await
+                    .map_err(|e| Error::tool("read", e.to_string()))?;
+                total_bytes_read = total_bytes_read.saturating_add(n as u64);
+                let (result, read, written, _errors) = decoder.decode_to_utf8(
+                    &buf[..carry + n],
+                    &mut decoded_chunk,
+                    n == 0,
+                );
+                if result == encoding_rs::CoderResult::OutputFull {
+                    // Unreachable: `decoded_chunk` is sized for the widest
+                    // expansion any WHATWG encoding can produce.
+                    return Err(Error::tool(
+                        "read",
+                        "encoding decode buffer exhausted".to_string(),
+                    ));
+                }
+                buf.copy_within(read..carry + n, 0);
+                carry = carry + n - read;
+                if n == 0 && written == 0 {
+                    break;
+                }
+                &decoded_chunk[..written]
+            } else {
+                let n = read_some(&mut file, &mut buf)
+                    .await
+                    .map_err(|e| Error::tool("read", e.to_string()))?;
+                if n == 0 {
+                    break;
+                }
+                total_bytes_read = total_bytes_read.saturating_add(n as u64);
+                &buf[..n]
+            };
 
-            let chunk = normalize_line_endings_chunk(&buf[..n], &mut pending_cr);
+            let chunk = normalize_line_endings_chunk(scan_bytes, &mut pending_cr);
             if chunk.is_empty() {
                 continue;
             }
@@ -7996,7 +8154,7 @@ impl Tool for BashTool {
             ) {
                 Ok(job) => job,
                 Err(err) => {
-                    // Named refusals (PI_JOBS_AT_CAPACITY, …) surface as a
+                    // Named refusals (RECUR_AGENT_JOBS_AT_CAPACITY, …) surface as a
                     // tool result the model can read, not a transport error.
                     return Ok(ToolOutput {
                         content: vec![ContentBlock::Text(TextContent::new(err.to_string()))],
@@ -8289,6 +8447,92 @@ impl LearnTool {
     pub const fn new(store: std::sync::Arc<crate::memory::MemoryStore>) -> Self {
         Self { store }
     }
+
+    /// Check whether a lesson with substantially identical content already
+    /// exists in the memory bank.  Uses FTS5 recall to find candidates, then
+    /// does a simple substring / overlap check to avoid false positives from
+    /// related-but-distinct lessons.
+    fn is_duplicate_lesson(&self, lesson: &str) -> Result<bool> {
+        // Extract a concise FTS query from the lesson (first ~80 chars keeps
+        // precision while still matching paraphrased variants).
+        let query: String = lesson.chars().take(80).collect();
+        let candidates = self.store.recall(&query, Some(5))?;
+        let normalised = lesson.trim().to_lowercase();
+        for candidate in &candidates {
+            if candidate.kind != crate::memory::MemoryKind::Lesson.as_str() {
+                continue;
+            }
+            let existing = candidate.content.trim().to_lowercase();
+            // Exact match after normalisation.
+            if existing == normalised {
+                return Ok(true);
+            }
+            // The new lesson is fully contained in an existing one (common
+            // when a hook records a subset of a broader lesson).
+            if existing.contains(&normalised) {
+                return Ok(true);
+            }
+            // The existing lesson is fully contained in the new one and the
+            // existing lesson is short enough that containment is meaningful.
+            if normalised.contains(&existing) && existing.len() >= 20 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Standalone entry-point that mirrors `LearnTool::execute` logic without
+/// going through the `Tool` trait — designed for reflection hooks and other
+/// callers that already hold a `MemoryStore` reference.
+///
+/// Returns a human-readable description of the action taken.
+pub fn learn_lesson(
+    store: &crate::memory::MemoryStore,
+    lesson: &str,
+    context: Option<&str>,
+) -> Result<String> {
+    let lesson = lesson.trim();
+    if lesson.is_empty() {
+        return Err(Error::validation(
+            "learn_lesson requires a non-empty lesson".to_string(),
+        ));
+    }
+    let content = context.map_or_else(
+        || lesson.to_string(),
+        |ctx| format!("{lesson}\n\nContext: {ctx}"),
+    );
+
+    // Fuzzy dedup via FTS5 recall.
+    let query: String = lesson.chars().take(80).collect();
+    let candidates = store.recall(&query, Some(5))?;
+    let normalised = lesson.to_lowercase();
+    for candidate in &candidates {
+        if candidate.kind != crate::memory::MemoryKind::Lesson.as_str() {
+            continue;
+        }
+        let existing = candidate.content.trim().to_lowercase();
+        if existing == normalised || existing.contains(&normalised) {
+            return Ok(format!(
+                "Lesson already exists [{}], skipping.",
+                candidate.id
+            ));
+        }
+        if normalised.contains(&existing) && existing.len() >= 20 {
+            return Ok(format!(
+                "Lesson already exists [{}], skipping.",
+                candidate.id
+            ));
+        }
+    }
+
+    let memory = store.retain(
+        crate::memory::MemoryKind::Lesson,
+        &content,
+        &["learn".to_string()],
+        None,
+    )?;
+    Ok(format!("Lesson captured [{}].", memory.id))
 }
 
 /// Derive a valid skill slug from free text: lowercase, non-alnum → hyphen,
@@ -8372,16 +8616,40 @@ impl Tool for LearnTool {
                 "learn requires a non-empty lesson".to_string(),
             ));
         }
+
+        // Fuzzy dedup: skip if a substantially identical lesson already exists.
+        if self.is_duplicate_lesson(&input.lesson)? {
+            return Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(
+                    "Lesson already exists, skipping.".to_string(),
+                ))],
+                details: Some(serde_json::json!({ "skipped": true })),
+                is_error: false,
+            });
+        }
+
         let content = input.context.as_deref().map_or_else(
             || input.lesson.clone(),
             |ctx| format!("{}\n\nContext: {ctx}", input.lesson),
         );
-        let memory = self.store.retain(
+        let memory = match self.store.retain(
             crate::memory::MemoryKind::Lesson,
             &content,
             &["learn".to_string()],
             None,
-        )?;
+        ) {
+            Ok(m) => m,
+            Err(ref e) if e.to_string().contains("RECUR_AGENT_MEMORY_DUPLICATE") => {
+                return Ok(ToolOutput {
+                    content: vec![ContentBlock::Text(TextContent::new(
+                        "Lesson already exists, skipping.".to_string(),
+                    ))],
+                    details: Some(serde_json::json!({ "skipped": true })),
+                    is_error: false,
+                });
+            }
+            Err(e) => return Err(e),
+        };
         let mut lines = vec![format!("Lesson captured [{}].", memory.id)];
         let mut promoted: Option<serde_json::Value> = None;
         if input.promote.unwrap_or(false) {
@@ -8425,14 +8693,22 @@ impl Tool for LearnTool {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ManageSkillInput {
-    /// create | update | delete | list.
+    /// create | update | delete | list | patch | merge.
     op: String,
-    /// Skill name (required for create/update/delete).
+    /// Skill name (required for create/update/delete/patch).
     name: Option<String>,
     /// Description (create; optional for update).
     description: Option<String>,
     /// Skill body markdown (create/update).
     content: Option<String>,
+    /// M4 patch: exact text to replace (must be unique in the body).
+    old_text: Option<String>,
+    /// M4 patch: replacement text.
+    new_text: Option<String>,
+    /// M4 merge: second skill to fold in (its name becomes an alias).
+    other: Option<String>,
+    /// M4 merge: when true, apply the plan; when false (default) dry-run only.
+    apply: Option<bool>,
 }
 
 /// CRUD over the isolated managed-skills dir. The managed tier loads dead
@@ -8463,12 +8739,16 @@ impl Tool for ManageSkillTool {
             "properties": {
                 "op": {
                     "type": "string",
-                    "enum": ["create", "update", "delete", "list"],
+                    "enum": ["create", "update", "delete", "list", "patch", "merge"],
                     "description": "Operation"
                 },
-                "name": { "type": "string", "description": "Skill name (create/update/delete)" },
+                "name": { "type": "string", "description": "Skill name (create/update/delete/patch/merge)" },
                 "description": { "type": "string", "description": "Skill description (create; optional for update)" },
-                "content": { "type": "string", "description": "Skill body markdown (create/update)" }
+                "content": { "type": "string", "description": "Skill body markdown (create/update)" },
+                "oldText": { "type": "string", "description": "patch: exact unique text to replace" },
+                "newText": { "type": "string", "description": "patch: replacement text" },
+                "other": { "type": "string", "description": "merge: the second skill to fold in (name becomes an alias)" },
+                "apply": { "type": "boolean", "description": "merge: apply the plan (default false = dry-run)" }
             },
             "required": ["op"]
         })
@@ -8529,32 +8809,28 @@ impl Tool for ManageSkillTool {
                     }),
                 ))
             }
-            "list" => {
-                let skills = crate::skills_managed::list()?;
-                let text = if skills.is_empty() {
-                    "No managed skills.".to_string()
-                } else {
-                    skills
-                        .iter()
-                        .map(|skill| {
-                            format!(
-                                "- {} (managed: {}): {}\n  {}",
-                                skill.name, skill.managed, skill.description, skill.path
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                };
+            "list" => Self::list_skills(),
+            "patch" => {
+                let name = name_required("patch")?;
+                let old_text = input.old_text.clone().ok_or_else(|| {
+                    Error::validation("manage_skill patch requires oldText".to_string())
+                })?;
+                let new_text = input.new_text.clone().ok_or_else(|| {
+                    Error::validation("manage_skill patch requires newText".to_string())
+                })?;
+                let info = crate::skills_managed::patch(&name, &old_text, &new_text)?;
                 Ok((
-                    text,
+                    format!("Managed skill '{name}' patched."),
                     serde_json::json!({
                         "schema": crate::skills_managed::SKILL_SCHEMA,
-                        "skills": skills,
+                        "op": "patch",
+                        "skill": info,
                     }),
                 ))
             }
+            "merge" => Self::merge_skill(&input),
             other => Err(Error::validation(format!(
-                "Unknown manage_skill op '{other}'; expected create, update, delete, or list"
+                "Unknown manage_skill op '{other}'; expected create, update, delete, list, patch, or merge"
             ))),
         })();
         match result {
@@ -8566,6 +8842,649 @@ impl Tool for ManageSkillTool {
             Err(err) => Ok(ToolOutput {
                 content: vec![ContentBlock::Text(TextContent::new(err.to_string()))],
                 details: Some(serde_json::json!({ "error": err.to_string() })),
+                is_error: true,
+            }),
+        }
+    }
+}
+
+impl ManageSkillTool {
+    /// List every managed skill as name + description + path.
+    ///
+    /// Split out of `execute`: the command dispatch stays readable and
+    /// each arm falls under the function line limit.
+    fn list_skills() -> Result<(String, serde_json::Value)> {
+        let skills = crate::skills_managed::list()?;
+        let text = if skills.is_empty() {
+            "No managed skills.".to_string()
+        } else {
+            skills
+                .iter()
+                .map(|skill| {
+                    format!(
+                        "- {} (managed: {}): {}\n  {}",
+                        skill.name, skill.managed, skill.description, skill.path
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        Ok((
+            text,
+            serde_json::json!({
+                "schema": crate::skills_managed::SKILL_SCHEMA,
+                "skills": skills,
+            }),
+        ))
+    }
+
+    /// Merge two managed skills; dry-run unless `apply` is set.
+    ///
+    /// Split out of `execute`: the command dispatch stays readable and
+    /// each arm falls under the function line limit.
+    fn merge_skill(input: &ManageSkillInput) -> Result<(String, serde_json::Value)> {
+        let primary = input
+            .name
+            .clone()
+            .filter(|name| !name.trim().is_empty())
+            .ok_or_else(|| Error::validation("manage_skill merge requires name".to_string()))?;
+        let other = input
+            .other
+            .clone()
+            .filter(|n| !n.trim().is_empty())
+            .ok_or_else(|| Error::validation("manage_skill merge requires other".to_string()))?;
+        if primary == other {
+            return Err(Error::validation(
+                "manage_skill merge needs two distinct skills".to_string(),
+            ));
+        }
+        // Resolve both skills against the managed index. A merge never
+        // touches user/project skills: only managed (agent-authored)
+        // content is foldable, matching the tier's isolation contract.
+        let managed = crate::skills_managed::list()?;
+        let lookup = |name: &str| -> Result<crate::resources::Skill> {
+            managed
+                .iter()
+                .find(|s| s.name == name)
+                .map(crate::skill_merge::skill_from_managed)
+                .ok_or_else(|| {
+                    Error::validation(format!(
+                        "RECUR_AGENT_SKILL_UNKNOWN: no managed skill named '{name}'"
+                    ))
+                })
+        };
+        let primary_skill = lookup(&primary)?;
+        let secondary_skill = lookup(&other)?;
+        // Read both bodies so the plan can synthesize a merged body.
+        // `resources::load_skill_body` is the same L1 reader the
+        // progressive-disclosure tools use.
+        let primary_body = crate::resources::load_skill_body(&primary_skill)?.content;
+        let secondary_body = crate::resources::load_skill_body(&secondary_skill)?.content;
+        let plan = crate::skill_merge::plan_merge(
+            &primary_skill,
+            &secondary_skill,
+            &primary_body,
+            &secondary_body,
+            true,
+        );
+        let apply = input.apply.unwrap_or(false);
+        if !apply {
+            // Dry-run is the default: the tool never writes unless the
+            // caller opts in, so a model cannot merge by accident.
+            return Ok((
+                format!(
+                    "Merge dry-run: '{}' ← '{}' (strategy {:?}, score {:.3}, {} conflict(s)). \
+                         Re-run with apply=true to persist.",
+                    plan.primary,
+                    plan.secondary,
+                    plan.strategy,
+                    plan.score,
+                    plan.conflicts.len()
+                ),
+                serde_json::to_value(&plan)?,
+            ));
+        }
+        // Apply: write the synthesized body under the primary name
+        // (revision-snapshotted), then retarget the secondary.
+        let info = crate::skills_managed::update(&primary, None, &plan.merged_body)?;
+        Ok((
+            format!(
+                "Merged '{}' into '{}'; '{}' now aliases '{}'.",
+                plan.secondary, plan.primary, plan.secondary, plan.primary
+            ),
+            serde_json::json!({
+                "schema": crate::skill_merge::SKILL_MERGE_SCHEMA,
+                "applied": true,
+                "plan": plan,
+                "skill": info,
+            }),
+        ))
+    }
+}
+
+// ============================================================================
+// Skills Progressive Disclosure Tools (M2)
+// ============================================================================
+
+/// L0 index: list available skills as name + description only.
+///
+/// Skill bodies are deliberately excluded. The model discovers skills here,
+/// then loads a single skill's full content (L1) — or one of its auxiliary
+/// files (L2) — on demand through [`SkillViewTool`], so resident prompt cost
+/// stays flat as the skill library grows. The rendering shares
+/// [`crate::resources::build_skills_index`] with the resident system prompt,
+/// so both apply the same truncation and L0 budget.
+pub struct SkillsListTool {
+    /// Project root used to resolve project-scoped skills.
+    cwd: PathBuf,
+    /// User-level skills root. Defaults to [`Config::global_dir`]; tests inject
+    /// their own so assertions stay hermetic — pointing this at the real global
+    /// store would pull in whatever skills the developer happens to have.
+    agent_dir: PathBuf,
+}
+
+impl SkillsListTool {
+    /// Create a list tool rooted at `cwd`.
+    pub fn new(cwd: impl Into<PathBuf>) -> Self {
+        Self {
+            cwd: cwd.into(),
+            agent_dir: Config::global_dir(),
+        }
+    }
+
+    /// Create a list tool with an explicit user-level skills root (test seam).
+    pub fn with_agent_dir(cwd: impl Into<PathBuf>, agent_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            cwd: cwd.into(),
+            agent_dir: agent_dir.into(),
+        }
+    }
+
+    /// Load the skills visible to this tool, excluding model-hidden ones.
+    ///
+    /// `include_defaults` must be true: `load_skills` gates the project-level
+    /// (`<cwd>/<project_dir>/skills`) and user-level (`<agent_dir>/skills`)
+    /// scans behind it, so `false` combined with an empty `skill_paths`
+    /// loads nothing at all and every caller sees "No skills available".
+    ///
+    /// No failure mode: `load_skills` reports per-resource issues as
+    /// diagnostics rather than `Err`, so this returns the list directly.
+    fn load_visible_skills(&self) -> Vec<crate::resources::Skill> {
+        let result = crate::resources::load_skills(crate::resources::LoadSkillsOptions {
+            cwd: self.cwd.clone(),
+            agent_dir: self.agent_dir.clone(),
+            skill_paths: Vec::new(),
+            include_defaults: true,
+        });
+        let mut skills = result.skills;
+        skills.retain(|skill| !skill.disable_model_invocation);
+        skills.sort_by(|a, b| a.name.cmp(&b.name));
+        skills
+    }
+}
+
+#[async_trait]
+impl Tool for SkillsListTool {
+    fn name(&self) -> &'static str {
+        "skills_list"
+    }
+
+    fn label(&self) -> &'static str {
+        "list skills"
+    }
+
+    fn description(&self) -> &'static str {
+        "List available skills with their name and short description (L0 \
+         index). Use skill_view to load a skill's full content (L1)."
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        })
+    }
+
+    fn effects(&self) -> ToolEffects {
+        ToolEffects::read()
+    }
+
+    async fn execute(
+        &self,
+        _tool_call_id: &str,
+        _input: serde_json::Value,
+        _on_update: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>>,
+    ) -> Result<ToolOutput> {
+        let skills = self.load_visible_skills();
+        // Render through the SAME index builder the resident system prompt
+        // uses (`format_skills_for_prompt_with_budget`), so the per-skill
+        // description truncation and the L0 budget can never drift between
+        // the injected index and this tool's output.
+        let index =
+            crate::resources::build_skills_index(&skills, crate::resources::L0_SKILL_BUDGET_CHARS);
+        let text = if index.entries.is_empty() && index.omitted.is_empty() {
+            "No skills available.".to_string()
+        } else {
+            let mut lines = index
+                .entries
+                .iter()
+                .map(|entry| {
+                    let suffix = if entry.truncated { "..." } else { "" };
+                    format!("- {}: {}{}", entry.name, entry.description, suffix)
+                })
+                .collect::<Vec<_>>();
+            if index.is_truncated() {
+                lines.push(format!(
+                    "({} more skill(s) omitted to stay within the L0 budget; \
+                     raise the budget or load skills directly by name.)",
+                    index.omitted.len()
+                ));
+            }
+            lines.join("\n")
+        };
+        Ok(ToolOutput {
+            content: vec![ContentBlock::Text(TextContent::new(text))],
+            details: Some(serde_json::json!({
+                "schema": "ra.skills_index.v1",
+                "count": index.entries.len(),
+                "omitted": index.omitted.len(),
+                "budgetChars": crate::resources::L0_SKILL_BUDGET_CHARS,
+            })),
+            is_error: false,
+        })
+    }
+}
+
+/// L1/L2: load one skill's full SKILL.md on demand, and read its auxiliary
+/// files (L2) one at a time.
+pub struct SkillViewTool {
+    /// Project root used to resolve project-scoped skills.
+    cwd: PathBuf,
+    /// User-level skills root; see [`SkillsListTool::agent_dir`].
+    agent_dir: PathBuf,
+}
+
+impl SkillViewTool {
+    /// Create a view tool rooted at `cwd`.
+    pub fn new(cwd: impl Into<PathBuf>) -> Self {
+        Self {
+            cwd: cwd.into(),
+            agent_dir: Config::global_dir(),
+        }
+    }
+
+    /// Create a view tool with an explicit user-level skills root (test seam).
+    pub fn with_agent_dir(cwd: impl Into<PathBuf>, agent_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            cwd: cwd.into(),
+            agent_dir: agent_dir.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for SkillViewTool {
+    fn name(&self) -> &'static str {
+        "skill_view"
+    }
+
+    fn label(&self) -> &'static str {
+        "view skill"
+    }
+
+    fn description(&self) -> &'static str {
+        "Load a skill's full content by name (L1). With `list_assets: true` \
+         it lists the skill's auxiliary files under references/, templates/ \
+         and scripts/ (L2); pass one of those relative paths as `asset` to \
+         read that single file. Use skills_list first to discover skills (L0)."
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Skill name, as shown by skills_list"
+                },
+                "list_assets": {
+                    "type": "boolean",
+                    "description": "List the skill's L2 auxiliary files instead of returning the SKILL.md body"
+                },
+                "asset": {
+                    "type": "string",
+                    "description": "Relative path of one L2 auxiliary file to read (from list_assets); must be under references/, templates/ or scripts/"
+                }
+            },
+            "required": ["name"]
+        })
+    }
+
+    fn effects(&self) -> ToolEffects {
+        ToolEffects::read()
+    }
+
+    async fn execute(
+        &self,
+        _tool_call_id: &str,
+        input: serde_json::Value,
+        _on_update: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>>,
+    ) -> Result<ToolOutput> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SkillViewInput {
+            name: String,
+            // The published tool schema (see `parameters()` above) declares
+            // `list_assets` in snake_case, while `rename_all = "camelCase"`
+            // makes serde accept `listAssets` only — so callers following the
+            // schema silently got `false` and fell through to the L1 body
+            // branch. Accept both spellings so schema and parser cannot drift.
+            #[serde(default, alias = "list_assets")]
+            list_assets: bool,
+            asset: Option<String>,
+        }
+        let input: SkillViewInput =
+            serde_json::from_value(input).map_err(|e| Error::validation(e.to_string()))?;
+        let name = input.name.trim();
+        if name.is_empty() {
+            return Err(Error::validation("skill_view requires name"));
+        }
+        let loader = SkillsListTool::with_agent_dir(self.cwd.clone(), self.agent_dir.clone());
+        let visible = loader.load_visible_skills();
+        let found = crate::resources::find_skill(&visible, name);
+        let Some(skill) = found else {
+            return Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(format!(
+                    "Skill '{name}' not found. Use skills_list to see available skills."
+                )))],
+                details: Some(serde_json::json!({
+                    "schema": "ra.skill_content.v1",
+                    "error": format!("skill '{name}' not found"),
+                })),
+                is_error: true,
+            });
+        };
+
+        // L2: read one auxiliary file, or list them. Only one file's content
+        // ever enters the result, so L2 never lands in the resident context
+        // wholesale.
+        if let Some(asset) = input
+            .asset
+            .as_deref()
+            .map(str::trim)
+            .filter(|a| !a.is_empty())
+        {
+            let content = crate::resources::load_skill_asset(skill, asset)?;
+            return Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(content))],
+                details: Some(serde_json::json!({
+                    "schema": "ra.skill_asset.v1",
+                    "name": skill.name,
+                    "asset": asset,
+                })),
+                is_error: false,
+            });
+        }
+        if input.list_assets {
+            let assets = crate::resources::list_skill_assets(skill);
+            let text = if assets.is_empty() {
+                format!(
+                    "Skill '{}' has no L2 auxiliary files under {:?}.",
+                    skill.name,
+                    crate::resources::SKILL_L2_DIRS
+                )
+            } else {
+                assets
+                    .iter()
+                    .map(|asset| format!("- {} ({} bytes)", asset.relative_path, asset.bytes))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            return Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(text))],
+                details: Some(serde_json::json!({
+                    "schema": "ra.skill_assets.v1",
+                    "name": skill.name,
+                    "count": assets.len(),
+                })),
+                is_error: false,
+            });
+        }
+
+        // L1: the full SKILL.md body.
+        let body = crate::resources::load_skill_body(skill)?;
+        Ok(ToolOutput {
+            content: vec![ContentBlock::Text(TextContent::new(body.content))],
+            details: Some(serde_json::json!({
+                "schema": "ra.skill_content.v1",
+                "name": body.name,
+                "description": body.description,
+                "path": body.path.display().to_string(),
+            })),
+            is_error: false,
+        })
+    }
+}
+
+// ============================================================================
+// Skill Hub native tools (M8)
+// ============================================================================
+
+/// `skill_hub_search(query)`: match the remote skill index by keyword.
+///
+/// Opt-in, read-only over the network (agentskills.io static index, token-free,
+/// served from a daily local cache). Returns ranked `name/description/source`
+/// candidates; installation is a separate, quarantined step.
+pub struct SkillHubSearchTool {
+    /// Shared coordinator (index cache + install dir + reload handle).
+    hub: std::sync::Arc<crate::skill_hub::SkillHub>,
+}
+
+impl SkillHubSearchTool {
+    /// Create a search tool over the process-wide hub.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            hub: crate::skill_hub::SkillHub::shared(),
+        }
+    }
+}
+
+impl Default for SkillHubSearchTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl Tool for SkillHubSearchTool {
+    fn name(&self) -> &'static str {
+        "skill_hub_search"
+    }
+
+    fn label(&self) -> &'static str {
+        "search skill hub"
+    }
+
+    fn description(&self) -> &'static str {
+        "Search the remote skill hub (agentskills.io) for skills matching a \
+         query. Returns candidate name/description/source entries; use \
+         skill_hub_install to download and install one."
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Keyword(s) matched against skill name and description; empty lists the catalogue"
+                }
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        })
+    }
+
+    fn effects(&self) -> ToolEffects {
+        ToolEffects::read().union(ToolEffects::network())
+    }
+
+    async fn execute(
+        &self,
+        _tool_call_id: &str,
+        input: serde_json::Value,
+        _on_update: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>>,
+    ) -> Result<ToolOutput> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct SearchInput {
+            query: String,
+        }
+        let input: SearchInput =
+            serde_json::from_value(input).map_err(|e| Error::validation(e.to_string()))?;
+        match self.hub.search(&input.query).await {
+            Ok(hits) => {
+                let text = if hits.is_empty() {
+                    format!("No skills match `{}`.", input.query)
+                } else {
+                    hits.iter()
+                        .map(|hit| {
+                            let desc: String = hit.description.chars().take(120).collect();
+                            format!("- {} [{}]: {}", hit.name, hit.source, desc)
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                };
+                Ok(ToolOutput {
+                    content: vec![ContentBlock::Text(TextContent::new(text))],
+                    details: Some(serde_json::json!({
+                        "schema": "ra.skill_hub_search.v1",
+                        "query": input.query,
+                        "count": hits.len(),
+                        "results": hits,
+                    })),
+                    is_error: false,
+                })
+            }
+            Err(err) => Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(err.to_string()))],
+                details: Some(serde_json::json!({
+                    "schema": "ra.skill_hub_search.v1",
+                    "error": err.to_string(),
+                })),
+                is_error: true,
+            }),
+        }
+    }
+}
+
+/// `skill_hub_install(name)`: download, quarantine, and install one skill.
+///
+/// Opt-in, network + write. A `Dangerous` quarantine verdict refuses the write
+/// and reports every finding; a successful install lands in the shared user
+/// skills dir and marks the skills reload handle dirty so the next turn's
+/// system prompt rebuilds with the new skill.
+pub struct SkillHubInstallTool {
+    /// Shared coordinator (index cache + install dir + reload handle).
+    hub: std::sync::Arc<crate::skill_hub::SkillHub>,
+}
+
+impl SkillHubInstallTool {
+    /// Create an install tool over the process-wide hub.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            hub: crate::skill_hub::SkillHub::shared(),
+        }
+    }
+}
+
+impl Default for SkillHubInstallTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl Tool for SkillHubInstallTool {
+    fn name(&self) -> &'static str {
+        "skill_hub_install"
+    }
+
+    fn label(&self) -> &'static str {
+        "install skill from hub"
+    }
+
+    fn description(&self) -> &'static str {
+        "Download and install a skill from the remote hub by exact name. The \
+         skill is scanned first; anything flagged dangerous is refused and \
+         nothing is written. Use skill_hub_search to find names."
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Exact skill name, as returned by skill_hub_search"
+                }
+            },
+            "required": ["name"],
+            "additionalProperties": false
+        })
+    }
+
+    fn effects(&self) -> ToolEffects {
+        ToolEffects::read()
+            .union(ToolEffects::write())
+            .union(ToolEffects::network())
+    }
+
+    async fn execute(
+        &self,
+        _tool_call_id: &str,
+        input: serde_json::Value,
+        _on_update: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>>,
+    ) -> Result<ToolOutput> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct InstallInput {
+            name: String,
+        }
+        let input: InstallInput =
+            serde_json::from_value(input).map_err(|e| Error::validation(e.to_string()))?;
+        let name = input.name.trim();
+        if name.is_empty() {
+            return Err(Error::validation("skill_hub_install requires name"));
+        }
+        match self.hub.install(name).await {
+            Ok(outcome) => {
+                let mut text = format!("Installed skill '{name}' at {}.", outcome.path.display());
+                if outcome.cautioned {
+                    let _ = write!(text, "\nCaution findings: {}", outcome.findings.join("; "));
+                }
+                Ok(ToolOutput {
+                    content: vec![ContentBlock::Text(TextContent::new(text))],
+                    details: Some(serde_json::json!({
+                        "schema": "ra.skill_hub_install.v1",
+                        "name": name,
+                        "path": outcome.path.display().to_string(),
+                        "cautioned": outcome.cautioned,
+                        "findings": outcome.findings,
+                    })),
+                    is_error: false,
+                })
+            }
+            Err(err) => Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(err.to_string()))],
+                details: Some(serde_json::json!({
+                    "schema": "ra.skill_hub_install.v1",
+                    "name": name,
+                    "error": err.to_string(),
+                })),
                 is_error: true,
             }),
         }
@@ -8737,7 +9656,7 @@ impl Tool for HubTool {
         let (text, details, is_error) = match dispatched {
             Ok((text, details)) => (text, details, false),
             Err(err) => {
-                // Domain refusals (PI_HUB_*) surface as tool results the
+                // Domain refusals (RECUR_AGENT_HUB_*) surface as tool results the
                 // model can read, matching the jobs capacity contract.
                 (
                     err.to_string(),
@@ -8909,7 +9828,7 @@ impl HubTool {
                     ));
                 }
                 let details = serde_json::json!({
-                    "schema": "pi.hub.send.v1",
+                    "schema": "ra.hub.send.v1",
                     "name": name,
                     "actions": actions,
                 });
@@ -11072,6 +11991,10 @@ fn build_workspace_ignore_matcher(
     builder.build().ok()
 }
 
+/// Line text captured for one scanner result path: `(1-based line number,
+/// text)` pairs in ascending line order.
+type CapturedGrepLines = Vec<(usize, String)>;
+
 /// Result of an in-process grep scan, handing the pinned roots and filters
 /// back to the async caller alongside the collected matches.
 struct InprocGrepScan {
@@ -11079,8 +12002,85 @@ struct InprocGrepScan {
     glob_override: Option<ignore::overrides::Override>,
     workspace_ignore: Option<ignore::gitignore::Gitignore>,
     matches: Vec<(PathBuf, usize)>,
+    /// Matched lines plus the context window the searcher walked, keyed by
+    /// scanner result path. Rendering consumes these instead of re-reading
+    /// every matched file just to print its surrounding lines.
+    captured: HashMap<PathBuf, CapturedGrepLines>,
     match_count: usize,
     limit_reached: bool,
+}
+
+/// Sink that captures the lines the in-process searcher walks — matches and
+/// their context window — so `grep` can render results without a second read
+/// of each file. The searcher supplies the context itself
+/// (`SearcherBuilder::before_context`/`after_context`), so the captured
+/// lines are exactly the ones the renderer prints.
+struct InprocGrepSink<'a> {
+    captured: &'a mut CapturedGrepLines,
+    matches: &'a mut Vec<usize>,
+    match_count: &'a mut usize,
+    scan_limit: usize,
+    after_context: usize,
+    /// Set once the scan limit is reached: the search then stops after the
+    /// remaining after-context of the last retained match has been walked,
+    /// so that match still renders a complete context window.
+    pending_after_context: Option<usize>,
+    limit_reached: bool,
+}
+
+impl InprocGrepSink<'_> {
+    /// Record one walked line, normalizing its line terminator away, and
+    /// return its 1-based line number.
+    fn push_line(&mut self, line_number: Option<u64>, bytes: &[u8]) -> usize {
+        let text = String::from_utf8_lossy(bytes);
+        let text = text.strip_suffix('\n').unwrap_or(&text);
+        let text = text.strip_suffix('\r').unwrap_or(text);
+        let line_number = usize::try_from(line_number.unwrap_or(0)).unwrap_or(usize::MAX);
+        self.captured.push((line_number, text.to_string()));
+        line_number
+    }
+}
+
+impl grep_searcher::Sink for InprocGrepSink<'_> {
+    type Error = std::io::Error;
+
+    fn matched(
+        &mut self,
+        _searcher: &grep_searcher::Searcher,
+        mat: &grep_searcher::SinkMatch<'_>,
+    ) -> std::result::Result<bool, Self::Error> {
+        let line_number = self.push_line(mat.line_number(), mat.bytes());
+        self.matches.push(line_number);
+        *self.match_count += 1;
+        if *self.match_count >= self.scan_limit {
+            self.limit_reached = true;
+            // The over-limit match is dropped by the caller, so the search
+            // only has to keep going until the last retained match has its
+            // full after-context window.
+            self.pending_after_context = Some(self.after_context);
+            if self.after_context == 0 {
+                return Ok(false);
+            }
+        } else if self.pending_after_context.is_some() {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    fn context(
+        &mut self,
+        _searcher: &grep_searcher::Searcher,
+        ctx: &grep_searcher::SinkContext<'_>,
+    ) -> std::result::Result<bool, Self::Error> {
+        self.push_line(ctx.line_number(), ctx.bytes());
+        match self.pending_after_context.as_mut() {
+            Some(remaining) => {
+                *remaining = remaining.saturating_sub(1);
+                Ok(*remaining > 0)
+            }
+            None => Ok(true),
+        }
+    }
 }
 
 /// In-process `grep` backend (bd-cv653.1.5): search with the engines ripgrep
@@ -11099,19 +12099,16 @@ fn grep_inproc_scan_sync(
     pattern: &str,
     ignore_case: bool,
     literal: bool,
+    after_context: usize,
     scan_limit: usize,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> std::io::Result<InprocGrepScan> {
-    use grep_searcher::{BinaryDetection, SearcherBuilder, sinks};
+    use grep_searcher::{BinaryDetection, SearcherBuilder};
 
-    let pattern_for_matcher = if literal {
-        regex::escape(pattern)
-    } else {
-        pattern.to_string()
-    };
     let matcher = grep_regex::RegexMatcherBuilder::new()
         .case_insensitive(ignore_case)
-        .build(&pattern_for_matcher)
+        .fixed_strings(literal)
+        .build(pattern)
         .map_err(|err| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -11123,9 +12120,14 @@ fn grep_inproc_scan_sync(
         // rg's default binary handling: stop searching a file at the first
         // NUL byte.
         .binary_detection(BinaryDetection::quit(0))
+        // Context comes from the searcher itself, so the sink below can
+        // capture the surrounding lines while it walks them.
+        .before_context(after_context)
+        .after_context(after_context)
         .build();
 
     let mut matches: Vec<(PathBuf, usize)> = Vec::new();
+    let mut captured: HashMap<PathBuf, CapturedGrepLines> = HashMap::new();
     let mut match_count: usize = 0;
     let mut limit_reached = false;
 
@@ -11186,29 +12188,30 @@ fn grep_inproc_scan_sync(
                     continue;
                 }
             }
-            let mut file_hit_limit = false;
-            let search = searcher.search_path(
-                &matcher,
-                path,
-                sinks::Lossy(|line_number, _line| {
-                    matches.push((
-                        relative.clone(),
-                        usize::try_from(line_number).unwrap_or(usize::MAX),
-                    ));
-                    match_count += 1;
-                    if match_count >= scan_limit {
-                        file_hit_limit = true;
-                        Ok(false)
-                    } else {
-                        Ok(true)
-                    }
-                }),
-            );
+            let mut file_matches: Vec<usize> = Vec::new();
+            let mut file_captured: CapturedGrepLines = Vec::new();
+            let mut sink = InprocGrepSink {
+                captured: &mut file_captured,
+                matches: &mut file_matches,
+                match_count: &mut match_count,
+                scan_limit,
+                after_context,
+                pending_after_context: None,
+                limit_reached: false,
+            };
+            let search = searcher.search_path(&matcher, path, &mut sink);
             if let Err(err) = search {
                 tracing::debug!(
                     "in-process grep skipped an unreadable file {}: {err}",
                     path_for_line_output(path)
                 );
+            }
+            let file_hit_limit = sink.limit_reached;
+            for line_number in file_matches {
+                matches.push((relative.clone(), line_number));
+            }
+            if !file_captured.is_empty() {
+                captured.entry(relative).or_default().extend(file_captured);
             }
             if file_hit_limit {
                 limit_reached = true;
@@ -11219,28 +12222,33 @@ fn grep_inproc_scan_sync(
         // Pinned regular file: search the held descriptor itself (dup'd, so
         // the parent's handle keeps an untouched offset) — a post-pin
         // rename/symlink swap cannot redirect the search.
-        let sink = sinks::Lossy(|line_number, _line| {
-            matches.push((
-                PathBuf::new(),
-                usize::try_from(line_number).unwrap_or(usize::MAX),
-            ));
-            match_count += 1;
-            if match_count >= scan_limit {
-                limit_reached = true;
-                Ok(false)
-            } else {
-                Ok(true)
-            }
-        });
+        let mut file_matches: Vec<usize> = Vec::new();
+        let mut file_captured: CapturedGrepLines = Vec::new();
+        let mut sink = InprocGrepSink {
+            captured: &mut file_captured,
+            matches: &mut file_matches,
+            match_count: &mut match_count,
+            scan_limit,
+            after_context,
+            pending_after_context: None,
+            limit_reached: false,
+        };
         #[cfg(unix)]
         {
             let handle = scoped_root.handle.try_clone()?;
-            searcher.search_reader(&matcher, handle, sink)?;
+            searcher.search_reader(&matcher, handle, &mut sink)?;
         }
         // Windows pins parent components rather than the file itself; the
         // logical-path read matches the platform's established posture.
         #[cfg(not(unix))]
-        searcher.search_path(&matcher, scoped_root.logical_path(), sink)?;
+        searcher.search_path(&matcher, scoped_root.logical_path(), &mut sink)?;
+        limit_reached = sink.limit_reached;
+        for line_number in file_matches {
+            matches.push((PathBuf::new(), line_number));
+        }
+        if !file_captured.is_empty() {
+            captured.insert(PathBuf::new(), file_captured);
+        }
     }
 
     Ok(InprocGrepScan {
@@ -11248,6 +12256,7 @@ fn grep_inproc_scan_sync(
         glob_override,
         workspace_ignore,
         matches,
+        captured,
         match_count,
         limit_reached,
     })
@@ -11536,6 +12545,7 @@ impl Tool for GrepTool {
         };
 
         let mut matches: Vec<(PathBuf, usize)> = Vec::new();
+        let mut captured: HashMap<PathBuf, CapturedGrepLines> = HashMap::new();
         let mut match_count: usize = 0;
         let mut match_scan_limit_reached = false;
 
@@ -11556,6 +12566,7 @@ impl Tool for GrepTool {
                     &pattern,
                     ignore_case,
                     literal,
+                    context_value,
                     scan_limit,
                     &cancel_for_scan,
                 )
@@ -11578,6 +12589,7 @@ impl Tool for GrepTool {
             let outcome =
                 outcome.map_err(|err| Error::tool("grep", error_for_line_output(&err)))?;
             matches = outcome.matches;
+            captured = outcome.captured;
             match_count = outcome.match_count;
             // outcome.limit_reached is equivalent to match_count > effective_limit
             // (scan_limit is effective_limit + 1), which the shared truncation
@@ -11859,6 +12871,7 @@ impl Tool for GrepTool {
         let mut lines_truncated = false;
 
         // Group matches by file to merge overlapping context windows
+        let mut captured_by_file = captured;
         let mut file_order: Vec<PathBuf> = Vec::new();
         let mut matches_by_file: HashMap<PathBuf, Vec<usize>> = HashMap::new();
         let mut logical_paths_by_file: HashMap<PathBuf, PathBuf> = HashMap::new();
@@ -11875,6 +12888,9 @@ impl Tool for GrepTool {
             if !matches_by_file.contains_key(&mapped.read_path) {
                 file_order.push(mapped.read_path.clone());
                 logical_paths_by_file.insert(mapped.read_path.clone(), mapped.logical_path.clone());
+                if let Some(lines) = captured_by_file.remove(child_path) {
+                    captured_by_file.insert(mapped.read_path.clone(), lines);
+                }
             }
             matches_by_file
                 .entry(mapped.read_path)
@@ -11892,11 +12908,23 @@ impl Tool for GrepTool {
             let relative_path = format_grep_path(&logical_path, cwd_scope.logical_path());
             // A pinned regular-file root renders context from the held
             // descriptor so a post-pin rename/symlink swap of the logical
-            // path cannot redirect or break the read.
-            let lines = if scoped_root.is_file_root() {
-                get_pinned_file_lines_async(&scoped_root).await
-            } else {
-                get_file_lines_async(&file_path, &operation_cwd).await
+            // path cannot redirect or break the read. The in-process scanner
+            // already captured matched and context lines while it searched,
+            // so only the external `rg` backend still reads the file back.
+            let lines = match captured_by_file.remove(&file_path) {
+                Some(mut lines) => {
+                    // The searcher walks a file front to back, but sort/dedup
+                    // keeps the line-number key lookup total regardless.
+                    lines.sort_unstable_by_key(|(number, _)| *number);
+                    lines.dedup_by_key(|(number, _)| *number);
+                    GrepFileLines::Captured(lines)
+                }
+                None if scoped_root.is_file_root() => {
+                    GrepFileLines::WholeFile(get_pinned_file_lines_async(&scoped_root).await)
+                }
+                None => {
+                    GrepFileLines::WholeFile(get_file_lines_async(&file_path, &operation_cwd).await)
+                }
             };
 
             if lines.is_empty() {
@@ -11921,7 +12949,9 @@ impl Tool for GrepTool {
                     line_number
                 };
                 let end = if context_value > 0 {
-                    line_number.saturating_add(context_value).min(lines.len())
+                    line_number
+                        .saturating_add(context_value)
+                        .min(lines.last_line_number())
                 } else {
                     line_number
                 };
@@ -11941,7 +12971,7 @@ impl Tool for GrepTool {
                     append_artifact_source_line(&mut artifact_source, "--");
                 }
                 for current in start..=end {
-                    let line_text = lines.get(current - 1).map_or("", String::as_str);
+                    let line_text = lines.line(current);
                     let sanitized = line_text.replace('\r', "");
                     let truncated = truncate_line(&sanitized, GREP_MAX_LINE_LENGTH);
                     if truncated.was_truncated {
@@ -13695,8 +14725,10 @@ impl Drop for ProcessGuard {
 /// `kill_process_group_tree` / `terminate_process_group_tree` calls reap the
 /// whole descendant tree, including processes spawned between the kill-time
 /// snapshot and the kill (bd-9jgrt item 1). Unix needs nothing here: the
-/// child already leads its own process group. Hub PTY services are out of
-/// scope (portable-pty children keep the walk-based discipline).
+/// child already leads its own process group. Hub PTY children are out of
+/// scope for this function: they carry their own kill-on-close job
+/// ([`crate::hub`]'s `attach_pty_job_discipline`), and portable-pty spawns
+/// them without a `std::process::Child` to attach.
 // Const only on unix where the body degenerates to `let _`; the windows
 // branch calls non-const job registration, so the lint cannot hold for both
 // targets at once.
@@ -13929,7 +14961,7 @@ pub(crate) fn command_with_default_sigpipe_in_dir(
 }
 
 #[cfg(windows)]
-const WINDOWS_SHARE_JOB_SPEC_ENV: &str = "PI_INTERNAL_SHARE_JOB_SPEC";
+const WINDOWS_SHARE_JOB_SPEC_ENV: &str = "RECUR_AGENT_INTERNAL_SHARE_JOB_SPEC";
 
 #[cfg(windows)]
 #[derive(Serialize, Deserialize)]
@@ -14218,6 +15250,47 @@ fn format_grep_path(file_path: &Path, cwd: &Path) -> String {
     }
 
     path_for_line_output(file_path)
+}
+
+/// Line text available for rendering one grep result file.
+enum GrepFileLines {
+    /// Whole-file lines, read back for the external `rg` backend — which
+    /// reports only match line numbers, so context still needs a second read.
+    WholeFile(Vec<String>),
+    /// The matched and context lines the in-process searcher already walked,
+    /// keyed by 1-based line number: rendering never re-reads the file.
+    Captured(CapturedGrepLines),
+}
+
+impl GrepFileLines {
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::WholeFile(lines) => lines.is_empty(),
+            Self::Captured(lines) => lines.is_empty(),
+        }
+    }
+
+    /// Highest line number available, used to clamp a context window the way
+    /// the whole-file read previously clamped at `lines.len()`.
+    fn last_line_number(&self) -> usize {
+        match self {
+            Self::WholeFile(lines) => lines.len(),
+            Self::Captured(lines) => lines.last().map_or(0, |(number, _)| *number),
+        }
+    }
+
+    /// Text of the 1-based `line_number`, or `""` when it was not captured.
+    fn line(&self, line_number: usize) -> &str {
+        match self {
+            Self::WholeFile(lines) => lines
+                .get(line_number.saturating_sub(1))
+                .map_or("", String::as_str),
+            Self::Captured(lines) => lines
+                .binary_search_by_key(&line_number, |(number, _)| *number)
+                .ok()
+                .map_or("", |index| lines[index].1.as_str()),
+        }
+    }
 }
 
 async fn get_file_lines_async(path: &Path, cwd: &Path) -> Vec<String> {
@@ -17113,7 +18186,7 @@ mod tests {
             })?;
             assert_eq!(
                 event.get("schema").and_then(serde_json::Value::as_str),
-                Some("pi.tool_output_context_cache.evidence.v1")
+                Some("ra.tool_output_context_cache.evidence.v1")
             );
             assert_eq!(
                 event.get("bead").and_then(serde_json::Value::as_str),
@@ -17638,7 +18711,7 @@ mod tests {
     }
 
     /// Issue #71: skill files, prompt templates, and themes live under the
-    /// agent dir (`~/.pi/agent/`, default). The agent legitimately needs to
+    /// agent dir (`~/.ra/agent/`, default). The agent legitimately needs to
     /// read these even when cwd is a user project on a different path.
     /// Ensure `enforce_read_scope_with_roots` accepts the agent dir as a
     /// second valid root without breaking the cwd-only contract for paths
@@ -17659,13 +18732,12 @@ mod tests {
             &WorkspaceHandle::default(),
         )
         .unwrap();
+        // Compare against the SAME normalization `enforce_read_scope_with_roots`
+        // returns. `Path::canonicalize` yields the Windows UNC form
+        // (`\\?\C:\...`) while `safe_canonicalize` strips that prefix, so
+        // mixing the two makes this assertion fail on Windows only.
         assert!(
-            resolved.starts_with(
-                agent_dir
-                    .path()
-                    .canonicalize()
-                    .unwrap_or_else(|_| agent_dir.path().to_path_buf())
-            ),
+            resolved.starts_with(crate::extensions::safe_canonicalize(agent_dir.path())),
             "agent-dir path must be allowed and returned canonicalised"
         );
     }
@@ -17708,13 +18780,10 @@ mod tests {
             &WorkspaceHandle::default(),
         )
         .unwrap();
-        assert!(
-            resolved.starts_with(
-                cwd.path()
-                    .canonicalize()
-                    .unwrap_or_else(|_| cwd.path().to_path_buf())
-            )
-        );
+        // Same normalization rule as above: `safe_canonicalize` strips the
+        // Windows UNC prefix that `Path::canonicalize` produces, so the two
+        // must agree for `starts_with` to hold cross-platform.
+        assert!(resolved.starts_with(crate::extensions::safe_canonicalize(cwd.path())));
     }
 
     #[test]
@@ -18108,6 +19177,83 @@ mod tests {
             let text = get_text(&out.content);
             assert!(!text.is_empty());
             assert!(!out.is_error);
+        });
+    }
+
+    #[test]
+    fn test_read_unknown_encoding_label_is_rejected() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = tempfile::tempdir().unwrap();
+            std::fs::write(tmp.path().join("ascii.txt"), "plain\n").unwrap();
+
+            let tool = ReadTool::new(tmp.path());
+            let err = tool
+                .execute(
+                    "t",
+                    serde_json::json!({
+                        "path": tmp.path().join("ascii.txt").to_string_lossy(),
+                        "encoding": "not-a-real-charset"
+                    }),
+                    None,
+                )
+                .await;
+            let msg = err.unwrap_err().to_string();
+            assert!(msg.contains("unknown `encoding` label"), "got: {msg}");
+        });
+    }
+
+    #[test]
+    fn test_read_explicit_encoding_decodes_non_utf8_text() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = tempfile::tempdir().unwrap();
+            // GBK bytes for "中文" followed by an ASCII tail. Decoded as UTF-8
+            // these are lone continuation bytes, i.e. U+FFFD without `encoding`.
+            let gbk: Vec<u8> = vec![0xD6, 0xD0, 0xCE, 0xC4, b'\n'];
+            std::fs::write(tmp.path().join("gbk.txt"), &gbk).unwrap();
+
+            let tool = ReadTool::new(tmp.path());
+            let out = tool
+                .execute(
+                    "t",
+                    serde_json::json!({
+                        "path": tmp.path().join("gbk.txt").to_string_lossy(),
+                        "encoding": "gbk"
+                    }),
+                    None,
+                )
+                .await
+                .unwrap();
+            let text = get_text(&out.content);
+            assert!(text.contains("中文"), "expected decoded GBK text, got: {text}");
+            assert!(!text.contains('\u{FFFD}'), "gbk decode should not emit U+FFFD: {text}");
+        });
+    }
+
+    #[test]
+    fn test_read_bom_sniffing_decodes_utf16le_without_encoding_argument() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut utf16: Vec<u8> = vec![0xFF, 0xFE]; // UTF-16LE BOM
+            for unit in "alpha\nbeta\n".encode_utf16() {
+                utf16.extend_from_slice(&unit.to_le_bytes());
+            }
+            std::fs::write(tmp.path().join("utf16.txt"), &utf16).unwrap();
+
+            let tool = ReadTool::new(tmp.path());
+            let out = tool
+                .execute(
+                    "t",
+                    serde_json::json!({
+                        "path": tmp.path().join("utf16.txt").to_string_lossy()
+                    }),
+                    None,
+                )
+                .await
+                .unwrap();
+            let text = get_text(&out.content);
+            assert!(text.contains("alpha"), "expected decoded UTF-16LE text, got: {text}");
+            assert!(text.contains("beta"), "expected both decoded lines, got: {text}");
+            assert!(!text.contains('\u{FFFD}'), "BOM decode should not emit U+FFFD: {text}");
         });
     }
 
@@ -21993,12 +23139,332 @@ mod tests {
 }
 
 #[cfg(test)]
+mod progressive_skill_tool_tests {
+    use super::*;
+
+    /// Build a skill directory with a `SKILL.md` plus L2 files, and return the
+    /// workspace root the tools should be rooted at.
+    fn workspace_with_skill(name: &str) -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().expect("skill workspace");
+        let skill_dir = tmp.path().join(".ra").join("skills").join(name);
+        std::fs::create_dir_all(skill_dir.join("references")).unwrap();
+        std::fs::create_dir_all(skill_dir.join("scripts")).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: A test skill for L1/L2.\n---\n\n# {name}\n\nBody text.\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            skill_dir.join("references").join("guide.md"),
+            "reference body",
+        )
+        .unwrap();
+        std::fs::write(
+            skill_dir.join("scripts").join("run.sh"),
+            "#!/bin/sh\necho hi",
+        )
+        .unwrap();
+        tmp
+    }
+
+    fn text_of(out: &ToolOutput) -> String {
+        out.content
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::Text(t) => Some(t.text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn skills_list_renders_l0_index_within_budget() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = workspace_with_skill("demo-skill");
+            // Point the user-level root at the temp dir as well: the default
+            // `Config::global_dir()` would drag in whatever skills this machine
+            // has, so `count == 1` would assert against the developer's
+            // environment instead of the fixture.
+            let tool = SkillsListTool::with_agent_dir(tmp.path(), tmp.path());
+            let out = tool
+                .execute("t", serde_json::json!({}), None)
+                .await
+                .unwrap();
+            assert!(!out.is_error);
+            let text = text_of(&out);
+            assert!(text.contains("demo-skill"), "L0 lacks the skill: {text}");
+            // Same truncation口径 as the resident prompt: 80 chars max.
+            let details = out.details.unwrap();
+            assert_eq!(details["schema"], "ra.skills_index.v1");
+            assert_eq!(details["count"], 1);
+        });
+    }
+
+    #[test]
+    fn skill_view_l1_returns_the_full_body() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = workspace_with_skill("demo-skill");
+            let tool = SkillViewTool::new(tmp.path());
+            let out = tool
+                .execute("t", serde_json::json!({ "name": "demo-skill" }), None)
+                .await
+                .unwrap();
+            assert!(!out.is_error);
+            let text = text_of(&out);
+            assert!(text.contains("# demo-skill"), "missing body: {text}");
+            assert!(text.contains("Body text."));
+            assert_eq!(out.details.unwrap()["schema"], "ra.skill_content.v1");
+        });
+    }
+
+    #[test]
+    fn skill_view_l2_lists_auxiliary_files() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = workspace_with_skill("demo-skill");
+            let tool = SkillViewTool::new(tmp.path());
+            let out = tool
+                .execute(
+                    "t",
+                    serde_json::json!({ "name": "demo-skill", "list_assets": true }),
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(!out.is_error);
+            let text = text_of(&out);
+            assert!(text.contains("references/guide.md"), "listing: {text}");
+            assert!(text.contains("scripts/run.sh"), "listing: {text}");
+            // Listing must not leak file contents into the context.
+            assert!(!text.contains("reference body"));
+            assert_eq!(out.details.unwrap()["schema"], "ra.skill_assets.v1");
+        });
+    }
+
+    #[test]
+    fn skill_view_l2_reads_one_asset() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = workspace_with_skill("demo-skill");
+            let tool = SkillViewTool::new(tmp.path());
+            let out = tool
+                .execute(
+                    "t",
+                    serde_json::json!({ "name": "demo-skill", "asset": "references/guide.md" }),
+                    None,
+                )
+                .await
+                .unwrap();
+            assert!(!out.is_error);
+            assert_eq!(text_of(&out), "reference body");
+            assert_eq!(out.details.unwrap()["schema"], "ra.skill_asset.v1");
+        });
+    }
+
+    #[test]
+    fn skill_view_l2_rejects_escapes_and_non_l2_paths() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = workspace_with_skill("demo-skill");
+            let tool = SkillViewTool::new(tmp.path());
+            for bad in ["../SKILL.md", "SKILL.md", "references/../../escape.md"] {
+                let err = tool
+                    .execute(
+                        "t",
+                        serde_json::json!({ "name": "demo-skill", "asset": bad }),
+                        None,
+                    )
+                    .await
+                    .unwrap_err();
+                let msg = err.to_string();
+                assert!(
+                    msg.contains("RECUR_AGENT_SKILL_ASSET_INVALID"),
+                    "path {bad} was not refused: {msg}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn skill_view_missing_name_and_unknown_skill_are_handled() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = workspace_with_skill("demo-skill");
+            let tool = SkillViewTool::new(tmp.path());
+
+            let err = tool
+                .execute("t", serde_json::json!({ "name": "   " }), None)
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("requires name"), "{err}");
+
+            let out = tool
+                .execute("t", serde_json::json!({ "name": "nope" }), None)
+                .await
+                .unwrap();
+            assert!(out.is_error);
+            assert!(text_of(&out).contains("not found"));
+        });
+    }
+}
+
+#[cfg(test)]
+mod manage_skill_patch_merge_tests {
+    use super::*;
+
+    fn text_of(out: &ToolOutput) -> String {
+        out.content
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::Text(t) => Some(t.text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn unique(tag: &str) -> String {
+        format!("pi-tool-{tag}-{}", std::process::id())
+    }
+
+    /// M4: `manage_skill op=patch` replaces exactly the named snippet and
+    /// leaves the rest of the body intact.
+    #[test]
+    fn manage_skill_patch_replaces_named_snippet() {
+        asupersync::test_utils::run_test(|| async {
+            let name = unique("patch");
+            let tool = ManageSkillTool;
+            tool.execute(
+                "t",
+                serde_json::json!({
+                    "op": "create",
+                    "name": name,
+                    "description": "patch target",
+                    "content": "line one\nOLD SNIPPET\nline three",
+                }),
+                None,
+            )
+            .await
+            .expect("create");
+
+            let out = tool
+                .execute(
+                    "t",
+                    serde_json::json!({
+                        "op": "patch",
+                        "name": name,
+                        "oldText": "OLD SNIPPET",
+                        "newText": "NEW SNIPPET",
+                    }),
+                    None,
+                )
+                .await
+                .expect("patch");
+            assert!(!out.is_error);
+            assert!(text_of(&out).contains("patched"));
+
+            // Verify on disk: the snippet changed, the neighbours survived.
+            let info = crate::skills_managed::list()
+                .unwrap()
+                .into_iter()
+                .find(|s| s.name == name)
+                .expect("skill present");
+            let raw = std::fs::read_to_string(&info.path).unwrap();
+            assert!(raw.contains("NEW SNIPPET"), "patch did not apply: {raw}");
+            assert!(!raw.contains("OLD SNIPPET"), "old text still present");
+            assert!(raw.contains("line one") && raw.contains("line three"));
+
+            crate::skills_managed::delete(&name).expect("cleanup");
+        });
+    }
+
+    /// M4: `manage_skill op=merge` is a dry-run by default (nothing written),
+    /// and `apply=true` persists the merged body under the primary name.
+    #[test]
+    fn manage_skill_merge_dry_run_then_apply() {
+        asupersync::test_utils::run_test(|| async {
+            let primary = unique("merge-a");
+            let secondary = unique("merge-b");
+            let tool = ManageSkillTool;
+            for (name, body) in [
+                (&primary, "primary body alpha"),
+                (&secondary, "secondary body beta"),
+            ] {
+                tool.execute(
+                    "t",
+                    serde_json::json!({
+                        "op": "create",
+                        "name": name,
+                        "description": "merge candidate",
+                        "content": body,
+                    }),
+                    None,
+                )
+                .await
+                .expect("create");
+            }
+
+            let dry = tool
+                .execute(
+                    "t",
+                    serde_json::json!({
+                        "op": "merge",
+                        "name": primary,
+                        "other": secondary,
+                    }),
+                    None,
+                )
+                .await
+                .expect("dry-run");
+            assert!(text_of(&dry).contains("dry-run"), "{}", text_of(&dry));
+
+            // Dry-run must NOT have rewritten the primary body.
+            let primary_path = crate::skills_managed::list()
+                .unwrap()
+                .into_iter()
+                .find(|s| s.name == primary)
+                .expect("primary present")
+                .path;
+            let before = std::fs::read_to_string(&primary_path).unwrap();
+            assert!(before.contains("primary body alpha"));
+            assert!(!before.contains("secondary body beta"));
+
+            let applied = tool
+                .execute(
+                    "t",
+                    serde_json::json!({
+                        "op": "merge",
+                        "name": primary,
+                        "other": secondary,
+                        "apply": true,
+                    }),
+                    None,
+                )
+                .await
+                .expect("apply");
+            assert!(
+                text_of(&applied).contains("Merged"),
+                "{}",
+                text_of(&applied)
+            );
+
+            // Apply must persist the synthesized body under the primary name.
+            let after = std::fs::read_to_string(&primary_path).unwrap();
+            assert!(
+                after.contains("secondary body beta"),
+                "merged body missing secondary content: {after}"
+            );
+
+            crate::skills_managed::delete(&primary).expect("cleanup primary");
+            crate::skills_managed::delete(&secondary).expect("cleanup secondary");
+        });
+    }
+}
+
+#[cfg(test)]
 mod known_tool_name_tests {
     use super::*;
 
     /// Joined after construction by the session host, so the registry builds
     /// nothing for them and neither does this test.
-    const HOST_COUPLED: &[&str] = &["ask", "todo", "submit_plan"];
+    const HOST_COUPLED: &[&str] = &["ask", "todo", "submit_plan", "dag"];
 
     /// What the registry holds for a request naming nothing at all.
     ///
@@ -22048,6 +23514,7 @@ mod known_tool_name_tests {
             "memory": {"backend": "local"},
             "browser": {"enableBrowser": true},
             "computer": {"enableComputer": true},
+            "skillHub": {"enable": true},
             "media": {
                 "enableInspectImage": true,
                 "enableGenerateImage": true,
@@ -22056,6 +23523,16 @@ mod known_tool_name_tests {
             }
         }))
         .expect("config");
+        // The hub tools are opt-in; turn them on for this probe both through
+        // the config and on disk, so the gate registers them whichever source
+        // it consults.
+        let project_dir = dir.path().join(".ra");
+        std::fs::create_dir_all(&project_dir).expect("mkdir .ra");
+        std::fs::write(
+            project_dir.join("settings.json"),
+            r#"{ "skillHub": { "enable": true } }"#,
+        )
+        .expect("write settings");
         let enabled: Vec<&str> = ToolRegistry::KNOWN_TOOL_NAMES.to_vec();
         let registry = ToolRegistry::new(&enabled, dir.path(), Some(&config));
 
