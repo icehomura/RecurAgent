@@ -7481,7 +7481,8 @@ async fn ui_protocol_connection(
                 .await;
             }
             UiCommand::TurnInterrupt(params) => {
-                handle_turn_interrupt(&ws, &ledger, &active_turns, &contracts, id, params).await;
+                handle_turn_interrupt(&ws, &state, &ledger, &active_turns, &contracts, id, params)
+                    .await;
             }
             UiCommand::ApprovalRespond(params) => {
                 handle_approval_respond(
@@ -7509,6 +7510,7 @@ async fn ui_protocol_connection(
             UiCommand::UserQuestionRespond(params) => {
                 handle_user_question_respond(
                     &ws,
+                    &state,
                     &contracts,
                     connection_profile_id,
                     connection_is_external.then(|| ws.connection_id()),
@@ -8288,8 +8290,7 @@ where
             }
             let connection_profile_id = connection_profile_id_owned.as_deref();
             // UPCR-2026-035 (#2571): the same host-peer confinement as the WS
-            // loop, from the persisted tool set (so it holds after a restart,
-            // unlike the in-memory check inside the turn-control handlers).
+            // loop, from the persisted tool set (so it holds after a restart).
             if let Some(error) =
                 refuse_foreign_host_peer_session_call(&state, &ws, &request.method, &request.params)
             {
@@ -8398,8 +8399,16 @@ where
                     .await;
                 }
                 UiCommand::TurnInterrupt(params) => {
-                    handle_turn_interrupt(&ws, &ledger, &active_turns, &contracts, id, params)
-                        .await;
+                    handle_turn_interrupt(
+                        &ws,
+                        &state,
+                        &ledger,
+                        &active_turns,
+                        &contracts,
+                        id,
+                        params,
+                    )
+                    .await;
                 }
                 UiCommand::ApprovalRespond(params) => {
                     // The stdio peer is the process owner, never external.
@@ -8428,6 +8437,7 @@ where
                 UiCommand::UserQuestionRespond(params) => {
                     handle_user_question_respond(
                         &ws,
+                        &state,
                         &contracts,
                         connection_profile_id_owned.as_deref(),
                         None,
@@ -24827,7 +24837,7 @@ async fn handle_voice_commit_admission(
         return;
     }
     if let Some(superseded) = params.supersedes_turn_id.as_ref() {
-        let refused = refuse_foreign_host_turn_control(&session_id, ws, "turn/interrupt");
+        let refused = refuse_foreign_host_turn_control(state, &session_id, ws, "turn/interrupt");
         let superseded = match refused {
             Some(error) => Err(error),
             None => await_superseded_turn(active_turns, &session_id, superseded).await,
@@ -25374,7 +25384,9 @@ async fn handle_turn_steer(
         send_scope_error(ws, id, error);
         return;
     }
-    if let Some(error) = refuse_foreign_host_turn_control(&params.session_id, ws, "turn/steer") {
+    if let Some(error) =
+        refuse_foreign_host_turn_control(state, &params.session_id, ws, "turn/steer")
+    {
         let _ = send_rpc_error(ws, Some(id), error);
         return;
     }
@@ -26752,6 +26764,7 @@ pub(crate) fn spawn_global_master_continuation_drain(state: Arc<AppState>) {
 
 async fn handle_turn_interrupt(
     ws: &WsConnection,
+    state: &Arc<AppState>,
     _ledger: &Arc<UiProtocolLedger>,
     active_turns: &SharedActiveTurns,
     // FIX-06 + FIX-08: kept on the signature so callers don't need to know
@@ -26770,7 +26783,8 @@ async fn handle_turn_interrupt(
     // task-turn-interrupt-steer-correlation-logs: make the interrupt's
     // receipt, decision and ack reconstructible from the log alone.
     crate::turn_trace::log_interrupt_received(&params.session_id, &params.turn_id);
-    if let Some(error) = refuse_foreign_host_turn_control(&params.session_id, ws, "turn/interrupt")
+    if let Some(error) =
+        refuse_foreign_host_turn_control(state, &params.session_id, ws, "turn/interrupt")
     {
         let _ = send_rpc_error(ws, Some(id), error);
         return;
@@ -27084,19 +27098,19 @@ fn host_connection_only_error(method: &str) -> RpcError {
 /// Whether `ws` may answer a prompt (approval or question) owned by
 /// `owner` on `session_id`. On a registered host peer's session only the
 /// prompt's owning connection or the peer's host connection may; on every
-/// other session this adds no restriction.
+/// other session this adds no restriction. Decided from the persisted tool
+/// set, so it holds from the first call after a restart.
 fn host_session_answer_allowed(
+    state: &AppState,
     session_id: &SessionKey,
     owner: Option<u64>,
     ws: &WsConnection,
 ) -> bool {
-    match crate::peers::host_tools::host_session_controller(session_id) {
-        None => true,
-        Some(controller) => {
-            let me = ws.connection_id.0;
-            controller == Some(me) || owner == Some(me)
-        }
-    }
+    let Some(controller) = persisted_host_session_controller(state, session_id) else {
+        return true;
+    };
+    let me = ws.connection_id.0;
+    controller == Some(me) || owner == Some(me)
 }
 
 /// Calls that start, steer, stop or rewrite the turns of a session.
@@ -27145,21 +27159,33 @@ fn refuse_foreign_host_peer_session_call(
             params.get("topic").and_then(Value::as_str),
         ),
     };
-    crate::peers::host_tools::host_peer_slug_of(&session)?;
+    refuse_foreign_host_turn_control(state, &session, ws, method)
+}
+
+/// The controller of `session` when it is a registered host peer's session:
+/// from the persisted tool set and the peer's current host route, so it
+/// holds from the first call after a restart. The syntax check up front
+/// keeps every ordinary session off the profile resolution entirely.
+fn persisted_host_session_controller(
+    state: &AppState,
+    session: &SessionKey,
+) -> Option<Option<u64>> {
+    crate::peers::host_tools::host_peer_slug_of(session)?;
     let (_, data_dir) = resolve_profile_data_dir(state, session.profile_id()).ok()?;
-    let controller =
-        crate::peers::host_tools::host_peer_session_controller(&data_dir.join("peers"), &session)?;
-    (controller != Some(ws.connection_id.0)).then(|| host_connection_only_error(method))
+    crate::peers::host_tools::host_peer_session_controller(&data_dir.join("peers"), session)
 }
 
 /// Refuse a turn control of a registered host peer's session from any
-/// connection but its host connection.
+/// connection but its host connection. Decided from the persisted tool set
+/// and the peer's current host route, so it holds from the first call after
+/// a restart, not only once a turn of the session has run.
 fn refuse_foreign_host_turn_control(
-    session_id: &SessionKey,
+    state: &AppState,
+    session: &SessionKey,
     ws: &WsConnection,
     method: &str,
 ) -> Option<RpcError> {
-    let controller = crate::peers::host_tools::host_session_controller(session_id)?;
+    let controller = persisted_host_session_controller(state, session)?;
     (controller != Some(ws.connection_id.0)).then(|| host_connection_only_error(method))
 }
 
@@ -27220,6 +27246,7 @@ async fn handle_approval_respond(
             ws.connection_id.0,
         ),
         None => host_session_answer_allowed(
+            state,
             &params.session_id,
             contracts
                 .approvals
@@ -27307,6 +27334,7 @@ async fn handle_approval_respond(
 /// on miss), and return the ack result.
 async fn handle_user_question_respond(
     ws: &WsConnection,
+    state: &Arc<AppState>,
     contracts: &Arc<UiProtocolContractStores>,
     connection_profile_id: Option<&str>,
     external_owner: Option<ConnectionId>,
@@ -27345,6 +27373,7 @@ async fn handle_user_question_respond(
     // answered by its owning connection or the peer's host connection (the
     // system agent answers through `peer_respond`, not here).
     if !host_session_answer_allowed(
+        state,
         &params.session_id,
         contracts
             .user_questions
