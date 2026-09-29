@@ -22,6 +22,7 @@ mod interaction;
 mod launch;
 mod mock;
 mod policy;
+mod storage;
 
 pub use launch::BrowserLaunchOptions;
 

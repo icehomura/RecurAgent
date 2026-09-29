@@ -3,7 +3,7 @@
 
 use super::{
     BrowserLaunchOptions, BrowserTabInfo, dialog, download, exports, interaction, launch, output,
-    policy, required,
+    policy, required, storage,
 };
 use crate::agent_cx::AgentCx;
 use crate::error::{Error, Result};
@@ -141,6 +141,7 @@ fn validate(args: &Value, allowlist: Option<&[String]>) -> Result<u64> {
         }
         "download" => download::validate(args)?,
         "screenshot" | "print_pdf" => exports::validate(args)?,
+        "cookies" | "storage" => storage::validate(args)?,
         "open" | "goto" => policy::check_navigation(required(args, "url")?, allowlist)?,
         "evaluate" => {
             required(args, "script")?;
@@ -444,7 +445,7 @@ impl Cdp {
         Ok(false)
     }
 
-    async fn call(
+    pub(super) async fn call(
         &mut self,
         owner: &AgentCx,
         method: &str,
@@ -945,6 +946,7 @@ impl Session {
                 result
             }
             "screenshot" | "print_pdf" => exports::execute(owner, cdp, cwd, &tab, args).await,
+            "cookies" | "storage" => storage::execute(owner, cdp, &tab, args).await,
             "evaluate" => {
                 let value = cdp.evaluate(owner, required(args, "script")?).await?;
                 Ok(output(
