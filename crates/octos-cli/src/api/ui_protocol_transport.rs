@@ -22034,6 +22034,58 @@ fn ledger_event_visible_to_connection(
     approval_id_visible_to_connection(&approval_id.0.to_string(), connection.0)
 }
 
+/// [`ledger_event_visible_to_connection`] for a ledgered (live, replayed or
+/// recovered) event, also honouring the durable external-prompt marker
+/// (UPCR-2026-036, #2625): a marked event is shown only to the live
+/// connection the transport recorded as the prompt's owner. Once that record
+/// is gone (a restart, or the bounded owner table evicted it) it is shown to
+/// nobody, so the replay of an old external prompt never fails open to the
+/// host. Unmarked (older) records behave as before.
+fn ledgered_event_visible_to_connection(
+    event: &LedgeredUiProtocolEvent,
+    connection: ConnectionId,
+) -> bool {
+    ledger_event_visible_to_connection(&event.event, connection)
+        && (!event.external_prompt
+            || super::ui_protocol_ledger::ledger_event_prompt_id(&event.event).is_some_and(
+                |prompt_id| {
+                    super::host_managed::external_prompt_owner(&prompt_id) == Some(connection.0)
+                },
+            ))
+}
+
+/// [`ledgered_event_visible_to_connection`] for replay and hydrate, where
+/// the pending stores are at hand: a marked event is also shown to the
+/// owner the store recorded on the prompt itself, so the owning connection
+/// still replays its own prompt after the bounded owner table evicted the
+/// id. The host never matches (the store's owner is the external
+/// connection), and after a restart the stores are empty.
+fn replayed_event_visible_to_connection(
+    event: &LedgeredUiProtocolEvent,
+    connection: ConnectionId,
+    approvals: &PendingApprovalStore,
+    questions: &PendingQuestionStore,
+) -> bool {
+    if ledgered_event_visible_to_connection(event, connection) {
+        return true;
+    }
+    if !event.external_prompt || !ledger_event_visible_to_connection(&event.event, connection) {
+        return false;
+    }
+    let UiProtocolLedgerEvent::Notification(notification) = &event.event else {
+        return false;
+    };
+    let owner = match notification {
+        UiNotification::ApprovalRequested(e) => approvals.external_owner(&e.approval_id),
+        UiNotification::ApprovalDecided(e) => approvals.external_owner(&e.approval_id),
+        UiNotification::ApprovalCancelled(e) => approvals.external_owner(&e.approval_id),
+        UiNotification::ApprovalAutoResolved(e) => approvals.external_owner(&e.approval_id),
+        UiNotification::UserQuestionRequested(e) => questions.external_owner(&e.question_id),
+        _ => None,
+    };
+    owner == Some(Some(connection.0))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn forward_live_ledger_event(
     ws: &WsConnection,
@@ -22051,7 +22103,7 @@ async fn forward_live_ledger_event(
     if event.from_connection == Some(self_connection_id) {
         return Ok(());
     }
-    if !ledger_event_visible_to_connection(&event.event, self_connection_id) {
+    if !ledgered_event_visible_to_connection(&event, self_connection_id) {
         return Ok(());
     }
     if !ledger_event_matches_topic_scope(&event.event, topic_scope) {
@@ -22806,7 +22858,7 @@ async fn open_session_result(
     replay.retain(|event| {
         ledger_event_matches_topic_scope(&event.event, topic_scope.as_deref())
             && ledger_event_matches_profile_scope(&event.event, profile_scope.as_deref())
-            && ledger_event_visible_to_connection(&event.event, connection_id)
+            && replayed_event_visible_to_connection(event, connection_id, approvals, questions)
     });
     let replayed_approval_ids = replay
         .iter()
@@ -28982,7 +29034,9 @@ async fn handle_session_hydrate(
                 return;
             }
         };
-    replayed.retain(|event| ledger_event_visible_to_connection(&event.event, ws.connection_id));
+    replayed.retain(|event| {
+        replayed_event_visible_to_connection(event, ws.connection_id, approvals, questions)
+    });
 
     let include_set = HydrateIncludeSet::from_request(&params.include);
     // #919.1: route to the profile's session manager when the connection
