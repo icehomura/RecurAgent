@@ -2,8 +2,8 @@
 //! over deterministic rule packs, emitting SARIF v2.1.0.
 //!
 //! v1 is fully native: regex rule packs (versioned in-tree, project
-//! overrides under `.pi/security-rules/`), a per-project disposition store
-//! (`.pi/security-dispositions.json`), and an optional OSV dependency lookup
+//! overrides under `.ra/security-rules/`), a per-project disposition store
+//! (`.ra/security-dispositions.json`), and an optional OSV dependency lookup
 //! that degrades to a warning offline. Code never leaves the machine.
 
 use std::collections::{BTreeMap, HashMap};
@@ -143,13 +143,13 @@ fixHint = "Canonicalize and check against allowed roots."
 "#;
 
 /// Load the default pack plus any project packs under
-/// `<project>/.pi/security-rules/*.toml`. A malformed project pack is a
+/// `<project>/.ra/security-rules/*.toml`. A malformed project pack is a
 /// named error (fail loud — silently dropping security rules is worse).
 pub fn load_rule_packs(project_root: &Path) -> Result<Vec<RulePack>> {
     let mut packs: Vec<RulePack> = vec![toml::from_str(DEFAULT_PACK).map_err(|e| {
         Error::validation(format!("embedded security rule pack failed to parse: {e}"))
     })?];
-    let overrides = project_root.join(".pi").join("security-rules");
+    let overrides = project_root.join(".ra").join("security-rules");
     if overrides.is_dir() {
         let mut entries: Vec<PathBuf> = fs::read_dir(&overrides)
             .map_err(|e| {
@@ -201,17 +201,28 @@ fn scope_files(cwd: &Path, paths: &[String]) -> Result<Vec<PathBuf>> {
             // `.hidden(false)` so dotfiles are scanned: `.env`, `.npmrc`,
             // `.aws/credentials` and CI workflow files are the classic
             // secret carriers. `.git/` itself is still skipped below.
-            let walker = ignore::WalkBuilder::new(&root)
+            // Parallel walk: per-entry work is independent and the collected
+            // list is sorted+deduped below, so worker order does not leak.
+            let (sender, receiver) = std::sync::mpsc::channel();
+            ignore::WalkBuilder::new(&root)
                 .hidden(false)
                 .git_ignore(true)
                 .filter_entry(|entry| entry.file_name() != ".git")
-                .build();
-            for entry in walker.flatten() {
-                let path = entry.path();
-                if path.is_file() {
-                    files.push(path.to_path_buf());
-                }
-            }
+                .build_parallel()
+                .run(|| {
+                    let sender = sender.clone();
+                    Box::new(move |entry| {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            if path.is_file() {
+                                let _ = sender.send(path.to_path_buf());
+                            }
+                        }
+                        ignore::WalkState::Continue
+                    })
+                });
+            drop(sender);
+            files.extend(receiver);
         }
     }
     files.sort();
@@ -403,7 +414,7 @@ pub fn to_sarif(
                 "driver": {
                     "name": "pi security_scan",
                     "version": env!("CARGO_PKG_VERSION"),
-                    "informationUri": "https://github.com/Dicklesworthstone/pi_agent_rust",
+                    "informationUri": "https://github.com/Dicklesworthstone/recur_agent",
                     "rules": rules_meta,
                 }
             },
@@ -439,7 +450,7 @@ fn confine_to_cwd(cwd: &Path, raw: &str, field: &str) -> Result<PathBuf> {
 }
 
 fn dispositions_path(project_root: &Path) -> PathBuf {
-    project_root.join(".pi").join("security-dispositions.json")
+    project_root.join(".ra").join("security-dispositions.json")
 }
 
 /// Missing store → empty map; unparseable store → error.
@@ -629,7 +640,7 @@ struct ScanInput {
     /// Paths (files or dirs, relative to cwd) to scope; empty = project.
     #[serde(default)]
     paths: Vec<String>,
-    /// run: SARIF output file (default `.pi/security-scan.sarif`).
+    /// run: SARIF output file (default `.ra/security-scan.sarif`).
     sarif_out: Option<String>,
     /// disposition: finding fingerprint to mark.
     fingerprint: Option<String>,
@@ -637,7 +648,7 @@ struct ScanInput {
     status: Option<String>,
     /// disposition: free-text reason.
     reason: Option<String>,
-    /// compare: prior SARIF file (default `.pi/security-scan.sarif`).
+    /// compare: prior SARIF file (default `.ra/security-scan.sarif`).
     baseline: Option<String>,
 }
 
@@ -675,7 +686,7 @@ impl Tool for SecurityScanTool {
          re-runs suppress false-positive/accepted, `fixed` reappearing is a \
          regression), `compare` (vs a prior SARIF: new/fixed/regressed). \
          Findings carry stable fingerprints (rule+path+matched text) that \
-         survive line shifts. Dispositions persist per project under .pi/."
+         survive line shifts. Dispositions persist per project under .ra/."
     }
 
     fn parameters(&self) -> Value {
@@ -692,7 +703,7 @@ impl Tool for SecurityScanTool {
                     "items": { "type": "string" },
                     "description": "Files/dirs to scope (relative to cwd); default: whole project"
                 },
-                "sarifOut": { "type": "string", "description": "run: SARIF output path (default .pi/security-scan.sarif)" },
+                "sarifOut": { "type": "string", "description": "run: SARIF output path (default .ra/security-scan.sarif)" },
                 "fingerprint": { "type": "string", "description": "disposition: finding fingerprint" },
                 "status": {
                     "type": "string",
@@ -700,14 +711,14 @@ impl Tool for SecurityScanTool {
                     "description": "disposition: status"
                 },
                 "reason": { "type": "string", "description": "disposition: reason (required)" },
-                "baseline": { "type": "string", "description": "compare: prior SARIF file (default .pi/security-scan.sarif)" }
+                "baseline": { "type": "string", "description": "compare: prior SARIF file (default .ra/security-scan.sarif)" }
             },
             "required": ["op"]
         })
     }
 
     fn effects(&self) -> ToolEffects {
-        // run/disposition write SARIF + the disposition store under .pi/;
+        // run/disposition write SARIF + the disposition store under .ra/;
         // plan/compare are pure reads. The union keeps the write honest.
         ToolEffects::read().union(ToolEffects::write())
     }
@@ -782,7 +793,7 @@ impl SecurityScanTool {
         let (active, suppressed) = partition_by_disposition(findings, &dispositions);
         let sarif = to_sarif(&active, &suppressed, &packs);
         let out_path = match input.sarif_out.as_deref() {
-            None => self.cwd.join(".pi/security-scan.sarif"),
+            None => self.cwd.join(".ra/security-scan.sarif"),
             Some(p) => confine_to_cwd(&self.cwd, p, "sarifOut")?,
         };
         if let Some(parent) = out_path.parent() {
@@ -885,7 +896,7 @@ impl SecurityScanTool {
 
     fn op_compare(&self, input: &ScanInput) -> Result<ToolOutput> {
         let baseline_path = match input.baseline.as_deref() {
-            None => self.cwd.join(".pi/security-scan.sarif"),
+            None => self.cwd.join(".ra/security-scan.sarif"),
             Some(p) => confine_to_cwd(&self.cwd, p, "baseline")?,
         };
         let text = fs::read_to_string(&baseline_path).map_err(|e| {

@@ -1,7 +1,7 @@
 //! Workspace isolation for subagents (bd-cv653.5.2).
 //!
 //! `worktree` mode creates a private Git snapshot of the parent's effective
-//! working files, then checks it out on a temporary `pi-iso-` branch. Neither
+//! working files, then checks it out on a temporary `ra-iso-` branch. Neither
 //! the parent's HEAD nor its real index is modified. Child changes are collected
 //! against that baseline using another private index, preserving staged work.
 //!
@@ -28,10 +28,10 @@ mod snapshot;
 mod snapshot_tests;
 
 /// Tool-result schema tag for isolation outcomes.
-pub const ISO_SCHEMA: &str = "pi.worktree_iso.v1";
+pub const ISO_SCHEMA: &str = "ra.worktree_iso.v1";
 
 /// Branch/path prefix that marks worktrees created by us.
-const ISO_PREFIX: &str = "pi-iso-";
+const ISO_PREFIX: &str = "ra-iso-";
 
 /// What to do with the worktree after the child completes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,7 +138,7 @@ fn git_ok(repo: &Path, args: &[&str]) -> Result<String> {
     // remain in the worktree for manual handling. Git binary patches are ASCII.
     String::from_utf8(output.stdout).map_err(|_| Error::tool(
         "subagent",
-        "PI_ISO_TEXT_ENCODING: Git output contains non-UTF8 text; the worktree was preserved rather than applying a lossy patch",
+        "RECUR_AGENT_ISO_TEXT_ENCODING: Git output contains non-UTF8 text; the worktree was preserved rather than applying a lossy patch",
     ))
 }
 
@@ -162,7 +162,7 @@ fn sanitize_id(task_id: &str) -> String {
 /// Create an isolated worktree carrying the parent's effective working files.
 ///
 /// # Errors
-/// Named `PI_ISO_NOT_GIT` for non-git directories; snapshot/checkout errors otherwise.
+/// Named `RECUR_AGENT_ISO_NOT_GIT` for non-git directories; snapshot/checkout errors otherwise.
 pub fn isolate(repo_root: &Path, task_id: &str) -> Result<IsoHandle> {
     let is_git = git(repo_root, &["rev-parse", "--is-inside-work-tree"])
         .is_ok_and(|output| output.status.success());
@@ -170,7 +170,7 @@ pub fn isolate(repo_root: &Path, task_id: &str) -> Result<IsoHandle> {
         return Err(Error::tool(
             "subagent",
             format!(
-                "PI_ISO_NOT_GIT: {} is not a git work tree; isolation requires git \
+                "RECUR_AGENT_ISO_NOT_GIT: {} is not a git work tree; isolation requires git \
                  (run non-isolated or copy the directory explicitly)",
                 repo_root.display()
             ),
@@ -259,7 +259,7 @@ struct PatchFile {
 impl PatchFile {
     fn new(patch: &str) -> Result<Self> {
         let path =
-            std::env::temp_dir().join(format!("pi-iso-patch-{}", uuid::Uuid::new_v4().simple()));
+            std::env::temp_dir().join(format!("ra-iso-patch-{}", uuid::Uuid::new_v4().simple()));
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -307,7 +307,7 @@ impl Drop for PatchFile {
 /// edit during that gap is rejected rather than forced.
 ///
 /// # Errors
-/// Named `PI_ISO_CONFLICT` on a rejected patch; the worktree remains inspectable.
+/// Named `RECUR_AGENT_ISO_CONFLICT` on a rejected patch; the worktree remains inspectable.
 pub fn apply_to_parent(handle: &IsoHandle, patch: &str) -> Result<()> {
     if patch.trim().is_empty() {
         return Ok(());
@@ -326,7 +326,7 @@ pub fn apply_to_parent(handle: &IsoHandle, patch: &str) -> Result<()> {
             return Err(Error::tool(
                 "subagent",
                 format!(
-                    "PI_ISO_CONFLICT: patch from {} does not apply cleanly to the parent tree. \
+                    "RECUR_AGENT_ISO_CONFLICT: patch from {} does not apply cleanly to the parent tree. \
                      The worktree is left at {} for manual resolution. Git apply: {}",
                     handle.branch,
                     handle.path.display(),
@@ -338,7 +338,7 @@ pub fn apply_to_parent(handle: &IsoHandle, patch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Remove a matching pi-iso worktree and its branch. A basename prefix alone
+/// Remove a matching ra-iso worktree and its branch. A basename prefix alone
 /// is not enough: a foreign branch in a similarly named directory is preserved.
 ///
 /// # Errors
@@ -350,7 +350,7 @@ pub fn drop_worktree(handle: &IsoHandle) -> Result<()> {
     {
         return Err(Error::tool(
             "subagent",
-            "PI_ISO_NOT_OWNED: refusing to remove a non-matching isolation worktree",
+            "RECUR_AGENT_ISO_NOT_OWNED: refusing to remove a non-matching isolation worktree",
         ));
     }
     let output = git_command(&handle.repo_root)
@@ -380,7 +380,7 @@ pub struct WorktreeInfo {
     pub age_ms: u64,
 }
 
-/// List live pi-iso worktrees under a repo.
+/// List live ra-iso worktrees under a repo.
 ///
 /// # Errors
 /// git failures.
@@ -392,7 +392,7 @@ pub fn list_mine(repo_root: &Path) -> Result<Vec<WorktreeInfo>> {
     let flush = |path: Option<String>, branch: String, out: &mut Vec<WorktreeInfo>| {
         let Some(path) = path else { return };
         // Match on the BASENAME prefix: a foreign worktree whose path
-        // merely contains "pi-iso-" somewhere must never look like ours
+        // merely contains "ra-iso-" somewhere must never look like ours
         // to the reaper.
         let is_ours = std::path::Path::new(&path)
             .file_name()
@@ -495,7 +495,7 @@ mod tests {
     use super::*;
 
     fn init_repo(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pi-iso-test-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ra-iso-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("repo dir");
         git_ok(&dir, &["init", "-b", "main"]).expect("git init");
@@ -509,7 +509,7 @@ mod tests {
 
     #[test]
     fn non_git_refuses_with_named_error() {
-        let dir = std::env::temp_dir().join(format!("pi-iso-nogit-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ra-iso-nogit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
 
         // Remote-execution harnesses may resolve temp_dir INSIDE the synced
@@ -526,7 +526,7 @@ mod tests {
 
         let err = isolate(&dir, "x").unwrap_err();
         assert!(
-            err.to_string().contains("PI_ISO_NOT_GIT"),
+            err.to_string().contains("RECUR_AGENT_ISO_NOT_GIT"),
             "expected named refusal: {err}"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -582,7 +582,7 @@ mod tests {
 
         let err = apply_to_parent(&handle, &patch).unwrap_err();
         assert!(
-            err.to_string().contains("PI_ISO_CONFLICT"),
+            err.to_string().contains("RECUR_AGENT_ISO_CONFLICT"),
             "expected conflict refusal: {err}"
         );
         // Worktree left for manual resolution; parent untouched by force.

@@ -779,27 +779,36 @@ fn run_fd_list_files(bin: &str, cwd: &Path) -> Option<Vec<String>> {
 }
 
 fn walk_project_files(cwd: &Path) -> Vec<String> {
-    let mut files = Vec::new();
-
-    let walker = ignore::WalkBuilder::new(cwd)
+    // Parallel walk: the per-entry work is pure path formatting, and the
+    // caller contract is a sorted+deduped list, so worker completion order
+    // does not leak into the result.
+    let (sender, receiver) = std::sync::mpsc::channel();
+    ignore::WalkBuilder::new(cwd)
         .hidden(false)
         .follow_links(false)
         .standard_filters(true)
-        .build();
+        .build_parallel()
+        .run(|| {
+            let sender = sender.clone();
+            Box::new(move |entry| {
+                let Ok(entry) = entry else {
+                    return ignore::WalkState::Continue;
+                };
+                if !entry.file_type().is_some_and(|ty| ty.is_file()) {
+                    return ignore::WalkState::Continue;
+                }
+                if let Ok(rel) = entry.path().strip_prefix(cwd) {
+                    let rel = rel.display().to_string().replace('\\', "/");
+                    if !rel.is_empty() && !rel.starts_with("..") {
+                        let _ = sender.send(rel);
+                    }
+                }
+                ignore::WalkState::Continue
+            })
+        });
+    drop(sender);
 
-    for entry in walker.flatten() {
-        let path = entry.path();
-        if !entry.file_type().is_some_and(|ty| ty.is_file()) {
-            continue;
-        }
-        if let Ok(rel) = path.strip_prefix(cwd) {
-            let rel = rel.display().to_string().replace('\\', "/");
-            if !rel.is_empty() && !rel.starts_with("..") {
-                files.push(rel);
-            }
-        }
-    }
-
+    let mut files: Vec<String> = receiver.into_iter().collect();
     files.sort();
     files.dedup();
     files

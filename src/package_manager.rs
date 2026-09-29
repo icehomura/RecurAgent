@@ -4,7 +4,7 @@
 //! - Sources: `npm:pkg`, `git:host/owner/repo[@ref]`, local paths
 //! - Scopes: user (global) and project (local)
 //! - Global npm installs use `npm install -g` (npm-managed global root)
-//! - Git installs are under Pi's agent/project directories (`~/.pi/agent/git`, `./.pi/git`)
+//! - Git installs are under Pi's agent/project directories (`~/.ra/agent/git`, `./.ra/git`)
 
 use crate::agent_cx::AgentCx;
 use crate::config::Config;
@@ -128,7 +128,7 @@ impl ResolveRoots {
 pub struct PackageManager {
     cwd: PathBuf,
     /// Workspace-trust gate (GH #151): when false, project-local settings and
-    /// auto-discovery (`.pi/settings.json` packages, `.pi/extensions/`, …)
+    /// auto-discovery (`.ra/settings.json` packages, `.ra/extensions/`, …)
     /// are excluded from resolution. Direct API construction defaults to true;
     /// trust-aware CLI and SDK entry points must override it with their
     /// established workspace decision before resolving project resources.
@@ -235,8 +235,8 @@ pub struct PackageLockMismatch {
     pub remediation: String,
 }
 
-pub const PACKAGE_LOCK_SCHEMA: &str = "pi.package_lock.v1";
-pub const PACKAGE_TRUST_AUDIT_SCHEMA: &str = "pi.package_trust_audit.v1";
+pub const PACKAGE_LOCK_SCHEMA: &str = "ra.package_lock.v1";
+pub const PACKAGE_TRUST_AUDIT_SCHEMA: &str = "ra.package_trust_audit.v1";
 
 impl PackageManager {
     pub const fn new(cwd: PathBuf) -> Self {
@@ -1224,7 +1224,7 @@ impl PackageManager {
                             "Missing package.json version for installed npm package at {}",
                             installed_path.display()
                         ),
-                        "Reinstall the package (`pi remove <source>` then `pi install <source>`) and retry.",
+                        "Reinstall the package (`ra remove <source>` then `ra install <source>`) and retry.",
                     )
                 })?;
 
@@ -2357,14 +2357,14 @@ impl AutoDirs {
 }
 
 #[derive(Debug, Clone, Default)]
-struct PiManifest {
+struct RaManifest {
     extensions: Option<Vec<String>>,
     skills: Option<Vec<String>>,
     prompts: Option<Vec<String>>,
     themes: Option<Vec<String>>,
 }
 
-impl PiManifest {
+impl RaManifest {
     fn entries_for(&self, resource_type: ResourceType) -> Option<Vec<String>> {
         match resource_type {
             ResourceType::Extensions => self.extensions.clone(),
@@ -2496,7 +2496,7 @@ fn manifest_path_within_root(target: &Path, root: &Path) -> bool {
     target == root || target.starts_with(&root)
 }
 
-fn read_pi_manifest(package_root: &Path) -> Result<Option<PiManifest>> {
+fn read_pi_manifest(package_root: &Path) -> Result<Option<RaManifest>> {
     let manifest_path = package_root.join("package.json");
     if !manifest_path.exists() {
         return Ok(None);
@@ -2518,12 +2518,12 @@ fn read_pi_manifest(package_root: &Path) -> Result<Option<PiManifest>> {
     };
     let Some(obj) = pi.as_object() else {
         return Err(Error::config(format!(
-            "Invalid package manifest {}: `pi` must be an object",
+            "Invalid package manifest {}: `ra` must be an object",
             manifest_path.display()
         )));
     };
 
-    Ok(Some(PiManifest {
+    Ok(Some(RaManifest {
         extensions: parse_manifest_entries_field(obj, "extensions", &manifest_path, package_root)?,
         skills: parse_manifest_entries_field(obj, "skills", &manifest_path, package_root)?,
         prompts: parse_manifest_entries_field(obj, "prompts", &manifest_path, package_root)?,
@@ -2938,18 +2938,32 @@ fn collect_files_recursive_any(dir: &Path, exts: &[&str]) -> Vec<PathBuf> {
         .add_custom_ignore_filename(".fdignore")
         .filter_entry(|e| e.file_name() != std::ffi::OsStr::new("node_modules"));
 
-    let mut out = Vec::new();
-    for entry in builder.build().filter_map(std::result::Result::ok) {
-        let path = entry.path();
-        if path.is_file()
-            && path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|found| exts.iter().any(|ext| found.eq_ignore_ascii_case(ext)))
-        {
-            out.push(path.to_path_buf());
-        }
-    }
+    // Parallel walk: per-entry work is an extension match, and every consumer
+    // dedups/sorts downstream. Sorting here restores the deterministic order
+    // the serial walker happened to provide.
+    let (sender, receiver) = std::sync::mpsc::channel();
+    builder.build_parallel().run(|| {
+        let sender = sender.clone();
+        Box::new(move |entry| {
+            let Ok(entry) = entry else {
+                return ignore::WalkState::Continue;
+            };
+            let path = entry.path();
+            if path.is_file()
+                && path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|found| exts.iter().any(|ext| found.eq_ignore_ascii_case(ext)))
+            {
+                let _ = sender.send(path.to_path_buf());
+            }
+            ignore::WalkState::Continue
+        })
+    });
+    drop(sender);
+
+    let mut out: Vec<PathBuf> = receiver.into_iter().collect();
+    out.sort();
     out
 }
 
@@ -3537,7 +3551,7 @@ fn parse_git_source(spec: &str, cwd: &Path) -> ParsedSource {
         let repo_path = local_path_from_spec(repo_raw, cwd);
 
         // Use a short stable hash for the on-disk install directory to avoid embedding absolute
-        // paths (slashes, drive letters) into `.pi/git/**` paths.
+        // paths (slashes, drive letters) into `.ra/git/**` paths.
         let mut hasher = Sha256::new();
         hasher.update(repo_path.to_string_lossy().as_bytes());
         let digest = hasher.finalize();
@@ -3913,7 +3927,7 @@ fn npm_exact_version(value: &str) -> Option<semver::Version> {
 /// Whether an npm spec's version fragment pins the source.
 ///
 /// Mirrors upstream pi's `isExactNpmVersion`: only exact versions pin, so
-/// `pi update` refreshes ranges and dist-tags while leaving pins alone.
+/// `ra update` refreshes ranges and dist-tags while leaving pins alone.
 /// Local file/link/workspace references are additionally treated as pinned
 /// so update keeps leaving them untouched (unchanged behavior).
 fn npm_version_pins_source(version: &str) -> bool {
@@ -3996,7 +4010,7 @@ fn enrich_global_npm_install_error(err: Error, spec: &str) -> Error {
              (ensure ~/.local/bin is on PATH), then re-run the install. NOTE: if you \
              use nvm or volta, do NOT set a prefix (nvm refuses to run with one) — \
              switch to a node install owned by your user instead. Inside a project \
-             you can use `pi install --local {spec}` instead, which installs under \
+             you can use `ra install --local {spec}` instead, which installs under \
              the project without touching the global prefix."
         ),
     )
@@ -4139,7 +4153,7 @@ pub fn evaluate_lock_transition(
                 candidate.source_kind
             ),
             remediation: format!(
-                "Review the source change, then run `pi remove {}` and `pi install {}` to re-establish trust.",
+                "Review the source change, then run `ra remove {}` and `ra install {}` to re-establish trust.",
                 candidate.source, candidate.source
             ),
         });
@@ -4156,7 +4170,7 @@ pub fn evaluate_lock_transition(
                 candidate.identity
             ),
             remediation: format!(
-                "Use `pi update {}` for unpinned sources, or reinstall after intentional provenance changes.",
+                "Use `ra update {}` for unpinned sources, or reinstall after intentional provenance changes.",
                 candidate.source
             ),
         });
@@ -4170,7 +4184,7 @@ pub fn evaluate_lock_transition(
                 candidate.identity, existing.digest_sha256, candidate.digest_sha256
             ),
             remediation: format!(
-                "Inspect upstream changes. If expected, run `pi remove {}` then `pi install {}` to trust the new digest.",
+                "Inspect upstream changes. If expected, run `ra remove {}` then `ra install {}` to trust the new digest.",
                 candidate.source, candidate.source
             ),
         });
@@ -4572,7 +4586,7 @@ fn write_settings_json_atomic(path: &Path, value: &Value) -> Result<()> {
 }
 
 fn compat_scan_enabled() -> bool {
-    let value = std::env::var("PI_EXT_COMPAT_SCAN").unwrap_or_default();
+    let value = std::env::var("RECUR_AGENT_EXT_COMPAT_SCAN").unwrap_or_default();
     matches!(
         value.trim().to_ascii_lowercase().as_str(),
         "1" | "true" | "yes" | "on"
@@ -4878,7 +4892,7 @@ mod tests {
         run_async(async {
             let temp_dir = tempfile::tempdir().expect("tempdir");
             let project_root = temp_dir.path().join("project");
-            fs::create_dir_all(project_root.join(".pi")).expect("create project settings dir");
+            fs::create_dir_all(project_root.join(".ra")).expect("create project settings dir");
 
             let package_root = temp_dir.path().join("pkg");
             fs::create_dir_all(package_root.join("extensions")).expect("create extensions dir");
@@ -4888,7 +4902,7 @@ mod tests {
                 .expect("write b.native.json");
 
             let global_settings_path = temp_dir.path().join("global-settings.json");
-            let project_settings_path = project_root.join(".pi/settings.json");
+            let project_settings_path = project_root.join(".ra/settings.json");
 
             let global_settings = json!({
                 "packages": [{
@@ -4919,7 +4933,7 @@ mod tests {
                 global_settings_path: global_settings_path.clone(),
                 project_settings_path: project_settings_path.clone(),
                 global_base_dir: temp_dir.path().join("global-base"),
-                project_base_dir: project_root.join(".pi"),
+                project_base_dir: project_root.join(".ra"),
                 project_settings_enabled: true,
             };
             fs::create_dir_all(&roots.global_base_dir).expect("create global base dir");
@@ -4956,10 +4970,10 @@ mod tests {
     fn test_list_packages_with_override_roots_ignores_project_settings() {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let project_root = temp_dir.path().join("project");
-        fs::create_dir_all(project_root.join(".pi")).expect("create project settings dir");
+        fs::create_dir_all(project_root.join(".ra")).expect("create project settings dir");
 
         let override_settings_path = temp_dir.path().join("override-settings.json");
-        let project_settings_path = project_root.join(".pi/settings.json");
+        let project_settings_path = project_root.join(".ra/settings.json");
 
         fs::write(
             &override_settings_path,
@@ -4999,7 +5013,7 @@ mod tests {
         let trusted = PackageManager::new(cwd.clone());
         let untrusted = PackageManager::new(cwd).with_project_trust(false);
 
-        // Without a PI_CONFIG_PATH override, trust is the only thing that can
+        // Without a RECUR_AGENT_CONFIG_PATH override, trust is the only thing that can
         // lower the project flag.
         if trusted.effective_roots().project_settings_enabled {
             assert!(
@@ -5014,7 +5028,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("tempdir");
         let cwd = temp_dir.path().join("workspace");
         let global_dir = temp_dir.path().join("global");
-        let project_dir = cwd.join(".pi");
+        let project_dir = cwd.join(".ra");
         fs::create_dir_all(&global_dir).expect("create global dir");
         fs::create_dir_all(&project_dir).expect("create project dir");
         fs::write(
@@ -5060,8 +5074,8 @@ mod tests {
         run_async(async {
             let temp_dir = tempfile::tempdir().expect("tempdir");
             let project_root = temp_dir.path().join("project");
-            fs::create_dir_all(project_root.join(".pi")).expect("create project settings dir");
-            fs::create_dir_all(project_root.join(".pi/extensions"))
+            fs::create_dir_all(project_root.join(".ra")).expect("create project settings dir");
+            fs::create_dir_all(project_root.join(".ra/extensions"))
                 .expect("create project extension dir");
 
             let package_root = temp_dir.path().join("pkg");
@@ -5074,14 +5088,14 @@ mod tests {
             fs::write(package_root2.join("extensions/b.native.json"), "{}")
                 .expect("write b.native.json");
             let project_local_extension =
-                project_root.join(".pi/extensions/project-local.native.json");
+                project_root.join(".ra/extensions/project-local.native.json");
             let project_auto_extension =
-                project_root.join(".pi/extensions/project-auto.native.json");
+                project_root.join(".ra/extensions/project-auto.native.json");
             fs::write(&project_local_extension, "{}").expect("write project local extension");
             fs::write(&project_auto_extension, "{}").expect("write project auto extension");
 
             let override_settings_path = temp_dir.path().join("override-settings.json");
-            let project_settings_path = project_root.join(".pi/settings.json");
+            let project_settings_path = project_root.join(".ra/settings.json");
 
             let override_settings = json!({
                 "packages": [{
@@ -5114,7 +5128,7 @@ mod tests {
                 global_settings_path: override_settings_path.clone(),
                 project_settings_path: project_settings_path.clone(),
                 global_base_dir: temp_dir.path().join("global-base"),
-                project_base_dir: project_root.join(".pi"),
+                project_base_dir: project_root.join(".ra"),
                 project_settings_enabled: false,
             };
             fs::create_dir_all(&roots.global_base_dir).expect("create global base dir");
@@ -5466,7 +5480,7 @@ mod tests {
         fs::write(
             extension_dir.join("extension.json"),
             serde_json::to_string_pretty(&json!({
-                "schema": "pi.ext.manifest.v1",
+                "schema": "ra.ext.manifest.v1",
                 "extension_id": "test.ext",
                 "name": "Test Extension",
                 "version": "0.1.0",
@@ -6384,10 +6398,10 @@ mod tests {
         fs::write(&manifest_path, r#"{"name":"pkg","pi":"not-an-object"}"#)
             .expect("write invalid pi manifest");
 
-        let err = read_pi_manifest(dir.path()).expect_err("non-object `pi` field must error");
+        let err = read_pi_manifest(dir.path()).expect_err("non-object `ra` field must error");
         let message = err.to_string();
         assert!(message.contains("Invalid package manifest"));
-        assert!(message.contains("`pi` must be an object"));
+        assert!(message.contains("`ra` must be an object"));
         assert!(message.contains(&manifest_path.display().to_string()));
     }
 
@@ -6532,7 +6546,7 @@ mod tests {
             ("npm:pkg@1.2.3", true),
             ("npm:pkg@v1.2.3", true),
             ("npm:@scope/pkg@2.0.0-beta.1", true),
-            // Local references stay pinned so `pi update` leaves them alone.
+            // Local references stay pinned so `ra update` leaves them alone.
             ("npm:pkg@file:../pkg", true),
             ("npm:pkg@link:../pkg", true),
             // Ranges, partial versions, and dist-tags float.
@@ -7174,7 +7188,7 @@ mod tests {
         fs::write(
             ext_dir.join("extension.json"),
             serde_json::to_string_pretty(&json!({
-                "schema": "pi.ext.manifest.v1",
+                "schema": "ra.ext.manifest.v1",
                 "extension_id": "test.ext",
                 "name": "Test",
                 "version": "0.1.0",
@@ -7502,12 +7516,12 @@ mod tests {
     }
 
     // ======================================================================
-    // PiManifest::entries_for
+    // RaManifest::entries_for
     // ======================================================================
 
     #[test]
-    fn pi_manifest_entries_for_returns_cloned_vectors() {
-        let manifest = PiManifest {
+    fn ra_manifest_entries_for_returns_cloned_vectors() {
+        let manifest = RaManifest {
             extensions: Some(vec!["a.js".to_string()]),
             skills: None,
             prompts: Some(vec!["p.md".to_string()]),
@@ -7837,11 +7851,11 @@ mod tests {
         run_async(async {
             let temp_dir = tempfile::tempdir().expect("tempdir");
             let project_root = temp_dir.path().join("project");
-            fs::create_dir_all(project_root.join(".pi")).expect("create project settings dir");
+            fs::create_dir_all(project_root.join(".ra")).expect("create project settings dir");
 
             // Pre-install a project-scoped npm package satisfying its range.
             let installed = project_root
-                .join(".pi")
+                .join(".ra")
                 .join("npm")
                 .join("node_modules")
                 .join("pi-test-preinstalled-pkg");
@@ -7853,7 +7867,7 @@ mod tests {
             .expect("write package.json");
             fs::write(installed.join("extensions/a.native.json"), "{}").expect("write extension");
 
-            let project_settings_path = project_root.join(".pi/settings.json");
+            let project_settings_path = project_root.join(".ra/settings.json");
             fs::write(
                 &project_settings_path,
                 serde_json::to_string_pretty(&json!({
@@ -7867,7 +7881,7 @@ mod tests {
                 global_settings_path: temp_dir.path().join("global-settings.json"),
                 project_settings_path,
                 global_base_dir: temp_dir.path().join("global-base"),
-                project_base_dir: project_root.join(".pi"),
+                project_base_dir: project_root.join(".ra"),
                 project_settings_enabled: true,
             };
             fs::create_dir_all(&roots.global_base_dir).expect("create global base dir");
@@ -7922,7 +7936,7 @@ mod tests {
 
     #[test]
     fn auto_dirs_constructs_correct_paths() {
-        let base = Path::new("/home/user/.pi/agent");
+        let base = Path::new("/home/user/.ra/agent");
         let dirs = AutoDirs::new(base);
         assert_eq!(dirs.extensions, base.join("extensions"));
         assert_eq!(dirs.skills, base.join("skills"));
@@ -8138,7 +8152,7 @@ mod tests {
             )
             .expect("first lock verification");
 
-        let lockfile_path = cwd.join(".pi").join("packages.lock.json");
+        let lockfile_path = cwd.join(".ra").join("packages.lock.json");
         let first = fs::read_to_string(&lockfile_path).expect("read first lockfile");
 
         manager
@@ -8210,8 +8224,8 @@ mod tests {
             fs::write(pkg.join("index.js"), "export const ok = true;\n").expect("write entry");
         }
 
-        let settings_path = cwd.join(".pi").join("settings.json");
-        fs::create_dir_all(settings_path.parent().unwrap()).expect("mkdir .pi");
+        let settings_path = cwd.join(".ra").join("settings.json");
+        fs::create_dir_all(settings_path.parent().unwrap()).expect("mkdir .ra");
         fs::write(
             &settings_path,
             json!({ "packages": ["./pkg1", "./pkg2"] }).to_string(),
@@ -8226,7 +8240,7 @@ mod tests {
             .verify_and_record_lock("./pkg2", PackageScope::Project, PackageLockAction::Install)
             .expect("lock pkg2");
 
-        let lockfile_path = cwd.join(".pi").join("packages.lock.json");
+        let lockfile_path = cwd.join(".ra").join("packages.lock.json");
         let before = read_package_lockfile(&lockfile_path).expect("read pre-reconcile lockfile");
         assert_eq!(
             before.entries.len(),
@@ -8276,7 +8290,7 @@ mod tests {
         assert!(again.is_empty(), "second reconcile should prune nothing");
 
         // Audit event should record the reconciled prune.
-        let audit_path = cwd.join(".pi").join("package-trust-audit.jsonl");
+        let audit_path = cwd.join(".ra").join("package-trust-audit.jsonl");
         let audit = fs::read_to_string(&audit_path).expect("read audit log");
         assert!(
             audit.lines().any(|line| line.contains("\"reconciled\"")),
@@ -8310,8 +8324,8 @@ mod tests {
         fs::create_dir_all(&pkg).expect("mkdir keep-me");
         fs::write(pkg.join("index.js"), "export const ok = true;\n").expect("write entry");
 
-        let settings_path = cwd.join(".pi").join("settings.json");
-        fs::create_dir_all(settings_path.parent().unwrap()).expect("mkdir .pi");
+        let settings_path = cwd.join(".ra").join("settings.json");
+        fs::create_dir_all(settings_path.parent().unwrap()).expect("mkdir .ra");
         fs::write(
             &settings_path,
             json!({ "packages": ["./keep-me"] }).to_string(),
@@ -8327,7 +8341,7 @@ mod tests {
             )
             .expect("lock keep-me");
 
-        let lockfile_path = cwd.join(".pi").join("packages.lock.json");
+        let lockfile_path = cwd.join(".ra").join("packages.lock.json");
         let before_len = read_package_lockfile(&lockfile_path)
             .expect("read lockfile")
             .entries
@@ -8631,7 +8645,7 @@ mod gh179_tests {
             "guidance must name the fix: {enriched}"
         );
         assert!(
-            enriched.contains("pi install --local pi-web-access"),
+            enriched.contains("ra install --local pi-web-access"),
             "guidance must offer the project-scoped alternative: {enriched}"
         );
     }
