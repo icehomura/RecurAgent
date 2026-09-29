@@ -558,8 +558,9 @@ async fn run_provider(
 fn metasearch() -> &'static octos_research::metasearch::Metasearch {
     static M: OnceLock<octos_research::metasearch::Metasearch> = OnceLock::new();
     M.get_or_init(|| {
+        // Engines that render (Google) load in the person's browser.
         octos_research::metasearch::Metasearch::from_env(
-            std::sync::Arc::new(octos_research::metasearch::ReqwestFetch::new()),
+            octos_research::metasearch::default_fetch(),
             &Default::default(),
         )
     })
@@ -584,6 +585,7 @@ async fn metasearch_round(
     req.limit = count as usize * 2;
     req.filters = opts.filters.clone();
     req.now = opts.now;
+    req.results_pages = opts.allow_serp_scrape;
     let resp = metasearch().search(&req).await;
     if resp.items.is_empty() {
         let engines: Vec<String> = resp
@@ -603,7 +605,13 @@ async fn metasearch_round(
     Ok(ProviderOut {
         hits: resp.hits(),
         answer: String::new(),
-        notes: resp.note.into_iter().collect(),
+        notes: resp
+            .note
+            .iter()
+            .cloned()
+            .chain(resp.challenges())
+            .chain(resp.browser_notice().map(String::from))
+            .collect(),
     })
 }
 
@@ -1139,7 +1147,12 @@ mod tests {
         let order = auto_plan(false, true);
         let ddg = order.iter().position(|p| *p == Provider::DuckDuckGo);
         let bing = order.iter().position(|p| *p == Provider::BingBrowser);
-        assert!(ddg.is_some() && bing.is_some() && ddg < bing, "{order:?}");
+        if octos_research::metasearch::enabled(|k| std::env::var(k).ok()) {
+            // The metasearch's own DuckDuckGo and Bing engines ask them.
+            assert!(ddg.is_none() && bing.is_none(), "{order:?}");
+        } else {
+            assert!(ddg.is_some() && bing.is_some() && ddg < bing, "{order:?}");
+        }
     }
 
     #[tokio::test]

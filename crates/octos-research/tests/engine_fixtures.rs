@@ -19,6 +19,15 @@ struct Replay {
 }
 
 impl Fetch for Replay {
+    // Rendered requests (Google) replay the recorded page the same way.
+    fn render(&self, req: HttpRequest) -> FetchFuture<'_> {
+        self.fetch(req)
+    }
+
+    fn can_render(&self) -> bool {
+        true
+    }
+
     fn fetch(&self, req: HttpRequest) -> FetchFuture<'_> {
         Box::pin(async move {
             // robots.txt (Google News asks for it): not found = no rules.
@@ -81,6 +90,9 @@ async fn replay(engine: &str, case: &Path) {
     let mut config = Config::default();
     config.enabled.push(engine.to_string());
     config.keys.insert("brave".into(), "fixture-key".into());
+    config
+        .keys
+        .insert("google_cse".into(), "fixture-key".into());
     let ms = Metasearch::new(registry, fetch.clone(), config);
 
     let r = &doc["request"];
@@ -108,10 +120,11 @@ async fn replay(engine: &str, case: &Path) {
     assert_eq!(resp.engines.len(), 1, "{name}: {:?}", resp.engines);
     // A case that expects no items (nothing in the recorded feeds is about
     // the query) answers `empty`; every other case `ok`.
-    let want_status = if doc["expect"].as_array().is_some_and(|e| e.is_empty()) {
-        EngineStatus::Empty
-    } else {
-        EngineStatus::Ok
+    let want_status = match doc["expect_status"].as_str() {
+        Some("challenge") => EngineStatus::Challenge,
+        Some(other) => panic!("{}: unknown expect_status {other}", case.display()),
+        None if doc["expect"].as_array().is_some_and(|e| e.is_empty()) => EngineStatus::Empty,
+        None => EngineStatus::Ok,
     };
     assert_eq!(
         resp.engines[0].status,
@@ -208,6 +221,12 @@ fixture_tests! {
     gdelt_build_and_parse => "gdelt",
     github_build_and_parse => "github",
     google_news_build_and_parse => "google_news",
+    google_build_and_parse => "google",
+    google_cse_build_and_parse => "google_cse",
+    brave_web_build_and_parse => "brave_web",
+    bing_news_build_and_parse => "bing_news",
+    duckduckgo_build_and_parse => "duckduckgo",
+    bing_build_and_parse => "bing",
     publisher_feeds_build_and_parse => "publisher_feeds",
     hackernews_build_and_parse => "hackernews",
     mastodon_build_and_parse => "mastodon",

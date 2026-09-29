@@ -153,8 +153,9 @@ impl WebSearchTool {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
+            // Engines that render (Google) load in the person's browser.
             octos_research::metasearch::Metasearch::from_env(
-                Arc::new(octos_research::metasearch::ReqwestFetch::new()),
+                octos_research::metasearch::default_fetch(),
                 &keys,
             )
         })
@@ -417,6 +418,11 @@ pub(crate) struct FreeTierAnswer {
     /// Providers that contributed, in output order.
     pub used: Vec<&'static str>,
     pub note: Option<String>,
+    /// Engines that met a bot challenge, one line each, for the person.
+    pub challenges: Vec<String>,
+    /// Set when the search used the person's browser: what that means for
+    /// their account and how to turn it off.
+    pub browser_notice: Option<&'static str>,
     /// Result cap (`count` per requested language).
     pub limit: usize,
 }
@@ -428,6 +434,14 @@ impl FreeTierAnswer {
         let mut output = octos_research::providers::format_hits(query, &self.hits);
         if let Some(note) = self.note.filter(|_| c.category == "general") {
             output.push_str(&format!("Note: {note}\n"));
+        }
+        // A search engine asked to confirm a person is searching: say so
+        // (octos does not solve or work around these).
+        for line in &self.challenges {
+            output.push_str(&format!("Note: {line}\n"));
+        }
+        if let Some(notice) = self.browser_notice {
+            output.push_str(&format!("Note: {notice}\n"));
         }
         if octos_research::respect_robots(|k| std::env::var(k).ok())
             && self.hits.iter().any(|h| {
@@ -594,7 +608,7 @@ impl Tool for WebSearchTool {
                 "category": {
                     "type": "string",
                     "enum": ["auto", "news", "general", "science", "it", "social"],
-                    "description": "Metasearch engines to use: news (GDELT, Hacker News, Mastodon), general (Wikipedia, Wikidata; web results come from results-page search, DuckDuckGo then Bing, on unless the operator turned it off), science (arXiv, OpenAlex), it (Hacker News, GitHub, Stack Exchange), social (Mastodon). auto (default) = news when since <= 31 days or the query mentions news/latest/today, else general."
+                    "description": "Metasearch engines to use: news (GDELT, Hacker News, Mastodon), general (DuckDuckGo, Bing and Brave results pages, Google where a browser is available, Wikipedia, Wikidata), science (arXiv, OpenAlex), it (Hacker News, GitHub, Stack Exchange), social (Mastodon). auto (default) = news when since <= 31 days or the query mentions news/latest/today, else general."
                 }
             },
             "required": ["query"]
@@ -639,19 +653,27 @@ impl Tool for WebSearchTool {
         // Free structured sources first (ADR 0002 §6): GDELT + Google News
         // for news-ish queries, then a configured SearXNG.
         // For a general query answered only by reference engines, the
-        // results-page tier is added (see `needs_results_page_tier`).
-        if let Some(answer) = self.free_tier_search(&input.query, count, &controls).await {
-            let answer = complete_free_tier(
-                answer,
-                &input.query,
-                serp_scrape,
-                &controls,
-                self.ddg_hits(&input.query, count),
-                self.bing_hits(&input.query, count),
-            )
-            .await;
-            return Ok(answer.into_result(&input.query, &controls));
-        }
+        // results-page tier is added (see `needs_results_page_tier`), but only
+        // without the metasearch: its own DuckDuckGo, Bing, Brave and Google
+        // engines have asked those pages already, and one search never asks
+        // a results page twice.
+        // Notes from a free tier that found nothing (engines that met a
+        // challenge, the browser notice) still reach the person below.
+        let free_notes = match self.free_tier_search(&input.query, count, &controls).await {
+            Err(notes) => notes,
+            Ok(answer) => {
+                let answer = complete_free_tier(
+                    answer,
+                    &input.query,
+                    serp_scrape && !metasearch_on(),
+                    &controls,
+                    self.ddg_hits(&input.query, count),
+                    self.bing_hits(&input.query, count),
+                )
+                .await;
+                return Ok(answer.into_result(&input.query, &controls));
+            }
+        };
 
         // Keyed providers: Tavily first (best quality), Perplexity last.
         // 1. Tavily (AI-optimized, 1k free/month)
@@ -862,8 +884,11 @@ impl Tool for WebSearchTool {
         }
 
         // DuckDuckGo HTML results page: general web results, last resort
-        // after every keyed provider (on unless turned off, ADR 0002).
-        let ddg_result = if serp_scrape {
+        // after every keyed provider (on unless turned off, ADR 0002). Only
+        // without the metasearch: its own DuckDuckGo and Bing engines have
+        // asked already, and one search never asks a results page twice.
+        let legacy_serp = serp_scrape && !metasearch_on();
+        let ddg_result = if legacy_serp {
             Some(self.ddg_search(&input.query, count).await)
         } else {
             None
@@ -891,7 +916,7 @@ impl Tool for WebSearchTool {
         // Bing through the in-process headless browser. On a box with no
         // Chrome this is a fast, clean miss (see `browser_cdp_search`).
         #[cfg(feature = "browser")]
-        if serp_scrape {
+        if legacy_serp {
             {
                 // Bound a touch above the per-action browser default headroom so
                 // launch + Bing nav fit, but a wedged Chrome can't block forever.
@@ -930,8 +955,12 @@ impl Tool for WebSearchTool {
             query = %input.query,
             "web_search: no results from allowed providers"
         );
+        let mut output = octos_research::no_results_message(&input.query, &tried);
+        for note in &free_notes {
+            output.push_str(&format!("Note: {note}\n"));
+        }
         Ok(ToolResult {
-            output: octos_research::no_results_message(&input.query, &tried),
+            output,
             success: true,
             ..Default::default()
         })
@@ -962,7 +991,7 @@ impl WebSearchTool {
                 tried.push(id.to_string());
             }
         }
-        if serp_scrape {
+        if serp_scrape && !metasearch_on() {
             tried.push("duckduckgo".to_string());
             if cfg!(feature = "browser") {
                 tried.push("bing_cdp".to_string());
@@ -1015,6 +1044,11 @@ impl WebSearchTool {
         req.limit = count as usize * langs.len().max(1) * 2;
         req.filters = c.filters.clone();
         req.now = c.now;
+        // This tool's results-page setting (`with_serp_scrape`, or the
+        // environment) governs the metasearch's results-page engines too.
+        req.results_pages = self
+            .serp_scrape
+            .unwrap_or_else(|| serp_scrape_opted_in(|k| std::env::var(k).ok()));
         self.metasearch().search(&req).await
     }
 
@@ -1054,22 +1088,25 @@ impl WebSearchTool {
         }
     }
 
-    /// Run the free tier for every requested language. Returns `None` when
-    /// it produced nothing usable, so the keyed/keyless chain continues.
+    /// Run the free tier for every requested language. `Err(notes)` when it
+    /// produced nothing usable, so the keyed/keyless chain continues; the
+    /// notes (challenges, the browser notice) go out with the final answer.
     async fn free_tier_search(
         &self,
         query: &str,
         count: u8,
         c: &FreeTierControls,
-    ) -> Option<FreeTierAnswer> {
+    ) -> Result<FreeTierAnswer, Vec<String>> {
         let providers = free_tier_providers(c.news, metasearch_on(), self.searxng_base().is_some());
         if providers.is_empty() {
-            return None;
+            return Err(Vec::new());
         }
         let langs = c.langs(query);
         let mut hits = Vec::new();
         let mut used: Vec<&'static str> = Vec::new();
         let mut note = None;
+        let mut challenges = Vec::new();
+        let mut browser_notice = None;
         // The metasearch covers every requested language in one call.
         if providers.contains(&octos_research::Provider::Metasearch) {
             let resp = self.metasearch_search(query, count, c, &langs).await;
@@ -1087,7 +1124,9 @@ impl WebSearchTool {
                 used.push("metasearch");
                 hits.extend(resp.hits());
             }
-            note = resp.note;
+            note = resp.note.clone();
+            challenges = resp.challenges();
+            browser_notice = resp.browser_notice();
         }
         let mut calls = Vec::new();
         for lang in &langs {
@@ -1141,12 +1180,19 @@ impl WebSearchTool {
         let limit = count as usize * langs.len().max(1);
         kept.truncate(limit);
         if kept.is_empty() {
-            return None;
+            // Nothing to show, but what the person needs to know still goes
+            // out with the final answer.
+            return Err(challenges
+                .into_iter()
+                .chain(browser_notice.map(String::from))
+                .collect());
         }
-        Some(FreeTierAnswer {
+        Ok(FreeTierAnswer {
             hits: kept,
             used,
             note,
+            challenges,
+            browser_notice,
             limit,
         })
     }
@@ -2430,11 +2476,15 @@ mod tests {
                 .iter()
                 .any(|p| p == "duckduckgo" || p == "bing_cdp")
         );
-        assert!(
-            tool.tried_providers(&c, true)
-                .iter()
-                .any(|p| p == "duckduckgo")
-        );
+        let tried = tool.tried_providers(&c, true);
+        if metasearch_on() {
+            // The metasearch's own DuckDuckGo and Bing engines asked them;
+            // the standalone providers do not ask again.
+            assert!(tried.iter().any(|p| p == "metasearch"), "{tried:?}");
+            assert!(!tried.iter().any(|p| p == "duckduckgo"), "{tried:?}");
+        } else {
+            assert!(tried.iter().any(|p| p == "duckduckgo"), "{tried:?}");
+        }
     }
 
     /// With results-page search turned off and no key or SearXNG, a general
@@ -2527,6 +2577,8 @@ mod tests {
             ],
             used: vec!["metasearch"],
             note: Some("general engines are thin".to_string()),
+            challenges: Vec::new(),
+            browser_notice: None,
             limit: 5,
         }
     }

@@ -40,11 +40,37 @@ impl HttpResponse {
 
 pub type FetchFuture<'a> = Pin<Box<dyn Future<Output = Result<HttpResponse, String>> + Send + 'a>>;
 
+/// Resolves to whether a challenge page was put in front of the person.
+pub type HandOverFuture<'a> = Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
+
 /// Performs one HTTP request. The metasearch has no HTTP client of its own:
 /// callers plug in theirs (see `ReqwestFetch` with the `http` feature), and
 /// tests plug in recorded responses.
 pub trait Fetch: Send + Sync {
     fn fetch(&self, req: HttpRequest) -> FetchFuture<'_>;
+
+    /// Load `req.url` in a real browser and return the rendered page as the
+    /// body (for results pages that need JavaScript). Hosts with a browser
+    /// implement it with the person's browser profile; the default has none.
+    fn render(&self, req: HttpRequest) -> FetchFuture<'_> {
+        let _ = req;
+        Box::pin(async { Err("no browser available to render this page".to_string()) })
+    }
+
+    /// Whether [`Fetch::render`] works here. Engines whose requests need a
+    /// browser are skipped quietly (no error, no backoff) where it does not.
+    fn can_render(&self) -> bool {
+        false
+    }
+
+    /// A page loaded with [`Fetch::render`] answered with a bot challenge:
+    /// show `url` to the person in their browser so they can deal with it
+    /// themselves. Never solve or work around it. Returns whether it was
+    /// shown; the default has no browser to show it in.
+    fn hand_over(&self, url: String) -> HandOverFuture<'_> {
+        let _ = url;
+        Box::pin(async { false })
+    }
 }
 
 /// Parse `Retry-After`: delta-seconds or an HTTP-date. Capped at one hour.

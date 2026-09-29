@@ -48,7 +48,7 @@ use crate::{lang, urls};
 
 #[cfg(feature = "http")]
 pub use http::ReqwestFetch;
-pub use http::{Fetch, FetchFuture, HttpRequest, HttpResponse};
+pub use http::{Fetch, FetchFuture, HandOverFuture, HttpRequest, HttpResponse};
 pub use manifest::EngineManifest;
 pub use merge::MetaItem;
 pub use registry::{Engine, Registry};
@@ -115,6 +115,9 @@ pub struct Config {
     /// Check robots.txt for engines whose manifest sets `robots` (operator
     /// setting, off by default; see [`crate::RESPECT_ROBOTS_ENV`]).
     pub respect_robots: bool,
+    /// Run engines whose manifest sets `results_page` (search engines' own
+    /// results pages). On by default; see [`crate::SERP_SCRAPE_ENV`].
+    pub results_pages: bool,
 }
 
 impl Default for Config {
@@ -129,6 +132,7 @@ impl Default for Config {
             backoff_max: Duration::from_secs(15 * 60),
             timeouts_before_suspend: 3,
             respect_robots: false,
+            results_pages: true,
         }
     }
 }
@@ -171,6 +175,7 @@ impl Config {
         }
         c.contact = nonempty(CONTACT_ENV).filter(|v| v.contains('@'));
         c.respect_robots = crate::respect_robots(&lookup);
+        c.results_pages = crate::serp_scrape_allowed(&lookup);
         c
     }
 }
@@ -201,6 +206,11 @@ pub struct SearchRequest {
     pub filters: Filters,
     /// Only these engines (ids), if set.
     pub engines: Option<Vec<String>>,
+    /// Run results-page engines (search engines' own pages, including those
+    /// loaded in the person's browser) for this search. Default true; they
+    /// also need [`Config::results_pages`]. A caller whose own setting turns
+    /// results-page search off passes false.
+    pub results_pages: bool,
     /// Overall deadline for the whole fan-out.
     pub deadline: Duration,
     /// Soft deadline: once an engine has answered with results and at most
@@ -227,6 +237,7 @@ impl SearchRequest {
             category: category.to_string(),
             filters: Filters::default(),
             engines: None,
+            results_pages: true,
             deadline: Duration::from_secs(25),
             straggler_grace: Some(DEFAULT_STRAGGLER_GRACE),
             now: Utc::now(),
@@ -254,6 +265,10 @@ pub enum EngineStatus {
     RateLimited,
     /// Skipped: robots.txt disallows the request.
     Robots,
+    /// The site answered with a bot challenge (CAPTCHA, "unusual traffic").
+    /// `challenge_url` is for the person to open and solve in their browser;
+    /// it is never worked around.
+    Challenge,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -269,6 +284,14 @@ pub struct EngineReport {
     /// Served from cache (fresh or revalidated with a 304).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub cached: bool,
+    /// For [`EngineStatus::Challenge`]: the page for the person to open and
+    /// solve in their browser.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub challenge_url: Option<String>,
+    /// The engine loads its pages in the person's browser (manifest
+    /// `renders`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub in_browser: bool,
 }
 
 /// Result of one search.
@@ -300,6 +323,54 @@ impl SearchResponse {
     pub fn hits(&self) -> Vec<SearchHit> {
         self.items.iter().map(MetaItem::to_hit).collect()
     }
+
+    /// The disclosure to show the person when this search used their
+    /// browser ([`crate::BROWSER_SEARCH_NOTICE`]); `None` when it did not.
+    pub fn browser_notice(&self) -> Option<&'static str> {
+        self.engines
+            .iter()
+            .any(|e| {
+                // A page actually loaded in the browser (an error may be a
+                // browser that never started).
+                e.in_browser
+                    && matches!(
+                        e.status,
+                        EngineStatus::Ok | EngineStatus::Empty | EngineStatus::Challenge
+                    )
+            })
+            .then_some(crate::BROWSER_SEARCH_NOTICE)
+    }
+
+    /// One line per engine that met a bot challenge, for the person: whether
+    /// it is open in their browser or which page to open.
+    pub fn challenges(&self) -> Vec<String> {
+        self.engines
+            .iter()
+            .filter(|e| e.status == EngineStatus::Challenge)
+            .map(|e| {
+                let what = e.error.as_deref().unwrap_or("challenge");
+                match &e.challenge_url {
+                    Some(url) => format!("{}: {what} ({url})", e.engine),
+                    None => format!("{}: {what}", e.engine),
+                }
+            })
+            .collect()
+    }
+}
+
+/// The fetcher a host should give the metasearch: plain HTTP, and with the
+/// `browser` feature the person's browser for engines that render (unless
+/// [`crate::browser::BROWSER_ENV`] turns it off).
+#[cfg(feature = "http")]
+pub fn default_fetch() -> Arc<dyn Fetch> {
+    #[cfg(feature = "browser")]
+    if let Some(b) = crate::browser::shared() {
+        return Arc::new(crate::browser::PersonBrowserFetch::new(
+            ReqwestFetch::new(),
+            b,
+        ));
+    }
+    Arc::new(ReqwestFetch::new())
 }
 
 #[derive(Debug, Default, Clone)]
@@ -428,19 +499,34 @@ impl Metasearch {
         if m.disabled_by_default && !c.enabled.contains(&m.id) {
             return false;
         }
+        if m.results_page && !c.results_pages {
+            return false;
+        }
+        // Needs a browser the host does not have: left out quietly rather
+        // than failing (and backing off) on every search.
+        if m.renders && !self.inner.fetch.can_render() {
+            return false;
+        }
         !m.needs_key || c.keys.contains_key(&m.id)
     }
 
-    /// Whether key-less general search is all this host has.
-    fn general_is_thin(&self) -> bool {
-        !self.engines_for("general").iter().any(|m| m.needs_key)
+    /// Whether general search is only the encyclopedias here: no keyed
+    /// engine and no results-page engine for this request.
+    fn general_is_thin(&self, req: &SearchRequest) -> bool {
+        !self
+            .engines_for("general")
+            .iter()
+            .any(|m| m.needs_key || (m.results_page && req.results_pages))
     }
 
     fn plan<'a>(&'a self, req: &SearchRequest) -> Vec<Call<'a>> {
         let mut calls = Vec::new();
         for e in self.inner.registry.engines() {
             let m = &e.manifest;
-            if !m.serves(&req.category) || !self.is_enabled(m) {
+            if !m.serves(&req.category)
+                || !self.is_enabled(m)
+                || (m.results_page && !req.results_pages)
+            {
                 continue;
             }
             if let Some(only) = &req.engines {
@@ -552,11 +638,11 @@ impl Metasearch {
                 items.push(item);
             }
         }
-        let note = (req.category == "general" && self.general_is_thin()).then(|| {
-            "The metasearch's key-less general engines are Wikipedia and Wikidata. Web \
-             results come from results-page search (DuckDuckGo, Bing; on unless \
-             OCTOS_ALLOW_SERP_SCRAPE=0), a Brave Search key (BRAVE_API_KEY) or a \
-             self-hosted SearXNG (SEARXNG_URL)."
+        let note = (req.category == "general" && self.general_is_thin(req)).then(|| {
+            "With results-page search off and no search key, the metasearch's general \
+             engines are Wikipedia and Wikidata. For web results, turn results-page search \
+             back on (unset OCTOS_ALLOW_SERP_SCRAPE), add a Brave Search key \
+             (BRAVE_API_KEY) or set a self-hosted SearXNG (SEARXNG_URL)."
                 .to_string()
         });
         SearchResponse {
@@ -570,8 +656,10 @@ impl Metasearch {
     /// Run every call in parallel. With a [`SearchRequest::straggler_grace`],
     /// calls still running that long after the soft deadline started (an
     /// engine answered with results, and at most a quarter of the calls, at
-    /// least one, are left) are dropped and reported as `timeout`. Reports
-    /// keep the plan's order.
+    /// least one, are left) are dropped and reported as `timeout`. Not while
+    /// an engine that loads pages in the person's browser (`renders`) is
+    /// still running: those are slower by nature and bounded by their own
+    /// timeout. Reports keep the plan's order.
     async fn fan_out(
         &self,
         calls: &[Call<'_>],
@@ -591,6 +679,7 @@ impl Metasearch {
                 .collect();
             let mut done = 0usize;
             let mut answered = false;
+            let mut patient_left = calls.iter().filter(|c| c.engine.manifest.renders).count();
             while done < calls.len() {
                 let next = match soft_deadline {
                     Some(at) => match tokio::time::timeout_at(at, running.next()).await {
@@ -602,11 +691,15 @@ impl Metasearch {
                 };
                 let Some((i, result)) = next else { break };
                 answered |= !result.1.is_empty();
+                if calls[i].engine.manifest.renders {
+                    patient_left -= 1;
+                }
                 out[i] = Some(result);
                 done += 1;
                 let left = calls.len() - done;
                 if let Some(grace) = req.straggler_grace {
                     if soft_deadline.is_none()
+                        && patient_left == 0
                         && answered
                         && left > 0
                         && left <= (calls.len() / 4).max(1)
@@ -645,6 +738,8 @@ impl Metasearch {
                 grace.as_secs_f64()
             )),
             cached: false,
+            challenge_url: None,
+            in_browser: m.renders,
         };
         (report, Vec::new())
     }
@@ -681,6 +776,9 @@ impl Metasearch {
                     h.suspended_until = Some(Instant::now() + backoff);
                     h.timeouts = 0;
                 }
+            }
+            EngineStatus::Challenge => {
+                h.suspended_until = Some(Instant::now() + c.backoff_base);
             }
             _ => {}
         }
@@ -790,6 +888,8 @@ impl Metasearch {
             elapsed_ms: t0.elapsed().as_millis() as u64,
             error,
             cached,
+            challenge_url: None,
+            in_browser: m.renders,
         };
         if let Some(left) = self.suspended(&m.id) {
             let msg = format!(
@@ -820,6 +920,24 @@ impl Metasearch {
                 )
             }
             Err(CallError::Skip(status, msg)) => (report(status, 0, Some(msg), false), Vec::new()),
+            Err(CallError::Challenge(reason, url, shown)) => {
+                // Not asked again at once. Shown to the person: a short fixed
+                // pause while they deal with it, not a growing backoff.
+                // Otherwise back off like an error.
+                let msg = if shown {
+                    self.record(&m.id, EngineStatus::Challenge, None);
+                    format!(
+                        "challenge ({reason}): shown in your browser; complete it there, \
+                         then search again"
+                    )
+                } else {
+                    self.record(&m.id, EngineStatus::Error, None);
+                    format!("challenge ({reason}): open the page to continue")
+                };
+                let mut r = report(EngineStatus::Challenge, 0, Some(msg), false);
+                r.challenge_url = Some(url);
+                (r, Vec::new())
+            }
             Err(CallError::Failed(msg, retry_after)) => {
                 self.record(&m.id, EngineStatus::Error, retry_after);
                 tracing::warn!(engine = %m.id, error = %msg, "metasearch engine error");
@@ -842,6 +960,7 @@ impl Metasearch {
             source: &e.source,
             allowed_hosts: &hosts,
             allow_http: m.allow_http,
+            renders: m.renders,
         };
         let opts = self.opts_json(call, req);
         let query = call_query(call, req);
@@ -899,6 +1018,7 @@ impl Metasearch {
                 Some(CallError::Failed(msg, _)) => msg.clone(),
                 Some(CallError::Timeout) => "timed out".to_string(),
                 Some(CallError::Skip(_, msg)) => msg.clone(),
+                Some(CallError::Challenge(reason, _, _)) => format!("challenge ({reason})"),
                 None => String::new(),
             };
             format!("{failed} of {} requests failed: {why}", requests.len())
@@ -1019,7 +1139,12 @@ impl Metasearch {
                 self.attach_key(m, &mut http)?;
                 let timeout = Duration::from_secs(m.timeout_secs)
                     .min(req.deadline.saturating_sub(started.elapsed()));
-                let r = tokio::time::timeout(timeout, self.inner.fetch.fetch(http))
+                let call = if sreq.render {
+                    self.inner.fetch.render(http)
+                } else {
+                    self.inner.fetch.fetch(http)
+                };
+                let r = tokio::time::timeout(timeout, call)
                     .await
                     .map_err(|_| CallError::Timeout)?
                     .map_err(|err| CallError::Failed(err, None))?;
@@ -1071,11 +1196,25 @@ impl Metasearch {
         if let Some(b) = parsed.backoff {
             self.inner.gate.block(&host, b);
         }
+        if let Some(reason) = parsed.challenge {
+            // Only a page the person's browser loaded can be handed to them.
+            let shown = sreq.render
+                && tokio::time::timeout(
+                    Duration::from_secs(5),
+                    self.inner.fetch.hand_over(sreq.url.clone()),
+                )
+                .await
+                .unwrap_or(false);
+            return Err(CallError::Challenge(reason, sreq.url.clone(), shown));
+        }
         if let Some(err) = parsed.error {
             return Err(CallError::Failed(err, parsed.backoff));
         }
         // Only responses the engine accepted are reused.
-        if !cached && cacheable {
+        // A rendered page with nothing on it may just have been read before
+        // its results arrived: not kept, so the next search loads it again.
+        let empty_render = sreq.render && parsed.items.is_empty();
+        if !cached && cacheable && !empty_render {
             self.inner
                 .cache
                 .store(&cache_key, &response, Duration::from_secs(m.cache_ttl_secs));
@@ -1125,6 +1264,9 @@ enum CallError {
     Timeout,
     Skip(EngineStatus, String),
     Failed(String, Option<Duration>),
+    /// A bot challenge: (reason, the page URL, whether the person's browser
+    /// is showing it to them).
+    Challenge(String, String, bool),
 }
 
 /// Validate and normalize one item a script returned. `kind` is the

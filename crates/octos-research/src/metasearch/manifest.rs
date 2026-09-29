@@ -76,6 +76,19 @@ pub struct EngineManifest {
     /// Off unless the host enables it.
     #[serde(default)]
     pub disabled_by_default: bool,
+    /// Reads a search engine's own results page (general web search). Runs
+    /// only while results-page search is on (on by default; see
+    /// [`crate::SERP_SCRAPE_ENV`]).
+    #[serde(default)]
+    pub results_page: bool,
+    /// The engine's requests load in the person's browser
+    /// (`net.request({render: true})`). Only such engines may ask for it,
+    /// only results-page engines may be such engines, and they are left out
+    /// where the host has no browser ([`super::Fetch::can_render`]). The
+    /// soft deadline waits for them: a browser load is slower than an API
+    /// call.
+    #[serde(default)]
+    pub renders: bool,
     /// The engine lists entries it did not search for (feeds): the core
     /// keeps only hits whose title or snippet match the query (the phrase,
     /// or every significant term; see [`super::topic`]) and reports the rest
@@ -154,6 +167,9 @@ impl EngineManifest {
         }
         if self.categories.is_empty() {
             return Err(format!("{}: no categories", self.id));
+        }
+        if self.renders && !self.results_page {
+            return Err(format!("{}: `renders` needs `results_page`", self.id));
         }
         if let Some(c) = self
             .categories
