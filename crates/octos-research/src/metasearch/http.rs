@@ -19,6 +19,10 @@ pub struct HttpRequest {
     pub headers: Vec<(String, String)>,
     pub body: Option<String>,
     pub timeout: Duration,
+    /// The client profile the engine's manifest names (`client`), if any:
+    /// fetchers that support it present that client (see
+    /// [`Fetch::supports_client`]).
+    pub client: Option<String>,
 }
 
 /// A response as the fetcher received it. Header names are lowercase.
@@ -60,6 +64,14 @@ pub trait Fetch: Send + Sync {
     /// Whether [`Fetch::render`] works here. Engines whose requests need a
     /// browser are skipped quietly (no error, no backoff) where it does not.
     fn can_render(&self) -> bool {
+        false
+    }
+
+    /// Whether this fetcher can present the client profile `client`
+    /// (manifest `client`). Engines that need one it lacks are left out,
+    /// like engines that need a browser.
+    fn supports_client(&self, client: &str) -> bool {
+        let _ = client;
         false
     }
 
@@ -393,6 +405,7 @@ mod tests {
                     headers: Vec::new(),
                     body: None,
                     timeout: Duration::from_secs(2),
+                    client: None,
                 })
                 .await
                 .unwrap_err();

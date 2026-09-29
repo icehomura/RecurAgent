@@ -15,6 +15,9 @@ use serde_json::Value;
 struct Replay {
     /// Request URL -> recorded body; `None` = any URL (single-request fixtures).
     bodies: Vec<(Option<String>, String)>,
+    /// Recorded response headers (`response_headers`), e.g. the page a
+    /// request ended on (`x-octos-final-url`).
+    headers: Vec<(String, String)>,
     seen: Mutex<Vec<HttpRequest>>,
 }
 
@@ -25,6 +28,11 @@ impl Fetch for Replay {
     }
 
     fn can_render(&self) -> bool {
+        true
+    }
+
+    // Client profiles (Google's `legacy_mobile`) replay the same way.
+    fn supports_client(&self, _client: &str) -> bool {
         true
     }
 
@@ -46,7 +54,7 @@ impl Fetch for Replay {
             self.seen.lock().unwrap().push(req);
             Ok(HttpResponse {
                 status: 200,
-                headers: Vec::new(),
+                headers: self.headers.clone(),
                 body,
             })
         })
@@ -81,8 +89,17 @@ async fn replay(engine: &str, case: &Path) {
             .collect(),
         None => vec![(None, read(doc["body_file"].as_str().unwrap()))],
     };
+    let headers = doc["response_headers"]
+        .as_object()
+        .map(|h| {
+            h.iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v.as_str().unwrap().to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
     let fetch = Arc::new(Replay {
         bodies,
+        headers,
         seen: Mutex::new(Vec::new()),
     });
     let mut registry = Registry::default();
@@ -185,6 +202,17 @@ async fn replay(engine: &str, case: &Path) {
             v
         })
         .collect();
+    // OCTOS_FIXTURE_BLESS=1 writes the parsed items into the fixture
+    // (review the diff before committing it).
+    if std::env::var_os("OCTOS_FIXTURE_BLESS").is_some()
+        && Value::Array(got.clone()) != doc["expect"]
+    {
+        let mut blessed = doc.clone();
+        blessed["expect"] = Value::Array(got);
+        let text = serde_json::to_string_pretty(&blessed).unwrap() + "\n";
+        std::fs::write(case, text).unwrap();
+        return;
+    }
     assert_eq!(Value::Array(got), doc["expect"], "{name}: items");
 }
 

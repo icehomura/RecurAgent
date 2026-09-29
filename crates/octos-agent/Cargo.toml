@@ -126,8 +126,11 @@ rustix = { workspace = true }
 # pre-existing HTTP-only `web_search` behaviour byte-for-byte. It also lets
 # metasearch engines that render (Google) load in the person's browser
 # (`octos_research::browser`).
-default = ["browser"]
+default = ["browser", "impersonate"]
 browser = ["octos-research/browser"]
+# Results-page engines that need a browser-like client (Google's page for
+# simple phones), as SearXNG does. Not on Windows; building it needs cmake.
+impersonate = ["octos-research/impersonate"]
 git = ["dep:gix", "dep:similar"]
 ast = ["dep:tree-sitter", "dep:tree-sitter-rust", "dep:tree-sitter-python", "dep:tree-sitter-javascript", "dep:tree-sitter-typescript"]
 # Enable MP3 decoding for the `AudioNonSilent` workspace-policy validator.

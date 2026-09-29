@@ -31,9 +31,11 @@
 //! - A browser octos launched closes after [`IDLE_CLOSE`] without use, and
 //!   short-lived hosts close it on exit ([`close_shared`]).
 //!
-//! Modes ([`BROWSER_ENV`]): `auto` (default: pages load headless; a
-//! challenge opens a window when there is a display), `window` (pages load
-//! in a minimised window), `headless` (never a window), `off`.
+//! Modes ([`BROWSER_ENV`]): `off` (default: searching needs no browser and
+//! no person; Google comes from its page for simple phones, see
+//! `metasearch::impersonate`), `auto` (pages load headless; a challenge
+//! opens a window when there is a display), `window` (pages load in a
+//! minimised window), `headless` (never a window).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -51,7 +53,7 @@ use tokio::sync::Mutex;
 
 use crate::metasearch::http::{Fetch, FetchFuture, HandOverFuture, HttpRequest, HttpResponse};
 
-/// `auto` (default) | `window` | `headless` | `off`.
+/// `off` (default) | `auto` | `window` | `headless`.
 pub use crate::BROWSER_ENV;
 
 /// Profile directory override (default `~/.octos/browser-profile`).
@@ -98,9 +100,13 @@ impl Mode {
     pub fn resolve(lookup: impl Fn(&str) -> Option<String>, has_display: bool) -> Mode {
         let windowed = |m: Mode| if has_display { m } else { Mode::Headless };
         match lookup(BROWSER_ENV) {
-            None => windowed(Mode::Auto),
+            // Off unless asked for: searching needs no browser and no person
+            // (Google comes from its page for simple phones, see
+            // `metasearch::impersonate`).
+            None => Mode::Off,
             Some(v) => match v.trim().to_ascii_lowercase().as_str() {
-                "" | "auto" => windowed(Mode::Auto),
+                "" | "off" => Mode::Off,
+                "auto" => windowed(Mode::Auto),
                 "window" => windowed(Mode::Window),
                 "headless" => Mode::Headless,
                 _ => Mode::Off,
@@ -669,8 +675,13 @@ mod tests {
 
     #[test]
     fn should_load_headless_and_show_challenges_only_with_a_display() {
-        assert_eq!(Mode::resolve(env(&[]), true), Mode::Auto);
-        assert_eq!(Mode::resolve(env(&[]), false), Mode::Headless);
+        // Off unless asked for: no browser and no person by default.
+        assert_eq!(Mode::resolve(env(&[]), true), Mode::Off);
+        assert_eq!(Mode::resolve(env(&[]), false), Mode::Off);
+        assert_eq!(
+            Mode::resolve(env(&[(BROWSER_ENV, "auto")]), true),
+            Mode::Auto
+        );
         assert_eq!(
             Mode::resolve(env(&[(BROWSER_ENV, "auto")]), false),
             Mode::Headless

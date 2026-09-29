@@ -10,6 +10,11 @@ use crate::item::ItemKind;
 
 /// Categories an engine can serve. A search asks for one category; every
 /// enabled engine that lists it runs.
+/// Client profiles a manifest may name (`client`).
+/// `legacy_mobile`: the browser-like client Google's page for simple phones
+/// answers (see `metasearch::impersonate`).
+pub const CLIENTS: &[&str] = &["legacy_mobile"];
+
 pub const CATEGORIES: &[&str] = &["general", "news", "science", "it", "social"];
 
 /// `manifest.json` of one engine.
@@ -89,6 +94,12 @@ pub struct EngineManifest {
     /// call.
     #[serde(default)]
     pub renders: bool,
+    /// A client profile the host fetches this engine's requests with,
+    /// instead of its plain, identifiable client. One of [`CLIENTS`]; only
+    /// results-page engines may name one. Left out where the host cannot
+    /// present it ([`super::Fetch::supports_client`]).
+    #[serde(default)]
+    pub client: Option<String>,
     /// The engine lists entries it did not search for (feeds): the core
     /// keeps only hits whose title or snippet match the query (the phrase,
     /// or every significant term; see [`super::topic`]) and reports the rest
@@ -170,6 +181,14 @@ impl EngineManifest {
         }
         if self.renders && !self.results_page {
             return Err(format!("{}: `renders` needs `results_page`", self.id));
+        }
+        if let Some(c) = &self.client {
+            if !CLIENTS.contains(&c.as_str()) {
+                return Err(format!("{}: unknown client {c:?}", self.id));
+            }
+            if !self.results_page {
+                return Err(format!("{}: `client` needs `results_page`", self.id));
+            }
         }
         if let Some(c) = self
             .categories

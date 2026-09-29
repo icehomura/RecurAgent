@@ -1,28 +1,42 @@
-// Google's results page (www.google.com/search), which needs JavaScript:
-// the request asks the host to load it in the person's browser (`render`).
-// Written from the page's long-standing structure (each result is a link
-// holding an <h3> headline) and Google's search-operators help page
-// (docs_url): `q` query, `hl` interface language, `gl` country, `num`
-// results. An "unusual traffic" page is reported as a challenge for the
-// person to solve in their browser; it is never worked around. The page the
-// browser ended on (`x-octos-final-url`) decides that: Google's normal
-// results pages also mention "/sorry/" in their scripts. Without it, the
-// page text counts only when no results were found.
+// Google's results page for simple phones (www.google.com/wml/search): plain
+// HTML, no JavaScript. The host fetches it with its `legacy_mobile` client
+// (manifest `client`), the browser-like client the page answers, as SearXNG
+// does; the request shape was observed black-box from SearXNG's network
+// traffic. Written from the pages themselves (each result is a block
+// holding a /url?q= link, its title and a snippet) and Google's
+// search-operators help page (docs_url): `q` query, `hl` interface
+// language, `lr` result language, `cr` country, `start` offset. An
+// "unusual traffic" answer (a redirect to /sorry/) is a challenge: the
+// engine is suspended, nothing is solved or worked around.
 use mod.markup
 use mod.net
 use mod.std.array
-use mod.std.math
 use mod.std.object
 use mod.std.text
+
+fn lang_code(opts) {
+    if opts.lang == nil {
+        return nil
+    }
+    if opts.lang.primary == "zh" {
+        if opts.lang.region == "TW" || opts.lang.region == "HK" {
+            return "zh-TW"
+        }
+        return "zh-CN"
+    }
+    return opts.lang.primary
+}
 
 fn build_request(query, opts) {
     let q = query
     if opts.since != nil {
         q = q + " after:" + opts.since.date
     }
-    let params = [["q", q], ["num", math.min(opts.count, 20)], ["start", (opts.page - 1) * math.min(opts.count, 20)]]
-    if opts.lang != nil {
-        array.push(params, ["hl", opts.lang.primary])
+    let params = [["q", q], ["sca_esv", "1"]]
+    let code = lang_code(opts)
+    if code != nil {
+        array.push(params, ["hl", code])
+        array.push(params, ["lr", "lang_" + code])
     }
     let gl = if opts.region != nil {
         opts.region
@@ -32,10 +46,15 @@ fn build_request(query, opts) {
         nil
     }
     if gl != nil {
-        array.push(params, ["gl", text.lower(gl)])
+        array.push(params, ["cr", "country" + text.upper(gl)])
     }
-    let u = net.url({base: "https://www.google.com/search", query: params})
-    return net.request({url: u.url, render: true})
+    if opts.page > 1 {
+        array.push(params, ["start", (opts.page - 1) * 10])
+    }
+    array.push(params, ["ie", "utf8"])
+    array.push(params, ["oe", "utf8"])
+    let u = net.url({base: "https://www.google.com/wml/search", query: params})
+    return net.request({url: u.url})
 }
 
 fn parse_response(response, opts) {
@@ -44,17 +63,17 @@ fn parse_response(response, opts) {
     if text.contains(final_url, "google.com/sorry/") {
         return {challenge: "Google reported unusual traffic"}
     }
-    let found = markup.select({item: "#search a h3, #rso a h3", fields: {title: "", url: "^a@href"}})
+    let found = markup.select({item: "div.zMzFAb", fields: {url: "a[href^=\"/url?q=\"]@href", title: "a[href^=\"/url?q=\"] span", snippet: "div.taTFJ"}})
     let out = []
     for r in found.items {
         if r.url == nil || r.title == nil || r.title == "" {
             continue
         }
         let url = markup.unwrap({url: r.url, base: "https://www.google.com/"}).url
-        if !text.starts_with(url, "http") || text.contains(url, "google.com/search") {
+        if !text.starts_with(url, "http") || text.contains(url, "google.com/") {
             continue
         }
-        array.push(out, {url: url, title: r.title})
+        array.push(out, {url: url, title: r.title, snippet: r.snippet})
     }
     if array.len(out) == 0 && (text.contains(body, "unusual traffic") || text.contains(body, "g-recaptcha")) {
         return {challenge: "Google reported unusual traffic"}

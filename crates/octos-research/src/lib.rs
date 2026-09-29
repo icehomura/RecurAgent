@@ -3,11 +3,15 @@
 //!
 //! Policy (OctoSense ADR 0002, section 6): free structured sources first
 //! (GDELT, Google News RSS), then a self-hosted SearXNG if one is configured,
-//! then search API keys the person chose to add, then the DuckDuckGo and Bing
+//! then search API keys the person chose to add, then search engines'
 //! results pages for general web search (on by default; an operator can turn
 //! them off). Pages that will be cited are *read* (optionally rendered by a
-//! real browser) at a polite rate, with an identifiable User-Agent. Nothing
-//! here disguises automation, imitates a person or solves CAPTCHAs.
+//! real browser) at a polite rate, with an identifiable User-Agent. The
+//! results-page engines search the way SearXNG does (the maintainer's
+//! decision): Google's page for simple phones only answers a browser-like
+//! client, which `metasearch::impersonate` presents for the engines that
+//! name it. Nothing solves CAPTCHAs: a challenge suspends that engine and no
+//! person is asked.
 //!
 //! This crate is deliberately network-free: it builds provider request URLs,
 //! parses provider responses, filters and caps results, parses robots.txt and
