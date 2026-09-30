@@ -45,6 +45,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ftui::core::geometry::Rect;
+use ftui::render::budget::{FrameBudgetConfig, PhaseBudgets};
 use ftui::render::sanitize::sanitize;
 use ftui::runtime::subscription::{StopSignal, SubId, Subscription};
 use ftui::text::{Text, WrapMode, display_width};
@@ -2662,15 +2663,8 @@ impl RaFtuiModel {
             }
             RaMsg::TerminalTitle(title) => {
                 // Issue #200: the cell-grid renderer can't carry OSC escapes
-                // in frame content, so write the title directly. This runs on
-                // the UI thread — the same thread that owns renderer writes —
-                // so the sequence cannot interleave with a frame.
-                use std::io::Write as _;
-
-                let sequence = crate::delight::format_terminal_title(&title);
-                let mut out = std::io::stdout().lock();
-                let _ = out.write_all(sequence.as_bytes());
-                let _ = out.flush();
+                // in frame content, so write the title directly.
+                Self::write_terminal_title(&title);
             }
             RaMsg::LoginPending {
                 provider,
@@ -3755,9 +3749,18 @@ impl RaFtuiModel {
     }
 
     /// Write the OSC title sequence, as `RaMsg::TerminalTitle` does.
+    ///
+    /// Routed through ftui's process-wide terminal output lock rather than
+    /// written bare: the frame writer serializes every byte it emits with that
+    /// lock, and an escape sequence emitted outside it is exactly the
+    /// one-writer violation ftui documents (bd-kdn7n item 2). Today the callers
+    /// are on the UI thread, so a concurrent frame flush would require a
+    /// cross-thread emitter — the lock is what keeps that from being a silent
+    /// assumption.
     fn write_terminal_title(title: &str) {
         use std::io::Write as _;
 
+        let _output_guard = ftui::core::terminal_session::terminal_output_lock();
         let sequence = crate::delight::format_terminal_title(title);
         let mut out = std::io::stdout().lock();
         let _ = out.write_all(sequence.as_bytes());
@@ -5048,6 +5051,42 @@ const SUBMIT_POLL: Duration = Duration::from_millis(50);
 /// (proven by the e2e_ftui scrollback capture lane).
 const INLINE_MIN_HEIGHT: u16 = 10;
 const INLINE_MAX_HEIGHT: u16 = 15;
+
+/// Frame budget for a conversation UI.
+///
+/// ftui defaults to a 16 ms frame with an 8 ms render phase, sized for 60 fps
+/// animation. Overrunning that budget costs *visuals*, not just smoothness: the
+/// renderer walks `DegradationLevel` from `Full` through `NoStyling` (colors
+/// dropped) and `EssentialOnly` (non-essential widgets stop drawing) to
+/// `SkipFrame` (frames stop being presented), and the transition is one-way per
+/// call — external paths are documented as able to degrade straight past the
+/// controller's floor. A chat view repaints on streaming deltas and re-lays-out
+/// whole markdown transcripts, so a frame far heavier than an animation tick is
+/// ordinary here. It must not cost the user their colors, their layout, or the
+/// frame itself, which is exactly what the shipped defaults did.
+///
+/// The adaptive load governor is disabled alongside this
+/// (see [`run`]), because it degrades on *measured* frame time and so reacts to
+/// precisely the heavy-but-legitimate frames a transcript render produces.
+fn conversation_frame_budget() -> FrameBudgetConfig {
+    FrameBudgetConfig {
+        total: Duration::from_millis(100),
+        phase_budgets: PhaseBudgets {
+            diff: Duration::from_millis(10),
+            present: Duration::from_millis(30),
+            render: Duration::from_millis(60),
+        },
+        // `exhausted()` reports exhaustion at `SkipFrame` only while this is
+        // set, so leaving it on is what turns a degraded renderer into a frozen
+        // screen. Disabling it keeps the worst case at "simplified frame".
+        allow_frame_skip: false,
+        // Slightly slower than the default so a burst of heavy frames cannot
+        // walk the ladder in a few ticks, but not so slow that climbing back
+        // waits on frames an idle UI never produces.
+        degradation_cooldown: 5,
+        ..FrameBudgetConfig::default()
+    }
+}
 
 /// Default budget for an extension UI prompt when the request carries none.
 const EXT_UI_TIMEOUT_MS: u64 = 300_000;
@@ -7250,13 +7289,55 @@ fn driver_bash_cwd(session_options: &crate::sdk::SessionOptions) -> std::path::P
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
+/// How long the UI waits for the agent driver to unwind after the app loop
+/// returns.
+///
+/// A clean shutdown flushes the session and joins owned resources, so the
+/// window is generous. It exists to bound the failure mode that otherwise
+/// freezes the process silently: [`JoinHandle::join`] cannot be cancelled, and
+/// by the time the app loop returns the terminal has already been restored, so
+/// a driver parked in a provider stream or a tool leaves the user with a dead
+/// screen and no error message.
+const DRIVER_SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
+
+/// Join the driver thread under a deadline; `None` means it did not stop within
+/// `grace`.
+///
+/// The join runs on a helper thread because [`JoinHandle::join`] has no
+/// timeout: calling it inline would park the caller for as long as the driver
+/// lives. When the deadline passes the helper is detached and dies with the
+/// process.
+fn join_driver_within(
+    driver: std::thread::JoinHandle<std::io::Result<()>>,
+    grace: Duration,
+) -> Option<std::thread::Result<std::io::Result<()>>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("pi-ftui-driver-join".into())
+        .spawn(move || {
+            // A disconnected receiver only means the deadline already passed.
+            let _ = tx.send(driver.join());
+        })
+        .ok()?;
+    rx.recv_timeout(grace).ok()
+}
+
 fn finish_ftui_run(
     app_result: std::io::Result<()>,
-    driver_result: std::thread::Result<std::io::Result<()>>,
+    driver_result: Option<std::thread::Result<std::io::Result<()>>>,
 ) -> std::io::Result<()> {
+    // The app's own failure is the primary diagnostic: it explains why the UI
+    // stopped, and a driver that also failed — or hung — must not mask it.
     app_result?;
-    driver_result
-        .map_err(|_| std::io::Error::other("FTUI agent driver panicked during shutdown"))?
+    match driver_result {
+        Some(Ok(result)) => result,
+        Some(Err(_)) => Err(std::io::Error::other(
+            "FTUI agent driver panicked during shutdown",
+        )),
+        None => Err(std::io::Error::other(
+            "FTUI agent driver did not stop within the shutdown grace; session teardown is incomplete",
+        )),
+    }
 }
 
 fn terminal_replacement_error(
@@ -7869,6 +7950,13 @@ pub fn run(
     } else {
         ftui::App::fullscreen(model)
     };
+    // Conversation rendering must never trade colors, layout, or the frame
+    // itself for frame timing. `without_load_governor` also re-arms the legacy
+    // upgrade path, so a heavy frame degrades at most one level and the next
+    // cheap frame climbs back.
+    let app = app
+        .with_budget(conversation_frame_budget())
+        .without_load_governor();
     // Divert tracing output away from the terminal while the TUI owns it
     // (bd-trkef); restored on drop.
     let log_guard = crate::tui::TuiLogRedirectGuard::begin();
@@ -7882,9 +7970,11 @@ pub fn run(
     drop(log_guard);
 
     // The UI (and with it the submit sender) is gone; the driver's next poll
-    // sees Disconnected and unwinds. Await the teardown result so final save
-    // or resource-shutdown failures cannot be reported as a successful exit.
-    finish_ftui_run(result, driver.join())
+    // sees Disconnected and unwinds. The wait is bounded, and the app's own
+    // failure keeps priority over the driver's: by this point the terminal has
+    // already been restored, so an unbounded join would leave the user with a
+    // dead screen and no error at all.
+    finish_ftui_run(result, join_driver_within(driver, DRIVER_SHUTDOWN_GRACE))
 }
 
 /// Whether a key event is user input. Release events are reported by
@@ -8005,7 +8095,7 @@ mod tests {
     fn ftui_exit_surfaces_driver_shutdown_failures_and_panics() {
         let shutdown_error = finish_ftui_run(
             Ok(()),
-            Ok(Err(std::io::Error::other("autosave was not flushed"))),
+            Some(Ok(Err(std::io::Error::other("autosave was not flushed")))),
         )
         .expect_err("driver shutdown failure must make FTUI exit fail");
         assert!(
@@ -8014,26 +8104,102 @@ mod tests {
                 .contains("autosave was not flushed")
         );
 
-        let panic_error = finish_ftui_run(Ok(()), Err(Box::new("driver panic")))
+        let panic_error = finish_ftui_run(Ok(()), Some(Err(Box::new("driver panic"))))
             .expect_err("driver panic must make FTUI exit fail");
         assert!(panic_error.to_string().contains("driver panicked"));
 
+        let timeout_error = finish_ftui_run(Ok(()), None)
+            .expect_err("a driver that outlives the grace must make FTUI exit fail");
+        assert!(
+            timeout_error.to_string().contains("did not stop within"),
+            "the timeout must name itself instead of freezing silently: {timeout_error}"
+        );
+
         let app_error = finish_ftui_run(
             Err(std::io::Error::other("terminal restore failed")),
-            Ok(Err(std::io::Error::other("driver shutdown failed"))),
+            Some(Ok(Err(std::io::Error::other("driver shutdown failed")))),
         )
         .expect_err("primary app failure must be preserved");
         assert!(app_error.to_string().contains("terminal restore failed"));
 
         let app_error_before_panic = finish_ftui_run(
             Err(std::io::Error::other("terminal restore failed first")),
-            Err(Box::new("driver panic")),
+            Some(Err(Box::new("driver panic"))),
         )
         .expect_err("app failure must remain primary even when the driver also panics");
         assert!(
             app_error_before_panic
                 .to_string()
                 .contains("terminal restore failed first")
+        );
+
+        // The reason the app error must stay primary: a hung driver produces
+        // no diagnostic of its own, so the app's error is the only explanation
+        // the user would ever see.
+        let app_error_before_timeout = finish_ftui_run(
+            Err(std::io::Error::other("terminal restore failed first")),
+            None,
+        )
+        .expect_err("app failure must remain primary even when the driver hangs");
+        assert!(
+            app_error_before_timeout
+                .to_string()
+                .contains("terminal restore failed first")
+        );
+    }
+
+    /// A driver that never returns must not park the caller forever; the wait
+    /// is bounded and reports its own timeout.
+    #[test]
+    fn driver_join_is_bounded_and_reports_its_timeout() {
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let driver = std::thread::spawn(move || {
+            // Released only by the end of the test: the driver is alive for the
+            // whole grace window, which is exactly the freeze under test.
+            let _ = release_rx.recv();
+            Ok(())
+        });
+
+        let started = Instant::now();
+        let outcome = join_driver_within(driver, Duration::from_millis(50));
+        let waited = started.elapsed();
+
+        assert!(
+            outcome.is_none(),
+            "a driver still running past the grace must not be reported as joined"
+        );
+        assert!(
+            waited < Duration::from_secs(5),
+            "the bounded join must return on its deadline, waited {waited:?}"
+        );
+        let _ = release_tx.send(());
+    }
+
+    /// The conversation budget exists because ftui's animation-sized default
+    /// degraded the UI on ordinary transcript frames: colors dropped at
+    /// `NoStyling`, non-essential widgets stopped drawing at `EssentialOnly`,
+    /// and `SkipFrame` could stop presenting outright. Pin the two properties
+    /// that keep that from returning.
+    #[test]
+    fn conversation_frame_budget_never_trades_visuals_for_frame_timing() {
+        let budget = conversation_frame_budget();
+        let animation_default = FrameBudgetConfig::default();
+
+        assert!(
+            !budget.allow_frame_skip,
+            "frame skipping is what turns a degraded renderer into a frozen screen"
+        );
+        assert!(
+            budget.total > animation_default.total,
+            "the conversation budget must be wider than the 16 ms animation default"
+        );
+        assert!(
+            budget.phase_budgets.render > animation_default.phase_budgets.render,
+            "a markdown relayout must not walk past the render phase"
+        );
+        assert!(
+            budget.degradation_cooldown >= animation_default.degradation_cooldown,
+            "level changes must not be faster than the default the bug was seen with"
         );
     }
 
