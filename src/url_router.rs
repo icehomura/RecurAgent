@@ -1460,7 +1460,7 @@ mod tests {
     fn resource_schemes_resolve_against_the_supplied_cwd() {
         let root = tempfile::tempdir().expect("tempdir");
         let project_dir = root.path().join(crate::config::Config::project_dir());
-        let skill_dir = project_dir.join("skills/router-cwd-skill");
+        let skill_dir = project_dir.join("skills").join("router-cwd-skill");
         let prompt_dir = project_dir.join("prompts");
         std::fs::create_dir_all(&skill_dir).expect("create skill dir");
         std::fs::create_dir_all(&prompt_dir).expect("create prompt dir");
@@ -1493,7 +1493,7 @@ mod tests {
     fn resource_schemes_preserve_matching_load_diagnostics() {
         let root = tempfile::tempdir().expect("tempdir");
         let project_dir = root.path().join(crate::config::Config::project_dir());
-        let skill_dir = project_dir.join("skills/broken-router-skill");
+        let skill_dir = project_dir.join("skills").join("broken-router-skill");
         let prompt_dir = project_dir.join("prompts");
         std::fs::create_dir_all(&skill_dir).expect("create skill dir");
         std::fs::create_dir_all(&prompt_dir).expect("create prompt dir");
