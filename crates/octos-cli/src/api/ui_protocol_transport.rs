@@ -15576,6 +15576,13 @@ struct RawPeerContextParams {
     /// may set it. Fixed at creation: a re-open must restate it.
     #[serde(default)]
     share_history: Option<crate::peers::shared_history::ShareHistoryParams>,
+    /// UPCR-2026-034 "Read-only view of the peer's folder": `true` lets the
+    /// context's turns READ the peer's folder (never another context's
+    /// folder under `contexts/`), while writes stay fenced to the context's
+    /// own folder. Only the peer's host connection may set it. Fixed at
+    /// creation: a re-open must restate it.
+    #[serde(default)]
+    read_parent: bool,
 }
 
 fn host_peer_context_prelude(
@@ -15671,6 +15678,22 @@ fn raw_peer_context_open_from(
                 .to_owned(),
         ));
     }
+    // A read view of the peer's folder widens what the context's turns can
+    // read: like shared history, only the peer's host may grant it.
+    if params.read_parent
+        && !caller.is_some_and(|ws| {
+            !ws.is_external()
+                && crate::peers::host_tools::host_route_connection(&peers_root, &slug)
+                    == Some(ws.connection_id.0)
+        })
+    {
+        return Err(host_peer_error(
+            "read_parent_host_only",
+            "only the connection that registered the peer's tools may open a context with \
+             read_parent"
+                .to_owned(),
+        ));
+    }
     let namespace = crate::runtime::memory_namespace::validate_memory_namespace(
         &context_memory_namespace(&peer.memory_namespace, &context_id),
     )
@@ -15755,6 +15778,16 @@ fn raw_peer_context_open_from(
                     format!("request context '{context_id}' is bound to another workspace"),
                 ));
             }
+            if existing.read_parent != params.read_parent {
+                return Err(host_peer_error(
+                    "peer_binding_mismatch",
+                    format!(
+                        "request context '{context_id}' was opened with read_parent: {}; open a \
+                         new context id",
+                        existing.read_parent
+                    ),
+                ));
+            }
             if existing.share_history != share_history {
                 return Err(host_peer_error(
                     "peer_binding_mismatch",
@@ -15777,6 +15810,7 @@ fn raw_peer_context_open_from(
                     memory_namespace: namespace.clone(),
                     closed: false,
                     share_history,
+                    read_parent: params.read_parent,
                 },
             )
             .map_err(RpcError::internal_error)?;
@@ -15800,6 +15834,7 @@ fn raw_peer_context_open_from(
         "profile_id": profile_id,
         "created": created,
         "share_history": binding.share_history,
+        "read_parent": binding.read_parent,
     }))
 }
 
