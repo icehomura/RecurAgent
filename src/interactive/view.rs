@@ -706,18 +706,18 @@ impl RaApp {
         let terminal_title = session_name.map_or_else(
             || {
                 format!(
-                    "Pi · {} · {activity}",
+                    "RecurAgent · {} · {activity}",
                     model_display_label(&self.model_entry)
                 )
             },
-            |name| format!("Pi · {name} · {activity}"),
+            |name| format!("RecurAgent · {name} · {activity}"),
         );
         output.push_str(&crate::delight::format_terminal_title(&terminal_title));
 
         let _ = write!(
             output,
             "  {} {}{}\n  {}\n  {}\n",
-            self.styles.title.render("Pi"),
+            self.styles.title.render("RecurAgent"),
             self.styles.muted.render(&model_label),
             self.styles.accent.render(&branch_indicator),
             self.styles.muted.render(&hints_line),

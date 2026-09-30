@@ -284,7 +284,7 @@ fn render_header_uses_cycle_thinking_binding_hint() {
     assert!(header.contains("shift+tab: thinking"), "header: {header}");
     assert!(!header.contains("ctrl+t: thinking"), "header: {header}");
     assert!(
-        header.contains("\x1b]0;Pi · openai/gpt-5.2 · ready\x07"),
+        header.contains("\x1b]0;RecurAgent · openai/gpt-5.2 · ready\x07"),
         "live header must emit the delight terminal title: {header:?}"
     );
 }
@@ -304,7 +304,7 @@ fn render_header_titles_terminal_after_session_name() {
 
     let header = app.render_header();
     assert!(
-        header.contains("\x1b]0;Pi · refactor-plan · ready\x07"),
+        header.contains("\x1b]0;RecurAgent · refactor-plan · ready\x07"),
         "named session must title the tab after itself: {header:?}"
     );
 }
@@ -324,7 +324,7 @@ fn a_model_display_name_renders_but_identity_stays_provider_id() {
     app.model_entry.model.name = "GPT Five Two".to_string();
     let view = app.view();
     assert!(view.contains("(GPT Five Two)"), "header: {view}");
-    assert!(view.contains("Pi · GPT Five Two"), "terminal title: {view}");
+    assert!(view.contains("RecurAgent · GPT Five Two"), "terminal title: {view}");
     assert_eq!(app.model, "openai/gpt-5.2", "identity is untouched");
     assert_eq!(
         session_model_line(&app.model_entry),
@@ -341,7 +341,7 @@ fn live_view_renders_default_welcome_and_powerline_status() {
 
     let view = app.view();
 
-    assert!(view.contains("Welcome to Pi!"), "view: {view}");
+    assert!(view.contains("Welcome to RecurAgent!"), "view: {view}");
     assert!(view.contains("Tip: Type /help"), "view: {view}");
     assert!(view.contains("ACT"), "powerline mode missing: {view}");
     assert!(
@@ -360,7 +360,7 @@ fn quiet_startup_does_not_render_welcome_screen_fallback() {
 
     let view = app.view();
 
-    assert!(!view.contains("Welcome to Pi!"), "view: {view}");
+    assert!(!view.contains("Welcome to RecurAgent!"), "view: {view}");
     assert!(!view.contains("Tip: Type /help"), "view: {view}");
 }
 

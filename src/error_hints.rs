@@ -63,7 +63,7 @@ fn config_hints(msg: &str) -> ErrorHint {
             summary: "Invalid or missing configuration file",
             hints: &[
                 "Check that ~/.ra/agent/settings.json exists and is valid JSON",
-                "Run 'pi config' to see configuration paths and precedence",
+                "Run 'ra config' to see configuration paths and precedence",
             ],
             context_fields: &["file_path"],
         };
@@ -90,7 +90,7 @@ fn session_hints(error: &Error) -> ErrorHint {
         Error::SessionNotFound { .. } => ErrorHint {
             summary: "Session file not found",
             hints: &[
-                "Use 'pi' without --session to start a new session",
+                "Use 'ra' without --session to start a new session",
                 "Use 'ra --resume' to pick from existing sessions",
             ],
             context_fields: &["path"],
@@ -151,7 +151,7 @@ fn auth_hints(msg: &str) -> ErrorHint {
         return ErrorHint {
             summary: "OAuth token expired or invalid",
             hints: &[
-                "Run 'pi login <provider>' to re-authenticate",
+                "Run 'ra login <provider>' to re-authenticate",
                 "Or set API key directly via environment variable",
             ],
             context_fields: &["provider"],
@@ -345,7 +345,7 @@ fn extension_hints(msg: &str) -> ErrorHint {
             summary: "Extension not found",
             hints: &[
                 "Check extension name is correct",
-                "Use 'pi list' to see installed extensions",
+                "Use 'ra list' to see installed extensions",
             ],
             context_fields: &["extension_name"],
         };
@@ -934,7 +934,7 @@ mod tests {
         let error = Error::auth("OAuth token expired for provider X");
         let hint = hints_for_error(&error);
         assert!(hint.summary.contains("OAuth"));
-        assert!(hint.hints.iter().any(|h| h.contains("pi login")));
+        assert!(hint.hints.iter().any(|h| h.contains("ra login")));
     }
 
     #[test]
