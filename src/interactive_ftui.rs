@@ -45,7 +45,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use ftui::core::geometry::Rect;
-use ftui::render::budget::{FrameBudgetConfig, PhaseBudgets};
+use ftui::render::budget::{DegradationLevel, FrameBudgetConfig, PhaseBudgets};
 use ftui::render::sanitize::sanitize;
 use ftui::runtime::subscription::{StopSignal, SubId, Subscription};
 use ftui::text::{Text, WrapMode, display_width};
@@ -4559,7 +4559,12 @@ impl Model for RaFtuiModel {
 
     fn view(&self, frame: &mut Frame) {
         let probe = self.watchdog.start();
-        self.render_frame(frame);
+        // Take the frame back to full fidelity before anything draws. What the
+        // renderer handed us is what the *renderer* decided, and every level
+        // below `NoStyling` costs the user colors or content; see
+        // [`restore_full_fidelity`].
+        let requested = restore_full_fidelity(frame);
+        self.render_frame(frame, requested);
         self.watchdog.finish(LoopPhase::Render, probe);
     }
 
@@ -4718,7 +4723,7 @@ impl RaFtuiModel {
     /// The real render pass. Split out of [`Model::view`] so the watchdog can
     /// time it without an extra guard type.
     #[allow(clippy::too_many_lines)]
-    fn render_frame(&self, frame: &mut Frame) {
+    fn render_frame(&self, frame: &mut Frame, requested: DegradationLevel) {
         let area = Rect::new(0, 0, frame.width(), frame.height());
         let regions = layout_regions(
             area,
@@ -4869,6 +4874,26 @@ impl RaFtuiModel {
             footer_style,
         )]))
         .render(regions.footer, frame);
+
+        // The renderer asked for a level that costs colors or content. The
+        // frame was restored to full fidelity, so the UI looks right — but the
+        // request itself is the bug, and silently discarding it would hide the
+        // only evidence the failure exists. Drawn last, over the finished
+        // frame, so nothing can paint over it.
+        if requested != DegradationLevel::Full {
+            let banner = format!(
+                "degradation {} ({}): {}",
+                requested as u8,
+                requested.as_str(),
+                degradation_explanation(requested)
+            );
+            let banner_area = Rect::new(0, 0, regions.header.width, regions.header.height);
+            Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+                banner,
+                ftui::Style::new().bold().fg(self.palette.error),
+            )]))
+            .render(banner_area, frame);
+        }
     }
 }
 
@@ -5086,6 +5111,43 @@ fn conversation_frame_budget() -> FrameBudgetConfig {
         degradation_cooldown: 5,
         ..FrameBudgetConfig::default()
     }
+}
+
+/// Why a frame arrived below [`DegradationLevel::Full`], as a line the user can
+/// read on screen.
+fn degradation_explanation(level: DegradationLevel) -> &'static str {
+    match level {
+        DegradationLevel::Full => "full fidelity",
+        DegradationLevel::SimpleBorders => "borders simplified (decorative detail dropped)",
+        DegradationLevel::NoStyling => "colors disabled (monochrome output)",
+        DegradationLevel::EssentialOnly => "non-essential widgets skipped",
+        DegradationLevel::Skeleton => "layout boxes only, no content",
+        DegradationLevel::SkipFrame => "frame skipped entirely",
+    }
+}
+
+/// Move `frame`'s degradation back to [`DegradationLevel::Full`] and report the
+/// level it arrived at.
+///
+/// ftui degrades on its own schedule — the frame budget, the load governor, the
+/// conformal risk gate, and the memory/queue guardrails all call
+/// `budget.degrade()`, which is one-way and is documented as allowed to step
+/// straight past the controller's floor. For a conversation UI that trade is
+/// never acceptable: the levels below `NoStyling` drop the user's colors, and
+/// `Skeleton` stops drawing content, while the input editor keeps rendering
+/// because it only ever consults `apply_styling()`. The observable result is a
+/// blank white screen with a lone prompt line and no explanation.
+///
+/// Restoring `Full` here — in `view()`, immediately before any widget draws —
+/// means no caller can leave a degraded level on the frame this UI presents.
+/// The returned level is the one that *would* have been drawn, which is what
+/// the caller surfaces.
+fn restore_full_fidelity(frame: &mut Frame) -> DegradationLevel {
+    let observed = frame.buffer.degradation;
+    if observed != DegradationLevel::Full {
+        frame.set_degradation(DegradationLevel::Full);
+    }
+    observed
 }
 
 /// Default budget for an extension UI prompt when the request carries none.
@@ -7945,27 +8007,38 @@ pub fn run(
     // Inline mode preserves shell scrollback (bead acceptance #2): the UI
     // anchors at the bottom, auto-sized to content within bounds; alt-screen
     // remains the default.
-    let app = if inline {
-        ftui::App::inline_auto(model, INLINE_MIN_HEIGHT, INLINE_MAX_HEIGHT)
+    // Built from `ProgramConfig` rather than the `AppBuilder` facade: the
+    // facade exposes no way to switch the conformal risk gate off, and every
+    // knob that can lower visual fidelity has to be reachable here. The
+    // facade's screen modes, budget and governor setters are reproduced below
+    // so nothing else changes.
+    let mut config = if inline {
+        ftui::ProgramConfig::inline_auto(INLINE_MIN_HEIGHT, INLINE_MAX_HEIGHT)
     } else {
-        ftui::App::fullscreen(model)
+        ftui::ProgramConfig::fullscreen()
     };
-    // Conversation rendering must never trade colors, layout, or the frame
-    // itself for frame timing. `without_load_governor` also re-arms the legacy
-    // upgrade path, so a heavy frame degrades at most one level and the next
-    // cheap frame climbs back.
-    let app = app
-        .with_budget(conversation_frame_budget())
-        .without_load_governor();
+    config.budget = conversation_frame_budget();
+    config.load_governor = ftui::runtime::LoadGovernorConfig::disabled();
+    // The conformal gate calls `budget.degrade()` from `render_frame`, once per
+    // frame, with no floor check — so a single heavy frame (a markdown
+    // relayout, exactly what streaming an answer produces) raises the measured
+    // residual, and every later frame then reads `risk` from a bound that
+    // still contains that outlier. Nothing about a conversation UI benefits
+    // from that trade; see [`restore_full_fidelity`] for what it used to cost.
+    config.conformal_config = None;
+    // Mouse capture defaults on; when the user asked for native terminal
+    // selection it stays off, exactly as the classic frontend does. `Auto`
+    // resolves to on for the alternate screen, which is the facade's
+    // `AppBuilder::run()` behavior this preserves.
+    if !disable_mouse_capture {
+        config.mouse_capture_policy = ftui::runtime::MouseCapturePolicy::On;
+    }
     // Divert tracing output away from the terminal while the TUI owns it
     // (bd-trkef); restored on drop.
     let log_guard = crate::tui::TuiLogRedirectGuard::begin();
-    // Mouse capture defaults on; when the user asked for native terminal
-    // selection it must stay off, exactly as the classic frontend does.
-    let result = if disable_mouse_capture {
-        app.run()
-    } else {
-        app.with_mouse().run()
+    let result = match ftui::Program::with_config(model, config) {
+        Ok(mut program) => program.run(),
+        Err(err) => Err(err),
     };
     drop(log_guard);
 
@@ -8200,6 +8273,64 @@ mod tests {
         assert!(
             budget.degradation_cooldown >= animation_default.degradation_cooldown,
             "level changes must not be faster than the default the bug was seen with"
+        );
+    }
+
+    /// The renderer decides a degradation level on its own; the view must hand
+    /// the frame back at full fidelity and report what was asked for, so the
+    /// user keeps their colors and the request is still visible.
+    #[test]
+    fn degraded_frames_are_restored_to_full_fidelity_and_reported() {
+        let mut pool = ftui::GraphemePool::new();
+        let mut frame = Frame::new(40, 10, &mut pool);
+
+        // A pristine frame passes through and reports nothing.
+        assert_eq!(restore_full_fidelity(&mut frame), DegradationLevel::Full);
+        assert_eq!(frame.buffer.degradation, DegradationLevel::Full);
+
+        // Every level below Full is undone, and the requested level comes back
+        // so the caller can surface it.
+        for level in [
+            DegradationLevel::SimpleBorders,
+            DegradationLevel::NoStyling,
+            DegradationLevel::EssentialOnly,
+            DegradationLevel::Skeleton,
+            DegradationLevel::SkipFrame,
+        ] {
+            frame.set_degradation(level);
+            assert_eq!(
+                restore_full_fidelity(&mut frame),
+                level,
+                "the level the renderer asked for must be reported back"
+            );
+            assert_eq!(
+                frame.buffer.degradation,
+                DegradationLevel::Full,
+                "the frame must draw at full fidelity whatever the renderer asked for"
+            );
+        }
+    }
+
+    /// Each level names what it costs, so the on-screen banner explains the
+    /// failure instead of just numbering it.
+    #[test]
+    fn every_degradation_level_explains_itself() {
+        for level in [
+            DegradationLevel::Full,
+            DegradationLevel::SimpleBorders,
+            DegradationLevel::NoStyling,
+            DegradationLevel::EssentialOnly,
+            DegradationLevel::Skeleton,
+            DegradationLevel::SkipFrame,
+        ] {
+            assert!(
+                !degradation_explanation(level).is_empty(),
+                "level {level:?} must explain itself on screen"
+            );
+        }
+        assert!(
+            degradation_explanation(DegradationLevel::NoStyling).contains("color"),
+            "the level that drops colors must say so"
         );
     }
 
