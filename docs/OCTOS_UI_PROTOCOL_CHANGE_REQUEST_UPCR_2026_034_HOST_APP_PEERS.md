@@ -12,7 +12,8 @@
   additive `turn/start` `origin` on a host-owned app peer's own session (the
   shared peer conversation, amended 2026-09-28); an additive
   `peer/context/open` `share_history` (the parallel person context with
-  shared history, amended 2026-09-29)
+  shared history, amended 2026-09-29); an additive raw AppUI method
+  `peer/purge` (erase a host-owned app peer, amended 2026-09-30, #2604)
 - Origin: Rinx ADR 0007, "Host-owned Octos app peers and Rinx deployment
   modes" (OctoSense shells host apps such as Rinx on one shared kernel)
 
@@ -64,7 +65,8 @@ created. Only its SHA-256 is stored.
 **Allocation is exclusive.** A new host-owned app peer is refused
 (`peer_binding_conflict`) when its namespace equals or nests with any other
 host-owned peer's namespace. That includes the peer's request-context
-subspace `<ns>/ctx-…`, and closed peers, whose stores still hold data. It is
+subspace `<ns>/ctx-…`, and closed peers, whose stores still hold data (a
+`peer/purge` erases them and frees the binding, see "Lifecycle" below). It is
 also refused when its workspace contains or is contained in another's, or
 lies inside the kernel's memory stores. Two apps therefore never share a
 memory store or a workspace by construction.
@@ -382,6 +384,107 @@ break tool-call pairing and compaction.
   the peer's session with its own queue. Contexts without `share_history`
   (e.g. Rinx mini apps) are unchanged.
 
+### Lifecycle: close, sign-out and `peer/purge` (amended 2026-09-30, #2604)
+
+The host owns a host-owned app peer's retention. Three steps are available:
+
+- **Suspend (sign-out): no kernel call.** A host-owned peer runs nothing on
+  its own: every turn on it is started by a host connection (the person's
+  turns, and the system agent's input, which reaches the host only as
+  `peer/input`). So a host suspends an account's agent with the existing
+  primitives: it closes the account's request contexts
+  (`peer/context/close`), answers every `peer/input` for it with
+  `peer/input/reject {reason: "signed_out"}` (UPCR-2026-035) and every
+  `peer/tool/call` with an error, and starts no turn for it. The peer, its
+  transcripts and its memory stay; signing in again resumes it
+  (`peer/prepare` with `resume` and the host token, then
+  `peer/tools/register`). A kernel-side suspend adds nothing to this: the
+  peer holds no kernel connection, no task and no model call while idle (its
+  namespace's stores stay open in the process, as for any bound namespace).
+- **Close** (`peer_close`, the originator's tool) is final but keeps
+  everything on disk, and keeps the (app, account) binding reserved.
+- **Purge** erases the peer and frees the binding, for when the person
+  removes the account or uninstalls the app.
+
+`peer/purge {session_id, peer, host_token, profile_id?}` →
+
+```
+{session_id, profile_id, slug, name, purged: true, already_purged: false,
+ purged_at, was_open, contexts: [context id], contexts_closed,
+ interrupted: [session id], host_calls_failed, prompts_cancelled,
+ erased: {transcript_entries, memory_namespace, memory: bool,
+          workspace: "erased" | "kept", peer_dir: bool},
+ errors: [string]}
+```
+
+Authorized like every control call (the originator `session_id` plus the
+host token); only for a host-owned app peer (`peer_not_host_bound`). It is a
+**host connection** method: refused to an external client of
+`serve --host-managed` (`external_method_denied`, at the gate and in the
+handler) and, as a raw-surface method, to session-ingress connections. When
+a connection holds the peer's tool route, only that connection may purge it
+(`peer_purge_not_owner`); with no live route (a host that reconnected and has
+not registered again) the host token alone suffices. The model has no tool
+for it.
+
+In order, the kernel:
+
+1. **Closes** the peer if it is open (the same path as `peer_close`: the
+   durable `closed` marker, the input queue cancelled, the wire evicted,
+   `peer/closed` emitted), and marks every open request context closed. From
+   here on no new turn, input or context can start on it.
+2. **Fails its in-flight host tool calls** at once with `peer_purged` (the
+   host hears `peer/tool/cancel {call_id, reason: "purged"}`), drops its
+   tool route, and forgets its per-peer claims (delivered inputs, `peer/input`
+   turn ids, unknown-outcome marks).
+3. **Stops its running turns**, on the peer's session and every context
+   (`turn/error`: "interrupted by peer/purge"), cancels their pending
+   approvals (`approval/cancelled`, reason `peer_purged`) and questions, and
+   waits for each turn's terminal. A turn that does not stop within 10 s
+   fails the purge with `peer_purge_busy`: the peer stays closed, nothing is
+   erased, and a retry finishes the job. The purge never leaves a turn
+   running over erased files.
+4. **Erases** the transcripts of the peer's session and every context (in the
+   profile's session store and the per-project stores of their folders: the
+   JSONL, sealed segments, sidecars, the context-manager snapshot and the
+   reasoning-effort sidecar), the memory namespace with every context
+   namespace under it (the process's open store handles are dropped first,
+   so a namespace bound again opens fresh stores), the workspace when the
+   kernel provisioned it (`<data_dir>/app-workspaces/…`, `workspace:
+   "erased"`), and the peer's directory `peers/<slug>/` (brief, results,
+   bindings, host tool set, tool audit, input rejections). **A host-supplied
+   workspace is the host's**: the kernel removes only the `contexts/<id>/`
+   folders it made inside it (`workspace: "kept"`). Content-addressed tool
+   output artifacts under `context_ledgers/` may be shared by other sessions
+   and are left to the existing retention. **Nothing is erased through a
+   symlink**: every removal must resolve inside its expected root (the
+   profile's `peers/`, memory stores, app workspaces or session store, or the
+   peer's own real `contexts/` folder); a bound workspace that no longer is
+   its canonical path is not touched, and the refusal is listed in `errors`.
+5. **Records** a tombstone and an audit row outside `peers/`:
+   `<data_dir>/peer-purges/tokens/<sha256(host token)>.json`,
+   `<data_dir>/peer-purges/slugs/<slug>` and a row in
+   `<data_dir>/peer_purge_audit.jsonl` (profile, originator, slug, name,
+   namespace, workspace, connection, what was stopped and erased, errors;
+   never the token).
+
+Afterwards `peer/prepare` with the same (app, account) binding creates a
+**new** peer (`resumed: false`, a new host token); the slug and name may be
+reused. Until a peer is staged under the slug again, a `#peer-<slug>`
+session is refused ("peer '<slug>' was purged"), so a stale client of the
+erased peer cannot run on as an ordinary profile session.
+
+**Idempotent.** A purge retried with the same token after it completed
+returns `{session_id, profile_id, slug, purged: false, already_purged: true,
+purged_at}`, also after a new peer took the name (the new peer is not
+touched: its token differs). A purge that failed part-way is retried the
+ordinary way (the peer is still staged). Two purges of one peer at once:
+the second gets `peer_purge_in_progress`. Erase failures of single files do
+not fail the purge; they are listed in `errors` and in the audit row.
+
+Other kinds: `peer_not_found`, `peer_originator_mismatch`,
+`peer_host_token_mismatch`.
+
 ## Non-goals and conservative defaults
 
 - **Permission prompts.** Approvals keep their existing policy: an app
@@ -393,7 +496,7 @@ break tool-call pairing and compaction.
 - **Background work after close.** Closing a request context interrupts its
   work; nothing in this UPCR keeps a context running. A host-owned peer
   survives its app's UI closing (the host owns its lifecycle and may close
-  it with the existing `peer_close` path).
+  it with the existing `peer_close` path, or erase it with `peer/purge`).
 - Per-app token/tool budgets beyond the existing `token_budget`, fair
   scheduling across apps, and exposing the namespaces through the
   memory-panel RPCs are not part of this change.
@@ -470,3 +573,16 @@ break tool-call pairing and compaction.
   dropped, speakers, merge, the byte budget; running rows after finished
   rows, their caps, no double showing while a turn commits, the registry's
   lifetime, the finished-only block unchanged)
+- `peer/purge` (octos-cli `peer_host_tools_tests`):
+  `should_erase_the_peers_stores_and_let_a_new_peer_bind_when_it_is_purged`
+  (a real turn and a context; afterwards no file under the data dir holds
+  the turn's text or the memory fact, `peers/news` and the namespace are
+  gone, the host's folder stays without `contexts/`, the audit row has no
+  token, the stale `#peer-news` session is refused, `peer/prepare` binds the
+  same app and account as a new peer with fresh memory),
+  `should_answer_already_purged_when_a_purge_is_retried`,
+  `should_refuse_a_purge_when_the_caller_is_not_the_peers_host` (external
+  client at the gate and in the handler, another originator, another
+  connection than the tool host),
+  `should_fail_the_host_call_and_stop_the_turn_when_the_peer_is_purged_mid_call`,
+  and the `peers::purge` unit tests
