@@ -52,6 +52,11 @@ path = "src/main.rs"
 # consumers that do not want the terminal stack.
 required-features = ["tui"]
 
+[[bin]]
+name = "ra-headless"
+path = "src/bin/ra_headless.rs"
+required-features = ["headless"]
+
 # RETIRABLE internal conformance utility (pending RULE 1 approval). Keeping it
 # behind a non-default feature prevents an ordinary `cargo install
 # recur_agent` from installing this unsupported executable. Repository gates
@@ -222,7 +227,7 @@ async-trait = "0.1"
 
 # URL reads (bd-cv653.2.2): HTML reader-mode conversion + PDF text extraction
 # htmd is lean and always on; pdf-extract adds ~6 MiB so it is opt-in
-# (release binary size budget, 96 MiB). `full` includes it.
+# (release binary size budget, 48 MiB). `full` includes it.
 htmd = "0.5.5"
 pdf-extract = { version = "0.12", optional = true }
 
@@ -250,9 +255,11 @@ anyhow = "1.0.104"
 thiserror = "2"
 
 # Terminal output (rich_rust for beautiful TUI).
-# rich_rust is shared by non-TUI code paths (plain styled stdout/markdown
-# rendering in src/tui.rs and elsewhere), so it stays unconditional.
-rich_rust = { version = "0.2.2", features = ["markdown"] }
+# rich_rust pulls crossterm as an UNCONDITIONAL dependency with no feature to
+# disable it, so anything that compiles rich_rust compiles the whole terminal
+# stack. Its only consumers are src/tui.rs and src/status_line.rs, both of which
+# are interactive-front-end code, so it is gated behind `tui` alongside them.
+rich_rust = { version = "0.2.2", features = ["markdown"], optional = true }
 # crossterm is the low-level terminal driver used exclusively by the
 # interactive front-end, so it is gated behind the `tui` feature.
 crossterm = { version = "0.29", optional = true }
@@ -304,10 +311,10 @@ crossbeam-queue = "0.3"
 # force-enables the extension vtabs, and serde_json's `preserve_order` no
 # longer leaks into pi's dependency graph (bd-nhm45). Size note: the vtab
 # decoupling reclaimed ~nothing (lto=true had already dead-stripped them);
-# the 96 MiB budget (src/perf_build.rs BINARY_SIZE_RELEASE_BUDGET_MB) stands
+# the 48 MiB budget (src/perf_build.rs BINARY_SIZE_RELEASE_BUDGET_MB) stands
 # with darwin-arm64 release at 24.59 MiB as of the v0.3.0 wave (bd-2ohw2) —
-# the budget was later raised to 96 MiB on 2026-09-29, so that figure is now
-# headroom rather than a near-limit reading.
+# roughly half the cap, so that figure is headroom rather than a near-limit
+# reading.
 # MOVED 0.3.5 -> 0.3.13 -> 0.3.14 on 2026-09-01: 0.3.12/0.3.13 carry the
 # fsqlite GH#399 cross-process WAL corruption-fix wave (reader-slot
 # registration, checkpoint horizon gating, generation-boundary pool drop)
@@ -342,6 +349,14 @@ regex = "1.12.3"
 ring = "0.17.14"
 semver = "1.0.27"
 crc32c = "0.6"
+# Canonicalize without the Windows verbatim (`\\?\`) prefix. `std`'s
+# canonicalize returns that form on Windows, which Win32 accepts but the `git`
+# subprocess does not — it fails with `Invalid argument` when asked to create a
+# lockfile under such a path, which broke every worktree isolation. Already in
+# the graph at this exact version via gix-discover, so this promotion adds no
+# crate; CC0-1.0 OR MIT-0 OR Apache-2.0, all three already in the deny.toml
+# allowlist.
+dunce = "1.0.5"
 ast-grep-core = "0.40"
 ast-grep-language = { version = "0.40", default-features = false, features = [
     "tree-sitter-bash",
@@ -351,18 +366,13 @@ ast-grep-language = { version = "0.40", default-features = false, features = [
     "tree-sitter-ruby",
     "tree-sitter-rust",
     "tree-sitter-go",
-    # Additional grammars, ordered by how often a coding agent meets them.
-    # Each is an existing feature of this crate, so the cost is the compiled
-    # grammar alone (~2.5 MiB for all nine) and no new dependency.
-    "tree-sitter-yaml",
-    "tree-sitter-c",
-    "tree-sitter-cpp",
-    "tree-sitter-java",
-    "tree-sitter-c-sharp",
-    "tree-sitter-php",
-    "tree-sitter-html",
-    "tree-sitter-css",
-    "tree-sitter-lua",
+    # Deliberately the base set only. These grammars are not free: each is a
+    # generated C parser that rustc has to chew through, and in a dev build the
+    # nine that were briefly enabled here added ~71 MiB of source and ~179 MiB
+    # of compiled artifact. The exec-mediation safety path (heredoc AST scoring
+    # in `extensions.rs`) needs only bash/python/javascript, and those are in the
+    # set below. Adding a language is cheap and reversible; add it when a real
+    # need shows up, not preemptively.
 ] }
 unicode-normalization = "0.1"
 # Legacy text decoding for the `read` tool's `encoding` param (BOM sniffing +
@@ -370,6 +380,11 @@ unicode-normalization = "0.1"
 # this promotion adds no new crate.
 encoding_rs = "0.8"
 xxhash-rust = { version = "0.8", features = ["xxh32"] }
+# Typo-resistant fuzzy matching with path-aware scoring (delimiter, prefix and
+# capitalization bonuses). Replaces the hand-rolled scorer for `@file`
+# completion and backs the `find_file` tool. MIT, one optional dependency, no
+# runtime coupling; `nucleo` was rejected on license (MPL-2.0).
+frizbee = "0.13.0"
 similar = "2"
 sysinfo = "0.39.6"
 # BPE token counting tables (bd-cv653.7.2.1); enabled via the `bpe-tokens`
@@ -515,12 +530,21 @@ url-pdf = ["dep:pdf-extract"]
 # Sampling profiler (bd-cv653.7.12.1) — opt-in; adds pprof + inferno deps.
 profiler = ["dep:pprof"]
 
+# RecurCode's background ACP binary. Deliberately does NOT include `tui`, so the
+# terminal stack — crossterm, rich_rust, bubbletea/lipgloss/bubbles/glamour,
+# ftui — is never compiled, not merely tree-shaken out at link time. Pair it
+# with `--no-default-features`, because Cargo features only add capability:
+# `--features headless` alone still pulls `default`, which includes `tui` and
+# `ftui`.
+headless = ["sqlite-sessions", "bpe-tokens"]
+
 # Interactive terminal front-end (crossterm + charmed_rust stack). Enabled by
 # default so CLI users get an identical `ra` binary with no action required.
 # Disabling it (`--no-default-features`) lets SDK/library consumers compile the
 # `ra` library without the terminal UI dependencies.
 tui = [
     "dep:crossterm",
+    "dep:rich_rust",
     "dep:bubbletea",
     "dep:lipgloss",
     "dep:bubbles",
