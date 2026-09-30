@@ -257,6 +257,38 @@ pub(crate) fn read_peer_host_binding(peers_root: &Path, slug: &str) -> Option<Pe
 /// the owning system agent through `peer_respond`. Fail-closed — a peer dir
 /// that carries the binding leaf counts even when the leaf is unreadable or
 /// malformed, so a torn binding can never re-open the originator path.
+/// Check that a bound workspace (a host-owned peer's folder, or one of its
+/// request contexts' folders) is still exactly the directory the binding
+/// recorded. Bindings store the CANONICAL path at `peer/prepare` /
+/// `peer/context/open`, so a folder since replaced by a symlink (or with a
+/// symlinked ancestor, or moved) no longer canonicalizes to itself — and a
+/// session rooted through it would run somewhere else. A missing folder is
+/// recreated first (then checked the same way, so a link planted in an
+/// ancestor still refuses).
+pub(crate) fn verify_bound_dir(cwd: &Path) -> Result<(), String> {
+    if std::fs::symlink_metadata(cwd).is_err() {
+        std::fs::create_dir_all(cwd).map_err(|err| {
+            format!(
+                "bound workspace {} is no longer usable: {err}",
+                cwd.display()
+            )
+        })?;
+    }
+    match dunce::canonicalize(cwd) {
+        Ok(real) if real == cwd && real.is_dir() => Ok(()),
+        Ok(real) => Err(format!(
+            "bound workspace {} no longer resolves to itself (it now leads to {}): it was \
+             moved or replaced by a link",
+            cwd.display(),
+            real.display()
+        )),
+        Err(err) => Err(format!(
+            "bound workspace {} is no longer usable: {err}",
+            cwd.display()
+        )),
+    }
+}
+
 pub(crate) fn peer_is_host_owned(peers_root: &Path, slug: &str) -> bool {
     staged_peer_dir(peers_root, slug)
         .is_some_and(|dir| dir.join(HOST_BINDING_LEAF).symlink_metadata().is_ok())
