@@ -2483,13 +2483,16 @@ jobs:
             ci-test-health-trend.jsonl
           if-no-files-found: error
 
-  # SDK / library consumers (e.g. the pi-code-gui VSCode extension) embed the
-  # `pi` library without the interactive terminal front-end. The `tui` feature
-  # is in the default set, so `cargo build` is unchanged for CLI users, but the
-  # library must keep compiling without crossterm + the charmed_rust stack.
-  # This job locks that contract in so it can never silently regress.
+  # Two consumers need this crate WITHOUT the interactive terminal front-end,
+  # and this job locks both contracts in so neither can silently regress:
+  #
+  #   * SDK / library consumers embed the library directly.
+  #   * RecurCode launches the `ra-headless` ACP binary as a subprocess.
+  #
+  # For both, "no TUI" must mean the terminal stack is unreachable in the
+  # dependency graph — not merely dead code the linker discards afterwards.
   library_no_default_features:
-    name: lib (--no-default-features, no TUI)
+    name: lib + headless (--no-default-features, no TUI)
     runs-on: ubuntu-latest
     env:
       CI: "true"
@@ -2528,3 +2531,31 @@ jobs:
           # integration tests/benches require the `tui` feature, so they are
           # expected to be skipped here — only the library contract is locked in.
           cargo check --locked --no-default-features --lib
+
+      - name: cargo check (headless ACP binary, no TUI)
+        run: |
+          set -euxo pipefail
+          # `--no-default-features` is load-bearing, not stylistic: Cargo
+          # features only add capability, so `--features headless` on its own
+          # would still enable `default`, which contains `tui` and `ftui`.
+          cargo check --locked --no-default-features --features headless --bin ra-headless
+
+      - name: Assert the headless dependency graph carries no terminal stack
+        run: |
+          set -euxo pipefail
+          # The compile is not the whole contract. A `#[cfg]` that reads a TUI
+          # type back in, or a dependency that loses `optional = true`, would
+          # still build while quietly re-adding the stack RecurCode's binary is
+          # supposed to be free of. Assert it at the graph level so the
+          # regression fails here instead of in a release.
+          #
+          # `rich_rust` is the one to watch: it depends on crossterm
+          # unconditionally, with no feature to turn that off, so it can only be
+          # kept out by staying behind `tui` itself.
+          forbidden='^(crossterm|rich_rust|bubbletea|lipgloss|bubbles|glamour|textwrap|ftui|ftui-extras) v'
+          if cargo tree --locked --no-default-features --features headless \
+            -e normal --prefix none | grep -E "$forbidden"; then
+            echo "::error::headless build reaches a terminal dependency; the TUI stack must stay unreachable"
+            exit 1
+          fi
+          echo "headless dependency graph is free of the terminal stack"

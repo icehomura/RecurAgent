@@ -488,22 +488,43 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `asset` is the interactive build; `headless_asset` is the TUI-free
+        # build RecurCode launches over ACP. Each leg builds BOTH, from one
+        # checkout, toolchain and cache, so the headless binaries cost one extra
+        # rustc invocation per target rather than a second runner.
+        #
+        # The two naming schemes differ deliberately. The interactive assets keep
+        # their historical `pi-<os>-<arch>` names (`amd64`/`arm64`) because
+        # install.sh resolves `ASSET_PLATFORM` from that spelling and renaming
+        # them would break every existing download and upgrade path. The headless
+        # assets are new, so they take the `x86_64`/`aarch64` spelling that
+        # RecurCode's ACP registry uses for its platform keys, letting that side
+        # map a key to a URL with no translation table.
+        #
+        # Compression differs too, and not cosmetically: RecurCode's extractor
+        # handles `.tar.gz`/`.tgz`, `.tar.bz2`/`.tbz2` and `.zip` only — it has no
+        # xz/lzma backend — so a headless archive has to be `.tar.gz`.
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             asset: pi-linux-amd64
+            headless_asset: ra-headless-linux-x86_64
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             asset: pi-linux-arm64
+            headless_asset: ra-headless-linux-aarch64
           - os: macos-15-intel
             target: x86_64-apple-darwin
             asset: pi-darwin-amd64
+            headless_asset: ra-headless-darwin-x86_64
           - os: macos-15
             target: aarch64-apple-darwin
             asset: pi-darwin-arm64
+            headless_asset: ra-headless-darwin-aarch64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset: pi-windows-amd64
+            headless_asset: ra-headless-windows-x86_64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     env:
@@ -655,7 +676,19 @@ jobs:
           key: release-${{ needs.plan.outputs.commit }}-${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --locked --bin ra --target "${{ matrix.target }}"
+        run: |
+          set -euo pipefail
+          # Interactive build: default features, so `tui` and `ftui` are on.
+          cargo build --release --locked --bin ra --target "${{ matrix.target }}"
+          # Headless build: `--no-default-features` is REQUIRED and not
+          # stylistic. Cargo features only add capability — `--features headless`
+          # on its own would still pull `default`, which contains `tui` and
+          # `ftui`, and the binary would carry the terminal stack it is supposed
+          # to exclude. Dropping `default` is what makes the TUI modules and
+          # their dependencies absent from the compilation, rather than merely
+          # dead code the linker removes afterwards.
+          cargo build --release --locked --no-default-features --features headless \
+            --bin ra-headless --target "${{ matrix.target }}"
 
       - name: Execute native release binary smoke test
         env:
@@ -787,6 +820,54 @@ jobs:
             fi
           done
 
+      - name: Execute headless ACP handshake smoke test
+        env:
+          RELEASE_RUNNER_OS: ${{ runner.os }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          # The headless binary has no `--version` banner to assert on (it is an
+          # ACP server, not a CLI), so the meaningful gate is the protocol
+          # handshake RecurCode actually performs on connect. This catches the
+          # build that links but starts with a broken runtime, a missing model
+          # registry, or a stdout that carries something other than JSON-RPC.
+          if [ "$RELEASE_RUNNER_OS" = "Windows" ]; then
+            binary="target/${RELEASE_TARGET}/release/ra-headless.exe"
+          else
+            binary="target/${RELEASE_TARGET}/release/ra-headless"
+          fi
+          if [ ! -x "$binary" ] && [ ! -f "$binary" ]; then
+            echo "::error::headless release binary is missing: $binary"
+            exit 1
+          fi
+
+          request='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}'
+          response="$(printf '%s\n' "$request" | "$binary" 2>/dev/null | head -1 || true)"
+          if [ -z "$response" ]; then
+            echo "::error::headless binary produced no ACP response on stdout"
+            exit 1
+          fi
+          RESPONSE="$response" RELEASE_VERSION="${{ needs.plan.outputs.version }}" python3 - <<'PY'
+          import json
+          import os
+
+          line = os.environ["RESPONSE"]
+          try:
+              payload = json.loads(line)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"headless stdout is not a single JSON-RPC line: {line!r} ({exc})") from exc
+          info = payload.get("result", {}).get("agentInfo")
+          if not isinstance(info, dict):
+              raise SystemExit(f"ACP initialize returned no agentInfo: {payload!r}")
+          if info.get("name") != "recur-agent":
+              raise SystemExit(f"ACP agent name is {info.get('name')!r}, expected 'recur-agent'")
+          if info.get("version") != os.environ["RELEASE_VERSION"]:
+              raise SystemExit(
+                  f"ACP agent version is {info.get('version')!r}, expected {os.environ['RELEASE_VERSION']!r}"
+              )
+          PY
+          printf '%s\n' "$response"
+
       - name: Create tarball (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -801,6 +882,19 @@ jobs:
           cp LICENSE README.md "$STAGE_DIR/"
 
           tar -C "$RUNNER_TEMP" -cJf "dist/${{ matrix.asset }}.tar.xz" "$STAGE_NAME"
+
+          # Headless archive: `.tar.gz`, not the `.tar.xz` the interactive asset
+          # uses. RecurCode's extractor has no xz backend, so `.tar.xz` would be
+          # rejected as an unsupported format at install time. The top-level
+          # directory and the payload binary are both named `ra-headless`, which
+          # is what `archive_binary` in the release job verifies.
+          HEADLESS_STAGE_NAME="ra-headless-${{ needs.plan.outputs.version }}-${{ matrix.target }}"
+          HEADLESS_STAGE_DIR="${RUNNER_TEMP}/${HEADLESS_STAGE_NAME}"
+          mkdir "$HEADLESS_STAGE_DIR"
+          cp "target/${{ matrix.target }}/release/ra-headless" "$HEADLESS_STAGE_DIR/"
+          cp LICENSE README.md "$HEADLESS_STAGE_DIR/"
+
+          tar -C "$RUNNER_TEMP" -czf "dist/${{ matrix.headless_asset }}.tar.gz" "$HEADLESS_STAGE_NAME"
 
       - name: Create zip (Windows)
         if: runner.os == 'Windows'
@@ -818,6 +912,15 @@ jobs:
 
           Compress-Archive -Path "$stageDir" -DestinationPath "dist/${{ matrix.asset }}.zip"
 
+          $headlessStageName = "ra-headless-${{ needs.plan.outputs.version }}-${{ matrix.target }}"
+          $headlessStageDir = Join-Path $env:RUNNER_TEMP $headlessStageName
+          New-Item -ItemType Directory -Path $headlessStageDir
+          Copy-Item "target/${{ matrix.target }}/release/ra-headless.exe" "$headlessStageDir/"
+          Copy-Item "LICENSE" "$headlessStageDir/"
+          Copy-Item "README.md" "$headlessStageDir/"
+
+          Compress-Archive -Path "$headlessStageDir" -DestinationPath "dist/${{ matrix.headless_asset }}.zip"
+
       - name: Build manifest
         env:
           RELEASE_TAG: ${{ needs.plan.outputs.tag }}
@@ -825,6 +928,7 @@ jobs:
           RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
           RELEASE_TARGET: ${{ matrix.target }}
           RELEASE_ASSET: ${{ matrix.asset }}
+          RELEASE_HEADLESS_ASSET: ${{ matrix.headless_asset }}
           RELEASE_RUNNER_OS: ${{ runner.os }}
         run: |
           set -euo pipefail
@@ -925,69 +1029,93 @@ jobs:
               raise SystemExit("native release runner host does not equal the declared artifact target")
 
           is_windows = os.environ["RELEASE_RUNNER_OS"] == "Windows"
-          archive = Path("dist") / (
-              f"{os.environ['RELEASE_ASSET']}.zip"
-              if is_windows
-              else f"{os.environ['RELEASE_ASSET']}.tar.xz"
-          )
-          binary = Path("target") / os.environ["RELEASE_TARGET"] / "release" / (
-              "ra.exe" if is_windows else "ra"
-          )
           max_binary_bytes = 48 * 1024 * 1024
-          binary_size = binary.stat().st_size
-          if binary_size >= max_binary_bytes:
-              raise SystemExit(
-                  f"release binary is {binary_size} bytes; policy requires < {max_binary_bytes} bytes (48 MiB)"
+
+          # Two artifacts per leg: the interactive build and the TUI-free
+          # headless ACP build. They share target, source blobs, toolchain and
+          # locked-package provenance — everything except the archive, the
+          # payload binary and the asset name. Emitting both from one loop is
+          # what keeps that shared half from drifting between them.
+          artifacts = [
+              (
+                  os.environ["RELEASE_ASSET"],
+                  "ra.exe" if is_windows else "ra",
+                  ".zip" if is_windows else ".tar.xz",
+              ),
+              (
+                  os.environ["RELEASE_HEADLESS_ASSET"],
+                  "ra-headless.exe" if is_windows else "ra-headless",
+                  ".zip" if is_windows else ".tar.gz",
+              ),
+          ]
+
+          for asset_name, binary_name, archive_suffix in artifacts:
+              archive = Path("dist") / f"{asset_name}{archive_suffix}"
+              binary = (
+                  Path("target")
+                  / os.environ["RELEASE_TARGET"]
+                  / "release"
+                  / binary_name
               )
-          manifest = {
-              "schema": "pi.release.build_manifest.v1",
-              "tag": os.environ["RELEASE_TAG"],
-              "version": os.environ["RELEASE_VERSION"],
-              "target": os.environ["RELEASE_TARGET"],
-              "asset": os.environ["RELEASE_ASSET"],
-              "runner_os": os.environ["RELEASE_RUNNER_OS"],
-              "pi_agent_rust": os.environ["PI_AGENT_RUST_SHA"],
-              "source_blobs": {
-                  "cargo_toml": os.environ["CARGO_TOML_BLOB"],
-                  "cargo_lock": os.environ["CARGO_LOCK_BLOB"],
-                  "rust_toolchain": os.environ["RUST_TOOLCHAIN_BLOB"],
-                  "license": os.environ["LICENSE_BLOB"],
-                  "readme": os.environ["README_BLOB"],
-                  "install": os.environ["INSTALL_BLOB"],
-                  "dropin_verdict": os.environ["DROPIN_VERDICT_BLOB"],
-                  "models_generated_ts": os.environ["MODELS_BLOB"],
-              },
-              "selected_locked_registry_packages": selected,
-              "rustc": {
-                  "toolchain_channel": expected_channel,
-                  "version": rustc_lines[0],
-                  "binary": rustc_fields["binary"],
-                  "commit_hash": rustc_fields["commit-hash"],
-                  "commit_date": rustc_fields["commit-date"],
-                  "host": rustc_fields["host"],
-                  "release": rustc_fields["release"],
-                  "llvm_version": rustc_fields["LLVM version"],
-              },
-              "archive": digest(archive),
-              "binary": digest(binary),
-          }
-          output = Path(f"dist/build-manifest-{os.environ['RELEASE_ASSET']}.json")
-          output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+              binary_size = binary.stat().st_size
+              if binary_size >= max_binary_bytes:
+                  raise SystemExit(
+                      f"{asset_name} payload {binary_name} is {binary_size} bytes; "
+                      f"policy requires < {max_binary_bytes} bytes (48 MiB)"
+                  )
+              manifest = {
+                  "schema": "pi.release.build_manifest.v1",
+                  "tag": os.environ["RELEASE_TAG"],
+                  "version": os.environ["RELEASE_VERSION"],
+                  "target": os.environ["RELEASE_TARGET"],
+                  "asset": asset_name,
+                  "runner_os": os.environ["RELEASE_RUNNER_OS"],
+                  "pi_agent_rust": os.environ["PI_AGENT_RUST_SHA"],
+                  "source_blobs": {
+                      "cargo_toml": os.environ["CARGO_TOML_BLOB"],
+                      "cargo_lock": os.environ["CARGO_LOCK_BLOB"],
+                      "rust_toolchain": os.environ["RUST_TOOLCHAIN_BLOB"],
+                      "license": os.environ["LICENSE_BLOB"],
+                      "readme": os.environ["README_BLOB"],
+                      "install": os.environ["INSTALL_BLOB"],
+                      "dropin_verdict": os.environ["DROPIN_VERDICT_BLOB"],
+                      "models_generated_ts": os.environ["MODELS_BLOB"],
+                  },
+                  "selected_locked_registry_packages": selected,
+                  "rustc": {
+                      "toolchain_channel": expected_channel,
+                      "version": rustc_lines[0],
+                      "binary": rustc_fields["binary"],
+                      "commit_hash": rustc_fields["commit-hash"],
+                      "commit_date": rustc_fields["commit-date"],
+                      "host": rustc_fields["host"],
+                      "release": rustc_fields["release"],
+                      "llvm_version": rustc_fields["LLVM version"],
+                  },
+                  "archive": digest(archive),
+                  "binary": digest(binary),
+              }
+              output = Path(f"dist/build-manifest-{asset_name}.json")
+              output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           PY
 
-      - name: Verify build artifact pair
+      - name: Verify build artifact set
         env:
           RELEASE_ASSET: ${{ matrix.asset }}
+          RELEASE_HEADLESS_ASSET: ${{ matrix.headless_asset }}
           RELEASE_RUNNER_OS: ${{ runner.os }}
         run: |
           set -euo pipefail
           if [ "$RELEASE_RUNNER_OS" = "Windows" ]; then
             archive="dist/${RELEASE_ASSET}.zip"
+            headless_archive="dist/${RELEASE_HEADLESS_ASSET}.zip"
           else
             archive="dist/${RELEASE_ASSET}.tar.xz"
+            headless_archive="dist/${RELEASE_HEADLESS_ASSET}.tar.gz"
           fi
           manifest="dist/build-manifest-${RELEASE_ASSET}.json"
-          for path in "$archive" "$manifest"; do
+          headless_manifest="dist/build-manifest-${RELEASE_HEADLESS_ASSET}.json"
+          for path in "$archive" "$manifest" "$headless_archive" "$headless_manifest"; do
             if [ ! -f "$path" ] || [ -L "$path" ] || [ ! -s "$path" ]; then
               echo "::error::Missing, empty, or non-regular build artifact: $path"
               exit 1
@@ -998,7 +1126,9 @@ jobs:
           else
             PYTHON=python
           fi
-          ARCHIVE_PATH="$archive" MANIFEST_PATH="$manifest" "$PYTHON" - <<'PY'
+          ARCHIVE_PATH="$archive" MANIFEST_PATH="$manifest" \
+            HEADLESS_ARCHIVE_PATH="$headless_archive" HEADLESS_MANIFEST_PATH="$headless_manifest" \
+            "$PYTHON" - <<'PY'
           import os
           from pathlib import Path
 
@@ -1006,10 +1136,12 @@ jobs:
           expected = {
               Path(os.environ["ARCHIVE_PATH"]).name,
               Path(os.environ["MANIFEST_PATH"]).name,
+              Path(os.environ["HEADLESS_ARCHIVE_PATH"]).name,
+              Path(os.environ["HEADLESS_MANIFEST_PATH"]).name,
           }
           entries = list(directory.iterdir()) if directory.is_dir() and not directory.is_symlink() else []
           actual = {entry.name for entry in entries}
-          if len(entries) != 2 or actual != expected:
+          if len(entries) != 4 or actual != expected:
               raise SystemExit(
                   f"build leg produced {sorted(actual)!r}; expected exactly {sorted(expected)!r}"
               )
@@ -1180,9 +1312,16 @@ jobs:
               else:
                   fail(f"unsupported release target: {target}")
 
-          def archive_binary(archive_path, target):
-              root_name = f"pi-{version}-{target}"
-              binary_name = "ra.exe" if target.endswith("windows-msvc") else "ra"
+          def archive_binary(archive_path, target, payload_name, root_prefix):
+              # The interactive archive is `pi-<version>-<target>/` carrying `ra`;
+              # the headless one is `ra-headless-<version>-<target>/` carrying
+              # `ra-headless`. Members are asserted as an exact set, so a renamed
+              # directory, a renamed payload, or a stray extra file fails the
+              # release rather than shipping an archive RecurCode cannot consume.
+              root_name = f"{root_prefix}-{version}-{target}"
+              binary_name = (
+                  f"{payload_name}.exe" if target.endswith("windows-msvc") else payload_name
+              )
               expected_files = {
                   f"{root_name}/{binary_name}",
                   f"{root_name}/LICENSE",
@@ -1213,7 +1352,11 @@ jobs:
                   except (OSError, zipfile.BadZipFile) as exc:
                       fail(f"invalid zip archive {archive_path}: {exc}")
               try:
-                  with tarfile.open(archive_path, mode="r:xz") as archive:
+                  # `.tar.xz` for the interactive asset, `.tar.gz` for the
+                  # headless one: RecurCode's extractor has no xz backend, so the
+                  # headless archive cannot be xz-compressed.
+                  tar_mode = "r:gz" if archive_path.suffix == ".gz" else "r:xz"
+                  with tarfile.open(archive_path, mode=tar_mode) as archive:
                       members = archive.getmembers()
                       names = [member.name.rstrip("/") for member in members]
                       if len(names) != len(set(names)):
@@ -1294,15 +1437,38 @@ jobs:
           expected_toolchain = tomllib.loads(
               (root / "rust-toolchain.toml").read_text(encoding="utf-8")
           )["toolchain"]["channel"]
+          # asset: (target, runner_os, archive_suffix, payload_binary, root_prefix)
+          #
+          # Ten assets, in two families. The `pi-*` family is the interactive
+          # build under its historical name and `.tar.xz`; it is left byte-for-byte
+          # alone because install.sh resolves `ASSET_PLATFORM` from that spelling.
+          # The `ra-headless-*` family is the TUI-free ACP build RecurCode
+          # launches: `.tar.gz` (RecurCode has no xz backend) and the
+          # `x86_64`/`aarch64` spelling its registry platform keys use.
           specs = {
-              "pi-linux-amd64": ("x86_64-unknown-linux-gnu", "Linux", ".tar.xz"),
-              "pi-linux-arm64": ("aarch64-unknown-linux-gnu", "Linux", ".tar.xz"),
-              "pi-darwin-amd64": ("x86_64-apple-darwin", "macOS", ".tar.xz"),
-              "pi-darwin-arm64": ("aarch64-apple-darwin", "macOS", ".tar.xz"),
-              "pi-windows-amd64": ("x86_64-pc-windows-msvc", "Windows", ".zip"),
+              "pi-linux-amd64": ("x86_64-unknown-linux-gnu", "Linux", ".tar.xz", "ra", "pi"),
+              "pi-linux-arm64": ("aarch64-unknown-linux-gnu", "Linux", ".tar.xz", "ra", "pi"),
+              "pi-darwin-amd64": ("x86_64-apple-darwin", "macOS", ".tar.xz", "ra", "pi"),
+              "pi-darwin-arm64": ("aarch64-apple-darwin", "macOS", ".tar.xz", "ra", "pi"),
+              "pi-windows-amd64": ("x86_64-pc-windows-msvc", "Windows", ".zip", "ra", "pi"),
+              "ra-headless-linux-x86_64": (
+                  "x86_64-unknown-linux-gnu", "Linux", ".tar.gz", "ra-headless", "ra-headless",
+              ),
+              "ra-headless-linux-aarch64": (
+                  "aarch64-unknown-linux-gnu", "Linux", ".tar.gz", "ra-headless", "ra-headless",
+              ),
+              "ra-headless-darwin-x86_64": (
+                  "x86_64-apple-darwin", "macOS", ".tar.gz", "ra-headless", "ra-headless",
+              ),
+              "ra-headless-darwin-aarch64": (
+                  "aarch64-apple-darwin", "macOS", ".tar.gz", "ra-headless", "ra-headless",
+              ),
+              "ra-headless-windows-x86_64": (
+                  "x86_64-pc-windows-msvc", "Windows", ".zip", "ra-headless", "ra-headless",
+              ),
           }
           expected_names = {
-              *(asset + suffix for asset, (_, _, suffix) in specs.items()),
+              *(asset + suffix for asset, (_, _, suffix, _, _) in specs.items()),
               *(f"build-manifest-{asset}.json" for asset in specs),
           }
           if not dist.is_dir() or dist.is_symlink():
@@ -1343,7 +1509,7 @@ jobs:
               "host", "release", "llvm_version",
           }
           common_rustc = None
-          for asset, (target, runner_os, suffix) in specs.items():
+          for asset, (target, runner_os, suffix, payload_name, root_prefix) in specs.items():
               manifest_path = dist / f"build-manifest-{asset}.json"
               manifest = strict_json(manifest_path)
               if not isinstance(manifest, dict) or set(manifest) != manifest_keys:
@@ -1376,15 +1542,15 @@ jobs:
               expected_archive = {"name": archive_path.name, "sha256": sha256(archive_bytes), "size": len(archive_bytes)}
               if manifest.get("archive") != expected_archive:
                   fail(f"{manifest_path} archive digest/size binding failed")
-              binary_bytes = archive_binary(archive_path, target)
-              binary_name = "ra.exe" if runner_os == "Windows" else "ra"
+              binary_bytes = archive_binary(archive_path, target, payload_name, root_prefix)
+              binary_name = f"{payload_name}.exe" if runner_os == "Windows" else payload_name
               expected_binary = {"name": binary_name, "sha256": sha256(binary_bytes), "size": len(binary_bytes)}
               if manifest.get("binary") != expected_binary:
                   fail(f"{manifest_path} extracted binary digest/size binding failed")
               if len(binary_bytes) >= 48 * 1024 * 1024:
                   fail(f"{manifest_path} binary violates the <48 MiB release budget")
               validate_binary(binary_bytes, target)
-          print("Verified exact five-platform inventory, strict manifests, archives, binaries, and compiler provenance")
+          print("Verified exact ten-asset inventory, strict manifests, archives, binaries, and compiler provenance")
           PY
 
       - name: Prepare release directory
@@ -1417,8 +1583,10 @@ jobs:
             sha256sum "$f"
           done > SHA256SUMS
           cat SHA256SUMS
-          if [ "$(wc -l < SHA256SUMS)" -ne 11 ]; then
-            echo "::error::SHA256SUMS must bind exactly the other 11 public assets"
+          # 22 public assets, minus SHA256SUMS itself: ten archives, ten build
+          # manifests, and install.sh.
+          if [ "$(wc -l < SHA256SUMS)" -ne 21 ]; then
+            echo "::error::SHA256SUMS must bind exactly the other 21 public assets"
             exit 1
           fi
           sha256sum --check --strict SHA256SUMS
@@ -1518,6 +1686,26 @@ jobs:
           | Windows x86_64 | `pi-windows-amd64.zip` |
 
           All archives include SHA256 checksums in `SHA256SUMS` for verification.
+
+          ### Headless builds (ACP)
+
+          These archives carry `ra-headless` instead of `ra`: the same agent with
+          the terminal UI and its dependencies left out of the build entirely, not
+          merely stripped afterwards. They exist for editors and tools — notably
+          RecurCode — that launch the agent as a background ACP server over stdio
+          and never draw to a terminal.
+
+          | Platform | Archive |
+          |----------|---------|
+          | Linux x86_64 | `ra-headless-linux-x86_64.tar.gz` |
+          | Linux ARM64 | `ra-headless-linux-aarch64.tar.gz` |
+          | macOS x86_64 | `ra-headless-darwin-x86_64.tar.gz` |
+          | macOS ARM64 (Apple Silicon) | `ra-headless-darwin-aarch64.tar.gz` |
+          | Windows x86_64 | `ra-headless-windows-x86_64.zip` |
+
+          Run it as `ra-headless --acp`. It speaks the Agent Client Protocol on
+          stdin/stdout and prints nothing else to stdout, so a client can parse
+          that stream line by line.
           INSTALL
 
           # Pin both script bytes and requested artifact version to this tag.
@@ -1566,6 +1754,17 @@ jobs:
               "build-manifest-pi-darwin-amd64.json",
               "build-manifest-pi-darwin-arm64.json",
               "build-manifest-pi-windows-amd64.json",
+              # TUI-free ACP build consumed by RecurCode. `.tar.gz` on Unix
+              # because RecurCode's extractor has no xz backend, and the
+              # `x86_64`/`aarch64` spelling its registry platform keys use.
+              "ra-headless-linux-x86_64.tar.gz", "ra-headless-linux-aarch64.tar.gz",
+              "ra-headless-darwin-x86_64.tar.gz", "ra-headless-darwin-aarch64.tar.gz",
+              "ra-headless-windows-x86_64.zip",
+              "build-manifest-ra-headless-linux-x86_64.json",
+              "build-manifest-ra-headless-linux-aarch64.json",
+              "build-manifest-ra-headless-darwin-x86_64.json",
+              "build-manifest-ra-headless-darwin-aarch64.json",
+              "build-manifest-ra-headless-windows-x86_64.json",
           }
           release_dir = Path("release")
           entries = list(release_dir.iterdir()) if release_dir.is_dir() and not release_dir.is_symlink() else []
@@ -1872,8 +2071,8 @@ jobs:
               or any(not isinstance(asset.get("name"), str) for asset in assets):
               raise SystemExit("release assets response is malformed")
           names = [asset.get("name") for asset in assets]
-          if len(names) != len(set(names)) or set(names) != set(local) or len(names) != 12:
-              raise SystemExit(f"draft does not contain the exact 12 public assets: {sorted(names)}")
+          if len(names) != len(set(names)) or set(names) != set(local) or len(names) != 22:
+              raise SystemExit(f"draft does not contain the exact 22 public assets: {sorted(names)}")
           for asset in assets:
               expected_size = local[asset["name"]][0]
               if type(asset.get("size")) is not int or asset.get("size") < 0 \
@@ -1885,7 +2084,7 @@ jobs:
                   raise SystemExit(f"draft asset bytes/size differ: {asset['name']}")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"release_id={release['id']}\nrelease_state={actual_state}\n")
-          print(f"Verified exact 12-asset {actual_state} release inventory, metadata, and bytes")
+          print(f"Verified exact 22-asset {actual_state} release inventory, metadata, and bytes")
           PY
 
       - name: Revalidate frozen source before draft handoff
@@ -2043,8 +2242,8 @@ jobs:
               or any(not isinstance(asset.get("name"), str) for asset in assets):
               raise SystemExit("release assets response is malformed")
           names = [asset.get("name") for asset in assets]
-          if len(names) != 12 or len(names) != len(set(names)) or set(names) != set(local):
-              raise SystemExit(f"draft release does not contain the exact 12 assets: {sorted(names)}")
+          if len(names) != 22 or len(names) != len(set(names)) or set(names) != set(local):
+              raise SystemExit(f"draft release does not contain the exact 22 assets: {sorted(names)}")
           for asset in assets:
               expected_size = local[asset["name"]][0]
               if type(asset.get("size")) is not int or asset.get("size") < 0 \
@@ -2054,7 +2253,7 @@ jobs:
                   data = response.read(expected_size + 1)
               if (len(data), hashlib.sha256(data).hexdigest()) != local[asset["name"]] or asset.get("size") != len(data):
                   raise SystemExit(f"draft asset bytes/size differ: {asset['name']}")
-          print(f"Confirmed exact 12-asset release remains {os.environ['RELEASE_STATE']}")
+          print(f"Confirmed exact 22-asset release remains {os.environ['RELEASE_STATE']}")
           PY
 
       - name: Revalidate frozen source after draft handoff
@@ -3269,9 +3468,20 @@ jobs:
               "build-manifest-pi-darwin-amd64.json",
               "build-manifest-pi-darwin-arm64.json",
               "build-manifest-pi-windows-amd64.json",
+              # TUI-free ACP build consumed by RecurCode. `.tar.gz` on Unix
+              # because RecurCode's extractor has no xz backend, and the
+              # `x86_64`/`aarch64` spelling its registry platform keys use.
+              "ra-headless-linux-x86_64.tar.gz", "ra-headless-linux-aarch64.tar.gz",
+              "ra-headless-darwin-x86_64.tar.gz", "ra-headless-darwin-aarch64.tar.gz",
+              "ra-headless-windows-x86_64.zip",
+              "build-manifest-ra-headless-linux-x86_64.json",
+              "build-manifest-ra-headless-linux-aarch64.json",
+              "build-manifest-ra-headless-darwin-x86_64.json",
+              "build-manifest-ra-headless-darwin-aarch64.json",
+              "build-manifest-ra-headless-windows-x86_64.json",
           }
           entries = list(release_dir.iterdir()) if release_dir.is_dir() and not release_dir.is_symlink() else []
-          if len(entries) != 12 or {entry.name for entry in entries} != expected_names \
+          if len(entries) != 22 or {entry.name for entry in entries} != expected_names \
               or any(entry.is_symlink() or not entry.is_file() or entry.stat().st_size == 0 for entry in entries) \
               or body_path.is_symlink() or not body_path.is_file() or body_path.stat().st_size == 0:
               raise SystemExit("final publication inputs are incomplete, extra, empty, or non-regular")
@@ -3369,7 +3579,7 @@ jobs:
                   or any(not isinstance(asset.get("name"), str) for asset in assets):
                   raise SystemExit("GitHub release assets response is malformed")
               names = [asset.get("name") for asset in assets]
-              if len(names) != 12 or len(names) != len(set(names)) or set(names) != expected_names:
+              if len(names) != 22 or len(names) != len(set(names)) or set(names) != expected_names:
                   raise SystemExit(f"GitHub release asset inventory mismatch: {sorted(names)}")
               for asset in assets:
                   expected_size = local[asset["name"]][0]
