@@ -94,11 +94,16 @@ pub struct MergePlan {
 ///
 /// Chosen over edit distance because skill names are
 /// short, hyphenated, and token-oriented (`web-search` vs `search-web`).
+///
+/// The shortcut also compares the *separator-free* form, because the canonical
+/// duplicate this feature exists to catch — `web-search` and `websearch`, one
+/// concept spelled two ways — shares no token at all and would otherwise score
+/// 0.0 on the name.
 #[must_use]
 pub fn token_similarity(a: &str, b: &str) -> f64 {
     let na = normalize(a);
     let nb = normalize(b);
-    if na == nb {
+    if na == nb || strip_separators(a) == strip_separators(b) {
         return 1.0;
     }
     let sa: std::collections::HashSet<&str> = na.split_whitespace().collect();
@@ -109,6 +114,15 @@ pub fn token_similarity(a: &str, b: &str) -> f64 {
     let intersection = f64::from(u32::try_from(sa.intersection(&sb).count()).unwrap_or(u32::MAX));
     let union = f64::from(u32::try_from(sa.union(&sb).count()).unwrap_or(u32::MAX));
     intersection / union
+}
+
+/// Lowercase and drop every separator, so `web-search` and `websearch` agree.
+fn strip_separators(input: &str) -> String {
+    input
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 /// Lowercase, split on non-alphanumerics so `web-search` and `Web Search`
@@ -327,9 +341,12 @@ mod tests {
         assert_eq!(found[0].primary, "web-search");
         assert_eq!(found[0].secondary, "websearch");
 
-        // A permissive threshold pulls in the unrelated skill too.
-        let all = find_candidates(&skills, 0.1);
-        assert!(all.len() >= 2);
+        // A permissive threshold pulls in the unrelated skill too. The
+        // unrelated pair shares no token in either name or description, so its
+        // score is exactly 0.0 — only a threshold at or below that admits it,
+        // which is why 0.1 could never satisfy this assertion.
+        let all = find_candidates(&skills, 0.0);
+        assert!(all.len() >= 2, "permissive threshold found {all:?}");
     }
 
     #[test]

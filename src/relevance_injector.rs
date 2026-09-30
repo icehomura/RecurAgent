@@ -174,14 +174,18 @@ mod tests {
 
     #[test]
     fn format_respects_token_budget() {
-        let injector = RelevanceInjector::new(10, 10); // ~40 chars budget
+        // Budget 44 chars against a 41-byte header ("Relevant context from
+        // previous sessions:\n"). At 10 tokens the budget is 40 and the header
+        // alone overruns it, so the function returns "" and the header
+        // assertion below could never hold.
+        let injector = RelevanceInjector::new(11, 10);
         let contexts = vec![
             context(&"x".repeat(200), 1.0),
             context(&"y".repeat(200), 0.5),
         ];
         let out = injector.format_for_prompt(&contexts);
         // Header fits, first line may or may not; second must be dropped.
-        assert!(out.len() <= 10 * 4, "output {} exceeds budget", out.len());
+        assert!(out.len() <= 11 * 4, "output {} exceeds budget", out.len());
         assert!(out.starts_with("Relevant context"));
         assert!(!out.contains("yyyy"), "second fragment should be dropped");
     }

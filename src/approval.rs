@@ -235,9 +235,14 @@ pub(crate) fn mediated_command(tool_args: &Value) -> Option<String> {
     {
         return Some(cmd.to_string());
     }
+    // `application` is a program name, so whitespace is never meaningful: a
+    // blank one means the caller supplied no argv at all (hub ps/logs, jobs
+    // list), which is not a command. `command`/`cmd` keep their raw form above
+    // because leading/trailing space can be significant in a shell string.
     let application = tool_args
         .get("application")
         .and_then(Value::as_str)
+        .map(str::trim)
         .filter(|app| !app.is_empty())?;
     let mut command = application.to_string();
     if let Some(args) = tool_args.get("args").and_then(Value::as_array) {
