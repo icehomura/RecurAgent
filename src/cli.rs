@@ -527,7 +527,7 @@ pub struct Cli {
     #[arg(
         long,
         value_name = "TOOLS",
-        default_value = "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query"
+        default_value = crate::xdev::DEFAULT_ENABLED_TOOLS
     )]
     pub tools: String,
 
@@ -1458,9 +1458,8 @@ mod tests {
                 "jobs",
                 "hub",
                 "current_time",
-                // Added alongside the `ptc_bridge` (RunCodeTool) work; must stay
-                // in lockstep with the `default_value` on `--tools`.
                 "run_code",
+                "json_query",
             ]
         );
     }

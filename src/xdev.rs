@@ -111,33 +111,22 @@ pub fn tier_for(name: &str, config: Option<&Config>) -> LoadMode {
     default_tier(name)
 }
 
+/// The tools enabled when the caller passes no `--tools` flag, comma-joined.
+///
+/// Single source of truth: the clap `default_value` on `--tools` and
+/// [`default_enabled_tools`] both read this, so they cannot drift. They did
+/// drift once — `json_query` was added to the clap literal and to
+/// [`ESSENTIAL_DEFAULTS`] but not to the function, which is what the
+/// "must stay in lockstep" comment was warning about.
+pub const DEFAULT_ENABLED_TOOLS: &str =
+    "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query";
+
 /// Names of built-in tools enabled by default when the user passes no
 /// `--tools`: the essential set plus the discoverable set. Opt-in-only tools
-/// (subagent) stay out.
+/// (subagent) stay out. See [`DEFAULT_ENABLED_TOOLS`].
 #[must_use]
 pub fn default_enabled_tools() -> Vec<&'static str> {
-    vec![
-        "read",
-        "bash",
-        "edit",
-        "write",
-        "grep",
-        "find",
-        "ls",
-        "hashline_edit",
-        "web_search",
-        "ast_grep",
-        "ast_edit",
-        "lsp",
-        "debug",
-        "ask",
-        "todo",
-        "submit_plan",
-        "jobs",
-        "hub",
-        "current_time",
-        "run_code",
-    ]
+    DEFAULT_ENABLED_TOOLS.split(',').collect()
 }
 
 /// Curated one-line purposes for built-in tools, used for the system-prompt
