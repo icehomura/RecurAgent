@@ -15,9 +15,11 @@
 //! [`crate::access`]): `blocked`, `robots`, `http_<status>`,
 //! `bot_challenge`, `consent_page`, `stub_page`, `paywall`, `login_wall`,
 //! `redirect_unresolved`, `render_failed`, `render_timeout`,
-//! `no_main_text`, … and the final URL when it is known. Walls are reported,
-//! never worked around: a bot challenge over plain HTTP is not retried in the
-//! browser, and nothing is clicked in a rendered page.
+//! `no_main_text`, … and the final URL when it is known. A page blocked over
+//! plain HTTP (a bot challenge, 401 or 403) gets one read in the browser,
+//! which is often let through ([`ReaderConfig::render_blocked`]). Walls are
+//! otherwise reported, never worked around: nothing is solved or clicked in a
+//! rendered page, and a challenge in the browser is final.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -73,6 +75,13 @@ pub struct ReaderConfig {
     /// Longest a render may take before the read fails as
     /// `render_timeout`.
     pub render_timeout: Duration,
+    /// A page blocked over plain HTTP (a bot challenge, 401 or 403) gets one
+    /// read in the [`Self::renderer`]: a real browser is often let through
+    /// where a plain client is not. Nothing is solved or worked around: a
+    /// challenge in the browser is final, and a failed browser read keeps
+    /// the original block as the reason. Default from
+    /// [`crate::READ_BLOCKED_IN_BROWSER_ENV`] (on unless turned off).
+    pub render_blocked: bool,
 }
 
 impl Default for ReaderConfig {
@@ -86,6 +95,7 @@ impl Default for ReaderConfig {
             fallback_text: None,
             renderer: None,
             render_timeout: Duration::from_secs(60),
+            render_blocked: crate::read_blocked_in_browser(|k| std::env::var(k).ok()),
         }
     }
 }
@@ -200,17 +210,19 @@ impl Reader {
             // A challenge usually answers 403/503: say so rather than the
             // bare status.
             let body = net::read_capped(resp, 256 * 1024).await.unwrap_or_default();
-            if access::is_bot_challenge(&body) {
-                return Err(ReadError::new(
+            let err = if access::is_bot_challenge(&body) {
+                ReadError::new(
                     ReadFailure::BotChallenge,
                     format!(
                         "HTTP {} with a bot challenge (not bypassed)",
                         status.as_u16()
                     ),
                 )
-                .at(final_url));
-            }
-            return Err(ReadError::new(ReadFailure::Http(status.as_u16()), "").at(final_url));
+                .at(final_url.clone())
+            } else {
+                ReadError::new(ReadFailure::Http(status.as_u16()), "").at(final_url.clone())
+            };
+            return self.read_blocked_in_browser(url, &final_url, err).await;
         }
         let ctype = resp
             .headers()
@@ -250,10 +262,11 @@ impl Reader {
         // Plain HTTP found the article: done.
         let (ex, rendered) = match wall {
             None if !ex.is_empty_text() => (ex, None),
-            // A challenge is never retried in a browser (it could pass it),
-            // and a stated error is final.
+            // Blocked (a challenge, 401/403): one read in the browser, which
+            // is often let through; any other stated error is final.
             Some(e) if matches!(e.reason, ReadFailure::BotChallenge | ReadFailure::Http(_)) => {
-                return Err(e);
+                let page_url = page.final_url.clone();
+                return self.read_blocked_in_browser(url, &page_url, e).await;
             }
             // Script-built pages, Google News links, and walls a browser
             // may not show: render when a renderer is configured.
@@ -287,6 +300,52 @@ impl Reader {
         Ok(page)
     }
 
+    /// A page plain HTTP could not read because it was blocked: read it once
+    /// in the renderer when [`ReaderConfig::render_blocked`] allows and one is
+    /// configured; otherwise, and for any other failure, `blocked` stands.
+    async fn read_blocked_in_browser(
+        &self,
+        url: &str,
+        page_url: &str,
+        blocked: ReadError,
+    ) -> Result<ReadPage, ReadError> {
+        let retry = matches!(
+            blocked.reason,
+            ReadFailure::BotChallenge | ReadFailure::Http(401) | ReadFailure::Http(403)
+        );
+        let render = match self.cfg.renderer.as_ref() {
+            Some(r) if retry && self.cfg.render_blocked => r,
+            _ => return Err(blocked),
+        };
+        // A browser that could not read it either: the block stands, with
+        // what the browser said.
+        let (ex, r) = self
+            .render_and_accept(render, url, page_url)
+            .await
+            .map_err(|e| ReadError {
+                detail: format!(
+                    "{} (read in the browser too: {}: {})",
+                    blocked.detail,
+                    e.reason.code(),
+                    e.detail
+                ),
+                ..blocked
+            })?;
+        let fetched_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        Ok(ReadPage {
+            final_url: r.final_url,
+            text: ex.text,
+            meta: ex.meta,
+            html: if self.cfg.keep_html {
+                r.html
+            } else {
+                String::new()
+            },
+            rendered: true,
+            fetched_at,
+        })
+    }
+
     /// Render `page_url` (bounded by [`ReaderConfig::render_timeout`]) and
     /// accept the result ([`Self::accept_rendered`]). `url` is the link the
     /// reader was given.
@@ -303,9 +362,10 @@ impl Reader {
                     return Err(ReadError::new(
                         ReadFailure::RenderTimeout,
                         format!("no page after {}s", self.cfg.render_timeout.as_secs()),
-                    ));
+                    )
+                    .at(page_url));
                 }
-                Ok(Err(message)) => return Err(ReadError::from_render_error(&message)),
+                Ok(Err(message)) => return Err(ReadError::from_render_error(&message).at(page_url)),
                 Ok(Ok(r)) => r,
             };
         self.accept_rendered(url, rendered).await
@@ -723,5 +783,91 @@ mod tests {
             .await
             .unwrap();
         assert!(!ex.is_empty_text());
+    }
+
+    fn blocked() -> ReadError {
+        ReadError::new(ReadFailure::BotChallenge, "HTTP 403 with a bot challenge").at(PUBLISHER)
+    }
+
+    #[tokio::test]
+    async fn should_read_a_blocked_page_once_in_the_browser() {
+        let article = fixture("article_mentions_walls.html");
+        let reader = Reader::new(ReaderConfig {
+            renderer: Some(renderer(Ok(page(PUBLISHER, article, Some(200))))),
+            ..ReaderConfig::default()
+        });
+        let p = reader
+            .read_blocked_in_browser(PUBLISHER, PUBLISHER, blocked())
+            .await
+            .unwrap();
+        assert!(p.rendered && !p.text.is_empty());
+
+        // 401/403 too; other statuses stand.
+        let forbidden = ReadError::new(ReadFailure::Http(403), "").at(PUBLISHER);
+        assert!(
+            reader
+                .read_blocked_in_browser(PUBLISHER, PUBLISHER, forbidden)
+                .await
+                .is_ok()
+        );
+        let gone = ReadError::new(ReadFailure::Http(404), "").at(PUBLISHER);
+        let err = reader
+            .read_blocked_in_browser(PUBLISHER, PUBLISHER, gone)
+            .await
+            .unwrap_err();
+        assert_eq!(err.reason, ReadFailure::Http(404));
+    }
+
+    #[tokio::test]
+    async fn should_keep_the_block_when_the_browser_is_challenged_too_or_off() {
+        let challenge = fixture("datadome_challenge.html");
+        let reader = Reader::new(ReaderConfig {
+            renderer: Some(renderer(Ok(page(PUBLISHER, challenge, Some(200))))),
+            ..ReaderConfig::default()
+        });
+        let err = reader
+            .read_blocked_in_browser(PUBLISHER, PUBLISHER, blocked())
+            .await
+            .unwrap_err();
+        assert_eq!(err.reason, ReadFailure::BotChallenge, "never worked around");
+        assert!(
+            err.detail
+                .contains("read in the browser too: bot_challenge"),
+            "{}",
+            err.detail
+        );
+
+        // A 403 whose browser read times out still says 403, with the URL.
+        let slow = Reader::new(ReaderConfig {
+            renderer: Some(slow_renderer()),
+            render_timeout: Duration::from_millis(50),
+            ..ReaderConfig::default()
+        });
+        let forbidden = ReadError::new(ReadFailure::Http(403), "").at(PUBLISHER);
+        let err = slow
+            .read_blocked_in_browser(PUBLISHER, PUBLISHER, forbidden)
+            .await
+            .unwrap_err();
+        assert_eq!(err.reason, ReadFailure::Http(403));
+        assert!(err.detail.contains("render_timeout"), "{}", err.detail);
+        assert_eq!(err.final_url.as_deref(), Some(PUBLISHER));
+
+        let article = fixture("article_mentions_walls.html");
+        let off = Reader::new(ReaderConfig {
+            renderer: Some(renderer(Ok(page(PUBLISHER, article, Some(200))))),
+            render_blocked: false,
+            ..ReaderConfig::default()
+        });
+        let err = off
+            .read_blocked_in_browser(PUBLISHER, PUBLISHER, blocked())
+            .await
+            .unwrap_err();
+        assert_eq!(err.reason, ReadFailure::BotChallenge);
+        let none = Reader::new(ReaderConfig::default());
+        assert!(
+            none.read_blocked_in_browser(PUBLISHER, PUBLISHER, blocked())
+                .await
+                .is_err()
+        );
     }
 }

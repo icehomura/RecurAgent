@@ -173,10 +173,16 @@ async fn extract_text(page: &Page) -> Result<String, String> {
     }
 }
 
+/// Two-second waits for a self-clearing challenge page (see
+/// `octos_research::access::interstitial_text`).
+const INTERSTITIAL_WAITS: u32 = 5;
+
 /// Check if text looks like a bot-protection page.
 fn is_bot_blocked(text: &str) -> bool {
     let lower = text.to_lowercase();
-    lower.contains("performing security verification")
+    // The shared list (Chinese sites' WAF pages included), on short text.
+    octos_research::access::challenge_text(text)
+        || lower.contains("performing security verification")
         || lower.contains("press & hold to confirm you are")
         || lower.contains("please verify you are a human")
         || lower.contains("checking your browser")
@@ -222,7 +228,17 @@ async fn crawl_single_page(page: &Page, url: &str, page_settle_ms: u64) -> Crawl
         }
     };
 
-    // A bot challenge is the site saying no: record it, do not wait it out.
+    // A check that clears itself in a real browser ("Just a moment…",
+    // "正在进行安全检测…"): wait for it, up to ~10 s. Any other challenge is
+    // the site saying no: recorded, not worked around.
+    let mut waits = 0;
+    while waits < INTERSTITIAL_WAITS && octos_research::access::interstitial_text(&text) {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        waits += 1;
+        if let Ok(t) = extract_text(page).await {
+            text = t;
+        }
+    }
     if is_bot_blocked(&text) {
         return challenged(url);
     }
@@ -445,6 +461,8 @@ impl Tool for DeepCrawlTool {
         let mut visited: HashSet<String> = HashSet::new();
         let mut queue: VecDeque<(String, u32)> = VecDeque::new(); // (url, depth)
         let mut results: Vec<CrawledPage> = Vec::new();
+        // Account links not followed (reported, not dropped silently).
+        let mut skipped_account: Vec<String> = Vec::new();
 
         let seed_normalized = normalize_url(&input.url).unwrap_or_else(|| input.url.clone());
         visited.insert(seed_normalized.clone());
@@ -522,6 +540,17 @@ impl Tool for DeepCrawlTool {
                         }
                     }
 
+                    // Sign-in, sign-up and sign-out pages hold no content; an
+                    // explicit path_prefix (already applied above) crawls them.
+                    if input.path_prefix.is_none()
+                        && octos_research::urls::is_account_link(&normalized)
+                    {
+                        if !skipped_account.contains(&normalized) {
+                            skipped_account.push(normalized);
+                        }
+                        continue;
+                    }
+
                     // SSRF check on discovered links
                     if check_ssrf(&normalized).await.is_some() {
                         continue;
@@ -559,6 +588,16 @@ impl Tool for DeepCrawlTool {
             ));
         }
         output.push('\n');
+        if !skipped_account.is_empty() {
+            output.push_str(&format!(
+                "## Not followed: {} sign-in/sign-up link(s) (octos_research::urls::is_account_link; set path_prefix to crawl under one)\n",
+                skipped_account.len()
+            ));
+            for u in skipped_account.iter().take(20) {
+                output.push_str(&format!("- {u}\n"));
+            }
+            output.push('\n');
+        }
 
         for (i, crawled) in results.iter().enumerate() {
             // Save full content to disk
@@ -644,9 +683,17 @@ mod tests {
     }
 
     #[test]
-    fn should_report_bot_challenges_instead_of_waiting_them_out() {
+    fn should_report_bot_challenges_that_do_not_clear() {
+        // Recognised as a challenge; the crawl waits for one that clears
+        // itself (interstitial_text) and reports it only if it stays.
         assert!(super::is_bot_blocked(
             "Just a moment... checking your browser"
+        ));
+        assert!(octos_research::access::interstitial_text(
+            "Just a moment... checking your browser"
+        ));
+        assert!(!octos_research::access::interstitial_text(
+            "Please complete the CAPTCHA to continue"
         ));
         let page = super::challenged("https://example.com/");
         assert!(page.error.unwrap().contains("not bypassed"));

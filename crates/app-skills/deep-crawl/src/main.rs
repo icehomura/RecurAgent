@@ -57,6 +57,10 @@ const CDP_CONNECT_TIMEOUT_SECS: u64 = 15;
 const DEFAULT_MAX_DEPTH: u32 = 3;
 const DEFAULT_MAX_PAGES: u32 = 50;
 
+/// Two-second waits for a self-clearing challenge page (see
+/// `octos_research::access::interstitial_text`).
+const INTERSTITIAL_WAITS: u32 = 5;
+
 /// Largest rendered HTML returned per page when `include_html` is set.
 const MAX_PAGE_HTML_BYTES: usize = 2 * 1024 * 1024;
 /// Cap on a robots.txt `Crawl-delay` we will honour between pages.
@@ -537,14 +541,16 @@ async fn evaluate_js(
     }
 }
 
-/// Extract innerText from the page, stripping boilerplate elements.
+/// Extract the page's visible text, stripping boilerplate elements. Hidden
+/// elements are dropped first (a detached clone's `innerText` would include
+/// them), so a check that clears by hiding its panel reads as the article.
 async fn extract_text(ws: &mut WsStream, session_id: &str) -> Result<String, String> {
     // Remove nav, footer, aside, cookie banners, ads before extracting text.
     // This runs in the browser so we get clean content without boilerplate.
     let text = evaluate_js(
         ws,
         session_id,
-        "(function(){if(!document.body)return '';var c=document.body.cloneNode(true);c.querySelectorAll('nav,footer,aside,[role=navigation],[role=banner],[role=complementary],[role=contentinfo],[class*=cookie],[class*=consent],[class*=gdpr],[class*=sidebar],[class*=newsletter],[class*=advertisement],[id*=cookie],[id*=consent],[id*=sidebar],[class*=popup],[class*=modal],[class*=overlay],iframe,svg,form,script,style,noscript').forEach(function(e){e.remove()});return c.innerText||'';})()",
+        "(function(){if(!document.body)return '';var h=[];document.body.querySelectorAll('*').forEach(function(e){if(e.checkVisibility&&!e.checkVisibility()){e.setAttribute('data-octos-hidden','');h.push(e);}});var c=document.body.cloneNode(true);h.forEach(function(e){e.removeAttribute('data-octos-hidden')});c.querySelectorAll('[data-octos-hidden]').forEach(function(e){e.remove()});c.querySelectorAll('nav,footer,aside,[role=navigation],[role=banner],[role=complementary],[role=contentinfo],[class*=cookie],[class*=consent],[class*=gdpr],[class*=sidebar],[class*=newsletter],[class*=advertisement],[id*=cookie],[id*=consent],[id*=sidebar],[class*=popup],[class*=modal],[class*=overlay],iframe,svg,form,script,style,noscript').forEach(function(e){e.remove()});return c.innerText||'';})()",
     )
     .await?;
     Ok(truncate_string(text, MAX_PAGE_TEXT_CHARS))
@@ -564,7 +570,9 @@ async fn extract_links(ws: &mut WsStream, session_id: &str) -> Vec<String> {
 
 fn is_bot_blocked(text: &str) -> bool {
     let lower = text.to_lowercase();
-    lower.contains("performing security verification")
+    // The shared list (Chinese sites' WAF pages included), on short text.
+    octos_research::access::challenge_text(text)
+        || lower.contains("performing security verification")
         || lower.contains("press & hold to confirm you are")
         || lower.contains("please verify you are a human")
         || lower.contains("checking your browser")
@@ -837,6 +845,16 @@ async fn crawl_single_page(
         }
     };
 
+    // A check that clears itself in a real browser ("Just a moment…",
+    // "正在进行安全检测…"): wait for it, up to ~10 s, instead of giving up.
+    let mut waited = 0;
+    while waited < INTERSTITIAL_WAITS && octos_research::access::interstitial_text(&text) {
+        pump_events(ws, Duration::from_secs(2)).await;
+        waited += 1;
+        if let Ok(t) = extract_text(ws, session_id).await {
+            text = t;
+        }
+    }
     if is_bot_blocked(&text) {
         eprintln!("[deep_crawl] bot challenge, not bypassing: {url}");
         return CrawledPage {
@@ -1240,6 +1258,8 @@ async fn run() -> Output {
     let mut visited: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::new();
     let mut results: Vec<CrawledPage> = Vec::new();
+    // Account links not followed (reported, not dropped silently).
+    let mut skipped_account: Vec<String> = Vec::new();
 
     let seed_normalized = normalize_url(&input.url).unwrap_or_else(|| input.url.clone());
     visited.insert(seed_normalized.clone());
@@ -1362,6 +1382,16 @@ async fn run() -> Output {
                     }
                 }
 
+                // Sign-in, sign-up and sign-out pages hold no content; an
+                // explicit path_prefix (already applied above) crawls them.
+                if input.path_prefix.is_none() && octos_research::urls::is_account_link(&normalized)
+                {
+                    if !skipped_account.contains(&normalized) {
+                        skipped_account.push(normalized);
+                    }
+                    continue;
+                }
+
                 // SSRF check on discovered links
                 if check_ssrf(&normalized).await.is_some() {
                     continue;
@@ -1404,6 +1434,16 @@ async fn run() -> Output {
         ));
     }
     output.push('\n');
+    if !skipped_account.is_empty() {
+        output.push_str(&format!(
+            "## Not followed: {} sign-in/sign-up link(s) (octos_research::urls::is_account_link; set path_prefix to crawl under one)\n",
+            skipped_account.len()
+        ));
+        for u in skipped_account.iter().take(20) {
+            output.push_str(&format!("- {u}\n"));
+        }
+        output.push('\n');
+    }
 
     for (i, crawled) in results.iter().enumerate() {
         // Save full content to disk

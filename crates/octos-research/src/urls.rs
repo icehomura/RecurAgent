@@ -59,6 +59,53 @@ pub fn dedup_key(raw: &str) -> String {
     rest.strip_prefix("www.").unwrap_or(rest).to_string()
 }
 
+/// Path segments that are sign-in, sign-up and sign-out pages. A crawl
+/// follows a site's content, not these: they hold no article and are where
+/// a site starts asking who is visiting. Deliberately narrow: segments that
+/// also name content (`auth`, `oauth2`, `profile`, `settings`, `checkout`,
+/// `register` in documentation and directories) are not here.
+pub const ACCOUNT_SEGMENTS: &[&str] = &[
+    "login",
+    "log-in",
+    "logon",
+    "signin",
+    "sign-in",
+    "sign_in",
+    "signup",
+    "sign-up",
+    "sign_up",
+    "logout",
+    "log-out",
+    "signout",
+    "sign-out",
+    "forgot-password",
+    "reset-password",
+    "my-account",
+    "myaccount",
+    "usercenter",
+];
+
+/// Host prefixes of sign-in services (`accounts.google.com`,
+/// `login.microsoftonline.com`, `passport.example.cn`).
+pub const ACCOUNT_HOST_PREFIXES: &[&str] = &["accounts.", "login.", "signin.", "passport.", "sso."];
+
+/// Whether `raw` is a sign-in, sign-up or sign-out page: a path segment in
+/// [`ACCOUNT_SEGMENTS`] or a host starting with one of
+/// [`ACCOUNT_HOST_PREFIXES`]. Crawls skip these (and say so), unless the
+/// crawl was pointed under a path prefix explicitly.
+pub fn is_account_link(raw: &str) -> bool {
+    let Ok(u) = url::Url::parse(raw) else {
+        return false;
+    };
+    let host = u.host_str().unwrap_or("").to_ascii_lowercase();
+    if ACCOUNT_HOST_PREFIXES.iter().any(|p| host.starts_with(p)) {
+        return true;
+    }
+    u.path_segments().is_some_and(|mut segs| {
+        segs.any(|seg| ACCOUNT_SEGMENTS.contains(&seg.to_ascii_lowercase().as_str()))
+    })
+}
+
 /// Host without a leading `www.`, lowercase.
 pub fn domain_of(raw: &str) -> Option<String> {
     let u = Url::parse(raw.trim()).ok()?;
@@ -115,5 +162,34 @@ mod tests {
             domain_of("https://www.BBC.co.uk/news").as_deref(),
             Some("bbc.co.uk")
         );
+    }
+
+    #[test]
+    fn should_recognise_account_pages() {
+        for u in [
+            "https://medium.com/m/signin?operation=login",
+            "https://www.theverge.com/auth/login?returnPath=%2F",
+            "https://36kr.com/usercenter/basicinfo",
+            "https://accounts.google.com/ServiceLogin",
+            "https://example.org/Sign-Up",
+            "https://shop.example/my-account/orders",
+        ] {
+            assert!(is_account_link(u), "{u}");
+        }
+        // Content that shares words with account pages (review of #2637).
+        for u in [
+            "https://www.bbc.com/news/articles/c1",
+            "https://medium.com/tag/rust",
+            "https://firebase.google.com/docs/auth",
+            "https://developers.google.com/identity/protocols/oauth2",
+            "https://code.visualstudio.com/docs/editor/settings",
+            "https://docs.stripe.com/payments/checkout",
+            "https://example.org/profile/jane-doe",
+            "https://example.org/blog/authors-we-like",
+            "https://example.org/login-tips-for-writers-2026",
+            "not a url",
+        ] {
+            assert!(!is_account_link(u), "{u}");
+        }
     }
 }
