@@ -25,11 +25,13 @@ pub const BENCH_ALLOCATOR_ENV: &str = "RECUR_AGENT_BENCH_ALLOCATOR";
 /// Raised 26.0 → 48.0 on 2026-08-21 for the v0.3.0 capability wave (BPE
 /// token tables, LSP/DAP bridges, MCP client, eval kernels, web tools);
 /// bd tracker holds the re-trim investigation.
-/// Raised 48.0 → 96.0 on 2026-09-29 by owner decision: the hard cap was
-/// lifted to "under 100 MB" so integration candidates are judged on merit
-/// rather than on binary size alone. 96.0 (not 100.0) keeps headroom below
-/// the stated ceiling so the gate does not trip on boundary noise.
-pub const BINARY_SIZE_RELEASE_BUDGET_MB: f64 = 96.0;
+/// A temporary raise to 96.0 on 2026-09-29 was reverted on 2026-09-30, so the
+/// cap is 48.0 MiB again. It had reached only part of the tree — the release
+/// workflow and `scripts/perf/measure_binary_size.py` kept their 48.0 gates
+/// throughout, and the calibrated threshold in
+/// `docs/evidence/conformal-budget-calibration.json` is 47.98 — so the 96.0
+/// value made three gates disagree about one policy rather than changing it.
+pub const BINARY_SIZE_RELEASE_BUDGET_MB: f64 = 48.0;
 
 /// Cargo profile family embedded by `build.rs` (`PROFILE`; custom release-derived
 /// profiles are reported by Cargo as `release`).
@@ -1195,6 +1197,21 @@ mod tests {
 
     const TEST_SOURCE_COMMIT: &str = "1234567890abcdef1234567890abcdef12345678";
 
+    /// An absolute, normalized producer path that deliberately does not exist.
+    ///
+    /// A POSIX literal such as `/unavailable/producer/...` is not absolute on
+    /// Windows — `Path::is_absolute` needs a drive or UNC prefix — so a control
+    /// claiming one was rejected for "not absolute" rather than for the
+    /// property under test.
+    fn unavailable_producer(relative: &str) -> String {
+        std::env::temp_dir()
+            .join("unavailable")
+            .join("producer")
+            .join(relative)
+            .display()
+            .to_string()
+    }
+
     fn write_json(path: &Path, value: &serde_json::Value) {
         std::fs::write(
             path,
@@ -1246,7 +1263,7 @@ mod tests {
             .expect("canonicalize relocated release binary");
         let mut relocated_control = control;
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/release/ra");
+            serde_json::json!(unavailable_producer("target/release/ra"));
         let relocated_control_path = temp.path().join("binary-size-relocated.json");
         write_json(&relocated_control_path, &relocated_control);
         assert!(verify_binary_size_measurement_control(&relocated_control_path).is_err());
@@ -1258,7 +1275,7 @@ mod tests {
         assert_eq!(relocated.binary_path, relocated_binary_path);
 
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/debug/ra");
+            serde_json::json!(unavailable_producer("target/debug/ra"));
         write_json(&relocated_control_path, &relocated_control);
         let wrong_suffix = verify_binary_size_measurement_control_with_relocated_artifact(
             &relocated_control_path,
@@ -1349,9 +1366,9 @@ mod tests {
         let relocated_artifact_path = std::fs::canonicalize(relocated_artifact_path)
             .expect("canonicalize relocated Criterion estimate");
         let mut relocated_control = control.clone();
-        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(format!(
-            "/unavailable/producer/target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/hello/new/estimates.json"
-        ));
+        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(unavailable_producer(&format!(
+            "target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/hello/new/estimates.json"
+        )));
         let relocated_control_path = temp.path().join("cold-load-relocated.json");
         write_json(&relocated_control_path, &relocated_control);
         assert!(verify_cold_load_measurement_control(&relocated_control_path, "hello").is_err());
@@ -1363,9 +1380,9 @@ mod tests {
         .expect("relocated Criterion bytes satisfy the producer control");
         assert_eq!(relocated.artifact_path, relocated_artifact_path);
 
-        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(format!(
-            "/unavailable/producer/target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/pirate/new/estimates.json"
-        ));
+        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(unavailable_producer(&format!(
+            "target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/pirate/new/estimates.json"
+        )));
         write_json(&relocated_control_path, &relocated_control);
         assert!(
             verify_cold_load_measurement_control_with_relocated_artifact(
@@ -1485,7 +1502,7 @@ mod tests {
             .expect("canonicalize relocated idle-RSS binary");
         let mut relocated_control = control.clone();
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/release/ra");
+            serde_json::json!(unavailable_producer("target/release/ra"));
         let relocated_control_path = temp.path().join("idle-rss-relocated.json");
         write_json(&relocated_control_path, &relocated_control);
         assert!(verify_idle_rss_measurement_control(&relocated_control_path).is_err());
@@ -1497,7 +1514,7 @@ mod tests {
         assert_eq!(relocated.binary_path, relocated_binary_path);
 
         relocated_control["binary_path"] =
-            serde_json::json!("/unavailable/producer/target/debug/ra");
+            serde_json::json!(unavailable_producer("target/debug/ra"));
         write_json(&relocated_control_path, &relocated_control);
         let wrong_suffix = verify_idle_rss_measurement_control_with_relocated_artifact(
             &relocated_control_path,

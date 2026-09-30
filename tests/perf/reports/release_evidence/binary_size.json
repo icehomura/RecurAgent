@@ -1,10 +1,10 @@
 {
   "schema": "ra.perf.binary_size.v1",
-  "generated_at": "2026-08-28T09:17:30.575992+00:00",
-  "binary_path": "/Users/jemanuel/projects/recur_agent/target/release/pi",
-  "binary_sha256": "27689834b77579e04b10dd2ac934a2d211e3080fef0f7cbf964e64d3cdad52b4",
-  "size_bytes": 34345984,
-  "size_mb": 32.755,
+  "generated_at": "2026-09-30T09:36:33.536103+00:00",
+  "binary_path": "D:\\cargo-target\\pi_agent\\release\\ra.exe",
+  "binary_sha256": "8e23bec39cca425d9ec104b83d369f0c74841bc880ec3e0c6030f1c11410c0b5",
+  "size_bytes": 48065024,
+  "size_mb": 45.838,
   "size_within_budget": true,
   "budget_threshold_mb": 48.0,
   "cargo_profile": "release",
@@ -14,6 +14,6 @@
   "profile_source": "scripts/perf/measure_binary_size.py",
   "build_command": "cargo build --release --bin ra",
   "build_exit_code": 0,
-  "target_triple": "arm64-unknown-darwin",
-  "binary_basename": "pi"
+  "target_triple": "AMD64-unknown-windows",
+  "binary_basename": "ra.exe"
 }

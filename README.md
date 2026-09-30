@@ -2257,11 +2257,10 @@ strip = true         # Remove symbol tables
 ```
 
 Binary size is explicitly budgeted by the DSR quality recipe via `binary_size_release`, with a target
-threshold of `96.0 MiB` (the harness computes bytes / 1024 / 1024; raised from
-`48.0 MiB` on 2026-09-29 by owner decision so integration candidates are judged
-on merit, which in turn was raised from `26.0 MiB` for the v0.3.0 capability
-wave — BPE token tables, LSP/DAP bridges, the MCP client, and eval kernels — and
-originally from `22.0 MiB` with the FrankenSQLite cutover). A fresh
+threshold of `48.0 MiB` (the harness computes bytes / 1024 / 1024; raised from
+`26.0 MiB` for the v0.3.0 capability wave — BPE token tables, LSP/DAP bridges,
+the MCP client, and eval kernels — and originally from `22.0 MiB` with the
+FrankenSQLite cutover). A fresh
 release measurement is required before reporting the achieved size.
 Default release builds keep heavyweight extras opt-in; use `--features full`
 when you need the image, clipboard, wasm, jemalloc, and syntax-highlighting

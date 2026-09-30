@@ -231,7 +231,7 @@ pub fn calibrate_series(
     let (basis_type, justification) = if series.budget_name == "binary_size_mb" {
         (
             "FOLKLORE_POLICY_CHOICE".to_string(),
-            "Retained as hard architectural release policy gate (96 MiB binary budget)".to_string(),
+            "Retained as hard architectural release policy gate (48 MiB binary budget)".to_string(),
         )
     } else {
         (
