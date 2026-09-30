@@ -152,23 +152,28 @@ details would pull this project away from the product we want to build.
 - User-facing copy must not call Pi Rust a drop-in replacement. Describe the
   actual supported behavior and independently valuable product surface.
 
-## Build, Quality, and Release Authority: DSR Only
+## Build, Quality, and Release Authority
 
-**NEVER use GitHub Actions for this repository, for any reason.** Do not enable,
-dispatch, rerun, cancel, or cite a GitHub Actions workflow as evidence. Workflow
-files may remain in the tree as historical reference, but they are permanently
-non-authoritative and must stay disabled.
+> **Fork note (icehomura/RecurAgent).** Upstream
+> (Dicklesworthstone/pi_agent_rust) holds DSR — installed here in WSL — as the
+> sole quality and release authority and forbids GitHub Actions outright. That
+> rule governs upstream's own release process, and this fork does not claim DSR
+> results it did not run. This fork is released with GitHub Actions instead:
+> `.github/workflows/release.yml` builds and publishes both binary families,
+> the interactive `ra` and the TUI-free `ra-headless`. A `dsr` run remains the
+> authority for any upstream-bound claim; it is not a precondition for this
+> fork's own releases.
 
-- Doodlestein Self-Releaser (`dsr`) is the exclusive quality, cross-platform
-  build, packaging, signing, and release authority.
 - Use `dsr quality --tool recur_agent`, `dsr build recur_agent`, and
   `dsr release recur_agent <version>` (or the corresponding fail-closed DSR
-  operation) instead of any Actions workflow or ad hoc release upload.
-- RCH is an implementation detail that DSR may use to offload compilation.
-  Agents must not invoke Cargo or RCH directly as an alternate quality path.
-- A tag, local binary, RCH result, or source build is not a release. A release
-  exists only after DSR publishes the expected artifacts and DSR verification
-  succeeds against the public release.
+  operation) when producing DSR-attributed evidence or releasing upstream work.
+  Do not cite a DSR result that was not actually produced by a DSR run.
+- This fork releases through `.github/workflows/release.yml`, which publishes
+  both families of archives: `ra-<target>` and `ra-headless-<target>`. It fires
+  on a `v*` tag push or a manual dispatch — neither a plain push to `main` nor a
+  local build publishes anything.
+- A tag, local binary, or source build is not a release until the publishing
+  workflow has produced and verified the expected artifacts for both variants.
 
 ---
 
@@ -343,7 +348,7 @@ This port uses two key libraries from sibling projects:
 | Metric | Target | Notes |
 |--------|--------|-------|
 | Startup time | <100ms | No heavy initialization |
-| Binary size (release) | <96 MiB | DSR release-size budget with LTO + strip enabled (raised 26 → 48 MiB for the v0.3.0 capability wave, then 48 → 96 MiB on 2026-09-29 by owner decision to judge integration candidates on merit rather than size). Gate constant: `src/perf_build.rs` `BINARY_SIZE_RELEASE_BUDGET_MB` |
+| Binary size (release) | <48 MiB | DSR release-size budget with LTO + strip enabled (raised 26 → 48 MiB for the v0.3.0 capability wave). Gate constant: `src/perf_build.rs` `BINARY_SIZE_RELEASE_BUDGET_MB` |
 | TUI framerate | 60fps | Differential rendering |
 | Memory (idle) | <50MB | No leaks on long sessions |
 
