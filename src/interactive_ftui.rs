@@ -3241,7 +3241,7 @@ impl RaFtuiModel {
             self.push_entry(
                 EntryRole::System,
                 String::from(
-                    "pi commands: /model [provider/model], /resume, /new, \
+                    "RecurAgent commands: /model [provider/model], /resume, /new, \
                      /session, /name <name>, /plan, /compact, /tree, /undo [n], /redo [n], \
                      /export [path], /copy, /share, /tan <task>, /usage, /mcp, \
                      /add-dir <dir>, /remove-dir <dir>, /crash [list|show|delete], \
@@ -4725,7 +4725,7 @@ impl RaFtuiModel {
         );
 
         // Header: identity + agent state.
-        let header = format!("pi · {}", self.state.label());
+        let header = format!("RecurAgent · {}", self.state.label());
         let header_style = ftui::Style::new().bold().fg(self.palette.accent);
         Paragraph::new(Text::from_lines([ftui::text::Line::styled(
             header,
@@ -4858,7 +4858,7 @@ impl RaFtuiModel {
         } else if let Some(usage) = &self.usage_line {
             usage.clone()
         } else {
-            String::from("pi")
+            String::from("RecurAgent")
         };
         let footer_style = ftui::Style::new().dim().fg(self.palette.muted);
         Paragraph::new(Text::from_lines([ftui::text::Line::styled(
@@ -5685,7 +5685,7 @@ const EXT_COMMAND_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
 fn unrouted_command_message(name: &str, extensions_enabled: bool) -> String {
     if crate::interactive::SlashCommand::parse(&format!("/{name}")).is_some() {
         return format!(
-            "/{name} is a pi command that this stack does not implement yet; run `ra --classic` for it"
+            "/{name} is a RecurAgent command that this stack does not implement yet; run `ra --classic` for it"
         );
     }
     if extensions_enabled {
@@ -6198,7 +6198,7 @@ async fn new_session_command(
                 || format!("{provider}/{model_id}"),
                 |entry| crate::interactive::model_display_label(&entry),
             );
-            let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {label}")));
+            let _ = agent_tx.send(RaMsg::TerminalTitle(format!("RecurAgent · {label}")));
         }
         Err(err) => {
             let _ = agent_tx.send(RaMsg::AgentError(format!("new session: {err}")));
@@ -6637,7 +6637,7 @@ async fn run_set_name_command(
         Ok(()) => {
             // Issue #200: a named session titles the terminal tab after
             // itself.
-            let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {name}")));
+            let _ = agent_tx.send(RaMsg::TerminalTitle(format!("RecurAgent · {name}")));
             RaMsg::System(format!("Session name: {name}"))
         }
         Err(err) => RaMsg::AgentError(format!("name: {err}")),
@@ -7038,7 +7038,7 @@ async fn resume_session_command(
             send_conversation_reset(handle, agent_tx, "session resumed").await;
             // Issue #200: a resumed named session restores its tab title.
             if let Ok(Some(name)) = handle.with_session(crate::session::Session::get_name).await {
-                let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {name}")));
+                let _ = agent_tx.send(RaMsg::TerminalTitle(format!("RecurAgent · {name}")));
             }
         }
         Err(err) => {
@@ -7392,7 +7392,7 @@ pub fn run(
                 .await?;
                 let current_ask =
                     install_ask_bridges(&handle, &agent_tx, ask_reply_rx, &runtime_handle);
-                send_conversation_reset(&handle, &agent_tx, "pi interactive stack").await;
+                send_conversation_reset(&handle, &agent_tx, "RecurAgent interactive stack").await;
                 Box::pin(send_status_snapshot(&handle, &bash_cwd, &agent_tx)).await;
                 // Issue #208: extension-contributed slash commands become
                 // completable now that the extension runtime is up.
@@ -7407,7 +7407,7 @@ pub fn run(
                 // titles the terminal tab after itself immediately.
                 if let Ok(Some(name)) = handle.with_session(crate::session::Session::get_name).await
                 {
-                    let _ = agent_tx.send(RaMsg::TerminalTitle(format!("Pi · {name}")));
+                    let _ = agent_tx.send(RaMsg::TerminalTitle(format!("RecurAgent · {name}")));
                 }
                 let mut plans = plan_commands::PlanController::default();
                 let mut replacement_failure = None;
@@ -8307,7 +8307,7 @@ mod tests {
             rendered.contains("session restored"),
             "frame missing transcript line: {rendered:?}"
         );
-        assert!(rendered.contains("pi · ready"), "frame missing header");
+        assert!(rendered.contains("RecurAgent · ready"), "frame missing header");
         assert!(
             rendered.contains("Type a message"),
             "frame missing input placeholder: {rendered:?}"
@@ -8811,11 +8811,11 @@ mod tests {
             let message = unrouted_command_message(name, true);
             assert!(
                 message.contains("does not implement yet") && message.contains("--classic"),
-                "/{name} is a real pi command; this stack must say so: {message}"
+                "/{name} is a real RecurAgent command; this stack must say so: {message}"
             );
             assert!(
                 !message.contains("Unknown command"),
-                "/{name} is a real pi command and must not be called unknown: {message}"
+                "/{name} is a real RecurAgent command and must not be called unknown: {message}"
             );
         }
     }
@@ -12285,7 +12285,7 @@ mod tests {
             sim.model()
                 .transcript
                 .iter()
-                .any(|e| e.text.contains("pi commands")),
+                .any(|e| e.text.contains("RecurAgent commands")),
             "uppercase /H must show help"
         );
         type_str(&mut sim, "/Q");
@@ -12371,7 +12371,7 @@ mod tests {
             sim.model()
                 .transcript
                 .iter()
-                .any(|e| e.text.contains("pi commands")),
+                .any(|e| e.text.contains("RecurAgent commands")),
             "the completed /help must route like a typed one"
         );
     }
@@ -12435,7 +12435,7 @@ mod tests {
             sim.model()
                 .transcript
                 .iter()
-                .any(|e| e.text.contains("pi commands")),
+                .any(|e| e.text.contains("RecurAgent commands")),
             "Enter with no highlight submits what was typed"
         );
     }
