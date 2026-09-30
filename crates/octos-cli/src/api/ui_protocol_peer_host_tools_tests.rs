@@ -6240,3 +6240,309 @@ async fn should_show_the_peer_session_a_persons_turn_in_progress() {
     wait_result(&e, &person_turn).await;
     assert_no_block_persisted(&e);
 }
+
+// ── #2605: the durable host-only kernel tool list of a host session ─────
+
+fn set_tool_list(ws: &WsConnection, fx: &Fx, params: Value) -> Result<Value, RpcError> {
+    raw_session_tool_list_set(
+        ws,
+        &fx.state,
+        &rpc(APPUI_METHOD_SESSION_TOOL_LIST_SET, params),
+        None,
+    )
+}
+
+fn get_tool_list(ws: &WsConnection, fx: &Fx, params: Value) -> Result<Value, RpcError> {
+    raw_session_tool_list_get(
+        ws,
+        &fx.state,
+        &rpc(APPUI_METHOD_SESSION_TOOL_LIST_GET, params),
+        None,
+    )
+}
+
+/// The registry of a serve turn on `key` driven by `connection` (`None`:
+/// a kernel continuation), through the production roster function.
+async fn serve_turn_registry(
+    fx: &Fx,
+    key: &SessionKey,
+    turn: &str,
+    connection: Option<u64>,
+) -> octos_agent::ToolRegistry {
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
+        .await
+        .expect("session runtime");
+    let mut registry = runtime.tools.snapshot_excluding(&[]);
+    apply_turn_host_tool_rosters(&mut registry, &fx.data_dir, key, turn, connection);
+    registry
+}
+
+#[test]
+fn should_advertise_and_dispatch_the_session_tool_list_methods() {
+    for method in [
+        APPUI_METHOD_SESSION_TOOL_LIST_SET,
+        APPUI_METHOD_SESSION_TOOL_LIST_GET,
+    ] {
+        assert!(APPUI_EXTRA_METHODS.contains(&method), "{method} advertised");
+        assert!(
+            raw_method_is_dispatched(method, false),
+            "{method} dispatched"
+        );
+        assert!(
+            !super::super::host_managed::EXTERNAL_ALLOWED_METHODS.contains(&method),
+            "{method} is host-only"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_narrow_every_turn_on_the_session_when_the_host_sets_a_durable_list() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (host, _rx) = ws_connection_for_test(8);
+    let usual = sorted_names(&serve_turn_registry(&fx, &fx.system, "t0", None).await);
+    assert!(usual.contains(&"shell".to_owned()) && usual.contains(&"read_file".to_owned()));
+
+    let result = set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token,
+                "generic_tools": ["read_file", "web_search", "read_file", "no_such_tool"] }),
+    )
+    .expect("the host sets the list");
+    assert_eq!(result["version"], 1);
+    assert_eq!(result["previous_version"], 0);
+    assert_eq!(result["applies"], "next_turn");
+    assert_eq!(
+        result["generic_tools"],
+        json!(["read_file", "web_search", "no_such_tool"])
+    );
+    let expected: Vec<String> = ["read_file", "web_search"]
+        .into_iter()
+        .filter(|name| usual.contains(&name.to_string()))
+        .map(str::to_owned)
+        .collect();
+    // The host's turn, another client's turn and a kernel continuation.
+    let (other, _orx) = ws_connection_for_test(8);
+    for (turn, connection) in [
+        ("t1", Some(host.connection_id.0)),
+        ("t2", Some(other.connection_id.0)),
+        ("t3", None),
+    ] {
+        assert_eq!(
+            sorted_names(&serve_turn_registry(&fx, &fx.system, turn, connection).await),
+            expected,
+            "{turn}: exactly the listed tools the roster has, never an unknown one"
+        );
+    }
+    // Other sessions of the profile are untouched.
+    let elsewhere = SessionKey::with_profile_topic("dev", "api", &host_chat(), "elsewhere");
+    assert_eq!(
+        sorted_names(&serve_turn_registry(&fx, &elsewhere, "t4", None).await),
+        usual
+    );
+    // An empty list keeps no kernel tool; null clears it.
+    set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": [] }),
+    )
+    .unwrap();
+    assert!(
+        serve_turn_registry(&fx, &fx.system, "t5", None)
+            .await
+            .tool_names()
+            .is_empty()
+    );
+    let cleared = set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": null,
+                "if_version": 2 }),
+    )
+    .unwrap();
+    assert_eq!(cleared["version"], 3);
+    assert_eq!(cleared["generic_tools"], Value::Null);
+    assert_eq!(
+        sorted_names(&serve_turn_registry(&fx, &fx.system, "t6", None).await),
+        usual
+    );
+}
+
+#[tokio::test]
+async fn should_keep_the_list_when_the_host_reconnects() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (first, _rx) = ws_connection_for_test(8);
+    set_tool_list(
+        &first,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": ["read_file"] }),
+    )
+    .unwrap();
+    // The host's connection goes away; nothing of the list lived on it.
+    crate::peers::host_tools::drop_routes_for_connection(first.connection_id.0);
+    drop(first);
+    let (second, _rx2) = ws_connection_for_test(8);
+    let read = get_tool_list(
+        &second,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token }),
+    )
+    .unwrap();
+    assert_eq!(read["status"], "set");
+    assert_eq!(read["version"], 1);
+    assert_eq!(read["generic_tools"], json!(["read_file"]));
+    assert_eq!(
+        sorted_names(
+            &serve_turn_registry(&fx, &fx.system, "t1", Some(second.connection_id.0)).await
+        ),
+        ["read_file"]
+    );
+    // It lives on disk only, under the profile data dir (so a restarted
+    // kernel reads the same list).
+    assert!(fx.data_dir.join("host_session_tools").is_dir());
+}
+
+#[tokio::test]
+async fn should_refuse_the_list_when_the_connection_is_external() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let params = json!({ "session_id": fx.system, "host_token": token, "generic_tools": [] });
+    for method in [
+        APPUI_METHOD_SESSION_TOOL_LIST_SET,
+        APPUI_METHOD_SESSION_TOOL_LIST_GET,
+    ] {
+        let error = super::super::host_managed::external_gate(method, &params, &HashSet::new())
+            .unwrap_err();
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            super::super::host_managed::EXTERNAL_METHOD_DENIED
+        );
+    }
+    // The handlers refuse it too, even with the host token.
+    let (ws, _rx) = external_ws(8);
+    for error in [
+        set_tool_list(&ws, &fx, params.clone()).unwrap_err(),
+        get_tool_list(&ws, &fx, params.clone()).unwrap_err(),
+    ] {
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            super::super::host_managed::EXTERNAL_METHOD_DENIED
+        );
+    }
+    assert!(!fx.data_dir.join("host_session_tools").exists());
+}
+
+#[tokio::test]
+async fn should_refuse_the_list_when_the_caller_has_no_host_credential() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    for bad in [json!(null), json!("not-the-token")] {
+        let error = set_tool_list(
+            &ws,
+            &fx,
+            json!({ "session_id": fx.system, "host_token": bad, "generic_tools": [] }),
+        )
+        .unwrap_err();
+        assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+    }
+    // Another session of the profile, which prepared no app peer, cannot
+    // use the system session's token for itself.
+    let other = SessionKey::with_profile_topic("dev", "api", &host_chat(), "other");
+    let error = set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": other, "host_token": token, "generic_tools": [] }),
+    )
+    .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+    let error = get_tool_list(&ws, &fx, json!({ "session_id": fx.system })).unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+}
+
+#[tokio::test]
+async fn should_refuse_the_list_when_the_session_is_an_app_peer_or_the_params_are_bad() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    let context = SessionKey(format!("{}#peerctx-news.c1", fx.system.base_key()));
+    for session in [peer_key(&fx), context] {
+        let error = set_tool_list(
+            &ws,
+            &fx,
+            json!({ "session_id": session, "host_token": token, "generic_tools": [] }),
+        )
+        .unwrap_err();
+        assert_eq!(error.data.unwrap()["kind"], "session_tool_list_invalid");
+    }
+    // `generic_tools` is required, so a misspelt key never clears a list.
+    let error = set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "tools": [] }),
+    )
+    .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "session_tool_list_invalid");
+    for bad in ["news.list", "rm -rf", ""] {
+        let error = set_tool_list(
+            &ws,
+            &fx,
+            json!({ "session_id": fx.system, "host_token": token, "generic_tools": [bad] }),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            "session_tool_list_invalid",
+            "{bad}"
+        );
+    }
+    set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": ["grep"] }),
+    )
+    .unwrap();
+    let error = set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": [],
+                "if_version": 0 }),
+    )
+    .unwrap_err();
+    let data = error.data.unwrap();
+    assert_eq!(data["kind"], "session_tool_list_version_conflict");
+    assert_eq!(data["current_version"], 1);
+}
+
+#[tokio::test]
+async fn should_intersect_with_the_live_session_set_when_both_are_given() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (host, _rx) = ws_connection_for_test(8);
+    set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token,
+                "generic_tools": ["read_file", "glob"] }),
+    )
+    .unwrap();
+    raw_peer_tools_register(
+        &host,
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_TOOLS_REGISTER,
+            json!({ "session_id": fx.system, "host_token": token,
+                    "tools": [news_list()], "generic_tools": ["glob", "shell"] }),
+        ),
+        None,
+    )
+    .expect("the live host session set");
+    // Kernel tools: both lists narrow; the app tool is the live set's.
+    assert_eq!(
+        sorted_names(&serve_turn_registry(&fx, &fx.system, "t1", Some(host.connection_id.0)).await),
+        ["glob", "news_list"]
+    );
+    crate::peers::host_tools::drop_routes_for_connection(host.connection_id.0);
+}

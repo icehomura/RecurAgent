@@ -652,6 +652,22 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   typed `data.kind` `peer_input_reject_invalid`, `peer_input_not_found`,
   `peer_input_wrong_connection`, `peer_input_already_rejected`,
   `peer_input_already_started`)
+- `session/tool_list/set` (accepted `UPCR-2026-035`, #2605: the host sets
+  the durable, exact kernel tool list of one of its own sessions;
+  `{session_id, host_token?, profile_id?, generic_tools: [string] | null,
+  if_version?}` → `{session_id, profile_id, version, previous_version,
+  generic_tools, applies: "next_turn"}`; `null` clears; it narrows every turn
+  on the session in the serve and gateway paths, survives reconnects and
+  restarts, never widens the profile policy, and an unreadable list keeps no
+  tools; never from an external client; on a host-managed server the host's
+  connection, elsewhere the host token of an app peer the session prepared;
+  typed `data.kind` `session_tool_list_invalid`,
+  `session_tool_list_version_conflict`, `peer_host_token_mismatch`,
+  `external_method_denied`)
+- `session/tool_list/get` (accepted `UPCR-2026-035`, #2605: the host reads
+  that list back; `{session_id, host_token?, profile_id?}` → `{session_id,
+  profile_id, version, status: "none" | "set" | "cleared" | "unreadable",
+  generic_tools}`; same authorization)
 - `peer/gather` (#1801 v2 blackboard read: per staged peer its brief + the
   latest `result.md` — written server-side on every peer-session turn
   terminal — with per-field truncation flags and `result_updated_unix`;

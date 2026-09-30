@@ -11643,3 +11643,115 @@ async fn session_actor_missing_ram_note_mirrors_existing_durable_row() {
         .count();
     assert_eq!(disk_notes2, 1, "no duplicate durable note");
 }
+
+// ── #2605: the host's durable session tool list in the gateway path ──────
+
+/// Records the tool names offered on every LLM call and ends the turn.
+struct ToolCapturingProvider {
+    offered: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+#[async_trait]
+impl LlmProvider for ToolCapturingProvider {
+    async fn chat(
+        &self,
+        _messages: &[Message],
+        tools: &[ToolSpec],
+        _config: &ChatConfig,
+    ) -> eyre::Result<ChatResponse> {
+        let mut names: Vec<String> = tools.iter().map(|spec| spec.name.clone()).collect();
+        names.sort();
+        self.offered.lock().unwrap().push(names);
+        Ok(ChatResponse {
+            content: Some("done".into()),
+            reasoning_content: None,
+            tool_calls: vec![],
+            stop_reason: StopReason::EndTurn,
+            usage: TokenUsage::default(),
+            provider_index: None,
+        })
+    }
+
+    fn context_window(&self) -> u32 {
+        128_000
+    }
+
+    fn model_id(&self) -> &str {
+        "tool-capture"
+    }
+
+    fn provider_name(&self) -> &str {
+        "tool-capture"
+    }
+}
+
+async fn run_one_turn(
+    tx: &mpsc::Sender<ActorMessage>,
+    out_rx: &mut mpsc::Receiver<OutboundMessage>,
+    provider: &ToolCapturingProvider,
+    text: &str,
+) -> Vec<String> {
+    let before = provider.offered.lock().unwrap().len();
+    tx.send(make_inbound(text)).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if provider.offered.lock().unwrap().len() > before {
+                break;
+            }
+            // Drain replies so the actor never blocks on its outbound queue.
+            let _ = tokio::time::timeout(Duration::from_millis(20), out_rx.recv()).await;
+        }
+    })
+    .await
+    .expect("the turn reached the model");
+    provider.offered.lock().unwrap()[before].clone()
+}
+
+#[tokio::test]
+async fn should_offer_exactly_the_hosts_durable_list_when_a_gateway_turn_starts() {
+    use crate::peers::session_tool_list::set_session_tool_list;
+    let dir = tempfile::tempdir().unwrap();
+    let provider = Arc::new(ToolCapturingProvider {
+        offered: std::sync::Mutex::new(Vec::new()),
+    });
+    let (tx, mut out_rx, _handle, _mgr) =
+        setup_actor_with_mode(provider.clone(), QueueMode::Followup, None, false, &dir).await;
+    let session = test_session_key(dir.path());
+
+    let usual = run_one_turn(&tx, &mut out_rx, &provider, "one").await;
+    assert!(usual.contains(&"read_file".to_owned()) && usual.contains(&"shell".to_owned()));
+
+    // The host sets a list: the next turn keeps exactly the listed tools the
+    // roster has (never an unknown one).
+    set_session_tool_list(
+        dir.path(),
+        &session,
+        Some(vec!["read_file".into(), "no_such_tool".into()]),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        run_one_turn(&tx, &mut out_rx, &provider, "two").await,
+        vec!["read_file".to_owned()]
+    );
+
+    // A change applies from the next turn of the same (long-lived) actor.
+    set_session_tool_list(
+        dir.path(),
+        &session,
+        Some(vec!["read_file".into(), "glob".into()]),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        run_one_turn(&tx, &mut out_rx, &provider, "three").await,
+        vec!["glob".to_owned(), "read_file".to_owned()]
+    );
+
+    // Cleared: the usual roster again.
+    set_session_tool_list(dir.path(), &session, None, None).unwrap();
+    assert_eq!(
+        run_one_turn(&tx, &mut out_rx, &provider, "four").await,
+        usual
+    );
+}
