@@ -25574,16 +25574,26 @@ mod tests {
     /// sha `f74b473e…` -> `61463384…`), from adding the `DefaultPackageManager`
     /// shim export that gh #223 hits. Re-pinned in the same commit as the edit,
     /// which is what this table exists to force.
+    ///
+    /// Re-pinned 2026-09-30 (`<bridge>` + `node:fs`): the JavaScript moved in
+    /// `4ba5e7ada` ("feat: expose the capability filesystem as pi.fs for
+    /// extension scripts", 2026-09-29) *without* the same-commit receipt update
+    /// the paragraph above requires. `<bridge>` 205_743 -> 206_641 (+898) and
+    /// `node:fs` 56_916 -> 58_034 (+1_118); that commit's 70 added / 2 removed
+    /// lines in this file account for both, and no other receipt moved. So this
+    /// is drift, not corruption — but it is the only entry here re-pinned in a
+    /// *later* commit than the edit that caused it, because the edit landed
+    /// without this one.
     const JS_SOURCE_RECEIPTS: &[(&str, usize, &str)] = &[
         (
             BRIDGE_RECEIPT,
-            205_743,
-            "d6e8f792cc3d6db785d1f3426a8c0b3b21308a5ee849b01ca1ed7b7adc79dbba",
+            206_641,
+            "c4717b18006d0276177ee4633c68f03d18875bedc76dc66c4ac113afafc4d9e8",
         ),
         (
             "node:fs",
-            56_916,
-            "5007b4eba74659801fff93fdb60da9b6b83457049459cdb9882ee93550b0be48",
+            58_034,
+            "9e9e78532251c85417a9bbafe470988675b35203d3f6fa7086f083d9d1f4e6cf",
         ),
         (
             "@mariozechner/pi-ai",

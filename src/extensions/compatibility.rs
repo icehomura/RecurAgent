@@ -762,7 +762,7 @@ fn extract_pi_capabilities(line: &str) -> Vec<(String, String, usize)> {
         return out;
     }
 
-    if line.contains("ra.tool") {
+    if line.contains("pi.tool") {
         for caps in ra_tool_regex().captures_iter(line) {
             let Some(tool) = caps.get(1) else { continue };
             let tool_name = tool.as_str().trim().to_ascii_lowercase();
@@ -776,31 +776,35 @@ fn extract_pi_capabilities(line: &str) -> Vec<(String, String, usize)> {
         }
     }
 
-    if line.contains("ra.exec")
+    // The hostcall API is `pi.*`; the regexes above are named `ra_*` only for
+    // historical reasons. A `ra.` substring guard here can never be satisfied
+    // by real hostcall source, which silently dropped every capability and left
+    // the ledger — and doctor's fail-closed verdict — empty.
+    if line.contains("pi.exec")
         && let Some(column) = find_regex_column(line, ra_exec_regex())
     {
-        out.push(("exec".to_string(), "ra.exec".to_string(), column));
+        out.push(("exec".to_string(), "pi.exec".to_string(), column));
     }
 
-    if line.contains("ra.http")
+    if line.contains("pi.http")
         && let Some(column) = find_regex_column(line, ra_http_regex())
     {
-        out.push(("http".to_string(), "ra.http".to_string(), column));
+        out.push(("http".to_string(), "pi.http".to_string(), column));
     }
 
-    if line.contains("ra.log")
+    if line.contains("pi.log")
         && let Some(column) = find_regex_column(line, ra_log_regex())
     {
-        out.push(("log".to_string(), "ra.log".to_string(), column));
+        out.push(("log".to_string(), "pi.log".to_string(), column));
     }
 
-    if line.contains("ra.session")
+    if line.contains("pi.session")
         && let Some(column) = find_regex_column(line, ra_session_regex())
     {
         out.push(("session".to_string(), "pi.session.*".to_string(), column));
     }
 
-    if line.contains("ra.ui")
+    if line.contains("pi.ui")
         && let Some(column) = find_regex_column(line, ra_ui_regex())
     {
         out.push(("ui".to_string(), "pi.ui.*".to_string(), column));
