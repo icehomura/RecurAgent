@@ -796,3 +796,155 @@ async fn should_accept_only_a_contexts_own_folder_as_its_workspace() {
         );
     }
 }
+
+#[tokio::test]
+async fn should_give_a_kernel_provisioned_app_session_no_shared_zones() {
+    // Security review (ADR 0004): a kernel-provisioned app workspace sits
+    // under the data dir, so its session got the profile's shared
+    // `research/` and `skills/` zones — reading what the system agent and
+    // other apps wrote. A host-bound session gets its workspace only.
+    let fx = fixture().await;
+    let staged = raw_peer_prepare(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_PREPARE,
+            json!({
+                "brief": "b", "names": ["Remote Rinx"], "session_id": fx.system,
+                "memory_namespace": "app/rinx/acct-9", "resume": true,
+            }),
+        ),
+        None,
+    )
+    .await
+    .expect("provisioned");
+    let key = SessionKey(format!(
+        "{}#peer-{}",
+        fx.system.base_key(),
+        staged["slug"].as_str().unwrap()
+    ));
+    let rt = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key, None)
+        .await
+        .expect("bound session");
+    let scope = rt.agent.session_scope().expect("scoped");
+    assert!(
+        scope.shared_zones().is_empty(),
+        "{:?}",
+        scope.shared_zones()
+    );
+    assert!(!matches!(
+        scope.classify_lexical_path(&fx.data_dir.join("research/notes.md")),
+        octos_core::PathClassification::InSharedZone { .. }
+    ));
+}
+
+#[tokio::test]
+async fn should_release_a_closed_contexts_memory_stores() {
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let params = json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"),
+                         "peer": "Rinx", "context_id": "ctx-a" });
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(APPUI_METHOD_PEER_CONTEXT_OPEN, params.clone()),
+        None,
+    )
+    .unwrap();
+    let namespace = opened["memory_namespace"].as_str().unwrap().to_owned();
+    let key = SessionKey(opened["session_id"].as_str().unwrap().to_owned());
+    let rt = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key, None)
+        .await
+        .expect("context session");
+    drop(rt);
+    assert!(
+        crate::runtime::memory_namespace::namespace_stores_open(&fx.data_dir, &namespace).await
+    );
+
+    raw_peer_context_close(
+        &fx.state,
+        &rpc(APPUI_METHOD_PEER_CONTEXT_CLOSE, params),
+        None,
+    )
+    .await
+    .expect("close");
+    assert!(
+        !crate::runtime::memory_namespace::namespace_stores_open(&fx.data_dir, &namespace).await,
+        "a closed context's stores are released"
+    );
+}
+
+#[test]
+fn should_redact_host_tokens_when_writing_the_evidence_transcript() {
+    let dir = tempfile::tempdir().unwrap();
+    append_appui_evidence_jsonl_at(
+        dir.path(),
+        "appui-transcript.jsonl",
+        json!({
+            "direction": "server_to_client",
+            "frame": {"result": {"slug": "rinx", "host_token": "hts-SECRET-1"},
+                      "params": [{"host_token": "hts-SECRET-2"}, {"host_token": null}]},
+        }),
+    );
+    let written = std::fs::read_to_string(dir.path().join("appui-transcript.jsonl")).unwrap();
+    assert!(!written.contains("SECRET"), "{written}");
+    assert!(written.contains("\"slug\":\"rinx\""), "{written}");
+    assert!(written.contains("[redacted]"), "{written}");
+}
+
+#[tokio::test]
+async fn should_leave_peer_notes_for_the_system_agent_when_an_external_turn_starts() {
+    // Security review (ADR 0004): an external client's turn on #system got
+    // the peer results / input refusal notes and advanced their cursors, so
+    // the system agent never heard of them.
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let peers = fx.data_dir.join("peers");
+    std::fs::write(
+        peers.join("rinx").join(crate::peers::host_tools::INPUT_REJECTIONS_LEAF),
+        "{\"ts\":\"t\",\"input_id\":\"i1\",\"turn_id\":\"x\",\"reason\":\"busy\",\"message\":null}\n",
+    )
+    .unwrap();
+
+    assert!(peer_turn_start_notes(&peers, &fx.system, true).is_empty());
+    let notes = peer_turn_start_notes(&peers, &fx.system, false);
+    assert!(
+        notes
+            .iter()
+            .any(|(_, label, note)| *label == "peer-input-rejected"
+                && note.contains("peer_input_rejected: busy")),
+        "{notes:?}"
+    );
+}
+
+#[tokio::test]
+async fn should_stage_only_one_of_two_concurrent_prepares_on_the_same_folder() {
+    // Security review (ADR 0004): the binding-conflict check was not
+    // serialized with staging, so two concurrent prepares with the same cwd
+    // both succeeded (20/20 in the reviewer's run).
+    for round in 0..10 {
+        let fx = fixture().await;
+        let prepare = |name: &'static str, ns: String| {
+            let state = fx.state.clone();
+            let params = json!({
+                "brief": "b", "names": [name], "session_id": fx.system,
+                "cwd": fx.apps.join("rinx").to_string_lossy(),
+                "memory_namespace": ns, "resume": true,
+            });
+            async move { raw_peer_prepare(&state, &rpc(APPUI_METHOD_PEER_PREPARE, params), None).await }
+        };
+        let (a, b) = tokio::join!(
+            prepare("Alpha", format!("app/alpha/r{round}")),
+            prepare("Beta", format!("app/beta/r{round}"))
+        );
+        let staged = [a.is_ok(), b.is_ok()].iter().filter(|ok| **ok).count();
+        assert_eq!(
+            staged, 1,
+            "round {round}: exactly one prepare may bind the folder"
+        );
+        let refused = a.err().or(b.err()).unwrap();
+        assert_eq!(refused.data.unwrap()["kind"], "peer_binding_conflict");
+    }
+}

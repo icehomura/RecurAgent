@@ -618,7 +618,12 @@ impl SessionRuntime {
         } else {
             workspace_root.clone()
         };
-        let scope_zones: Vec<PathBuf> = if workspace_under_data {
+        // A host-bound app session (UPCR-2026-034) gets no shared zones:
+        // a kernel-provisioned app workspace lives under the data dir, but
+        // the profile's `research/` and `skills/` hold what the system agent
+        // and other apps wrote.
+        let scope_zones: Vec<PathBuf> = if workspace_under_data && bound_memory_namespace.is_none()
+        {
             DEFAULT_MULTI_TENANT_SHARED_ZONE_NAMES
                 .iter()
                 .map(|name| scope_root.join(name))
