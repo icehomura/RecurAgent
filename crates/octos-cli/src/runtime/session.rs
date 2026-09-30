@@ -357,14 +357,15 @@ impl SessionRuntime {
         // matches the durable one (the session was bound by `peer/prepare` or
         // `peer/context/open` after it was cached) is never reused.
         let bootstrapped_binding = app_binding.clone();
-        let (workspace_hint, bound_memory_namespace) = match app_binding {
-            crate::peers::app_binding::SessionAppBinding::Unbound => (workspace_hint, None),
+        let (workspace_hint, bound_memory_namespace, read_view) = match app_binding {
+            crate::peers::app_binding::SessionAppBinding::Unbound => (workspace_hint, None, None),
             crate::peers::app_binding::SessionAppBinding::Refused(reason) => {
                 eyre::bail!("session {session_key} cannot run: {reason}");
             }
             crate::peers::app_binding::SessionAppBinding::Bound {
                 cwd,
                 memory_namespace,
+                read_view,
             } => {
                 if let Some(hint) = workspace_hint.as_ref() {
                     let hint_canon = dunce::canonicalize(hint).unwrap_or_else(|_| hint.clone());
@@ -377,9 +378,17 @@ impl SessionRuntime {
                         );
                     }
                 }
-                (Some(cwd), Some(memory_namespace))
+                (Some(cwd), Some(memory_namespace), read_view)
             }
         };
+        // UPCR-2026-034 `read_parent`: a request context's read-only view of
+        // its peer's folder, minus every context's folder (its own stays its
+        // workspace). Enforced by the session scope (file tools) and the
+        // sandbox (shell), never by convention.
+        let read_view = read_view.map(|root| {
+            let excluded = vec![crate::peers::app_binding::contexts_folder(&root)];
+            (root, excluded)
+        });
         // UPCR-2026-035: a host-bound app session never runs with host
         // filesystem access. `Host` (danger_full_access, e.g. a Solo profile
         // run with `--danger-full-access`) leaves file tools unscoped and the
@@ -461,8 +470,14 @@ impl SessionRuntime {
         // `fm_tts` and friends emit into this session's
         // `<workspace>/skill-output/` rather than the profile-template
         // path.
-        let sandbox = sandbox_override
+        let mut sandbox = sandbox_override
             .unwrap_or_else(|| permissions.apply_to_sandbox(&profile.default_sandbox));
+        if let Some((root, excluded)) = &read_view {
+            sandbox.read_only_view = Some(octos_agent::SandboxReadOnlyView {
+                root: root.clone(),
+                excluded: excluded.clone(),
+            });
+        }
         let mut tools = profile.tool_specs.rebind_cwd_with_permissions(
             &workspace_root,
             create_sandbox(&sandbox),
@@ -700,6 +715,17 @@ impl SessionRuntime {
         if bound_memory_namespace.is_some() && session_scope.is_none() {
             eyre::bail!("session {session_key} is host-bound but its workspace scope failed");
         }
+        let session_scope = match (session_scope, read_view) {
+            (Some(scope), Some((root, excluded))) => Some(Arc::new(
+                (*scope)
+                    .clone()
+                    .with_read_only_view(root, excluded)
+                    .wrap_err_with(|| {
+                        format!("session {session_key}: the read view of its peer's folder")
+                    })?,
+            )),
+            (scope, _) => scope,
+        };
 
         // The prompt's slash commands (`/router`, `/queue`, …) are handled by
         // bus channels only; serve sessions get the client's own commands
