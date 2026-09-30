@@ -163,6 +163,38 @@ pub struct SessionRuntime {
     client_commands_owner: std::sync::Mutex<Option<u64>>,
 }
 
+/// UPCR-2026-034 `read_parent`: a request context's read-only view of its
+/// peer's folder, minus every context's folder (its own stays its
+/// workspace): `(peer folder, excluded folders)`. Enforced by the session
+/// scope (file tools) and the sandbox (shell), never by convention.
+fn context_read_view(
+    binding: &crate::peers::app_binding::SessionAppBinding,
+) -> Option<(PathBuf, Vec<PathBuf>)> {
+    match binding {
+        crate::peers::app_binding::SessionAppBinding::Bound {
+            read_view: Some(root),
+            ..
+        } => Some((
+            root.clone(),
+            vec![crate::peers::app_binding::contexts_folder(root)],
+        )),
+        _ => None,
+    }
+}
+
+/// Attach [`context_read_view`] to the session scope.
+fn with_context_read_view(
+    scope: Option<Arc<SessionScope>>,
+    binding: &crate::peers::app_binding::SessionAppBinding,
+) -> Result<Option<Arc<SessionScope>>, octos_core::SessionScopeError> {
+    match (scope, context_read_view(binding)) {
+        (Some(scope), Some((root, excluded))) => Ok(Some(Arc::new(
+            (*scope).clone().with_read_only_view(root, excluded)?,
+        ))),
+        (scope, _) => Ok(scope),
+    }
+}
+
 impl SessionRuntime {
     /// Whether the durable app binding of this session still equals the one
     /// this runtime was built for. `false` means the runtime is stale (e.g.
@@ -357,15 +389,15 @@ impl SessionRuntime {
         // matches the durable one (the session was bound by `peer/prepare` or
         // `peer/context/open` after it was cached) is never reused.
         let bootstrapped_binding = app_binding.clone();
-        let (workspace_hint, bound_memory_namespace, read_view) = match app_binding {
-            crate::peers::app_binding::SessionAppBinding::Unbound => (workspace_hint, None, None),
+        let (workspace_hint, bound_memory_namespace) = match app_binding {
+            crate::peers::app_binding::SessionAppBinding::Unbound => (workspace_hint, None),
             crate::peers::app_binding::SessionAppBinding::Refused(reason) => {
                 eyre::bail!("session {session_key} cannot run: {reason}");
             }
             crate::peers::app_binding::SessionAppBinding::Bound {
                 cwd,
                 memory_namespace,
-                read_view,
+                ..
             } => {
                 if let Some(hint) = workspace_hint.as_ref() {
                     let hint_canon = dunce::canonicalize(hint).unwrap_or_else(|_| hint.clone());
@@ -378,17 +410,9 @@ impl SessionRuntime {
                         );
                     }
                 }
-                (Some(cwd), Some(memory_namespace), read_view)
+                (Some(cwd), Some(memory_namespace))
             }
         };
-        // UPCR-2026-034 `read_parent`: a request context's read-only view of
-        // its peer's folder, minus every context's folder (its own stays its
-        // workspace). Enforced by the session scope (file tools) and the
-        // sandbox (shell), never by convention.
-        let read_view = read_view.map(|root| {
-            let excluded = vec![crate::peers::app_binding::contexts_folder(&root)];
-            (root, excluded)
-        });
         // UPCR-2026-035: a host-bound app session never runs with host
         // filesystem access. `Host` (danger_full_access, e.g. a Solo profile
         // run with `--danger-full-access`) leaves file tools unscoped and the
@@ -472,11 +496,11 @@ impl SessionRuntime {
         // path.
         let mut sandbox = sandbox_override
             .unwrap_or_else(|| permissions.apply_to_sandbox(&profile.default_sandbox));
-        if let Some((root, excluded)) = &read_view {
-            sandbox.read_only_view = Some(octos_agent::SandboxReadOnlyView {
-                root: root.clone(),
-                excluded: excluded.clone(),
-            });
+        if let Some((root, excluded)) = context_read_view(&bootstrapped_binding) {
+            sandbox.read_only_view = Some(Box::new(octos_agent::SandboxReadOnlyView {
+                root,
+                excluded,
+            }));
         }
         let mut tools = profile.tool_specs.rebind_cwd_with_permissions(
             &workspace_root,
@@ -715,17 +739,10 @@ impl SessionRuntime {
         if bound_memory_namespace.is_some() && session_scope.is_none() {
             eyre::bail!("session {session_key} is host-bound but its workspace scope failed");
         }
-        let session_scope = match (session_scope, read_view) {
-            (Some(scope), Some((root, excluded))) => Some(Arc::new(
-                (*scope)
-                    .clone()
-                    .with_read_only_view(root, excluded)
-                    .wrap_err_with(|| {
-                        format!("session {session_key}: the read view of its peer's folder")
-                    })?,
-            )),
-            (scope, _) => scope,
-        };
+        let session_scope = with_context_read_view(session_scope, &bootstrapped_binding)
+            .wrap_err_with(|| {
+                format!("session {session_key}: the read view of its peer's folder")
+            })?;
 
         // The prompt's slash commands (`/router`, `/queue`, …) are handled by
         // bus channels only; serve sessions get the client's own commands

@@ -25,7 +25,7 @@ pub struct BwrapSandbox {
     /// writable behaviour. The operator's explicit grant, NOT a fence.
     pub(crate) repo_git_write: Option<PathBuf>,
     /// UPCR-2026-034 `read_parent` (see `SandboxConfig::read_only_view`).
-    pub(crate) read_only_view: Option<super::SandboxReadOnlyView>,
+    pub(crate) read_only_view: Option<Box<super::SandboxReadOnlyView>>,
 }
 
 impl Sandbox for BwrapSandbox {
@@ -143,10 +143,10 @@ mod tests {
         let cwd = root.join("contexts/a");
         std::fs::create_dir_all(&cwd).unwrap();
         let sb = BwrapSandbox {
-            read_only_view: Some(crate::sandbox::SandboxReadOnlyView {
+            read_only_view: Some(Box::new(crate::sandbox::SandboxReadOnlyView {
                 root: root.clone(),
                 excluded: vec![root.join("contexts")],
-            }),
+            })),
             allow_network: false,
             workspace_write: true,
             repo_git_write: None,

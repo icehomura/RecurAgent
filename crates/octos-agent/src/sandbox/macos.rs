@@ -194,7 +194,7 @@ pub struct MacosSandbox {
     /// confines writes must not quietly regain toolchain caches).
     pub(crate) toolchain_write_grants: super::ToolchainWriteGrants,
     /// UPCR-2026-034 `read_parent` (see `SandboxConfig::read_only_view`).
-    pub(crate) read_only_view: Option<super::SandboxReadOnlyView>,
+    pub(crate) read_only_view: Option<Box<super::SandboxReadOnlyView>>,
 }
 
 /// Whether `path` would break out of an SBPL string literal.
@@ -608,10 +608,10 @@ mod tests {
 
     fn view_sandbox(root: &Path, read_allow_paths: Vec<String>) -> MacosSandbox {
         MacosSandbox {
-            read_only_view: Some(crate::sandbox::SandboxReadOnlyView {
+            read_only_view: Some(Box::new(crate::sandbox::SandboxReadOnlyView {
                 root: root.to_path_buf(),
                 excluded: vec![root.join("contexts")],
-            }),
+            })),
             toolchain_write_grants: Default::default(),
             allow_network: false,
             read_allow_paths,

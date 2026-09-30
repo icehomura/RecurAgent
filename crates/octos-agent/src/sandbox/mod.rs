@@ -182,7 +182,7 @@ pub struct SandboxConfig {
     ///   granted one, so they add nothing (fail closed: the shell does not
     ///   see the peer's folder; the file tools still do).
     #[serde(skip)]
-    pub read_only_view: Option<SandboxReadOnlyView>,
+    pub read_only_view: Option<Box<SandboxReadOnlyView>>,
 }
 
 /// See [`SandboxConfig::read_only_view`]. `root` and `excluded` are
