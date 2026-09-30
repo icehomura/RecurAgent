@@ -1043,6 +1043,13 @@ fn sort_scored_items(items: &mut [ScoredItem]) {
         if score_cmp != Ordering::Equal {
             return score_cmp;
         }
+        // Among equal scores, prefer the shorter candidate: for a query like
+        // `he`, `help` is a likelier intent than `hello`. frizbee scores the
+        // alignment, not the leftover length, so this tier is applied here.
+        let length_cmp = a.label.len().cmp(&b.label.len());
+        if length_cmp != Ordering::Equal {
+            return length_cmp;
+        }
         let kind_cmp = a.kind_rank.cmp(&b.kind_rank);
         if kind_cmp != Ordering::Equal {
             return kind_cmp;
@@ -1055,40 +1062,44 @@ fn clamp_usize_to_i32(value: usize) -> i32 {
     i32::try_from(value).unwrap_or(i32::MAX)
 }
 
+/// Score one candidate against the query.
+///
+/// Returns `(is_prefix, score)`: `is_prefix` keeps its meaning as the primary
+/// sort tier (does the match begin at the start of the candidate), and `score`
+/// is the fuzzy score within that tier.
+///
+/// The scoring itself is `frizbee` (Smith-Waterman with affine gaps, the same
+/// family as FZF), which brings two things the previous hand-rolled scorer
+/// lacked: **path-aware bonuses** — `/`, `_`, `-` and `.` all count as word
+/// boundaries, so `conf` ranks `src/conf.rs` above `assets/iconf_x.rs` — and
+/// **typo tolerance**. It is also Unicode-correct, where the previous version
+/// lowercased ASCII only and so could not match CJK paths at all.
 fn fuzzy_match_score(candidate: &str, query: &str) -> Option<(bool, i32)> {
     let query = query.trim();
     if query.is_empty() {
         return Some((true, 0));
     }
 
-    let cand = candidate.to_ascii_lowercase();
-    let query = query.to_ascii_lowercase();
+    // Both sides are lowercased before matching. `Smart` casing alone is not
+    // enough: it makes `Help` match, but the score still differs from `help`,
+    // so case-only variants of the same intent would rank apart. This scorer is
+    // fed paths and command names, where that difference is never meaningful.
+    // Lowercasing here also makes the match Unicode-correct, which the previous
+    // hand-rolled scorer was not (`to_ascii_lowercase` left CJK unmatched).
+    let candidate_lower = candidate.to_lowercase();
+    let query_lower = query.to_lowercase();
 
-    if cand.starts_with(&query) {
-        // Prefer shorter completions for prefix matches.
-        let penalty =
-            clamp_usize_to_i32(cand.len()).saturating_sub(clamp_usize_to_i32(query.len()));
-        return Some((true, 1_000 - penalty));
-    }
+    let config = frizbee::Config::default().casing(frizbee::CaseMatching::Ignore);
+    let mut matcher = frizbee::Matcher::new(&query_lower, &config);
+    let matched = matcher
+        .match_list(&[candidate_lower.as_str()])
+        .into_iter()
+        .next()?;
 
-    if let Some(idx) = cand.find(&query) {
-        return Some((false, 700 - clamp_usize_to_i32(idx)));
-    }
-
-    // Subsequence match with a gap penalty.
-    let mut score = 500i32;
-    let mut search_from = 0usize;
-    for q in query.chars() {
-        let pos = cand[search_from..].find(q)?;
-        let abs = search_from + pos;
-        let gap = clamp_usize_to_i32(abs.saturating_sub(search_from));
-        score -= gap;
-        search_from = abs + q.len_utf8();
-    }
-
-    // Prefer shorter candidates if the match score ties.
-    score -= clamp_usize_to_i32(cand.len()) / 10;
-    Some((false, score))
+    // `exact` means the needle matched the whole haystack. A true prefix (the
+    // match starts at offset 0) is the broader tier the UI sorts on first.
+    let is_prefix = matched.exact || candidate_lower.starts_with(&query_lower);
+    Some((is_prefix, i32::from(matched.score)))
 }
 
 fn is_path_like(text: &str) -> bool {
@@ -1545,12 +1556,41 @@ mod tests {
         );
     }
 
+    fn scored_for_test(label: &str, is_prefix: bool, score: i32) -> ScoredItem {
+        ScoredItem {
+            is_prefix,
+            score,
+            kind_rank: kind_rank(AutocompleteItemKind::Skill),
+            label: label.to_string(),
+            item: AutocompleteItem {
+                kind: AutocompleteItemKind::Skill,
+                label: label.to_string(),
+                insert: label.to_string(),
+                description: None,
+            },
+        }
+    }
+
+    /// "Shorter is likelier" is a *ranking* rule, not a scoring one: frizbee
+    /// scores the alignment only, so `help` and `hello` both score `44` for
+    /// `he`. The tie is broken by candidate length in [`sort_scored_items`].
+    /// This test therefore asserts the order the UI actually shows rather than
+    /// a score difference the scorer does not produce.
     #[test]
     fn fuzzy_match_prefers_prefix_and_shorter() {
         let (prefix_short, score_short) = fuzzy_match_score("help", "he").expect("match help");
         let (prefix_long, score_long) = fuzzy_match_score("hello", "he").expect("match hello");
         assert!(prefix_short && prefix_long);
-        assert!(score_short > score_long);
+
+        let mut items = vec![
+            scored_for_test("hello", prefix_long, score_long),
+            scored_for_test("help", prefix_short, score_short),
+        ];
+        sort_scored_items(&mut items);
+        assert_eq!(
+            items[0].label, "help",
+            "on a score tie the shorter candidate must rank first"
+        );
     }
 
     #[test]
@@ -1876,9 +1916,16 @@ mod tests {
 
     #[test]
     fn fuzzy_match_exact_prefix() {
-        let (is_prefix, score) = fuzzy_match_score("help", "help").unwrap();
+        let (is_prefix, exact) = fuzzy_match_score("help", "help").unwrap();
         assert!(is_prefix);
-        assert_eq!(score, 1000); // exact match → 0 penalty
+        // The invariant is that a whole-string match does not score below the
+        // same query matched against a longer candidate. The concrete number is
+        // frizbee's internal scale, so asserting it would pin the algorithm.
+        let (_, longer) = fuzzy_match_score("helping", "help").unwrap();
+        assert!(
+            exact >= longer,
+            "exact match must not score below a longer candidate: {exact} vs {longer}"
+        );
     }
 
     #[test]
@@ -1891,8 +1938,15 @@ mod tests {
     fn fuzzy_match_substring_not_prefix() {
         let (is_prefix, score) = fuzzy_match_score("xhelp", "help").unwrap();
         assert!(!is_prefix);
-        // substring found at index 1 → 700 - 1 = 699
-        assert_eq!(score, 699);
+        // A buried match must still score positively, and must still land below
+        // the prefix tier. The old `699` was the previous scorer's arithmetic.
+        assert!(score > 0, "buried match must score positive, got {score}");
+        let (prefix, prefix_score) = fuzzy_match_score("help", "help").unwrap();
+        assert!(prefix);
+        assert!(
+            prefix_score > score,
+            "prefix tier must outrank a buried match: {prefix_score} vs {score}"
+        );
     }
 
     #[test]
@@ -2714,15 +2768,25 @@ mod tests {
                 assert_eq!(fuzzy_match_score(&cand, "  "), Some((true, 0)));
             }
 
-            /// Prefix matches report `is_prefix=true` and score >= 900.
+            /// A prefix match is flagged as such and outscores the same query
+            /// buried mid-string — the ordering the old `score >= 900` stood in
+            /// for, stated without frizbee's raw scale.
             #[test]
             fn fuzzy_prefix_match(base in "[a-z]{2,10}", suffix in "[a-z]{0,5}") {
                 let candidate = format!("{base}{suffix}");
-                let result = fuzzy_match_score(&candidate, &base);
-                assert!(result.is_some());
-                let (is_prefix, score) = result.unwrap();
+                let (is_prefix, score) = fuzzy_match_score(&candidate, &base).unwrap();
                 assert!(is_prefix, "prefix match should be flagged");
-                assert!(score >= 900, "prefix score should be high, got {score}");
+
+                // A digit separator keeps the buried probe from accidentally
+                // forming a prefix of its own when `base` starts with the same
+                // character the separator uses.
+                let buried = format!("9{candidate}");
+                let (buried_prefix, buried_score) = fuzzy_match_score(&buried, &base).unwrap();
+                assert!(!buried_prefix, "buried match must not claim the prefix tier");
+                assert!(
+                    score > buried_score,
+                    "prefix {score} must outrank buried {buried_score}"
+                );
             }
 
             /// `fuzzy_match_score` is case-insensitive.
