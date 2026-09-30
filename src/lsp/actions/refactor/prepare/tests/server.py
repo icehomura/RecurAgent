@@ -62,7 +62,7 @@ while True:
     result = None
     if method == "initialize":
         if mode == "init-stall":
-            (root / "started").write_text("initialize", encoding="utf-8")
+            (root / "started").write_text("initialize", encoding="utf-8", newline='')
             continue
         caps = {"textDocumentSync": 1, "renameProvider": {"prepareProvider": True}}
         if mode == "plain":
@@ -100,9 +100,9 @@ while True:
         elif mode == "oversized":
             result["extra"] = "x" * (2 * 1024 * 1024 + 1)
         elif mode == "prepare-drift":
-            (root / "source.target").write_text("external source\n", encoding="utf-8")
+            (root / "source.target").write_text("external source\n", encoding="utf-8", newline='')
         elif mode == "prepare-stall":
-            (root / "started").write_text("prepareRename", encoding="utf-8")
+            (root / "started").write_text("prepareRename", encoding="utf-8", newline='')
             continue
         elif mode == "probe":
             sibling = (root / "sibling.target").as_uri()
@@ -110,7 +110,7 @@ while True:
                   "params": {"edit": {"documentChanges": [edit(sibling, span(0, 5, 0), "unauthorized")]}}})
             response = read()
             assert response["id"] == "edit-probe"
-            (root / "probe.json").write_text(json.dumps(response), encoding="utf-8")
+            (root / "probe.json").write_text(json.dumps(response), encoding="utf-8", newline='')
     elif method == "textDocument/rename":
         selected = span(12, 17) if params["position"]["character"] >= 12 else span(4, 9)
         result = {"documentChanges": [
@@ -118,7 +118,7 @@ while True:
             edit((root / "sibling.target").as_uri(), span(0, 5, 0), params["newName"]),
         ]}
         if mode == "rename-drift":
-            (root / "source.target").write_text("external source\n", encoding="utf-8")
+            (root / "source.target").write_text("external source\n", encoding="utf-8", newline='')
     elif method == "test/barrier":
         result = "ready"
     send({"jsonrpc": "2.0", "id": message["id"], "result": result})

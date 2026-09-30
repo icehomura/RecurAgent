@@ -60,7 +60,7 @@ while True:
         elif mode == 'surrogate':
             result = [edit(1, 1, 'x')]
         elif mode == 'drift':
-            (root / 'source.fmtfixture').write_text('external edit\n', encoding='utf-8')
+            (root / 'source.fmtfixture').write_text('external edit\n', encoding='utf-8', newline='')
         elif mode == 'range':
             result = [{'range':params['range'],'newText':'y'}]
         elif mode == 'inserts':
@@ -74,7 +74,7 @@ while True:
             send({'jsonrpc':'2.0','id':'formatter-edit','method':'workspace/applyEdit',
                 'params':{'edit':{'changes':{target:[edit(0, 4, 'changed')]}}}})
             reply = read()
-            (root / 'callback.json').write_text(json.dumps(reply), encoding='utf-8')
+            (root / 'callback.json').write_text(json.dumps(reply), encoding='utf-8', newline='')
     send({'jsonrpc':'2.0','id':message['id'],'result':result})
 ";
 

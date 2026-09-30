@@ -4,6 +4,17 @@ use super::*;
 use crate::lsp::client::try_path_to_uri;
 use serde_json::json;
 
+/// The key production files an edit under.
+///
+/// `validate` derives its lookup keys through `uri_to_path`, which drops the
+/// Windows verbatim (`\\?\`) prefix that `fs::canonicalize` adds. A map keyed by
+/// the raw canonicalized path would therefore miss every entry; round-trip
+/// through the URI layer instead.
+fn key(path: &std::path::Path) -> PathBuf {
+    crate::lsp::client::uri_to_path(&try_path_to_uri(path).expect("path to uri"))
+        .expect("uri round-trips through a file URI")
+}
+
 struct Fixture {
     paths: [PathBuf; 3],
     uris: [String; 3],
@@ -254,7 +265,7 @@ fn actual_ordered_transaction_moves_then_applies_a_versioned_edit() {
     let new = root.join("new.rs");
     std::fs::write(&old, "old\n").expect("source");
     let hash = crate::lsp::actions::file_hash(&old).expect("request hash");
-    let requested = HashMap::from([(old.clone(), DocumentSnapshot { version: 7, hash })]);
+    let requested = HashMap::from([(key(&old), DocumentSnapshot { version: 7, hash })]);
     let raw = json!({"documentChanges":[
         {"kind":"rename","oldUri":try_path_to_uri(&old).unwrap(),"newUri":try_path_to_uri(&new).unwrap()},
         {"textDocument":{"uri":try_path_to_uri(&new).unwrap(),"version":7},"edits":[{
@@ -263,7 +274,7 @@ fn actual_ordered_transaction_moves_then_applies_a_versioned_edit() {
     ]});
     let plan = crate::lsp::edits::parse_workspace_edit(&raw).expect("ordered plan");
     validate(&raw, &requested, &requested).expect("moved version");
-    crate::lsp::edits::apply_workspace_edit(&plan, Some(&HashMap::from([(old.clone(), hash)])))
+    crate::lsp::edits::apply_workspace_edit(&plan, Some(&HashMap::from([(key(&old), hash)])))
         .expect("apply real transaction");
     assert!(!old.exists());
     assert_eq!(std::fs::read_to_string(new).unwrap(), "new\n");

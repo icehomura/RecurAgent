@@ -229,15 +229,22 @@ fn renamed_text_is_checked_against_the_original_source_hash() {
 
 #[test]
 fn operation_and_text_edit_counts_have_finite_admission_limits() {
+    // A real temp URI, because `uri_to_path` requires a drive letter on Windows
+    // and rejects a hardcoded `file:///tmp/a` outright — that trips the
+    // malformed check first and neither admission limit is ever reached.
+    let dir = tempfile::tempdir().expect("temp dir");
+    let uri = crate::lsp::client::path_to_uri(&dir.path().join("a.rs"));
+
     let entries = vec![
-        json!({"textDocument":{"uri":"file:///tmp/a","version":null},"edits":[]});
+        json!({"textDocument":{"uri":uri,"version":null},"edits":[]});
         MAX_STEPS + 1
     ];
     let error = parse_workspace_edit(&json!({"documentChanges":entries})).expect_err("step bound");
     assert!(error.to_string().contains("LSP_EDIT_LIMIT"));
+
     let edit = json!({"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"newText":""});
-    let error =
-        parse_workspace_edit(&json!({"changes":{"file:///tmp/a":vec![edit; MAX_TEXT_EDITS + 1]}}))
-            .expect_err("edit bound");
+    let mut changes = serde_json::Map::new();
+    changes.insert(uri, json!(vec![edit; MAX_TEXT_EDITS + 1]));
+    let error = parse_workspace_edit(&json!({"changes":changes})).expect_err("edit bound");
     assert!(error.to_string().contains("LSP_EDIT_LIMIT"));
 }

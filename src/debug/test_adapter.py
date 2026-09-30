@@ -199,7 +199,7 @@ def main():
             if MODE == "disconnect_error":
                 reply(request, error="disconnect rejected by test adapter")
                 continue
-            Path("disconnect.json").write_text(json.dumps(args), encoding="utf-8")
+            Path("disconnect.json").write_text(json.dumps(args), encoding="utf-8", newline='')
             reply(request)
             event("terminated")
             return

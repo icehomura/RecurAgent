@@ -79,7 +79,7 @@ while True:
         elif mode == 'response-limit':
             result = [edit('x' * (2 * 1024 * 1024))]
         elif mode == 'drift':
-            (root / 'source.reviewfmt').write_text('external edit\n', encoding='utf-8')
+            (root / 'source.reviewfmt').write_text('external edit\n', encoding='utf-8', newline='')
         elif mode == 'callback':
             send({'jsonrpc': '2.0', 'id': 'format-probe', 'method': 'workspace/applyEdit',
                   'params': {'edit': {'changes': {(root / 'other.reviewfmt').as_uri(): [edit('bad')]}}}})
@@ -87,7 +87,7 @@ while True:
                 reply = read()
                 if reply.get('id') == 'format-probe' and 'method' not in reply:
                     break
-            (root / 'format-probe.json').write_text(json.dumps(reply), encoding='utf-8')
+            (root / 'format-probe.json').write_text(json.dumps(reply), encoding='utf-8', newline='')
     elif method == 'test/count':
         result = formats
     send({'jsonrpc': '2.0', 'id': message['id'], 'result': result})

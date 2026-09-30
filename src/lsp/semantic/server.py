@@ -103,7 +103,7 @@ while True:
         elif mode == "hints-outside":
             response["result"][0]["position"] = {"line": 0, "character": 0}
         elif mode == "hints-drift":
-            (root / "source.pisig").write_text("external hint edit\n", encoding="utf-8")
+            (root / "source.pisig").write_text("external hint edit\n", encoding="utf-8", newline='')
         elif mode == "hints-oversized":
             response["result"][0]["data"] = "x" * (2 * 1024 * 1024)
         elif mode == "hints-error":
@@ -128,7 +128,7 @@ while True:
         elif mode == "hints-resolve-command":
             result["label"][1]["command"]["command"] = "new.command"
         elif mode == "hints-resolve-drift":
-            (root / "source.pisig").write_text("external hint edit\n", encoding="utf-8")
+            (root / "source.pisig").write_text("external hint edit\n", encoding="utf-8", newline='')
         elif mode == "hints-resolve-oversized":
             result["tooltip"] = "x" * (64 * 1024)
         elif mode == "hints-resolve-output":
@@ -154,7 +154,7 @@ while True:
             response.pop("result")
             response["error"] = {"code": -32603, "message": "signature engine failed"}
         elif mode == "drift":
-            (root / "source.pisig").write_text("external edit\n", encoding="utf-8")
+            (root / "source.pisig").write_text("external edit\n", encoding="utf-8", newline='')
         elif mode == "oversized":
             response["result"]["unknown"] = "x" * (2 * 1024 * 1024)
         elif mode == "unsolicited":

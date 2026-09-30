@@ -490,6 +490,21 @@ impl Change {
                 file.persist(&self.path)
             };
             result.map_err(|error| error.error)?;
+            // `tempfile` normalizes the file's attribute word while persisting
+            // (it clears `FILE_ATTRIBUTE_TEMPORARY`, which the scratch file
+            // carried). The permissions captured in `prepare` therefore no
+            // longer describe what is on disk, and `rollback` verifies exactly
+            // this image before undoing — a stale attribute word made it refuse
+            // to restore a file we own, leaving the change behind and failing on
+            // its created directories with `os error 145`. Re-read the truth.
+            if self.staged.after.is_some() {
+                let permissions = std::fs::metadata(&self.path)?.permissions();
+                self.staged
+                    .after
+                    .as_mut()
+                    .expect("after image")
+                    .permissions = Some(permissions);
+            }
         } else {
             std::fs::remove_file(&self.path)?;
         }

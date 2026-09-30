@@ -499,6 +499,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("repo dir");
         git_ok(&dir, &["init", "-b", "main"]).expect("git init");
+        // See `repository_at` in `snapshot_tests`: the host system config on
+        // Windows sets `core.autocrlf=true`, which would turn every fixture's
+        // "\n" into "\r\n" on checkout.
+        git_ok(&dir, &["config", "core.autocrlf", "false"]).expect("config");
         git_ok(&dir, &["config", "user.email", "iso@test"]).expect("config");
         git_ok(&dir, &["config", "user.name", "Iso Test"]).expect("config");
         std::fs::write(dir.join("file.txt"), "one\n").expect("write");

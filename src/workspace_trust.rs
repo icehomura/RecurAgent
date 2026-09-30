@@ -146,9 +146,19 @@ impl WorkspaceTrustSurface {
                         escaped_path(&found.absolute)
                     ))
                 })?;
-            let relative = Path::new(".ra/extensions").join(&found.relative);
-            hash_surface_record(&mut surface_hasher, b"extension", &relative, &bytes);
-            extension_entries.push(escaped_path(&relative));
+            // Manifest keys and the trust digest must not vary by platform.
+            // `Path::join` yields `.ra/extensions\hook.js` on Windows, and
+            // `escaped_path` then escapes that backslash to a literal `\\`,
+            // while the MCP entries below keep their literal `/`. Normalizing
+            // to `/` makes the two lists consistent and the same workspace
+            // hash identically everywhere.
+            let relative = Path::new(".ra/extensions")
+                .join(&found.relative)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let relative = Path::new(&relative);
+            hash_surface_record(&mut surface_hasher, b"extension", relative, &bytes);
+            extension_entries.push(escaped_path(relative));
         }
         let mut mcp_config_entries = Vec::with_capacity(mcp_config_files.len());
         for (relative, bytes) in mcp_config_files {

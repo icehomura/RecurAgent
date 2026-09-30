@@ -50,7 +50,7 @@ def resolved(item):
     if mode in ('command', 'lazy-command'):
         result['command'] = {'title': 'After extraction', 'command': 'test.after'}
     if mode == 'changed': result['title'] = 'A different selection'
-    if mode == 'drift': (root / 'source.review').write_text('external\n', encoding='utf-8')
+    if mode == 'drift': (root / 'source.review').write_text('external\n', encoding='utf-8', newline='')
     return result
 
 while True:

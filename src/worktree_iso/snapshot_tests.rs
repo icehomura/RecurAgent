@@ -7,6 +7,11 @@ use tempfile::TempDir;
 fn repository_at(path: &Path) {
     fs::create_dir_all(path).unwrap();
     git_ok(path, &["init", "-b", "main"]).unwrap();
+    // Git for Windows ships `core.autocrlf=true` in the system config, so a
+    // plain init here rewrites "\n" to "\r\n" on checkout and every byte
+    // assertion below fails. These cases are about snapshot fidelity, not
+    // about the host's line-ending policy, so pin it.
+    git_ok(path, &["config", "core.autocrlf", "false"]).unwrap();
     git_ok(path, &["config", "user.name", "Isolation Fixture"]).unwrap();
     git_ok(path, &["config", "user.email", "isolation@localhost"]).unwrap();
     git_ok(path, &["config", "commit.gpgSign", "false"]).unwrap();
@@ -176,7 +181,10 @@ fn requesting_isolation_from_a_subdirectory_still_captures_the_whole_repo() {
     fs::write(repo.path().join("nested/inside.txt"), "inside\n").unwrap();
     fs::write(repo.path().join("outside.txt"), "outside\n").unwrap();
     let handle = isolate(&repo.path().join("nested"), "subdirectory").unwrap();
-    assert_eq!(handle.repo_root, repo.path().canonicalize().unwrap());
+    // `repo_root` is simplified the same way production resolves it: on
+    // Windows the verbatim `\\?\` prefix that `fs::canonicalize` emits must be
+    // gone before the path is handed to git.
+    assert_eq!(handle.repo_root, dunce::canonicalize(repo.path()).unwrap());
     assert_eq!(
         fs::read(handle.path.join("outside.txt")).unwrap(),
         b"outside\n"

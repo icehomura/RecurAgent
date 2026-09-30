@@ -152,35 +152,58 @@ mod tests {
         }
     }
 
+    /// A temp directory pre-named with `names`, plus the file URI production
+    /// derives for each.
+    ///
+    /// A hardcoded `file:///tmp/...` does not work: `uri_to_path` requires a
+    /// drive letter on Windows and rejects that shape outright, so the fixture
+    /// has to name paths this host can actually represent.
+    fn fixture(names: &[&str]) -> (tempfile::TempDir, Vec<String>) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let uris = names
+            .iter()
+            .map(|name| crate::lsp::client::path_to_uri(&dir.path().join(name)))
+            .collect();
+        (dir, uris)
+    }
+
+    /// The map key production files an entry under for `uri`.
+    fn key(uri: &str) -> PathBuf {
+        crate::lsp::client::uri_to_path(uri).expect("uri round-trips to a path")
+    }
+
     #[test]
     fn parse_changes_form() {
-        let raw = serde_json::json!({
-            "changes": {
-                "file:///tmp/a.rs": [
-                    { "range": { "start": {"line": 0, "character": 1}, "end": {"line": 0, "character": 3} }, "newText": "XX" }
-                ]
-            }
-        });
+        let (_dir, uris) = fixture(&["a.rs"]);
+        let mut changes = serde_json::Map::new();
+        changes.insert(
+            uris[0].clone(),
+            serde_json::json!([
+                { "range": { "start": {"line": 0, "character": 1}, "end": {"line": 0, "character": 3} }, "newText": "XX" }
+            ]),
+        );
+        let raw = serde_json::json!({ "changes": changes });
         let plan = parse_workspace_edit(&raw).expect("parse");
         assert_eq!(plan.text_edits.len(), 1);
-        let edits = &plan.text_edits[&PathBuf::from("/tmp/a.rs")];
+        let edits = &plan.text_edits[&key(&uris[0])];
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].new_text, "XX");
     }
 
     #[test]
     fn parse_document_changes_with_file_ops() {
+        let (_dir, uris) = fixture(&["a.rs", "old.rs", "new.rs", "created.rs", "gone.rs"]);
         let raw = serde_json::json!({
             "documentChanges": [
                 {
-                    "textDocument": { "uri": "file:///tmp/a.rs", "version": 1 },
+                    "textDocument": { "uri": uris[0], "version": 1 },
                     "edits": [
                         { "range": { "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1} }, "newText": "Z" }
                     ]
                 },
-                { "kind": "rename", "oldUri": "file:///tmp/old.rs", "newUri": "file:///tmp/new.rs" },
-                { "kind": "create", "uri": "file:///tmp/created.rs", "options": { "overwrite": true } },
-                { "kind": "delete", "uri": "file:///tmp/gone.rs" }
+                { "kind": "rename", "oldUri": uris[1], "newUri": uris[2] },
+                { "kind": "create", "uri": uris[3], "options": { "overwrite": true } },
+                { "kind": "delete", "uri": uris[4] }
             ]
         });
         let plan = parse_workspace_edit(&raw).expect("parse");
@@ -199,10 +222,11 @@ mod tests {
 
     #[test]
     fn parse_annotated_text_edits() {
+        let (_dir, uris) = fixture(&["a.rs"]);
         let raw = serde_json::json!({
             "documentChanges": [
                 {
-                    "textDocument": { "uri": "file:///tmp/a.rs", "version": 1 },
+                    "textDocument": { "uri": uris[0], "version": 1 },
                     "edits": [
                         {
                             "textEdit": { "range": { "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1} }, "newText": "Z" },
@@ -213,10 +237,7 @@ mod tests {
             ]
         });
         let plan = parse_workspace_edit(&raw).expect("parse");
-        assert_eq!(
-            plan.text_edits[&PathBuf::from("/tmp/a.rs")][0].new_text,
-            "Z"
-        );
+        assert_eq!(plan.text_edits[&key(&uris[0])][0].new_text, "Z");
     }
 
     #[test]

@@ -47,7 +47,7 @@ while True:
         log.write(json.dumps({"method": method, "params": params}) + "\n")
     if method is None:
         if message.get("id") == "unsolicited-edit":
-            (root / "edit-response.json").write_text(json.dumps(message["result"]), encoding="utf-8")
+            (root / "edit-response.json").write_text(json.dumps(message["result"]), encoding="utf-8", newline='')
         continue
     if method == "exit":
         sys.exit(0)
@@ -95,7 +95,7 @@ while True:
                   "error": {"code": -32603, "message": "fixture diagnostic failure"}})
             continue
         if mode == "drift" and uri.endswith("/b.scan"):
-            (root / "a.scan").write_text("external change\n", encoding="utf-8")
+            (root / "a.scan").write_text("external change\n", encoding="utf-8", newline='')
         result = {"kind": "full", "resultId": uri + ":" + str(documents[uri]["version"]),
                   "items": items(uri)}
     if method == "textDocument/diagnostic":

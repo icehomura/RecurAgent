@@ -107,7 +107,7 @@ while True:
             caps['positionEncoding'] = 'utf-8'
         reply(message, {'capabilities': caps})
     elif method == 'workspace/symbol':
-        (root / 'workspace-search-started').write_text('ready', encoding='utf-8')
+        (root / 'workspace-search-started').write_text('ready', encoding='utf-8', newline='')
         if mode == 'stall-search':
             continue
         if mode == 'search-error':
@@ -118,7 +118,7 @@ while True:
         if mode == 'probe':
             probe()
         if mode == 'drift-search':
-            (root / 'anchor.pisymbol').write_text('external\n', encoding='utf-8')
+            (root / 'anchor.pisymbol').write_text('external\n', encoding='utf-8', newline='')
         values = [symbol(0, True), symbol(1), symbol(2)]
         if mode == 'legacy':
             values = [symbol(i, True) for i in range(3)]
@@ -138,7 +138,7 @@ while True:
                 value['data']['large'] = 'x' * 60000
         reply(message, values)
     elif method == 'workspaceSymbol/resolve':
-        (root / 'workspace-resolve-started').write_text('ready', encoding='utf-8')
+        (root / 'workspace-resolve-started').write_text('ready', encoding='utf-8', newline='')
         if mode == 'stall-resolve':
             pending = (message, params)
             continue
@@ -148,7 +148,7 @@ while True:
         if mode == 'shared-budget':
             time.sleep(0.65)
         if mode == 'drift-resolve':
-            (root / 'anchor.pisymbol').write_text('external\n', encoding='utf-8')
+            (root / 'anchor.pisymbol').write_text('external\n', encoding='utf-8', newline='')
         reply(message, resolution(params))
     elif method == 'textDocument/documentSymbol':
         reply(message, [{'name': 'document_only', 'kind': 12, 'range': span(), 'selectionRange': span()}])

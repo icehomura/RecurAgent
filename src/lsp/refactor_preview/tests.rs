@@ -10,6 +10,15 @@ fn uri(path: &Path) -> String {
     try_path_to_uri(path).unwrap()
 }
 
+/// The key production files an edit under.
+///
+/// It comes from `uri_to_path`, which drops the Windows verbatim (`\\?\`)
+/// prefix that `fs::canonicalize` adds. Deriving the test's key through the same
+/// URI layer keeps a canonicalized working path comparable to it.
+fn key(path: &Path) -> std::path::PathBuf {
+    crate::lsp::client::uri_to_path(&uri(path)).expect("path round-trips through a file URI")
+}
+
 fn replacement(path: &Path, text: &str) -> Value {
     json!({"textDocument":{"uri":uri(path),"version":null},"edits":[{
         "range":{"start":{"line":0,"character":0},"end":{"line":0,"character":3}},
@@ -37,7 +46,7 @@ fn prepared_rename_stages_without_writes_and_never_replans() {
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
     // Mutating the input/parsed plan cannot change the retained final images.
     raw["documentChanges"][0]["edits"][0]["newText"] = json!("wrong");
-    plan.text_edits.get_mut(&old).unwrap()[0].new_text = "wrong".into();
+    plan.text_edits.get_mut(&key(&old)).unwrap()[0].new_text = "wrong".into();
     prepared.commit(|| Ok(())).unwrap();
     assert!(!old.exists());
     assert_eq!(std::fs::read_to_string(&new).unwrap(), "new\n");

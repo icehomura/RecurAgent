@@ -119,7 +119,7 @@ while True:
             continue
         response["result"] = result()
         if mode == "drift_list":
-            source_path.write_text("external\n", encoding="utf-8")
+            source_path.write_text("external\n", encoding="utf-8", newline='')
         if mode == "unsolicited":
             pending = (message["id"], response["result"])
             send({"jsonrpc": "2.0", "id": "unsolicited-edit", "method": "workspace/applyEdit",
@@ -141,7 +141,7 @@ while True:
         elif mode == "mutate":
             item["textEdit"]["newText"] = "Substitute"
         elif mode == "drift_resolve":
-            source_path.write_text("external\n", encoding="utf-8")
+            source_path.write_text("external\n", encoding="utf-8", newline='')
         response["result"] = item
     elif method == "workspace/executeCommand":
         raise AssertionError("completion must never execute commands")

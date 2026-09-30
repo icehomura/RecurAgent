@@ -45,7 +45,7 @@ while True:
             'targetText': target.read_text(encoding='utf-8') if target.exists() else None,
             'siblingText': (root / 'sibling.refactor').read_text(encoding='utf-8')
         }
-        (root / 'notification.json').write_text(json.dumps(evidence), encoding='utf-8')
+        (root / 'notification.json').write_text(json.dumps(evidence), encoding='utf-8', newline='')
     if 'id' not in message:
         continue
     result = None
@@ -68,9 +68,9 @@ while True:
             version = versions[source] + (1 if mode == 'stale' else 0)
             result = {'documentChanges': [{'textDocument': {'uri': uri, 'version': version}, 'edits': edits()}]}
         elif mode == 'source-drift':
-            (root / 'source.refactor').write_text('external source\n', encoding='utf-8')
+            (root / 'source.refactor').write_text('external source\n', encoding='utf-8', newline='')
         elif mode == 'sibling-drift':
-            (root / 'sibling.refactor').write_text('external sibling\n', encoding='utf-8')
+            (root / 'sibling.refactor').write_text('external sibling\n', encoding='utf-8', newline='')
         elif mode == 'resource':
             result = {'documentChanges': [
                 {'textDocument': {'uri': sibling, 'version': None}, 'edits': edits()},
@@ -83,13 +83,13 @@ while True:
         result = {'changes': {source: edits(), sibling: edits()}}
         if mode == 'move-appeared':
             destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text('external destination\n', encoding='utf-8')
+            destination.write_text('external destination\n', encoding='utf-8', newline='')
         elif mode == 'move-invalid':
             result['changes'][sibling][0]['range']['end']['line'] = 999
         elif mode == 'move-escape':
             result['changes'][(root.parent / 'outside.refactor').as_uri()] = edits()
         elif mode == 'move-drift':
-            (root / 'source.refactor').write_text('external source\n', encoding='utf-8')
+            (root / 'source.refactor').write_text('external source\n', encoding='utf-8', newline='')
         elif mode == 'move-error':
             send({'jsonrpc': '2.0', 'id': message['id'], 'error': {'code': -32603, 'message': 'import preparation failed'}})
             continue

@@ -68,7 +68,7 @@ while True:
         elif mode == 'stale':
             steps[1]['textDocument']['version'] += 1
         elif mode == 'drift':
-            (root / 'source.identity').write_text('external\n', encoding='utf-8')
+            (root / 'source.identity').write_text('external\n', encoding='utf-8', newline='')
         result = {'documentChanges': steps}
     send({'jsonrpc': '2.0', 'id': message['id'], 'result': result})
 ";

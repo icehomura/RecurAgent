@@ -84,6 +84,20 @@ fn object_id(bytes: &[u8]) -> Result<String> {
     Ok(id.to_string())
 }
 
+/// Canonicalize, then drop the Windows verbatim (`\\?\`) prefix.
+///
+/// `std::fs::canonicalize` returns `\\?\C:\...` on Windows. Win32 accepts that
+/// form, but the `git` subprocess does not: creating the private index
+/// lockfile under such a path fails with `Invalid argument`, which broke
+/// isolation entirely on Windows. Every path this module derives is handed to
+/// git, so they all resolve through here. `dunce` keeps the prefix where
+/// dropping it would change meaning — a path past the legacy length limit, or
+/// one whose final component contains a separator — so it only simplifies what
+/// is safe. On Unix this is `fs::canonicalize`.
+fn canonicalize(path: &Path) -> std::io::Result<PathBuf> {
+    dunce::canonicalize(path)
+}
+
 /// Strip only Git's record terminator, never whitespace belonging to a path.
 fn repository_path(cwd: &Path, flag: &str) -> Result<PathBuf> {
     let mut bytes = run(
@@ -109,7 +123,7 @@ fn repository_path(cwd: &Path, flag: &str) -> Result<PathBuf> {
             "Repository root is not representable on this platform",
         )
     })?);
-    path.canonicalize().map_err(|error| {
+    canonicalize(&path).map_err(|error| {
         failure(
             "RECUR_AGENT_ISO_SNAPSHOT",
             &format!("Cannot resolve repository root: {error}"),
@@ -231,21 +245,21 @@ pub(super) struct Snapshot {
 
 impl Snapshot {
     pub(super) fn checkout(&self, repo: &Path, path: &Path, branch: &str) -> Result<()> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| {
-                failure(
-                    "RECUR_AGENT_ISO_WORKTREE_PATH",
-                    "Missing worktree parent directory",
-                )
-            })?
-            .canonicalize()
-            .map_err(|_| {
-                failure(
-                    "RECUR_AGENT_ISO_WORKTREE_PATH",
-                    "Cannot resolve worktree parent directory",
-                )
-            })?;
+        let parent = canonicalize(
+            path.parent()
+                .ok_or_else(|| {
+                    failure(
+                        "RECUR_AGENT_ISO_WORKTREE_PATH",
+                        "Missing worktree parent directory",
+                    )
+                })?,
+        )
+        .map_err(|_| {
+            failure(
+                "RECUR_AGENT_ISO_WORKTREE_PATH",
+                "Cannot resolve worktree parent directory",
+            )
+        })?;
         if !path.is_absolute() || parent.starts_with(repository_root(repo)?) {
             return Err(failure(
                 "RECUR_AGENT_ISO_NESTED_TEMP",

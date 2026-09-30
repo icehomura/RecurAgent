@@ -119,11 +119,11 @@ def run_command_sequence(data):
         assert Path("source.lspfixture").read_text() == "fixed\n"
         results.append(server_workspace_edit(versioned_edit(sibling, data["siblingVersion"])))
     elif MODE in ("command-source-drift", "command-inline-drift"):
-        Path("source.lspfixture").write_text("external\n", encoding="utf-8")
+        Path("source.lspfixture").write_text("external\n", encoding="utf-8", newline='')
         results.append(server_edit(sibling))
     elif MODE == "command-between-drift":
         results.append(server_edit(uri))
-        Path("source.lspfixture").write_text("external\n", encoding="utf-8")
+        Path("source.lspfixture").write_text("external\n", encoding="utf-8", newline='')
         results.append(server_workspace_edit(edit(uri, "bad", 5)))
         results.append(server_edit(sibling))
     elif MODE in ("command-move", "command-recreated"):
@@ -135,7 +135,7 @@ def run_command_sequence(data):
         if MODE == "command-move":
             results.append(server_workspace_edit(versioned_edit(moved, None, "two")))
         else:
-            Path("source.lspfixture").write_text("external\n", encoding="utf-8")
+            Path("source.lspfixture").write_text("external\n", encoding="utf-8", newline='')
             results.append(server_workspace_edit({"documentChanges": [
                 {"kind": "create", "uri": uri, "options": {"overwrite": True}}]}))
     elif MODE == "command-budget":
@@ -143,7 +143,7 @@ def run_command_sequence(data):
             results.append(server_workspace_edit({}))
     else:
         raise ValueError("unknown command fixture mode")
-    Path("command-results.json").write_text(json.dumps(results), encoding="utf-8")
+    Path("command-results.json").write_text(json.dumps(results), encoding="utf-8", newline='')
     return results
 
 
@@ -211,7 +211,7 @@ def main():
                 continue
             if MODE == "review-pull-probe":
                 probe = server_edit(Path("sibling.lspfixture").resolve().as_uri())
-                Path("pull-probe.json").write_text(json.dumps(probe), encoding="utf-8")
+                Path("pull-probe.json").write_text(json.dumps(probe), encoding="utf-8", newline='')
             if PULL_VERSION == version:
                 assert params.get("previousResultId") == "review-report"
                 reply(request, {"kind": "unchanged", "resultId": "review-report"})
@@ -223,7 +223,7 @@ def main():
                 "severity": 1, "code": "needs-fix", "message": "Fix this identifier",
                 "data": {"opaque": ["λ", version], "uri": uri}}]
             if MODE == "review-pull-drift":
-                Path("source.lspfixture").write_text("external\n", encoding="utf-8")
+                Path("source.lspfixture").write_text("external\n", encoding="utf-8", newline='')
             reply(request, {"kind": "full", "items": PULL_ITEMS, "resultId": "review-report"})
         elif method in ("textDocument/didOpen", "textDocument/didChange"):
             continue
@@ -238,7 +238,7 @@ def main():
             if MODE.startswith("selection"):
                 if MODE == "selection-probe":
                     probe = server_edit(Path("sibling.lspfixture").resolve().as_uri())
-                    Path("selection-probe.json").write_text(json.dumps(probe), encoding="utf-8")
+                    Path("selection-probe.json").write_text(json.dumps(probe), encoding="utf-8", newline='')
                 reply(request, selection_actions(params))
                 continue
             action = {"title": "Finish refactoring", "kind": "refactor", "data": {"uri": SOURCE}}
@@ -252,7 +252,7 @@ def main():
                     continue
                 if MODE == "review-probe":
                     result = server_edit(Path("sibling.lspfixture").resolve().as_uri())
-                    Path("review-probe.json").write_text(json.dumps(result), encoding="utf-8")
+                    Path("review-probe.json").write_text(json.dumps(result), encoding="utf-8", newline='')
                 if MODE == "review-error":
                     send({"id": request["id"], "error": {"code": -32603, "message": "refactor resolution failed"}})
                     continue
@@ -368,7 +368,7 @@ def resolve_review(params):
     if MODE == "review-changed":
         resolved["data"] = {"changed": True}
     if MODE == "review-drift":
-        Path("source.lspfixture").write_text("external\n", encoding="utf-8")
+        Path("source.lspfixture").write_text("external\n", encoding="utf-8", newline='')
     return resolved
 
 

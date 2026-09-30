@@ -59,7 +59,7 @@ def reply(message):
     elif MODE == "output-limit":
         result = [{"uri": "generated:" + "x" * 8000, "range": span(0, 1)}] * 40
     elif MODE == "drift":
-        (ROOT / "source.navfixture").write_text("external source\n", encoding="utf-8")
+        (ROOT / "source.navfixture").write_text("external source\n", encoding="utf-8", newline='')
     if MODE == "error":
         send({"jsonrpc": "2.0", "id": message["id"],
               "error": {"code": -32603, "message": "navigation provider failed"}})
@@ -99,7 +99,7 @@ while True:
             uri = (ROOT / "other.navfixture").as_uri()
             send({"jsonrpc": "2.0", "id": "edit-probe", "method": "workspace/applyEdit",
                   "params": {"edit": {"changes": {uri: [{"range": span(0, 4), "newText": "wrong"}]}}}})
-            (ROOT / "probe.json").write_text(json.dumps(read()), encoding="utf-8")
+            (ROOT / "probe.json").write_text(json.dumps(read()), encoding="utf-8", newline='')
         reply(message)
     else:
         send({"jsonrpc": "2.0", "id": message["id"], "result": {"barrier": True}})

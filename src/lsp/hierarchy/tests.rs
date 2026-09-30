@@ -43,7 +43,7 @@ while True:
         log.write(json.dumps(message) + '\n')
     method, params = message.get('method'), message.get('params') or {}
     if method is None:
-        (root / 'callback.json').write_text(json.dumps(message), encoding='utf-8')
+        (root / 'callback.json').write_text(json.dumps(message), encoding='utf-8', newline='')
         continue
     if 'id' not in message:
         continue
@@ -61,7 +61,7 @@ while True:
         reply['result'] = {'capabilities': caps}
     elif method == 'textDocument/prepareCallHierarchy':
         if mode == 'hang_prepare':
-            (root / 'held').write_text('prepare', encoding='utf-8')
+            (root / 'held').write_text('prepare', encoding='utf-8', newline='')
             continue
         if mode == 'shared_timeout':
             time.sleep(0.65)
@@ -73,7 +73,7 @@ while True:
         elif mode == 'malformed_item':
             reply['result'].append({'name': 'bad'})
         elif mode == 'drift_prepare':
-            (root / 'source.graphfixture').write_text('changed\n', encoding='utf-8')
+            (root / 'source.graphfixture').write_text('changed\n', encoding='utf-8', newline='')
         elif mode == 'unsolicited':
             send({'jsonrpc':'2.0', 'id':700, 'method':'workspace/applyEdit', 'params':{'edit':{'changes':{
                 (root / 'source.graphfixture').as_uri(): [{'range':span(), 'newText':'UNAUTHORIZED'}]
@@ -101,15 +101,15 @@ while True:
         elif mode == 'type_many':
             reply['result'] = [target for _ in range(150)]
         elif mode == 'type_drift':
-            (root / 'source.graphfixture').write_text('source changed\n', encoding='utf-8')
+            (root / 'source.graphfixture').write_text('source changed\n', encoding='utf-8', newline='')
         elif mode == 'type_hang':
-            (root / 'held').write_text('type', encoding='utf-8')
+            (root / 'held').write_text('type', encoding='utf-8', newline='')
             continue
     elif method in ('callHierarchy/incomingCalls', 'callHierarchy/outgoingCalls'):
         selected = params['item']
         assert selected == items[selected['name']], 'opaque hierarchy item was changed'
         if mode == 'hang_calls':
-            (root / 'held').write_text('calls', encoding='utf-8')
+            (root / 'held').write_text('calls', encoding='utf-8', newline='')
             continue
         if mode == 'shared_timeout':
             time.sleep(0.65)
@@ -128,7 +128,7 @@ while True:
         elif mode == 'many_sites':
             edge['fromRanges'] = [span(5, 9) for _ in range(100)]
         elif mode == 'drift_calls':
-            (root / 'source.graphfixture').write_text('changed\n', encoding='utf-8')
+            (root / 'source.graphfixture').write_text('changed\n', encoding='utf-8', newline='')
         elif mode == 'error':
             del reply['result']
             reply['error'] = {'code':-32603, 'message':'hierarchy fixture failed'}
