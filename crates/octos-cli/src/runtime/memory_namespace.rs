@@ -169,6 +169,7 @@ fn bundles() -> &'static tokio::sync::Mutex<HashMap<PathBuf, Arc<Bundle>>> {
     BUNDLES.get_or_init(Default::default)
 }
 
+#[cfg_attr(not(feature = "api"), allow(dead_code))]
 fn bundle_key(data_dir: &Path, namespace: &str) -> Option<PathBuf> {
     let namespace = validate_memory_namespace(namespace).ok()?;
     let root = memory_namespace_root(data_dir, &namespace);
@@ -179,6 +180,7 @@ fn bundle_key(data_dir: &Path, namespace: &str) -> Option<PathBuf> {
 /// context never runs again, UPCR-2026-034). The stores close once the last
 /// runtime still holding them (a cached, now-refusing session) is dropped,
 /// instead of staying open for the life of the process.
+#[cfg_attr(not(feature = "api"), allow(dead_code))]
 pub(crate) async fn release_namespace_stores(data_dir: &Path, namespace: &str) {
     if let Some(key) = bundle_key(data_dir, namespace) {
         bundles().lock().await.remove(&key);
