@@ -227,6 +227,10 @@ pub mod interactive;
 pub mod interactive_ftui;
 #[doc(hidden)]
 pub mod jobs;
+// Keybinding catalog + the session picker are interactive-front-end surfaces:
+// they consume bubbletea event types and are reached only from `interactive`.
+// Gate them with `tui` so a headless build compiles no terminal stack.
+#[cfg(feature = "tui")]
 #[doc(hidden)]
 pub mod keybindings;
 #[doc(hidden)]
@@ -306,6 +310,7 @@ pub mod session_index;
 #[doc(hidden)]
 pub mod session_metrics;
 #[cfg(feature = "tui")]
+#[cfg(feature = "tui")]
 #[doc(hidden)]
 pub mod session_picker;
 #[cfg(feature = "sqlite-sessions")]
@@ -319,6 +324,9 @@ pub mod skill_merge;
 pub mod skills_managed;
 pub mod sse;
 pub mod stats;
+// Powerline status line: renders through rich_rust, which unconditionally
+// compiles crossterm. Reached only from the interactive views.
+#[cfg(feature = "tui")]
 #[doc(hidden)]
 pub mod status_line;
 pub mod stream_rules;
@@ -342,6 +350,10 @@ pub mod todo;
 #[doc(hidden)]
 pub mod token_count;
 pub mod tools;
+// Styled console + markdown rendering, built on rich_rust. Session resume's
+// interactive picker is its only non-interactive-module caller, and that path
+// is gated with it (see src/session.rs).
+#[cfg(feature = "tui")]
 #[doc(hidden)]
 pub mod tui;
 pub mod turn_recovery;

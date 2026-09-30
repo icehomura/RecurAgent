@@ -18,7 +18,57 @@ use crate::session_index::{
     enqueue_session_index_snapshot_update, is_session_file_path, session_file_stats,
 };
 use crate::session_store_v2::{self, SessionStoreV2};
+#[cfg(feature = "tui")]
 use crate::tui::RaConsole;
+
+// `RaConsole` is rich_rust-backed, and rich_rust compiles crossterm
+// unconditionally — so a headless build cannot name it. The session picker's
+// text-mode fallback (see `resume_with_picker`) uses the console only to
+// STYLE a listing it prints to stdout and a selection it reads from stdin;
+// the flow itself is plain stdio, not a terminal UI. This shim keeps that
+// flow working with the same four calls rendered plainly, so the headless
+// build links no terminal stack while behaving identically on the wire.
+#[cfg(not(feature = "tui"))]
+struct RaConsole;
+
+#[cfg(not(feature = "tui"))]
+impl RaConsole {
+    const fn new() -> Self {
+        Self
+    }
+
+    fn render_info(&self, message: &str) {
+        println!("{message}");
+    }
+
+    fn render_warning(&self, message: &str) {
+        eprintln!("{message}");
+    }
+
+    fn render_table(&self, headers: &[&str], rows: &[Vec<&str>]) {
+        let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+        for row in rows {
+            for (idx, cell) in row.iter().enumerate() {
+                if let Some(width) = widths.get_mut(idx) {
+                    *width = (*width).max(cell.len());
+                }
+            }
+        }
+        let render_row = |cells: &[&str]| {
+            let line = cells
+                .iter()
+                .enumerate()
+                .map(|(idx, cell)| format!("{cell:<width$}", width = widths[idx]))
+                .collect::<Vec<_>>()
+                .join("  ");
+            println!("{}", line.trim_end());
+        };
+        render_row(headers);
+        for row in rows {
+            render_row(row);
+        }
+    }
+}
 use asupersync::channel::oneshot;
 use asupersync::sync::Mutex;
 use async_trait::async_trait;
