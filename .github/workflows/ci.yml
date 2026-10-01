@@ -1817,6 +1817,44 @@ jobs:
           set -euxo pipefail
           echo "ts=$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_OUTPUT"
 
+      - name: Diagnose snapshot index delta
+        run: |
+          set -euxo pipefail
+          git --version
+          git status --porcelain | head -20 || true
+          git diff --cached --stat | head -20 || true
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          root = Path(".").resolve()
+          def git(*args):
+              return subprocess.run(["git","-c","core.bare=false","-c","core.worktree="+str(root),"--git-dir",str(root/".git"),"--work-tree",str(root),*args],capture_output=True,check=True).stdout
+          head = git("rev-parse","--verify","HEAD^{commit}").decode().strip()
+          tb = git("ls-tree","-r","-z","--full-tree",head)
+          tree = {}
+          for rec in filter(None, tb.split(b"\0")):
+              md, p = rec.split(b"\t",1); f = md.split(b" "); tree[p] = (f[0], f[2])
+          ib = git("ls-files","--stage","-z")
+          idx = {}
+          for rec in filter(None, ib.split(b"\0")):
+              md, p = rec.split(b"\t",1); f = md.split(b" "); idx[p] = (f[0], f[1])
+          print("counts", len(tree), len(idx))
+          for p in sorted(set(tree)-set(idx))[:20]:
+              print("TREE-ONLY", p.decode(), tree[p])
+          for p in sorted(set(idx)-set(tree))[:20]:
+              print("INDEX-ONLY", p.decode(), idx[p])
+          diffs = 0
+          for p in sorted(set(tree)&set(idx)):
+              if tree[p] != idx[p]:
+                  diffs += 1
+                  if diffs <= 20:
+                      print("DIFF", p.decode(), "tree=", tree[p], "index=", idx[p])
+          print("total diffs", diffs)
+          flags = git("ls-files","-v","-z").split(b"\0")
+          bad = [r for r in flags if r and r[:1] != b"H"]
+          print("non-H flags count", len(bad), "sample", [r.decode() for r in bad[:5]])
+          PY
+
       - name: Execute shard lane
         env:
           SHARD_ARTIFACT_DIR: ${{ github.workspace }}/RecurAgent/tests/e2e_results/ci-shards/${{ matrix.shard.name }}/${{ steps.ts.outputs.ts }}
