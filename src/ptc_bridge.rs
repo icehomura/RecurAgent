@@ -1,20 +1,21 @@
 //! M6 PTC (Programmatic Tool Calling): the `run_code` tool.
 //!
-//! The model writes one JS program; pi spawns a sandboxed node child that
-//! executes it against [`PTC_SDK`]. The program orchestrates multiple tool
-//! calls in a single round-trip — intermediate data stays in the child, only
-//! the program's final value returns to the model.
+//! The model writes one JS program; it runs on an **in-process QuickJS realm**
+//! (`rquickjs`) with a Rust-injected `sdk` object, and orchestrates multiple
+//! tool calls in a single round-trip. Intermediate data stays in the realm;
+//! only the program's final value returns to the model.
 //!
-//! Structure follows [`crate::eval`]'s kernel bridge: piped stdio, a reader
-//! thread feeding an mpsc channel, deadline polling, and process-group
-//! discipline so a timeout kills children spawned by the program too.
+//! There is no Node.js/Bun dependency and no embedded JS asset to keep in
+//! sync: the engine is already linked in for extensions
+//! ([`crate::extensions_js`]) and `eval` ([`crate::eval`]), and every `sdk.*`
+//! binding below is a Rust closure. A run spawns no child process and writes
+//! nothing to disk.
 //!
-//! # SDK surface (what model code may call)
+//! # SDK surface (what program code may call)
 //!
-//! The program body receives `sdk` and a `console` that writes to stderr.
-//! Every helper below forwards to a host tool through the bridge; the host
-//! reply is the tool's rendered text, or a rejected Promise carrying the
-//! tool's error text.
+//! The program body receives `sdk` and a `console`. Every helper forwards to a
+//! host tool through the bridge; the host reply is the tool's rendered text, or
+//! a thrown error carrying the tool's error text.
 //!
 //! Each helper accepts the positional shorthand **or** an options object, and
 //! the object form forwards every key to the host tool (so `offset`, `limit`,
@@ -34,34 +35,27 @@
 //! bindings the host always rejects. Adding them requires routing through the
 //! approval pipeline first (port plan §7).
 //!
-//! # Output discipline
+//! # Error locations
 //!
-//! stdout carries the protocol, so program output is kept off it: `console.*`
-//! and any stray `process.stdout.write` are redirected to stderr, and the
-//! protocol writes through a handle captured before the program runs. Only the
-//! program's `return`ed value comes back to the model.
+//! The program is evaluated with the file name `ptc-program`, and the wrapper
+//! prefix stays on line 1, so a frame like `ptc-program:12:5` names line 12 of
+//! the exact `code` string the model wrote — leading blank lines included,
+//! because `code` is never trimmed.
 //!
 //! # Security boundary
 //!
-//! Two independent layers, both reported in the tool result's `details`:
-//!
-//! - **Tool layer.** Every bridge call is dispatched through the *same*
-//!   [`Tool`] implementations a direct call uses (see
+//! - **Capability layer.** The realm has no ambient I/O: no `fs`, no
+//!   `child_process`, no `require`, no network, no `process`. *Only* the
+//!   injected `sdk` object can reach outside, and every call is dispatched
+//!   through the *same* [`Tool`] implementations a direct call uses (see
 //!   [`RunCodeTool::bridge_call`]), so path confinement, workspace roots, and
-//!   read settings are identical — no policy bypass. All four whitelisted tools
-//!   are read-only and thus need no approval; the bridge can never reach an
-//!   approval-gated tool.
-//! - **Process layer.** When the runtime supports it, the child is spawned under
-//!   Node's permission model (see [`SandboxMode`]): reads are confined to the
-//!   program's scratch directory plus the session workspace roots, and writes,
-//!   `child_process`, and reads outside those roots fail with
-//!   `ERR_ACCESS_DENIED`. This is what makes the read-only contract real for a
-//!   program that reaches for `node:fs` or `node:child_process` directly instead
-//!   of going through the bridge. On a runtime without the permission model the
-//!   flag is omitted, `details.sandbox` reads `"unavailable"`, and the process
-//!   layer is absent (the tool layer still holds).
-//! - A node child owns its process group: a wall-clock timeout kills the whole
-//!   tree, including anything the program spawned.
+//!   read settings are identical — no policy bypass.
+//! - **Resource layer.** The realm is created with a heap ceiling
+//!   ([`PTC_MEMORY_LIMIT_BYTES`]), a QuickJS stack ceiling, and an interrupt
+//!   handler wired to the run deadline and a cancellation flag, so a runaway or
+//!   wedged program is interrupted instead of taking the host down.
+//! - A bridge call the host never answers fails at the run budget, so one stuck
+//!   tool cannot pin the whole run past its deadline.
 
 use crate::error::{Error, Result};
 use crate::model::{ContentBlock, TextContent};
@@ -71,15 +65,17 @@ use crate::tools::{
 };
 use crate::workspace::WorkspaceHandle;
 use async_trait::async_trait;
+use rquickjs::function::{Func, Opt, Rest};
+use rquickjs::{Coerced, Ctx, FromJs, Object, Promise, Value as JsValue};
 use serde::Deserialize;
-use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use serde_json::{Map, Value, json};
+use std::cell::RefCell;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-/// The PTC SDK, shipped inside the binary and materialized next to the code.
-const PTC_SDK: &str = include_str!("../assets/ptc_sdk.js");
 
 /// Default wall-clock budget for one `run_code` invocation (seconds).
 pub const DEFAULT_RUN_CODE_TIMEOUT_SECS: u64 = 120;
@@ -93,67 +89,47 @@ pub const PTC_RUN_CODE_SCHEMA: &str = "ra.ptc.run_code.v1";
 /// open question in the port plan, §7).
 const BRIDGE_WHITELIST: [&str; 4] = ["read", "grep", "find", "ls"];
 
-/// Node permission-model flags, most-preferred first.
-///
-/// `--permission` is the stable spelling (Node >= 23, and accepted as an alias
-/// in 22.x); `--experimental-permission` is the 20.x/22.x spelling. Whichever
-/// the installed runtime accepts is used; if neither is accepted the child runs
-/// without the process layer and reports [`SandboxMode::Unavailable`].
-const PERMISSION_FLAGS: [&str; 2] = ["--permission", "--experimental-permission"];
+/// Script file name QuickJS reports in stack frames, so an error points at the
+/// model's own `code` rather than at an anonymous eval.
+const PROGRAM_FILENAME: &str = "ptc-program";
 
 /// Maximum stack frames carried into the model-facing error text.
 const MAX_ERROR_FRAMES: usize = 8;
 
-/// What confinement the node child actually ran under.
-///
-/// Reported in the tool result's `details.sandbox` so the boundary is
-/// auditable instead of assumed: a runtime without the permission model cannot
-/// confine the process, and saying so is better than claiming a sandbox that
-/// does not exist.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SandboxMode {
-    /// Node's permission model: read-only, confined to the allowed roots, with
-    /// `child_process` and writes denied by the runtime.
-    NodePermission,
-    /// The runtime does not accept a permission-model flag; the child is an
-    /// unconfined node process (the tool-layer policy still applies).
-    Unavailable,
-    /// Explicitly disabled by the caller or `PTC_SANDBOX`.
-    Disabled,
-}
+/// QuickJS heap ceiling for one program. A program that allocates past this
+/// aborts with an out-of-memory error instead of growing the host process.
+const PTC_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 
-impl SandboxMode {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::NodePermission => "node-permission",
-            Self::Unavailable => "unavailable",
-            Self::Disabled => "disabled",
-        }
-    }
-}
+/// QuickJS stack ceiling for one program. Deep recursion trips this and raises
+/// a catchable QuickJS error instead of overflowing the host thread stack.
+const PTC_MAX_STACK_BYTES: usize = 2 * 1024 * 1024;
 
-/// Whether the process layer is enabled, from `PTC_SANDBOX`.
-///
-/// Confinement is on by default because it is what makes the module's
-/// read-only contract true for a program that reaches for `node:fs` or
-/// `node:child_process` directly; opting out therefore has to be explicit.
-fn sandbox_enabled_from_env() -> bool {
-    !matches!(
-        std::env::var("PTC_SANDBOX")
-            .ok()
-            .as_deref()
-            .map(str::trim)
-            .map(str::to_ascii_lowercase)
-            .as_deref(),
-        Some("off" | "0" | "false" | "no")
-    )
-}
+/// Stack reserve for the realm thread. The interpreter's own recursion is
+/// bounded by [`PTC_MAX_STACK_BYTES`]; this covers the Rust frames around it.
+const REALM_THREAD_STACK_BYTES: usize = 32 * 1024 * 1024;
+
+/// How often the host polls the realm for bridge calls and its terminal value.
+const HOST_POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+/// How often a blocked bridge call re-checks the deadline and cancel flag.
+const BRIDGE_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Grace the host waits past the realm's own deadline before it gives up on a
+/// worker wedged inside a native call (where the interrupt handler cannot run).
+const HOST_DEADLINE_GRACE: Duration = Duration::from_secs(5);
+
+/// Console text kept per run (surfaced in `details.console`).
+const PTC_MAX_CONSOLE_BYTES: usize = 16 * 1024;
+
+/// Actionable message for a run that outlived its budget.
+const PTC_DEADLINE_MESSAGE: &str =
+    "PTC_DEADLINE: run_code exceeded its wall-clock budget; the QuickJS realm was interrupted.";
 
 /// Input parameters for the `run_code` tool.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunCodeInput {
-    /// Async function body executed by node; may use `await` and `return`.
+    /// Async function body executed on the QuickJS realm; may `await`/`return`.
     pub code: String,
     /// 5–10 word description shown in the UI.
     pub description: Option<String>,
@@ -161,9 +137,9 @@ pub struct RunCodeInput {
     pub timeout_ms: Option<u64>,
 }
 
-/// Executes a JS program in a sandboxed node child.
+/// Executes a JS program on an in-process QuickJS realm.
 pub struct RunCodeTool {
-    /// Working directory for the child (and for path-confining bridge tools).
+    /// Working directory for the bridge tools (and thus path confinement).
     cwd: PathBuf,
     /// Wall-clock budget per invocation, in seconds.
     timeout_secs: u64,
@@ -177,9 +153,6 @@ pub struct RunCodeTool {
     image_auto_resize: bool,
     /// `read` image-blocking flag, matching the live registry.
     block_images: bool,
-    /// Whether to confine the child with Node's permission model when the
-    /// runtime supports it (default: on; `PTC_SANDBOX=off` opts out).
-    sandbox: bool,
 }
 
 impl RunCodeTool {
@@ -197,7 +170,6 @@ impl RunCodeTool {
             search_backend: search_backend_from_config(None),
             image_auto_resize: true,
             block_images: false,
-            sandbox: sandbox_enabled_from_env(),
         }
     }
 
@@ -206,26 +178,6 @@ impl RunCodeTool {
     pub const fn with_timeout_secs(mut self, timeout_secs: u64) -> Self {
         self.timeout_secs = timeout_secs;
         self
-    }
-
-    /// Override process-layer confinement (used by tests and config wiring).
-    #[must_use]
-    pub const fn with_sandbox(mut self, sandbox: bool) -> Self {
-        self.sandbox = sandbox;
-        self
-    }
-
-    /// Read-only roots the confined child may touch: its own scratch directory
-    /// (for the SDK and the program) plus every session workspace root, so a
-    /// direct `fs` read of a workspace file still works from the program.
-    ///
-    /// Nothing outside this set is readable, and no write access is granted at
-    /// all — the child is a read-only program by contract.
-    fn sandbox_read_roots(&self, scratch: &Scratch) -> Vec<PathBuf> {
-        let mut roots = vec![scratch.dir.clone(), self.cwd.clone()];
-        roots.extend(self.workspace.roots());
-        roots.dedup();
-        roots
     }
 
     /// Share the session workspace root set with the bridge's inner tools so
@@ -310,92 +262,676 @@ impl RunCodeTool {
     }
 }
 
-/// Outcome of the pre-spawn `node` availability probe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NodeProbe {
-    /// `node` is on PATH and answered `--version`.
-    Available,
-    /// `node` could not be executed at all (ENOENT / not executable).
-    Missing,
-    /// `node` exists but the probe failed for another reason (e.g. a broken
-    /// shim). Reported with the underlying OS error.
-    Broken,
+/* ------------------------------------------------------------------ */
+/* Host <-> realm protocol                                             */
+/* ------------------------------------------------------------------ */
+
+/// One `sdk.*` call the program made, awaiting the host's reply.
+struct BridgeCall {
+    tool: String,
+    args: Value,
+    /// `Ok(text)` resolves the JS call; `Err(text)` throws it.
+    reply: Sender<std::result::Result<String, String>>,
 }
 
-/// Classify the result of running a candidate runtime's probe command.
-///
-/// Split out from [`probe_node`] so the three-state mapping is testable
-/// without depending on what happens to be installed on the build machine.
-fn classify_probe(probe: std::io::Result<std::process::ExitStatus>) -> NodeProbe {
-    match probe {
-        Ok(status) if status.success() => NodeProbe::Available,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => NodeProbe::Missing,
-        // Non-zero exit and spawn failure share a verdict: the runtime is not
-        // usable, which is exactly what `Broken` means.
-        _ => NodeProbe::Broken,
+/// What the realm worker sends the host.
+enum RealmMessage {
+    /// A tool call to service; the host answers on `reply`.
+    Call(BridgeCall),
+    /// Terminal outcome, shaped like the old node protocol so error rendering
+    /// is unchanged: `{ ok, result | error, console }`.
+    Done(Value),
+}
+
+/// Run budget plus cancellation, shared with the QuickJS interrupt handler and
+/// the bridge closures so both notice promptly.
+#[derive(Clone)]
+struct RealmFlags {
+    origin: Instant,
+    /// Budget in milliseconds; `u64::MAX` means "no deadline yet".
+    budget_ms: Arc<AtomicU64>,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl RealmFlags {
+    fn new(budget: Duration, cancelled: Arc<AtomicBool>) -> Self {
+        Self {
+            origin: Instant::now(),
+            budget_ms: Arc::new(AtomicU64::new(
+                u64::try_from(budget.as_millis()).unwrap_or(u64::MAX),
+            )),
+            cancelled,
+        }
+    }
+
+    fn expired(&self) -> bool {
+        let budget = self.budget_ms.load(Ordering::SeqCst);
+        budget != u64::MAX
+            && u64::try_from(self.origin.elapsed().as_millis()).unwrap_or(u64::MAX) > budget
+    }
+
+    /// Cancel or deadline: either one aborts the interpreter.
+    fn tripped(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst) || self.expired()
     }
 }
 
-/// Run one command as an availability probe (stdout/stderr discarded).
-fn probe_command(program: &str) -> NodeProbe {
-    classify_probe(
-        Command::new(program)
-            .arg("--version")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status(),
-    )
+/// A running QuickJS realm on its own OS thread.
+///
+/// Fresh per invocation: no state leaks from one `run_code` to the next, which
+/// is what the old process-per-run design gave us for free.
+struct JsRealm {
+    inbox: Mutex<Receiver<RealmMessage>>,
+    cancelled: Arc<AtomicBool>,
 }
 
-/// Probe `node` on PATH before spawning the real child.
-///
-/// A missing runtime must produce an actionable error, never a hang or panic.
-/// The store checks `ErrorKind::NotFound` and, on some platforms (Windows
-/// without `PATHEXT` resolution), that is enough; the explicit probe makes the
-/// diagnosis deterministic across platforms.
-fn probe_node() -> NodeProbe {
-    probe_command("node")
-}
-
-/// Which permission-model flag (if any) the installed `node` accepts, probed
-/// once per process.
-///
-/// `None` means the runtime cannot confine the child; the caller then reports
-/// [`SandboxMode::Unavailable`] rather than implying a boundary that is absent.
-fn probe_permission_flag() -> Option<&'static str> {
-    static FLAG: std::sync::OnceLock<Option<&'static str>> = std::sync::OnceLock::new();
-    *FLAG.get_or_init(|| {
-        PERMISSION_FLAGS.into_iter().find(|flag| {
-            Command::new("node")
-                .arg(flag)
-                .arg("-e")
-                .arg("")
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok_and(|status| status.success())
+impl JsRealm {
+    fn spawn(code: &str, budget: Duration) -> Result<Self> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flags = RealmFlags::new(budget, Arc::clone(&cancelled));
+        let code = code.to_string();
+        std::thread::Builder::new()
+            .name("ptc-quickjs".into())
+            .stack_size(REALM_THREAD_STACK_BYTES)
+            .spawn(move || realm_thread(&code, flags, tx, budget))
+            .map_err(|err| Error::tool("run_code", format!("PTC_SPAWN: {err}")))?;
+        Ok(Self {
+            inbox: Mutex::new(rx),
+            cancelled,
         })
+    }
+
+    /// Await the next realm message, or fail the run at `deadline`.
+    ///
+    /// Polling (rather than a blocking receive) keeps the async host runtime
+    /// free while the program runs on its own thread.
+    async fn next_message(&self, deadline: Instant) -> Result<RealmMessage> {
+        loop {
+            let received = self
+                .inbox
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .try_recv();
+            match received {
+                Ok(message) => return Ok(message),
+                Err(TryRecvError::Empty) => {
+                    if Instant::now() > deadline {
+                        return Err(Error::tool("run_code", PTC_DEADLINE_MESSAGE));
+                    }
+                    asupersync::time::sleep(asupersync::time::wall_now(), HOST_POLL_INTERVAL).await;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    return Err(Error::tool(
+                        "run_code",
+                        "PTC_EOF: the JavaScript realm exited before returning a result",
+                    ));
+                }
+            }
+        }
+    }
+}
+
+impl Drop for JsRealm {
+    fn drop(&mut self) {
+        // Trips the interrupt handler on the realm thread so a program still
+        // running after the host stopped listening winds down instead of
+        // leaking a thread for the rest of the budget.
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* The realm worker                                                    */
+/* ------------------------------------------------------------------ */
+
+/// Outcome of one program run, before it is shaped into a terminal message.
+enum ProgramOutcome {
+    Ok(Value),
+    Failed(Value),
+}
+
+fn realm_thread(code: &str, flags: RealmFlags, tx: Sender<RealmMessage>, budget: Duration) {
+    let console: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
+    let outcome = match rquickjs::Runtime::new() {
+        Ok(runtime) => match rquickjs::Context::full(&runtime) {
+            Ok(context) => {
+                runtime.set_memory_limit(PTC_MEMORY_LIMIT_BYTES);
+                runtime.set_max_stack_size(PTC_MAX_STACK_BYTES);
+                {
+                    let flags = flags.clone();
+                    runtime.set_interrupt_handler(Some(Box::new(move || flags.tripped())));
+                }
+                match context.with(|ctx| install_globals(&ctx, &console, &tx, &flags, budget)) {
+                    Ok(()) => run_program(&context, &runtime, code, &flags),
+                    Err(err) => ProgramOutcome::Failed(protocol_error(&err.to_string())),
+                }
+            }
+            Err(err) => ProgramOutcome::Failed(protocol_error(&format!("context: {err}"))),
+        },
+        Err(err) => ProgramOutcome::Failed(protocol_error(&format!("runtime: {err}"))),
+    };
+    let terminal = terminal_message(outcome, std::mem::take(&mut *console.borrow_mut()));
+    let _ = tx.send(RealmMessage::Done(terminal));
+}
+
+/// Wrap the model's body in an async IIFE.
+///
+/// The prefix stays on line 1, so a frame `ptc-program:N` names line N of the
+/// `code` the model wrote; nothing is shifted. Only columns on line 1 are
+/// offset, by the length of the prefix.
+fn program_source(code: &str) -> String {
+    format!("(async () => {{{code}\n}})()")
+}
+
+/// Install `console` and the Rust-built `sdk` bridge into the realm.
+fn install_globals<'js>(
+    ctx: &Ctx<'js>,
+    console: &Rc<RefCell<String>>,
+    tx: &Sender<RealmMessage>,
+    flags: &RealmFlags,
+    budget: Duration,
+) -> rquickjs::Result<()> {
+    let globals = ctx.globals();
+
+    // console.* appends to the per-run buffer; the host surfaces it in
+    // `details.console` instead of letting it reach the protocol.
+    let console_obj = Object::new(ctx.clone())?;
+    for level in ["log", "info", "debug", "warn", "error"] {
+        let sink = Rc::clone(console);
+        let func = Func::from(move |parts: Rest<Coerced<String>>| {
+            let text: Vec<String> = parts.0.into_iter().map(|part| part.0).collect();
+            let mut buffer = sink.borrow_mut();
+            buffer.push_str("[ptc:");
+            buffer.push_str(level);
+            buffer.push_str("] ");
+            buffer.push_str(&text.join(" "));
+            buffer.push('\n');
+        });
+        console_obj.set(level, func)?;
+    }
+    globals.set("console", console_obj)?;
+
+    let sdk = Object::new(ctx.clone())?;
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "read",
+            tool: "read",
+            key: "path",
+            optional: false,
+            scope: false,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "grep",
+            tool: "grep",
+            key: "pattern",
+            optional: false,
+            scope: true,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "find",
+            tool: "find",
+            key: "pattern",
+            optional: false,
+            scope: true,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "ls",
+            tool: "ls",
+            key: "path",
+            optional: true,
+            scope: false,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
+
+    // Escape hatch: full argument set for any whitelisted tool. The host is
+    // still the thing that decides whether the tool exists.
+    let call_tx = tx.clone();
+    let call_flags = flags.clone();
+    let call = Func::from(
+        move |ctx: Ctx<'js>, tool: String, args: Opt<JsValue<'js>>| {
+            let payload = args
+                .0
+                .as_ref()
+                .and_then(|value| json_arg(&ctx, value))
+                .unwrap_or_else(|| json!({}));
+            bridge_call(&ctx, &call_tx, &call_flags, budget, &tool, payload)
+        },
+    );
+    sdk.set("call", call)?;
+
+    globals.set("sdk", sdk)?;
+    Ok(())
+}
+
+/// Which host tool one `sdk` helper maps onto, and how it reads its arguments.
+struct SdkSpec {
+    /// The binding's name on `sdk` (also the name used in error messages).
+    name: &'static str,
+    /// The host tool it dispatches to.
+    tool: &'static str,
+    /// The required key for the positional shorthand (`path`/`pattern`).
+    key: &'static str,
+    /// Whether the key may be omitted entirely (`ls`).
+    optional: bool,
+    /// Whether a second scope argument is merged in (`grep`/`find`).
+    scope: bool,
+}
+
+fn set_sdk_helper<'js>(
+    sdk: &Object<'js>,
+    spec: SdkSpec,
+    tx: &Sender<RealmMessage>,
+    flags: &RealmFlags,
+    budget: Duration,
+) -> rquickjs::Result<()> {
+    let SdkSpec {
+        name,
+        tool,
+        key,
+        optional,
+        scope,
+    } = spec;
+    let tx = tx.clone();
+    let flags = flags.clone();
+    let func = Func::from(
+        move |ctx: Ctx<'js>, first: JsValue<'js>, second: Opt<JsValue<'js>>| {
+            let mut args = normalize_args(&ctx, &first, key, name, optional)
+                .map_err(|msg| rquickjs::Exception::throw_message(&ctx, &msg))?;
+            if scope {
+                args = merge_scope(&ctx, args, second.0.as_ref(), name)
+                    .map_err(|msg| rquickjs::Exception::throw_message(&ctx, &msg))?;
+            }
+            bridge_call(&ctx, &tx, &flags, budget, tool, args)
+        },
+    );
+    sdk.set(name, func)
+}
+
+/// Send one bridge call and block until the host answers, the run is
+/// cancelled, or the budget runs out.
+fn bridge_call(
+    ctx: &Ctx<'_>,
+    tx: &Sender<RealmMessage>,
+    flags: &RealmFlags,
+    budget: Duration,
+    tool: &str,
+    args: Value,
+) -> rquickjs::Result<String> {
+    let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+    if tx
+        .send(RealmMessage::Call(BridgeCall {
+            tool: tool.to_string(),
+            args,
+            reply: reply_tx,
+        }))
+        .is_err()
+    {
+        return Err(rquickjs::Exception::throw_message(
+            ctx,
+            "PTC_CANCELLED: the host stopped listening",
+        ));
+    }
+    let deadline = Instant::now() + budget;
+    loop {
+        match reply_rx.recv_timeout(BRIDGE_POLL_INTERVAL) {
+            Ok(Ok(text)) => return Ok(text),
+            Ok(Err(err)) => return Err(rquickjs::Exception::throw_message(ctx, &err)),
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(rquickjs::Exception::throw_message(
+                    ctx,
+                    "PTC_CANCELLED: the host dropped the bridge",
+                ));
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                if flags.cancelled.load(Ordering::SeqCst) {
+                    return Err(rquickjs::Exception::throw_message(
+                        ctx,
+                        "PTC_CANCELLED: the run was cancelled",
+                    ));
+                }
+                if Instant::now() > deadline {
+                    return Err(rquickjs::Exception::throw_message(
+                        ctx,
+                        &format!(
+                            "PTC_BRIDGE_TIMEOUT: tool `{tool}` did not answer within the run budget"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Argument normalization (built in Rust, no JS asset)                 */
+/* ------------------------------------------------------------------ */
+
+/// Convert a JS value to the JSON an host tool argument needs, if it has one.
+fn json_arg<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> Option<Value> {
+    if value.is_undefined() {
+        return None;
+    }
+    let text = ctx.json_stringify(value.clone()).ok().flatten()?;
+    serde_json::from_str(&text.to_string().ok()?).ok()
+}
+
+/// Human-readable kind for error messages.
+fn js_kind(value: &JsValue<'_>) -> &'static str {
+    if value.is_null() {
+        "null"
+    } else if value.is_undefined() {
+        "undefined"
+    } else if value.is_array() {
+        "an array"
+    } else if value.is_function() {
+        "a function"
+    } else if value.is_object() {
+        "an object"
+    } else if value.is_string() {
+        "a string"
+    } else if value.is_number() {
+        "a number"
+    } else if value.is_bool() {
+        "a boolean"
+    } else {
+        "an unsupported value"
+    }
+}
+
+fn js_string<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> String {
+    Coerced::<String>::from_js(ctx, value.clone())
+        .map(|coerced| coerced.0)
+        .unwrap_or_default()
+}
+
+/// Normalize the first helper argument: positional shorthand or options object.
+///
+/// Mirrors the documented contract — a non-empty string becomes `{ key: value }`,
+/// an options object is forwarded verbatim but must carry `key`, and (for `ls`)
+/// both may be omitted.
+fn normalize_args<'js>(
+    ctx: &Ctx<'js>,
+    value: &JsValue<'js>,
+    key: &str,
+    form: &str,
+    optional: bool,
+) -> std::result::Result<Value, String> {
+    if value.is_string() {
+        let text = js_string(ctx, value);
+        if text.is_empty() {
+            return Err(format!("sdk.{form}: `{key}` must be a non-empty string"));
+        }
+        return Ok(Value::Object(Map::from_iter([(
+            key.to_string(),
+            Value::String(text),
+        )])));
+    }
+    let Some(Value::Object(map)) = json_arg(ctx, value) else {
+        if optional && (value.is_undefined() || value.is_null()) {
+            return Ok(json!({}));
+        }
+        return Err(format!(
+            "sdk.{form}: expected a `{key}` string or an options object, got {}",
+            js_kind(value)
+        ));
+    };
+    match map.get(key) {
+        Some(Value::String(text)) if !text.is_empty() => {}
+        Some(other) => {
+            return Err(format!(
+                "sdk.{form}: an options object needs a non-empty `{key}` string, got {other}"
+            ));
+        }
+        None if optional => {}
+        None => {
+            return Err(format!(
+                "sdk.{form}: an options object needs a non-empty `{key}` string"
+            ));
+        }
+    }
+    Ok(Value::Object(map))
+}
+
+/// Merge the optional second scope argument (path string or options object).
+fn merge_scope<'js>(
+    ctx: &Ctx<'js>,
+    mut args: Value,
+    scope: Option<&JsValue<'js>>,
+    form: &str,
+) -> std::result::Result<Value, String> {
+    let Some(scope) = scope else {
+        return Ok(args);
+    };
+    if scope.is_undefined() || scope.is_null() {
+        return Ok(args);
+    }
+    if scope.is_string() {
+        let text = js_string(ctx, scope);
+        if text.is_empty() {
+            return Err(format!(
+                "sdk.{form}: the second argument must be a non-empty path string"
+            ));
+        }
+        if let Value::Object(map) = &mut args {
+            map.insert("path".to_string(), Value::String(text));
+        }
+        return Ok(args);
+    }
+    let Some(Value::Object(extra)) = json_arg(ctx, scope) else {
+        return Err(format!(
+            "sdk.{form}: the second argument must be a path string or an options object, got {}",
+            js_kind(scope)
+        ));
+    };
+    if let Value::Object(map) = &mut args {
+        map.extend(extra);
+    }
+    Ok(args)
+}
+
+/* ------------------------------------------------------------------ */
+/* Program execution                                                   */
+/* ------------------------------------------------------------------ */
+
+fn run_program(
+    context: &rquickjs::Context,
+    runtime: &rquickjs::Runtime,
+    code: &str,
+    flags: &RealmFlags,
+) -> ProgramOutcome {
+    enum Phase1 {
+        Done(ProgramOutcome),
+        Pending(rquickjs::Persistent<Promise<'static>>),
+    }
+    let source = program_source(code);
+    let phase1 = context.with(|ctx| {
+        let mut options = rquickjs::context::EvalOptions::default();
+        options.global = true;
+        options.strict = true;
+        options.filename = Some(PROGRAM_FILENAME.to_string());
+        let evaluated: rquickjs::Result<JsValue<'_>> =
+            ctx.eval_with_options(source.as_bytes(), options);
+        match evaluated {
+            Err(err) => Phase1::Done(ProgramOutcome::Failed(error_payload(&ctx, &err))),
+            Ok(value) => match Promise::from_value(value.clone()) {
+                Ok(promise) => Phase1::Pending(rquickjs::Persistent::save(&ctx, promise)),
+                // Not an async program (a syntax-level surprise); take the
+                // completion value as the result.
+                Err(_) => Phase1::Done(ProgramOutcome::Ok(serialize_value(&ctx, &value))),
+            },
+        }
+    });
+
+    let saved = match phase1 {
+        Phase1::Done(outcome) => {
+            while matches!(runtime.execute_pending_job(), Ok(true)) {}
+            return outcome;
+        }
+        Phase1::Pending(saved) => saved,
+    };
+
+    // Pump jobs until the program's promise settles or the run is stopped.
+    // A pending promise with no runnable jobs means the program is waiting on
+    // something that will never arrive (there is no timer or I/O API), so the
+    // loop simply waits for the deadline to trip.
+    loop {
+        let state = context.with(|ctx| {
+            saved
+                .clone()
+                .restore(&ctx)
+                .ok()
+                .map(|promise| promise.state())
+        });
+        match state {
+            Some(rquickjs::promise::PromiseState::Pending) => {
+                if flags.cancelled.load(Ordering::SeqCst) {
+                    return ProgramOutcome::Failed(cancelled_error());
+                }
+                if flags.expired() {
+                    return ProgramOutcome::Failed(deadline_error());
+                }
+                match runtime.execute_pending_job() {
+                    Ok(true) => {}
+                    Ok(false) => std::thread::sleep(Duration::from_millis(2)),
+                    Err(_) => break,
+                }
+            }
+            _ => break,
+        }
+    }
+    while matches!(runtime.execute_pending_job(), Ok(true)) {}
+
+    context.with(|ctx| {
+        let Some(promise) = saved.clone().restore(&ctx).ok() else {
+            return ProgramOutcome::Failed(protocol_error("promise restore failed"));
+        };
+        match promise.result::<JsValue<'_>>() {
+            Some(Ok(value)) => ProgramOutcome::Ok(serialize_value(&ctx, &value)),
+            Some(Err(err)) => ProgramOutcome::Failed(error_payload(&ctx, &err)),
+            None if flags.expired() => ProgramOutcome::Failed(deadline_error()),
+            None if flags.cancelled.load(Ordering::SeqCst) => {
+                ProgramOutcome::Failed(cancelled_error())
+            }
+            None => ProgramOutcome::Failed(protocol_error("promise never settled")),
+        }
     })
 }
 
-/// The actionable error returned when the node runtime is unavailable.
-fn node_missing_error() -> Error {
-    Error::tool(
-        "run_code",
-        "PTC_NODE_MISSING: `node` not found on PATH. run_code requires Node.js \
-         (>=18); install it (e.g. `apt install nodejs`, `brew install node`, or \
-         https://nodejs.org) and retry. Other tools keep working without it; \
-         use the eval tool for non-JS orchestration.",
-    )
+/// Render the program's return value as JSON the host can display.
+fn serialize_value<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> Value {
+    if value.is_undefined() {
+        return Value::Null;
+    }
+    if let Some(parsed) = json_arg(ctx, value) {
+        return parsed;
+    }
+    // Non-JSON returns (bigint, function, circular, symbol) fall back to their
+    // text form, mirroring the eval kernel's extraction.
+    Value::String(js_string(ctx, value))
 }
 
-/// Render the SDK's terminal `error` field for the model.
+/// Shape a thrown value into `{ name, message, stack?, code? }`, the payload
+/// [`render_program_error`] renders.
+fn error_payload(ctx: &Ctx<'_>, err: &rquickjs::Error) -> Value {
+    if !err.is_exception() {
+        return json!({ "name": "Error", "message": err.to_string() });
+    }
+    let thrown = ctx.catch();
+    let Some(exception) = thrown.as_exception() else {
+        // `throw "x"` / `throw { code: 1 }`: no Error shape to read.
+        let message = json_arg(ctx, &thrown)
+            .map_or_else(|| js_string(ctx, &thrown), |value| value.to_string());
+        return json!({ "name": "Error", "message": message });
+    };
+    let name = exception
+        .get::<_, String>("name")
+        .unwrap_or_else(|_| "Error".to_string());
+    let mut payload = json!({
+        "name": name,
+        "message": exception.message().unwrap_or_default(),
+    });
+    if let Some(stack) = exception.stack() {
+        payload["stack"] = Value::String(stack);
+    }
+    if let Ok(Some(code)) = exception.get::<_, Option<String>>("code") {
+        payload["code"] = Value::String(code);
+    }
+    payload
+}
+
+fn deadline_error() -> Value {
+    json!({
+        "name": "Error",
+        "message": PTC_DEADLINE_MESSAGE,
+        "code": "PTC_DEADLINE",
+    })
+}
+
+fn cancelled_error() -> Value {
+    json!({
+        "name": "Error",
+        "message": "PTC_CANCELLED: the run_code realm was cancelled before the program returned.",
+        "code": "PTC_CANCELLED",
+    })
+}
+
+fn protocol_error(detail: &str) -> Value {
+    json!({
+        "name": "Error",
+        "message": format!("PTC_PROTOCOL: {detail}"),
+        "code": "PTC_PROTOCOL",
+    })
+}
+
+fn terminal_message(outcome: ProgramOutcome, console: String) -> Value {
+    let console = bound_console(&console);
+    match outcome {
+        ProgramOutcome::Ok(result) => json!({ "ok": true, "result": result, "console": console }),
+        ProgramOutcome::Failed(error) => json!({ "ok": false, "error": error, "console": console }),
+    }
+}
+
+fn bound_console(console: &str) -> String {
+    if console.len() <= PTC_MAX_CONSOLE_BYTES {
+        return console.to_string();
+    }
+    let mut end = PTC_MAX_CONSOLE_BYTES;
+    while end > 0 && !console.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &console[..end])
+}
+
+/* ------------------------------------------------------------------ */
+/* Error rendering                                                     */
+/* ------------------------------------------------------------------ */
+
+/// Render the realm's terminal `error` field for the model.
 ///
-/// The SDK serializes thrown errors as `{ name, message, stack, code? }` and
-/// rebases `<anonymous>` frames onto the program's own line numbers. Surface the
-/// human-facing `message` (prefixed by the name and error code when they add
+/// Surface the `message` (prefixed by the name and error code when they add
 /// signal) plus a short trace pointing at the program, instead of dumping the
 /// whole JSON object.
 fn render_program_error(error: &Value) -> String {
@@ -460,274 +996,24 @@ fn extract_frame_site(frame: &str, marker: &str) -> Option<String> {
     ))
 }
 
-/// Pick the actionable frames out of a rebased stack.
+/// Pick the actionable frames out of a QuickJS stack.
 ///
-/// Program frames win: they point at the exact line of the `code` the model
-/// wrote. Only when the program has no frame (an error raised inside the SDK
-/// itself, e.g. argument validation on a malformed call) fall back to the SDK
-/// helper frames. Node internals, the scratch directory, and the harness entry
-/// point are dropped as noise.
+/// Only frames that name the program survive: they point at the exact line of
+/// the `code` the model wrote. QuickJS's own frames (`<eval>`, native helpers)
+/// are dropped as noise. Unlike node, QuickJS stacks carry no `Error: msg`
+/// header line, so every line is a candidate frame.
 fn render_error_frames(stack: &str) -> Vec<String> {
-    let frames: Vec<&str> = stack.lines().skip(1).collect();
-    let collect = |marker: &str| -> Vec<String> {
-        frames
-            .iter()
-            .filter_map(|frame| extract_frame_site(frame, marker))
-            .take(MAX_ERROR_FRAMES)
-            .map(|site| format!("  at {site}"))
-            .collect()
-    };
-    let program = collect("ptc-program:");
-    if program.is_empty() {
-        collect("ptc_sdk.js:")
-    } else {
-        program
-    }
+    stack
+        .lines()
+        .filter_map(|frame| extract_frame_site(frame, "ptc-program:"))
+        .take(MAX_ERROR_FRAMES)
+        .map(|site| format!("  at {site}"))
+        .collect()
 }
 
-/// First ~160 chars of a stray protocol line, for diagnostics.
-///
-/// A non-protocol line means something wrote to the protocol channel; the
-/// offending bytes are the only way to tell what. The SDK redirects
-/// `process.stdout.write` to stderr, so this should stay rare — it is the
-/// diagnostic for the residue (a native addon writing to fd 1, say).
-fn protocol_snippet(line: &str) -> String {
-    let mut out: String = line.chars().take(160).collect();
-    if line.chars().count() > 160 {
-        out.push('…');
-    }
-    out
-}
-
-/// Per-invocation scratch directory holding the SDK and code files.
-///
-/// Removed on drop so a killed run leaves no residue.
-struct Scratch {
-    dir: PathBuf,
-}
-
-impl Scratch {
-    fn materialize(code: &str) -> Result<Self> {
-        let dir = std::env::temp_dir().join(format!(
-            "pi-ptc-{}-{}",
-            std::process::id(),
-            UtcMillis::now()
-        ));
-        std::fs::create_dir_all(&dir)
-            .map_err(|err| Error::tool("run_code", format!("PTC_SCRATCH: {err}")))?;
-        std::fs::write(dir.join("sdk.js"), PTC_SDK)
-            .map_err(|err| Error::tool("run_code", format!("PTC_SCRATCH: {err}")))?;
-        std::fs::write(dir.join("code.js"), code)
-            .map_err(|err| Error::tool("run_code", format!("PTC_SCRATCH: {err}")))?;
-        Ok(Self { dir })
-    }
-
-    fn sdk_path(&self) -> PathBuf {
-        self.dir.join("sdk.js")
-    }
-
-    fn code_path(&self) -> PathBuf {
-        self.dir.join("code.js")
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
-
-/// Millisecond timestamp helper for unique scratch dir names.
-struct UtcMillis;
-impl UtcMillis {
-    fn now() -> u128 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_millis())
-    }
-}
-
-/// Running node child with its protocol channel.
-struct PtcChild {
-    child: Child,
-    stdin: ChildStdin,
-    /// Lines from the child's stdout, streamed by a dedicated reader thread.
-    lines: std::sync::Mutex<std::sync::mpsc::Receiver<Option<String>>>,
-    /// Set by the first kill(): guards against pid-reuse double-kill.
-    killed: bool,
-    /// Which confinement the child was actually spawned under.
-    sandbox: SandboxMode,
-}
-
-impl PtcChild {
-    /// Spawn the node child for `scratch`.
-    ///
-    /// `tool_timeout_ms` becomes the SDK's per-call timeout: the program can
-    /// never wait on a host reply longer than the enclosing run budget, so a
-    /// stalled bridge fails the call instead of hanging the whole run.
-    ///
-    /// When `sandbox` is set, the child is confined with Node's permission
-    /// model (see [`SandboxMode`]): `read_roots` become the only readable
-    /// paths, and every other read, all writes, and `child_process` are denied
-    /// by the runtime. The mode actually obtained is recorded on the child.
-    fn spawn(
-        scratch: &Scratch,
-        cwd: &Path,
-        tool_timeout_ms: u64,
-        sandbox: bool,
-        read_roots: &[PathBuf],
-    ) -> Result<Self> {
-        // Fail fast with an actionable message when node is absent, rather
-        // than surfacing a bare ENOENT (or, on odd shims, hanging).
-        match probe_node() {
-            NodeProbe::Available => {}
-            NodeProbe::Missing | NodeProbe::Broken => return Err(node_missing_error()),
-        }
-        let mut command = Command::new("node");
-        let sandbox_mode = if sandbox {
-            match probe_permission_flag() {
-                Some(flag) => {
-                    let allowed: Vec<String> = read_roots
-                        .iter()
-                        .map(|root| root.to_string_lossy().into_owned())
-                        .filter(|root| !root.is_empty())
-                        .collect();
-                    command.arg(flag);
-                    if !allowed.is_empty() {
-                        command.arg(format!("--allow-fs-read={}", allowed.join(",")));
-                    }
-                    SandboxMode::NodePermission
-                }
-                None => SandboxMode::Unavailable,
-            }
-        } else {
-            SandboxMode::Disabled
-        };
-        command
-            .arg(scratch.sdk_path())
-            .arg("--code-file")
-            .arg(scratch.code_path())
-            .env("PTC_TOOL_TIMEOUT_MS", tool_timeout_ms.to_string())
-            .current_dir(cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        // Own process group so a timeout kills program-spawned children too.
-        crate::tools::isolate_command_process_group(&mut command);
-        let mut child = command.spawn().map_err(|err| {
-            if err.kind() == std::io::ErrorKind::NotFound {
-                node_missing_error()
-            } else {
-                Error::tool("run_code", format!("PTC_SPAWN: {err}"))
-            }
-        })?;
-        crate::tools::attach_child_job_discipline(&child);
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| Error::tool("run_code", "PTC_SPAWN: no stdin pipe"))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| Error::tool("run_code", "PTC_SPAWN: no stdout pipe"))?;
-        // Keep the protocol channel clean: park child stderr in a drain thread
-        // so it can never interleave with stdout JSON lines.
-        if let Some(stderr) = child.stderr.take() {
-            std::thread::Builder::new()
-                .name("ptc-stderr-drain".into())
-                .spawn(move || {
-                    let mut sink = Vec::new();
-                    let _ = std::io::copy(&mut BufReader::new(stderr), &mut sink);
-                })
-                .ok();
-        }
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::Builder::new()
-            .name("ptc-node-read".into())
-            .spawn(move || {
-                let mut reader = BufReader::new(stdout);
-                loop {
-                    let mut line = String::new();
-                    match reader.read_line(&mut line) {
-                        Ok(0) | Err(_) => {
-                            let _ = tx.send(None);
-                            return;
-                        }
-                        Ok(_) => {
-                            if tx.send(Some(line)).is_err() {
-                                return;
-                            }
-                        }
-                    }
-                }
-            })
-            .map_err(|err| Error::tool("run_code", format!("PTC_SPAWN: {err}")))?;
-        // Open the protocol: the SDK's transport probe treats an immediate
-        // newline as "plain spawn, use stdin/stdout JSON-lines".
-        let _ = writeln!(stdin);
-        Ok(Self {
-            child,
-            stdin,
-            lines: std::sync::Mutex::new(rx),
-            killed: false,
-            sandbox: sandbox_mode,
-        })
-    }
-
-    /// Await the next stdout line under a budget. `Ok(None)` = EOF.
-    async fn next_line(&self, deadline: Instant) -> Result<Option<String>> {
-        loop {
-            let received = self
-                .lines
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .try_recv();
-            match received {
-                Ok(line) => return Ok(line),
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    if Instant::now() > deadline {
-                        return Err(Error::tool(
-                            "run_code",
-                            "PTC_DEADLINE: run_code exceeded its wall-clock budget; the node \
-                             child (and anything it spawned) was terminated.",
-                        ));
-                    }
-                    asupersync::time::sleep(
-                        asupersync::time::wall_now(),
-                        Duration::from_millis(25),
-                    )
-                    .await;
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => return Ok(None),
-            }
-        }
-    }
-
-    fn reply(&mut self, payload: &Value) -> Result<()> {
-        let mut line = payload.to_string();
-        line.push('\n');
-        self.stdin
-            .write_all(line.as_bytes())
-            .and_then(|()| self.stdin.flush())
-            .map_err(|err| Error::tool("run_code", format!("PTC_IO: {err}")))
-    }
-
-    fn kill(&mut self) {
-        if self.killed {
-            return;
-        }
-        self.killed = true;
-        crate::tools::kill_process_group_tree(Some(self.child.id()));
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-impl Drop for PtcChild {
-    fn drop(&mut self) {
-        self.kill();
-    }
-}
+/* ------------------------------------------------------------------ */
+/* Tool implementation                                                 */
+/* ------------------------------------------------------------------ */
 
 #[async_trait]
 impl Tool for RunCodeTool {
@@ -740,18 +1026,19 @@ impl Tool for RunCodeTool {
     }
 
     fn description(&self) -> &'static str {
-        "Execute a JavaScript program against the available tools. Takes two \
-         arguments: `code`, the BODY of an async function (top-level `await` and \
-         `return` work), and `description`, a short summary of what the program \
-         does. Call tools as `await sdk.read('path')`, `await sdk.grep('needle', \
-         'dir')`, `await sdk.find('*.rs', 'dir')`, or `await sdk.ls('dir')`; every \
-         helper also accepts an options object (`await sdk.read({ path: \
-         'src/main.rs', offset: 1, limit: 40 })`, `await sdk.ls({ limit: 20 })`), \
-         and `await sdk.call(tool, args)` reaches the full argument set. Only what \
-         you return is program output — curate it; `console.*` and stray stdout \
-         writes go to stderr. The program is read-only (writes, `child_process`, \
-         and reads outside the workspace are denied) and `process.exit` is \
-         refused with an error. One run_code replaces many model round-trips."
+        "Execute a JavaScript program against the available tools. `code` is the \
+         BODY of an async function (top-level `await` and `return` work). Call \
+         tools as `await sdk.read('path')`, `await sdk.grep('needle', 'dir')`, \
+         `await sdk.find('*.rs', 'dir')`, or `await sdk.ls('dir')`; every helper \
+         also accepts an options object (`await sdk.read({ path: 'src/main.rs', \
+         offset: 1, limit: 40 })`, `await sdk.ls({ limit: 20 })`), and `await \
+         sdk.call(tool, args)` reaches the full argument set. The program runs \
+         on the built-in QuickJS engine with no filesystem, process, or network \
+         API: `sdk.*` is the only way out, and it only reaches the read-only \
+         tools `read`, `grep`, `find`, and `ls`. Errors carry `ptc-program:<line>` \
+         frames pointing at your own code; `console.log` is captured separately. \
+         Only what you return is program output — curate it. One run_code \
+         replaces many model round-trips."
     }
 
     fn parameters(&self) -> Value {
@@ -780,11 +1067,12 @@ impl Tool for RunCodeTool {
     }
 
     fn effects(&self) -> ToolEffects {
-        // Arbitrary code in a child process: serialized fail-closed, same
-        // policy as bash/eval.
+        // Arbitrary code execution: serialized fail-closed, same policy as
+        // bash/eval.
         ToolEffects::process()
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn execute(
         &self,
         _tool_call_id: &str,
@@ -793,98 +1081,63 @@ impl Tool for RunCodeTool {
     ) -> Result<ToolOutput> {
         let input: RunCodeInput =
             serde_json::from_value(input).map_err(|e| Error::validation(e.to_string()))?;
-        let code = input.code.trim();
-        if code.is_empty() {
+        if input.code.trim().is_empty() {
             return Err(Error::validation(
                 "run_code requires a non-empty `code` body".to_string(),
             ));
         }
+        // Deliberately NOT trimmed: reported `ptc-program:<line>` frames must
+        // line up with the code string the model actually wrote.
+        let code = input.code.as_str();
         let timeout = input.timeout_ms.map_or_else(
             || Duration::from_secs(self.timeout_secs),
             |ms| Duration::from_millis(ms.max(1)),
         );
         let deadline = Instant::now() + timeout;
-        // Let the SDK's per-call timeout never outlive the host budget: a
-        // bridge call that stalls cannot pin the run past its deadline.
-        let tool_timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
 
-        let scratch = Scratch::materialize(code)?;
-        let read_roots = self.sandbox_read_roots(&scratch);
-        let mut proc =
-            PtcChild::spawn(&scratch, &self.cwd, tool_timeout_ms, self.sandbox, &read_roots)?;
-        let sandbox = proc.sandbox.as_str();
+        let realm = JsRealm::spawn(code, timeout)?;
+        // The realm enforces the budget itself via its interrupt handler; this
+        // is only the backstop for a worker wedged in a native call.
+        let host_deadline = deadline + HOST_DEADLINE_GRACE;
 
-        // Protocol loop: service tool calls until the terminal result line.
-        let final_line = loop {
-            let line = proc.next_line(deadline).await?;
-            let Some(line) = line else {
-                return Err(Error::tool(
-                    "run_code",
-                    "PTC_EOF: node child exited before returning a result",
-                ));
-            };
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
+        let terminal = loop {
+            match realm.next_message(host_deadline).await? {
+                RealmMessage::Call(call) => {
+                    let reply = self.bridge_call(&call.tool, call.args).await;
+                    let _ = call.reply.send(reply);
+                }
+                RealmMessage::Done(terminal) => break terminal,
             }
-            let parsed: Value = serde_json::from_str(trimmed).map_err(|err| {
-                proc.kill();
-                Error::tool(
-                    "run_code",
-                    format!(
-                        "PTC_PROTOCOL: non-protocol output on the channel ({err}); \
-                         first bytes: {}",
-                        protocol_snippet(trimmed)
-                    ),
-                )
-            })?;
-            let Some(id) = parsed.get("id").cloned() else {
-                proc.kill();
-                return Err(Error::tool(
-                    "run_code",
-                    "PTC_PROTOCOL: message without `id`",
-                ));
-            };
-            if id == Value::String("result".to_string()) {
-                break trimmed.to_string();
-            }
-            // Tool call: dispatch through the whitelist and reply in-band.
-            let tool_name = parsed
-                .get("tool")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            let args = parsed.get("args").cloned().unwrap_or_else(|| json!({}));
-            let reply = match self.bridge_call(&tool_name, args).await {
-                Ok(text) => json!({ "id": id, "ok": true, "result": text }),
-                Err(error) => json!({ "id": id, "ok": false, "error": error }),
-            };
-            proc.reply(&reply)?;
         };
 
-        // Parse the terminal message: { id: "result", ok, result | error }.
-        let terminal: Value = serde_json::from_str(&final_line)
-            .map_err(|err| Error::tool("run_code", format!("PTC_PROTOCOL: {err}")))?;
+        let console = terminal
+            .get("console")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+
         let ok = terminal.get("ok").and_then(Value::as_bool).unwrap_or(false);
         if !ok {
             let error_value = terminal.get("error");
-            let error = error_value
-                .map_or_else(|| "run_code failed".to_string(), render_program_error);
+            let error =
+                error_value.map_or_else(|| "run_code failed".to_string(), render_program_error);
             let error_code = error_value
                 .and_then(|value| value.get("code"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
+            let mut details = json!({
+                "schema": PTC_RUN_CODE_SCHEMA,
+                "ok": false,
+                "error": error,
+                "errorCode": error_code,
+                "runtime": "quickjs",
+            });
+            attach_console(&mut details, &console);
             return Ok(ToolOutput {
                 content: vec![ContentBlock::Text(TextContent::new(format!(
                     "run_code failed: {error}"
                 )))],
-                details: Some(json!({
-                    "schema": PTC_RUN_CODE_SCHEMA,
-                    "ok": false,
-                    "error": error,
-                    "errorCode": error_code,
-                    "sandbox": sandbox,
-                })),
+                details: Some(details),
                 is_error: true,
             });
         }
@@ -894,19 +1147,31 @@ impl Tool for RunCodeTool {
             other => other.to_string(),
         };
         let truncation = truncate_head(rendered, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES);
+        let mut details = json!({
+            "schema": PTC_RUN_CODE_SCHEMA,
+            "ok": true,
+            "truncated": truncation.truncated,
+            "description": input.description,
+            "runtime": "quickjs",
+        });
+        attach_console(&mut details, &console);
         Ok(ToolOutput {
             content: vec![ContentBlock::Text(TextContent::new(
                 truncation.content.clone(),
             ))],
-            details: Some(json!({
-                "schema": PTC_RUN_CODE_SCHEMA,
-                "ok": true,
-                "truncated": truncation.truncated,
-                "description": input.description,
-                "sandbox": sandbox,
-            })),
+            details: Some(details),
             is_error: false,
         })
+    }
+}
+
+/// Add captured console output to `details` when the program produced any.
+fn attach_console(details: &mut Value, console: &str) {
+    if console.is_empty() {
+        return;
+    }
+    if let Value::Object(map) = details {
+        map.insert("console".to_string(), Value::String(console.to_string()));
     }
 }
 
@@ -922,11 +1187,6 @@ mod tests {
         runtime.block_on(tool.execute("t1", input, None))
     }
 
-    /// Whether the host machine can actually run the node-backed cases.
-    fn node_available() -> bool {
-        probe_node() == NodeProbe::Available
-    }
-
     /// Concatenated text of a tool result.
     fn output_text(output: &ToolOutput) -> String {
         output
@@ -939,86 +1199,32 @@ mod tests {
             .collect()
     }
 
-    /// Whether this runtime can confine the child with the permission model.
-    fn sandbox_available() -> bool {
-        node_available() && probe_permission_flag().is_some()
+    fn details_str(output: &ToolOutput, key: &str) -> Option<String> {
+        output
+            .details
+            .as_ref()
+            .and_then(|details| details.get(key))
+            .and_then(Value::as_str)
+            .map(str::to_string)
     }
 
-    /// An absolute path that exists on this platform and sits outside every
-    /// allowed root (used as the sandbox escape probe).
-    fn outside_system_path() -> &'static str {
-        if cfg!(windows) {
-            "C:/Windows/win.ini"
-        } else {
-            "/etc/hostname"
+    /// Run a program and return either its rendered output or the error text.
+    fn run_text(tool: &RunCodeTool, code: &str) -> String {
+        match run(tool, json!({ "code": code, "timeoutMs": 30_000 })) {
+            Ok(output) => output_text(&output),
+            Err(err) => err.to_string(),
         }
     }
 
-    #[test]
-    fn probe_reports_missing_for_absent_command() {
-        // A command that cannot exist on any PATH must classify as Missing
-        // (NeverNotACommand is not a real executable).
-        let absent = "pi-ptc-definitely-not-a-real-command-2f5c9d";
-        assert_eq!(probe_command(absent), NodeProbe::Missing);
-    }
-
-    #[test]
-    fn probe_reports_available_for_a_real_runtime() {
-        // The actual node on this machine, when present, must read Available.
-        // Skipped (not failed) on hosts without node.
-        match probe_node() {
-            NodeProbe::Available => assert_eq!(probe_node(), NodeProbe::Available),
-            NodeProbe::Missing | NodeProbe::Broken => {}
-        }
-    }
-
-    #[test]
-    fn probe_reports_broken_for_non_rust_executable() -> std::io::Result<()> {
-        // Point the probe at a file that exists but cannot answer `--version`:
-        // a directory is reported as an error by `Command::status` on every
-        // supported platform, so it must classify as Broken, not Available.
-        let harness = std::env::temp_dir();
-        let dir = harness.join(format!("pi-ptc-probe-{}", std::process::id()));
-        std::fs::create_dir_all(&dir)?;
-        // A directory is not an executable program; classify_probe maps the
-        // non-NotFound failure to Broken.
-        assert_eq!(probe_command(&dir.to_string_lossy()), NodeProbe::Broken);
+    /// A scratch directory holding the given files.
+    fn scratch_dir(tag: &str, files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("pi-ptc-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        Ok(())
-    }
-
-    #[test]
-    fn classify_probe_maps_all_three_states() {
-        // Direct unit coverage of the mapping itself, independent of PATH.
-        let ok = Command::new("node")
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if let Ok(status) = ok {
-            assert_eq!(classify_probe(Ok(status)), NodeProbe::Available);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        for (name, content) in files {
+            std::fs::write(dir.join(name), content).expect("write fixture");
         }
-        assert_eq!(
-            classify_probe(Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "absent",
-            ))),
-            NodeProbe::Missing
-        );
-        assert_eq!(
-            classify_probe(Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "no exec",
-            ))),
-            NodeProbe::Broken
-        );
-    }
-
-    #[test]
-    fn node_missing_error_is_actionable() {
-        let text = node_missing_error().to_string();
-        assert!(text.contains("PTC_NODE_MISSING"), "{text}");
-        assert!(text.contains("Node.js"), "{text}");
+        dir
     }
 
     #[test]
@@ -1075,10 +1281,7 @@ mod tests {
     fn bridge_allows_read_through_the_real_tool() {
         // The whitelisted path must actually reach the shared ReadTool and
         // return its text rendering.
-        let dir = std::env::temp_dir().join(format!("pi-ptc-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        let file = dir.join("probe.txt");
-        std::fs::write(&file, "hello-bridge").expect("write");
+        let dir = scratch_dir("bridge", &[("probe.txt", "hello-bridge")]);
         let tool = RunCodeTool::new(&dir);
         let runtime = asupersync::runtime::RuntimeBuilder::new()
             .build()
@@ -1087,98 +1290,7 @@ mod tests {
             .block_on(tool.bridge_call("read", json!({ "path": "probe.txt" })))
             .expect("read via bridge should succeed");
         assert!(out.contains("hello-bridge"), "{out}");
-        let _ = std::fs::remove_file(&file);
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn render_program_error_prefers_message() {
-        let rendered = render_program_error(&json!({
-            "name": "TypeError",
-            "message": "x is not a function",
-            "stack": "TypeError: x is not a function\n    at <anonymous>:1:1",
-        }));
-        assert_eq!(rendered, "TypeError: x is not a function");
-        assert_eq!(render_program_error(&json!("boom")), "boom");
-        // A bare Error name collapses to the message alone.
-        assert_eq!(
-            render_program_error(&json!({ "name": "Error", "message": "nope" })),
-            "nope"
-        );
-        // Rebased program frames and an error code are carried through.
-        assert_eq!(
-            render_program_error(&json!({
-                "name": "TypeError",
-                "message": "x is not a function",
-                "code": "ERR_TEST",
-                "stack": "TypeError: x is not a function\n    at ptc-program:4:9",
-            })),
-            "TypeError: x is not a function [ERR_TEST]\n  at ptc-program:4:9"
-        );
-        // A code already spelled out in the message is not duplicated.
-        assert_eq!(
-            render_program_error(&json!({
-                "name": "Error",
-                "message": "PTC_EXIT: nope",
-                "code": "PTC_EXIT",
-            })),
-            "PTC_EXIT: nope"
-        );
-    }
-
-    #[test]
-    fn error_frames_prefer_program_lines() {
-        // Program frames win over the SDK helper and harness frames; node
-        // internals never reach the model.
-        let mixed = "Error: boom\n    \
-                     at eval (eval at main (C:/tmp/x/ptc_sdk.js:585:21), ptc-program:3:7)\n    \
-                     at main (C:/tmp/x/ptc_sdk.js:586:26)\n    \
-                     at node:internal/vm:209:10";
-        assert_eq!(
-            render_error_frames(mixed),
-            vec!["  at ptc-program:3:7".to_string()]
-        );
-
-        // With no program frame (the error was raised inside the SDK itself),
-        // the helper frames are the fallback.
-        let sdk_only = "Error: bad\n    \
-                        at normalizeArgs (C:/tmp/x/ptc_sdk.js:337:13)\n    \
-                        at Object.read (C:/tmp/x/ptc_sdk.js:375:23)";
-        assert_eq!(
-            render_error_frames(sdk_only),
-            vec![
-                "  at ptc_sdk.js:337:13".to_string(),
-                "  at ptc_sdk.js:375:23".to_string()
-            ]
-        );
-
-        // A stack with nothing recognizable yields no frames.
-        assert!(render_error_frames("Error: boom\n    at <anonymous>:1:1").is_empty());
-    }
-
-    #[test]
-    fn frame_site_requires_line_and_column() {
-        assert_eq!(
-            extract_frame_site("  at ptc-program:12:5)", "ptc-program:").as_deref(),
-            Some("ptc-program:12:5")
-        );
-        // Trailing frame with no closing punctuation still parses.
-        assert_eq!(
-            extract_frame_site("  at ptc-program:9:4", "ptc-program:").as_deref(),
-            Some("ptc-program:9:4")
-        );
-        // A marker with no digits is not a site.
-        assert_eq!(extract_frame_site("  at ptc-program:)", "ptc-program:"), None);
-        assert_eq!(extract_frame_site("  at other.js:1:2", "ptc-program:"), None);
-    }
-
-    #[test]
-    fn protocol_snippet_is_bounded() {
-        let long = "x".repeat(500);
-        let snippet = protocol_snippet(&long);
-        assert_eq!(snippet.chars().count(), 161, "160 chars plus the ellipsis");
-        assert!(snippet.ends_with('…'), "{snippet}");
-        assert_eq!(protocol_snippet("short"), "short");
     }
 
     #[test]
@@ -1189,115 +1301,54 @@ mod tests {
     }
 
     #[test]
-    fn missing_node_reports_actionable_error() {
-        // Exercise the spawn-time guard directly: when the probe says node is
-        // absent, `spawn` must return the actionable error and never hang.
-        if node_available() {
-            return; // Only meaningful on machines without node.
-        }
-        let scratch = Scratch::materialize("return 1;").expect("scratch");
-        let err = PtcChild::spawn(&scratch, Path::new("."), 5_000, false, &[])
-            .err()
-            .expect("spawn must fail without node");
-        assert!(err.to_string().contains("PTC_NODE_MISSING"), "{err}");
-    }
-
-    #[test]
-    fn program_timeout_is_enforced() {
-        // A program that neither returns nor talks to the host must be killed
-        // at the deadline and surface PTC_DEADLINE, not hang the caller.
-        if !node_available() {
-            return;
-        }
-        let tool = RunCodeTool::new(".");
-        let started = Instant::now();
-        let err = run(
-            &tool,
-            json!({ "code": "await new Promise(() => {});", "timeoutMs": 800 }),
+    fn return_value_is_the_only_output() {
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": "console.log('noise'); return { answer: 42 };", "timeoutMs": 30_000 }),
         )
-        .expect_err("a never-settling program must time out");
-        assert!(err.to_string().contains("PTC_DEADLINE"), "{err}");
-        assert!(
-            started.elapsed() < Duration::from_secs(20),
-            "timeout must fire promptly, took {:?}",
-            started.elapsed()
-        );
+        .expect("run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        assert_eq!(output_text(&out), r#"{"answer":42}"#);
+        assert!(!output_text(&out).contains("noise"));
     }
 
     #[test]
-    fn throwing_program_returns_error_not_hang() {
-        // An exception in the program must come back as an is_error tool
-        // result (host-side), never as a hang or a panic.
-        if !node_available() {
-            return;
-        }
-        let tool = RunCodeTool::new(".");
-        let out = run(&tool, json!({ "code": "throw new Error('kaboom');" }))
-            .expect("a thrown program still yields a ToolOutput");
-        assert!(out.is_error, "thrown program must be an error result");
-        let text = out
-            .content
-            .iter()
-            .filter_map(|b| match b {
-                ContentBlock::Text(t) => Some(t.text.clone()),
-                _ => None,
-            })
-            .collect::<String>();
-        assert!(text.contains("kaboom"), "{text}");
-    }
-
-    #[test]
-    fn five_step_orchestration_in_one_round_trip() {
-        // Acceptance: one run_code performs 5 bridge calls (multi-return,
-        // grep, ls, find, read) with no extra model round-trips, and only the
-        // curated return value is surfaced.
-        if !node_available() {
-            return;
-        }
-        let dir = std::env::temp_dir().join(format!("pi-ptc-orch-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        std::fs::write(dir.join("a.txt"), "alpha needle\n").expect("write a");
-        std::fs::write(dir.join("b.txt"), "beta\n").expect("write b");
-
+    fn positional_and_options_forms_both_work() {
+        // Regression for the bug that motivated the QuickJS port: the running
+        // node SDK rejected the documented options-object form with a
+        // misleading "pattern must be a non-empty string". Both forms must work
+        // in the same realm.
+        let dir = scratch_dir("forms", &[("needle.txt", "alpha needle\n")]);
         let code = r"
-            const a = await sdk.read('a.txt');      // 1
-            const hits = await sdk.grep('needle');   // 2
-            const listing = await sdk.ls('.');       // 3
-            const found = await sdk.find('*.txt');   // 4
-            const b = await sdk.read('b.txt');       // 5
-            return { calls: 5, hasAlpha: a.includes('alpha'), hasBeta: b.includes('beta'),
-                     grep: String(hits).length > 0, listing: String(listing).length > 0,
-                     find: String(found).length > 0 };
+            const positional = String(await sdk.grep('needle', '.'));
+            const object = String(await sdk.grep({ pattern: 'needle', path: '.' }));
+            const readPositional = String(await sdk.read('needle.txt'));
+            const readObject = String(await sdk.read({ path: 'needle.txt' }));
+            return {
+                positional: positional.includes('needle'),
+                object: object.includes('needle'),
+                readPositional: readPositional.includes('needle'),
+                readObject: readObject.includes('needle'),
+            };
         ";
-        let tool = RunCodeTool::new(&dir);
-        let out = run(&tool, json!({ "code": code, "timeoutMs": 30_000 }))
-            .expect("orchestration should succeed");
-        assert!(!out.is_error, "orchestration must not error");
-        let text = out
-            .content
-            .iter()
-            .filter_map(|b| match b {
-                ContentBlock::Text(t) => Some(t.text.clone()),
-                _ => None,
-            })
-            .collect::<String>();
-        assert!(text.contains("\"calls\":5"), "{text}");
-        assert!(text.contains("\"hasAlpha\":true"), "{text}");
-        assert!(text.contains("\"hasBeta\":true"), "{text}");
+        let out = run(
+            &RunCodeTool::new(&dir),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        for key in ["positional", "object", "readPositional", "readObject"] {
+            assert!(text.contains(&format!(r#""{key}":true"#)), "{text}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn bridge_helpers_forward_options_objects() {
-        // The options-object form must forward every key, not just `path`:
-        // `limit: 1` has to reach ReadTool and actually truncate, while the
-        // positional form keeps working unchanged.
-        if !node_available() {
-            return;
-        }
-        let dir = std::env::temp_dir().join(format!("pi-ptc-opts-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        std::fs::write(dir.join("multi.txt"), "one\ntwo\nthree\n").expect("write");
+    fn options_object_forwards_every_key() {
+        // The object form must forward every key, not just `path`: `limit: 1`
+        // has to reach ReadTool and actually truncate.
+        let dir = scratch_dir("opts", &[("multi.txt", "one\ntwo\nthree\n")]);
         let code = r"
             const limited = String(await sdk.read({ path: 'multi.txt', limit: 1 }));
             const full = String(await sdk.read('multi.txt'));
@@ -1321,126 +1372,243 @@ mod tests {
     }
 
     #[test]
-    fn stray_stdout_write_cannot_corrupt_the_protocol() {
-        // stdout carries the protocol. The SDK redirects program stdout to
-        // stderr, so even a deliberate write — or clobbering the writer —
-        // must leave the run intact instead of surfacing PTC_PROTOCOL.
-        if !node_available() {
-            return;
-        }
-        let code = "process.stdout.write('NOISE\\n'); \
-                    process.stdout.write = () => true; return 'clean';";
+    fn call_escape_hatch_reaches_the_bridge() {
+        let dir = scratch_dir("hatch", &[("needle.txt", "alpha needle\n")]);
+        let code = r"
+            const viaCall = String(await sdk.call('grep', { pattern: 'needle', path: '.' }));
+            return { reached: viaCall.includes('needle') };
+        ";
         let out = run(
-            &RunCodeTool::new("."),
+            &RunCodeTool::new(&dir),
             json!({ "code": code, "timeoutMs": 30_000 }),
         )
-        .expect("a stray stdout write must not fail the run");
+        .expect("run");
         assert!(!out.is_error, "{}", output_text(&out));
-        assert!(output_text(&out).contains("clean"), "{}", output_text(&out));
-    }
-
-    #[test]
-    fn process_exit_is_refused_and_reported() {
-        // Without the SDK guard this surfaces as PTC_EOF (a child that died
-        // without answering). With it, the refusal is an ordinary error.
-        if !node_available() {
-            return;
-        }
-        let out = run(
-            &RunCodeTool::new("."),
-            json!({ "code": "process.exit(0);", "timeoutMs": 30_000 }),
-        )
-        .expect("process.exit must surface as a tool error, not EOF");
-        assert!(out.is_error, "{}", output_text(&out));
-        let text = output_text(&out);
-        assert!(text.contains("PTC_EXIT"), "{text}");
-        assert!(text.contains("process.exit"), "{text}");
-    }
-
-    #[test]
-    fn sandbox_confines_direct_fs_reads() {
-        // Layer 2 contract (see the module docs): a program that reaches for
-        // `node:fs` directly still cannot read outside the scratch dir and the
-        // workspace roots. The unsandboxed run is the control that proves the
-        // denial comes from the sandbox rather than a missing file.
-        if !sandbox_available() {
-            return;
-        }
-        let outside = outside_system_path();
-        assert!(
-            Path::new(outside).exists(),
-            "sandbox escape probe needs {outside} to exist"
-        );
-        let dir = std::env::temp_dir().join(format!("pi-ptc-sbx-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        std::fs::write(dir.join("inside.txt"), "inside-ok").expect("write");
-        let code = format!(
-            r"
-            const fs = await import('node:fs');
-            const probe = (p) => {{ try {{ fs.readFileSync(p); return 'read'; }} catch (err) {{ return String(err.code); }} }};
-            return {{ outside: probe({outside:?}), inside: probe('inside.txt') }};
-            ",
-            outside = outside
-        );
-        let confined = run(
-            &RunCodeTool::new(&dir).with_sandbox(true),
-            json!({ "code": code.clone(), "timeoutMs": 30_000 }),
-        )
-        .expect("sandboxed run");
-        let open = run(
-            &RunCodeTool::new(&dir).with_sandbox(false),
-            json!({ "code": code, "timeoutMs": 30_000 }),
-        )
-        .expect("unsandboxed run");
-        let confined_text = output_text(&confined);
-        let open_text = output_text(&open);
-        // The workspace is still readable inside the sandbox...
-        assert!(
-            confined_text.contains(r#""inside":"read""#),
-            "{confined_text}"
-        );
-        // ...but the escape is denied, and the control shows it is the sandbox
-        // doing the denying.
-        assert!(
-            !confined_text.contains(r#""outside":"read""#),
-            "{confined_text}"
-        );
-        assert!(open_text.contains(r#""outside":"read""#), "{open_text}");
+        assert!(output_text(&out).contains(r#""reached":true"#));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn sandbox_mode_is_reported_in_details() {
-        if !node_available() {
-            return;
-        }
+    fn five_step_orchestration_in_one_round_trip() {
+        // Acceptance: one run_code performs 5 bridge calls (multi-return,
+        // grep, ls, find, read) with no extra model round-trips, and only the
+        // curated return value is surfaced.
+        let dir = scratch_dir("orch", &[("a.txt", "alpha needle\n"), ("b.txt", "beta\n")]);
+        let code = r"
+            const a = await sdk.read('a.txt');      // 1
+            const hits = await sdk.grep('needle');   // 2
+            const listing = await sdk.ls('.');       // 3
+            const found = await sdk.find('*.txt');   // 4
+            const b = await sdk.read('b.txt');       // 5
+            return { calls: 5, hasAlpha: a.includes('alpha'), hasBeta: b.includes('beta'),
+                     grep: String(hits).length > 0, listing: String(listing).length > 0,
+                     find: String(found).length > 0 };
+        ";
+        let out = run(
+            &RunCodeTool::new(&dir),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("orchestration should succeed");
+        assert!(!out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        assert!(text.contains(r#""calls":5"#), "{text}");
+        assert!(text.contains(r#""hasAlpha":true"#), "{text}");
+        assert!(text.contains(r#""hasBeta":true"#), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn async_program_settles() {
+        let text = run_text(
+            &RunCodeTool::new("."),
+            "const value = await Promise.resolve(7);\nawait new Promise((resolve) => resolve());\nreturn value * 2;",
+        );
+        assert_eq!(text, "14");
+    }
+
+    #[test]
+    fn thrown_program_reports_program_line() {
+        // The error must name the line of the model's own `code`; the wrapper
+        // prefix stays on line 1 so nothing is shifted.
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({
+                "code": "const a = 1;\nconst b = 2;\nthrow new Error('boom');",
+                "timeoutMs": 30_000,
+            }),
+        )
+        .expect("a thrown program still yields a ToolOutput");
+        assert!(out.is_error, "thrown program must be an error result");
+        let text = output_text(&out);
+        assert!(text.contains("boom"), "{text}");
+        assert!(text.contains("ptc-program:3"), "{text}");
+        assert_eq!(details_str(&out, "runtime").as_deref(), Some("quickjs"));
+    }
+
+    #[test]
+    fn program_timeout_is_enforced() {
+        // A program that neither returns nor settles must be interrupted at the
+        // deadline, not hang the caller.
+        let tool = RunCodeTool::new(".");
+        let started = Instant::now();
+        let text = match run(
+            &tool,
+            json!({ "code": "await new Promise(() => {});", "timeoutMs": 800 }),
+        ) {
+            Ok(output) => {
+                assert!(output.is_error, "a never-settling program must error");
+                output_text(&output)
+            }
+            Err(err) => err.to_string(),
+        };
+        assert!(text.contains("PTC_DEADLINE"), "{text}");
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "timeout must fire promptly, took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn console_output_is_captured() {
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": "console.log('hello-console'); return 'ok';", "timeoutMs": 30_000 }),
+        )
+        .expect("run");
+        assert!(!out.is_error);
+        assert_eq!(output_text(&out), "ok");
+        let console = details_str(&out, "console").expect("console captured");
+        assert!(console.contains("hello-console"), "{console}");
+    }
+
+    #[test]
+    fn realm_has_no_ambient_node_globals() {
+        let text = run_text(
+            &RunCodeTool::new("."),
+            "return [typeof process, typeof require, typeof module, typeof Buffer].join(',');",
+        );
+        assert_eq!(text, "undefined,undefined,undefined,undefined");
+    }
+
+    #[test]
+    fn sdk_exposes_no_write_bindings() {
+        let text = run_text(
+            &RunCodeTool::new("."),
+            "return { bash: typeof sdk.bash, write: typeof sdk.write, edit: typeof sdk.edit };",
+        );
+        assert_eq!(
+            text,
+            r#"{"bash":"undefined","edit":"undefined","write":"undefined"}"#
+        );
+    }
+
+    #[test]
+    fn runtime_is_reported_in_details() {
         let out = run(
             &RunCodeTool::new("."),
             json!({ "code": "return 1;", "timeoutMs": 30_000 }),
         )
         .expect("run");
-        let mode = out
-            .details
-            .as_ref()
-            .and_then(|details| details.get("sandbox"))
-            .and_then(Value::as_str);
-        let expected = if sandbox_available() {
-            "node-permission"
-        } else {
-            "unavailable"
-        };
-        assert_eq!(mode, Some(expected));
+        assert_eq!(details_str(&out, "runtime").as_deref(), Some("quickjs"));
+        assert_eq!(output_text(&out), "1");
+    }
 
-        // An explicit opt-out is reported honestly rather than implied away.
-        let off = RunCodeTool::new(".").with_sandbox(false);
-        let out_off = run(&off, json!({ "code": "return 1;", "timeoutMs": 30_000 })).expect("run");
+    #[test]
+    fn program_source_keeps_line_numbers() {
+        let source = program_source("first;\nsecond;");
+        assert!(source.starts_with("(async () => {first;"), "{source}");
+        assert_eq!(source.lines().nth(1), Some("second;"));
+    }
+
+    #[test]
+    fn render_program_error_prefers_message() {
+        let rendered = render_program_error(&json!({
+            "name": "TypeError",
+            "message": "x is not a function",
+            "stack": "    at <anonymous> (ptc-program:1:1)",
+        }));
         assert_eq!(
-            out_off
-                .details
-                .as_ref()
-                .and_then(|details| details.get("sandbox"))
-                .and_then(Value::as_str),
-            Some("disabled")
+            rendered,
+            "TypeError: x is not a function\n  at ptc-program:1:1"
         );
+        assert_eq!(render_program_error(&json!("boom")), "boom");
+        // A bare Error name collapses to the message alone.
+        assert_eq!(
+            render_program_error(&json!({ "name": "Error", "message": "nope" })),
+            "nope"
+        );
+        // Program frames and an error code are carried through.
+        assert_eq!(
+            render_program_error(&json!({
+                "name": "TypeError",
+                "message": "x is not a function",
+                "code": "ERR_TEST",
+                "stack": "    at <anonymous> (ptc-program:4:9)",
+            })),
+            "TypeError: x is not a function [ERR_TEST]\n  at ptc-program:4:9"
+        );
+        // A code already spelled out in the message is not duplicated.
+        assert_eq!(
+            render_program_error(&json!({
+                "name": "Error",
+                "message": "PTC_EXIT: nope",
+                "code": "PTC_EXIT",
+            })),
+            "PTC_EXIT: nope"
+        );
+    }
+
+    #[test]
+    fn error_frames_keep_only_program_lines() {
+        // QuickJS stacks carry no `Error: msg` header, and only frames naming
+        // the program survive; eval/native frames are noise.
+        let quickjs =
+            "    at <anonymous> (ptc-program:3:7)\n    at <eval> (ptc-program:9:1)\n    at native";
+        assert_eq!(
+            render_error_frames(quickjs),
+            vec![
+                "  at ptc-program:3:7".to_string(),
+                "  at ptc-program:9:1".to_string()
+            ]
+        );
+        // A header line (node-style, kept for robustness) is not a frame.
+        assert_eq!(
+            render_error_frames("Error: boom\n    at <anonymous> (ptc-program:5:2)"),
+            vec!["  at ptc-program:5:2".to_string()]
+        );
+        // A stack with nothing recognizable yields no frames.
+        assert!(render_error_frames("Error: boom\n    at <anonymous>:1:1").is_empty());
+    }
+
+    #[test]
+    fn frame_site_requires_line_and_column() {
+        assert_eq!(
+            extract_frame_site("  at ptc-program:12:5)", "ptc-program:").as_deref(),
+            Some("ptc-program:12:5")
+        );
+        // Trailing frame with no closing punctuation still parses.
+        assert_eq!(
+            extract_frame_site("  at ptc-program:9:4", "ptc-program:").as_deref(),
+            Some("ptc-program:9:4")
+        );
+        // A marker with no digits is not a site.
+        assert_eq!(
+            extract_frame_site("  at ptc-program:)", "ptc-program:"),
+            None
+        );
+        assert_eq!(
+            extract_frame_site("  at other.js:1:2", "ptc-program:"),
+            None
+        );
+    }
+
+    #[test]
+    fn console_is_bounded() {
+        let long = "x".repeat(PTC_MAX_CONSOLE_BYTES + 100);
+        let bounded = bound_console(&long);
+        assert!(bounded.ends_with('…'));
+        assert!(bounded.len() <= PTC_MAX_CONSOLE_BYTES + '…'.len_utf8());
+        assert_eq!(bound_console("short"), "short");
     }
 }
