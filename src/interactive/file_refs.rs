@@ -280,6 +280,57 @@ pub fn extract_file_references(
     (cleaned, file_args)
 }
 
+/// Normalize pasted text that is one or more existing file paths — a
+/// drag-and-drop target, a `file://` URL, a shell-quoted path — into the
+/// `@file` reference form the prompt layer expands into attachments.
+///
+/// Returns the text to insert and how many paths were attached, or `None`
+/// when any non-empty line is not an existing path: ordinary pasted prose
+/// must reach the editor untouched. Shared by the classic and ftui stacks so
+/// the two surfaces cannot drift.
+pub fn normalize_pasted_file_refs(pasted: &str, cwd: &Path) -> Option<(String, usize)> {
+    let mut refs = Vec::new();
+    for line in pasted.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        refs.push(normalize_pasted_path(trimmed, cwd)?);
+    }
+
+    if refs.is_empty() {
+        return None;
+    }
+
+    let mut insert = refs
+        .iter()
+        .map(|path| format_file_ref(path))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !insert.ends_with(' ') {
+        insert.push(' ');
+    }
+
+    Some((insert, refs.len()))
+}
+
+fn normalize_pasted_path(raw: &str, cwd: &Path) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.starts_with('@') {
+        return None;
+    }
+
+    let unquoted = strip_wrapping_quotes(trimmed);
+    let unescaped = unescape_dragged_path(unquoted);
+    let path = file_url_to_path(&unescaped).unwrap_or_else(|| PathBuf::from(&unescaped));
+    let resolved = crate::tools::resolve_read_path(path.to_string_lossy().as_ref(), cwd);
+    if !resolved.exists() {
+        return None;
+    }
+
+    Some(path_for_display(&resolved, cwd))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;

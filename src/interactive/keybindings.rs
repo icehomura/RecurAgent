@@ -117,47 +117,10 @@ impl RaApp {
     }
 
     fn normalize_pasted_paths(&self, pasted: &str) -> Option<(String, usize)> {
-        let mut refs = Vec::new();
-        for line in pasted.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let path = self.normalize_pasted_path(trimmed)?;
-            refs.push(path);
-        }
-
-        if refs.is_empty() {
-            return None;
-        }
-
-        let mut insert = refs
-            .iter()
-            .map(|path| format_file_ref(path))
-            .collect::<Vec<_>>()
-            .join(" ");
-        if !insert.ends_with(' ') {
-            insert.push(' ');
-        }
-
-        Some((insert, refs.len()))
-    }
-
-    fn normalize_pasted_path(&self, raw: &str) -> Option<String> {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed.starts_with('@') {
-            return None;
-        }
-
-        let unquoted = strip_wrapping_quotes(trimmed);
-        let unescaped = unescape_dragged_path(unquoted);
-        let path = file_url_to_path(&unescaped).unwrap_or_else(|| PathBuf::from(&unescaped));
-        let resolved = resolve_read_path(path.to_string_lossy().as_ref(), &self.cwd);
-        if !resolved.exists() {
-            return None;
-        }
-
-        Some(path_for_display(&resolved, &self.cwd))
+        // Shared with the ftui stack so drag/drop parity cannot drift: the
+        // same normalization turns a dropped target into an `@file` ref on
+        // both surfaces.
+        super::file_refs::normalize_pasted_file_refs(pasted, &self.cwd)
     }
 
     pub(super) fn insert_file_ref_path(&mut self, path: &Path) {
