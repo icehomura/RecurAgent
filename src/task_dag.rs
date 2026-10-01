@@ -44,6 +44,12 @@ impl TaskNodeId {
 pub struct TaskNode {
     pub id: TaskNodeId,
     pub tool_name: String,
+    /// AI-authored short label for the step (`"读取配置"`, `"运行构建"`), shown
+    /// in the TUI diagram. Purely presentational — it carries no execution
+    /// meaning and defaults to empty, in which case the view falls back to
+    /// `tool_name`.
+    #[serde(default)]
+    pub name: String,
     /// 节点入参；省略时为 `Null`（无参工具无需声明）。
     #[serde(default)]
     pub args: serde_json::Value,
@@ -408,6 +414,7 @@ mod tests {
         TaskNode {
             id: TaskNodeId::new(id),
             tool_name: "read".to_string(),
+            name: String::new(),
             args: json!({}),
             depends_on: deps.iter().copied().map(TaskNodeId::new).collect(),
             effects: ToolEffects::read(),

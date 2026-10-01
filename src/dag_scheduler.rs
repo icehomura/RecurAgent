@@ -4,10 +4,16 @@
 //! [`crate::agent::plan_tool_effect_batches`] 对就绪子集切批（barrier 独占批次）；
 //! 第 3 层按 `max_concurrency` 分块并发（块内 `join_all`、块间串行）。批间串行，因此
 //! 全局并发峰值恒 ≤ `max_concurrency`，barrier 批永不与他者重叠。
+//!
+//! **重试**（[`DagScheduler::with_retry`]）只作用于 **parallel-safe** 节点
+//! （只读/联网）：这类节点重跑无副作用，失败后按 `attempts` 重试。带
+//! write/append/process 副作用的节点**永不重试**——重放 `bash`/`write` 会把
+//! 副作用做两遍，比原始失败更糟。这是固定语义，不提供配置开关。
 
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use futures::future::join_all;
 use serde_json::Value;
@@ -256,12 +262,16 @@ pub struct DagScheduler {
     failures: HashMap<TaskNodeId, String>,
     executor: Arc<dyn NodeExecutor>,
     max_concurrency: usize,
+    /// parallel-safe 节点的总尝试次数（含首次）；`1` = 不重试。
+    retry_attempts: u32,
+    /// 两次尝试之间的固定退避。
+    retry_backoff: Duration,
     on_state: Option<StateCallback>,
     on_output: Option<OutputCallback>,
 }
 
 impl DagScheduler {
-    /// 创建调度器，所有节点初始为 `Pending`。
+    /// 创建调度器，所有节点初始为 `Pending`，默认不重试。
     #[must_use]
     pub fn new(graph: TaskGraph, executor: Arc<dyn NodeExecutor>, max_concurrency: usize) -> Self {
         let states = graph
@@ -276,6 +286,8 @@ impl DagScheduler {
             failures: HashMap::new(),
             executor,
             max_concurrency: max_concurrency.max(1),
+            retry_attempts: 1,
+            retry_backoff: Duration::ZERO,
             on_state: None,
             on_output: None,
         }
@@ -289,6 +301,40 @@ impl DagScheduler {
             executor,
             crate::agent::compatible_tool_parallelism_limit(),
         )
+    }
+
+    /// 设置 parallel-safe 节点的重试策略。
+    ///
+    /// `attempts` 含首次执行（`1` = 不重试；`0` 视作 `1`）。带副作用的节点
+    /// （write/append/process）不受影响，**永不重试**。
+    #[must_use]
+    pub fn with_retry(mut self, attempts: u32, backoff: Duration) -> Self {
+        self.retry_attempts = attempts.max(1);
+        self.retry_backoff = backoff;
+        self
+    }
+
+    /// 播种既有结果：`resume` 时已 `Succeeded` 的节点不重跑。
+    ///
+    /// `outputs` 同时写入黑板（下游占位符可解析）与状态机（节点直接终态，
+    /// 不再进入就绪集）。不在图中的 id 会被忽略——避免写入幽灵节点。
+    #[must_use]
+    pub fn with_seed(
+        mut self,
+        outputs: Vec<(TaskNodeId, Arc<ToolOutput>)>,
+        succeeded: &[TaskNodeId],
+    ) -> Self {
+        for (id, output) in outputs {
+            if self.graph.node(id).is_some() {
+                self.outputs.insert(id, output);
+            }
+        }
+        for &id in succeeded {
+            if self.graph.node(id).is_some() {
+                self.states.insert(id, TaskNodeState::Succeeded);
+            }
+        }
+        self
     }
 
     /// 注册状态迁移回调（M4 事件层挂这里）。
@@ -385,7 +431,7 @@ impl DagScheduler {
                 let mut results: Vec<(TaskNodeId, Result<ToolOutput, String>)> =
                     Vec::with_capacity(ids.len());
                 for chunk in ids.chunks(self.max_concurrency) {
-                    let futures = chunk.iter().map(|&id| self.execute_one(id));
+                    let futures = chunk.iter().map(|&id| self.execute_with_retry(id));
                     results.extend(join_all(futures).await);
                 }
 
@@ -517,6 +563,33 @@ impl DagScheduler {
         };
         (id, self.executor.execute(node.clone(), resolved).await)
     }
+
+    /// 执行一个节点，**只对 parallel-safe 节点**按 `retry_attempts` 重试。
+    ///
+    /// barrier 节点（write/append/process）恒为一次：重跑会重放副作用。
+    /// 解析失败（越权占位符等）是确定性错误，重试也拦不住——但重试只发生在
+    /// parallel-safe 节点上，成本有界，故不额外区分。
+    async fn execute_with_retry(&self, id: TaskNodeId) -> (TaskNodeId, Result<ToolOutput, String>) {
+        let attempts = match self.graph.node(id) {
+            Some(node) if node.effects.parallel_safe() => self.retry_attempts,
+            _ => 1,
+        };
+        let mut result = self.execute_one(id).await;
+        let mut attempt = 1;
+        while attempt < attempts && is_failure(&result.1) {
+            if !self.retry_backoff.is_zero() {
+                asupersync::time::sleep(asupersync::time::wall_now(), self.retry_backoff).await;
+            }
+            result = self.execute_one(id).await;
+            attempt += 1;
+        }
+        result
+    }
+}
+
+/// 执行结果是否算失败（`Err`，或工具自报 `is_error`）。
+fn is_failure(result: &Result<ToolOutput, String>) -> bool {
+    result.as_ref().map_or(true, |output| output.is_error)
 }
 
 #[cfg(test)]
@@ -550,6 +623,7 @@ mod tests {
         TaskNode {
             id: TaskNodeId::new(id),
             tool_name: tool.to_string(),
+            name: String::new(),
             args: Value::Null,
             depends_on: deps.iter().copied().map(TaskNodeId::new).collect(),
             effects,
@@ -908,5 +982,135 @@ mod tests {
         assert_eq!(args["a"], "out-1");
         assert_eq!(args["b"], 10);
         assert_eq!(args["c"], "pre-out-1-post");
+    }
+
+    // ---- 重试语义 ----
+
+    /// 计数型执行器：指定节点前 `fail_first` 次失败，之后成功。
+    #[derive(Default)]
+    struct FlakyState {
+        attempts: HashMap<u32, u32>,
+    }
+
+    struct FlakyExecutor {
+        fail_first: HashMap<u32, u32>,
+        state: Arc<Mutex<FlakyState>>,
+    }
+
+    impl FlakyExecutor {
+        fn new(fail_first: &[(u32, u32)]) -> Self {
+            Self {
+                fail_first: fail_first.iter().copied().collect(),
+                state: Arc::new(Mutex::new(FlakyState::default())),
+            }
+        }
+
+        fn attempts(&self, id: u32) -> u32 {
+            self.state
+                .lock()
+                .expect("flaky state lock")
+                .attempts
+                .get(&id)
+                .copied()
+                .unwrap_or(0)
+        }
+    }
+
+    impl NodeExecutor for FlakyExecutor {
+        fn execute(
+            &self,
+            node: TaskNode,
+            _resolved_args: Value,
+        ) -> Pin<Box<dyn Future<Output = Result<ToolOutput, String>> + Send>> {
+            let id = node.id.value();
+            let fail_first = self.fail_first.get(&id).copied().unwrap_or(0);
+            let state = Arc::clone(&self.state);
+            Box::pin(async move {
+                let n = {
+                    let mut guard = state.lock().expect("flaky state lock");
+                    let counter = guard.attempts.entry(id).or_insert(0);
+                    *counter += 1;
+                    *counter
+                };
+                if n <= fail_first {
+                    return Err(format!("node {id} attempt {n} failed"));
+                }
+                Ok(ToolOutput {
+                    content: vec![ContentBlock::Text(TextContent::new(format!("out-{id}")))],
+                    details: None,
+                    is_error: false,
+                })
+            })
+        }
+    }
+
+    fn run_with_retry(
+        executor: Arc<FlakyExecutor>,
+        graph: TaskGraph,
+        n: usize,
+        attempts: u32,
+    ) -> Result<(), ScheduleError> {
+        let rt = asupersync::runtime::RuntimeBuilder::current_thread()
+            .build()
+            .expect("runtime");
+        let executor: Arc<dyn NodeExecutor> = executor;
+        let mut scheduler =
+            DagScheduler::new(graph, executor, n).with_retry(attempts, Duration::ZERO);
+        rt.block_on(async { scheduler.run().await })
+    }
+
+    /// 只读节点失败后重试，直到成功。
+    #[test]
+    fn read_node_retries_until_success() {
+        let graph =
+            TaskGraph::build(vec![node(1, "read", &[], ToolEffects::read())]).expect("valid graph");
+        let executor = Arc::new(FlakyExecutor::new(&[(1, 2)])); // 前两次失败
+        let result = run_with_retry(Arc::clone(&executor), graph, 1, 5);
+        assert!(
+            result.is_ok(),
+            "read node should succeed within the retry budget"
+        );
+        assert_eq!(executor.attempts(1), 3, "third attempt should succeed");
+    }
+
+    /// 重试用尽仍失败 → Failed，下游级联 Skipped，不越权执行。
+    #[test]
+    fn read_node_exhausts_retries_then_skips_downstream() {
+        let graph = TaskGraph::build(vec![
+            node(1, "read", &[], ToolEffects::read()),
+            node(2, "read", &[1], ToolEffects::read()),
+        ])
+        .expect("valid graph");
+        let executor = Arc::new(FlakyExecutor::new(&[(1, 99)])); // 恒失败
+        let result = run_with_retry(Arc::clone(&executor), graph, 1, 3);
+        assert!(matches!(
+            result,
+            Err(ScheduleError::Aggregate {
+                failed: 1,
+                skipped: 1,
+                cancelled: 0
+            })
+        ));
+        assert_eq!(
+            executor.attempts(1),
+            3,
+            "attempts must equal the configured limit"
+        );
+        assert_eq!(executor.attempts(2), 0, "skipped downstream must not run");
+    }
+
+    /// barrier 节点永不重试：一次即定，避免重放副作用。
+    #[test]
+    fn barrier_node_is_never_retried() {
+        let graph = TaskGraph::build(vec![node(1, "bash", &[], ToolEffects::process())])
+            .expect("valid graph");
+        let executor = Arc::new(FlakyExecutor::new(&[(1, 99)])); // 恒失败
+        let result = run_with_retry(Arc::clone(&executor), graph, 1, 5);
+        assert!(result.is_err());
+        assert_eq!(
+            executor.attempts(1),
+            1,
+            "a write/process node must run exactly once even with retries configured"
+        );
     }
 }
