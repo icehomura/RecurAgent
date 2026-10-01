@@ -199,7 +199,7 @@ fn non_git_refusal_through_tool() {
         json!({
             "agent": "default",
             "task": "touch a file",
-            "tasks": null,
+            "parallel": null,
             "isolation": "worktree"
         }),
         None,

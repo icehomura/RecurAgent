@@ -505,7 +505,7 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
         // the names the model is told about cannot drift from the names
         // discovery actually seeds.
         guidelines_list.push(format!(
-            "Delegate with `subagent` instead of working serially in this context: a user intent usually decomposes into more than two independent slices, so default to a single `subagent` call whose `tasks` array runs one child per slice (up to 8, bounded concurrency), then converge on the children's results. Use `chain` only when a step needs the previous child's output. After implementing a change, delegate an independent check to the `verify` child before declaring the work done, and hand any defect it reports to `fixer` rather than editing a test to make it pass. The built-in agents {} are always available; user or project definitions in `.ra/agents/` override them by name",
+            "Delegate with `subagent` instead of working serially in this context: a user intent usually decomposes into more than two independent slices, so default to a single `subagent` call whose `parallel` array runs one child per slice (up to 8, bounded concurrency), then converge on the children's results. Use `chain` only when a step needs the previous child's output. After implementing a change, delegate an independent check to the `verify` child before declaring the work done, and hand any defect it reports to `fixer` rather than editing a test to make it pass. The built-in agents {} are always available; user or project definitions in `.ra/agents/` override them by name",
             crate::subagents::builtin_agent_roster()
         ));
         // The fan-out guidance has a failure mode in the opposite direction:

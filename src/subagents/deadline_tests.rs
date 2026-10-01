@@ -135,7 +135,7 @@ fn queued_parallel_work_consumes_the_original_budget() {
     );
     let output = run(
         &tool,
-        json!({"concurrency":1,"tasks":[
+        json!({"concurrency":1,"parallel":[
             {"agent":"worker","task":"first"}, {"agent":"worker","task":"queued"}
         ]}),
         None,
@@ -310,7 +310,7 @@ fn expired_isolated_work_is_preserved_and_never_applied() {
     }
     let output = run(
         &tool,
-        json!({"tasks":[{
+        json!({"parallel":[{
             "agent":"worker","task":"change file","isolation":"worktree","isoApply":"apply"
         }]}),
         None,

@@ -322,7 +322,7 @@ fn unsuccessful_child_protocol_never_applies_worktree_edits() {
     initialize_git(&tool.cwd);
     let output = run(
         &tool,
-        json!({"tasks":[{"agent":"worker","task":"change file","isolation":"worktree","isoApply":"apply"}]}),
+        json!({"parallel":[{"agent":"worker","task":"change file","isolation":"worktree","isoApply":"apply"}]}),
     );
     assert!(output.is_error);
     assert_eq!(
@@ -342,7 +342,7 @@ fn invalid_typed_output_keeps_worktree_edits_even_in_permissive_mode() {
     initialize_git(&tool.cwd);
     let output = run(
         &tool,
-        json!({"tasks":[{
+        json!({"parallel":[{
             "agent":"worker","task":"change file","isolation":"worktree","isoApply":"apply",
             "outputSchema":{"type":"object"},"schemaMode":"permissive"
         }]}),
@@ -384,7 +384,7 @@ fn valid_corrective_retry_applies_only_accepted_edits() {
     initialize_git(&tool.cwd);
     let output = run(
         &tool,
-        json!({"tasks":[{
+        json!({"parallel":[{
             "agent":"worker","task":"produce an accepted change",
             "isolation":"worktree","isoApply":"apply","schemaMode":"strict",
             "outputSchema":{
@@ -441,7 +441,7 @@ fn apply_conflict_marks_result_and_hub_failed() {
     let output = runtime
         .block_on(tool.execute(
             "conflict",
-            json!({"tasks":[{
+            json!({"parallel":[{
                 "agent":"worker","task":"change file","isolation":"worktree","isoApply":"apply"
             }]}),
             Some(Box::new(move |update| {
@@ -494,7 +494,7 @@ fn invalid_isolation_settings_do_not_launch() {
     for (isolation, apply) in [("worktre", "apply"), ("worktree", "aply")] {
         let output = run(
             &tool,
-            json!({"tasks":[{
+            json!({"parallel":[{
                 "agent":"worker","task":"must not launch","isolation":isolation,"isoApply":apply
             }]}),
         );

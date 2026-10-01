@@ -65,7 +65,7 @@
         }
       ],
       "input": {
-        "tasks": [
+        "parallel": [
           {
             "agent": "scout",
             "task": "first fixture task"
@@ -101,7 +101,7 @@
       "input": {
         "agent": "scout",
         "task": "single",
-        "tasks": [
+        "parallel": [
           {
             "agent": "scout",
             "task": "parallel"
@@ -109,7 +109,7 @@
         ]
       },
       "expect_error": true,
-      "error_contains": "Provide exactly one of agent+task, tasks, or chain",
+      "error_contains": "Provide exactly one of agent+task, parallel, or chain",
       "expected": {}
     }
   ]

@@ -485,7 +485,7 @@ impl Tool for SubagentTool {
                 "task": {"type": "string", "description": "Task for a single delegation."},
                 "outputSchema": {"type": "object", "description": "JSON Schema the single delegation's final output must match; the parent validates and returns parsed data."},
                 "schemaMode": {"type": "string", "enum": ["permissive", "strict"], "default": "permissive", "description": "permissive keeps an invalid result with a warning; strict fails the task."},
-                "tasks": {"type": "array", "maxItems": MAX_PARALLEL_TASKS, "items": {"$ref": "#/definitions/task"}, "description": "Independent tasks to run in parallel."},
+                "parallel": {"type": "array", "maxItems": MAX_PARALLEL_TASKS, "items": {"$ref": "#/definitions/task"}, "description": "Independent tasks to run in parallel."},
                 "chain": {"type": "array", "maxItems": MAX_PARALLEL_TASKS, "items": {"$ref": "#/definitions/task"}, "description": "Sequential tasks; {previous} is replaced with the prior child output, and {{previous.data.<field.path>}} addresses the prior task's schema-validated data."},
                 "concurrency": {"type": "integer", "minimum": 1, "maximum": MAX_PARALLEL_TASKS},
                 "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": deadline::MAX_TIMEOUT_SECS, "description": "Budget for this whole delegation request, including queueing, chained steps and corrective retries. May shorten, never extend, the host's limit."},
@@ -576,7 +576,7 @@ struct SubagentRequest {
     #[serde(default)]
     schema_mode: SchemaMode,
     #[serde(default)]
-    tasks: Option<Vec<SubagentTask>>,
+    parallel: Option<Vec<SubagentTask>>,
     #[serde(default)]
     chain: Option<Vec<SubagentTask>>,
     #[serde(default)]
@@ -603,12 +603,12 @@ impl SubagentRequest {
                 schema_mode: self.schema_mode,
             });
         let selected = usize::from(single.is_some())
-            + usize::from(self.tasks.is_some())
+            + usize::from(self.parallel.is_some())
             + usize::from(self.chain.is_some());
         if selected.ne(&1) {
             return Err(Error::tool(
                 "subagent",
-                "Provide exactly one of agent+task, tasks, or chain.",
+                "Provide exactly one of agent+task, parallel, or chain.",
             ));
         }
         if self.agent.is_some() != self.task.is_some() {
@@ -617,12 +617,12 @@ impl SubagentRequest {
                 "Single delegation requires both agent and task.",
             ));
         }
-        if let Some(tasks) = &self.tasks
-            && (tasks.is_empty() || tasks.len() > MAX_PARALLEL_TASKS)
+        if let Some(parallel) = &self.parallel
+            && (parallel.is_empty() || parallel.len() > MAX_PARALLEL_TASKS)
         {
             return Err(Error::tool(
                 "subagent",
-                format!("tasks must contain 1-{MAX_PARALLEL_TASKS} entries."),
+                format!("parallel must contain 1-{MAX_PARALLEL_TASKS} entries."),
             ));
         }
         if let Some(chain) = &self.chain
@@ -635,7 +635,7 @@ impl SubagentRequest {
         }
         Ok(single.map_or_else(
             || {
-                self.tasks.as_ref().map_or_else(
+                self.parallel.as_ref().map_or_else(
                     || RequestMode::Chain(self.chain.clone().unwrap_or_default()),
                     |tasks| RequestMode::Parallel(tasks.clone()),
                 )
@@ -1866,7 +1866,7 @@ mod tests {
     #[test]
     fn request_requires_exactly_one_mode_and_renders_chain_context() {
         let invalid: SubagentRequest = serde_json::from_value(json!({
-            "agent": "scout", "task": "x", "tasks": [{"agent": "review", "task": "y"}]
+            "agent": "scout", "task": "x", "parallel": [{"agent": "review", "task": "y"}]
         }))
         .expect("parse");
         assert!(invalid.mode().is_err());
@@ -2000,7 +2000,7 @@ mod tests {
             SubagentTool::with_paths(PathBuf::from("."), PathBuf::from("."), PathBuf::from("pi"));
         let schema = tool.parameters();
         assert!(schema["properties"].get("agent").is_some());
-        assert!(schema["properties"].get("tasks").is_some());
+        assert!(schema["properties"].get("parallel").is_some());
         assert!(schema["properties"].get("chain").is_some());
     }
 
