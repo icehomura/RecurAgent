@@ -50,7 +50,9 @@ use crate::contracts::UiProtocolContractStores;
 
 pub(crate) mod app_binding;
 pub(crate) mod host_tools;
+pub(crate) mod purge;
 mod recovery;
+pub(crate) mod session_tool_list;
 pub(crate) mod shared_history;
 pub(crate) mod turn_origin;
 pub(crate) use recovery::*;

@@ -31,6 +31,11 @@ struct Fx {
 }
 
 async fn fixture() -> Fx {
+    fixture_with(|_| {}).await
+}
+
+/// [`fixture`], with `setup` applied to the server state first.
+async fn fixture_with(setup: impl FnOnce(&mut AppState)) -> Fx {
     let tmp = tempfile::tempdir().unwrap();
     let profile = crate::profiles::UserProfile {
         id: "dev".to_string(),
@@ -75,6 +80,7 @@ async fn fixture() -> Fx {
     .expect("bootstrap dev runtime");
     let mut state = AppState::empty_for_tests();
     state.profiles.insert("dev".to_string(), runtime.clone());
+    setup(&mut state);
     let apps = tmp.path().join("apps");
     std::fs::create_dir_all(apps.join("news")).unwrap();
     Fx {
@@ -4117,6 +4123,95 @@ async fn should_give_the_system_agent_the_app_tools_the_host_registers_on_its_se
     assert!(after.get("calendar_today").is_none());
 }
 
+/// OctoSense#146: the host's own connection (the private `serve --stdio`
+/// pipe, or the host token's connection of `serve --host-managed`) registers
+/// a host session's tools with no app peer's token, so the system agent's
+/// host tools do not wait for an app peer to exist; it answers the calls
+/// routed to it the same way. Any other connection still needs the token of
+/// an app peer that session prepared, and an app peer's session is still
+/// refused.
+#[tokio::test]
+async fn should_register_a_host_sessions_tools_without_a_peer_token_when_the_connection_is_the_hosts_own()
+ {
+    let tools = json!({ "tools": [calendar_today()] });
+
+    // `serve --stdio`: the host's private pipe. No app peer exists yet.
+    let fx = fixture().await;
+    let (stdio_tx, _stdio_rx) = std::sync::mpsc::sync_channel(8);
+    let stdio = WsConnection::new_stdio(stdio_tx);
+    let registered = register_on_session(&fx, &stdio, None, &fx.system, tools.clone())
+        .expect("the host's own pipe needs no app peer's token");
+    assert_eq!(registered["version"], 1);
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, fx.system.clone(), None)
+        .await
+        .unwrap();
+    let mut host_turn = runtime.tools.snapshot_excluding(&[]);
+    crate::peers::host_tools::apply_session_owned_host_tools(
+        &mut host_turn,
+        &peers_root(&fx),
+        &fx.system,
+        "turn-h1",
+        Some(stdio.connection_id.0),
+    );
+    assert_eq!(
+        host_turn.origin("calendar_today"),
+        Some(octos_agent::ToolOrigin::HostRouted)
+    );
+    // Its answer to a call needs no token either (only the connection the
+    // call was sent to may answer it).
+    let answer = raw_peer_tool_result(
+        stdio.connection_id.0,
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_TOOL_RESULT,
+            json!({"session_id": fx.system, "call_id": "no-such-call", "ok": true, "data": {}}),
+        ),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(answer.data.unwrap()["kind"], "peer_tool_call_not_found");
+    // Still refused: an app peer's session, and another connection without
+    // a token (or its answer).
+    let refused =
+        register_on_session(&fx, &stdio, None, &peer_key(&fx), tools.clone()).unwrap_err();
+    assert_eq!(refused.data.unwrap()["kind"], "peer_tools_invalid");
+    let (ws, _rx) = ws_connection_for_test(8);
+    let refused = register_on_session(&fx, &ws, None, &fx.system, tools.clone()).unwrap_err();
+    assert_eq!(refused.data.unwrap()["kind"], "peer_host_token_mismatch");
+    let refused = raw_peer_tool_result(
+        ws.connection_id.0,
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_TOOL_RESULT,
+            json!({"session_id": fx.system, "call_id": "no-such-call", "ok": true, "data": {}}),
+        ),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(refused.data.unwrap()["kind"], "peer_host_token_mismatch");
+    crate::peers::host_tools::drop_routes_for_connection(stdio.connection_id.0);
+
+    // `serve --host-managed`: the host token's connection needs none; an
+    // external client is refused whatever it holds.
+    let fx = fixture_with(|state| {
+        state.host_managed = Some(Arc::new(
+            super::super::host_managed::HostManaged::new(
+                "host-token-0123456789abcdef0123456789abcdef".to_owned(),
+                None,
+                8765,
+            )
+            .unwrap(),
+        ));
+    })
+    .await;
+    let (host_ws, _host_rx) = ws_connection_for_test(8);
+    register_on_session(&fx, &host_ws, None, &fx.system, tools.clone())
+        .expect("the host token's connection needs no app peer's token");
+    let (ext_ws, _ext_rx) = external_ws(8);
+    assert!(register_on_session(&fx, &ext_ws, None, &fx.system, tools).is_err());
+    crate::peers::host_tools::drop_routes_for_connection(host_ws.connection_id.0);
+}
+
 #[tokio::test]
 async fn should_offer_ask_user_question_on_a_peer_input_turn_when_the_host_lists_it() {
     let fx = fixture().await;
@@ -6297,6 +6392,599 @@ async fn should_show_the_peer_session_a_persons_turn_in_progress() {
     assert_no_block_persisted(&e);
 }
 
+// ── #2605: the durable host-only kernel tool list of a host session ─────
+
+fn set_tool_list(ws: &WsConnection, fx: &Fx, params: Value) -> Result<Value, RpcError> {
+    raw_session_tool_list_set(
+        ws,
+        &fx.state,
+        &rpc(APPUI_METHOD_SESSION_TOOL_LIST_SET, params),
+        None,
+    )
+}
+
+fn get_tool_list(ws: &WsConnection, fx: &Fx, params: Value) -> Result<Value, RpcError> {
+    raw_session_tool_list_get(
+        ws,
+        &fx.state,
+        &rpc(APPUI_METHOD_SESSION_TOOL_LIST_GET, params),
+        None,
+    )
+}
+
+/// The registry of a serve turn on `key` driven by `connection` (`None`:
+/// a kernel continuation), through the production roster function.
+async fn serve_turn_registry(
+    fx: &Fx,
+    key: &SessionKey,
+    turn: &str,
+    connection: Option<u64>,
+) -> octos_agent::ToolRegistry {
+    let runtime = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key.clone(), None)
+        .await
+        .expect("session runtime");
+    let mut registry = runtime.tools.snapshot_excluding(&[]);
+    apply_turn_host_tool_rosters(&mut registry, &fx.data_dir, key, turn, connection);
+    registry
+}
+
+#[test]
+fn should_advertise_and_dispatch_the_session_tool_list_methods() {
+    for method in [
+        APPUI_METHOD_SESSION_TOOL_LIST_SET,
+        APPUI_METHOD_SESSION_TOOL_LIST_GET,
+    ] {
+        assert!(APPUI_EXTRA_METHODS.contains(&method), "{method} advertised");
+        assert!(
+            raw_method_is_dispatched(method, false),
+            "{method} dispatched"
+        );
+        assert!(
+            !super::super::host_managed::EXTERNAL_ALLOWED_METHODS.contains(&method),
+            "{method} is host-only"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_narrow_every_turn_on_the_session_when_the_host_sets_a_durable_list() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (host, _rx) = ws_connection_for_test(8);
+    let usual = sorted_names(&serve_turn_registry(&fx, &fx.system, "t0", None).await);
+    assert!(usual.contains(&"shell".to_owned()) && usual.contains(&"read_file".to_owned()));
+
+    let result = set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token,
+                "generic_tools": ["read_file", "web_search", "read_file", "no_such_tool"] }),
+    )
+    .expect("the host sets the list");
+    assert_eq!(result["version"], 1);
+    assert_eq!(result["previous_version"], 0);
+    assert_eq!(result["applies"], "next_turn");
+    assert_eq!(
+        result["generic_tools"],
+        json!(["read_file", "web_search", "no_such_tool"])
+    );
+    let expected: Vec<String> = ["read_file", "web_search"]
+        .into_iter()
+        .filter(|name| usual.contains(&name.to_string()))
+        .map(str::to_owned)
+        .collect();
+    // The host's turn, another client's turn and a kernel continuation.
+    let (other, _orx) = ws_connection_for_test(8);
+    for (turn, connection) in [
+        ("t1", Some(host.connection_id.0)),
+        ("t2", Some(other.connection_id.0)),
+        ("t3", None),
+    ] {
+        assert_eq!(
+            sorted_names(&serve_turn_registry(&fx, &fx.system, turn, connection).await),
+            expected,
+            "{turn}: exactly the listed tools the roster has, never an unknown one"
+        );
+    }
+    // Other sessions of the profile are untouched.
+    let elsewhere = SessionKey::with_profile_topic("dev", "api", &host_chat(), "elsewhere");
+    assert_eq!(
+        sorted_names(&serve_turn_registry(&fx, &elsewhere, "t4", None).await),
+        usual
+    );
+    // An empty list keeps no kernel tool; null clears it.
+    set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": [] }),
+    )
+    .unwrap();
+    assert!(
+        serve_turn_registry(&fx, &fx.system, "t5", None)
+            .await
+            .tool_names()
+            .is_empty()
+    );
+    let cleared = set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": null,
+                "if_version": 2 }),
+    )
+    .unwrap();
+    assert_eq!(cleared["version"], 3);
+    assert_eq!(cleared["generic_tools"], Value::Null);
+    assert_eq!(
+        sorted_names(&serve_turn_registry(&fx, &fx.system, "t6", None).await),
+        usual
+    );
+}
+
+#[tokio::test]
+async fn should_keep_the_list_when_the_host_reconnects() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (first, _rx) = ws_connection_for_test(8);
+    set_tool_list(
+        &first,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": ["read_file"] }),
+    )
+    .unwrap();
+    // The host's connection goes away; nothing of the list lived on it.
+    crate::peers::host_tools::drop_routes_for_connection(first.connection_id.0);
+    drop(first);
+    let (second, _rx2) = ws_connection_for_test(8);
+    let read = get_tool_list(
+        &second,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token }),
+    )
+    .unwrap();
+    assert_eq!(read["status"], "set");
+    assert_eq!(read["version"], 1);
+    assert_eq!(read["generic_tools"], json!(["read_file"]));
+    assert_eq!(
+        sorted_names(
+            &serve_turn_registry(&fx, &fx.system, "t1", Some(second.connection_id.0)).await
+        ),
+        ["read_file"]
+    );
+    // It lives on disk only, under the profile data dir (so a restarted
+    // kernel reads the same list).
+    assert!(fx.data_dir.join("host_session_tools").is_dir());
+}
+
+#[tokio::test]
+async fn should_refuse_the_list_when_the_connection_is_external() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let params = json!({ "session_id": fx.system, "host_token": token, "generic_tools": [] });
+    for method in [
+        APPUI_METHOD_SESSION_TOOL_LIST_SET,
+        APPUI_METHOD_SESSION_TOOL_LIST_GET,
+    ] {
+        let error = super::super::host_managed::external_gate(method, &params, &HashSet::new())
+            .unwrap_err();
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            super::super::host_managed::EXTERNAL_METHOD_DENIED
+        );
+    }
+    // The handlers refuse it too, even with the host token.
+    let (ws, _rx) = external_ws(8);
+    for error in [
+        set_tool_list(&ws, &fx, params.clone()).unwrap_err(),
+        get_tool_list(&ws, &fx, params.clone()).unwrap_err(),
+    ] {
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            super::super::host_managed::EXTERNAL_METHOD_DENIED
+        );
+    }
+    assert!(!fx.data_dir.join("host_session_tools").exists());
+}
+
+#[tokio::test]
+async fn should_refuse_the_list_when_the_caller_has_no_host_credential() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    for bad in [json!(null), json!("not-the-token")] {
+        let error = set_tool_list(
+            &ws,
+            &fx,
+            json!({ "session_id": fx.system, "host_token": bad, "generic_tools": [] }),
+        )
+        .unwrap_err();
+        assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+    }
+    // Another session of the profile, which prepared no app peer, cannot
+    // use the system session's token for itself.
+    let other = SessionKey::with_profile_topic("dev", "api", &host_chat(), "other");
+    let error = set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": other, "host_token": token, "generic_tools": [] }),
+    )
+    .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+    let error = get_tool_list(&ws, &fx, json!({ "session_id": fx.system })).unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+}
+
+#[tokio::test]
+async fn should_refuse_the_list_when_the_session_is_an_app_peer_or_the_params_are_bad() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(8);
+    let context = SessionKey(format!("{}#peerctx-news.c1", fx.system.base_key()));
+    for session in [peer_key(&fx), context] {
+        let error = set_tool_list(
+            &ws,
+            &fx,
+            json!({ "session_id": session, "host_token": token, "generic_tools": [] }),
+        )
+        .unwrap_err();
+        assert_eq!(error.data.unwrap()["kind"], "session_tool_list_invalid");
+    }
+    // `generic_tools` is required, so a misspelt key never clears a list.
+    let error = set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "tools": [] }),
+    )
+    .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "session_tool_list_invalid");
+    for bad in ["news.list", "rm -rf", ""] {
+        let error = set_tool_list(
+            &ws,
+            &fx,
+            json!({ "session_id": fx.system, "host_token": token, "generic_tools": [bad] }),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.data.unwrap()["kind"],
+            "session_tool_list_invalid",
+            "{bad}"
+        );
+    }
+    set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": ["grep"] }),
+    )
+    .unwrap();
+    let error = set_tool_list(
+        &ws,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token, "generic_tools": [],
+                "if_version": 0 }),
+    )
+    .unwrap_err();
+    let data = error.data.unwrap();
+    assert_eq!(data["kind"], "session_tool_list_version_conflict");
+    assert_eq!(data["current_version"], 1);
+}
+
+#[tokio::test]
+async fn should_intersect_with_the_live_session_set_when_both_are_given() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (host, _rx) = ws_connection_for_test(8);
+    set_tool_list(
+        &host,
+        &fx,
+        json!({ "session_id": fx.system, "host_token": token,
+                "generic_tools": ["read_file", "glob"] }),
+    )
+    .unwrap();
+    raw_peer_tools_register(
+        &host,
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_TOOLS_REGISTER,
+            json!({ "session_id": fx.system, "host_token": token,
+                    "tools": [news_list()], "generic_tools": ["glob", "shell"] }),
+        ),
+        None,
+    )
+    .expect("the live host session set");
+    // Kernel tools: both lists narrow; the app tool is the live set's.
+    assert_eq!(
+        sorted_names(&serve_turn_registry(&fx, &fx.system, "t1", Some(host.connection_id.0)).await),
+        ["glob", "news_list"]
+    );
+    crate::peers::host_tools::drop_routes_for_connection(host.connection_id.0);
+}
+
+// ---------------------------------------------------------------------------
+// UPCR-2026-034 `peer/purge` (#2604)
+// ---------------------------------------------------------------------------
+
+/// `peer/purge` of the News peer from `ws`, on the process-wide turn registry.
+async fn purge(
+    state: &Arc<AppState>,
+    ws: &WsConnection,
+    system: &SessionKey,
+    peer: &str,
+    token: &str,
+) -> Result<Value, RpcError> {
+    let ledger = Arc::new(UiProtocolLedger::new(64));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    peer_purge::raw_peer_purge(
+        ws,
+        state,
+        &ledger,
+        &contracts,
+        &active_turns_registry(),
+        &rpc(
+            APPUI_METHOD_PEER_PURGE,
+            json!({"session_id": system, "peer": peer, "host_token": token}),
+        ),
+        None,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_erase_the_peers_stores_and_let_a_new_peer_bind_when_it_is_purged() {
+    let llm = ScriptedHostToolLlm::new("news_list", json!({"topic": "rust"}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [news_list()] })).await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    // A real turn on the peer, and a request context with its own folder.
+    e2e_turn_with(
+        &mut e,
+        &session,
+        &llm,
+        "PURGE-MARK-7 what's new?",
+        TurnId::new(),
+    )
+    .await;
+    open_context_from(&e, Some(&e.ws), "reader-1", json!({})).expect("open a context");
+    // The peer's memory namespace holds something, with its stores open.
+    let runtime = e.state.profiles.get("dev").unwrap().clone();
+    crate::runtime::memory_namespace::SessionMemory::namespaced(&runtime, "app/news/acct-1")
+        .await
+        .expect("open the peer's memory");
+    let ns_root =
+        crate::runtime::memory_namespace::memory_namespace_root(&e.data_dir, "app/news/acct-1");
+    std::fs::write(
+        ns_root.join("MEMORY.md"),
+        "- PURGE-MARK-7 the account's fact\n",
+    )
+    .unwrap();
+    assert!(!files_containing(&e.data_dir, "PURGE-MARK-7").is_empty());
+    let apps = e.data_dir.parent().unwrap().join("apps/news");
+    assert!(apps.join("contexts/reader-1").is_dir());
+
+    let result = purge(&e.state, &e.ws, &e.system, "News", &e.token)
+        .await
+        .expect("the host purges its peer");
+    assert_eq!(result["purged"], true);
+    assert_eq!(result["already_purged"], false);
+    assert_eq!(result["slug"], "news");
+    assert_eq!(result["was_open"], true);
+    assert_eq!(result["contexts"], json!(["reader-1"]));
+    assert_eq!(result["errors"], json!([]), "{result}");
+    assert_eq!(result["erased"]["workspace"], "kept");
+
+    // Nothing the peer said or stored is left in the kernel's data...
+    assert_eq!(
+        files_containing(&e.data_dir, "PURGE-MARK-7"),
+        Vec::<PathBuf>::new()
+    );
+    assert!(!e.data_dir.join("peers/news").exists());
+    assert!(!ns_root.exists());
+    // ...the host's own folder stays, without the kernel's context folders.
+    assert!(apps.is_dir());
+    assert!(!apps.join("contexts").exists());
+    // The purge is audited outside `peers/`.
+    let audit =
+        std::fs::read_to_string(e.data_dir.join(crate::peers::purge::PEER_PURGE_AUDIT_LEAF))
+            .unwrap();
+    assert!(audit.contains("\"event\":\"peer_purged\"") && audit.contains("\"slug\":\"news\""));
+    assert!(
+        !audit.contains(&e.token),
+        "the audit never records the token"
+    );
+    // A stale client of the erased peer cannot run it as a profile session.
+    assert!(matches!(
+        crate::peers::app_binding::resolve_session_app_binding(&e.data_dir.join("peers"), &session),
+        crate::peers::app_binding::SessionAppBinding::Refused(_)
+    ));
+
+    // The same (app, account) binding can be prepared again: a new peer.
+    let again = raw_peer_prepare(
+        &e.state,
+        &rpc(
+            APPUI_METHOD_PEER_PREPARE,
+            json!({
+                "brief": "You are the News app's assistant.",
+                "names": ["News"],
+                "cwd": apps.to_string_lossy(),
+                "session_id": e.system,
+                "memory_namespace": "app/news/acct-1",
+                "resume": true,
+            }),
+        ),
+        None,
+    )
+    .await
+    .expect("a new peer binds the same app and account");
+    assert_eq!(again["resumed"], false);
+    assert_eq!(again["slug"], "news");
+    assert_ne!(again["host_token"].as_str().unwrap(), e.token);
+    // Its memory starts empty (no stale open handle on the erased stores).
+    crate::runtime::memory_namespace::SessionMemory::namespaced(&runtime, "app/news/acct-1")
+        .await
+        .expect("open the new peer's memory");
+    assert!(!ns_root.join("MEMORY.md").exists());
+    assert!(matches!(
+        crate::peers::app_binding::resolve_session_app_binding(&e.data_dir.join("peers"), &session),
+        crate::peers::app_binding::SessionAppBinding::Bound { .. }
+    ));
+}
+
+#[tokio::test]
+async fn should_answer_already_purged_when_a_purge_is_retried() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(32);
+    let first = purge(&fx.state, &ws, &fx.system, "news", &token)
+        .await
+        .unwrap();
+    assert_eq!(first["purged"], true);
+    let again = purge(&fx.state, &ws, &fx.system, "news", &token)
+        .await
+        .expect("a retry succeeds");
+    assert_eq!(again["purged"], false);
+    assert_eq!(again["already_purged"], true);
+    assert_eq!(again["purged_at"], first["purged_at"]);
+    // The old credential stays answered after a new peer took the name, and
+    // never touches the new peer.
+    let new_token = prepare_news(&fx).await;
+    let old = purge(&fx.state, &ws, &fx.system, "News", &token)
+        .await
+        .unwrap();
+    assert_eq!(old["already_purged"], true);
+    assert!(peers_root(&fx).join("news/brief.md").exists());
+    // Without the right token nothing is said about a purge.
+    let error = purge(&fx.state, &ws, &fx.system, "news", "not-the-token")
+        .await
+        .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+    drop(new_token);
+}
+
+#[tokio::test]
+async fn should_refuse_a_purge_when_the_caller_is_not_the_peers_host() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    // An external client of a host-managed server: refused at the gate and
+    // in the handler, even with the host token.
+    let params = json!({"session_id": fx.system, "peer": "news", "host_token": token});
+    let error = super::super::host_managed::external_gate(
+        APPUI_METHOD_PEER_PURGE,
+        &params,
+        &HashSet::new(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.data.unwrap()["kind"],
+        super::super::host_managed::EXTERNAL_METHOD_DENIED
+    );
+    let (ext, mut ext_rx) = external_ws(8);
+    let handled = handle_raw_appui_rpc(
+        &ext,
+        &fx.state,
+        &Arc::new(UiProtocolLedger::new(16)),
+        &Arc::new(UiProtocolContractStores::default()),
+        &active_turns_registry(),
+        &Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        ConnectionUiFeatures::stdio_defaults(),
+        None,
+        "ext-purge".into(),
+        &RpcRequest::new("ext-purge".to_string(), APPUI_METHOD_PEER_PURGE, params),
+    )
+    .await;
+    assert!(handled);
+    assert_eq!(
+        rpc_error_kind(ext_rx.recv().await.unwrap()),
+        super::super::host_managed::EXTERNAL_METHOD_DENIED
+    );
+    // Another session (not the originator), and a missing token.
+    let (ws, _rx) = ws_connection_for_test(8);
+    let stranger = SessionKey::with_profile_topic("dev", "api", "stranger", "system");
+    let error = purge(&fx.state, &ws, &stranger, "news", &token)
+        .await
+        .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_originator_mismatch");
+    // A connection other than the one that drives the peer.
+    let (host_ws, _host_rx) = ws_connection_for_test(8);
+    register(&fx, &host_ws, &token, json!({})).unwrap();
+    let error = purge(&fx.state, &ws, &fx.system, "news", &token)
+        .await
+        .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_purge_not_owner");
+    assert!(
+        peers_root(&fx).join("news/brief.md").exists(),
+        "nothing erased"
+    );
+    crate::peers::host_tools::drop_routes_for_connection(host_ws.connection_id.0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_fail_the_host_call_and_stop_the_turn_when_the_peer_is_purged_mid_call() {
+    let llm = ScriptedHostToolLlm::new("news_topics_set", json!({"topics": ["rust"]}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [news_topics_set()] })).await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    let mut rx = e.rx.take().unwrap();
+    let ledger = Arc::new(UiProtocolLedger::new(256));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let connection_turns: SharedConnectionTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let turn_id = TurnId::new();
+    handle_turn_start(
+        &e.ws,
+        &e.state,
+        &ledger,
+        &contracts,
+        &active_turns_registry(),
+        &connection_turns,
+        None,
+        None,
+        ConnectionUiFeatures::stdio_defaults(),
+        "start-1".into(),
+        TurnStartParams {
+            session_id: session.clone(),
+            turn_id: turn_id.clone(),
+            input: vec![InputItem::Text {
+                text: "follow rust".into(),
+            }],
+            media: Vec::new(),
+            topic: None,
+            rewrite_for: None,
+            reasoning_effort: None,
+            tool_context: None,
+            live_video: false,
+            origin: None,
+        },
+    )
+    .await;
+    // The host is working on the call (never answers) when it purges. A
+    // loaded test run can take a while to reach the call.
+    let call = loop {
+        let message = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
+            .await
+            .expect("the call reaches the host")
+            .expect("connection open");
+        let frame = frame_json(message);
+        if frame["method"] == "peer/tool/call" {
+            break frame["params"].clone();
+        }
+    };
+    let result = purge(&e.state, &e.ws, &e.system, "news", &e.token)
+        .await
+        .expect("purge while a call is in flight");
+    assert_eq!(result["host_calls_failed"], 1);
+    assert_eq!(result["interrupted"], json!([session]));
+    // The host is told to stop that call because the peer was purged...
+    let cancel = next_frame(&mut rx, "peer/tool/cancel").await;
+    assert_eq!(cancel["call_id"], call["call_id"]);
+    assert_eq!(cancel["reason"], "purged");
+    // ...the turn is over, and nothing is pending for the peer.
+    let registry = active_turns_registry();
+    let active = registry.lock().await;
+    if let Some(turn) = active.get(&session) {
+        assert!(matches!(&*turn.state.lock().await, TurnState::Terminal(_)));
+    }
+    drop(active);
+    assert!(
+        crate::peers::host_tools::pending_calls_for(&e.data_dir.join("peers"), "news").is_empty()
+    );
+    assert!(!e.data_dir.join("peers/news").exists());
+}
+
 // ---------------------------------------------------------------------------
 // UPCR-2026-034 `read_parent`: a request context's read-only view of its
 // peer's folder (#2603).
@@ -6539,4 +7227,57 @@ async fn should_refuse_a_reopen_when_it_changes_read_parent() {
     let widened =
         open_context_from(&e, Some(&e.ws), "ui-2", json!({"read_parent": true})).unwrap_err();
     assert_eq!(widened.data.unwrap()["kind"], "peer_binding_mismatch");
+}
+
+fn unregister(fx: &Fx, ws: &WsConnection, token: Option<&str>) -> Result<Value, RpcError> {
+    raw_peer_tools_unregister(
+        ws,
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_TOOLS_UNREGISTER,
+            json!({ "session_id": fx.system, "peer": "news", "host_token": token }),
+        ),
+        None,
+    )
+}
+
+#[tokio::test]
+async fn should_refuse_the_system_agents_input_when_the_host_released_the_peer() {
+    // The shell's consumers share one connection, so releasing an app (it
+    // closed, or its agent was turned off) does not close the connection and
+    // the peer's route stayed: the system agent's input was then "sent" and
+    // nobody ran it. `peer/tools/unregister` drops the route, so the input
+    // fails visibly.
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, mut rx) = ws_connection_for_test(16);
+    register(&fx, &ws, &token, json!({ "tools": [] })).unwrap();
+    deliver_input(&fx, &mut rx, "call_1").await;
+
+    // Host-only: the token is required, and an external client is refused.
+    assert_eq!(
+        rpc_kind(unregister(&fx, &ws, Some("guess")).unwrap_err()),
+        "peer_host_token_mismatch"
+    );
+    let (ext, _ext_rx) = external_ws(8);
+    assert!(unregister(&fx, &ext, Some(&token)).is_err());
+
+    let released = unregister(&fx, &ws, Some(&token)).expect("the host releases its peer");
+    assert_eq!(released["unregistered"], true);
+    let refused = deliver_peer_send_input(
+        "dev",
+        &peers_root(&fx),
+        &fx.system.0,
+        &TurnId::new(),
+        send_input_request("summarise today's news", "call_2"),
+    )
+    .expect_err("no host route: the input is not delivered");
+    assert!(refused.contains("not connected"), "{refused}");
+    // Idempotent, and registering again restores the route.
+    assert_eq!(
+        unregister(&fx, &ws, Some(&token)).unwrap()["unregistered"],
+        false
+    );
+    register(&fx, &ws, &token, json!({ "tools": [] })).unwrap();
+    deliver_input(&fx, &mut rx, "call_3").await;
 }

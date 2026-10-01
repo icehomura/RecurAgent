@@ -427,6 +427,19 @@ const APPUI_METHOD_PEER_TOOL_RESULT: &str = "peer/tool/result";
 /// `peer/input/reject` (UPCR-2026-035, #2618): the host refuses a
 /// `peer/input` it received; the system agent learns why.
 const APPUI_METHOD_PEER_INPUT_REJECT: &str = "peer/input/reject";
+/// #2605 (UPCR-2026-035 "Durable host session tool list")
+/// `session/tool_list/set`: the host sets (or clears) the exact kernel tool
+/// list of one of its own sessions; durable, applied to every turn on it.
+const APPUI_METHOD_SESSION_TOOL_LIST_SET: &str = "session/tool_list/set";
+/// #2605 `session/tool_list/get`: the host reads that list back.
+const APPUI_METHOD_SESSION_TOOL_LIST_GET: &str = "session/tool_list/get";
+/// UPCR-2026-034 `peer/purge` (#2604): the host erases a host-owned app peer
+/// (closing it first) and frees its (app, account) binding.
+const APPUI_METHOD_PEER_PURGE: &str = "peer/purge";
+/// UPCR-2026-035 `peer/tools/unregister`: the host releases a host-owned app
+/// peer (the app closed, or its agent was turned off) without closing its
+/// connection; the peer's route is dropped, so later input fails visibly.
+const APPUI_METHOD_PEER_TOOLS_UNREGISTER: &str = "peer/tools/unregister";
 /// `turn/steer` — mid-turn prompt injection into the ACTIVE turn (codex
 /// parity: app-server `turn/steer` → `Session::steer_input`). Params
 /// `{session_id, expected_turn_id?, input}`; result `{turn_id, steered}`.
@@ -543,6 +556,10 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_PEER_TOOLS_REGISTER,
     APPUI_METHOD_PEER_TOOL_RESULT,
     APPUI_METHOD_PEER_INPUT_REJECT,
+    APPUI_METHOD_SESSION_TOOL_LIST_SET,
+    APPUI_METHOD_SESSION_TOOL_LIST_GET,
+    APPUI_METHOD_PEER_PURGE,
+    APPUI_METHOD_PEER_TOOLS_UNREGISTER,
     APPUI_METHOD_TURN_STEER,
     APPUI_METHOD_PROFILE_SKILLS_LIST,
     APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH,
@@ -1921,6 +1938,8 @@ enum InterruptOrigin {
     PeerClose,
     /// UPCR-2026-034 `peer/context/close` released the request context.
     ContextClose,
+    /// UPCR-2026-034 `peer/purge` erased the peer (#2604).
+    PeerPurge,
 }
 
 impl InterruptOrigin {
@@ -1935,6 +1954,10 @@ impl InterruptOrigin {
             Self::ContextClose => {
                 "turn interrupted by peer/context/close — the request context was \
                  released, so its in-flight work was discarded"
+            }
+            Self::PeerPurge => {
+                "turn interrupted by peer/purge — the app's agent was erased, so its \
+                 in-flight work was discarded"
             }
         }
     }
@@ -15710,12 +15733,12 @@ fn raw_peer_context_open_from(
         &context_memory_namespace(&peer.memory_namespace, &context_id),
     )
     .map_err(|err| host_peer_error("peer_context_namespace_too_long", err))?;
-    let peer_root = dunce::canonicalize(&peer.cwd).map_err(|err| {
-        RpcError::internal_error(format!(
-            "peer workspace {} is not usable: {err}",
-            peer.cwd.display()
-        ))
-    })?;
+    // The peer's folder must still be exactly its bound (canonical) path: a
+    // symlink swapped in for it would place every new context's folder at
+    // the link's target.
+    crate::peers::app_binding::verify_bound_dir(&peer.cwd)
+        .map_err(|reason| host_peer_error("peer_workspace_changed", reason))?;
+    let peer_root = peer.cwd.clone();
     let requested_cwd = match params.cwd.as_deref() {
         Some(cwd) => {
             let canonical = dunce::canonicalize(cwd).map_err(|err| {
@@ -16138,12 +16161,104 @@ fn raw_peer_input_reject(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawPeerToolsUnregisterParams {
+    session_id: SessionKey,
+    peer: String,
+    #[serde(default)]
+    host_token: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+}
+
+/// `peer/tools/unregister` — the host releases a host-owned app peer it no
+/// longer serves (the app closed, or its agent was turned off) while its
+/// connection stays open for other apps. The peer's route is dropped and its
+/// calls in flight end `host_gone`, exactly as if its connection had closed:
+/// the system agent's later `peer_send_input` fails ("not connected") instead
+/// of being accepted with nobody to run it. Host token and a non-external
+/// connection required; idempotent; `peer/tools/register` restores it.
+fn raw_peer_tools_unregister(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
+    let params: RawPeerToolsUnregisterParams = parse_raw_params(request)?;
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    let peers_root = data_dir.join("peers");
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    if crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug).is_none() {
+        return Err(host_peer_error(
+            "peer_not_host_bound",
+            format!("peer '{slug}' is not a host-owned app peer"),
+        ));
+    }
+    let unregistered = crate::peers::host_tools::unregister_peer_route(&peers_root, &slug);
+    Ok(json!({
+        "slug": slug,
+        "profile_id": profile_id,
+        "unregistered": unregistered,
+    }))
+}
+
 /// The connection a turn counts as driven by for a host peer's tools
 /// (UPCR-2026-035). A kernel-internal continuation (a peer_send_input
 /// injection, a background result) is nobody's turn: it never gets a host
 /// peer's tools, whichever connection it happens to run on; the host drives
 /// the peer's runs itself. An external client of a host-managed server is
 /// never a peer's host either (UPCR-2026-036).
+/// The host's rosters for one serve turn of `session_id`, applied to its
+/// finished registry (after the profile policy):
+///
+/// 1. #2605: the host session's durable kernel tool list narrows every turn
+///    on the session (before any app tool is added: it names kernel tools);
+/// 2. UPCR-2026-035: a host-owned app peer's (or request context's) set;
+/// 3. UPCR-2026-035: a host session's live set (its app tools, and its
+///    `generic_tools`, which narrow too).
+fn apply_turn_host_tool_rosters(
+    registry: &mut octos_agent::ToolRegistry,
+    data_dir: &Path,
+    session_id: &SessionKey,
+    turn_id: &str,
+    turn_connection: Option<u64>,
+) {
+    crate::peers::session_tool_list::retain_session_tool_list(registry, data_dir, session_id);
+    let peers_root = data_dir.join("peers");
+    let resolved = crate::peers::host_tools::resolve_session_host_tools(&peers_root, session_id);
+    crate::peers::host_tools::apply_session_host_tools(
+        registry,
+        &resolved,
+        &peers_root,
+        session_id,
+        turn_id,
+        turn_connection,
+    );
+    // A host SESSION tool set (e.g. the system agent calling the app tools
+    // the host granted it): only the host's own turns on it.
+    crate::peers::host_tools::apply_session_owned_host_tools(
+        registry,
+        &peers_root,
+        session_id,
+        turn_id,
+        turn_connection,
+    );
+}
+
 fn host_tools_turn_connection(ws: &WsConnection, internal_continuation: bool) -> Option<u64> {
     (!internal_continuation && !ws.is_external()).then_some(ws.connection_id.0)
 }
@@ -16164,6 +16279,7 @@ fn authorize_host_session_call(
     peers_root: &Path,
     session: &SessionKey,
     host_token: Option<&str>,
+    host_connection: bool,
 ) -> Result<(), RpcError> {
     if session.topic().is_some_and(|topic| {
         topic.starts_with("peer-")
@@ -16173,6 +16289,10 @@ fn authorize_host_session_call(
             "an app peer's session takes its tools from its peer: name the peer".to_owned(),
         )
         .with_data(json!({ "kind": "peer_tools_invalid" })));
+    }
+    // The host's own connection (OctoSense#146) needs no app peer's token.
+    if host_connection {
+        return Ok(());
     }
     let proven = crate::peers::app_binding::host_bound_peers(peers_root)
         .into_iter()
@@ -16201,11 +16321,17 @@ fn raw_session_tools_register(
     peers_root: &Path,
     profile_id: &str,
     params: RawPeerToolsRegisterParams,
+    host_connection: bool,
 ) -> Result<Value, RpcError> {
     use crate::peers::host_tools::{
         SessionRegisterError, build_tool_set, register_session_tool_set,
     };
-    authorize_host_session_call(peers_root, &params.session_id, params.host_token.as_deref())?;
+    authorize_host_session_call(
+        peers_root,
+        &params.session_id,
+        params.host_token.as_deref(),
+        host_connection,
+    )?;
     let set = build_tool_set(params.tools, params.generic_tools, params.options)
         .map_err(|err| host_peer_error("peer_tools_invalid", err))?;
     let route_ws = ws.clone();
@@ -16240,6 +16366,177 @@ fn raw_session_tools_register(
         "approval_ttl_secs": set.approval_ttl_secs,
         "max_result_bytes": set.max_result_bytes,
         "applies": "next_turn",
+    }))
+}
+
+/// #2605 — who may set or read a host session's durable kernel tool list:
+/// never an external connection; the host's own connection (the `serve
+/// --stdio` pipe, or a host-token connection of `serve --host-managed`)
+/// needs nothing more; elsewhere the
+/// holder of the host token of an app peer that `session` prepared (as for a
+/// host session tool set). An app peer's session or request context is
+/// refused: its kernel tools come from its peer's `generic_tools`.
+fn authorize_session_tool_list_call(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    method: &str,
+    peers_root: &Path,
+    session: &SessionKey,
+    host_token: Option<&str>,
+) -> Result<(), RpcError> {
+    if ws.is_external() {
+        return Err(external_host_tools_denied(method));
+    }
+    if !crate::peers::session_tool_list::session_is_eligible(session) {
+        return Err(RpcError::invalid_params(
+            "an app peer's session takes its kernel tools from its peer's generic_tools \
+             (peer/tools/register)"
+                .to_owned(),
+        )
+        .with_data(json!({ "kind": "session_tool_list_invalid" })));
+    }
+    // The host's own connection, as for a host session tool set: the private
+    // `serve --stdio` pipe, or (not external) a host-token connection of
+    // `serve --host-managed`.
+    let host_connection = ws.is_stdio() || state.host_managed.is_some();
+    authorize_host_session_call(peers_root, session, host_token, host_connection)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSessionToolListParams {
+    session_id: SessionKey,
+    #[serde(default)]
+    host_token: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    /// `set` only: the exact kernel tool names (`[]` keeps none); `null`
+    /// clears the list. Required on `set` (checked on the raw params, so a
+    /// misspelt key never clears a list).
+    #[serde(default)]
+    generic_tools: Option<Vec<String>>,
+    /// `set` only: refuse unless the list is at this version.
+    #[serde(default)]
+    if_version: Option<u64>,
+}
+
+fn session_tool_list_scope(
+    state: &Arc<AppState>,
+    params: &RawSessionToolListParams,
+    connection_profile_id: Option<&str>,
+) -> Result<(String, PathBuf), RpcError> {
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    Ok((profile_id, data_dir))
+}
+
+/// #2605 `session/tool_list/set` — set (or with `generic_tools: null` clear)
+/// the durable, exact kernel tool list of the host session `session_id`.
+fn raw_session_tool_list_set(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::session_tool_list::{
+        SetSessionToolListError, normalize_tool_list, set_session_tool_list,
+    };
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
+    if request.params.get("generic_tools").is_none() {
+        return Err(RpcError::invalid_params(
+            "generic_tools is required: a list of kernel tool names, or null to clear".to_owned(),
+        )
+        .with_data(json!({ "kind": "session_tool_list_invalid" })));
+    }
+    let params: RawSessionToolListParams = parse_raw_params(request)?;
+    let (profile_id, data_dir) = session_tool_list_scope(state, &params, connection_profile_id)?;
+    authorize_session_tool_list_call(
+        ws,
+        state,
+        &request.method,
+        &data_dir.join("peers"),
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    let generic_tools = params
+        .generic_tools
+        .map(normalize_tool_list)
+        .transpose()
+        .map_err(|err| {
+            RpcError::invalid_params(err).with_data(json!({ "kind": "session_tool_list_invalid" }))
+        })?;
+    let (previous, list) = set_session_tool_list(
+        &data_dir,
+        &params.session_id,
+        generic_tools,
+        params.if_version,
+    )
+    .map_err(|err| match err {
+        SetSessionToolListError::VersionConflict(current) => {
+            RpcError::invalid_params(format!("the session's tool list is at version {current}"))
+                .with_data(json!({
+                    "kind": "session_tool_list_version_conflict",
+                    "current_version": current,
+                }))
+        }
+        SetSessionToolListError::NotEligible => RpcError::invalid_params(
+            "an app peer's session takes its kernel tools from its peer".to_owned(),
+        )
+        .with_data(json!({ "kind": "session_tool_list_invalid" })),
+        SetSessionToolListError::Io(message) => RpcError::internal_error(message),
+    })?;
+    Ok(json!({
+        "session_id": params.session_id,
+        "profile_id": profile_id,
+        "version": list.version,
+        "previous_version": previous,
+        "generic_tools": list.generic_tools,
+        "applies": "next_turn",
+    }))
+}
+
+/// #2605 `session/tool_list/get` — the host reads the durable list back.
+fn raw_session_tool_list_get(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::session_tool_list::{StoredSessionToolList, read_session_tool_list};
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
+    let params: RawSessionToolListParams = parse_raw_params(request)?;
+    let (profile_id, data_dir) = session_tool_list_scope(state, &params, connection_profile_id)?;
+    authorize_session_tool_list_call(
+        ws,
+        state,
+        &request.method,
+        &data_dir.join("peers"),
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    let stored = read_session_tool_list(&data_dir, &params.session_id);
+    let status = match &stored {
+        StoredSessionToolList::None => "none",
+        StoredSessionToolList::Set(list) if list.generic_tools.is_none() => "cleared",
+        StoredSessionToolList::Set(_) => "set",
+        StoredSessionToolList::Unreadable => "unreadable",
+    };
+    Ok(json!({
+        "session_id": params.session_id,
+        "profile_id": profile_id,
+        "version": stored.version(),
+        "status": status,
+        // What every turn keeps: `null` = the usual roster; an unreadable
+        // list keeps nothing (fail closed).
+        "generic_tools": stored.allowed(),
     }))
 }
 
@@ -16285,7 +16582,11 @@ fn raw_peer_tools_register(
     let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
     let peers_root = data_dir.join("peers");
     let Some(peer) = params.peer.clone() else {
-        return raw_session_tools_register(ws, &peers_root, &profile_id, params);
+        // The host's own connection: the private `serve --stdio` pipe, or a
+        // host-token connection of `serve --host-managed` (an external one
+        // was refused above).
+        let host_connection = ws.is_stdio() || state.host_managed.is_some();
+        return raw_session_tools_register(ws, &peers_root, &profile_id, params, host_connection);
     };
     let slug = authorize_host_peer_call(
         &peers_root,
@@ -16410,10 +16711,16 @@ fn raw_peer_tool_result(
             crate::peers::host_tools::ToolHost::Peer(slug)
         }
         None => {
+            // The connection that registered the session's set answers its
+            // calls without a token (only it is sent them).
+            let registrant =
+                crate::peers::host_tools::session_set_connection(&peers_root, &params.session_id)
+                    == Some(connection);
             authorize_host_session_call(
                 &peers_root,
                 &params.session_id,
                 params.host_token.as_deref(),
+                registrant,
             )?;
             crate::peers::host_tools::ToolHost::Session(params.session_id.clone())
         }
@@ -18750,119 +19057,146 @@ fn build_peer_close_callback(
                 "peer '{slug}' no longer exists (its staged directory was removed)"
             ));
         };
-        // Durable close marker FIRST, written atomically (same helper as the
-        // brief / originator / result files). The body records the closing
-        // session id and a unix timestamp for post-mortems; its mere existence
-        // is the signal that `read_peer_blackboard` reads back as `closed`.
-        // Writing the marker before evicting the wire means a marker-write
-        // failure leaves the peer fully OPEN — never partially closed (wire
-        // gone but no marker, which would silently drop input).
-        let now_unix = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_secs())
-            .unwrap_or(0);
-        let body = format!("{origin_session}\n{now_unix}\n");
-        if let Err(err) = peer_io::write_peer_file_atomic(&peer_dir, "closed", &body) {
-            return Err(format!(
-                "failed to write close marker for peer '{slug}': {err}"
-            ));
-        }
-        // The fence branch lives in the peer's own clone, so pull it into the
-        // workspace repo now that the peer is done — otherwise its work is
-        // invisible from the workspace and looks like it never happened.
-        // AFTER the marker: collection is best-effort and must never leave a
-        // peer un-closed.
-        collect_peer_branch(&peer_dir, &slug);
-        // #436 leak fix — the marker now refuses NEW sends; actively CANCEL +
-        // tombstone any injection queued for this peer BEFORE the close so
-        // nothing stays stranded in the durable queue (the drain gates skip a
-        // closed target without ever popping/capping/tombstoning it).
-        let cancelled = default_agent_orchestrator()
-            .cancel_peer_send_input_continuations_for_peer(&profile_id, &slug);
-        if cancelled > 0 {
-            tracing::debug!(
-                slug = %slug,
-                cancelled,
-                "cancelled pending peer_send_input injections on peer close"
-            );
-        }
-        // #1842(a) — ABORT the peer's in-flight turn through the interrupt path
-        // `run_standalone_turn` honors, so a closed peer definitively STOPS and
-        // cannot park again after the sweep below. Ordered after the durable
-        // marker (which already refuses any new park, #1842(b)) and before the
-        // wire eviction (which removes the slug→session mapping this resolves
-        // through). Best-effort and non-blocking.
-        interrupt_closed_peer_turn(&profile_id, &slug);
-        // #P1-2 — cancel any pending approval/question this peer is parked on
-        // (from the authoritative store) so its in-flight turn is released
-        // fail-closed. BEFORE the wire eviction below, which removes the
-        // slug→session mapping the cancel derives its trusted session key from.
-        cancel_peer_pending_on_close(&contracts, &profile_id, &slug, &|event| {
-            emit_cancelled(event)
-        });
-        // #1967 — the cancel above released the live oneshot, but the
-        // escalation row written at park time
-        // (`model_goal_record_peer_escalation`) is DURABLE: with the peer now
-        // closed, `peer_respond` refuses it, so nothing would ever flip the
-        // row off `open` — a permanent phantom on the master's goal_get
-        // escalation surface. Resolve it bulk-by-peer (the depth-1 peer has
-        // at most one open escalation, and every open row of a closed peer is
-        // by definition abandoned). Best-effort: a goal-less peer / missing
-        // ledger is a benign Ok(0), and a ledger failure must never fail the
-        // close (the marker is already durable).
-        let goal_id = peer_io::read_peer_file(&peer_dir, "goal", peer_io::PEER_FILE_READ_CAP_SMALL)
-            .and_then(|body| body.lines().next().map(|l| l.trim().to_owned()))
-            .filter(|s| !s.is_empty());
-        if let (Some(goal_id), Some(data_dir)) = (goal_id, peers_root.parent()) {
-            if let Err(err) = default_agent_orchestrator().model_goal_resolve_peer_escalation(
-                data_dir,
-                &goal_id,
-                &slug,
-                "[closed] peer closed before answering",
-                &origin_session,
-            ) {
-                tracing::warn!(
-                    slug = %slug,
-                    goal_id = %goal_id,
-                    error = %err,
-                    "peer-goal: failed to resolve open escalation on peer close (close proceeds)"
-                );
-            }
-        }
-        // Peer-fleet auto-synthesis RESET — the close marker now excludes this
-        // peer from the master's owned fleet. If it was the LAST owned peer, the
-        // fleet is fully retired: drop the `.synthesized` marker so a genuinely
-        // fresh fleet (spawned later under the same master) synthesizes once.
-        // No-op while any owned peer remains. `origin_session` is the master
-        // (the authorized originator).
-        reset_peer_fleet_synthesis_if_cleared(&peers_root, &origin_session);
-        // Marker durable + queue cleared; now evict the live wire if the peer
-        // is open so a still-connected peer stops being an injection target
-        // immediately (the marker already covers the offline / reconnect case).
-        let key = peer_wire_key(&profile_id, &slug);
-        if let Some(wire) = peer_wire_registry().resolve(&key) {
-            evict_peer_wire_session(&wire);
-        }
-        // Outer-loop #4 (§4.2): safety-net slot release (Retired). The
-        // PRIMARY release is the per-turn terminal; a peer whose last turn
-        // already finished finds nothing here (registry take → None), but a
-        // peer closed WITH a turn in flight — or one staged and never booted —
-        // would otherwise hold its flock until serve exit. Idempotent.
-        release_staged_peer_build_cache_slot(&peers_root, &slug);
-        // Close succeeded (marker durable, queue cleared, wire evicted). Emit
-        // the durable `peer/closed` so the client tears down the peer pane it
-        // opened. Mirrors the `peer/staged` emit — routing keys off the
-        // ORIGINATING session; `topic` (`peer-<slug>`) is the closed peer's.
-        emit_closed(PeerClosedEvent {
-            session_id: SessionKey(origin_session.clone()),
-            topic: format!("peer-{slug}"),
-            slug: slug.clone(),
-            profile_id: profile_id.clone(),
-        });
+        close_authorized_peer(
+            &peers_root,
+            &peer_dir,
+            &slug,
+            &origin_session,
+            &profile_id,
+            &contracts,
+            &|event| emit_closed(event),
+            &|event| emit_cancelled(event),
+        )?;
         Ok(format!(
             "peer '{slug}' closed — it will receive no further input"
         ))
     })
+}
+
+/// Close peer `slug` for good, the caller already authorized as its
+/// originator: the durable `closed` marker first, then the queue, the
+/// in-flight turn, pending prompts, the escalation row, the fleet synthesis
+/// marker, the wire and the build-cache slot, and finally `peer/closed`.
+/// Shared by `peer_close` and `peer/purge` (#2604).
+#[allow(clippy::too_many_arguments)]
+fn close_authorized_peer(
+    peers_root: &Path,
+    peer_dir: &Path,
+    slug: &str,
+    origin_session: &str,
+    profile_id: &str,
+    contracts: &UiProtocolContractStores,
+    emit_closed: &dyn Fn(PeerClosedEvent),
+    emit_cancelled: &dyn Fn(ApprovalCancelledEvent),
+) -> Result<(), String> {
+    // Durable close marker FIRST, written atomically (same helper as the
+    // brief / originator / result files). The body records the closing
+    // session id and a unix timestamp for post-mortems; its mere existence
+    // is the signal that `read_peer_blackboard` reads back as `closed`.
+    // Writing the marker before evicting the wire means a marker-write
+    // failure leaves the peer fully OPEN — never partially closed (wire
+    // gone but no marker, which would silently drop input).
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let body = format!("{origin_session}\n{now_unix}\n");
+    if let Err(err) = peer_io::write_peer_file_atomic(peer_dir, "closed", &body) {
+        return Err(format!(
+            "failed to write close marker for peer '{slug}': {err}"
+        ));
+    }
+    // The fence branch lives in the peer's own clone, so pull it into the
+    // workspace repo now that the peer is done — otherwise its work is
+    // invisible from the workspace and looks like it never happened.
+    // AFTER the marker: collection is best-effort and must never leave a
+    // peer un-closed.
+    collect_peer_branch(peer_dir, slug);
+    // #436 leak fix — the marker now refuses NEW sends; actively CANCEL +
+    // tombstone any injection queued for this peer BEFORE the close so
+    // nothing stays stranded in the durable queue (the drain gates skip a
+    // closed target without ever popping/capping/tombstoning it).
+    let cancelled = default_agent_orchestrator()
+        .cancel_peer_send_input_continuations_for_peer(profile_id, slug);
+    if cancelled > 0 {
+        tracing::debug!(
+            slug = %slug,
+            cancelled,
+            "cancelled pending peer_send_input injections on peer close"
+        );
+    }
+    // #1842(a) — ABORT the peer's in-flight turn through the interrupt path
+    // `run_standalone_turn` honors, so a closed peer definitively STOPS and
+    // cannot park again after the sweep below. Ordered after the durable
+    // marker (which already refuses any new park, #1842(b)) and before the
+    // wire eviction (which removes the slug→session mapping this resolves
+    // through). Best-effort and non-blocking.
+    interrupt_closed_peer_turn(profile_id, slug);
+    // #P1-2 — cancel any pending approval/question this peer is parked on
+    // (from the authoritative store) so its in-flight turn is released
+    // fail-closed. BEFORE the wire eviction below, which removes the
+    // slug→session mapping the cancel derives its trusted session key from.
+    cancel_peer_pending_on_close(contracts, profile_id, slug, emit_cancelled);
+    // #1967 — the cancel above released the live oneshot, but the
+    // escalation row written at park time
+    // (`model_goal_record_peer_escalation`) is DURABLE: with the peer now
+    // closed, `peer_respond` refuses it, so nothing would ever flip the
+    // row off `open` — a permanent phantom on the master's goal_get
+    // escalation surface. Resolve it bulk-by-peer (the depth-1 peer has
+    // at most one open escalation, and every open row of a closed peer is
+    // by definition abandoned). Best-effort: a goal-less peer / missing
+    // ledger is a benign Ok(0), and a ledger failure must never fail the
+    // close (the marker is already durable).
+    let goal_id = peer_io::read_peer_file(peer_dir, "goal", peer_io::PEER_FILE_READ_CAP_SMALL)
+        .and_then(|body| body.lines().next().map(|l| l.trim().to_owned()))
+        .filter(|s| !s.is_empty());
+    if let (Some(goal_id), Some(data_dir)) = (goal_id, peers_root.parent()) {
+        if let Err(err) = default_agent_orchestrator().model_goal_resolve_peer_escalation(
+            data_dir,
+            &goal_id,
+            slug,
+            "[closed] peer closed before answering",
+            origin_session,
+        ) {
+            tracing::warn!(
+                slug = %slug,
+                goal_id = %goal_id,
+                error = %err,
+                "peer-goal: failed to resolve open escalation on peer close (close proceeds)"
+            );
+        }
+    }
+    // Peer-fleet auto-synthesis RESET — the close marker now excludes this
+    // peer from the master's owned fleet. If it was the LAST owned peer, the
+    // fleet is fully retired: drop the `.synthesized` marker so a genuinely
+    // fresh fleet (spawned later under the same master) synthesizes once.
+    // No-op while any owned peer remains. `origin_session` is the master
+    // (the authorized originator).
+    reset_peer_fleet_synthesis_if_cleared(peers_root, origin_session);
+    // Marker durable + queue cleared; now evict the live wire if the peer
+    // is open so a still-connected peer stops being an injection target
+    // immediately (the marker already covers the offline / reconnect case).
+    let key = peer_wire_key(profile_id, slug);
+    if let Some(wire) = peer_wire_registry().resolve(&key) {
+        evict_peer_wire_session(&wire);
+    }
+    // Outer-loop #4 (§4.2): safety-net slot release (Retired). The
+    // PRIMARY release is the per-turn terminal; a peer whose last turn
+    // already finished finds nothing here (registry take → None), but a
+    // peer closed WITH a turn in flight — or one staged and never booted —
+    // would otherwise hold its flock until serve exit. Idempotent.
+    release_staged_peer_build_cache_slot(peers_root, slug);
+    // Close succeeded (marker durable, queue cleared, wire evicted). Emit
+    // the durable `peer/closed` so the client tears down the peer pane it
+    // opened. Mirrors the `peer/staged` emit — routing keys off the
+    // ORIGINATING session; `topic` (`peer-<slug>`) is the closed peer's.
+    emit_closed(PeerClosedEvent {
+        session_id: SessionKey(origin_session.to_owned()),
+        topic: format!("peer-{slug}"),
+        slug: slug.to_owned(),
+        profile_id: profile_id.to_owned(),
+    });
+    Ok(())
 }
 
 /// Mailbox nudge (#1801 v3 fan-in): slugs named in the ready-note before the
@@ -20759,9 +21093,16 @@ async fn handle_raw_appui_rpc(
         APPUI_METHOD_PEER_TOOLS_REGISTER
         | APPUI_METHOD_PEER_TOOL_RESULT
         | APPUI_METHOD_PEER_INPUT_REJECT
+        | APPUI_METHOD_SESSION_TOOL_LIST_SET
+        | APPUI_METHOD_SESSION_TOOL_LIST_GET
+        | APPUI_METHOD_PEER_PURGE
+        | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             if ws.is_external() =>
         {
             Err(external_host_tools_denied(&request.method))
+        }
+        APPUI_METHOD_PEER_TOOLS_UNREGISTER => {
+            raw_peer_tools_unregister(ws, state, request, connection_profile_id)
         }
         APPUI_METHOD_PEER_TOOLS_REGISTER => {
             raw_peer_tools_register(ws, state, request, connection_profile_id)
@@ -20771,6 +21112,26 @@ async fn handle_raw_appui_rpc(
         }
         APPUI_METHOD_PEER_INPUT_REJECT => {
             raw_peer_input_reject(ws.connection_id.0, state, request, connection_profile_id)
+        }
+        APPUI_METHOD_SESSION_TOOL_LIST_SET => {
+            raw_session_tool_list_set(ws, state, request, connection_profile_id)
+        }
+        APPUI_METHOD_SESSION_TOOL_LIST_GET => {
+            raw_session_tool_list_get(ws, state, request, connection_profile_id)
+        }
+        // Boxed: the purge future is large, and this dispatch future is
+        // nested inside every connection's (and the stdio runtime's) stack.
+        APPUI_METHOD_PEER_PURGE => {
+            Box::pin(peer_purge::raw_peer_purge(
+                ws,
+                state,
+                ledger,
+                contracts,
+                active_turns,
+                request,
+                connection_profile_id,
+            ))
+            .await
         }
         APPUI_METHOD_PROFILE_SKILLS_LIST => {
             raw_profile_skills_list(state, request, connection_profile_id)
@@ -21216,6 +21577,10 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
             | APPUI_METHOD_PEER_TOOLS_REGISTER
             | APPUI_METHOD_PEER_TOOL_RESULT
             | APPUI_METHOD_PEER_INPUT_REJECT
+            | APPUI_METHOD_SESSION_TOOL_LIST_SET
+            | APPUI_METHOD_SESSION_TOOL_LIST_GET
+            | APPUI_METHOD_PEER_PURGE
+            | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             | APPUI_METHOD_PROFILE_SKILLS_LIST
             | APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH
             | APPUI_METHOD_PROFILE_SKILLS_INSTALL
@@ -35681,7 +36046,17 @@ async fn run_native_code_review_turn(
         &profile_id,
         &session_runtime.profile.data_dir,
     );
-    let tools = Arc::new(session_runtime.tools.snapshot_excluding(&[]));
+    let tools = {
+        let mut tools = session_runtime.tools.snapshot_excluding(&[]);
+        // #2605: the host session's durable kernel tool list binds review
+        // specialists too.
+        crate::peers::session_tool_list::retain_session_tool_list(
+            &mut tools,
+            &session_runtime.profile.data_dir,
+            &session_id,
+        );
+        Arc::new(tools)
+    };
     let agent_config = session_runtime.agent.agent_config();
     // UPCR follow-up to #1561: refresh named prompt segments (memory) on
     // the cached session agent BEFORE snapshotting — WS turns build a
@@ -39601,28 +39976,13 @@ async fn run_standalone_turn(
     // with a registered tool set: the host's own turns keep the usual tools
     // and gain the host's app tools (routed to the host); any other turn gets
     // none. Re-read every turn, so a registration applies from the next turn.
-    {
-        let peers_root = session_runtime.profile.data_dir.join("peers");
-        let resolved =
-            crate::peers::host_tools::resolve_session_host_tools(&peers_root, &session_id);
-        crate::peers::host_tools::apply_session_host_tools(
-            &mut tool_registry,
-            &resolved,
-            &peers_root,
-            &session_id,
-            &turn_id.0.to_string(),
-            host_tools_turn_connection(&ws, internal_master_continuation),
-        );
-        // A host SESSION tool set (e.g. the system agent calling the app
-        // tools the host granted it): only the host's own turns on it.
-        crate::peers::host_tools::apply_session_owned_host_tools(
-            &mut tool_registry,
-            &peers_root,
-            &session_id,
-            &turn_id.0.to_string(),
-            host_tools_turn_connection(&ws, internal_master_continuation),
-        );
-    }
+    apply_turn_host_tool_rosters(
+        &mut tool_registry,
+        &session_runtime.profile.data_dir,
+        &session_id,
+        &turn_id.0.to_string(),
+        host_tools_turn_connection(&ws, internal_master_continuation),
+    );
     // `octos serve --host-managed`: an external client's turn keeps only the
     // external tool allowlist, applied to the FINISHED registry so nothing
     // registered above (spawn, peer_*, send_file, task tools, MCP, plugins)
@@ -47030,6 +47390,9 @@ fn flush_replay_lossy(
     }
     emit_replay_lossy_opportunistic(ws, ledger, &session_id.0);
 }
+
+#[path = "ui_protocol_peer_purge.rs"]
+mod peer_purge;
 
 #[cfg(test)]
 #[path = "ui_protocol_tests.rs"]

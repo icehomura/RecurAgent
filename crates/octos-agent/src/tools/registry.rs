@@ -286,6 +286,14 @@ pub struct ToolRegistry {
     /// path — and on any host without a real backend — command validators
     /// run the argv directly and behavior is unchanged.
     sandbox: Arc<dyn Sandbox>,
+    /// #2605: the host's exact kernel tool list for the session this
+    /// registry serves (`None`: no list). Set through `&self` because a
+    /// long-lived registry (the gateway's session actor shares one
+    /// `Arc<ToolRegistry>` across turns) must follow the host's durable
+    /// list from turn to turn. Unlisted tools are hidden from `specs()`,
+    /// visibility checks and discovery, and refused by `execute_with_context`.
+    /// It only ever narrows: it never adds a tool the registry lacks.
+    host_tool_allowlist: std::sync::RwLock<Option<Arc<HashSet<String>>>>,
 }
 
 /// Default per-tool execution-timeout backstop (seconds) for the registry
@@ -330,6 +338,7 @@ impl ToolRegistry {
             // real sandbox (`with_builtins_and_permissions`,
             // `rebind_cwd_with_permissions`) overwrite this below.
             sandbox: Arc::new(NoSandbox),
+            host_tool_allowlist: std::sync::RwLock::new(None),
         }
     }
 
@@ -807,6 +816,9 @@ impl ToolRegistry {
         if self.internal_hidden.contains(name) {
             return false;
         }
+        if !self.host_tool_allowlist_permits(name) {
+            return false;
+        }
         if let Some(ref policy) = self.provider_policy {
             if !provider_policy_allows_equivalent_with_tags(policy, name, tool.tags()) {
                 return false;
@@ -839,6 +851,7 @@ impl ToolRegistry {
         if let Some(ref specs) = *cache {
             return specs.clone();
         }
+        let allowlist = self.host_tool_allowlist_snapshot();
 
         // RFC-0 (#1289): every enabled tool is emitted every turn. The only
         // exclusions remaining are internal-hidden tools (mofa_make
@@ -852,6 +865,7 @@ impl ToolRegistry {
             // the LLM-visible spec set. They remain callable via `get()`
             // for internal forwarders (e.g. `mofa_make`).
             .filter(|t| !self.internal_hidden.contains(t.name()))
+            .filter(|t| allowlist.as_ref().is_none_or(|a| a.contains(t.name())))
             .filter(|t| {
                 self.provider_policy.as_ref().is_none_or(|p| {
                     provider_policy_allows_equivalent_with_tags(p, t.name(), t.tags())
@@ -1194,6 +1208,9 @@ impl ToolRegistry {
             // plain `snapshot_excluding` caller still observes the same
             // confinement as the parent.
             sandbox: self.sandbox.clone(),
+            // #2605: a snapshot (a per-turn registry, a spawned child's
+            // parent roster) keeps the host's list: it must never widen.
+            host_tool_allowlist: std::sync::RwLock::new(self.host_tool_allowlist_snapshot()),
         };
         // #1148 codex P2: the cloned `tool_search` / `tool_suggest`
         // Arcs still point to the PARENT's catalog cell. Re-register
@@ -1219,6 +1236,54 @@ impl ToolRegistry {
             .inherit_registration_observers(&self.supervisor);
         snapshot.refresh_live_catalog();
         snapshot
+    }
+
+    // -- Host session tool list (#2605) --------------------------------------
+
+    /// Set (`Some`) or clear (`None`) the host's exact kernel tool list for
+    /// the session this registry serves. Takes `&self` so a registry shared
+    /// behind an `Arc` across turns can follow the host's durable list; the
+    /// caller sets it at each turn start. Only narrows: a listed name the
+    /// registry lacks stays absent.
+    pub fn set_host_tool_allowlist(&self, allowed: Option<&[String]>) {
+        let next: Option<Arc<HashSet<String>>> =
+            allowed.map(|names| Arc::new(names.iter().cloned().collect()));
+        {
+            let mut guard = self
+                .host_tool_allowlist
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            if *guard == next {
+                return;
+            }
+            *guard = next;
+        }
+        *self.cached_specs.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.refresh_live_catalog();
+    }
+
+    /// The host's current list for this registry, if any.
+    pub fn host_tool_allowlist(&self) -> Option<Vec<String>> {
+        self.host_tool_allowlist_snapshot().map(|set| {
+            let mut names: Vec<String> = set.iter().cloned().collect();
+            names.sort();
+            names
+        })
+    }
+
+    fn host_tool_allowlist_snapshot(&self) -> Option<Arc<HashSet<String>>> {
+        self.host_tool_allowlist
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    fn host_tool_allowlist_permits(&self, name: &str) -> bool {
+        self.host_tool_allowlist
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .is_none_or(|set| set.contains(name))
     }
 
     // -- Cache management ---------------------------------------------------
@@ -1262,6 +1327,9 @@ impl ToolRegistry {
         name: &str,
         args: &serde_json::Value,
     ) -> Result<ToolResult> {
+        if !self.host_tool_allowlist_permits(name) {
+            eyre::bail!("tool '{}' is not in this session's tool list", name);
+        }
         if let Some(ref policy) = self.provider_policy {
             if let policy::PolicyDecision::Deny { reason } =
                 evaluate_provider_policy_equivalent(policy, name)
@@ -1537,6 +1605,7 @@ impl ToolRegistry {
             // tool_search / tool_suggest discovery too — the LLM cannot
             // call them directly, advertising them would be misleading.
             .filter(|tool| !self.internal_hidden.contains(tool.name()))
+            .filter(|tool| self.host_tool_allowlist_permits(tool.name()))
             .filter(|tool| {
                 self.provider_policy.as_ref().is_none_or(|policy| {
                     provider_policy_allows_equivalent_with_tags(policy, tool.name(), tool.tags())
@@ -3640,6 +3709,57 @@ mod spec_order_tests {
             });
         }
         registry
+    }
+
+    #[tokio::test]
+    async fn should_hide_and_refuse_unlisted_tools_when_a_host_tool_allowlist_is_set() {
+        let registry = registry_with(&["read_file", "shell", "grep"]);
+        assert_eq!(registry.specs().len(), 3, "cache primed without a list");
+        registry.set_host_tool_allowlist(Some(&["grep".to_owned(), "absent".to_owned()]));
+        let names: Vec<String> = registry.specs().iter().map(|s| s.name.clone()).collect();
+        assert_eq!(names, vec!["grep".to_owned()], "a list never adds a tool");
+        assert!(!registry.is_tool_visible("shell"));
+        assert!(registry.is_tool_visible("grep"));
+        let Err(refused) = registry.execute("shell", &serde_json::json!({})).await else {
+            panic!("an unlisted tool is refused at dispatch");
+        };
+        assert!(
+            refused
+                .to_string()
+                .contains("not in this session's tool list")
+        );
+        assert!(
+            registry
+                .execute("grep", &serde_json::json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            registry
+                .catalog_snapshot()
+                .iter()
+                .all(|entry| entry.name == "grep"),
+            "discovery shows only listed tools"
+        );
+    }
+
+    #[test]
+    fn should_restore_the_roster_when_the_host_tool_allowlist_is_cleared() {
+        let registry = registry_with(&["read_file", "shell"]);
+        registry.set_host_tool_allowlist(Some(&[]));
+        assert!(registry.specs().is_empty(), "an empty list keeps nothing");
+        registry.set_host_tool_allowlist(None);
+        assert_eq!(registry.specs().len(), 2);
+        assert_eq!(registry.host_tool_allowlist(), None);
+    }
+
+    #[test]
+    fn should_keep_the_host_tool_allowlist_when_a_registry_is_snapshotted() {
+        let registry = registry_with(&["read_file", "shell"]);
+        registry.set_host_tool_allowlist(Some(&["read_file".to_owned()]));
+        let snapshot = registry.snapshot_excluding(&[]);
+        let names: Vec<String> = snapshot.specs().iter().map(|s| s.name.clone()).collect();
+        assert_eq!(names, vec!["read_file".to_owned()]);
     }
 
     #[test]

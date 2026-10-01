@@ -231,6 +231,24 @@ async fn open_bundle(profile: &ProfileRuntime, root: &Path) -> Result<Arc<Bundle
     Ok(bundle)
 }
 
+/// Erase the stores of `namespace` (already validated) and of every namespace
+/// nested under it (a peer's request contexts, `<ns>/ctx-<id>`): drop the
+/// process's open handles first, so a namespace bound again later opens fresh
+/// stores instead of the erased files, then delete the directory. Returns
+/// whether a directory was removed. Used by `peer/purge` (UPCR-2026-034).
+#[cfg_attr(not(feature = "api"), allow(dead_code))]
+pub(crate) async fn erase_memory_namespace(data_dir: &Path, namespace: &str) -> Result<bool> {
+    let root = memory_namespace_root(data_dir, namespace);
+    let canonical = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
+    {
+        let mut map = bundles().lock().await;
+        map.retain(|key, _| !(key.starts_with(&canonical) || key.starts_with(&root)));
+    }
+    // Never through a symlink out of the kernel's memory stores.
+    crate::peers::purge::remove_tree_within(&data_dir.join(MEMORY_NAMESPACES_DIR), &root)
+        .wrap_err_with(|| format!("erase memory namespace {}", root.display()))
+}
+
 /// Re-register the profile's memory tools on a session registry against
 /// `memory`'s stores. Only tools the profile policy left in the registry are
 /// replaced (a policy-denied tool stays absent), and `memory_note` is removed

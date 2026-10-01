@@ -641,6 +641,17 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   gated call's wait to the approval TTL; an unanswered non-read call ends as
   `outcome_unknown`; typed `data.kind` `peer_tool_call_not_found` for a
   finished, timed-out or cancelled call, whose late result is audited)
+- `peer/purge` (accepted `UPCR-2026-034` amendment, #2604: the host erases
+  a host-owned app peer. `{session_id, peer, host_token, profile_id?}` →
+  `{session_id, profile_id, slug, name, purged, already_purged, purged_at,
+  was_open, contexts, contexts_closed, interrupted, host_calls_failed,
+  prompts_cancelled, erased, errors}`; closes an open peer first, fails its
+  in-flight host tool calls (`peer_purged`), stops its and its contexts'
+  running turns, then erases their transcripts, the memory namespace, the
+  blackboard and a kernel-provisioned workspace, and frees the (app,
+  account) binding; a retry with the same token answers `already_purged`;
+  host connection only; typed `data.kind` `peer_purge_not_owner`,
+  `peer_purge_busy`, `peer_purge_in_progress`, `peer_not_host_bound`)
 - `peer/input/reject` (accepted `UPCR-2026-035`, #2618: the host refuses a
   `peer/input`; `{session_id, peer, host_token, input_id, reason:
   "signed_out" | "no_consent" | "busy" | "other", message?}` → `{input_id,
@@ -652,6 +663,29 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   typed `data.kind` `peer_input_reject_invalid`, `peer_input_not_found`,
   `peer_input_wrong_connection`, `peer_input_already_rejected`,
   `peer_input_already_started`)
+- `session/tool_list/set` (accepted `UPCR-2026-035`, #2605: the host sets
+  the durable, exact kernel tool list of one of its own sessions;
+  `{session_id, host_token?, profile_id?, generic_tools: [string] | null,
+  if_version?}` → `{session_id, profile_id, version, previous_version,
+  generic_tools, applies: "next_turn"}`; `null` clears; it narrows every turn
+  on the session in the serve and gateway paths, survives reconnects and
+  restarts, never widens the profile policy, and an unreadable list keeps no
+  tools; never from an external client; the host's own connection (`serve --stdio`, or
+  a host-managed host-token connection), elsewhere the host token of an app peer the session prepared;
+  typed `data.kind` `session_tool_list_invalid`,
+  `session_tool_list_version_conflict`, `peer_host_token_mismatch`,
+  `external_method_denied`)
+- `session/tool_list/get` (accepted `UPCR-2026-035`, #2605: the host reads
+  that list back; `{session_id, host_token?, profile_id?}` → `{session_id,
+  profile_id, version, status: "none" | "set" | "cleared" | "unreadable",
+  generic_tools}`; same authorization)
+- `peer/tools/unregister` (accepted `UPCR-2026-035`: the host releases a
+  host-owned app peer it no longer serves while its connection stays open;
+  `{session_id, peer, host_token, profile_id?}` → `{slug, profile_id,
+  unregistered}`; drops the peer's route and ends its calls in flight
+  `host_gone`, so the system agent's later `peer_send_input` fails "not
+  connected"; idempotent; `peer/tools/register` restores the route; refused
+  to external clients)
 - `peer/gather` (#1801 v2 blackboard read: per staged peer its brief + the
   latest `result.md` — written server-side on every peer-session turn
   terminal — with per-field truncation flags and `result_updated_unix`;

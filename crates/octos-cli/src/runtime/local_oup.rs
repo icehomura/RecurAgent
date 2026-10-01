@@ -197,6 +197,33 @@ mod tests {
         }
     }
 
+    /// The local runtime's turn path polls deep agent futures, which need the
+    /// 8 MiB stacks every production entry point sets; `#[tokio::test]` polls
+    /// them on the test thread's default (2 MiB) stack, where a debug build
+    /// overflows and aborts the whole test binary (#2581; the same treatment
+    /// as `commands::oup_session`'s reopen test). Run a turn-driving test on
+    /// an 8 MiB thread instead.
+    fn on_big_stack<F, Fut>(body: F)
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()>,
+    {
+        std::thread::Builder::new()
+            .name("local-oup-turn".into())
+            .stack_size(8 * 1024 * 1024)
+            .spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .thread_stack_size(8 * 1024 * 1024)
+                    .enable_all()
+                    .build()
+                    .expect("test runtime")
+                    .block_on(body());
+            })
+            .expect("spawn big-stack test thread")
+            .join()
+            .unwrap_or_else(|payload| std::panic::resume_unwind(payload));
+    }
+
     fn options(data_dir: &Path, config_home: &Path, model: Arc<ContextModel>) -> LocalOupOptions {
         let config = Config {
             provider: Some("local".into()),
@@ -262,9 +289,14 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test]
     #[cfg(unix)]
-    async fn should_fire_on_turn_end_hook_after_oup_turn() {
+    fn should_fire_on_turn_end_hook_after_oup_turn() {
+        on_big_stack(should_fire_on_turn_end_hook_after_oup_turn_body);
+    }
+
+    #[cfg(unix)]
+    async fn should_fire_on_turn_end_hook_after_oup_turn_body() {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
         let workspace = tempfile::tempdir().unwrap();
@@ -345,9 +377,14 @@ mod tests {
     // #2244 — the errored arm is a turn outcome too: a turn that fails
     // (here: a non-retryable auth error) must still fire `on_turn_end`
     // before its terminal frame.
-    #[tokio::test]
+    #[test]
     #[cfg(unix)]
-    async fn should_fire_on_turn_end_hook_after_errored_oup_turn() {
+    fn should_fire_on_turn_end_hook_after_errored_oup_turn() {
+        on_big_stack(should_fire_on_turn_end_hook_after_errored_oup_turn_body);
+    }
+
+    #[cfg(unix)]
+    async fn should_fire_on_turn_end_hook_after_errored_oup_turn_body() {
         let home = tempfile::tempdir().unwrap();
         let data = tempfile::tempdir().unwrap();
         let workspace = tempfile::tempdir().unwrap();
@@ -425,8 +462,12 @@ mod tests {
         assert_eq!(sampling["repeat_penalty"], serde_json::json!(1.1));
     }
 
-    #[tokio::test]
-    async fn should_preserve_shared_profile_context_in_ephemeral_oup_turn() {
+    #[test]
+    fn should_preserve_shared_profile_context_in_ephemeral_oup_turn() {
+        on_big_stack(should_preserve_shared_profile_context_in_ephemeral_oup_turn_body);
+    }
+
+    async fn should_preserve_shared_profile_context_in_ephemeral_oup_turn_body() {
         let home = tempfile::tempdir().unwrap();
         let shared = home.path().join("profiles/ephemeral-fixture/data");
         let transient = tempfile::tempdir().unwrap();

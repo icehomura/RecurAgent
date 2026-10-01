@@ -397,8 +397,18 @@ impl SessionRuntime {
             crate::peers::app_binding::SessionAppBinding::Bound {
                 cwd,
                 memory_namespace,
-                ..
+                read_view,
             } => {
+                // The bound folder (and a context's read-only view of its
+                // peer's folder) must still be the canonical directory the
+                // binding recorded: a symlink swapped in for it (or an
+                // ancestor) would otherwise re-root the session, or widen
+                // the view, wherever it points.
+                for dir in std::iter::once(&cwd).chain(read_view.iter()) {
+                    if let Err(reason) = crate::peers::app_binding::verify_bound_dir(dir) {
+                        eyre::bail!("session {session_key} cannot run: {reason}");
+                    }
+                }
                 if let Some(hint) = workspace_hint.as_ref() {
                     let hint_canon = dunce::canonicalize(hint).unwrap_or_else(|_| hint.clone());
                     let cwd_canon = dunce::canonicalize(&cwd).unwrap_or_else(|_| cwd.clone());

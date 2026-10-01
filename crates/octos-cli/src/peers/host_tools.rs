@@ -164,7 +164,7 @@ pub(crate) fn validate_app_tool_name(name: &str) -> Result<(), String> {
 }
 
 /// A kernel tool name: `[A-Za-z0-9_-]`, no `.` (app tools are dotted).
-fn validate_generic_name(name: &str) -> Result<(), String> {
+pub(crate) fn validate_generic_name(name: &str) -> Result<(), String> {
     let ok = !name.is_empty()
         && name.len() <= MAX_MODEL_NAME_BYTES
         && name
@@ -669,6 +669,16 @@ pub(crate) fn register_session_tool_set(
     Ok((current, version))
 }
 
+/// The connection that registered the host session set of `session`, if any.
+pub(crate) fn session_set_connection(peers_root: &Path, session: &SessionKey) -> Option<u64> {
+    let key = session_route_key(peers_root, session);
+    SESSION_SETS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&key)
+        .map(|set| set.connection)
+}
+
 /// The route key of the host tool set a call on `session` belongs to: the
 /// app peer's for a `peer-`/`peerctx-` session, the session's own when a
 /// host session set is registered on it.
@@ -795,6 +805,134 @@ fn unknown_key(route_key: &str, tool: &str, args_digest: &str) -> String {
 
 /// How long an unknown outcome blocks the same call.
 const UNKNOWN_RETENTION: Duration = Duration::from_secs(24 * 3_600);
+
+/// `peers/` leaf holding the unresolved unknown outcomes of this profile's
+/// tool sets, so the interlock survives a kernel restart: a JSON array of
+/// `{key, at}` (`key` = the marker without the peers-root prefix, `at` = unix
+/// seconds when it was marked).
+const UNKNOWN_OUTCOMES_LEAF: &str = ".host_tool_unknown_outcomes.json";
+
+#[derive(Serialize, Deserialize)]
+struct PersistedUnknownOutcome {
+    key: String,
+    at: u64,
+}
+
+/// Peers roots whose persisted unknown outcomes are already in [`HUB`].
+static UNKNOWN_RESTORED: LazyLock<Mutex<std::collections::HashSet<PathBuf>>> =
+    LazyLock::new(Default::default);
+
+fn unknown_prefix(peers_root: &Path) -> String {
+    format!("{}\u{0}", peers_root.display())
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
+}
+
+/// Load `peers_root`'s persisted unknown outcomes into [`HUB`] once per
+/// process, before its first interlock decision. Held under
+/// [`UNKNOWN_RESTORED`] so no decision for this root runs half-restored.
+fn restore_unknown_outcomes(peers_root: &Path) {
+    let mut restored = UNKNOWN_RESTORED.lock().unwrap_or_else(|p| p.into_inner());
+    if !restored.insert(peers_root.to_path_buf()) {
+        return;
+    }
+    let Some(body) = peer_io::read_peer_file(
+        peers_root,
+        UNKNOWN_OUTCOMES_LEAF,
+        peer_io::PEER_FILE_READ_CAP_LARGE,
+    ) else {
+        return;
+    };
+    let mut entries: Vec<PersistedUnknownOutcome> = match serde_json::from_str(&body) {
+        Ok(entries) => entries,
+        Err(error) => {
+            tracing::warn!(
+                peers_root = %peers_root.display(),
+                %error,
+                "host tools: unreadable unknown-outcome record ignored"
+            );
+            return;
+        }
+    };
+    entries.sort_by_key(|entry| entry.at);
+    let prefix = unknown_prefix(peers_root);
+    let now = unix_now();
+    let mut unknown = HUB.unknown.lock().unwrap_or_else(|p| p.into_inner());
+    for entry in entries {
+        let age = Duration::from_secs(now.saturating_sub(entry.at));
+        if age >= UNKNOWN_RETENTION {
+            continue;
+        }
+        let at = Instant::now().checked_sub(age).unwrap_or_else(Instant::now);
+        unknown.mark_at(format!("{prefix}{}", entry.key), at, UNKNOWN_RETENTION);
+    }
+}
+
+/// Rewrite `peers_root`'s record from the markers [`HUB`] holds for it.
+fn persist_unknown_outcomes(peers_root: &Path) {
+    let prefix = unknown_prefix(peers_root);
+    let now = unix_now();
+    let entries: Vec<PersistedUnknownOutcome> = {
+        let unknown = HUB.unknown.lock().unwrap_or_else(|p| p.into_inner());
+        unknown
+            .order
+            .iter()
+            .filter(|(key, _)| unknown.keys.contains(key))
+            .filter_map(|(key, at)| {
+                key.strip_prefix(&prefix)
+                    .map(|rest| PersistedUnknownOutcome {
+                        key: rest.to_owned(),
+                        at: now.saturating_sub(at.elapsed().as_secs()),
+                    })
+            })
+            .collect()
+    };
+    let body = serde_json::to_string(&entries).unwrap_or_else(|_| "[]".to_owned());
+    let _ = std::fs::create_dir_all(peers_root);
+    if let Err(error) = peer_io::write_peer_file_durable(peers_root, UNKNOWN_OUTCOMES_LEAF, &body) {
+        tracing::warn!(
+            peers_root = %peers_root.display(),
+            %error,
+            "host tools: could not persist unknown outcomes"
+        );
+    }
+}
+
+/// Mark `(route, tool, digest)` unknown, durably.
+fn mark_unknown_outcome(peers_root: &Path, route_key: &str, tool: &str, args_digest: &str) {
+    restore_unknown_outcomes(peers_root);
+    HUB.unknown
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .mark(unknown_key(route_key, tool, args_digest), UNKNOWN_RETENTION);
+    persist_unknown_outcomes(peers_root);
+}
+
+/// Test seam: forget what this process knows about `peers_root`'s unknown
+/// outcomes, as a restarted kernel would.
+#[cfg(test)]
+pub(crate) fn forget_unknown_outcomes_in_memory(peers_root: &Path) {
+    let prefix = unknown_prefix(peers_root);
+    let mut unknown = HUB.unknown.lock().unwrap_or_else(|p| p.into_inner());
+    let keys: Vec<String> = unknown
+        .keys
+        .iter()
+        .filter(|key| key.starts_with(&prefix))
+        .cloned()
+        .collect();
+    for key in keys {
+        unknown.remove(&key);
+    }
+    drop(unknown);
+    UNKNOWN_RESTORED
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(peers_root);
+}
 
 struct PendingCall {
     meta: CallMeta,
@@ -955,6 +1093,22 @@ impl BoundedClaims {
         evicted
     }
 
+    /// [`Self::mark`] with the time the claim was originally made (a
+    /// restored marker keeps its age).
+    fn mark_at(&mut self, key: String, at: Instant, retention: Duration) {
+        self.evict_expired(Instant::now(), retention);
+        if self.keys.contains(&key) {
+            return;
+        }
+        if self.order.len() >= Self::MAX {
+            if let Some((oldest, _)) = self.order.pop_front() {
+                self.keys.remove(&oldest);
+            }
+        }
+        self.keys.insert(key.clone());
+        self.order.push_back((key, at));
+    }
+
     fn contains(&mut self, key: &str, retention: Duration) -> bool {
         self.evict_expired(Instant::now(), retention);
         self.keys.contains(key)
@@ -964,6 +1118,12 @@ impl BoundedClaims {
         if self.keys.remove(key) {
             self.order.retain(|(k, _)| k != key);
         }
+    }
+
+    /// Forget every claim whose key starts with `prefix`.
+    fn remove_prefix(&mut self, prefix: &str) {
+        self.keys.retain(|k| !k.starts_with(prefix));
+        self.order.retain(|(k, _)| !k.starts_with(prefix));
     }
 }
 
@@ -1843,6 +2003,68 @@ pub(crate) fn drop_routes_for_connection(connection: u64) {
         .retain(|_, registered| registered.connection != connection);
 }
 
+/// `peer/purge`: end every host call in flight for peer `slug` at once
+/// (`peer_purged`; the host hears `peer/tool/cancel` with reason `purged`),
+/// drop its route, and forget every per-peer claim and marker (delivered
+/// inputs, `peer/input` turn ids, unknown outcomes, tool-call occurrences), so
+/// a new peer later staged under the same slug starts clean. Returns how many
+/// calls were failed.
+pub(crate) fn purge_peer_host_state(peers_root: &Path, slug: &str) -> usize {
+    let key = route_key(peers_root, slug);
+    let mut failed = 0;
+    for call in HUB
+        .pending
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .values()
+    {
+        if call.meta.route_key == key {
+            call.cancel.fire("purged");
+            failed += 1;
+        }
+    }
+    HUB.routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(&key);
+    // Per-route partitions go whole; the flat sets lose this route's keys.
+    for claims in [&HUB.inputs, &HUB.occurrences] {
+        claims
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .parts
+            .remove(&key);
+    }
+    let prefix = format!("{key}\u{0}");
+    for claims in [&HUB.input_turns, &HUB.unknown] {
+        claims
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove_prefix(&prefix);
+    }
+    failed
+}
+
+/// Drop the peer `slug`'s route at its host's request (`peer/tools/unregister`):
+/// its calls in flight end `host_gone` and later input is refused as "not
+/// connected", as if its connection had closed. Whether a route was held.
+pub(crate) fn unregister_peer_route(peers_root: &Path, slug: &str) -> bool {
+    let key = route_key(peers_root, slug);
+    let send = HUB
+        .routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&key)
+        .map(|route| route.send.clone());
+    match send {
+        Some(send) => {
+            drop_route_if(&key, &send);
+            true
+        }
+        None => false,
+    }
+}
+
 /// Drop the route if it is still `send` (its connection closed).
 ///
 /// Like a closed connection ([`drop_routes_for_connection`]), every call in
@@ -2246,13 +2468,19 @@ impl Drop for PendingGuard {
         // The host may be acting on it: an interrupted or timed-out non-read
         // call must not be resent as if it never happened.
         if call.meta.risk != "read" {
-            HUB.unknown.lock().unwrap_or_else(|p| p.into_inner()).mark(
-                unknown_key(
-                    &call.meta.route_key,
-                    &call.meta.tool,
-                    &call.meta.args_digest,
-                ),
-                UNKNOWN_RETENTION,
+            // The route key starts with the profile's peers root.
+            let peers_root = call
+                .meta
+                .route_key
+                .split('\u{0}')
+                .next()
+                .map(PathBuf::from)
+                .unwrap_or_default();
+            mark_unknown_outcome(
+                &peers_root,
+                &call.meta.route_key,
+                &call.meta.tool,
+                &call.meta.args_digest,
             );
         }
         {
@@ -2330,6 +2558,7 @@ impl HostToolRouter for TurnHostToolRouter {
     }
 
     fn outcome_unknown_before(&self, tool: &str, args_digest: &str) -> bool {
+        restore_unknown_outcomes(&self.peers_root);
         HUB.unknown
             .lock()
             .unwrap_or_else(|p| p.into_inner())
@@ -2337,17 +2566,21 @@ impl HostToolRouter for TurnHostToolRouter {
     }
 
     fn mark_outcome_unknown(&self, tool: &str, args_digest: &str) {
-        HUB.unknown
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .mark(self.unknown_key(tool, args_digest), UNKNOWN_RETENTION);
+        mark_unknown_outcome(
+            &self.peers_root,
+            &self.host.route_key(&self.peers_root),
+            tool,
+            args_digest,
+        );
     }
 
     fn clear_outcome_unknown(&self, tool: &str, args_digest: &str) {
+        restore_unknown_outcomes(&self.peers_root);
         HUB.unknown
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .remove(&self.unknown_key(tool, args_digest));
+        persist_unknown_outcomes(&self.peers_root);
     }
 
     async fn call(&self, call: HostToolCall) -> HostToolCallOutcome {
@@ -2507,11 +2740,21 @@ impl HostToolRouter for TurnHostToolRouter {
                     // Interrupted turn or closed host connection: stop now.
                     let reason = cancel.reason();
                     // The host is told `cancelled` either way (a closed
-                    // connection will not hear it).
-                    guard.reason = "cancelled";
+                    // connection will not hear it), or `purged` when the
+                    // host erased the peer (`peer/purge`).
+                    guard.reason = if reason == "purged" { "purged" } else { "cancelled" };
                     drop(guard);
                     if let Ok(outcome) = rx.try_recv() {
                         return outcome;
+                    }
+                    if reason == "purged" {
+                        // The peer and everything it stored are being erased:
+                        // there is nothing left to retry or check.
+                        return Self::error(
+                            "peer_purged",
+                            "the app's agent was erased (peer/purge) while this call was \
+                             in flight; stop working",
+                        );
                     }
                     let (kind, what) = if reason == "host_gone" {
                         ("host_unavailable", "the app's host connection closed")
@@ -2655,6 +2898,28 @@ mod tests {
             approval_ttl: Duration::from_secs(1),
             max_result_bytes: 1024,
         }
+    }
+
+    #[test]
+    fn should_still_refuse_an_unknown_outcome_call_when_the_kernel_restarted() {
+        // Security review (ADR 0004): the unknown-outcome interlock lived only
+        // in process memory, so after a kernel restart an act tool whose
+        // outcome was unknown was re-dispatched without the special approval.
+        let root = tempfile::tempdir().unwrap();
+        let peers = root.path().join("peers");
+        std::fs::create_dir_all(&peers).unwrap();
+        claims_router(&peers, "news").mark_outcome_unknown("news_post", "digest-1");
+
+        forget_unknown_outcomes_in_memory(&peers); // the kernel restarts
+        let after = claims_router(&peers, "news");
+        assert!(after.outcome_unknown_before("news_post", "digest-1"));
+        assert!(!after.outcome_unknown_before("news_post", "digest-2"));
+        assert!(!claims_router(&peers, "other").outcome_unknown_before("news_post", "digest-1"));
+
+        // A resolved outcome stays resolved across the next restart too.
+        after.clear_outcome_unknown("news_post", "digest-1");
+        forget_unknown_outcomes_in_memory(&peers);
+        assert!(!claims_router(&peers, "news").outcome_unknown_before("news_post", "digest-1"));
     }
 
     #[test]

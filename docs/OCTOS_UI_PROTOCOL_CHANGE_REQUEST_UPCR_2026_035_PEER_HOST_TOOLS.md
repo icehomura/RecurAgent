@@ -6,8 +6,9 @@
 - Date: 2026-09-27
 - Target protocol: `octos-ui/v1alpha1`
 - Status: implemented
-- Scope: three additive raw AppUI methods, `peer/tools/register`,
-  `peer/tool/result` and `peer/input/reject` (#2618); three additive server
+- Scope: five additive raw AppUI methods, `peer/tools/register`,
+  `peer/tool/result`, `peer/input/reject` (#2618), `session/tool_list/set`
+  and `session/tool_list/get` (#2605); three additive server
   notifications, `peer/tool/call`,
   `peer/tool/cancel` and `peer/input`; per-turn enforcement of a host-owned
   app peer's app tools and tool risk levels; the system agent's input to a
@@ -82,10 +83,14 @@ drives the turns, after every `peer/prepare` and every reconnect.
 **Host session target.** Without `peer`, the set is registered on the host
 session `session_id` itself: a session that is not an app peer, typically
 the system agent's conversation, so the system agent can call the app tools
-the host granted it. The credential is the host token of an app peer that
-`session_id` prepared (only the host that prepared that session's app peers
-holds one); a `peer-`/`peerctx-` session is refused (`peer_tools_invalid`),
-as is an external connection of `serve --host-managed`. The result carries
+the host granted it. The host's own connection needs no credential
+(OctoSense#146): the private `serve --stdio` pipe, or a host-token
+connection of `serve --host-managed`, registers a host session's set before
+any app peer exists. Any other connection presents the host token of an app
+peer that `session_id` prepared (only the host that prepared that session's
+app peers holds one; `peer_host_token_mismatch` otherwise). A
+`peer-`/`peerctx-` session is refused (`peer_tools_invalid`), as is an
+external connection of `serve --host-managed`. The result carries
 `session_id` instead of `slug`. Such a set:
 
 - lives in memory as long as the registering connection (the host registers
@@ -97,11 +102,13 @@ as is an external connection of `serve --host-managed`. The result carries
 - when `generic_tools` is given, is a host-only kernel tool list for that
   session: it narrows EVERY turn on the session while the set is registered
   (the host's, other clients', kernel wake-ups; never widening the profile
-  policy), and no other session of the profile. A list that survives the
-  host connection (durable, set on `session/open`) is a follow-up (#2605);
+  policy), and no other session of the profile. A durable list that
+  survives the host connection is `session/tool_list/set` (#2605, "Durable
+  host session tool list" below);
 - routes its calls to that connection with `caller.kind: "system"` and
   `peer: null`; they are answered with `peer/tool/result` without `peer`
-  (same credential); its approvals are host-routed like a peer's; its audit
+  (the connection that registered the set answers without a token; any
+  other connection needs the credential above); its approvals are host-routed like a peer's; its audit
   goes to `host_session_tool_audit.jsonl` in the profile data dir (the same
   row shape, `peer: null`).
 
@@ -154,6 +161,84 @@ Typed `data.kind`: `peer_host_token_mismatch`, `peer_originator_mismatch`,
 `peer_not_found`, `peer_not_host_bound`, `peer_closed`, `peer_tools_invalid`,
 `peer_tools_version_conflict`.
 
+### Durable host session tool list (#2605)
+
+Addendum, 2026-09-30. The host SESSION set's `generic_tools` lives only as
+long as the registering connection, and a set that narrows every client's
+turns is not what a host registers for its app tools (OctoSense ADR 0004,
+section 12, step 4). Two more raw methods let the host fix the EXACT kernel
+tool list of one of its own sessions durably, for example the system agent's
+conversation. Discovery: both are in `config/capabilities/list`
+`supported_methods`.
+
+```
+session/tool_list/set
+{session_id, host_token?, profile_id?, generic_tools: [string] | null, if_version?: u64}
+→ {session_id, profile_id, version, previous_version, generic_tools, applies: "next_turn"}
+
+session/tool_list/get
+{session_id, host_token?, profile_id?}
+→ {session_id, profile_id, version, status: "none" | "set" | "cleared" | "unreadable",
+   generic_tools: [string] | null}
+```
+
+Unknown parameters are refused (`invalid_params`).
+
+- **Who may call them.** Never an external client of `serve
+  --host-managed` (refused by the external allowlist and again in the
+  handlers, `permission_denied`, `data.kind: "external_method_denied"`). The host's
+  own connection (the private `serve --stdio` pipe, or a host-token
+  connection of `serve --host-managed`) needs nothing more, as for a host
+  session tool set. On any other server the caller
+  presents the host token of an app peer that `session_id` prepared, as for
+  a host session tool set (`peer_host_token_mismatch` otherwise). An app
+  peer's session or request context (`peer-…`/`peerctx-…`) is refused
+  (`session_tool_list_invalid`): its kernel tools are its peer's
+  `generic_tools`.
+- **`generic_tools`** is required on `set` (a misspelt key never clears a
+  list): an array of kernel tool names (no `.`; at most 256; duplicates
+  dropped, order kept), or `null` to clear the list. `[]` keeps no kernel
+  tool at all. A name the session's roster does not have is stored and
+  echoed but never adds a tool. Bad names: `session_tool_list_invalid`.
+- **`version`** increments on every `set`, a clear included (the first set
+  is 1). With `if_version`, a set whose expected version is not the current
+  one is refused (`session_tool_list_version_conflict`,
+  `data.current_version`). Sets of one session are serialized.
+- **Durable.** The list is written to
+  `<profile data dir>/host_session_tools/<sha256 of the session key>.json`
+  (atomic, fsynced; the file records the session key, so a copied or
+  mismatched file fails closed). It survives host reconnects and kernel
+  restarts; nothing of it lives on the connection. It applies from the next
+  turn start.
+- **Every turn on the session.** The list narrows every turn on
+  `session_id`, whoever drives it: the host's, another client's (an
+  external client's turn is then also confined to its own allowlist,
+  UPCR-2026-036), a kernel continuation or wake-up, and a `review/start`
+  specialist swarm. It applies in both runtime paths: the serve turn build
+  (`apply_turn_host_tool_rosters`, after the profile `tool_policy` and
+  before any host-routed app tool is added) and the gateway's
+  `session_actor` (re-read at each turn start and set on the actor's shared
+  registry with `ToolRegistry::set_host_tool_allowlist`, which hides an
+  unlisted tool from `specs()`, visibility checks and `tool_search`, and
+  refuses it at dispatch). Other sessions of the profile are untouched.
+- **Never widens.** It only removes tools from the roster the profile
+  policy already built. It is a list of KERNEL tools: host-routed app tools
+  keep coming from `peer/tools/register` (a live host session set) and are
+  not filtered by it. When both lists are set, a turn keeps the kernel tools
+  in both (their intersection).
+- **Fail closed.** A list file that exists but cannot be read or parsed (or
+  whose folder is a symlink) keeps no kernel tools; `get` says
+  `status: "unreadable"`, `generic_tools: []`.
+- **Not covered.** A child agent that a listed `spawn`-family tool starts
+  builds its own roster from the kernel's built-in tools (under the profile
+  policy and the spawn call's own restrictions), not from this list; a host
+  that wants an exact list leaves those tools out. `skill/action/invoke` and
+  `octos chat` do not build a session turn registry and are unaffected.
+
+`session/open` does not take the list: the host sets it once with
+`session/tool_list/set` (and again whenever the person's grants change) and
+it holds from then on, across reconnects and restarts.
+
 ### `peer/tool/call` (server → host notification)
 
 ```
@@ -190,6 +275,26 @@ fails with `host_unavailable`; it is never replayed.
 - MUST send `status: "awaiting_confirmation"` before showing its own
   confirmation sheet for a gated call whose `confirm_required` is false
   (for `confirm_required: true` the kernel already waits the approval TTL).
+
+### `peer/tools/unregister`
+
+```
+{session_id, peer, host_token, profile_id?}
+→ {slug, profile_id, unregistered: bool}
+```
+
+The host releases a host-owned app peer it no longer serves — the app
+closed, or its agent was turned off — while its connection stays open for
+other apps (a shell whose app consumers share one connection never closes
+it). The peer's route is dropped exactly as if its connection had closed:
+calls in flight end `host_gone`, and the system agent's later
+`peer_send_input` to the peer fails ("the app that owns peer … is not
+connected") instead of being accepted with nobody to run it. Host token
+required (`peer_host_token_mismatch`), only for a host-owned peer
+(`peer_not_host_bound`), refused to an external client of `serve
+--host-managed`. Idempotent (`unregistered: false` when no route was held).
+The peer itself, its binding and its durable state are untouched;
+`peer/tools/register` restores the route when the app comes back.
 
 ### `peer/tool/result`
 
@@ -534,6 +639,9 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   sent unless the person approves it through an approval whose text says the
   earlier outcome is unknown (`approved_after_unknown`, which clears the
   mark); without an approval channel it is refused (`outcome_unknown_before`).
+  The marks are durable: they are kept in `peers/.host_tool_unknown_outcomes.json`
+  (the argument digest, never the arguments) and restored before the
+  profile's first interlock decision after a kernel restart.
 - **Routing and waiting.** At most 16 calls in flight per peer
   (`host_busy`). A call waits `call_timeout_ms`; a `confirm_required` call
   waits the approval TTL instead (the app's sheet may take as long as an
@@ -690,6 +798,25 @@ never declares its tools a second way.
 
 ## Tests
 
+- #2605 durable host session tool list (octos-cli
+  `ui_protocol_peer_host_tools_tests`):
+  `should_advertise_and_dispatch_the_session_tool_list_methods`,
+  `should_narrow_every_turn_on_the_session_when_the_host_sets_a_durable_list`
+  (the host's turn, another client's and a kernel continuation; other
+  sessions untouched; `[]` and `null`),
+  `should_keep_the_list_when_the_host_reconnects`,
+  `should_refuse_the_list_when_the_connection_is_external`,
+  `should_refuse_the_list_when_the_caller_has_no_host_credential`,
+  `should_refuse_the_list_when_the_session_is_an_app_peer_or_the_params_are_bad`,
+  `should_intersect_with_the_live_session_set_when_both_are_given`; the
+  gateway path (`session_actor_tests`):
+  `should_offer_exactly_the_hosts_durable_list_when_a_gateway_turn_starts`
+  (a change applies from the next turn of the same actor); storage
+  (`peers::session_tool_list`): versioning, fail-closed reads, name
+  validation; the registry (octos-agent `spec_order_tests`):
+  `should_hide_and_refuse_unlisted_tools_when_a_host_tool_allowlist_is_set`,
+  `should_restore_the_roster_when_the_host_tool_allowlist_is_cleared`,
+  `should_keep_the_host_tool_allowlist_when_a_registry_is_snapshotted`.
 - `peer_host_tool` unit tests (octos-agent, 13; also
   `should_describe_the_owning_app_the_tool_and_the_caller_when_asking_for_approval`
   and `should_mark_a_host_routed_tool_by_origin_whatever_its_name`):
