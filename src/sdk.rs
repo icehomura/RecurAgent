@@ -4234,7 +4234,7 @@ mod tests {
             .system_prompt()
             .expect("default system prompt present")
             .to_string();
-        assert!(system_prompt.contains("Pi documentation"));
+        assert!(system_prompt.contains("RecurAgent documentation"));
         let advertised_readme = pkg_root.join("README.md");
         assert!(
             system_prompt.contains(&advertised_readme.display().to_string()),

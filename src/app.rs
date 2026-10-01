@@ -384,6 +384,15 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
             "The date below is not a clock: call current_time whenever a task depends on the current time of day",
         );
     }
+    if has_tool("run_code") && has_bash {
+        // run_code (PTC) batches a whole job into one round trip and returns
+        // structured results; each bash call is its own process spawn and its
+        // output still has to be parsed back out of text. Orchestration
+        // belongs in the former; a shell stays for what only a shell does.
+        guidelines_list.push(
+            "When an operation can be expressed as a JavaScript program against these tools, use run_code instead of bash: it finishes the whole job in one round trip and returns structured results. Reach for bash only for what needs a real shell (build tools, package managers, git)",
+        );
+    }
 
     guidelines_list.push("Be concise in your responses");
     guidelines_list.push("Show file paths clearly when working with files");
@@ -395,7 +404,7 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
         .join("\n");
 
     let mut prompt = format!(
-        "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\nAvailable tools:\n{tools_list}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.\n\nGuidelines:\n{guidelines}"
+        "You are an expert coding assistant operating inside RecurAgent (ra), a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\nAvailable tools:\n{tools_list}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.\n\nGuidelines:\n{guidelines}"
     );
     if let Some(docs) = ra_docs_prompt_section(&stable_package_dir(package_dir, None)) {
         prompt.push_str("\n\n");
@@ -422,7 +431,7 @@ pub(crate) fn stable_package_dir(
     )
 }
 
-/// The "Pi documentation" block of the default system prompt, listing only
+/// The "RecurAgent documentation" block of the default system prompt, listing only
 /// documentation that is actually present under the resolved package root.
 ///
 /// Upstream pi ships `README.md`, `docs/`, and `examples/` inside its npm
@@ -459,7 +468,7 @@ fn ra_docs_prompt_section(package_dir: &Path) -> Option<String> {
     let exists_file = |relative: &str| -> bool { docs.join(relative).is_file() };
 
     let mut lines = vec![String::from(
-        "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
+        "RecurAgent documentation (read only when the user asks about RecurAgent itself, its SDK, extensions, themes, skills, or TUI):",
     )];
     if has_readme {
         lines.push(format!("- Main documentation: {}", readme.display()));
@@ -3208,7 +3217,7 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let prompt = default_system_prompt(&["read", "bash"], dir.path());
         assert!(
-            !prompt.contains("Pi documentation"),
+            !prompt.contains("RecurAgent documentation"),
             "docs block leaked into prompt: {prompt}"
         );
         assert!(!prompt.contains("README.md"));
@@ -3218,13 +3227,13 @@ mod tests {
         // A package dir that does not exist at all behaves the same.
         let missing = dir.path().join("does-not-exist");
         let prompt = default_system_prompt(&["read"], &missing);
-        assert!(!prompt.contains("Pi documentation"));
+        assert!(!prompt.contains("RecurAgent documentation"));
 
         // Empty directory placeholders must NOT resurrect the block either.
         std::fs::create_dir(dir.path().join("docs")).expect("mkdir docs");
         std::fs::create_dir(dir.path().join("examples")).expect("mkdir examples");
         let prompt = default_system_prompt(&["read"], dir.path());
-        assert!(prompt.contains("Pi documentation"));
+        assert!(prompt.contains("RecurAgent documentation"));
         assert!(
             !prompt.contains("When asked about:"),
             "empty dirs must not advertise any topic files: {prompt}"
@@ -3236,7 +3245,7 @@ mod tests {
         std::fs::create_dir(odd.path().join("README.md")).expect("mkdir README.md");
         std::fs::write(odd.path().join("docs"), "").expect("write docs file");
         let prompt = default_system_prompt(&["read"], odd.path());
-        assert!(!prompt.contains("Pi documentation"));
+        assert!(!prompt.contains("RecurAgent documentation"));
     }
 
     /// Partial installs advertise exactly the files that exist — nothing more.
@@ -3273,7 +3282,7 @@ mod tests {
         let docs_only = tempdir().expect("tempdir");
         std::fs::create_dir(docs_only.path().join("docs")).expect("mkdir docs");
         let prompt = default_system_prompt(&["read"], docs_only.path());
-        assert!(prompt.contains("Pi documentation"));
+        assert!(prompt.contains("RecurAgent documentation"));
         assert!(prompt.contains("- Additional docs:"));
         assert!(!prompt.contains("- Main documentation:"));
         assert!(!prompt.contains("- Examples:"));
