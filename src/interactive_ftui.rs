@@ -1101,6 +1101,181 @@ struct TranscriptEntry {
     /// 1 = standalone.
     group_count: u32,
 }
+
+/// Namespace of the `dag` tool's structured progress schemas (plan §4.1).
+/// Only `details.schema` values under this prefix reach the list view;
+/// every other schema (e.g. `ra.tool_approval.audit.v1`) keeps its existing
+/// handling — silence — so unrelated namespaces never leak into the frame.
+const DAG_SCHEMA_PREFIX: &str = "ra.dag.";
+
+/// Layer depth beyond which rows stop indenting, so a deep graph still fits
+/// on screen instead of walking off the right edge.
+const MAX_DAG_INDENT_LAYERS: usize = 6;
+/// Tail of a node's streaming output kept at all (lines, then characters).
+const DAG_NODE_OUTPUT_MAX_LINES: usize = 4;
+const DAG_NODE_OUTPUT_MAX_CHARS: usize = 400;
+/// Characters of a node's most recent output line shown in its row preview.
+const DAG_OUTPUT_PREVIEW_CHARS: usize = 60;
+
+/// Live list-style progress for one `dag` tool call (plan §4.5). The TUI
+/// deliberately renders a layered check-list, never a graphical DAG.
+#[derive(Debug, Default)]
+struct DagProgress {
+    /// Nodes in topology order (`nodes` of `ra.dag.topology.v1`).
+    nodes: Vec<DagNodeView>,
+    /// `layers` of `ra.dag.topology.v1`: layer index → node ids.
+    layers: Vec<Vec<u32>>,
+}
+
+/// One node row of the DAG list view.
+#[derive(Debug)]
+struct DagNodeView {
+    id: u32,
+    /// Sanitized `toolName`.
+    tool_name: String,
+    /// 0-based layer (from `layers`, falling back to the node's own field).
+    layer: usize,
+    depends_on: Vec<u32>,
+    state: DagNodeVisual,
+    /// Sanitized, tail-capped streaming output (`ra.dag.node_output.v1`).
+    output: String,
+}
+
+/// Node state as the list view shows it (marker + label).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DagNodeVisual {
+    Pending,
+    Running,
+    Ok,
+    Error,
+    Skipped,
+}
+
+impl DagNodeVisual {
+    /// Wire `state` (snake_case `TaskNodeState`) → visual state. Unknown or
+    /// absent values stay `Pending` rather than inventing a state.
+    fn from_wire(state: Option<&str>) -> Self {
+        match state {
+            Some("running") => Self::Running,
+            Some("succeeded") => Self::Ok,
+            Some("failed") => Self::Error,
+            Some("skipped" | "cancelled") => Self::Skipped,
+            _ => Self::Pending,
+        }
+    }
+
+    const fn marker(self) -> &'static str {
+        match self {
+            Self::Pending => "[ ]",
+            Self::Running => "[>]",
+            Self::Ok => "[✓]",
+            Self::Error => "[✗]",
+            Self::Skipped => "[-]",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Ok => "ok",
+            Self::Error => "error",
+            Self::Skipped => "skipped",
+        }
+    }
+
+    const fn is_settled(self) -> bool {
+        matches!(self, Self::Ok | Self::Error | Self::Skipped)
+    }
+}
+
+/// Read a JSON number as `u32`, defaulting to 0 for absent/malformed values —
+/// the dag wire encodes every id as a small non-negative integer.
+fn dag_json_u32(value: Option<&serde_json::Value>) -> u32 {
+    value
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok())
+        .unwrap_or(0)
+}
+
+/// One-line DAG card head: node count plus settled progress (plan §4.5).
+fn dag_card_head(progress: &DagProgress) -> String {
+    let total = progress.nodes.len();
+    if total == 0 {
+        return String::from("◇ task graph");
+    }
+    let settled = progress.nodes.iter().filter(|n| n.state.is_settled()).count();
+    format!("◇ task graph · {total} nodes · {settled}/{total} done")
+}
+
+/// Layered list rendering (plan §4.5): rows sorted by layer then id, indented
+/// by depth so fan-out/rejoin stays readable. One line per node, so a chatty
+/// graph never floods the card; the card's own fold caps the block further.
+fn dag_detail_text(progress: &DagProgress) -> String {
+    let mut order: Vec<&DagNodeView> = progress.nodes.iter().collect();
+    order.sort_by_key(|node| (node.layer, node.id));
+    let mut out = String::new();
+    for node in order {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        let indent = "  ".repeat(node.layer.min(MAX_DAG_INDENT_LAYERS));
+        let mut row = format!(
+            "{indent}{} {}. {} · {}",
+            node.state.marker(),
+            node.id,
+            node.tool_name,
+            node.state.label()
+        );
+        if !node.depends_on.is_empty() {
+            let deps = node
+                .depends_on
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            let _ = write!(row, " · ← {deps}");
+        }
+        if let Some(preview) = dag_output_preview(&node.output) {
+            let _ = write!(row, " · ⤷ {preview}");
+        }
+        out.push_str(&row);
+    }
+    out
+}
+
+/// Truncated single-line preview of a node's most recent output — the whole
+/// stream stays out of the list (`ra.dag.node_output.v1` is high-frequency).
+fn dag_output_preview(output: &str) -> Option<String> {
+    let last = output.lines().rev().find(|line| !line.trim().is_empty())?;
+    let last = last.trim();
+    let clipped: String = last.chars().take(DAG_OUTPUT_PREVIEW_CHARS).collect();
+    if last.chars().count() > DAG_OUTPUT_PREVIEW_CHARS {
+        Some(format!("{clipped}…"))
+    } else {
+        Some(clipped)
+    }
+}
+
+/// Bound a node's stored streaming output to a trailing window (lines, then
+/// characters) on a UTF-8 boundary.
+fn cap_dag_node_output(output: &mut String) {
+    let capped = {
+        let lines: Vec<&str> = output.lines().collect();
+        let start = lines.len().saturating_sub(DAG_NODE_OUTPUT_MAX_LINES);
+        lines[start..].join("\n")
+    };
+    *output = capped;
+    if output.len() > DAG_NODE_OUTPUT_MAX_CHARS {
+        let mut cut = output.len() - DAG_NODE_OUTPUT_MAX_CHARS;
+        while cut < output.len() && !output.is_char_boundary(cut) {
+            cut += 1;
+        }
+        let tail = output[cut..].to_string();
+        *output = tail;
+    }
+}
+
 /// An ask-tool card being answered (bd-cv653.3.8), mirroring the inline flow
 /// of the bubbletea stack: the card renders into the transcript and the
 /// editor collects the reply (`1`/label to select, comma-separated for multi,
@@ -1672,6 +1847,11 @@ pub struct RaFtuiModel {
     /// Transcript markdown spacing policy (issue #202), resolved from
     /// `markdown.spacing` in settings at launch.
     markdown_spacing: crate::config::MarkdownSpacing,
+    /// Live list-style progress of in-flight `dag` tool calls, keyed by the
+    /// sanitized tool-call id (`graphId`). Fed by the `ra.dag.*` schemas
+    /// (plan §4.1) and folded into the dag card; dropped when the call ends
+    /// (plan §4.5 keeps the TUI list-shaped, not graphical).
+    dag_progress: std::collections::HashMap<String, DagProgress>,
 }
 
 /// One cached transcript block (issue #201): the styled lines produced for
@@ -1871,6 +2051,7 @@ impl RaFtuiModel {
             render_stats: std::cell::Cell::new((0, 0)),
             busy: None,
             markdown_spacing: crate::config::MarkdownSpacing::Comfortable,
+            dag_progress: std::collections::HashMap::new(),
             #[cfg(test)]
             suspend_task_override: None,
             pending_task: None,
@@ -2379,6 +2560,150 @@ impl RaFtuiModel {
         }
     }
 
+    /// Fold one streaming tool update into the transcript. Only the `dag`
+    /// tool's `ra.dag.*` progress schemas mutate the view (plan §4.1); every
+    /// other update keeps the pre-existing behaviour — dropped — so unrelated
+    /// `details` namespaces never reach a frame.
+    #[allow(clippy::too_many_lines)]
+    fn apply_tool_update(
+        &mut self,
+        name: &str,
+        tool_id: &str,
+        details: Option<&serde_json::Value>,
+    ) {
+        let Some(details) = details else { return };
+        let Some(schema) = details.get("schema").and_then(serde_json::Value::as_str) else {
+            return;
+        };
+        if !schema.starts_with(DAG_SCHEMA_PREFIX) {
+            return;
+        }
+        // `graphId` IS the dag tool-call id (dag_tool.rs), so pairing on the
+        // same sanitized key ToolStart used finds the live card instead of
+        // spawning a second one.
+        let key = sanitize(tool_id).into_owned();
+        match schema {
+            "ra.dag.topology.v1" => {
+                let mut progress = DagProgress::default();
+                if let Some(nodes) = details.get("nodes").and_then(serde_json::Value::as_array) {
+                    for node in nodes {
+                        progress.nodes.push(DagNodeView {
+                            id: dag_json_u32(node.get("id")),
+                            tool_name: node
+                                .get("toolName")
+                                .and_then(serde_json::Value::as_str)
+                                .map_or_else(|| String::from("?"), |n| sanitize(n).into_owned()),
+                            // `u32 as usize` is lossless on every target
+                            // (`usize` is at least 32 bits), so no lint-safe
+                            // conversion helper is needed here.
+                            layer: dag_json_u32(node.get("layer")) as usize,
+                            depends_on: node
+                                .get("dependsOn")
+                                .and_then(serde_json::Value::as_array)
+                                .map(|deps| {
+                                    deps.iter().map(|v| dag_json_u32(Some(v))).collect()
+                                })
+                                .unwrap_or_default(),
+                            state: DagNodeVisual::Pending,
+                            output: String::new(),
+                        });
+                    }
+                }
+                progress.layers = details
+                    .get("layers")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|layers| {
+                        layers
+                            .iter()
+                            .map(|layer| {
+                                layer
+                                    .as_array()
+                                    .map(|ids| ids.iter().map(|v| dag_json_u32(Some(v))).collect())
+                                    .unwrap_or_default()
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                // `layers` is authoritative for depth (the per-node `layer`
+                // carries the same value; the array survives a node omitting it).
+                for (layer, ids) in progress.layers.iter().enumerate() {
+                    for id in ids {
+                        if let Some(node) = progress.nodes.iter_mut().find(|n| n.id == *id) {
+                            node.layer = layer;
+                        }
+                    }
+                }
+                self.dag_progress.insert(key.clone(), progress);
+            }
+            "ra.dag.node_state.v1" => {
+                let node_id = dag_json_u32(details.get("nodeId"));
+                let state = details.get("state").and_then(serde_json::Value::as_str);
+                let progress = self.dag_progress.entry(key.clone()).or_default();
+                if let Some(node) = progress.nodes.iter_mut().find(|n| n.id == node_id) {
+                    node.state = DagNodeVisual::from_wire(state);
+                }
+            }
+            "ra.dag.node_output.v1" => {
+                let node_id = dag_json_u32(details.get("nodeId"));
+                let delta = details
+                    .get("delta")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default();
+                if delta.is_empty() {
+                    return;
+                }
+                let delta = sanitize(delta).into_owned();
+                let progress = self.dag_progress.entry(key.clone()).or_default();
+                if let Some(node) = progress.nodes.iter_mut().find(|n| n.id == node_id) {
+                    if !node.output.is_empty() {
+                        node.output.push('\n');
+                    }
+                    node.output.push_str(delta.trim_end());
+                    cap_dag_node_output(&mut node.output);
+                }
+            }
+            // An unrecognised `ra.dag.*` schema is silently ignored: it may
+            // be newer than this view, and guessing at its shape would be
+            // worse than showing nothing.
+            _ => return,
+        }
+        self.refresh_dag_card(&key, name);
+    }
+
+    /// Render the live DAG progress into the dag tool's card: head = one-line
+    /// summary, detail = the layered node list. Falls back to pushing a card
+    /// when the `ToolStart` card is missing, so progress is never lost.
+    fn refresh_dag_card(&mut self, key: &str, name: &str) {
+        // Render both strings inside the borrow so the immutable look-up never
+        // overlaps the `&mut self` revisions below.
+        let (head, detail) = {
+            let Some(progress) = self.dag_progress.get(key) else {
+                return;
+            };
+            (
+                sanitize(&dag_card_head(progress)).into_owned(),
+                sanitize(&dag_detail_text(progress)).into_owned(),
+            )
+        };
+        let revision = self.next_revision();
+        if let Some(entry) = self.transcript.iter_mut().rev().find(|e| {
+            e.card == Some(CardState::Pending) && e.pair_key.as_deref() == Some(key)
+        }) {
+            entry.text = head;
+            entry.detail = Some(detail);
+            entry.revision = revision;
+            return;
+        }
+        let tool = sanitize(name).into_owned();
+        self.push_tool_card(key, &head, &tool);
+        let idx = self.transcript.len() - 1;
+        self.transcript[idx].detail = Some(detail);
+        // push_tool_card took a revision for the head; the detail write needs
+        // its own so the render cache cannot reuse a stale block.
+        let revision = self.next_revision();
+        self.transcript[idx].revision = revision;
+    }
+
     /// Fold a bash result preview into the still-pending bash card
     /// (driver emits BashResult between ToolStart and ToolEnd). Caps the
     /// preview at 8 lines with an elision counter. Returns false when no
@@ -2496,6 +2821,16 @@ impl RaFtuiModel {
                     entry.revision = revision;
                 }
             }
+            RaMsg::ToolUpdate {
+                name,
+                tool_id,
+                details,
+                ..
+            } => {
+                // Streaming progress: only the dag schemas mutate the view
+                // (see `apply_tool_update`); every other update is a no-op.
+                self.apply_tool_update(&name, &tool_id, details.as_ref());
+            }
             RaMsg::ToolEnd {
                 name,
                 tool_id,
@@ -2512,6 +2847,11 @@ impl RaFtuiModel {
                 let diff_styled = matches!(name.as_str(), "edit" | "hashline_edit");
                 self.finish_tool_card(&pair, &name, !is_error, output, diff_styled);
                 self.current_tool = None;
+                // A finished dag call drops its live list; its card keeps the
+                // head summary and takes the aggregate report as its detail.
+                if name == "dag" {
+                    self.dag_progress.remove(&pair);
+                }
             }
             RaMsg::TodoSummary { summary } => {
                 self.todo_summary = summary.map(|s| sanitize(&s).into_owned());
@@ -4268,6 +4608,9 @@ impl RaFtuiModel {
     ) {
         self.transcript.clear();
         self.render_cache.borrow_mut().clear();
+        // Live dag progress belonged to the cleared transcript; a later
+        // node_state for a gone card must not resurrect it.
+        self.dag_progress.clear();
         self.streaming.clear();
         // A resumed conversation's prompts become recallable (up arrow) when
         // nothing has been typed yet this run.
@@ -5021,6 +5364,20 @@ pub fn agent_event_to_pi_msgs(event: &crate::agent::AgentEvent) -> Vec<RaMsg> {
             tool_id: tool_call_id.clone(),
             is_error: *is_error,
             output: tool_output_preview(result),
+        }],
+        // Streaming progress (plan §4.1): the `dag` tool reports through
+        // `partialResult.details`, so the ftui stack must forward `details`
+        // verbatim — `handle_agent` is what decides which schemas to show.
+        E::ToolExecutionUpdate {
+            tool_call_id,
+            tool_name,
+            partial_result,
+            ..
+        } => vec![RaMsg::ToolUpdate {
+            name: tool_name.clone(),
+            tool_id: tool_call_id.clone(),
+            content: partial_result.content.clone(),
+            details: partial_result.details.clone(),
         }],
         E::AutoRetryStart {
             attempt,
@@ -10882,6 +11239,124 @@ mod tests {
             // ubs:ignore panic in #[cfg(test)] match-else is an assertion failure, not library code
             other => panic!("unexpected translation: {other:?}"),
         }
+    }
+
+    #[test]
+    fn agent_event_tool_update_maps_with_details_passthrough() {
+        use crate::agent::AgentEvent as E;
+        use crate::tools::ToolOutput;
+
+        let details = serde_json::json!({
+            "schema": "ra.dag.topology.v1",
+            "graphId": "t1",
+            "nodes": [{"id": 1, "toolName": "search", "dependsOn": [], "layer": 0}],
+            "layers": [[1]],
+        });
+        let msgs = agent_event_to_pi_msgs(&E::ToolExecutionUpdate {
+            tool_call_id: "t1".into(),
+            tool_name: "dag".into(),
+            args: serde_json::json!({}),
+            partial_result: ToolOutput {
+                content: Vec::new(),
+                details: Some(details.clone()),
+                is_error: false,
+            },
+        });
+        match msgs.as_slice() {
+            [RaMsg::ToolUpdate {
+                name,
+                tool_id,
+                details: Some(forwarded),
+                ..
+            }] => {
+                assert_eq!(name, "dag");
+                assert_eq!(tool_id, "t1");
+                assert_eq!(forwarded, &details, "details must pass through verbatim");
+            }
+            // ubs:ignore panic in #[cfg(test)] match-else is an assertion failure, not library code
+            other => panic!("unexpected translation: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dag_details_prefix_gates_the_list_view() {
+        let (_tx, mut model) = new_model();
+
+        // Non-DAG details (e.g. the approval audit schema) keep the existing
+        // behaviour: nothing reaches the transcript.
+        model.apply_tool_update(
+            "bash",
+            "t9",
+            Some(&serde_json::json!({
+                "schema": "ra.tool_approval.audit.v1",
+                "decision": "allow",
+            })),
+        );
+        assert!(
+            model.transcript.is_empty(),
+            "non-dag details leaked into the transcript"
+        );
+
+        // Topology builds the card: head carries the node count, the detail
+        // carries the layered list.
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.topology.v1",
+                "graphId": "t1",
+                "nodes": [
+                    {"id": 1, "toolName": "search", "dependsOn": [], "layer": 0},
+                    {"id": 2, "toolName": "math", "dependsOn": [1], "layer": 1},
+                ],
+                "layers": [[1], [2]],
+            })),
+        );
+        assert_eq!(model.transcript.len(), 1, "topology should create one card");
+        let card = &model.transcript[0];
+        assert_eq!(card.card, Some(CardState::Pending));
+        assert!(
+            card.text.contains("2 nodes"),
+            "head missing node count: {:?}",
+            card.text
+        );
+        let detail = card.detail.clone().unwrap_or_default();
+        assert!(detail.contains("1. search"), "missing node 1: {detail:?}");
+        assert!(detail.contains("← 1"), "missing dependency marker: {detail:?}");
+
+        // node_state flips the row's marker in place (no new card).
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.node_state.v1",
+                "graphId": "t1", "nodeId": 1, "state": "succeeded",
+                "seq": 1, "layer": 0,
+            })),
+        );
+        assert_eq!(model.transcript.len(), 1);
+        let detail = model.transcript[0].detail.clone().unwrap_or_default();
+        assert!(detail.contains("[✓] 1. search"), "state not applied: {detail:?}");
+
+        // node_output shows a truncated preview on the row.
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.node_output.v1",
+                "graphId": "t1", "nodeId": 1, "delta": "8848 m", "seq": 2,
+            })),
+        );
+        let detail = model.transcript[0].detail.clone().unwrap_or_default();
+        assert!(detail.contains("⤷ 8848 m"), "output preview missing: {detail:?}");
+
+        // An unknown `ra.dag.*` schema is ignored, not rendered.
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({"schema": "ra.dag.future.v9", "x": 1})),
+        );
+        assert_eq!(model.transcript.len(), 1);
     }
 
     #[test]
