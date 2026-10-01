@@ -788,6 +788,66 @@ fn render_horizontal_cfg(
     out
 }
 
+/// The layout decision [`render_auto`] reaches for a given width.
+///
+/// Independent of the spinner `frame` — every braille glyph is one display
+/// column, so the fit probe cannot change with it. That makes this cheap to
+/// cache in a TUI: re-decide only when the node set or the width changes, and
+/// re-render every frame with the cached decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Orientation {
+    /// Vertical tree via [`render_layout`] with an explicit name cap / gap.
+    Vertical { cap: usize, gap: usize },
+    /// Left-to-right layers via [`render_horizontal_cfg`].
+    Horizontal { cap: usize, col_gap: usize },
+}
+
+/// Decide the orientation for `nodes` within `max_width` columns, without
+/// rendering every candidate for real.
+///
+/// Probes use `frame = 0` and mirror [`render_auto`]'s search order exactly
+/// (horizontal first, widest labels first), so the decision and the eventual
+/// render always agree.
+#[must_use]
+pub fn choose_orientation(nodes: &[DagViewNode], max_width: usize) -> Orientation {
+    if max_width == 0 {
+        return Orientation::Vertical {
+            cap: 10,
+            gap: H_GAP,
+        };
+    }
+    for col_gap in [COL_GAP, 1] {
+        for cap in (4..=10usize).rev() {
+            if width_of_rows(&render_horizontal_cfg(nodes, 0, cap, col_gap)) <= max_width {
+                return Orientation::Horizontal { cap, col_gap };
+            }
+        }
+    }
+    for gap in [H_GAP, 1] {
+        for cap in (4..=10usize).rev() {
+            if width_of_rows(&render_layout(nodes, 0, cap, gap)) <= max_width {
+                return Orientation::Vertical { cap, gap };
+            }
+        }
+    }
+    Orientation::Vertical { cap: 4, gap: 1 }
+}
+
+/// Render with a pre-decided [`Orientation`] and the current spinner `frame`.
+#[must_use]
+pub fn render_with(
+    nodes: &[DagViewNode],
+    frame: usize,
+    orientation: Orientation,
+) -> Vec<Vec<DagViewCell>> {
+    match orientation {
+        Orientation::Vertical { cap, gap } => render_layout(nodes, frame, cap, gap),
+        Orientation::Horizontal { cap, col_gap } => {
+            render_horizontal_cfg(nodes, frame, cap, col_gap)
+        }
+    }
+}
+
 /// 自动取向，按可用宽度判断：
 /// 1. `max_width == 0`（未知宽度）→ 竖排自然宽；
 /// 2. 横排逐级缩间距、缩名字，只要能塞进 `max_width` 就**优先横排**；
@@ -797,18 +857,7 @@ fn render_horizontal_cfg(
 /// 直接退回另一种"的误判。
 #[must_use]
 pub fn render_auto(nodes: &[DagViewNode], frame: usize, max_width: usize) -> Vec<Vec<DagViewCell>> {
-    if max_width == 0 {
-        return render_layout(nodes, frame, 10, H_GAP);
-    }
-    for col_gap in [COL_GAP, 1] {
-        for cap in (4..=10usize).rev() {
-            let rows = render_horizontal_cfg(nodes, frame, cap, col_gap);
-            if width_of_rows(&rows) <= max_width {
-                return rows;
-            }
-        }
-    }
-    render_fitted(nodes, frame, max_width)
+    render_with(nodes, frame, choose_orientation(nodes, max_width))
 }
 
 /// Shared graph preparation for both orientations: layout nodes, layers, edges.
@@ -1160,6 +1209,39 @@ mod tests {
         let start = lines.iter().position(|l| l.contains("开始")).unwrap();
         let end = lines.iter().position(|l| l.contains("结束")).unwrap();
         assert!(end > start, "width 0 must fall back to vertical");
+    }
+
+    /// The TUI caches [`choose_orientation`] and calls [`render_with`] per
+    /// frame. That is only sound if it reproduces [`render_auto`] exactly —
+    /// for every spinner frame, not just `frame = 0` (the frame the decision
+    /// probes with).
+    #[test]
+    fn cached_orientation_matches_render_auto_at_every_frame() {
+        let mut fan = vec![n(0, "root", &[], DagViewState::Running)];
+        for i in 1..=12u32 {
+            fan.push(n(i, "web_search", &[0], DagViewState::Pending));
+        }
+        let chain: Vec<DagViewNode> = (1..=8u32)
+            .map(|i| {
+                let deps = if i == 1 { Vec::new() } else { vec![i - 1] };
+                n(i, "step", &deps, DagViewState::Running)
+            })
+            .collect();
+
+        for nodes in [&fan, &chain] {
+            for width in [0usize, 20, 60, 100, 400] {
+                let orientation = choose_orientation(nodes, width);
+                for frame in 0..10 {
+                    let cached = render_with(nodes, frame, orientation);
+                    let direct = render_auto(nodes, frame, width);
+                    assert_eq!(
+                        rows_to_string(&cached),
+                        rows_to_string(&direct),
+                        "cached orientation diverged at width={width} frame={frame}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
