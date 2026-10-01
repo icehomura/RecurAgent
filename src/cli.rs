@@ -793,6 +793,35 @@ mod tests {
         assert_eq!(cli.session_dir.as_deref(), Some("/tmp/sessions"));
     }
 
+    #[test]
+    fn parse_handoff_defaults_to_stdout_without_save() {
+        let Some(Commands::Handoff {
+            to,
+            out,
+            session,
+            print,
+            save,
+        }) = Cli::parse_from(["ra", "handoff"]).command
+        else {
+            panic!("expected handoff command");
+        };
+        assert_eq!(to, "human");
+        assert!(out.is_none());
+        assert!(session.is_none());
+        assert!(!print);
+        assert!(!save);
+
+        let Some(Commands::Handoff {
+            out, print, save, ..
+        }) = Cli::parse_from(["ra", "handoff", "--save", "--print"]).command
+        else {
+            panic!("expected handoff command");
+        };
+        assert!(save);
+        assert!(print);
+        assert!(out.is_none());
+    }
+
     /// bd-print-session-path-persists-nothing: the exact print-mode argv, since
     /// `parse_session_path` above proves only the two-token form.
     ///
@@ -2434,6 +2463,10 @@ pub enum Commands {
         /// Print generated handoff markdown directly to stdout
         #[arg(long)]
         print: bool,
+        /// Also persist the brief to the project handoff directory
+        /// (`.ra/handoffs/<session_id>_handoff.md` + `.json`)
+        #[arg(long)]
+        save: bool,
     },
 
     /// Manage time-traveling stream rules (TTSR) (bd-cv653.3.4)

@@ -327,4 +327,12 @@ root@*
 .yan-verify2/
 .omc/
 .workbuddy-ai/
+.ra/
 /pi_test_out.txt
+
+# Root-level handoff scratch. Agent-written handoffs live under `.ra/` (ignored
+# above) and `ra handoff --save` archives to `<project root>/.ra/handoffs/; keep
+# these patterns so new strays never land in the tree.
+/.handoff-*
+/_handoff-*
+

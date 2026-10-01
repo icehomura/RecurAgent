@@ -676,18 +676,60 @@ pub const fn should_warn_at_iteration_threshold(current: usize, max: usize) -> b
         && current >= max.saturating_mul(ITERATION_WARN_NUMERATOR) / ITERATION_WARN_DENOMINATOR
 }
 
-/// Body of the one-shot soft-handoff steering message, formatted with the
-/// current/max iteration counts. Kept as a free function so test fixtures
-/// can pin the wording without instantiating a full agent.
-pub fn iteration_handoff_steering_text(current: usize, max: usize) -> String {
+/// Body of the one-shot soft-handoff steering message.
+///
+/// Formatted with the current/max iteration counts, the resolved project
+/// handoff directory, and the session id. The runtime never writes the envelope
+/// itself: it fixes the directory and the `<session_id>_` filename prefix, and
+/// the agent chooses the descriptive middle (`<session_id>_<name>.md`). Kept as
+/// a free function so test fixtures can pin the wording without instantiating a
+/// full agent.
+pub fn iteration_handoff_steering_text(
+    current: usize,
+    max: usize,
+    handoffs_dir: Option<&Path>,
+    session_id: &str,
+) -> String {
+    let target = handoffs_dir.map_or_else(
+        || format!("`{session_id}_<name>.md`"),
+        |dir| {
+            format!(
+                "`{}`",
+                dir.join(format!("{session_id}_<name>.md")).display()
+            )
+        },
+    );
     format!(
         "[runtime] Tool-iteration budget at >=80% (used {current} of {max}). \
-         Per the iteration-aware-handoff protocol in your spec, begin graceful \
-         handoff now: commit current work, post a one-line status note, and \
-         write an incomplete-handoff envelope with what's done / what remains \
-         / next-agent starting position. Do NOT compress remaining work into \
-         the last few iterations."
+         Per the iteration-aware-handoff protocol, begin graceful handoff now: \
+         commit current work, post a one-line status note, and write an \
+         incomplete-handoff envelope to {target} — replace `<name>` with a short \
+         slug of the work it covers, and cover what's done / what remains / the \
+         next agent's starting position. Do NOT compress remaining work into the \
+         last few iterations."
     )
+}
+
+/// Best-effort resolution of the project handoff directory for the
+/// soft-handoff branch.
+///
+/// Creates the directory so the agent's `write` call lands immediately; a
+/// failure is logged and degrades to "no directory named in the steering
+/// message" rather than aborting the run. The runtime deliberately does not
+/// write the envelope file itself — the agent decides the descriptive part of
+/// the `<session_id>_<name>.md` filename inside this directory.
+fn ensure_handoffs_dir() -> Option<PathBuf> {
+    let dir = crate::config::Config::handoffs_dir();
+    match std::fs::create_dir_all(&dir) {
+        Ok(()) => Some(dir),
+        Err(err) => {
+            warn!(
+                %err,
+                "failed to create handoff directory; steering message will omit it"
+            );
+            None
+        }
+    }
 }
 
 /// Configuration for the agent.
@@ -3524,10 +3566,13 @@ impl Agent {
                         )
                     {
                         warned_at_handoff_threshold = true;
+                        let handoffs_dir = ensure_handoffs_dir();
                         let warning = Message::User(UserMessage {
                             content: UserContent::Text(iteration_handoff_steering_text(
                                 iterations,
                                 self.config.max_tool_iterations,
+                                handoffs_dir.as_deref(),
+                                &session_id,
                             )),
                             timestamp: Utc::now().timestamp_millis(),
                         });
@@ -19281,13 +19326,28 @@ mod tests {
         // contract between the runtime and the agent's iteration-aware-handoff
         // protocol. If it changes, downstream spec templates may need an
         // update, so the test forces a deliberate review on edits.
-        let text = iteration_handoff_steering_text(42, 50);
+        let text = iteration_handoff_steering_text(42, 50, None, "sess-abc");
         assert!(text.contains("[runtime]"));
         assert!(text.contains("Tool-iteration budget at >=80%"));
         assert!(text.contains("used 42 of 50"));
         assert!(text.contains("graceful handoff"));
         assert!(text.contains("incomplete-handoff"));
         assert!(text.contains("Do NOT compress"));
+        // The session id prefixes the filename; the descriptive middle is the
+        // agent's to choose.
+        assert!(text.contains("sess-abc_<name>.md"));
+
+        // With a resolved directory the message names the exact destination and
+        // still leaves only the descriptive middle to the agent.
+        let with_dir = iteration_handoff_steering_text(
+            42,
+            50,
+            Some(Path::new("/work/.ra/handoffs")),
+            "sess-abc",
+        );
+        assert!(with_dir.contains("/work/.ra/handoffs"));
+        assert!(with_dir.contains("sess-abc_<name>.md"));
+        assert!(with_dir.contains("what's done"));
     }
 
     #[test]

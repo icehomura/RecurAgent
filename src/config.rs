@@ -743,6 +743,23 @@ impl Config {
         sessions_dir_from_env(env_lookup, &global_dir)
     }
 
+    /// Get the project-local handoff artifact directory.
+    ///
+    /// Handoff briefs are deliverables for the next human or agent working in
+    /// this checkout, so they live beside the project at
+    /// `<project root>/.ra/handoffs` rather than in the global `~/.ra/agent`
+    /// runtime state. The project root is the nearest ancestor of the working
+    /// directory that carries a `.git` entry, so a run started in a
+    /// subdirectory still lands in the checkout's `.ra/handoffs` instead of a
+    /// nested `<subdir>/.ra/handoffs`. When no `.git` ancestor exists the
+    /// working directory itself is used, so a bare non-git directory still gets
+    /// a local `.ra/handoffs` (and never the user's home). Override with
+    /// `RECUR_AGENT_HANDOFFS_DIR` (used by tests and SDK embedders).
+    pub fn handoffs_dir() -> PathBuf {
+        let start = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        handoffs_dir_from_env(env_lookup, &project_root_from(&start))
+    }
+
     /// Get the package directory.
     pub fn package_dir() -> PathBuf {
         let global_dir = Self::global_dir();
@@ -1615,6 +1632,34 @@ where
     get_env("RECUR_AGENT_SESSIONS_DIR").map_or_else(|| global_dir.join("sessions"), PathBuf::from)
 }
 
+fn handoffs_dir_from_env<F>(get_env: F, project_dir: &Path) -> PathBuf
+where
+    F: Fn(&str) -> Option<String>,
+{
+    get_env("RECUR_AGENT_HANDOFFS_DIR").map_or_else(|| project_dir.join("handoffs"), PathBuf::from)
+}
+
+/// Nearest ancestor of `start` that carries a `.git` entry, or `start` itself
+/// when the walk reaches the filesystem root without finding one.
+///
+/// `.git` is a directory in a normal checkout and a file in a linked worktree;
+/// `exists` accepts both. `.ra` is deliberately *not* a marker: the user's home
+/// usually contains `~/.ra`, and treating that as a project root would silently
+/// redirect every non-git directory beneath it into the global state tree.
+/// Pure so tests can exercise the walk without touching the process cwd.
+fn project_root_from(start: &Path) -> PathBuf {
+    let mut current = start.to_path_buf();
+    loop {
+        if current.join(".git").exists() {
+            return current;
+        }
+        match current.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => current = parent.to_path_buf(),
+            _ => return start.to_path_buf(),
+        }
+    }
+}
+
 fn package_dir_from_env<F>(get_env: F, global_dir: &Path) -> PathBuf
 where
     F: Fn(&str) -> Option<String>,
@@ -2415,10 +2460,10 @@ mod tests {
         BranchSummarySettings, CompactionSettings, Config, ExtensionPolicyConfig,
         ExtensionRiskConfig, ImageSettings, MarkdownSpacing, RepairPolicyConfig, RetrySettings,
         SettingsScope, TerminalSettings, ThinkingBudgets, deep_merge_settings_value,
-        extension_index_path_from_env, first_report_of, global_dir_from_env, merge_branch_summary,
-        merge_compaction, merge_extension_policy, merge_extension_risk, merge_images,
-        merge_repair_policy, merge_retry, merge_terminal, merge_thinking_budgets,
-        package_dir_from_env, sessions_dir_from_env, unrecognised_setting_keys,
+        extension_index_path_from_env, first_report_of, global_dir_from_env, handoffs_dir_from_env,
+        merge_branch_summary, merge_compaction, merge_extension_policy, merge_extension_risk,
+        merge_images, merge_repair_policy, merge_retry, merge_terminal, merge_thinking_budgets,
+        package_dir_from_env, project_root_from, sessions_dir_from_env, unrecognised_setting_keys,
     };
     use crate::agent::QueueMode;
     use proptest::prelude::*;
@@ -2824,17 +2869,24 @@ mod tests {
                 "RECUR_AGENT_EXTENSION_INDEX_PATH".to_string(),
                 "env-extension-index.json".to_string(),
             ),
+            (
+                "RECUR_AGENT_HANDOFFS_DIR".to_string(),
+                "env-handoffs".to_string(),
+            ),
         ]);
 
         let global = global_dir_from_env(|key| env.get(key).cloned());
         let sessions = sessions_dir_from_env(|key| env.get(key).cloned(), &global);
         let package = package_dir_from_env(|key| env.get(key).cloned(), &global);
         let extension_index = extension_index_path_from_env(|key| env.get(key).cloned(), &global);
+        let handoffs =
+            handoffs_dir_from_env(|key| env.get(key).cloned(), &PathBuf::from("project"));
 
         assert_eq!(global, PathBuf::from("env-root"));
         assert_eq!(sessions, PathBuf::from("env-sessions"));
         assert_eq!(package, PathBuf::from("env-packages"));
         assert_eq!(extension_index, PathBuf::from("env-extension-index.json"));
+        assert_eq!(handoffs, PathBuf::from("env-handoffs"));
     }
 
     #[test]
@@ -2844,6 +2896,7 @@ mod tests {
         let sessions = sessions_dir_from_env(|key| env.get(key).cloned(), &global);
         let package = package_dir_from_env(|key| env.get(key).cloned(), &global);
         let extension_index = extension_index_path_from_env(|key| env.get(key).cloned(), &global);
+        let handoffs = handoffs_dir_from_env(|key| env.get(key).cloned(), &PathBuf::from(".ra"));
 
         assert_eq!(global, PathBuf::from("root-dir"));
         assert_eq!(sessions, PathBuf::from("root-dir").join("sessions"));
@@ -2852,6 +2905,27 @@ mod tests {
             extension_index,
             PathBuf::from("root-dir").join("extension-index.json")
         );
+        assert_eq!(handoffs, PathBuf::from(".ra").join("handoffs"));
+    }
+
+    #[test]
+    fn project_root_walks_up_to_the_git_marker() {
+        let temp = TempDir::new().expect("create tempdir");
+        let root = temp.path().join("checkout");
+        let nested = root.join("src").join("deep");
+        std::fs::create_dir_all(&nested).expect("create nested dirs");
+        std::fs::create_dir_all(root.join(".git")).expect("create git marker");
+
+        // A run started deep in the tree resolves to the checkout root, so the
+        // handoff dir stays `<root>/.ra/handoffs` rather than a nested one.
+        assert_eq!(project_root_from(&nested), root);
+        assert_eq!(project_root_from(&root), root);
+
+        // With no `.git` ancestor, the starting directory is kept as-is rather
+        // than escaping to the filesystem root (or the user's home).
+        let bare = temp.path().join("bare");
+        std::fs::create_dir_all(&bare).expect("create bare dir");
+        assert_eq!(project_root_from(&bare), bare);
     }
 
     #[test]

@@ -256,7 +256,19 @@ pub fn handoff(session: &crate::session::Session, args: &str) -> Report {
         (crate::handoff::HandoffTarget::parse(target_str), path_str)
     };
     let doc = crate::handoff::HandoffGenerator::generate_from_session(session);
-    match crate::handoff::HandoffGenerator::deliver(&doc, &to_target, out_path.as_deref()) {
+
+    // The card below always presents the brief; persistence is opt-in. A
+    // human-targeted `/handoff` with no path leaves no file behind.
+    let is_human = matches!(to_target, crate::handoff::HandoffTarget::Human);
+    let output = if let Some(path) = out_path {
+        crate::handoff::HandoffOutput::Path(path)
+    } else if is_human {
+        crate::handoff::HandoffOutput::Stdout
+    } else {
+        crate::handoff::HandoffOutput::Dir(crate::config::Config::handoffs_dir())
+    };
+
+    match crate::handoff::HandoffGenerator::deliver(&doc, &to_target, &output) {
         Ok(report) => Report::card(
             format!(
                 "### 📋 Handoff Brief Generated\n\n{}\n\n*{}*",

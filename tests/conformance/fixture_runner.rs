@@ -1060,12 +1060,14 @@ fn command_value(command: Option<&Commands>) -> Value {
             out,
             session,
             print,
+            save,
         }) => json!({
             "name": "handoff",
             "to": to,
             "out": out.as_ref().map(|p| p.to_string_lossy().to_string()),
             "session": session,
             "print": print,
+            "save": save,
         }),
         Some(Commands::Rules { .. }) => json!({
             "name": "rules",

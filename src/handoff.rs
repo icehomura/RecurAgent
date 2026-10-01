@@ -32,6 +32,26 @@ pub enum HandoffTarget {
     Agent(String),
 }
 
+/// Where a generated handoff brief is persisted.
+///
+/// The target (who receives the brief) and the output (where it is archived)
+/// are deliberately separate: a human-targeted brief is normally printed and
+/// never written, while bead/agent deliveries keep a local archive so the
+/// comment or thread message can reference it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HandoffOutput {
+    /// Write nothing; the caller presents the brief (stdout or TUI card).
+    Stdout,
+    /// Persist into this directory using the canonical
+    /// `<session_id>_handoff.md` / `.json` names. Callers normally pass
+    /// [`crate::config::Config::handoffs_dir`] (`.ra/handoffs`) unless they
+    /// redirect it.
+    Dir(PathBuf),
+    /// Persist markdown to this explicit path, with the `.json` sidecar
+    /// written alongside it.
+    Path(PathBuf),
+}
+
 impl HandoffTarget {
     /// Parse a target specifier string (e.g. `human`, `bead:bd-123`, `agent:my-thread`).
     #[must_use]
@@ -730,11 +750,16 @@ impl HandoffGenerator {
         }
     }
 
-    /// Deliver a generated handoff to the requested target (human/disk, bead comment, or agent thread).
+    /// Deliver a generated handoff to the requested target and then perform any
+    /// external tool integration (Beads comment / Agent Mail thread).
+    ///
+    /// Files are only written when `output` asks for persistence. Callers that
+    /// only want the brief presented pass [`HandoffOutput::Stdout`], which is
+    /// the default for a human target and keeps the working directory clean.
     pub fn deliver(
         handoff: &HandoffDocument,
         target: &HandoffTarget,
-        out_path: Option<&Path>,
+        output: &HandoffOutput,
     ) -> Result<HandoffDeliveryReport> {
         let markdown = handoff.to_markdown();
         let json_str = handoff.to_json()?;
@@ -747,105 +772,127 @@ impl HandoffGenerator {
             external_delivery_success: true,
         };
 
-        // Determine destination paths
-        let (md_path, js_path) = out_path.map_or_else(
-            || {
-                let base_name = format!("handoff_{}", handoff.session_id);
-                (
-                    PathBuf::from(format!("{base_name}.md")),
-                    PathBuf::from(format!("{base_name}.json")),
-                )
-            },
-            |p| {
-                let md = p.to_path_buf();
-                let mut js = p.to_path_buf();
-                let stem = js
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                js.set_file_name(format!("{stem}.json"));
-                (md, js)
-            },
+        // Resolve destination paths, if this output asks for persistence.
+        let destination = match output {
+            HandoffOutput::Stdout => None,
+            HandoffOutput::Dir(dir) => {
+                fs::create_dir_all(dir).map_err(|e| {
+                    Error::session(format!(
+                        "Failed to create handoff directory {}: {e}",
+                        dir.display()
+                    ))
+                })?;
+                Some(Self::handoff_paths_in_dir(dir, &handoff.session_id))
+            }
+            HandoffOutput::Path(path) => Some(Self::handoff_paths_from_explicit(path)),
+        };
+
+        if let Some((md_path, js_path)) = destination {
+            if let Err(e) = fs::write(&md_path, &markdown) {
+                return Err(Error::session(format!(
+                    "Failed to write handoff markdown to {}: {e}",
+                    md_path.display()
+                )));
+            }
+            report.markdown_path = Some(md_path);
+
+            if let Err(e) = fs::write(&js_path, &json_str) {
+                return Err(Error::session(format!(
+                    "Failed to write handoff JSON to {}: {e}",
+                    js_path.display()
+                )));
+            }
+            report.json_path = Some(js_path);
+        }
+
+        // Where the brief lives, for status text and external references.
+        let location = report.markdown_path.as_ref().map_or_else(
+            || "this session's stdout".to_string(),
+            |md| format!("`{}`", md.display()),
         );
 
-        // Always write to disk files
-        if let Err(e) = fs::write(&md_path, &markdown) {
-            return Err(Error::session(format!(
-                "Failed to write handoff markdown to {}: {e}",
-                md_path.display()
-            )));
-        }
-        report.markdown_path = Some(md_path.clone());
-
-        if let Err(e) = fs::write(&js_path, &json_str) {
-            return Err(Error::session(format!(
-                "Failed to write handoff JSON to {}: {e}",
-                js_path.display()
-            )));
-        }
-        report.json_path = Some(js_path);
-
-        // Perform external tool integration if requested
+        // Perform external tool integration if requested.
         match target {
             HandoffTarget::Human => {
-                report.status = format!(
-                    "Handoff saved to markdown ({}) and sidecar JSON",
-                    md_path.display()
-                );
+                report.status = match &report.markdown_path {
+                    Some(md) => format!(
+                        "Handoff saved to markdown ({}) and sidecar JSON",
+                        md.display()
+                    ),
+                    None => "Handoff generated for stdout (no file written; pass --out or \
+                             --save to persist)"
+                        .to_string(),
+                };
             }
             HandoffTarget::Bead(bead_id) => {
                 if bead_id.is_empty() {
                     report.status =
-                        "Bead target specified without issue ID; brief saved to disk".to_string();
+                        "Bead target specified without issue ID; brief generated only".to_string();
                     report.external_delivery_success = false;
                 } else {
                     let comment_text = format!(
-                        "### 📋 Handoff Brief\n\n**Goal:** {}\n**Current State:** {}\n\nFull details written to `{}`.",
-                        handoff.goal,
-                        handoff.current_state,
-                        md_path.display()
+                        "### 📋 Handoff Brief\n\n**Goal:** {}\n**Current State:** {}\n\nFull details written to {location}.",
+                        handoff.goal, handoff.current_state
                     );
                     let res = Command::new("br")
                         .args(["comments", "add", bead_id, &comment_text])
                         .output();
 
-                    match res {
-                        Ok(output) if output.status.success() => {
-                            report.status = format!(
-                                "Handoff recorded as comment on bead `{bead_id}` and saved to {}",
-                                md_path.display()
-                            );
-                        }
+                    report.status = match res {
+                        Ok(output) if output.status.success() => format!(
+                            "Handoff recorded as comment on bead `{bead_id}` and saved to {location}"
+                        ),
                         Ok(output) => {
                             let err_msg = String::from_utf8_lossy(&output.stderr);
-                            report.status = format!(
-                                "Saved to {}, but `br comments add` returned code {:?}: {}",
-                                md_path.display(),
+                            report.external_delivery_success = false;
+                            format!(
+                                "Saved to {location}, but `br comments add` returned code {:?}: {}",
                                 output.status.code(),
                                 err_msg.trim()
-                            );
-                            report.external_delivery_success = false;
+                            )
                         }
                         Err(e) => {
-                            report.status = format!(
-                                "Saved to {}, but `br` could not be executed: {e}",
-                                md_path.display()
-                            );
                             report.external_delivery_success = false;
+                            format!("Saved to {location}, but `br` could not be executed: {e}")
                         }
-                    }
+                    };
                 }
             }
             HandoffTarget::Agent(thread_id) => {
                 report.status = format!(
-                    "Handoff formatted for Agent Mail thread `{thread_id}` and saved to {}",
-                    md_path.display()
+                    "Handoff formatted for Agent Mail thread `{thread_id}` and saved to {location}"
                 );
             }
         }
 
         Ok(report)
+    }
+
+    /// Canonical markdown/JSON paths for a brief archived in a directory.
+    ///
+    /// The session id leads the filename (`<session_id>_handoff.md`), matching
+    /// the `<session_id>_<name>.md` shape the agent uses for the
+    /// incomplete-handoff envelopes, so an archived brief and a live envelope
+    /// for the same session sort together.
+    fn handoff_paths_in_dir(dir: &Path, session_id: &str) -> (PathBuf, PathBuf) {
+        let base_name = format!("{session_id}_handoff");
+        (
+            dir.join(format!("{base_name}.md")),
+            dir.join(format!("{base_name}.json")),
+        )
+    }
+
+    /// An explicit markdown path plus its `.json` sidecar.
+    fn handoff_paths_from_explicit(path: &Path) -> (PathBuf, PathBuf) {
+        let md = path.to_path_buf();
+        let mut js = path.to_path_buf();
+        let stem = js
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        js.set_file_name(format!("{stem}.json"));
+        (md, js)
     }
 }
 

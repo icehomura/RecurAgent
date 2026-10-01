@@ -3010,8 +3010,9 @@ async fn handle_subcommand(
             out,
             session,
             print,
+            save,
         } => {
-            handle_handoff(cwd, &to, out, session.as_deref(), print).await?;
+            handle_handoff(cwd, &to, out, session.as_deref(), print, save).await?;
         }
         cli::Commands::Rules { command } => {
             handle_rules(cwd, &command)?;
@@ -5341,14 +5342,20 @@ fn handle_profile(input: Option<&Path>, top: usize) -> Result<()> {
     Ok(())
 }
 
-/// `ra handoff [--to human|bead:<id>|agent:<thread_id>] [--out PATH] [--session ID]` (bd-cv653.3.17):
+/// `ra handoff [--to human|bead:<id>|agent:<thread_id>] [--out PATH] [--session ID] [--save]` (bd-cv653.3.17):
 /// generates a structured handoff brief from a session.
+///
+/// A plain human-targeted invocation prints the brief to stdout and writes no
+/// files; `--out` writes to an explicit path, `--save` archives under
+/// `.ra/handoffs`, and bead/agent targets always archive there so the external
+/// message can reference the brief.
 async fn handle_handoff(
     cwd: &Path,
     to: &str,
     out: Option<PathBuf>,
     session_id_or_path: Option<&str>,
     print_stdout: bool,
+    save: bool,
 ) -> Result<()> {
     let target = ra::handoff::HandoffTarget::parse(to);
     let session = if let Some(spec) = session_id_or_path {
@@ -5377,9 +5384,22 @@ async fn handle_handoff(
     };
 
     let doc = ra::handoff::HandoffGenerator::generate_from_session(&session);
-    let report = ra::handoff::HandoffGenerator::deliver(&doc, &target, out.as_deref())?;
 
-    if print_stdout || (out.is_none() && matches!(target, ra::handoff::HandoffTarget::Human)) {
+    // Target and output are independent: a human brief defaults to stdout,
+    // while bead/agent deliveries archive locally so the external message can
+    // point at a file.
+    let is_human = matches!(target, ra::handoff::HandoffTarget::Human);
+    let output = if let Some(path) = out {
+        ra::handoff::HandoffOutput::Path(path)
+    } else if save || !is_human {
+        ra::handoff::HandoffOutput::Dir(ra::config::Config::handoffs_dir())
+    } else {
+        ra::handoff::HandoffOutput::Stdout
+    };
+
+    let report = ra::handoff::HandoffGenerator::deliver(&doc, &target, &output)?;
+
+    if print_stdout || matches!(output, ra::handoff::HandoffOutput::Stdout) {
         println!("{}", doc.to_markdown());
     }
 

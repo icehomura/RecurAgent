@@ -2,7 +2,7 @@
 
 use ra::handoff::{
     Decision, FailedApproach, FileTouched, HANDOFF_SCHEMA_V1, HandoffDocument, HandoffGenerator,
-    HandoffTarget,
+    HandoffOutput, HandoffTarget,
 };
 use ra::model::{AssistantMessage, ContentBlock, TextContent, ToolCall, UserContent};
 use ra::session::{CompactionEntry, EntryBase, MessageEntry, SessionEntry, SessionMessage};
@@ -214,7 +214,11 @@ fn test_handoff_delivery_to_disk() {
         compaction_summaries_count: 0,
     };
 
-    let Ok(report) = HandoffGenerator::deliver(&doc, &HandoffTarget::Human, Some(&md_path)) else {
+    let Ok(report) = HandoffGenerator::deliver(
+        &doc,
+        &HandoffTarget::Human,
+        &HandoffOutput::Path(md_path.clone()),
+    ) else {
         return;
     };
 
@@ -228,6 +232,85 @@ fn test_handoff_delivery_to_disk() {
     };
     assert!(content.contains("# Session Handoff Brief"));
     assert!(content.contains("delivery-sess"));
+}
+
+/// The default human path must not litter the working directory: a
+/// stdout-only delivery reports no paths and writes no files.
+#[test]
+fn test_handoff_stdout_delivery_writes_nothing() {
+    let Ok(tmp) = tempdir() else {
+        return;
+    };
+    let doc = HandoffDocument {
+        schema: HANDOFF_SCHEMA_V1.to_string(),
+        session_id: "stdout-sess".to_string(),
+        timestamp: "2026-10-01T00:00:00Z".to_string(),
+        goal: "Print only".to_string(),
+        current_state: "Clean".to_string(),
+        decisions: vec![],
+        failed_approaches: vec![],
+        files_touched: vec![],
+        blockers: vec![],
+        open_threads: vec![],
+        next_steps: vec![],
+        lessons: vec![],
+        compaction_summaries_count: 0,
+    };
+
+    let Ok(report) = HandoffGenerator::deliver(&doc, &HandoffTarget::Human, &HandoffOutput::Stdout)
+    else {
+        return;
+    };
+
+    assert!(report.external_delivery_success);
+    assert!(report.markdown_path.is_none());
+    assert!(report.json_path.is_none());
+    assert!(report.status.contains("stdout"));
+    assert_eq!(fs::read_dir(tmp.path()).map(Iterator::count), Ok(0));
+}
+
+/// A canonical-directory delivery writes `<session_id>_handoff.{md,json}`
+/// (and creates the directory on demand).
+#[test]
+fn test_handoff_canonical_dir_delivery() {
+    let Ok(tmp) = tempdir() else {
+        return;
+    };
+    let handoff_dir = tmp.path().join("nested").join("handoffs");
+    let doc = HandoffDocument {
+        schema: HANDOFF_SCHEMA_V1.to_string(),
+        session_id: "canon-sess".to_string(),
+        timestamp: "2026-10-01T00:00:00Z".to_string(),
+        goal: "Persist canonically".to_string(),
+        current_state: "Clean".to_string(),
+        decisions: vec![],
+        failed_approaches: vec![],
+        files_touched: vec![],
+        blockers: vec![],
+        open_threads: vec![],
+        next_steps: vec![],
+        lessons: vec![],
+        compaction_summaries_count: 0,
+    };
+
+    let Ok(report) = HandoffGenerator::deliver(
+        &doc,
+        &HandoffTarget::Human,
+        &HandoffOutput::Dir(handoff_dir.clone()),
+    ) else {
+        return;
+    };
+
+    assert_eq!(
+        report.markdown_path,
+        Some(handoff_dir.join("canon-sess_handoff.md"))
+    );
+    assert_eq!(
+        report.json_path,
+        Some(handoff_dir.join("canon-sess_handoff.json"))
+    );
+    assert!(handoff_dir.join("canon-sess_handoff.md").exists());
+    assert!(handoff_dir.join("canon-sess_handoff.json").exists());
 }
 
 #[test]
