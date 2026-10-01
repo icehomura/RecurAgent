@@ -2022,6 +2022,12 @@ pub struct RaFtuiModel {
     /// Animation phase for the "scroll to bottom" badge. Advanced once per
     /// tick while the badge is visible, so an idle session still pulses it.
     scroll_hint_phase: u8,
+    /// Terminal size of the last frame actually drawn, recorded in
+    /// `render_frame`. Mouse hit-testing reads it through `frame_area`, not
+    /// `self.term`: the frame is authoritative (the first frame renders before
+    /// any `Event::Resize` arrives), so a terminal taller than the initial
+    /// default left `body_rect` covering only the top of the screen.
+    rendered_size: std::cell::Cell<(u16, u16)>,
     /// Total rendered conversation lines from the last frame. Markdown
     /// rendering expands the raw text (blank lines after blocks, fence
     /// chrome), so the raw-line approximation in `conversation_line_count()`
@@ -2359,6 +2365,7 @@ impl RaFtuiModel {
             term: (80, 24),
             scroll_from_tail: 0,
             scroll_hint_phase: 0,
+            rendered_size: std::cell::Cell::new((0, 0)),
             rendered_total_lines: std::cell::Cell::new(0),
             mouse_selection: None,
             selection_snapshot: std::cell::RefCell::new(None),
@@ -3256,9 +3263,22 @@ impl RaFtuiModel {
     /// Body region the current model state lays out. Used to hit-test mouse
     /// presses; `render_frame` recomputes the same layout each frame, and the
     /// snapshot it records is what extraction reads.
+    /// The area of the last rendered frame, or the tracked terminal size
+    /// before the first frame. Hit-testing derives its regions from this so it
+    /// cannot drift from what is actually on screen; `self.term` alone is
+    /// stale until an `Event::Resize` arrives.
+    fn frame_area(&self) -> Rect {
+        let (width, height) = self.rendered_size.get();
+        if width == 0 || height == 0 {
+            Rect::new(0, 0, self.term.0, self.term.1)
+        } else {
+            Rect::new(0, 0, width, height)
+        }
+    }
+
     fn body_rect(&self) -> Rect {
         layout_regions(
-            Rect::new(0, 0, self.term.0, self.term.1),
+            self.frame_area(),
             self.input_rows(),
             u16::from(self.error_banner.is_some()),
             self.completion_rows(),
@@ -5817,6 +5837,9 @@ impl RaFtuiModel {
     #[allow(clippy::too_many_lines)]
     fn render_frame(&self, frame: &mut Frame, requested: DegradationLevel) {
         let area = Rect::new(0, 0, frame.width(), frame.height());
+        // Record the authoritative frame size; mouse hit-testing reads it via
+        // `frame_area` so it cannot drift from what was drawn.
+        self.rendered_size.set((frame.width(), frame.height()));
         let regions = layout_regions(
             area,
             self.input_rows(),
@@ -10458,6 +10481,37 @@ mod tests {
         // Frame 3 is the triangle's brightest point, so every channel rises.
         let bright = scroll_hint_background(base, 3);
         assert!(bright.r() > base.r() && bright.g() > base.g() && bright.b() > base.b());
+    }
+
+    #[test]
+    fn body_rect_tracks_the_rendered_frame_not_the_stale_term() {
+        let (_tx, mut model) = new_model();
+        // The first frame renders before any Resize, and construction defaults
+        // to (80, 24). A taller terminal must still have its whole body
+        // hit-testable, or only the top of the screen can start a selection.
+        model.rendered_size.set((80, 40));
+        let body = model.body_rect();
+        assert!(
+            body.bottom() > 24,
+            "body must reach below the stale 24-row default: {body:?}"
+        );
+    }
+
+    #[test]
+    fn mouse_can_start_a_selection_in_the_lower_half_of_a_tall_frame() {
+        let (_tx, mut model) = new_model();
+        model.rendered_size.set((80, 40));
+        let body = model.body_rect();
+        let y = body.bottom().saturating_sub(1);
+        let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
+            MouseEventKind::Down(MouseButton::Left),
+            2,
+            y,
+        )));
+        assert!(
+            model.mouse_selection.is_some(),
+            "a press near the bottom of the drawn body must start a selection"
+        );
     }
 
     #[test]
