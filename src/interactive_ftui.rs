@@ -2997,6 +2997,46 @@ impl RaFtuiModel {
         // spawning a second one.
         let key = sanitize(tool_id).into_owned();
         match schema {
+            // A patch changed one node's definition: update (or insert) just
+            // that box, so a `resume` repair shows the new tool / args / edges
+            // without the frontend rebuilding the whole picture.
+            "ra.dag.node_update.v1" => {
+                let node_id = dag_json_u32(details.get("nodeId"));
+                let name = details
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .map_or_else(String::new, |n| sanitize(n).into_owned());
+                let tool_name = details
+                    .get("toolName")
+                    .and_then(serde_json::Value::as_str)
+                    .map_or_else(|| String::from("?"), |n| sanitize(n).into_owned());
+                let depends_on = details
+                    .get("dependsOn")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|deps| {
+                        deps.iter()
+                            .map(|v| dag_json_u32(Some(v)))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let progress = self.dag_progress.entry(key.clone()).or_default();
+                if let Some(node) = progress.nodes.iter_mut().find(|n| n.id == node_id) {
+                    node.name = name;
+                    node.tool_name = tool_name;
+                    node.depends_on = depends_on;
+                } else {
+                    // A node added by the patch: show it unrun until its own
+                    // node_state arrives.
+                    progress.nodes.push(DagNodeView {
+                        id: node_id,
+                        name,
+                        tool_name,
+                        depends_on,
+                        state: DagNodeVisual::Pending,
+                        output: String::new(),
+                    });
+                }
+            }
             "ra.dag.topology.v1" => {
                 let mut progress = DagProgress::default();
                 if let Some(nodes) = details.get("nodes").and_then(serde_json::Value::as_array) {
@@ -12678,6 +12718,56 @@ mod tests {
             Some(&serde_json::json!({"schema": "ra.dag.future.v9", "x": 1})),
         );
         assert_eq!(model.transcript.len(), 1);
+    }
+
+    /// A `resume` patch's `node_update.v1` renames a node in place (no new
+    /// card) and can introduce a node the original topology did not have.
+    #[test]
+    fn dag_node_update_patches_one_box_in_place() {
+        let (_tx, mut model) = new_model();
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.topology.v1",
+                "graphId": "t1",
+                "nodes": [{"id": 1, "toolName": "read", "dependsOn": [], "layer": 0}],
+                "layers": [[1]],
+            })),
+        );
+        assert_eq!(model.transcript.len(), 1);
+
+        // Rename node 1 and add node 2 through node_update only.
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.node_update.v1",
+                "graphId": "t1", "nodeId": 1,
+                "name": "读取配置", "toolName": "read", "dependsOn": [],
+            })),
+        );
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.node_update.v1",
+                "graphId": "t1", "nodeId": 2,
+                "name": "运行构建", "toolName": "run_code", "dependsOn": [1],
+            })),
+        );
+
+        assert_eq!(
+            model.transcript.len(),
+            1,
+            "node_update must not open a card"
+        );
+        let detail = model.transcript[0].detail.clone().unwrap_or_default();
+        assert!(detail.contains("读取配置"), "rename missing: {detail:?}");
+        assert!(
+            detail.contains("运行构建"),
+            "added node missing: {detail:?}"
+        );
     }
 
     /// Regression: a finished `dag` card must surface its aggregate report.

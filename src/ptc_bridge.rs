@@ -44,12 +44,14 @@
 //!
 //! # Security boundary
 //!
-//! - **Capability layer.** The realm has no ambient I/O: no `fs`, no
-//!   `child_process`, no `require`, no network, no `process`. *Only* the
-//!   injected `sdk` object can reach outside, and every call is dispatched
+//! - **Capability layer.** The realm has no ambient I/O and no network API of
+//!   its own: no `fs`, no `child_process`, no `require`, no `process`. *Only*
+//!   the injected `sdk` object can reach outside, and every call is dispatched
 //!   through the *same* [`Tool`] implementations a direct call uses (see
 //!   [`RunCodeTool::bridge_call`]), so path confinement, workspace roots, and
-//!   read settings are identical — no policy bypass.
+//!   read settings are identical — no policy bypass. Network *reads* remain
+//!   reachable only through [`sdk.read`](RunCodeTool), which forwards to the
+//!   `read` tool and therefore fetches `http(s)` URLs.
 //! - **Resource layer.** The realm is created with a heap ceiling
 //!   ([`PTC_MEMORY_LIMIT_BYTES`]), a QuickJS stack ceiling, and an interrupt
 //!   handler wired to the run deadline and a cancellation flag, so a runaway or
@@ -504,12 +506,17 @@ fn install_globals<'js>(
     let globals = ctx.globals();
 
     // console.* appends to the per-run buffer; the host surfaces it in
-    // `details.console` instead of letting it reach the protocol.
+    // `details.console` (and, when a run fails, in the error content). It never
+    // reaches the realm protocol as a value.
     let console_obj = Object::new(ctx.clone())?;
     for level in ["log", "info", "debug", "warn", "error"] {
         let sink = Rc::clone(console);
-        let func = Func::from(move |parts: Rest<Coerced<String>>| {
-            let text: Vec<String> = parts.0.into_iter().map(|part| part.0).collect();
+        let func = Func::from(move |ctx: Ctx<'js>, parts: Rest<JsValue<'js>>| {
+            let text: Vec<String> = parts
+                .0
+                .iter()
+                .map(|part| render_console_arg(&ctx, part))
+                .collect();
             let mut buffer = sink.borrow_mut();
             buffer.push_str("[ptc:");
             buffer.push_str(level);
@@ -581,12 +588,15 @@ fn install_globals<'js>(
     let call_flags = flags.clone();
     let call = Func::from(
         move |ctx: Ctx<'js>, tool: String, args: Opt<JsValue<'js>>| {
+            let (promise, resolve, reject) = Promise::new(&ctx)?;
             let payload = args
                 .0
                 .as_ref()
                 .and_then(|value| json_arg(&ctx, value))
                 .unwrap_or_else(|| json!({}));
-            bridge_call(&ctx, &call_tx, &call_flags, budget, &tool, payload)
+            let outcome = bridge_call(&ctx, &call_tx, &call_flags, budget, &tool, payload);
+            settle_bridge_promise(&ctx, resolve, reject, outcome)?;
+            Ok(promise)
         },
     );
     sdk.set("call", call)?;
@@ -627,14 +637,19 @@ fn set_sdk_helper<'js>(
     let tx = tx.clone();
     let flags = flags.clone();
     let func = Func::from(
-        move |ctx: Ctx<'js>, first: JsValue<'js>, second: Opt<JsValue<'js>>| {
-            let mut args = normalize_args(&ctx, &first, key, name, optional)
-                .map_err(|msg| rquickjs::Exception::throw_message(&ctx, &msg))?;
-            if scope {
-                args = merge_scope(&ctx, args, second.0.as_ref(), name)
-                    .map_err(|msg| rquickjs::Exception::throw_message(&ctx, &msg))?;
-            }
-            bridge_call(&ctx, &tx, &flags, budget, tool, args)
+        move |ctx: Ctx<'js>, first: Opt<JsValue<'js>>, second: Opt<JsValue<'js>>| {
+            let (promise, resolve, reject) = Promise::new(&ctx)?;
+            let outcome = normalize_args(&ctx, first.0.as_ref(), key, name, optional)
+                .and_then(|args| {
+                    if scope {
+                        merge_scope(&ctx, args, second.0.as_ref(), name)
+                    } else {
+                        Ok(args)
+                    }
+                })
+                .and_then(|args| bridge_call(&ctx, &tx, &flags, budget, tool, args));
+            settle_bridge_promise(&ctx, resolve, reject, outcome)?;
+            Ok(promise)
         },
     );
     sdk.set(name, func)
@@ -642,14 +657,18 @@ fn set_sdk_helper<'js>(
 
 /// Send one bridge call and block until the host answers, the run is
 /// cancelled, or the budget runs out.
+///
+/// Returns the host text on success, or the host's error text: the caller
+/// settles the helper's promise with the outcome. The `Ctx` parameter is kept
+/// so the call shape matches the promise-building closures that invoke it.
 fn bridge_call(
-    ctx: &Ctx<'_>,
+    _ctx: &Ctx<'_>,
     tx: &Sender<RealmMessage>,
     flags: &RealmFlags,
     budget: Duration,
     tool: &str,
     args: Value,
-) -> rquickjs::Result<String> {
+) -> std::result::Result<String, String> {
     let (reply_tx, reply_rx) = std::sync::mpsc::channel();
     if tx
         .send(RealmMessage::Call(BridgeCall {
@@ -659,40 +678,48 @@ fn bridge_call(
         }))
         .is_err()
     {
-        return Err(rquickjs::Exception::throw_message(
-            ctx,
-            "PTC_CANCELLED: the host stopped listening",
-        ));
+        return Err("PTC_CANCELLED: the host stopped listening".to_string());
     }
     let deadline = Instant::now() + budget;
     loop {
         match reply_rx.recv_timeout(BRIDGE_POLL_INTERVAL) {
             Ok(Ok(text)) => return Ok(text),
-            Ok(Err(err)) => return Err(rquickjs::Exception::throw_message(ctx, &err)),
+            Ok(Err(err)) => return Err(err),
             Err(RecvTimeoutError::Disconnected) => {
-                return Err(rquickjs::Exception::throw_message(
-                    ctx,
-                    "PTC_CANCELLED: the host dropped the bridge",
-                ));
+                return Err("PTC_CANCELLED: the host dropped the bridge".to_string());
             }
             Err(RecvTimeoutError::Timeout) => {
                 if flags.cancelled.load(Ordering::SeqCst) {
-                    return Err(rquickjs::Exception::throw_message(
-                        ctx,
-                        "PTC_CANCELLED: the run was cancelled",
-                    ));
+                    return Err("PTC_CANCELLED: the run was cancelled".to_string());
                 }
                 if Instant::now() > deadline {
-                    return Err(rquickjs::Exception::throw_message(
-                        ctx,
-                        &format!(
-                            "PTC_BRIDGE_TIMEOUT: tool `{tool}` did not answer within the run budget"
-                        ),
+                    return Err(format!(
+                        "PTC_BRIDGE_TIMEOUT: tool `{tool}` did not answer within the run budget"
                     ));
                 }
             }
         }
     }
+}
+
+/// Settle a helper's promise with the host reply, or reject it with a JS
+/// `Error` so `await sdk.x(...)` throws an object whose `.message` is the
+/// host's error text.
+fn settle_bridge_promise<'js>(
+    ctx: &Ctx<'js>,
+    resolve: rquickjs::Function<'js>,
+    reject: rquickjs::Function<'js>,
+    outcome: std::result::Result<String, String>,
+) -> rquickjs::Result<()> {
+    match outcome {
+        Ok(text) => resolve.call::<_, ()>((text,))?,
+        Err(message) => {
+            let ctor: rquickjs::Function<'js> = ctx.globals().get("Error")?;
+            let error: Object<'js> = ctor.call((message,))?;
+            reject.call::<_, ()>((error,))?;
+        }
+    }
+    Ok(())
 }
 
 /* ------------------------------------------------------------------ */
@@ -737,6 +764,49 @@ fn js_string<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> String {
         .unwrap_or_default()
 }
 
+/// Render one console argument without ever throwing: a string prints raw,
+/// JSON-able values print as JSON, and anything JSON cannot express (symbols,
+/// functions, circular structures) falls back to text instead of aborting the
+/// program.
+fn render_console_arg<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> String {
+    if value.is_string() {
+        return js_string(ctx, value);
+    }
+    if value.is_undefined() {
+        return "undefined".to_string();
+    }
+    if value.is_null() {
+        return "null".to_string();
+    }
+    // A symbol has no successful `ToString` coercion, so describe it instead
+    // of letting that exception escape the console call.
+    if value.is_symbol() {
+        return js_kind(value).to_string();
+    }
+    match ctx.json_stringify(value.clone()) {
+        Ok(Some(text)) => text.to_string().unwrap_or_default(),
+        Ok(None) => render_console_text(ctx, value),
+        Err(_) => {
+            // `json_stringify` raises a pending exception for BigInt/circular
+            // input; clear it so it cannot surface later.
+            let _ = ctx.catch();
+            render_console_text(ctx, value)
+        }
+    }
+}
+
+/// Fallback text for a console argument JSON cannot express. Clears any
+/// exception a failed coercion left pending so the console call cannot throw.
+fn render_console_text<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> String {
+    let text = js_string(ctx, value);
+    let _ = ctx.catch();
+    if text.is_empty() {
+        js_kind(value).to_string()
+    } else {
+        text
+    }
+}
+
 /// Normalize the first helper argument: positional shorthand or options object.
 ///
 /// Mirrors the documented contract — a non-empty string becomes `{ key: value }`,
@@ -744,11 +814,20 @@ fn js_string<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> String {
 /// both may be omitted.
 fn normalize_args<'js>(
     ctx: &Ctx<'js>,
-    value: &JsValue<'js>,
+    value: Option<&JsValue<'js>>,
     key: &str,
     form: &str,
     optional: bool,
 ) -> std::result::Result<Value, String> {
+    let Some(value) = value else {
+        return if optional {
+            Ok(json!({}))
+        } else {
+            Err(format!(
+                "sdk.{form}: expected a `{key}` string or an options object, got undefined"
+            ))
+        };
+    };
     if value.is_string() {
         let text = js_string(ctx, value);
         if text.is_empty() {
@@ -845,7 +924,7 @@ fn run_program(
         let evaluated: rquickjs::Result<JsValue<'_>> =
             ctx.eval_with_options(source.as_bytes(), options);
         match evaluated {
-            Err(err) => Phase1::Done(ProgramOutcome::Failed(error_payload(&ctx, &err))),
+            Err(err) => Phase1::Done(ProgramOutcome::Failed(error_or_stop(&ctx, &err, flags))),
             // A non-promise completion is a syntax-level surprise; take the
             // completion value as the result.
             Ok(value) => Promise::from_value(value.clone()).map_or_else(
@@ -900,7 +979,7 @@ fn run_program(
         };
         match promise.result::<JsValue<'_>>() {
             Some(Ok(value)) => ProgramOutcome::Ok(serialize_value(&ctx, &value)),
-            Some(Err(err)) => ProgramOutcome::Failed(error_payload(&ctx, &err)),
+            Some(Err(err)) => ProgramOutcome::Failed(error_or_stop(&ctx, &err, flags)),
             None if flags.expired() => ProgramOutcome::Failed(deadline_error()),
             None if flags.cancelled.load(Ordering::SeqCst) => {
                 ProgramOutcome::Failed(cancelled_error())
@@ -950,6 +1029,19 @@ fn error_payload(ctx: &Ctx<'_>, err: &rquickjs::Error) -> Value {
         payload["code"] = Value::String(code);
     }
     payload
+}
+
+/// Prefer the run's own stop reason over a raw QuickJS interrupt: an interrupt
+/// raised because the deadline or cancellation tripped must read as
+/// PTC_DEADLINE / PTC_CANCELLED, not "InternalError: interrupted".
+fn error_or_stop(ctx: &Ctx<'_>, err: &rquickjs::Error, flags: &RealmFlags) -> Value {
+    if flags.cancelled.load(Ordering::SeqCst) {
+        return cancelled_error();
+    }
+    if flags.expired() {
+        return deadline_error();
+    }
+    error_payload(ctx, err)
 }
 
 fn deadline_error() -> Value {
@@ -1102,12 +1194,15 @@ impl Tool for RunCodeTool {
          `await sdk.find('*.rs', 'dir')`, or `await sdk.ls('dir')`; every helper \
          also accepts an options object (`await sdk.read({ path: 'src/main.rs', \
          offset: 1, limit: 40 })`, `await sdk.ls({ limit: 20 })`), and `await \
-         sdk.call(tool, args)` reaches the full argument set. The program runs \
-         on the built-in QuickJS engine with no filesystem, process, or network \
-         API: `sdk.*` is the only way out, and it only reaches the read-only \
-         tools `read`, `grep`, `find`, and `ls`. Errors carry `ptc-program:<line>` \
-         frames pointing at your own code; `console.log` is captured separately. \
-         Only what you return is program output — curate it. One run_code \
+         sdk.call(tool, args)` reaches the full argument set. Every helper \
+         returns a Promise, so `await` it. The program runs on the built-in \
+         QuickJS engine with no filesystem, process, or network API of its own: \
+         `sdk.*` is the only way out, and it reaches the read-only tools \
+         `read`, `grep`, `find`, and `ls`. Note that `read` can fetch http(s) \
+         URLs, so network reads are reachable through it. Errors carry \
+         `ptc-program:<line>` frames pointing at your own code; `console.log` \
+         is captured separately and never throws. Only what you return is \
+         program output — curate it. One run_code \
          replaces many model round-trips. The operator may also grant the \
          approval-gated tools `bash`, `write` and `edit` for this session, in \
          which case `await sdk.call('bash', { command: '...' })` and friends are \
@@ -1213,10 +1308,12 @@ impl Tool for RunCodeTool {
                 "runtime": "quickjs",
             });
             attach_console(&mut details, &console);
+            let mut message = format!("run_code failed: {error}");
+            if !console.is_empty() {
+                message = format!("[console output]\n{console}[end console output]\n{message}");
+            }
             return Ok(ToolOutput {
-                content: vec![ContentBlock::Text(TextContent::new(format!(
-                    "run_code failed: {error}"
-                )))],
+                content: vec![ContentBlock::Text(TextContent::new(message))],
                 details: Some(details),
                 is_error: true,
             });
@@ -1227,6 +1324,18 @@ impl Tool for RunCodeTool {
             other => other.to_string(),
         };
         let truncation = truncate_head(rendered, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES);
+        // Details are not sent to the model, so a truncated result must say so
+        // in the content itself; otherwise the model silently sees a prefix.
+        let mut content = truncation.content.clone();
+        if truncation.truncated {
+            content.push_str(&format!(
+                "\n\n[truncated: kept first {} of {} lines, {} of {} bytes]",
+                truncation.output_lines,
+                truncation.total_lines,
+                truncation.output_bytes,
+                truncation.total_bytes
+            ));
+        }
         let mut details = json!({
             "schema": PTC_RUN_CODE_SCHEMA,
             "ok": true,
@@ -1236,7 +1345,7 @@ impl Tool for RunCodeTool {
         });
         attach_console(&mut details, &console);
         Ok(ToolOutput {
-            content: vec![ContentBlock::Text(TextContent::new(truncation.content))],
+            content: vec![ContentBlock::Text(TextContent::new(content))],
             details: Some(details),
             is_error: false,
         })
@@ -1857,5 +1966,97 @@ mod tests {
         assert!(bounded.ends_with('…'));
         assert!(bounded.len() <= PTC_MAX_CONSOLE_BYTES + '…'.len_utf8());
         assert_eq!(bound_console("short"), "short");
+    }
+
+    #[test]
+    fn helpers_return_promises() {
+        let code = r"
+            const r = sdk.ls(undefined);
+            return { isPromise: r instanceof Promise, then: typeof r.then, len: String(await r).length > 0 };
+        ";
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        assert!(text.contains(r#""isPromise":true"#), "{text}");
+        assert!(text.contains(r#""then":"function""#), "{text}");
+        assert!(text.contains(r#""len":true"#), "{text}");
+    }
+
+    #[test]
+    fn ls_accepts_zero_arguments() {
+        assert_eq!(
+            run_text(
+                &RunCodeTool::new("."),
+                "return String(await sdk.ls()).length > 0;"
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn then_chaining_works() {
+        assert_eq!(
+            run_text(
+                &RunCodeTool::new("."),
+                "return await sdk.ls(undefined).then((s) => String(s).length > 0);",
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn console_never_throws_on_exotic_values() {
+        let text = run_text(
+            &RunCodeTool::new("."),
+            "console.log(Symbol('s'), () => {}, 10n); return 'ok';",
+        );
+        assert_eq!(text, "ok");
+    }
+
+    #[test]
+    fn cpu_spin_timeout_reports_deadline() {
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": "while (true) {}", "timeoutMs": 800 }),
+        )
+        .expect("a spinning program still yields a ToolOutput");
+        assert!(out.is_error, "a spinning program must error");
+        assert!(
+            output_text(&out).contains("PTC_DEADLINE"),
+            "{}",
+            output_text(&out)
+        );
+    }
+
+    #[test]
+    fn truncation_is_visible() {
+        let text = run_text(
+            &RunCodeTool::new("."),
+            r"return Array(2100).fill('x').join('\n');",
+        );
+        assert!(
+            text.contains("[truncated: kept first 2000 of 2100 lines"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn console_surfaces_on_failure() {
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({
+                "code": "console.log('debug-line-xyz'); throw new Error('boom');",
+                "timeoutMs": 30_000,
+            }),
+        )
+        .expect("a failed program still yields a ToolOutput");
+        assert!(out.is_error);
+        let text = output_text(&out);
+        assert!(text.contains("debug-line-xyz"), "{text}");
+        assert!(text.contains("boom"), "{text}");
     }
 }
