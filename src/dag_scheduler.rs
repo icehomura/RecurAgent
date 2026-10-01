@@ -2,8 +2,9 @@
 //!
 //! 第 1 层由 [`TaskGraph`] 的显式 `depends_on` 决定谁就绪；第 2 层复用
 //! [`crate::agent::plan_tool_effect_batches`] 对就绪子集切批（barrier 独占批次）；
-//! 第 3 层按 `max_concurrency` 分块并发（块内 `join_all`、块间串行）。批间串行，因此
-//! 全局并发峰值恒 ≤ `max_concurrency`，barrier 批永不与他者重叠。
+//! 第 3 层在 `max_concurrency` 个动态槽位内并发：完成一个立刻补一个，慢节点
+//! 不阻塞其余槽位。批间串行，因此全局并发峰值恒 ≤ `max_concurrency`，
+//! barrier 批永不与他者重叠。
 //!
 //! **重试**（[`DagScheduler::with_retry`]）只作用于 **parallel-safe** 节点
 //! （只读/联网）：这类节点重跑无副作用，失败后按 `attempts` 重试。带
@@ -15,7 +16,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::future::join_all;
+use futures::stream::{FuturesUnordered, StreamExt};
 use serde_json::Value;
 use thiserror::Error;
 
@@ -422,17 +423,35 @@ impl DagScheduler {
                 }
 
                 // 第 3 层：批内并发受限；批间串行（barrier 语义由切批保证）。
-                // 第 3 层限流：按 max_concurrency 分块，块内 join_all 并发、
-                // 块间串行 —— 全局峰值恒 ≤ N。
-                // 注：原设计用 buffer_unordered，但 nightly rustc 1.100 对该
-                // 组合的 opaque future Send 推断触发 rust-lang/rust#100013
-                // （误报 lifetime bound not satisfied），分块 join_all 语义等价
-                // 且可编译；代价是块内无动态槽位回收（同批同质节点场景无感）。
+                //
+                // 动态槽位：维护至多 `max_concurrency` 个在飞 future，**谁先
+                // 完成谁立刻补位**——慢节点不再拖住整块（旧的 `chunks +
+                // join_all` 会让一个慢节点阻塞同块其余槽位）。
+                //
+                // 注：原设计用 `buffer_unordered`，nightly rustc 1.100 对该组合
+                // 的 opaque future Send 推断触发 rust-lang/rust#100013（误报
+                // lifetime bound not satisfied）。这里改用显式的
+                // `FuturesUnordered` 手动补位：future 类型具名、不经过
+                // `buffer_unordered` 的 opaque 包装，同样的语义与限流保证，
+                // 且能在不满足 `Send` 推断时**编译期直接暴露**（哨兵测试
+                // `run_future_is_send` 会先报警），不会悄悄退化为串行。
                 let mut results: Vec<(TaskNodeId, Result<ToolOutput, String>)> =
                     Vec::with_capacity(ids.len());
-                for chunk in ids.chunks(self.max_concurrency) {
-                    let futures = chunk.iter().map(|&id| self.execute_with_retry(id));
-                    results.extend(join_all(futures).await);
+                // Scope the in-flight set so its borrow of `&self` ends before
+                // the mutable bookkeeping loop below.
+                {
+                    let mut pending = ids.iter();
+                    let mut in_flight: FuturesUnordered<_> = pending
+                        .by_ref()
+                        .take(self.max_concurrency)
+                        .map(|&id| self.execute_with_retry(id))
+                        .collect();
+                    while let Some((id, result)) = in_flight.next().await {
+                        results.push((id, result));
+                        if let Some(&next) = pending.next() {
+                            in_flight.push(self.execute_with_retry(next));
+                        }
+                    }
                 }
 
                 for (id, result) in results {
@@ -1111,6 +1130,87 @@ mod tests {
             executor.attempts(1),
             1,
             "a write/process node must run exactly once even with retries configured"
+        );
+    }
+
+    // ---- 动态槽位 ----
+
+    /// Yields `yields[id]` times before completing, recording enter/exit.
+    #[derive(Default)]
+    struct YieldsState {
+        timeline: Vec<(u32, bool)>,
+    }
+
+    struct YieldsExecutor {
+        yields: HashMap<u32, usize>,
+        state: Arc<Mutex<YieldsState>>,
+    }
+
+    impl NodeExecutor for YieldsExecutor {
+        fn execute(
+            &self,
+            node: TaskNode,
+            _resolved_args: Value,
+        ) -> Pin<Box<dyn Future<Output = Result<ToolOutput, String>> + Send>> {
+            let id = node.id.value();
+            let count = self.yields.get(&id).copied().unwrap_or(1);
+            let state = Arc::clone(&self.state);
+            Box::pin(async move {
+                state.lock().expect("yields lock").timeline.push((id, true));
+                for _ in 0..count {
+                    YieldOnce(false).await;
+                }
+                state
+                    .lock()
+                    .expect("yields lock")
+                    .timeline
+                    .push((id, false));
+                Ok(ToolOutput {
+                    content: vec![ContentBlock::Text(TextContent::new(format!("out-{id}")))],
+                    details: None,
+                    is_error: false,
+                })
+            })
+        }
+    }
+
+    /// A slow node must not hold the batch: a fast node queued behind it starts
+    /// as soon as a slot frees. The old `chunks + join_all` would have started
+    /// node 2 only after node 0 finished (a whole chunk later).
+    #[test]
+    fn slow_node_does_not_block_the_next_slot() {
+        let graph = TaskGraph::build(vec![
+            node(0, "read", &[], ToolEffects::read()),
+            node(1, "read", &[], ToolEffects::read()),
+            node(2, "read", &[], ToolEffects::read()),
+        ])
+        .expect("valid graph");
+        // 0 is slow (many yields); 1 and 2 finish almost immediately.
+        let state = Arc::new(Mutex::new(YieldsState::default()));
+        let executor = Arc::new(YieldsExecutor {
+            yields: HashMap::from([(0, 50), (1, 1), (2, 1)]),
+            state: Arc::clone(&state),
+        });
+        let rt = asupersync::runtime::RuntimeBuilder::current_thread()
+            .build()
+            .expect("runtime");
+        let executor: Arc<dyn NodeExecutor> = executor;
+        let mut scheduler = DagScheduler::new(graph, executor, 2);
+        rt.block_on(async { scheduler.run().await })
+            .expect("run should succeed");
+
+        let timeline = state.lock().expect("yields lock").timeline.clone();
+        let enter2 = timeline
+            .iter()
+            .position(|&(id, enter)| id == 2 && enter)
+            .expect("node 2 must start");
+        let exit0 = timeline
+            .iter()
+            .position(|&(id, enter)| id == 0 && !enter)
+            .expect("node 0 must finish");
+        assert!(
+            enter2 < exit0,
+            "node 2 must start while slow node 0 is still running (dynamic slot reclaim): {timeline:?}"
         );
     }
 }
