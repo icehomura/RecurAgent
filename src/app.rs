@@ -380,6 +380,22 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
             "current_time",
             "Get the host's current wall-clock time (UTC and local ISO-8601, offset, Unix epoch, weekday); takes no arguments",
         ),
+        (
+            "dag",
+            "Run two or more tool calls as a dependency DAG in parallel inside this session (one call, per-node status, resumable graphId)",
+        ),
+        (
+            "run_code",
+            "Execute a JavaScript program against the available tools in one round trip",
+        ),
+        (
+            "ast_grep",
+            "Structural code search using tree-sitter AST patterns (matches code shape, not text)",
+        ),
+        (
+            "ast_edit",
+            "Staged structural code rewrite using tree-sitter AST patterns (propose, then apply atomically)",
+        ),
     ];
 
     let mut tools = Vec::new();
@@ -454,6 +470,30 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
         );
     }
 
+    if has_tool("dag") && has_bash {
+        // Without an explicit ordering the model falls back to bash for
+        // everything, because a shell appears to do it all. The rungs are the
+        // tools that actually own each job: fan-out, then one-round-trip
+        // orchestration, then structural code work, then plain lookup, and a
+        // shell last. A rung is skipped only when its tool is not enabled.
+        guidelines_list.push(
+            "When more than one tool could do the job, descend this order and stop at the first rung that fits: `dag` (two or more independent tool calls -> one fan-out call) > `run_code` (a JavaScript program over the tools -> one round trip) > `ast_grep`/`ast_edit` (structural code match/rewrite) > `grep`/`find`/`ls` (plain text and file lookup) > `bash` (only what genuinely needs a shell: build, tests, git, package managers, process control). Do not drop to `bash` for something a higher rung already does: a code search is `grep`/`ast_grep`, not `rg` in bash, and orchestrating several tool calls is `dag`/`run_code`, not a shell one-liner.".into(),
+        );
+    }
+
+    if has_tool("dag") {
+        // `dag` is the orchestrator that fans tool calls out INSIDE this
+        // session. Its whole value is being the first thing reached for when
+        // work parallelizes; left unstated, the model issues the calls one at a
+        // time and pays a round trip each. The disambiguation against
+        // `subagent` and `run_code` is load-bearing: all three occupy the
+        // "parallel work" slot, so naming only two of them leaves `dag` with
+        // no trigger condition of its own.
+        guidelines_list.push(
+            "When a task needs two or more tool calls that are independent of each other and whose results you will read together, prefer ONE `dag` call that fans them out (use `dependsOn` for steps that genuinely need an earlier result, and `resume` + `patch` to repair a partially failed graph) over issuing them one at a time. Division of labor: `dag` runs tool calls concurrently inside this session (write/process nodes are serialized, and the report carries per-node status plus a resumable `graphId`); `subagent` fans out work that deserves its own context window; `run_code` runs a JavaScript program against the tools.".into(),
+        );
+    }
+
     if has_tool("subagent") {
         // Delegation is an orchestrator, like `dag`. Left unstated, the model
         // treats it as a last resort and burns this context window walking the
@@ -468,6 +508,13 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
             "Delegate with `subagent` instead of working serially in this context: a user intent usually decomposes into more than two independent slices, so default to a single `subagent` call whose `tasks` array runs one child per slice (up to 8, bounded concurrency), then converge on the children's results. Use `chain` only when a step needs the previous child's output. After implementing a change, delegate an independent check to the `verify` child before declaring the work done, and hand any defect it reports to `fixer` rather than editing a test to make it pass. The built-in agents {} are always available; user or project definitions in `.ra/agents/` override them by name",
             crate::subagents::builtin_agent_roster()
         ));
+        // The fan-out guidance has a failure mode in the opposite direction:
+        // splitting a single-point change or a pure question into children to
+        // look parallel. `scope-splitting` is a named forbidden pattern, so the
+        // boundary and the same-file isolation rule are stated outright.
+        guidelines_list.push(
+            "Only fan a task out when the slices are genuinely independent and touch disjoint surfaces. A single-file single-point change, or a pure question, is NOT a fan-out: splitting it into children just to look parallel is scope-splitting, not delegation. When two children must touch the same file, isolate them with `isolation: \"worktree\"` rather than racing the same lines.".into(),
+        );
     }
 
     guidelines_list.push("Be concise in your responses".into());
@@ -3541,11 +3588,46 @@ mod tests {
             prompt.contains("hand any defect it reports to `fixer`"),
             "prompt must route verify findings to fixer: {prompt}"
         );
+        // The fan-out guidance needs its boundary as well: without it the model
+        // either never splits or splits single-point changes to look busy.
+        assert!(
+            prompt.contains("scope-splitting, not delegation"),
+            "prompt must bound fan-out against scope-splitting: {prompt}"
+        );
+        assert!(
+            prompt.contains("`isolation: \"worktree\"`"),
+            "prompt must tell the model how to isolate same-file children: {prompt}"
+        );
 
         // Without the tool there is no guideline to make: the roster must not
         // leak into a session that cannot delegate.
         let without = default_system_prompt(&["read", "bash"], dir.path());
         assert!(!without.contains("`fixer`"));
+        assert!(!without.contains("scope-splitting, not delegation"));
+    }
+
+    /// The tool-preference ladder (`dag` > `run_code` > `ast_grep` > `grep` >
+    /// `bash`) and the `dag` trigger rule must reach the model whenever those
+    /// tools are enabled; absent `dag`, neither may leak in.
+    #[test]
+    fn default_system_prompt_states_the_tool_preference_ladder_and_dag_trigger() {
+        let dir = tempdir().expect("tempdir");
+        let prompt = default_system_prompt(
+            &["read", "bash", "grep", "dag", "run_code", "ast_grep"],
+            dir.path(),
+        );
+        assert!(
+            prompt.contains("descend this order and stop at the first rung"),
+            "prompt must state the preference ladder: {prompt}"
+        );
+        assert!(
+            prompt.contains("prefer ONE `dag` call"),
+            "prompt must give `dag` its own trigger condition: {prompt}"
+        );
+
+        let without = default_system_prompt(&["read", "bash", "grep"], dir.path());
+        assert!(!without.contains("descend this order and stop at the first rung"));
+        assert!(!without.contains("prefer ONE `dag` call"));
     }
 
     /// Partial installs advertise exactly the files that exist — nothing more.
