@@ -162,96 +162,6 @@ impl Drop for TurnSystemPromptGuard<'_> {
 const UI_STREAM_DELTA_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(45);
 const UI_STREAM_DELTA_MAX_BUFFER_BYTES: usize = 2 * 1024;
 
-/// System prompt for automatic session titling (bd-cv653.3.1).
-const TITLE_SYSTEM_PROMPT: &str = "You name coding sessions. Reply with ONLY a short plain-text title: 3-7 words, no quotes, no markdown, no trailing punctuation.";
-
-/// One-shot title generation against a tiny/smol-role model entry.
-///
-/// Returns None on ANY failure (auth, provider construction, stream error,
-/// empty/oversized output) — titling is strictly best-effort and must never
-/// disturb the session. Never logs prompt content.
-async fn generate_session_title(
-    entry: &ModelEntry,
-    user_text: &str,
-    assistant_excerpt: &str,
-) -> Option<String> {
-    use crate::model::{Message, StreamEvent};
-    use crate::provider::{Context, StreamOptions};
-    use futures::StreamExt;
-
-    if crate::models::model_requires_configured_credential(entry) {
-        // Cheap-role titling silently disables itself when credentials are
-        // missing — the user never asked for this call.
-        let key = super::commands::resolve_model_key_from_default_auth(entry)?;
-        if key.trim().is_empty() {
-            return None;
-        }
-    }
-    let provider = providers::create_provider(entry, None).ok()?;
-
-    let excerpt = |text: &str, cap: usize| {
-        let trimmed = text.trim();
-        if trimmed.chars().count() <= cap {
-            trimmed.to_string()
-        } else {
-            let mut s: String = trimmed.chars().take(cap).collect();
-            s.push('…');
-            s
-        }
-    };
-    let prompt_text = format!(
-        "Name this coding session.\n\nUser:\n{}\n\nAssistant (excerpt):\n{}",
-        excerpt(user_text, 2000),
-        excerpt(assistant_excerpt, 800)
-    );
-
-    let context = Context {
-        system_prompt: Some(TITLE_SYSTEM_PROMPT.to_string().into()),
-        messages: vec![Message::User(UserMessage {
-            content: UserContent::Blocks(vec![ContentBlock::Text(TextContent::new(prompt_text))]),
-            timestamp: chrono::Utc::now().timestamp_millis(),
-        })]
-        .into(),
-        tools: Vec::new().into(),
-    };
-    let options = StreamOptions {
-        api_key: None,
-        max_tokens: Some(96),
-        thinking_level: Some(entry.clamp_thinking_level(ThinkingLevel::Minimal)),
-        ..Default::default()
-    };
-
-    let mut stream = provider.stream(&context, &options).await.ok()?;
-    let mut collected = String::new();
-    while let Some(event) = stream.next().await {
-        match event {
-            Ok(StreamEvent::TextDelta { delta, .. }) => collected.push_str(&delta),
-            Ok(StreamEvent::Done { .. }) => break,
-            Ok(_) => {}
-            Err(_) => return None,
-        }
-    }
-    sanitize_session_title(&collected)
-}
-
-/// Normalize a raw model reply into a valid session title: single line,
-/// stripped of quotes/markdown/noise, bounded to 60 chars. None when empty.
-fn sanitize_session_title(raw: &str) -> Option<String> {
-    let first_line = raw.lines().next().unwrap_or("").trim();
-    let cleaned: String = first_line
-        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`' || c == '*' || c == '#')
-        .trim_end_matches(['.', '!', ':'])
-        .chars()
-        .take(60)
-        .collect();
-    let cleaned = cleaned.trim().to_string();
-    if cleaned.is_empty() {
-        None
-    } else {
-        Some(cleaned)
-    }
-}
-
 const EXTENSION_CUSTOM_WIDGET_KEY: &str = "__pi_custom_overlay";
 const EXTENSION_CUSTOM_MIN_WIDTH: usize = 20;
 // Interactive slash commands may host long-running custom UIs (e.g. games).
@@ -2868,7 +2778,7 @@ After approving access in the browser, press Enter in Pi to complete login."
         self.runtime_handle.spawn(async move {
             let cx = Cx::for_request();
             if let Some(title) =
-                generate_session_title(&entry, &user_text, &assistant_excerpt).await
+                crate::app::generate_session_title(&entry, &user_text, &assistant_excerpt).await
             {
                 crate::interactive::enqueue_pi_event(
                     &event_tx,

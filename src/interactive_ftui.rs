@@ -6106,11 +6106,13 @@ async fn run_prompt_turn(
     images: Vec<crate::model::ImageContent>,
     agent_tx: &Sender<RaMsg>,
     turn_control: &TurnControlSlot,
-) {
+) -> bool {
     let mut next = Some((prompt, images));
+    let mut last_stopped = false;
     while let Some((prompt, images)) = next.take() {
         let (leftover, stopped) =
             run_controlled_turn(handle, prompt, images, agent_tx, turn_control).await;
+        last_stopped = stopped;
         if leftover.is_empty() {
             continue;
         }
@@ -6139,6 +6141,7 @@ async fn run_prompt_turn(
             next = Some((text, Vec::new()));
         }
     }
+    last_stopped
 }
 
 /// One controlled turn; returns the text of inputs it never claimed and
@@ -6206,6 +6209,152 @@ fn report_turn_result(
             let _ = agent_tx.send(RaMsg::AgentError(headline));
         }
         Ok(_) => {}
+    }
+}
+
+/// Driver activity reflected in the terminal window title.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DriverTitleState {
+    /// Waiting for the next prompt.
+    Idle,
+    /// A prompt turn is in flight.
+    Running,
+    /// The last turn ended abnormally (aborted or failed).
+    Stopped,
+}
+
+/// Window-title glyph for a driver state.
+///
+/// Deliberately limited to Geometric Shapes plus the Latin-1 `×`: those are
+/// codepoints a bare monospace font carries, so a terminal that cannot draw an
+/// arrow does not trade one missing glyph for another. When `statusLine.chrome`
+/// graduates out of the status row, this should branch on it the same way.
+fn title_state_glyph(state: DriverTitleState) -> &'static str {
+    match state {
+        DriverTitleState::Idle => "\u{25cb}",    // ○
+        DriverTitleState::Running => "\u{25b6}", // ▶
+        DriverTitleState::Stopped => "\u{d7}",   // ×
+    }
+}
+
+/// `RecurAgent · <session name or model label> · <state glyph>`.
+async fn compose_terminal_title(
+    handle: &crate::sdk::AgentSessionHandle,
+    state: DriverTitleState,
+) -> String {
+    let name = handle
+        .with_session(crate::session::Session::get_name)
+        .await
+        .ok()
+        .flatten();
+    let label = name.unwrap_or_else(|| {
+        handle.session().current_model_entry().map_or_else(
+            || String::from("RecurAgent"),
+            |entry| crate::interactive::model_display_label(&entry),
+        )
+    });
+    format!("RecurAgent · {label} · {}", title_state_glyph(state))
+}
+
+/// Push the composed title for `state`; a send failure means the UI thread is
+/// already gone (shutdown), which is not an error here.
+async fn push_driver_title(
+    handle: &crate::sdk::AgentSessionHandle,
+    state: DriverTitleState,
+    agent_tx: &Sender<RaMsg>,
+) {
+    let title = compose_terminal_title(handle, state).await;
+    let _ = agent_tx.send(RaMsg::TerminalTitle(title));
+}
+
+/// Fire the one-shot auto-titling call for an unnamed session
+/// (bd-cv653.3.1), matching the classic stack's eligibility rules: a cheap
+/// titling model, a session that is still unnamed, and only the first exchange
+/// seen so far.
+///
+/// Best-effort: any failure leaves the session unnamed and the run unaffected.
+async fn maybe_title_session(
+    handle: &mut crate::sdk::AgentSessionHandle,
+    title_model_entry: Option<&crate::models::ModelEntry>,
+    agent_tx: &Sender<RaMsg>,
+    already_requested: &mut bool,
+) {
+    if *already_requested {
+        return;
+    }
+    let Some(entry) = title_model_entry.cloned() else {
+        return;
+    };
+    let Some((user_text, assistant_excerpt)) = handle
+        .with_session(|session| {
+            if session.get_name().is_some() {
+                return None;
+            }
+            let messages = session.to_messages_for_current_path();
+            let user_text = messages.iter().find_map(|message| match message {
+                crate::model::Message::User(user) => Some(user_content_text(&user.content)),
+                _ => None,
+            })?;
+            let assistant_excerpt = messages
+                .iter()
+                .rev()
+                .find_map(|message| match message {
+                    crate::model::Message::Assistant(assistant) => Some(
+                        assistant
+                            .content
+                            .iter()
+                            .filter_map(|block| match block {
+                                crate::model::ContentBlock::Text(text) => Some(text.text.clone()),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            // Only title on the first exchange: later arrivals mean the
+            // session already has an established topic.
+            let user_turns = messages
+                .iter()
+                .filter(|message| matches!(message, crate::model::Message::User(_)))
+                .count();
+            (user_turns == 1).then_some((user_text, assistant_excerpt))
+        })
+        .await
+        .ok()
+        .flatten()
+    else {
+        return;
+    };
+    *already_requested = true;
+    if let Some(title) =
+        crate::app::generate_session_title(&entry, &user_text, &assistant_excerpt).await
+    {
+        // A manual /name during the titling call always wins.
+        let still_unnamed = handle
+            .with_session(|session| session.get_name().is_none())
+            .await
+            .unwrap_or(false);
+        if still_unnamed && handle.set_session_name(&title).await.is_ok() {
+            let _ = agent_tx.send(RaMsg::System(format!("Session named: {title}")));
+        }
+    }
+}
+
+/// Flatten a user message's content into the text the titling prompt should
+/// see, ignoring non-text blocks.
+fn user_content_text(content: &crate::model::UserContent) -> String {
+    match content {
+        crate::model::UserContent::Text(text) => text.clone(),
+        crate::model::UserContent::Blocks(blocks) => blocks
+            .iter()
+            .filter_map(|block| match block {
+                crate::model::ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
     }
 }
 
@@ -7908,6 +8057,11 @@ fn terminal_replacement_error(
 pub struct FtuiSettings {
     /// Conversation spacing for the markdown renderer.
     pub markdown_spacing: crate::config::MarkdownSpacing,
+    /// Model used for automatic session titling, from the `tiny` role falling
+    /// back to `smol` (`app::titling_model_entry`). `None` disables titling —
+    /// the same silent no-op the classic stack has when no cheap role resolves
+    /// (bd-cv653.3.1).
+    pub title_model_entry: Option<crate::models::ModelEntry>,
     /// The `ghPath` setting, for `/share`. Empty or `None` means `gh` from
     /// `PATH`; the e2e scenarios point it at a mock.
     pub gh_path: Option<String>,
@@ -7942,6 +8096,7 @@ pub fn run(
     const DRIVER_STACK_BYTES: usize = 16 * 1024 * 1024;
     let FtuiSettings {
         markdown_spacing,
+        title_model_entry,
         gh_path,
         disable_mouse_capture,
         subagent_role_spec,
@@ -8035,6 +8190,9 @@ pub fn run(
                 }
                 let mut plans = plan_commands::PlanController::default();
                 let mut replacement_failure = None;
+                // One-shot auto-titling (bd-cv653.3.1): fired at most once per
+                // driver run, after the first prompt turn.
+                let mut title_requested = false;
                 // The `/login` waiting for input, if any (boxed: the driver
                 // future sits near clippy's large_futures threshold).
                 let mut login: Option<Box<DriverLogin>> = None;
@@ -8057,12 +8215,35 @@ pub fn run(
                                 auto_resize_images,
                             ) {
                                 Ok((text, images)) => {
-                                    run_prompt_turn(
+                                    push_driver_title(
+                                        &handle,
+                                        DriverTitleState::Running,
+                                        &agent_tx,
+                                    )
+                                    .await;
+                                    let stopped = run_prompt_turn(
                                         &mut handle,
                                         text,
                                         images,
                                         &agent_tx,
                                         &driver_turn_control,
+                                    )
+                                    .await;
+                                    maybe_title_session(
+                                        &mut handle,
+                                        title_model_entry.as_ref(),
+                                        &agent_tx,
+                                        &mut title_requested,
+                                    )
+                                    .await;
+                                    push_driver_title(
+                                        &handle,
+                                        if stopped {
+                                            DriverTitleState::Stopped
+                                        } else {
+                                            DriverTitleState::Idle
+                                        },
+                                        &agent_tx,
                                     )
                                     .await;
                                 }

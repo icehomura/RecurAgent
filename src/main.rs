@@ -2238,6 +2238,10 @@ async fn run(
             ftui_sessions,
             ra::interactive_ftui::FtuiSettings {
                 markdown_spacing: config.markdown_spacing(),
+                // Automatic session titling (bd-cv653.3.1): the `tiny` role
+                // falling back to `smol`, exactly as the classic stack resolves
+                // it. `None` keeps titling a silent no-op.
+                title_model_entry: ra::app::titling_model_entry(&cli, &config, &model_registry),
                 // Resolved exactly as the classic stack resolves it; the
                 // `--no-mouse-capture` flag has already been folded into
                 // `config.disable_mouse_capture` above.
