@@ -141,11 +141,7 @@ impl StatusSegment {
         self.render_with_chrome(ctx, StatusLineChrome::default())
     }
 
-    fn render_with_chrome(
-        &self,
-        ctx: &StatusContext,
-        chrome: StatusLineChrome,
-    ) -> Option<String> {
+    fn render_with_chrome(&self, ctx: &StatusContext, chrome: StatusLineChrome) -> Option<String> {
         let use_icons = chrome.uses_icons();
         let use_symbols = chrome.uses_symbols();
         fn text(value: &str) -> Option<String> {

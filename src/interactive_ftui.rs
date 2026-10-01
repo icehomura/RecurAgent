@@ -8231,9 +8231,7 @@ fn render_self_select_prompt(session_id: &str, session_path: Option<&str>) -> St
     }
     prompt.push_str("That history is not inlined here. Use the `sessions` tool ");
     prompt.push_str(&format!("(action=\"read\", session=\"{session_id}\") "));
-    prompt.push_str(
-        "to read it and pull in only the parts relevant to the current task; ",
-    );
+    prompt.push_str("to read it and pull in only the parts relevant to the current task; ");
     prompt.push_str("action=\"search\" finds specific topics.\n");
     prompt
 }
@@ -8263,7 +8261,11 @@ fn build_continuation_session(
     match mode {
         ForkMode::Full => {
             let plan = crate::session::ForkPlan {
-                entries: source.entries_for_current_path().into_iter().cloned().collect(),
+                entries: source
+                    .entries_for_current_path()
+                    .into_iter()
+                    .cloned()
+                    .collect(),
                 leaf_id: source.leaf_id().map(str::to_string),
                 selected_text: String::new(),
             };

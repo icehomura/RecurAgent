@@ -8,8 +8,8 @@
 #![recursion_limit = "256"]
 
 use anyhow::Result;
-use asupersync::runtime::reactor::create_reactor;
 use asupersync::runtime::RuntimeBuilder;
+use asupersync::runtime::reactor::create_reactor;
 use ra::acp::{AcpOptions, run_stdio};
 use ra::auth::AuthStorage;
 use ra::config::Config;

@@ -3715,9 +3715,10 @@ fn performance_git_context(root: &Path) -> Result<PerformanceGitContext, String>
         return Err("performance repository worktree identity mismatch".to_string());
     }
     let reported_git_dir = perf_git_stdout_at(&context, &["rev-parse", "--absolute-git-dir"])?;
-    let canonical_reported_git_dir = canonicalize_for_git(Path::new(&reported_git_dir)).map_err(|err| {
-        format!("performance repository reported git directory is invalid: {err}")
-    })?;
+    let canonical_reported_git_dir =
+        canonicalize_for_git(Path::new(&reported_git_dir)).map_err(|err| {
+            format!("performance repository reported git directory is invalid: {err}")
+        })?;
     if canonical_reported_git_dir != context.git_dir {
         return Err("performance repository git directory identity mismatch".to_string());
     }
