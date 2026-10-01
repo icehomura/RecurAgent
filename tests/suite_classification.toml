@@ -191,6 +191,7 @@ files = [
     "gc",
     "sdk_api",
     "sdk_unit",
+    "m5_concurrency_smoke_yan",
 ]
 
 [suite.vcr]
@@ -324,6 +325,7 @@ files = [
     "session_picker",
     "session_store_v2_contract",
     "sdk_integration",
+    "sdk_multimodal",
     "semantic_workspace_graph_builder",
     "swarm_progress_cli",
     "swarm_progress_slo_e2e",

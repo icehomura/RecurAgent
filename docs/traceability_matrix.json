@@ -746,6 +746,10 @@
           "justification": "Classified unit suite included in the bd-8t27h.3 traceability backfill so CI governance covers all registered tests."
         },
         {
+          "path": "tests/m5_concurrency_smoke_yan.rs",
+          "justification": "Classified unit suite included in the bd-8t27h.3 traceability backfill so CI governance covers all registered tests."
+        },
+        {
           "path": "tests/agent_context_filtering.rs",
           "justification": "Classified vcr suite included in the bd-8t27h.3 traceability backfill so CI governance covers all registered tests."
         },
@@ -835,6 +839,10 @@
         },
         {
           "path": "tests/sdk_integration.rs",
+          "justification": "Classified vcr suite included in the bd-8t27h.3 traceability backfill so CI governance covers all registered tests."
+        },
+        {
+          "path": "tests/sdk_multimodal.rs",
           "justification": "Classified vcr suite included in the bd-8t27h.3 traceability backfill so CI governance covers all registered tests."
         },
         {
