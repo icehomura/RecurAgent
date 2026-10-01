@@ -155,8 +155,9 @@ heading. Ensure that exact heading exists for the tag you are cutting.
 
 Workflow YAML cannot make tag refs immutable or turn an auto-created
 environment into a protected one. The former design called for the following
-repository settings; they are retained as history and must not be configured as
-a way to reactivate the workflow:
+repository settings; **the workflow step that enforced them has been deleted**,
+so these are history only — do not configure them expecting to reactivate
+anything:
 
 - an environment named `release` with at least one required reviewer and
   self-review prevention; store `CARGO_REGISTRY_TOKEN` there and disable
@@ -167,25 +168,34 @@ a way to reactivate the workflow:
   `release-env-reviewers+immutable-v-tags-v1` only after those controls have
   been inspected
 
-The workflow queries the observable environment and active ruleset shape and
-fails closed when either is absent, unreadable, inactive, or malformed. GitHub
-normally redacts ruleset `bypass_actors` from read-only callers; omission is
-treated as unproven and fails closed rather than being confused with an empty
+The retired step queried the observable environment and active ruleset shape and
+failed closed when either was absent, unreadable, inactive, or malformed. GitHub
+normally redacts ruleset `bypass_actors` from read-only callers; omission was
+treated as unproven and failed closed rather than being confused with an empty
 list. The environment API also does not independently prove the
-administrator-bypass setting. Consequently, the former automated lane was
-never eligible without stronger proof. It is now permanently retired regardless
-of those settings. Do not add a broad administrator token or any other
-credential to a workflow. DSR releases still require server-side tag
-immutability; local Git ref checks are defense in depth, not a substitute for it.
+administrator-bypass setting. Consequently the former automated lane was never
+eligible without stronger proof, and it was permanently retired regardless of
+those settings.
+
+**Why the step is gone rather than left in place:** the design assumed an
+organization with more than one maintainer — `prevent_self_review` cannot be
+satisfied by the only collaborator, so on a single-maintainer fork the gate was
+not a control but an unconditional failure. It blocked every tag before any
+build ran. The tag-format validation, the frozen-source commit check, and the
+`Cargo.toml`-matches-tag check that follow it are retained; they are the parts
+of `plan` with an actual failure to catch.
+
+Do not add a broad administrator token or any other credential to a workflow.
+DSR releases on upstream still require server-side tag immutability; local Git
+ref checks are defense in depth, not a substitute for it.
 
 **Current state:** ruleset `20418963` was created and read back on 2026-08-04
 as active for `refs/tags/v*`, with update and deletion forbidden and no bypass
-actors. That dated observation is not current release evidence. The registered
-DSR recipe does not yet encode the equivalent live ruleset check, so release is
-**HOLD** until DSR verifies it before tagging and immediately before
-publication. The former automated lane is permanently retired, not waiting for
-an environment or acknowledgement. Repeated local ref comparisons are never a
-substitute for the server-side rule or a reason to bypass DSR.
+actors. That dated observation is not current release evidence. Upstream's
+registered DSR recipe does not yet encode the equivalent live ruleset check, so
+upstream release is **HOLD** until DSR verifies it before tagging and
+immediately before publication. That hold governs upstream, not this fork's
+GitHub Actions releases.
 
 ## Distribution and migration strategy
 Goal: make installation and upgrades predictable without treating legacy Pi
