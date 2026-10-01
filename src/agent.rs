@@ -577,8 +577,8 @@ pub const MAX_TOOL_ITERATIONS_CEILING: usize = 1_000;
 pub const MAX_PAUSE_TURN_CONTINUATIONS: usize = 3;
 
 /// Threshold (as a fraction of `max_tool_iterations`) at which the runtime
-/// emits a one-shot soft-handoff steering message so the agent can begin a
-/// graceful incomplete-handoff rather than being silently killed at the cap.
+/// emits a one-shot soft-handoff notice so the agent can begin a graceful
+/// incomplete-handoff rather than being silently killed at the cap.
 /// Encoded as numerator/denominator to avoid floating-point in a hot loop.
 const ITERATION_WARN_NUMERATOR: usize = 4;
 const ITERATION_WARN_DENOMINATOR: usize = 5;
@@ -3179,6 +3179,11 @@ impl Agent {
         let mut iterations = 0usize;
         let mut pause_turn_continuations = 0usize;
         let mut warned_at_handoff_threshold = false;
+        // Soft-handoff notice waiting for the post-tool delivery boundary.
+        // It cannot ride the steering queue: `execute_tool_calls` drains that
+        // queue before the first effect batch, which would skip the tool calls
+        // of the very iteration that produced the warning.
+        let mut pending_handoff_notice: Option<QueuedAgentMessage> = None;
         let mut turn_index: usize = 0;
         let mut new_messages: Vec<Message> = Vec::with_capacity(prompts.len() + 8);
         let mut last_assistant: Option<Arc<AssistantMessage>> = None;
@@ -3552,13 +3557,13 @@ impl Agent {
                 let mut tool_results: Vec<Arc<ToolResultMessage>> = Vec::new();
                 if execute_local_tools {
                     iterations += 1;
-                    // Soft handoff: at >=80% of the cap, push a one-shot
+                    // Soft handoff: at >=80% of the cap, build a one-shot
                     // steering message so the agent has room to write an
-                    // incomplete-handoff envelope before the hard stop. The
-                    // queue drains at the next loop iteration via
-                    // drain_steering_messages, so the agent observes the
-                    // steering before its next assistant turn rather than
-                    // after the cap fires.
+                    // incomplete-handoff envelope before the hard stop. It is
+                    // delivered at the post-tool boundary below instead of
+                    // through the steering queue: `execute_tool_calls` drains
+                    // that queue before its first effect batch, so pushing it
+                    // there would skip every tool call of this very iteration.
                     if !warned_at_handoff_threshold
                         && should_warn_at_iteration_threshold(
                             iterations,
@@ -3576,12 +3581,11 @@ impl Agent {
                             )),
                             timestamp: Utc::now().timestamp_millis(),
                         });
-                        self.message_queue
-                            .push_steering(QueuedAgentMessage::generated(warning));
+                        pending_handoff_notice = Some(QueuedAgentMessage::generated(warning));
                         tracing::warn!(
                             iterations,
                             max = self.config.max_tool_iterations,
-                            "tool-iteration budget at >=80%; injected handoff steering message"
+                            "tool-iteration budget at >=80%; queued handoff notice"
                         );
                     }
                     if iterations > self.config.max_tool_iterations {
@@ -3737,6 +3741,13 @@ impl Agent {
                 } else {
                     // Delivery boundary: after assistant completion (no tool calls).
                     pending_messages = self.drain_steering_messages().await;
+                }
+
+                // The soft-handoff notice rides behind this turn's tool results
+                // and any real user steering, so the agent observes it before
+                // its next assistant turn without losing the current batch.
+                if let Some(notice) = pending_handoff_notice.take() {
+                    pending_messages.push(notice);
                 }
 
                 // Turn recovery (bd-cv653.3.15): with nothing queued and no
