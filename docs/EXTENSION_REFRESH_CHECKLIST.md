@@ -322,7 +322,7 @@ git commit -m "chore(extensions): refresh corpus (N new, M total, X% pass)"
 ### 7.3 Push
 
 ```bash
-git push origin main && git push origin main:master
+git push origin main
 ```
 
 ---

@@ -50,15 +50,15 @@ success** — one line, revert, next lever, no retraction narrative.
 
 ---
 
-## Git Branch: ONLY Use `main`, NEVER `master`
+## Git Branch: ONLY Use `main`
 
-**The default branch is `main`. The `master` branch exists only for legacy URL compatibility.**
+**The default branch is `main`; there is no `master` branch.**
 
 - **All work happens on `main`** — commits, PRs, feature branches all merge to `main`
-- **Never reference `master` in code or docs** — if you see `master` anywhere, it's a bug that needs fixing
-- **The `master` branch must stay synchronized with `main`** — after pushing to `main`, also push to `master`:
+- **Never reference `master` in code, docs, or CI** — if you see `master` anywhere, it's a bug that needs fixing
+- **Push to `main`**:
   ```bash
-  git push origin main:master
+  git push origin main
   ```
 
 ---

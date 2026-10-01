@@ -91,7 +91,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           tag_oid="$(git rev-parse "${tag_ref}")"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           tag_type="$(git cat-file -t "${tag_ref}")"
@@ -174,7 +174,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -268,7 +268,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
           remote_master="$(git rev-parse "${validation_master_ref}^{commit}")"
           if [ "$(git cat-file -t "${validation_tag_ref}")" != "tag" ] \
@@ -336,7 +336,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -449,7 +449,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -634,7 +634,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -1077,7 +1077,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -1798,7 +1798,7 @@ jobs:
           git fetch --no-tags --force origin \
             "${tag_ref}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -1981,7 +1981,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -2150,7 +2150,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           if [ "$(git rev-parse "${validation_tag_ref}")" != "$RELEASE_TAG_OID" ] \
             || [ "$(git rev-parse "${validation_tag_ref}^{commit}")" != "$RELEASE_COMMIT" ] \
             || [ "$(git rev-parse 'HEAD^{commit}')" != "$RELEASE_COMMIT" ] \
@@ -2196,7 +2196,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -2436,7 +2436,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           if [ "$(git rev-parse "${validation_tag_ref}")" != "$RELEASE_TAG_OID" ] \
             || [ "$(git rev-parse "${validation_tag_ref}^{commit}")" != "$RELEASE_COMMIT" ] \
             || [ "$(git rev-parse 'HEAD^{commit}')" != "$RELEASE_COMMIT" ] \
@@ -2543,7 +2543,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           if [ "$(git rev-parse "${validation_tag_ref}")" != "$RELEASE_TAG_OID" ] \
             || [ "$(git rev-parse "${validation_tag_ref}^{commit}")" != "$RELEASE_COMMIT" ] \
             || [ "$(git rev-parse 'HEAD^{commit}')" != "$RELEASE_COMMIT" ] \
@@ -2671,7 +2671,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
           remote_master="$(git rev-parse "${validation_master_ref}^{commit}")"
           if [ "$(git cat-file -t "${validation_tag_ref}")" != "tag" ] \
@@ -2774,7 +2774,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
           remote_master="$(git rev-parse "${validation_master_ref}^{commit}")"
           if [ "$(git cat-file -t "${validation_tag_ref}")" != "tag" ] \
@@ -3223,7 +3223,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
           remote_master="$(git rev-parse "${validation_master_ref}^{commit}")"
           if [ "$(git cat-file -t "${validation_tag_ref}")" != "tag" ] \
@@ -3284,7 +3284,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_tag_oid="$(git rev-parse "${validation_tag_ref}")"
           remote_commit="$(git rev-parse "${validation_tag_ref}^{commit}")"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
@@ -3553,7 +3553,7 @@ jobs:
           git fetch --no-tags --force origin \
             "refs/tags/${RELEASE_TAG}:${validation_tag_ref}" \
             "refs/heads/main:${validation_main_ref}" \
-            "refs/heads/master:${validation_master_ref}"
+             "refs/heads/main:${validation_master_ref}"
           remote_main="$(git rev-parse "${validation_main_ref}^{commit}")"
           remote_master="$(git rev-parse "${validation_master_ref}^{commit}")"
           if [ "$(git cat-file -t "${validation_tag_ref}")" != "tag" ] \

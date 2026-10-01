@@ -19247,11 +19247,11 @@ def build_autopilot_decision_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -19914,11 +19914,11 @@ def build_context_intelligence_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -20547,11 +20547,11 @@ def build_runtime_intelligence_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -21301,11 +21301,11 @@ def build_fourth_wave_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -27995,11 +27995,11 @@ def build_adaptive_execution_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -28755,11 +28755,11 @@ def build_sixth_wave_validation_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -29476,11 +29476,11 @@ def build_seventh_wave_runtime_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -30200,11 +30200,11 @@ def build_eighth_wave_test_fabric_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -31002,11 +31002,11 @@ def _draft_build_predictive_operations_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -31853,11 +31853,11 @@ def build_predictive_operations_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -32843,11 +32843,11 @@ def _draft_build_ninth_wave_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(
@@ -33861,11 +33861,11 @@ def build_ninth_wave_closeout_gate_summary(
     if git_refs is None:
         head = git_value(["git", "rev-parse", "HEAD"], root)
         origin_main = git_value(["git", "rev-parse", "origin/main"], root)
-        origin_master = git_value(["git", "rev-parse", "origin/master"], root)
+        origin_master = git_value(["git", "rev-parse", "origin/main"], root)
     else:
         head = git_refs.get("head")
         origin_main = git_refs.get("origin_main")
-        origin_master = git_refs.get("origin_master")
+        origin_master = git_refs.get("origin_main")
     pushed = bool(head and head == origin_main == origin_master)
     checklist.append(
         gate_check(

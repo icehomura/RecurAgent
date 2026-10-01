@@ -1108,7 +1108,7 @@ proof is not proof of an empty bypass list.
    The gate requires a clean repository at entry and revalidates the exact
    HEAD, canonical source-tree digest, index, index flags, symlink topology,
    untracked paths, and raw worktree bytes after every executable check. Push
-   only after it passes, then synchronize the legacy compatibility ref:
+   only after it passes, then push `main`:
 
    ```bash
    set -euo pipefail
@@ -1120,12 +1120,9 @@ proof is not proof of an empty bypass list.
           "$branch_source_subject" >&2; exit 1 ;;
    esac
    origin_push_guarded \
-     refs/heads/main:refs/heads/main \
-     refs/heads/main:refs/heads/master
+     refs/heads/main:refs/heads/main
    branch_source_commit="$(git rev-parse 'HEAD^{commit}')"
    test "$(git ls-remote origin refs/heads/main | awk 'NR == 1 {print $1}')" = \
-     "$branch_source_commit"
-   test "$(git ls-remote origin refs/heads/master | awk 'NR == 1 {print $1}')" = \
      "$branch_source_commit"
    assert_origin_push_disabled
    ```
