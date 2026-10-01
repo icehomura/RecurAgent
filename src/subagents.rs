@@ -14,12 +14,12 @@ use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 #[cfg(all(test, unix))]
 use std::process::Command;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 mod deadline;
@@ -32,6 +32,9 @@ mod protocol;
 
 use deadline::Deadline;
 use execution::ChildRunner;
+
+use crate::dag_scheduler::{DagScheduler, NodeExecutor};
+use crate::task_dag::{MAX_DAG_NODES, TaskGraph, TaskNode, TaskNodeId};
 
 const MAX_PARALLEL_TASKS: usize = 8;
 const DEFAULT_CONCURRENCY: usize = 4;
@@ -431,6 +434,60 @@ impl SubagentTool {
                 }
                 Ok(results)
             }
+            RequestMode::Dag(nodes) => {
+                // Reuse the `dag` tool's model and scheduler: build a
+                // `TaskGraph` (Kahn layering + cycle validation) whose nodes are
+                // subagent tasks, then drive it with a subagent `NodeExecutor`.
+                // Every node shares the request deadline, exactly like
+                // `parallel`/`chain`.
+                let task_nodes: Vec<TaskNode> = nodes
+                    .iter()
+                    .map(|node| TaskNode {
+                        id: TaskNodeId::new(node.id),
+                        tool_name: String::from("subagent"),
+                        name: node.name.clone().unwrap_or_default(),
+                        args: serde_json::to_value(node).unwrap_or(Value::Null),
+                        depends_on: node
+                            .depends_on
+                            .iter()
+                            .copied()
+                            .map(TaskNodeId::new)
+                            .collect(),
+                        effects: ToolEffects::process(),
+                    })
+                    .collect();
+                let task_graph = TaskGraph::build(task_nodes).map_err(|error| {
+                    Error::validation(format!("subagent dag is invalid: {error}"))
+                })?;
+                let results: Arc<Mutex<HashMap<u32, SubagentResult>>> =
+                    Arc::new(Mutex::new(HashMap::new()));
+                let executor: Arc<dyn NodeExecutor> = Arc::new(SubagentDagExecutor {
+                    cwd: self.cwd.clone(),
+                    global_dir: self.global_dir.clone(),
+                    child_binary: self.child_binary.clone(),
+                    role_model_spec: self.role_model_spec.clone(),
+                    agents: agents.clone(),
+                    deadline,
+                    on_update: on_update.clone(),
+                    results: Arc::clone(&results),
+                });
+                let mut scheduler = DagScheduler::with_default_concurrency(task_graph, executor);
+                // `Err(Aggregate)` means at least one node failed or was
+                // skipped; the per-node results are still the payload, so the
+                // collected vector is returned either way and each result keeps
+                // its own `is_error`/`status`.
+                let _ = scheduler.run().await;
+                let collected = results.lock().map_or_else(
+                    |_| Vec::new(),
+                    |map| {
+                        nodes
+                            .iter()
+                            .filter_map(|node| map.get(&node.id).cloned())
+                            .collect::<Vec<_>>()
+                    },
+                );
+                Ok(collected)
+            }
         }
     }
 
@@ -471,7 +528,7 @@ impl Tool for SubagentTool {
         static DESCRIPTION: OnceLock<String> = OnceLock::new();
         DESCRIPTION.get_or_init(|| {
             format!(
-                "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {{previous}}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md; the built-in agents {} are always available and a user or project definition of the same name overrides them. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {{worktree_path, diff_stat, patch}} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>).",
+                "Delegate an isolated task to a named Pi child agent. Supports one task, a parallel batch, a sequential chain whose tasks may reference {{previous}}, or a layered DAG whose nodes declare `dependsOn` and may read an upstream node via {{node.<id>.content}} / {{node.<id>.data.<path>}}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md; the built-in agents {} are always available and a user or project definition of the same name overrides them. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {{worktree_path, diff_stat, patch}} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>).",
                 builtin_agent_roster()
             )
         })
@@ -487,6 +544,7 @@ impl Tool for SubagentTool {
                 "schemaMode": {"type": "string", "enum": ["permissive", "strict"], "default": "permissive", "description": "permissive keeps an invalid result with a warning; strict fails the task."},
                 "parallel": {"type": "array", "maxItems": MAX_PARALLEL_TASKS, "items": {"$ref": "#/definitions/task"}, "description": "Independent tasks to run in parallel."},
                 "chain": {"type": "array", "maxItems": MAX_PARALLEL_TASKS, "items": {"$ref": "#/definitions/task"}, "description": "Sequential tasks; {previous} is replaced with the prior child output, and {{previous.data.<field.path>}} addresses the prior task's schema-validated data."},
+                "dag": {"type": "array", "maxItems": 256, "items": {"type": "object", "required": ["id", "agent", "task"], "properties": {"id": {"type": "integer", "minimum": 0}, "agent": {"type": "string"}, "task": {"type": "string"}, "name": {"type": "string"}, "dependsOn": {"type": "array", "items": {"type": "integer", "minimum": 0}}, "cwd": {"type": "string"}, "isolation": {"type": "string"}, "isoApply": {"type": "string"}, "outputSchema": {}, "schemaMode": {"type": "string", "enum": ["permissive", "strict"]}}}, "description": "Layered DAG of subagent tasks. Independent nodes run concurrently; a node's task may read an upstream dependency via {{node.<id>.content}} or {{node.<id>.data.<path>}}. A failed node skips its downstream nodes."},
                 "concurrency": {"type": "integer", "minimum": 1, "maximum": MAX_PARALLEL_TASKS},
                 "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": deadline::MAX_TIMEOUT_SECS, "description": "Budget for this whole delegation request, including queueing, chained steps and corrective retries. May shorten, never extend, the host's limit."},
                 "scope": {"type": "string", "enum": ["both", "user", "project"], "default": "both"}
@@ -580,6 +638,8 @@ struct SubagentRequest {
     #[serde(default)]
     chain: Option<Vec<SubagentTask>>,
     #[serde(default)]
+    dag: Option<Vec<SubagentDagNode>>,
+    #[serde(default)]
     concurrency: Option<usize>,
     #[serde(default)]
     timeout_seconds: Option<u64>,
@@ -604,11 +664,12 @@ impl SubagentRequest {
             });
         let selected = usize::from(single.is_some())
             + usize::from(self.parallel.is_some())
-            + usize::from(self.chain.is_some());
+            + usize::from(self.chain.is_some())
+            + usize::from(self.dag.is_some());
         if selected.ne(&1) {
             return Err(Error::tool(
                 "subagent",
-                "Provide exactly one of agent+task, parallel, or chain.",
+                "Provide exactly one of agent+task, parallel, chain, or dag.",
             ));
         }
         if self.agent.is_some() != self.task.is_some() {
@@ -625,6 +686,14 @@ impl SubagentRequest {
                 format!("parallel must contain 1-{MAX_PARALLEL_TASKS} entries."),
             ));
         }
+        if let Some(dag) = &self.dag
+            && (dag.is_empty() || dag.len() > MAX_DAG_NODES)
+        {
+            return Err(Error::tool(
+                "subagent",
+                format!("dag must contain 1-{MAX_DAG_NODES} nodes."),
+            ));
+        }
         if let Some(chain) = &self.chain
             && (chain.is_empty() || chain.len() > MAX_PARALLEL_TASKS)
         {
@@ -633,15 +702,16 @@ impl SubagentRequest {
                 format!("chain must contain 1-{MAX_PARALLEL_TASKS} entries."),
             ));
         }
-        Ok(single.map_or_else(
-            || {
-                self.parallel.as_ref().map_or_else(
-                    || RequestMode::Chain(self.chain.clone().unwrap_or_default()),
-                    |tasks| RequestMode::Parallel(tasks.clone()),
-                )
-            },
-            RequestMode::Single,
-        ))
+        if let Some(task) = single {
+            return Ok(RequestMode::Single(task));
+        }
+        if let Some(dag) = &self.dag {
+            return Ok(RequestMode::Dag(dag.clone()));
+        }
+        if let Some(tasks) = &self.parallel {
+            return Ok(RequestMode::Parallel(tasks.clone()));
+        }
+        Ok(RequestMode::Chain(self.chain.clone().unwrap_or_default()))
     }
 
     fn mode_name(&self) -> Result<&'static str> {
@@ -649,7 +719,113 @@ impl SubagentRequest {
             RequestMode::Single(_) => Ok("single"),
             RequestMode::Parallel(_) => Ok("parallel"),
             RequestMode::Chain(_) => Ok("chain"),
+            RequestMode::Dag(_) => Ok("dag"),
         }
+    }
+}
+
+/// One node of a `dag`-mode subagent DAG: a subagent task plus its edges.
+///
+/// Deliberately the same field surface as [`SubagentTask`] plus `id`/`name`/
+/// `dependsOn`, so a node can use workspace isolation and per-task output
+/// schemas exactly like a `parallel`/`chain` entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SubagentDagNode {
+    id: u32,
+    agent: String,
+    task: String,
+    /// Presentational label for the diagram; defaults to the agent name.
+    #[serde(default)]
+    name: Option<String>,
+    /// Upstream node ids that must succeed before this node runs.
+    #[serde(default)]
+    depends_on: Vec<u32>,
+    #[serde(default)]
+    cwd: Option<PathBuf>,
+    #[serde(default)]
+    isolation: Option<String>,
+    #[serde(default)]
+    iso_apply: Option<String>,
+    #[serde(default)]
+    output_schema: Option<Value>,
+    #[serde(default)]
+    schema_mode: SchemaMode,
+}
+
+/// Executes one `dag` node: runs the child subagent and publishes the full
+/// result for the caller. The returned `ToolOutput` lets the scheduler
+/// template downstream nodes off `{{node.<id>.content}}` /
+/// `{{node.<id>.data.<path>}}`.
+struct SubagentDagExecutor {
+    cwd: PathBuf,
+    global_dir: PathBuf,
+    child_binary: PathBuf,
+    role_model_spec: Option<String>,
+    agents: BTreeMap<String, AgentDefinition>,
+    deadline: Deadline,
+    on_update: Option<UpdateCallback>,
+    results: Arc<Mutex<HashMap<u32, SubagentResult>>>,
+}
+
+impl NodeExecutor for SubagentDagExecutor {
+    fn execute(
+        &self,
+        node: TaskNode,
+        resolved_args: Value,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = std::result::Result<ToolOutput, String>> + Send,
+        >,
+    > {
+        let cwd = self.cwd.clone();
+        let global_dir = self.global_dir.clone();
+        let child_binary = self.child_binary.clone();
+        let role_model_spec = self.role_model_spec.clone();
+        let agents = self.agents.clone();
+        let deadline = self.deadline.clone();
+        let on_update = self.on_update.clone();
+        let results = Arc::clone(&self.results);
+        let node_id = node.id.value();
+        Box::pin(async move {
+            let dag_node: SubagentDagNode =
+                serde_json::from_value(resolved_args).map_err(|error| {
+                    format!("subagent dag node {node_id} is malformed: {error}")
+                })?;
+            let task = SubagentTask {
+                agent: dag_node.agent,
+                task: dag_node.task,
+                cwd: dag_node.cwd,
+                isolation: dag_node.isolation,
+                iso_apply: dag_node.iso_apply,
+                output_schema: dag_node.output_schema,
+                schema_mode: dag_node.schema_mode,
+            };
+            let result = ChildRunner::new(
+                cwd,
+                global_dir,
+                child_binary,
+                role_model_spec,
+                crate::agent_hub::ChildKind::Subagent,
+                deadline,
+            )
+            .run_one(&agents, task, Some(node_id as usize), on_update)
+            .await;
+            let is_error = result.is_error;
+            let text = result.output.clone();
+            let details = result.data.clone();
+            if let Ok(mut map) = results.lock() {
+                map.insert(node_id, result);
+            }
+            if is_error {
+                return Err(format!("subagent dag node {node_id} failed"));
+            }
+            Ok(ToolOutput {
+                content: vec![ContentBlock::Text(TextContent::new(text))],
+                details,
+                is_error: false,
+            })
+        })
     }
 }
 
@@ -657,6 +833,7 @@ enum RequestMode {
     Single(SubagentTask),
     Parallel(Vec<SubagentTask>),
     Chain(Vec<SubagentTask>),
+    Dag(Vec<SubagentDagNode>),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1885,6 +2062,36 @@ mod tests {
             task.with_rendered_previous_result(Some(&previous)).task,
             "review evidence"
         );
+    }
+
+    /// `dag` is the fourth mutually exclusive mode: it parses, reports as
+    /// `dag`, keeps its edges, and is rejected when combined with another mode
+    /// or left empty.
+    #[test]
+    fn dag_is_a_mutually_exclusive_mode() {
+        let ok: SubagentRequest = serde_json::from_value(json!({
+            "dag": [
+                {"id": 1, "agent": "scout", "task": "first"},
+                {"id": 2, "agent": "review", "task": "second", "dependsOn": [1]}
+            ]
+        }))
+        .expect("parse dag");
+        assert_eq!(ok.mode_name().expect("mode name"), "dag");
+        assert!(matches!(
+            ok.mode().expect("mode"),
+            RequestMode::Dag(nodes) if nodes.len() == 2 && nodes[1].depends_on == vec![1]
+        ));
+
+        let clash: SubagentRequest = serde_json::from_value(json!({
+            "parallel": [{"agent": "scout", "task": "x"}],
+            "dag": [{"id": 1, "agent": "scout", "task": "x"}]
+        }))
+        .expect("parse clash");
+        assert!(clash.mode().is_err(), "dag must not combine with tasks");
+
+        let empty: SubagentRequest =
+            serde_json::from_value(json!({"dag": []})).expect("parse empty");
+        assert!(empty.mode().is_err(), "an empty dag is rejected");
     }
 
     /// bd-cv653.5.1: `{{previous.data.<path>}}` addresses the prior task's
