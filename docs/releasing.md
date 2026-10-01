@@ -1243,10 +1243,8 @@ proof is not proof of an empty bypass list.
    test "$(cat "$bwrap_source_receipt")" = "source_commit=$source_commit"
 
    git fetch --no-tags origin \
-     refs/heads/main:refs/remotes/origin/main \
-     refs/heads/master:refs/remotes/origin/master
+     refs/heads/main:refs/remotes/origin/main
    test "$(git rev-parse 'origin/main^{commit}')" = "$source_commit"
-   test "$(git rev-parse 'origin/master^{commit}')" = "$source_commit"
    test -z "$(git tag --list "$RELEASE_TAG")"
    test -z "$(git ls-remote --tags origin \
      "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")"

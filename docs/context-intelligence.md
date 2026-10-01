@@ -145,7 +145,7 @@ each child bead from `bd-ircr3.1` through `bd-ircr3.10` to code paths, tests,
 docs or evidence paths, validation commands, close reasons, and commit hashes.
 It also checks operator docs, README freshness, staged UBS, bead ledger
 reconciliation, focused RCH tests, broad RCH cargo gates, and pushed
-`origin/main` plus `origin/master` state.
+`origin/main` state.
 
 ```bash
 python3 scripts/build_swarm_operator_runpack.py \

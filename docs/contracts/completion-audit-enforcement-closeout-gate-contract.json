@@ -66,5 +66,5 @@
     "mutates_live_agent_mail",
     "mutates_live_rch"
   ],
-  "closeout_rule": "The parent epic may close only after the closeout evidence commit lands and both origin/main and origin/master point at or beyond that commit."
+  "closeout_rule": "The parent epic may close only after the closeout evidence commit lands and origin/main points at or beyond that commit."
 }
