@@ -2323,10 +2323,8 @@ d040d967dbf63644a29d72068aa6ac35e5ff74a7e168cb5eda08a46ff828f32b
        (.bypass_actors | type) == "array" and .bypass_actors == []
      ' "$pretag_ruleset" >/dev/null
      git fetch --no-tags origin \
-       refs/heads/main:refs/remotes/origin/main \
-       refs/heads/master:refs/remotes/origin/master
+       refs/heads/main:refs/remotes/origin/main
      test "$(git rev-parse 'origin/main^{commit}')" = "$source_commit"
-     test "$(git rev-parse 'origin/master^{commit}')" = "$source_commit"
 
      remote_refs="$(git ls-remote --tags origin \
        "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")"
