@@ -283,6 +283,333 @@ interactive_scroll_to_bottom:
   en: "↓ scroll to bottom"
   zh-CN: "↓ 回到底部"
 
+# ── workspace slash-command reports (/rules, /omfg, /commit, /review,
+#    /handoff, /memory, /security, /plugins, /hub, /advisor, /approval) ──
+#
+# NOTE on the cards: their markdown furniture — `###`, `- `, `**`, backticks,
+# the emoji headers — is deliberately OUTSIDE the translated text wherever it
+# can be, and reproduced verbatim inside the value where it cannot (`### 🛡️ ...`
+# is one line the user reads as a heading). The rule from the login slice holds:
+# a translator must never be handed a codepoint they can mangle into a different
+# control. Emoji are duplicated in both locales on purpose, not by oversight.
+
+workspace_rules_card_title:
+  en: "### 🛡️ Active Stream Rules (%{count})\n\n"
+  zh-CN: "### 🛡️ 已启用的流规则（%{count}）\n\n"
+
+workspace_rules_none:
+  en: "No stream rules configured. Use `/rules add <id> <pattern> <body>` or `/omfg <complaint>` to create one.\n"
+  zh-CN: "尚未配置流规则。用 `/rules add <id> <pattern> <body>` 或 `/omfg <complaint>` 创建一条。\n"
+
+# The icons stay in the code: `✅` / `⏸️` are symbols, so only the word is
+# translated and the badge is assembled as `{icon} {word}`.
+workspace_rules_enabled:
+  en: "enabled"
+  zh-CN: "已启用"
+
+workspace_rules_disabled:
+  en: "disabled"
+  zh-CN: "已禁用"
+
+workspace_rules_row:
+  en: "- **%{name}** [%{status}]: `/%{pattern}/`\n  %{body}"
+  zh-CN: "- **%{name}** [%{status}]：`/%{pattern}/`\n  %{body}"
+
+workspace_rules_count:
+  en: "%{count} stream rule(s)"
+  zh-CN: "%{count} 条流规则"
+
+workspace_rules_removed:
+  en: "Removed stream rule '%{id}'"
+  zh-CN: "已移除流规则 '%{id}'"
+
+workspace_rules_not_found:
+  en: "Stream rule '%{id}' not found"
+  zh-CN: "找不到流规则 '%{id}'"
+
+workspace_rules_err_remove:
+  en: "Error removing rule: %{error}"
+  zh-CN: "移除规则时出错：%{error}"
+
+workspace_rules_toggled:
+  en: "Stream rule '%{id}' is now %{state}"
+  zh-CN: "流规则 '%{id}' 现在是%{state}"
+
+workspace_rules_usage:
+  en: "Usage: /rules [list|remove <id>|toggle <id>]"
+  zh-CN: "用法：/rules [list|remove <id>|toggle <id>]"
+
+workspace_omfg_usage:
+  en: "Usage: /omfg <complaint about model behavior>"
+  zh-CN: "用法：/omfg <对模型行为的抱怨>"
+
+workspace_omfg_card:
+  en: "### 📝 Grievance Logged & Stream Rule Forged\n\n- **Grievance ID:** `%{gid}`\n- **Complaint:** %{complaint}\n\n**Generated TTSR Stream Rule (`%{rid}`):**\n- **Name:** %{name}\n- **Pattern:** `/%{pattern}/`\n- **Directive:** %{body}\n\n*Rule is now active for this project and will abort & retry if this pattern occurs mid-stream.*"
+  zh-CN: "### 📝 已记录抱怨并锻造流规则\n\n- **抱怨 ID：** `%{gid}`\n- **抱怨内容：** %{complaint}\n\n**生成的 TTSR 流规则（`%{rid}`）：**\n- **名称：** %{name}\n- **模式：** `/%{pattern}/`\n- **指令：** %{body}\n\n*该规则已对本项目生效；一旦流中出现此模式，将中止并重试。*"
+
+workspace_omfg_forged:
+  en: "Forged and activated stream rule '%{id}'"
+  zh-CN: "已锻造并启用流规则 '%{id}'"
+
+workspace_omfg_err:
+  en: "Failed to record grievance: %{error}"
+  zh-CN: "记录抱怨失败：%{error}"
+
+workspace_commit_err_status:
+  en: "Failed to run git status: %{error}"
+  zh-CN: "运行 git status 失败：%{error}"
+
+workspace_commit_clean:
+  en: "Working tree clean; nothing to commit."
+  zh-CN: "工作区干净，无需提交。"
+
+workspace_commit_err_plan:
+  en: "Failed to plan commits: %{error}"
+  zh-CN: "规划提交失败：%{error}"
+
+workspace_commit_none:
+  en: "No eligible files to commit."
+  zh-CN: "没有可提交的文件。"
+
+workspace_commit_card_title:
+  en: "### 📦 Planned Atomic Commits (%{count})\n\n"
+  zh-CN: "### 📦 计划的原子提交（%{count}）\n\n"
+
+workspace_commit_row:
+  en: "%{index}. **%{message}** (`%{scope}`)"
+  zh-CN: "%{index}. **%{message}**（`%{scope}`）"
+
+workspace_commit_dry_run:
+  en: "\n*Dry run: no commits were created.*"
+  zh-CN: "\n*试运行：未创建任何提交。*"
+
+workspace_commit_done:
+  en: "\n\n**Committed %{successful}/%{total} units successfully.**"
+  zh-CN: "\n\n**已成功提交 %{successful}/%{total} 个单元。**"
+
+workspace_commit_err_exec:
+  en: "\n\n**Error executing commits:** %{error}"
+  zh-CN: "\n\n**执行提交时出错：** %{error}"
+
+workspace_commit_plan_status:
+  en: "Generated commit plan with %{units} units"
+  zh-CN: "已生成含 %{units} 个单元的提交计划"
+
+workspace_review_err:
+  en: "Review failed: %{error}"
+  zh-CN: "评审失败：%{error}"
+
+workspace_handoff_card:
+  en: "### 📋 Handoff Brief Generated\n\n%{body}\n\n*%{status}*"
+  zh-CN: "### 📋 已生成交接简报\n\n%{body}\n\n*%{status}*"
+
+workspace_handoff_ok:
+  en: "Handoff brief generated successfully"
+  zh-CN: "交接简报生成成功"
+
+workspace_handoff_err:
+  en: "Failed to generate handoff: %{error}"
+  zh-CN: "生成交接失败：%{error}"
+
+workspace_memory_usage:
+  en: "Usage: /memory [view|list|search <query>|forget <id>]"
+  zh-CN: "用法：/memory [view|list|search <query>|forget <id>]"
+
+workspace_memory_none:
+  en: "%{title}: none"
+  zh-CN: "%{title}：无"
+
+workspace_memory_card_title:
+  en: "### 🧠 %{title} (%{count})\n\n"
+  zh-CN: "### 🧠 %{title}（%{count}）\n\n"
+
+workspace_memory_row:
+  en: "- `#%{id}` [%{kind}] %{content}"
+  zh-CN: "- `#%{id}` [%{kind}] %{content}"
+
+workspace_memory_count_status:
+  en: "%{title}: %{count}"
+  zh-CN: "%{title}：%{count}"
+
+workspace_memory_empty:
+  en: "Memory bank is empty for this project."
+  zh-CN: "本项目的记忆库为空。"
+
+workspace_memory_view_card:
+  en: "### 🧠 Project memory\n\n%{model}"
+  zh-CN: "### 🧠 项目记忆\n\n%{model}"
+
+workspace_memory_view_status:
+  en: "Project memory"
+  zh-CN: "项目记忆"
+
+workspace_memory_err_view:
+  en: "Memory view failed: %{error}"
+  zh-CN: "查看记忆失败：%{error}"
+
+workspace_memory_recent_title:
+  en: "Recent memories"
+  zh-CN: "最近的记忆"
+
+workspace_memory_err_list:
+  en: "Memory list failed: %{error}"
+  zh-CN: "列出记忆失败：%{error}"
+
+workspace_memory_search_title:
+  en: "Memories matching \"%{query}\""
+  zh-CN: "匹配 \"%{query}\" 的记忆"
+
+workspace_memory_err_search:
+  en: "Memory search failed: %{error}"
+  zh-CN: "搜索记忆失败：%{error}"
+
+workspace_memory_forgot:
+  en: "Forgot memory #%{id}"
+  zh-CN: "已遗忘记忆 #%{id}"
+
+workspace_memory_err_forget:
+  en: "Could not forget #%{id}: %{error}"
+  zh-CN: "无法遗忘 #%{id}：%{error}"
+
+workspace_security_err_scan:
+  en: "Security scan failed: %{error}"
+  zh-CN: "安全扫描失败：%{error}"
+
+workspace_security_err_dispositions:
+  en: "Security dispositions unreadable: %{error}"
+  zh-CN: "无法读取安全扫描处置记录：%{error}"
+
+workspace_security_none:
+  en: "Security scan: no findings (%{suppressed} suppressed by dispositions)."
+  zh-CN: "安全扫描：无发现（%{suppressed} 项已按处置记录抑制）。"
+
+workspace_security_card_title:
+  en: "### 🔒 Security scan: %{count} finding(s)"
+  zh-CN: "### 🔒 安全扫描：%{count} 项发现"
+
+workspace_security_suppressed:
+  en: ", %{count} suppressed"
+  zh-CN: "，已抑制 %{count} 项"
+
+workspace_security_row:
+  en: "- [%{severity}] `%{path}:%{line}` %{message} (`%{rule}`)"
+  zh-CN: "- [%{severity}] `%{path}:%{line}` %{message}（`%{rule}`）"
+
+workspace_security_more:
+  en: "- … %{count} more"
+  zh-CN: "- … 另有 %{count} 项"
+
+workspace_security_count:
+  en: "%{count} security finding(s)"
+  zh-CN: "%{count} 项安全发现"
+
+workspace_plugins_err:
+  en: "Could not list packages: %{error}"
+  zh-CN: "无法列出插件包：%{error}"
+
+workspace_plugins_none:
+  en: "No packages installed. `ra install <source>` adds one."
+  zh-CN: "未安装任何插件包。`ra install <source>` 可添加一个。"
+
+workspace_plugins_card_title:
+  en: "### 📦 Installed packages (%{count})\n\n"
+  zh-CN: "### 📦 已安装的插件包（%{count}）\n\n"
+
+workspace_plugins_row:
+  en: "- `%{source}` (%{scope})"
+  zh-CN: "- `%{source}`（%{scope}）"
+
+workspace_plugins_hint:
+  en: "\n`ra install <source>` / `ra remove <source>` manage them; `/reload` applies changes."
+  zh-CN: "\n用 `ra install <source>` / `ra remove <source>` 管理；`/reload` 使改动生效。"
+
+workspace_plugins_count:
+  en: "%{count} package(s)"
+  zh-CN: "%{count} 个插件包"
+
+workspace_hub_no_transcript:
+  en: "%{id}: no transcript yet"
+  zh-CN: "%{id}：暂无对话记录"
+
+workspace_hub_transcript_card:
+  en: "### %{id} transcript (tail)\n\n%{page}"
+  zh-CN: "### %{id} 对话记录（末尾）\n\n%{page}"
+
+workspace_hub_none:
+  en: "No subagents in this session (the subagent tool and /tan spawn them)."
+  zh-CN: "本会话没有子代理（由 subagent 工具和 /tan 创建）。"
+
+workspace_hub_card_title:
+  en: "### Agent hub (%{count})\n\n"
+  zh-CN: "### 代理中枢（%{count}）\n\n"
+
+workspace_hub_row:
+  en: "- `%{id}` [%{kind}] %{status} · %{task}"
+  zh-CN: "- `%{id}` [%{kind}] %{status} · %{task}"
+
+workspace_hub_hint:
+  en: "\n`/hub <id>` shows a child's transcript."
+  zh-CN: "\n`/hub <id>` 可查看某个子代理的对话记录。"
+
+workspace_hub_count:
+  en: "%{count} children, %{running} running"
+  zh-CN: "%{count} 个子代理，%{running} 个运行中"
+
+workspace_advisor_on:
+  en: "Advisor: on (%{spec})"
+  zh-CN: "顾问：开启（%{spec}）"
+
+workspace_advisor_off_assigned:
+  en: "Advisor: off (%{spec} assigned)"
+  zh-CN: "顾问：关闭（已分配 %{spec}）"
+
+workspace_advisor_none:
+  en: "Advisor: no model is assigned to the 'advisor' role"
+  zh-CN: "顾问：未给 'advisor' 角色分配模型"
+
+# The source used `{other:?}` (Debug), which quotes the value. The quotes live in
+# the template so the rendered English stays byte-identical; the call site then
+# passes Display.
+workspace_advisor_unknown:
+  en: "Unknown /advisor subcommand \"%{other}\": use /advisor [on|off|status]"
+  zh-CN: "未知的 /advisor 子命令 \"%{other}\"：请用 /advisor [on|off|status]"
+
+workspace_advisor_disabled:
+  en: "Advisor disabled."
+  zh-CN: "顾问已关闭。"
+
+workspace_advisor_enabled:
+  en: "Advisor enabled."
+  zh-CN: "顾问已开启。"
+
+workspace_advisor_enabled_unassigned:
+  en: "Advisor enabled, but no model is assigned to the 'advisor' role."
+  zh-CN: "顾问已开启，但未给 'advisor' 角色分配模型。"
+
+workspace_approval_none:
+  en: "none"
+  zh-CN: "无"
+
+workspace_approval_status:
+  en: "Approval mode: %{mode} | Dual-confirm classes: %{dual}"
+  zh-CN: "审批模式：%{mode} | 双重确认类别：%{dual}"
+
+workspace_approval_set_always_ask:
+  en: "Approval mode set to always-ask"
+  zh-CN: "审批模式已设为 always-ask（总是询问）"
+
+workspace_approval_set_write:
+  en: "Approval mode set to write (file mutations auto-approved)"
+  zh-CN: "审批模式已设为 write（文件修改自动批准）"
+
+workspace_approval_set_yolo:
+  en: "Approval mode set to yolo (all auto-approved except hard policy gates)"
+  zh-CN: "审批模式已设为 yolo（除硬性策略门禁外全部自动批准）"
+
+workspace_approval_unknown:
+  en: "Unknown /approval mode \"%{other}\": use /approval [always-ask|write|yolo|status]"
+  zh-CN: "未知的 /approval 模式 \"%{other}\"：请用 /approval [always-ask|write|yolo|status]"
+
 # ── RESERVED: status_line machine prefixes (optional translation) ───────
 #
 # These are the compact machine labels a status line draws — `git:`, `ctx:`,

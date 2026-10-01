@@ -8,6 +8,8 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
+use rust_i18n::t;
+
 /// A command's result: an optional transcript card plus a one-line status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
@@ -37,32 +39,28 @@ pub fn rules(cwd: &Path, args: &str) -> Report {
     let mut store = crate::stream_rules::StreamRuleStore::load_for_project(cwd);
     if args.is_empty() || args == "list" {
         let rules = store.list_all_rules();
-        let mut text = format!("### 🛡️ Active Stream Rules ({})\n\n", rules.len());
+        let mut text = t!("workspace_rules_card_title", count = rules.len()).to_string();
         if rules.is_empty() {
-            text.push_str("No stream rules configured. Use `/rules add <id> <pattern> <body>` or `/omfg <complaint>` to create one.\n");
+            text.push_str(&t!("workspace_rules_none"));
         } else {
             for r in &rules {
                 let status = if r.enabled {
-                    "✅ enabled"
+                    format!("✅ {}", t!("workspace_rules_enabled"))
                 } else {
-                    "⏸️ disabled"
+                    format!("⏸️ {}", t!("workspace_rules_disabled"))
                 };
-                let _ = writeln!(
-                    text,
-                    "- **{}** [{status}]: `/{}/`\n  {}",
-                    r.name, r.pattern, r.body
-                );
+                let _ = write!(text, "{}", t!("workspace_rules_row", name = r.name, status = status, pattern = r.pattern, body = r.body));
             }
         }
         let count = rules.len();
-        return Report::card(text, format!("{count} stream rule(s)"));
+        return Report::card(text, t!("workspace_rules_count", count = count).to_string());
     }
     if let Some(rest) = args.strip_prefix("remove ") {
         let id = rest.trim();
         return Report::status(match store.remove_rule(id) {
-            Ok(true) => format!("Removed stream rule '{id}'"),
-            Ok(false) => format!("Stream rule '{id}' not found"),
-            Err(e) => format!("Error removing rule: {e}"),
+            Ok(true) => t!("workspace_rules_removed", id = id).to_string(),
+            Ok(false) => t!("workspace_rules_not_found", id = id).to_string(),
+            Err(e) => t!("workspace_rules_err_remove", error = e).to_string(),
         });
     }
     if let Some(rest) = args.strip_prefix("toggle ") {
@@ -74,48 +72,33 @@ pub fn rules(cwd: &Path, args: &str) -> Report {
             .is_none_or(|r| r.enabled);
         return Report::status(match store.toggle_rule(id, !current) {
             Ok(true) => {
-                let st = if current { "disabled" } else { "enabled" };
-                format!("Stream rule '{id}' is now {st}")
+                let st = if current { t!("workspace_rules_disabled") } else { t!("workspace_rules_enabled") };
+                t!("workspace_rules_toggled", id = id, state = st).to_string()
             }
-            _ => format!("Stream rule '{id}' not found"),
+            _ => t!("workspace_rules_not_found", id = id).to_string(),
         });
     }
-    Report::status("Usage: /rules [list|remove <id>|toggle <id>]")
+    Report::status(t!("workspace_rules_usage"))
 }
 
 /// `/omfg <complaint>`: log the grievance and forge an active stream rule.
 pub fn omfg(cwd: &Path, args: &str) -> Report {
     let args = args.trim();
     if args.is_empty() {
-        return Report::status("Usage: /omfg <complaint about model behavior>");
+        return Report::status(t!("workspace_omfg_usage"));
     }
     match crate::stream_rules::GrievancesLedger::record_complaint(cwd, args, None) {
         Ok(g) => {
             let candidate = crate::stream_rules::GrievancesLedger::forge_candidate_rule(&g);
             let mut store = crate::stream_rules::StreamRuleStore::load_for_project(cwd);
             let _ = store.add_rule(candidate.clone(), false);
-            let card = format!(
-                "### 📝 Grievance Logged & Stream Rule Forged\n\n\
-                 - **Grievance ID:** `{gid}`\n\
-                 - **Complaint:** {complaint}\n\n\
-                 **Generated TTSR Stream Rule (`{rid}`):**\n\
-                 - **Name:** {name}\n\
-                 - **Pattern:** `/{pattern}/`\n\
-                 - **Directive:** {body}\n\n\
-                 *Rule is now active for this project and will abort & retry if this pattern occurs mid-stream.*",
-                gid = g.id,
-                complaint = g.complaint,
-                rid = candidate.id,
-                name = candidate.name,
-                pattern = candidate.pattern,
-                body = candidate.body,
-            );
+            let card = t!("workspace_omfg_card", gid = g.id, complaint = g.complaint, rid = candidate.id, name = candidate.name, pattern = candidate.pattern, body = candidate.body).to_string();
             Report::card(
                 card,
-                format!("Forged and activated stream rule '{}'", candidate.id),
+                t!("workspace_omfg_forged", id = candidate.id).to_string(),
             )
         }
-        Err(e) => Report::status(format!("Failed to record grievance: {e}")),
+        Err(e) => Report::status(t!("workspace_omfg_err", error = e).to_string()),
     }
 }
 
@@ -155,11 +138,11 @@ pub fn commit(cwd: &Path, args: &str) -> Report {
         .output()
     {
         Ok(o) => o,
-        Err(e) => return Report::status(format!("Failed to run git status: {e}")),
+        Err(e) => return Report::status(t!("workspace_commit_err_status", error = e).to_string()),
     };
     let changed_files = porcelain_paths(&String::from_utf8_lossy(&status_out.stdout));
     if changed_files.is_empty() {
-        return Report::status("Working tree clean; nothing to commit.");
+        return Report::status(t!("workspace_commit_clean"));
     }
 
     let hunks = std::process::Command::new("git")
@@ -184,31 +167,27 @@ pub fn commit(cwd: &Path, args: &str) -> Report {
     };
     let plan = match crate::commit_split::CommitPlanner::plan(&hunks, &changed_files, &options) {
         Ok(plan) => plan,
-        Err(e) => return Report::status(format!("Failed to plan commits: {e}")),
+        Err(e) => return Report::status(t!("workspace_commit_err_plan", error = e).to_string()),
     };
     if plan.units.is_empty() {
-        return Report::status("No eligible files to commit.");
+        return Report::status(t!("workspace_commit_none"));
     }
 
-    let mut card = format!("### 📦 Planned Atomic Commits ({})\n\n", plan.units.len());
+    let mut card = t!("workspace_commit_card_title", count = plan.units.len()).to_string();
     for (idx, unit) in plan.units.iter().enumerate() {
         let msg = unit.formatted_message(None);
-        let _ = writeln!(card, "{}. **{}** (`{}`)", idx + 1, msg, unit.scope);
+        let _ = write!(card, "{}", t!("workspace_commit_row", index = idx + 1, message = msg, scope = unit.scope));
         for f in &unit.files {
             let _ = writeln!(card, "   - `{f}`");
         }
     }
     if dry_run {
-        card.push_str("\n*Dry run: no commits were created.*");
+        card.push_str(&t!("workspace_commit_dry_run"));
     } else {
         match crate::commit_split::CommitExecutor::execute(cwd, &plan, &options) {
             Ok(results) => {
                 let successful = results.iter().filter(|r| r.success).count();
-                let _ = writeln!(
-                    card,
-                    "\n\n**Committed {successful}/{} units successfully.**",
-                    plan.units.len()
-                );
+                let _ = write!(card, "{}", t!("workspace_commit_done", successful = successful, total = plan.units.len()));
                 for res in results {
                     if let Some(ref sha) = res.commit_sha {
                         let _ = writeln!(card, "- `[{sha}]` {}", res.message);
@@ -216,12 +195,12 @@ pub fn commit(cwd: &Path, args: &str) -> Report {
                 }
             }
             Err(e) => {
-                let _ = write!(card, "\n\n**Error executing commits:** {e}");
+                let _ = write!(card, "{}", t!("workspace_commit_err_exec", error = e));
             }
         }
     }
     let units = plan.units.len();
-    Report::card(card, format!("Generated commit plan with {units} units"))
+    Report::card(card, t!("workspace_commit_plan_status", units = units).to_string())
 }
 
 /// `/review [target]`: heuristic code review of the working tree (or target).
@@ -240,7 +219,7 @@ pub fn review(cwd: &Path, args: &str) -> Report {
             report.format_markdown(),
             format!("{}: {}", report.verdict.badge(), report.summary),
         ),
-        Err(e) => Report::status(format!("Review failed: {e}")),
+        Err(e) => Report::status(t!("workspace_review_err", error = e).to_string()),
     }
 }
 
@@ -270,18 +249,25 @@ pub fn handoff(session: &crate::session::Session, args: &str) -> Report {
 
     match crate::handoff::HandoffGenerator::deliver(&doc, &to_target, &output) {
         Ok(report) => Report::card(
-            format!(
-                "### 📋 Handoff Brief Generated\n\n{}\n\n*{}*",
-                doc.to_markdown(),
-                report.status
-            ),
-            "Handoff brief generated successfully",
+            t!(
+                "workspace_handoff_card",
+                body = doc.to_markdown(),
+                status = report.status
+            )
+            .to_string(),
+            t!("workspace_handoff_ok"),
         ),
-        Err(e) => Report::status(format!("Failed to generate handoff: {e}")),
+        Err(e) => Report::status(t!("workspace_handoff_err", error = e).to_string()),
     }
 }
 
-const MEMORY_USAGE: &str = "Usage: /memory [view|list|search <query>|forget <id>]";
+/// The `/memory` usage line.
+///
+/// A function rather than a `const` because the text now comes from the
+/// catalogue and `t!` is not const-evaluable.
+fn memory_usage() -> String {
+    t!("workspace_memory_usage").to_string()
+}
 
 /// `/memory [view|list|search <query>|forget <id>]`: this project's memory
 /// bank (bd-cv653.4.1). `view` (the default) is the mental model the agent
@@ -299,45 +285,45 @@ fn memory_in(store: &crate::memory::MemoryStore, args: &str) -> Report {
     let rest = rest.trim();
     let listing = |title: &str, memories: Vec<crate::memory::Memory>| {
         if memories.is_empty() {
-            return Report::status(format!("{title}: none"));
+            return Report::status(t!("workspace_memory_none", title = title).to_string());
         }
-        let mut card = format!("### 🧠 {title} ({})\n\n", memories.len());
+        let mut card = t!("workspace_memory_card_title", title = title, count = memories.len()).to_string();
         for m in &memories {
-            let _ = write!(card, "- `#{}` [{}] {}", m.id, m.kind, m.content);
+            let _ = write!(card, "{}", t!("workspace_memory_row", id = m.id, kind = m.kind, content = m.content));
             if !m.tags.is_empty() {
                 let _ = write!(card, " _({})_", m.tags.join(", "));
             }
             card.push('\n');
         }
-        Report::card(card, format!("{title}: {}", memories.len()))
+        Report::card(card, t!("workspace_memory_count_status", title = title, count = memories.len()).to_string())
     };
     match verb.to_ascii_lowercase().as_str() {
         "" | "view" => match store.mental_model() {
             Ok(model) if model.is_empty() => {
-                Report::status("Memory bank is empty for this project.")
+                Report::status(t!("workspace_memory_empty"))
             }
             Ok(model) => Report::card(
-                format!("### 🧠 Project memory\n\n{model}"),
-                "Project memory",
+                t!("workspace_memory_view_card", model = model).to_string(),
+                t!("workspace_memory_view_status"),
             ),
-            Err(e) => Report::status(format!("Memory view failed: {e}")),
+            Err(e) => Report::status(t!("workspace_memory_err_view", error = e).to_string()),
         },
         "list" => match store.list(20) {
-            Ok(memories) => listing("Recent memories", memories),
-            Err(e) => Report::status(format!("Memory list failed: {e}")),
+            Ok(memories) => listing(&t!("workspace_memory_recent_title"), memories),
+            Err(e) => Report::status(t!("workspace_memory_err_list", error = e).to_string()),
         },
         "search" if !rest.is_empty() => match store.recall(rest, Some(10)) {
-            Ok(memories) => listing(&format!("Memories matching \"{rest}\""), memories),
-            Err(e) => Report::status(format!("Memory search failed: {e}")),
+            Ok(memories) => listing(&t!("workspace_memory_search_title", query = rest).to_string(), memories),
+            Err(e) => Report::status(t!("workspace_memory_err_search", error = e).to_string()),
         },
         "forget" => rest.trim_start_matches('#').parse::<i64>().map_or_else(
-            |_| Report::status(MEMORY_USAGE),
+            |_| Report::status(memory_usage()),
             |id| match store.edit(id, crate::memory::MemoryEditOp::Forget, None) {
-                Ok(()) => Report::status(format!("Forgot memory #{id}")),
-                Err(e) => Report::status(format!("Could not forget #{id}: {e}")),
+                Ok(()) => Report::status(t!("workspace_memory_forgot", id = id).to_string()),
+                Err(e) => Report::status(t!("workspace_memory_err_forget", id = id, error = e).to_string()),
             },
         ),
-        _ => Report::status(MEMORY_USAGE),
+        _ => Report::status(memory_usage()),
     }
 }
 
@@ -349,36 +335,29 @@ pub fn security(cwd: &Path, args: &str) -> Report {
     let paths: Vec<String> = args.split_whitespace().map(str::to_string).collect();
     let findings = match crate::security_scan::run_scan(cwd, &paths) {
         Ok(findings) => findings,
-        Err(e) => return Report::status(format!("Security scan failed: {e}")),
+        Err(e) => return Report::status(t!("workspace_security_err_scan", error = e).to_string()),
     };
     let dispositions = match crate::security_scan::load_dispositions(cwd) {
         Ok(dispositions) => dispositions,
-        Err(e) => return Report::status(format!("Security dispositions unreadable: {e}")),
+        Err(e) => return Report::status(t!("workspace_security_err_dispositions", error = e).to_string()),
     };
     let (active, suppressed) =
         crate::security_scan::partition_by_disposition(findings, &dispositions);
     if active.is_empty() {
-        return Report::status(format!(
-            "Security scan: no findings ({} suppressed by dispositions).",
-            suppressed.len()
-        ));
+        return Report::status(t!("workspace_security_none", suppressed = suppressed.len()).to_string());
     }
-    let mut card = format!("### 🔒 Security scan: {} finding(s)", active.len());
+    let mut card = t!("workspace_security_card_title", count = active.len()).to_string();
     if !suppressed.is_empty() {
-        let _ = write!(card, ", {} suppressed", suppressed.len());
+        let _ = write!(card, "{}", t!("workspace_security_suppressed", count = suppressed.len()));
     }
     card.push_str("\n\n");
     for finding in active.iter().take(SHOWN) {
-        let _ = writeln!(
-            card,
-            "- [{}] `{}:{}` {} (`{}`)",
-            finding.severity, finding.path, finding.line, finding.message, finding.rule_id
-        );
+        let _ = writeln!(card, "{}", t!("workspace_security_row", severity = finding.severity, path = finding.path, line = finding.line, message = finding.message, rule = finding.rule_id));
     }
     if active.len() > SHOWN {
-        let _ = writeln!(card, "- … {} more", active.len() - SHOWN);
+        let _ = writeln!(card, "{}", t!("workspace_security_more", count = active.len() - SHOWN));
     }
-    Report::card(card, format!("{} security finding(s)", active.len()))
+    Report::card(card, t!("workspace_security_count", count = active.len()).to_string())
 }
 
 /// `/plugins`: the packages (extensions, skills, prompts, themes) installed
@@ -387,24 +366,24 @@ pub fn plugins(manager: &crate::package_manager::PackageManager) -> Report {
     use crate::package_manager::PackageScope;
     let packages = match manager.list_packages_blocking() {
         Ok(packages) => packages,
-        Err(e) => return Report::status(format!("Could not list packages: {e}")),
+        Err(e) => return Report::status(t!("workspace_plugins_err", error = e).to_string()),
     };
     if packages.is_empty() {
-        return Report::status("No packages installed. `ra install <source>` adds one.");
+        return Report::status(t!("workspace_plugins_none"));
     }
-    let mut card = format!("### 📦 Installed packages ({})\n\n", packages.len());
+    let mut card = t!("workspace_plugins_card_title", count = packages.len()).to_string();
     for package in &packages {
         let scope = match package.scope {
             PackageScope::User => "user",
             PackageScope::Project => "project",
             PackageScope::Temporary => "temporary",
         };
-        let _ = writeln!(card, "- `{}` ({scope})", package.source);
+        let _ = writeln!(card, "{}", t!("workspace_plugins_row", source = package.source, scope = scope));
     }
     card.push_str(
-        "\n`ra install <source>` / `ra remove <source>` manage them; `/reload` applies changes.",
+        &t!("workspace_plugins_hint"),
     );
-    Report::card(card, format!("{} package(s)", packages.len()))
+    Report::card(card, t!("workspace_plugins_count", count = packages.len()).to_string())
 }
 
 /// `/hub [id]`: this session's subagent children (bd-cv653.5.3), or one
@@ -418,34 +397,25 @@ pub fn hub(args: &str) -> Report {
         return format_roster(&registry.roster());
     }
     match registry.transcript_page(id) {
-        Ok(page) if page.trim().is_empty() => Report::status(format!("{id}: no transcript yet")),
-        Ok(page) => Report::card(format!("### {id} transcript (tail)\n\n{page}"), id),
+        Ok(page) if page.trim().is_empty() => Report::status(t!("workspace_hub_no_transcript", id = id).to_string()),
+        Ok(page) => Report::card(t!("workspace_hub_transcript_card", id = id, page = page).to_string(), id),
         Err(e) => Report::status(e.to_string()),
     }
 }
 
 fn format_roster(roster: &[crate::agent_hub::ChildEntry]) -> Report {
     if roster.is_empty() {
-        return Report::status(
-            "No subagents in this session (the subagent tool and /tan spawn them).",
-        );
+        return Report::status(t!("workspace_hub_none"));
     }
-    let mut card = format!("### Agent hub ({})\n\n", roster.len());
+    let mut card = t!("workspace_hub_card_title", count = roster.len()).to_string();
     for child in roster {
-        let _ = writeln!(
-            card,
-            "- `{}` [{}] {} · {}",
-            child.id,
-            child.kind.as_str(),
-            child.status.as_str(),
-            child.task
-        );
+        let _ = writeln!(card, "{}", t!("workspace_hub_row", id = child.id, kind = child.kind.as_str(), status = child.status.as_str(), task = child.task));
     }
-    card.push_str("\n`/hub <id>` shows a child's transcript.");
+    card.push_str(&t!("workspace_hub_hint"));
     let running = roster.iter().filter(|c| !c.status.settled()).count();
     Report::card(
         card,
-        format!("{} children, {running} running", roster.len()),
+        t!("workspace_hub_count", count = roster.len(), running = running).to_string(),
     )
 }
 
@@ -468,23 +438,21 @@ fn advisor_with(
         "off" | "pause" => false,
         "status" => {
             return Report::status(match (configured, paused.load(Ordering::SeqCst)) {
-                (Some(spec), false) => format!("Advisor: on ({spec})"),
-                (Some(spec), true) => format!("Advisor: off ({spec} assigned)"),
-                (None, _) => String::from("Advisor: no model is assigned to the 'advisor' role"),
+                (Some(spec), false) => t!("workspace_advisor_on", spec = spec).to_string(),
+                (Some(spec), true) => t!("workspace_advisor_off_assigned", spec = spec).to_string(),
+                (None, _) => t!("workspace_advisor_none").to_string(),
             });
         }
         other => {
-            return Report::status(format!(
-                "Unknown /advisor subcommand {other:?}: use /advisor [on|off|status]"
-            ));
+            return Report::status(t!("workspace_advisor_unknown", other = other).to_string());
         }
     };
     paused.store(!enable, Ordering::SeqCst);
     Report::status(match (enable, configured) {
-        (false, _) => String::from("Advisor disabled."),
-        (true, Some(_)) => String::from("Advisor enabled."),
+        (false, _) => t!("workspace_advisor_disabled").to_string(),
+        (true, Some(_)) => t!("workspace_advisor_enabled").to_string(),
         (true, None) => {
-            String::from("Advisor enabled, but no model is assigned to the 'advisor' role.")
+            t!("workspace_advisor_enabled_unassigned").to_string()
         }
     })
 }
@@ -500,7 +468,7 @@ pub fn approval(
         "" | "status" => {
             let classes = state.dual_confirm_classes();
             let dual = if classes.is_empty() {
-                String::from("none")
+                t!("workspace_approval_none").to_string()
             } else {
                 classes
                     .iter()
@@ -509,29 +477,24 @@ pub fn approval(
                     .join(", ")
             };
             return (
-                Report::status(format!(
-                    "Approval mode: {} | Dual-confirm classes: {dual}",
-                    state.mode().as_str()
-                )),
+                Report::status(t!("workspace_approval_status", mode = state.mode().as_str(), dual = dual).to_string()),
                 None,
             );
         }
         "always-ask" | "always_ask" | "always" | "ask" => {
-            (ApprovalMode::AlwaysAsk, "Approval mode set to always-ask")
+            (ApprovalMode::AlwaysAsk, t!("workspace_approval_set_always_ask"))
         }
         "write" | "files" => (
             ApprovalMode::Write,
-            "Approval mode set to write (file mutations auto-approved)",
+            t!("workspace_approval_set_write"),
         ),
         "yolo" | "auto-approve" | "auto" | "all" => (
             ApprovalMode::Yolo,
-            "Approval mode set to yolo (all auto-approved except hard policy gates)",
+            t!("workspace_approval_set_yolo"),
         ),
         other => {
             return (
-                Report::status(format!(
-                    "Unknown /approval mode {other:?}: use /approval [always-ask|write|yolo|status]"
-                )),
+                Report::status(t!("workspace_approval_unknown", other = other).to_string()),
                 None,
             );
         }
@@ -576,7 +539,7 @@ mod tests {
             "{listed:?}"
         );
         assert!(memory_in(&store, "search parser").card.is_some());
-        assert_eq!(memory_in(&store, "search").status, MEMORY_USAGE);
+        assert_eq!(memory_in(&store, "search").status, memory_usage());
         assert_eq!(
             memory_in(&store, &format!("forget #{}", kept.id)).status,
             format!("Forgot memory #{}", kept.id)
