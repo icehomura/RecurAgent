@@ -1778,6 +1778,7 @@ jobs:
       RUST_BACKTRACE: "1"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_TERM_COLOR: "never"
       SHARD_ARTIFACT_DIR: ${{ github.workspace }}/RecurAgent/tests/e2e_results/ci-shards/${{ matrix.shard.name }}
       SHARD_CORRELATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard.name }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/RecurAgent/target/ci-shards/${{ matrix.shard.name }}
@@ -2530,7 +2531,10 @@ jobs:
           # `--lib` (not `--all-targets`) is deliberate: the `pi` binary and the
           # integration tests/benches require the `tui` feature, so they are
           # expected to be skipped here — only the library contract is locked in.
-          cargo check --locked --no-default-features --lib
+          # `sqlite-sessions` stays on: `memory` and `session_index` import it
+          # unconditionally, so a truly feature-less lib build cannot compile;
+          # the contract this job guards is the TUI stack, not sqlite.
+          cargo check --locked --no-default-features --features sqlite-sessions --lib
 
       - name: cargo check (headless ACP binary, no TUI)
         run: |
