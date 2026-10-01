@@ -138,6 +138,7 @@ pub mod crypto_shim;
 pub mod current_time;
 pub mod dag_scheduler;
 pub mod dag_tool;
+pub mod dag_view;
 pub mod json_query;
 // Always declared: the module is dual-mode internally (its non-feature
 // `imp` degrades to named errors), and main.rs's `ra profile` arm calls

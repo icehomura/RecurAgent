@@ -95,6 +95,9 @@ pub struct Config {
     pub bash: Option<BashSettings>,
     /// Memory-bank settings (bd-cv653.4.1).
     pub memory: Option<MemorySettings>,
+    /// DAG scheduler settings: per-node retry, concurrency, and how many
+    /// finished graphs stay addressable by `resume`.
+    pub dag: Option<DagSettings>,
     /// Opt-in media trio settings (bd-cv653.2.7).
     pub media: Option<crate::media_tools::MediaSettings>,
     /// Opt-in computer tool settings (bd-cv653.2.5).
@@ -223,6 +226,10 @@ pub struct Config {
 
     // Markdown rendering
     pub markdown: Option<MarkdownSettings>,
+
+    // Status row appearance
+    #[serde(alias = "statusLine")]
+    pub status_line: Option<StatusLineSettings>,
 
     // Terminal Display
     pub terminal: Option<TerminalSettings>,
@@ -617,6 +624,86 @@ pub struct MemorySettings {
     pub backend: Option<String>,
 }
 
+/// DAG tool configuration.
+///
+/// ```json
+/// "dag": {
+///   "retry": { "attempts": 5, "backoffMs": 500 },
+///   "maxConcurrency": 8,
+///   "keepGraphs": 16
+/// }
+/// ```
+///
+/// Retry applies **only to read-safe nodes**. Nodes with write/append/process
+/// side effects (`write`, `edit`, `bash`, `run_code`, …) are never retried:
+/// replaying them would duplicate the side effect, which is worse than the
+/// original failure. That is a fixed semantic, deliberately not configurable —
+/// there is no correct setting that would re-run a `bash` command twice.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DagSettings {
+    /// Per-node retry policy (`dag.retry`).
+    pub retry: Option<DagRetrySettings>,
+    /// Maximum concurrent nodes within one dependency-ready batch
+    /// (`dag.maxConcurrency`). Unset → the agent loop's compatible-tool
+    /// parallelism limit.
+    #[serde(alias = "maxConcurrency")]
+    pub max_concurrency: Option<usize>,
+    /// How many finished graphs remain addressable by `resume` per session
+    /// (`dag.keepGraphs`, default 16). Oldest are evicted first.
+    #[serde(alias = "keepGraphs")]
+    pub keep_graphs: Option<usize>,
+}
+
+/// `dag.retry` — automatic retry for read-safe nodes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DagRetrySettings {
+    /// Attempts per node, including the first (`dag.retry.attempts`,
+    /// default 5; 0 or 1 disables retrying).
+    pub attempts: Option<u32>,
+    /// Fixed delay between attempts in milliseconds
+    /// (`dag.retry.backoffMs`, default 500).
+    #[serde(alias = "backoffMs")]
+    pub backoff_ms: Option<u64>,
+}
+
+/// Default retry attempts when `dag.retry.attempts` is unset.
+pub const DAG_DEFAULT_RETRY_ATTEMPTS: u32 = 5;
+/// Default retry backoff (milliseconds) when `dag.retry.backoffMs` is unset.
+pub const DAG_DEFAULT_RETRY_BACKOFF_MS: u64 = 500;
+/// Default cap on retained finished graphs for `resume`.
+pub const DAG_DEFAULT_KEEP_GRAPHS: usize = 16;
+
+impl DagSettings {
+    /// Retry attempts per node (>= 1). `1` means "run once, no retry".
+    #[must_use]
+    pub fn retry_attempts(&self) -> u32 {
+        self.retry
+            .as_ref()
+            .and_then(|r| r.attempts)
+            .unwrap_or(DAG_DEFAULT_RETRY_ATTEMPTS)
+            .max(1)
+    }
+
+    /// Fixed delay between retry attempts.
+    #[must_use]
+    pub fn retry_backoff(&self) -> std::time::Duration {
+        let ms = self
+            .retry
+            .as_ref()
+            .and_then(|r| r.backoff_ms)
+            .unwrap_or(DAG_DEFAULT_RETRY_BACKOFF_MS);
+        std::time::Duration::from_millis(ms)
+    }
+
+    /// Retained-graph cap for `resume` (>= 1).
+    #[must_use]
+    pub fn keep_graphs(&self) -> usize {
+        self.keep_graphs.unwrap_or(DAG_DEFAULT_KEEP_GRAPHS).max(1)
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ImageSettings {
@@ -651,6 +738,77 @@ pub enum MarkdownSpacing {
     Comfortable,
     /// Blank lines survive only around headings and code fences.
     Compact,
+}
+
+/// Glyph set for the status row: which separators and icons get drawn.
+///
+/// Orthogonal to the status-line *preset*, which selects which segments
+/// appear. Every variant except [`Self::Nerd`] is guaranteed to render on a
+/// terminal with no patched font installed; `Nerd` codepoints live in a
+/// Unicode private-use area, so without a Nerd Font they draw as replacement
+/// boxes. The renderer maps these onto its separator and icon glyphs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StatusLineChrome {
+    /// Portable Unicode: an ASCII `|` separator plus, wherever a common
+    /// symbol exists, that symbol. Nothing outside the ranges every monospace
+    /// font carries. **Default.**
+    #[default]
+    Unicode,
+    /// Pure ASCII: `|` separators and `git:`-style text labels.
+    Ascii,
+    /// Powerline triangles plus Font Awesome / Nerd Font icons. Requires a
+    /// patched font.
+    Nerd,
+}
+
+impl StatusLineChrome {
+    /// Whether segments may emit Font Awesome / private-use icons.
+    #[must_use]
+    pub const fn uses_icons(self) -> bool {
+        matches!(self, Self::Nerd)
+    }
+
+    /// Whether segments may emit third-tier "common Unicode" symbols. Only
+    /// [`Self::Unicode`] asks for them; [`Self::Ascii`] stays 7-bit.
+    #[must_use]
+    pub const fn uses_symbols(self) -> bool {
+        matches!(self, Self::Unicode)
+    }
+
+    /// The `statusLine.chrome` spelling of this variant.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Unicode => "unicode",
+            Self::Ascii => "ascii",
+            Self::Nerd => "nerd",
+        }
+    }
+
+    /// Parse a `statusLine.chrome` value. `None` for anything unrecognised —
+    /// callers report the error rather than silently picking a default.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "unicode" => Some(Self::Unicode),
+            "ascii" => Some(Self::Ascii),
+            "nerd" => Some(Self::Nerd),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StatusLineSettings {
+    /// Glyph set for the status row: `unicode` (default) | `ascii` | `nerd`.
+    ///
+    /// `unicode` keeps an ASCII separator and adds the handful of symbols
+    /// every monospace font carries; `ascii` stays 7-bit; `nerd` asks for
+    /// powerline triangles and Font Awesome icons, which render as replacement
+    /// boxes unless a Nerd Font is installed.
+    pub chrome: Option<StatusLineChrome>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -885,6 +1043,16 @@ impl Config {
         }
     }
 
+    /// Glyph set for the status row, from `statusLine.chrome`; portable
+    /// Unicode when unset.
+    #[must_use]
+    pub fn status_line_chrome(&self) -> StatusLineChrome {
+        self.status_line
+            .as_ref()
+            .and_then(|settings| settings.chrome)
+            .unwrap_or_default()
+    }
+
     pub fn patch_settings_with_roots(
         scope: SettingsScope,
         global_dir: &Path,
@@ -906,6 +1074,7 @@ impl Config {
         Self {
             // Appearance
             theme: other.theme.or(base.theme),
+            status_line: other.status_line.or(base.status_line),
             hide_thinking_block: other.hide_thinking_block.or(base.hide_thinking_block),
             show_hardware_cursor: other.show_hardware_cursor.or(base.show_hardware_cursor),
             disable_mouse_capture: other.disable_mouse_capture.or(base.disable_mouse_capture),
@@ -924,6 +1093,7 @@ impl Config {
             read: merge_read(base.read, other.read),
             bash: merge_bash(base.bash, other.bash),
             memory: merge_memory(base.memory, other.memory),
+            dag: merge_dag(base.dag, other.dag),
             media: merge_media(base.media, other.media),
             computer: merge_computer(base.computer, other.computer),
             browser: merge_browser(base.browser, other.browser),
@@ -2052,6 +2222,36 @@ fn merge_memory(
     }
 }
 
+/// Merge `dag` settings field-wise; `retry` merges field-by-field too.
+fn merge_dag(base: Option<DagSettings>, other: Option<DagSettings>) -> Option<DagSettings> {
+    match (base, other) {
+        (Some(base), Some(other)) => Some(DagSettings {
+            retry: merge_dag_retry(base.retry, other.retry),
+            max_concurrency: other.max_concurrency.or(base.max_concurrency),
+            keep_graphs: other.keep_graphs.or(base.keep_graphs),
+        }),
+        (None, Some(other)) => Some(other),
+        (Some(base), None) => Some(base),
+        (None, None) => None,
+    }
+}
+
+/// Merge `dag.retry` field-wise.
+fn merge_dag_retry(
+    base: Option<DagRetrySettings>,
+    other: Option<DagRetrySettings>,
+) -> Option<DagRetrySettings> {
+    match (base, other) {
+        (Some(base), Some(other)) => Some(DagRetrySettings {
+            attempts: other.attempts.or(base.attempts),
+            backoff_ms: other.backoff_ms.or(base.backoff_ms),
+        }),
+        (None, Some(other)) => Some(other),
+        (Some(base), None) => Some(base),
+        (None, None) => None,
+    }
+}
+
 /// Merge media trio settings field-wise (bd-cv653.2.7).
 fn merge_media(
     base: Option<crate::media_tools::MediaSettings>,
@@ -2457,13 +2657,16 @@ fn sync_settings_parent_dir(_path: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        BranchSummarySettings, CompactionSettings, Config, ExtensionPolicyConfig,
-        ExtensionRiskConfig, ImageSettings, MarkdownSpacing, RepairPolicyConfig, RetrySettings,
-        SettingsScope, TerminalSettings, ThinkingBudgets, deep_merge_settings_value,
-        extension_index_path_from_env, first_report_of, global_dir_from_env, handoffs_dir_from_env,
-        merge_branch_summary, merge_compaction, merge_extension_policy, merge_extension_risk,
-        merge_images, merge_repair_policy, merge_retry, merge_terminal, merge_thinking_budgets,
-        package_dir_from_env, project_root_from, sessions_dir_from_env, unrecognised_setting_keys,
+        BranchSummarySettings, CompactionSettings, Config, DAG_DEFAULT_KEEP_GRAPHS,
+        DAG_DEFAULT_RETRY_ATTEMPTS, DAG_DEFAULT_RETRY_BACKOFF_MS, DagSettings,
+        ExtensionPolicyConfig, ExtensionRiskConfig, ImageSettings, MarkdownSpacing,
+        RepairPolicyConfig, RetrySettings, SettingsScope, TerminalSettings, ThinkingBudgets,
+        deep_merge_settings_value, extension_index_path_from_env, first_report_of,
+        global_dir_from_env, handoffs_dir_from_env, merge_branch_summary, merge_compaction,
+        merge_dag, merge_extension_policy, merge_extension_risk, merge_images, merge_repair_policy,
+        merge_retry, merge_terminal, merge_thinking_budgets, package_dir_from_env,
+        project_root_from, recognises_setting_key, sessions_dir_from_env,
+        unrecognised_setting_keys,
     };
     use crate::agent::QueueMode;
     use proptest::prelude::*;
@@ -2473,6 +2676,72 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::{Arc, Barrier};
     use tempfile::TempDir;
+
+    #[test]
+    fn dag_settings_parse_defaults_and_clamp() {
+        let config: Config = serde_json::from_value(json!({
+            "dag": {
+                "retry": { "attempts": 3, "backoffMs": 250 },
+                "maxConcurrency": 4,
+                "keepGraphs": 2
+            }
+        }))
+        .expect("parse dag settings");
+        let dag = config.dag.clone().expect("dag settings present");
+        assert_eq!(dag.retry_attempts(), 3);
+        assert_eq!(dag.retry_backoff(), std::time::Duration::from_millis(250));
+        assert_eq!(dag.keep_graphs(), 2);
+
+        // Unset → the documented defaults.
+        let default = DagSettings::default();
+        assert_eq!(default.retry_attempts(), DAG_DEFAULT_RETRY_ATTEMPTS);
+        assert_eq!(
+            default.retry_backoff(),
+            std::time::Duration::from_millis(DAG_DEFAULT_RETRY_BACKOFF_MS)
+        );
+        assert_eq!(default.keep_graphs(), DAG_DEFAULT_KEEP_GRAPHS);
+
+        // `attempts: 0` normalises to 1 — "run once", never an infinite loop.
+        let zero: DagSettings =
+            serde_json::from_value(json!({"retry": {"attempts": 0}})).expect("parse zero");
+        assert_eq!(zero.retry_attempts(), 1);
+    }
+
+    #[test]
+    fn merge_dag_is_field_wise() {
+        let base: DagSettings = serde_json::from_value(json!({
+            "retry": {"attempts": 5}, "maxConcurrency": 8, "keepGraphs": 4
+        }))
+        .expect("base");
+        let other: DagSettings =
+            serde_json::from_value(json!({"retry": {"backoffMs": 10}})).expect("other");
+        let merged = merge_dag(Some(base), Some(other)).expect("merged");
+        assert_eq!(merged.retry_attempts(), 5, "base attempts survive");
+        assert_eq!(
+            merged.retry_backoff(),
+            std::time::Duration::from_millis(10),
+            "other backoff wins"
+        );
+        assert_eq!(
+            merged.max_concurrency,
+            Some(8),
+            "an untouched base field survives"
+        );
+        assert_eq!(merged.keep_graphs, Some(4));
+    }
+
+    #[test]
+    fn dag_key_is_recognised_and_typos_are_reported() {
+        assert!(recognises_setting_key("dag"));
+        assert!(
+            unrecognised_setting_keys(r#"{"dag": {"retry": {"attempts": 2}}}"#).is_empty(),
+            "the dag subtree must be recognised"
+        );
+        assert_eq!(
+            unrecognised_setting_keys(r#"{"dag": {"retryy": {}}}"#),
+            vec!["dag.retryy".to_string()]
+        );
+    }
 
     #[test]
     fn failover_settings_parse_chains_cooldown_and_cap() {

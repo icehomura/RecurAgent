@@ -893,6 +893,11 @@ pub fn strip_thinking_level_suffix(pattern: &str) -> &str {
     }
 }
 
+/// Returned by [`copy_text_to_clipboard`] when the text actually reached the
+/// system clipboard (as opposed to the temp-file fallback). Callers that only
+/// need "did it work" compare against this instead of a duplicated literal.
+pub const COPY_OK_MESSAGE: &str = "Copied to clipboard";
+
 /// Put `text` on the system clipboard, falling back to a private temp file,
 /// and return the sentence describing what happened.
 ///
@@ -925,14 +930,14 @@ pub fn copy_text_to_clipboard(text: &str) -> String {
     // GH #242: under WSL without WSLg there is no display for arboard, but
     // WSL puts Windows' clip.exe on PATH.
     if running_under_wsl() && copy_via_clip_exe(text).is_ok() {
-        return String::from("Copied to clipboard");
+        return String::from(COPY_OK_MESSAGE);
     }
 
     #[cfg(feature = "clipboard")]
     {
         match ArboardClipboard::new().and_then(|mut clipboard| clipboard.set_text(text.to_string()))
         {
-            Ok(()) => String::from("Copied to clipboard"),
+            Ok(()) => String::from(COPY_OK_MESSAGE),
             Err(err) => match write_fallback(text) {
                 Ok(path) => format!(
                     "Clipboard support is disabled or unavailable ({err}). Wrote to {}",
@@ -3536,7 +3541,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
             }
             TanGate::Disabled => {
                 self.status_message = Some(
-                    "/tan unavailable: enable the opt-in subagent tool with --tools ...subagent"
+                    "/tan unavailable: the subagent tool is disabled in this session; enable it with --tools ...subagent"
                         .to_string(),
                 );
                 self.scroll_to_bottom();

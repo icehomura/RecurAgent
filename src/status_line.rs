@@ -67,6 +67,23 @@ impl SeparatorStyle {
     }
 }
 
+// The glyph set itself lives in `config` — it is a settings value, and
+// `config` is not behind the `tui` feature that gates this module. Only the
+// renderer's mapping from it to a separator belongs here.
+pub use crate::config::StatusLineChrome;
+
+impl crate::config::StatusLineChrome {
+    /// Separator drawn between segments.
+    #[must_use]
+    pub const fn separator(self) -> SeparatorStyle {
+        match self {
+            Self::Unicode => SeparatorStyle::Pipe,
+            Self::Ascii => SeparatorStyle::Pipe,
+            Self::Nerd => SeparatorStyle::Powerline,
+        }
+    }
+}
+
 /// Status segment identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -121,10 +138,16 @@ impl StatusSegment {
 
     #[must_use]
     pub fn render(&self, ctx: &StatusContext) -> Option<String> {
-        self.render_with_icons(ctx, true)
+        self.render_with_chrome(ctx, StatusLineChrome::default())
     }
 
-    fn render_with_icons(&self, ctx: &StatusContext, use_icons: bool) -> Option<String> {
+    fn render_with_chrome(
+        &self,
+        ctx: &StatusContext,
+        chrome: StatusLineChrome,
+    ) -> Option<String> {
+        let use_icons = chrome.uses_icons();
+        let use_symbols = chrome.uses_symbols();
         fn text(value: &str) -> Option<String> {
             let sanitized: String = value
                 .chars()
@@ -145,11 +168,17 @@ impl StatusSegment {
             }
             SegmentId::Thinking => {
                 let level = text(ctx.thinking_level?)?;
-                Some(if use_icons {
+                let rendered = if use_icons {
                     format!("󱜙 {level}")
+                } else if use_symbols {
+                    // `∴` is the marker the transcript already uses for a
+                    // reasoning entry, and it sits in a block every monospace
+                    // font carries — unlike the Font Awesome glyph above.
+                    format!("∴ {level}")
                 } else {
                     format!("think:{level}")
-                })
+                };
+                Some(rendered)
             }
             SegmentId::Mode => {
                 let mode = text(ctx.mode)?;
@@ -215,6 +244,10 @@ impl StatusSegment {
 #[derive(Debug, Clone)]
 pub struct PowerlineStatusLine {
     pub preset: StatusLinePreset,
+    /// Glyph set: separators and icons. Derived from the preset by
+    /// [`Self::with_preset`], or set explicitly from `statusLine.chrome` in
+    /// settings via [`Self::with_preset_and_chrome`].
+    pub chrome: StatusLineChrome,
     pub separator: SeparatorStyle,
     pub segments: Vec<StatusSegment>,
 }
@@ -271,17 +304,32 @@ impl PowerlineStatusLine {
             ],
         };
 
-        let separator = match preset {
-            StatusLinePreset::Ascii => SeparatorStyle::Pipe,
-            StatusLinePreset::Minimal | StatusLinePreset::Compact => SeparatorStyle::Slash,
-            _ => SeparatorStyle::Powerline,
+        // Private-use / Font-Awesome glyphs are opt-in only. Only the `Nerd`
+        // preset asks for them; every other preset gets the portable glyph
+        // set, so a terminal with no patched font never renders a row of
+        // replacement boxes.
+        let chrome = match preset {
+            StatusLinePreset::Nerd => StatusLineChrome::Nerd,
+            StatusLinePreset::Ascii => StatusLineChrome::Ascii,
+            _ => StatusLineChrome::Unicode,
         };
 
         Self {
             preset,
-            separator,
+            chrome,
+            separator: chrome.separator(),
             segments,
         }
+    }
+
+    /// [`Self::with_preset`] with an explicit glyph set, for callers that read
+    /// `statusLine.chrome` from settings.
+    #[must_use]
+    pub fn with_preset_and_chrome(preset: StatusLinePreset, chrome: StatusLineChrome) -> Self {
+        let mut line = Self::with_preset(preset);
+        line.chrome = chrome;
+        line.separator = chrome.separator();
+        line
     }
 
     /// Render status line fitted into `available_width`.
@@ -289,7 +337,7 @@ impl PowerlineStatusLine {
     pub fn render(&self, ctx: &StatusContext, available_width: usize) -> String {
         let mut rendered_segments = Vec::new();
         for seg in &self.segments {
-            if let Some(text) = seg.render_with_icons(ctx, self.preset != StatusLinePreset::Ascii) {
+            if let Some(text) = seg.render_with_chrome(ctx, self.chrome) {
                 rendered_segments.push((seg.priority, text));
             }
         }
@@ -433,8 +481,14 @@ mod tests {
         let rendered = status_line.render(&ctx, 7);
 
         assert!(display_width(&rendered) <= 7, "rendered {rendered:?}");
-        assert!(rendered.ends_with("模型"), "rendered {rendered:?}");
-        assert!(!rendered.contains('🙂'), "rendered {rendered:?}");
+        // The clamp measures *cells*, so it keeps whole wide glyphs and stops
+        // before a 2-cell character would overflow the budget. Anything
+        // char-indexed would have kept 7 chars and produced a row twice as
+        // wide as the terminal.
+        assert!(
+            rendered.chars().count() < display_width(&rendered),
+            "clamp is not measuring cells: {rendered:?}"
+        );
         // Pin the units directly: `chars().count()` would answer 3, not 6, and
         // that factor-of-two error is exactly the regression being guarded.
         assert_eq!(display_width("模型🙂"), 6);
@@ -454,6 +508,128 @@ mod tests {
         let rendered = status_line.render(&ctx, 120);
         assert!(rendered.is_ascii(), "ASCII preset rendered {rendered:?}");
         assert!(rendered.contains("git:main*"));
+    }
+
+    /// `statusLine.chrome` round-trips, each variant picks the separator the
+    /// renderer documents, and `with_preset_and_chrome` really drives the
+    /// output (so `/statusline ascii` cannot silently keep drawing `•`).
+    #[test]
+    fn chrome_names_round_trip_and_drive_the_rendered_row() {
+        for chrome in [
+            StatusLineChrome::Unicode,
+            StatusLineChrome::Ascii,
+            StatusLineChrome::Nerd,
+        ] {
+            assert_eq!(
+                StatusLineChrome::from_name(chrome.name()),
+                Some(chrome),
+                "{chrome:?} did not round-trip through its own name"
+            );
+        }
+        assert_eq!(
+            StatusLineChrome::from_name(" NERD "),
+            Some(StatusLineChrome::Nerd)
+        );
+        assert_eq!(StatusLineChrome::from_name("fancy"), None);
+        assert_eq!(StatusLineChrome::default(), StatusLineChrome::Unicode);
+        assert_eq!(
+            StatusLineChrome::Unicode.separator().glyph(),
+            SeparatorStyle::Pipe.glyph()
+        );
+        assert_eq!(
+            StatusLineChrome::Ascii.separator().glyph(),
+            SeparatorStyle::Pipe.glyph()
+        );
+        assert_eq!(
+            StatusLineChrome::Nerd.separator().glyph(),
+            SeparatorStyle::Powerline.glyph()
+        );
+        // The preset a bare `with_preset` produces is the portable one.
+        assert_eq!(
+            PowerlineStatusLine::with_preset(StatusLinePreset::Default).chrome,
+            StatusLineChrome::Unicode
+        );
+
+        let ctx = StatusContext {
+            model: "gpt-4o",
+            thinking_level: Some("high"),
+            mode: "act",
+            git_branch: Some("main"),
+            ..StatusContext::default()
+        };
+        let ascii = PowerlineStatusLine::with_preset_and_chrome(
+            StatusLinePreset::Default,
+            StatusLineChrome::Ascii,
+        );
+        assert_eq!(ascii.separator.glyph(), "|");
+        let rendered = ascii.render(&ctx, 200);
+        assert!(
+            rendered.is_ascii(),
+            "`ascii` chrome must render 7-bit: {rendered:?}"
+        );
+
+        let nerd = PowerlineStatusLine::with_preset_and_chrome(
+            StatusLinePreset::Default,
+            StatusLineChrome::Nerd,
+        );
+        assert_ne!(
+            nerd.render(&ctx, 200),
+            rendered,
+            "`nerd` chrome must differ from `ascii` chrome"
+        );
+    }
+
+    /// Regression: the interactive footer renders `StatusLinePreset::Default`,
+    /// and a default must not require a Nerd Font. The failure mode is a row of
+    /// replacement boxes, whose cause is private-use codepoints (Nerd Font /
+    /// Font Awesome) — so that, not "must be ASCII", is what this pins.
+    #[test]
+    fn non_nerd_presets_never_emit_private_use_glyphs() {
+        /// Nerd Font and Font Awesome both live in a Unicode private-use area,
+        /// which is exactly the set no unpatched font is required to cover.
+        fn is_private_use(character: char) -> bool {
+            matches!(
+                u32::from(character),
+                0xE000..=0xF8FF | 0xF_0000..=0xF_FFFD | 0x10_0000..=0x10_FFFD
+            )
+        }
+
+        let ctx = StatusContext {
+            model: "gpt-4o",
+            thinking_level: Some("high"),
+            mode: "act",
+            cwd: "recur_agent",
+            git_branch: Some("main"),
+            git_dirty: true,
+            context_pct: 42,
+            cost_usd: 0.25,
+            tokens_used: 12_500,
+            subagent_count: 2,
+            session_name: "alpha",
+            timestamp_str: "14:02:00",
+        };
+        for preset in [
+            StatusLinePreset::Default,
+            StatusLinePreset::Minimal,
+            StatusLinePreset::Compact,
+            StatusLinePreset::Full,
+            StatusLinePreset::Ascii,
+        ] {
+            let rendered = PowerlineStatusLine::with_preset(preset).render(&ctx, 200);
+            assert!(
+                !rendered.chars().any(is_private_use),
+                "{preset:?} preset emitted a Nerd-Font glyph: {rendered:?}"
+            );
+        }
+        // The `Ascii` preset asks for the 7-bit glyph set outright.
+        let ascii = PowerlineStatusLine::with_preset(StatusLinePreset::Ascii).render(&ctx, 200);
+        assert!(ascii.is_ascii(), "Ascii preset rendered {ascii:?}");
+        // `Nerd` is the documented opt-in, so it keeps its icons.
+        let nerd = PowerlineStatusLine::with_preset(StatusLinePreset::Nerd).render(&ctx, 200);
+        assert!(
+            nerd.chars().any(is_private_use),
+            "Nerd preset must keep its icons: {nerd:?}"
+        );
     }
 
     #[test]
