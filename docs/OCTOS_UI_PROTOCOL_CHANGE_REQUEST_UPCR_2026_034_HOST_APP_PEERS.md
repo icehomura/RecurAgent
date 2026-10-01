@@ -71,7 +71,10 @@ subspace `<ns>/ctx-…`, and closed peers, whose stores still hold data (a
 `peer/purge` erases them and frees the binding, see "Lifecycle" below). It is
 also refused when its workspace contains or is contained in another's, or
 lies inside the kernel's memory stores. Two apps therefore never share a
-memory store or a workspace by construction.
+memory store or a workspace by construction. Host-bound prepares of one
+profile are serialized, so two concurrent prepares on the same folder or
+namespace cannot both pass this check. `host_token` values are redacted
+from the AppUI evidence transcript (`OCTOSCODE_M15_UX_OUTPUT_DIR`).
 
 Typed `data.kind`: `peer_originator_mismatch` and `peer_host_token_mismatch`
 (permission denied), `peer_binding_mismatch`, `peer_binding_conflict`,
@@ -117,7 +120,8 @@ namespace is `<peer namespace>/ctx-<context_id>`. Idempotent while open.
 `peer/context/close {session_id, peer, context_id, host_token}` →
 `{session_id, slug, context_id, profile_id, closed, was_open, interrupted}`.
 Writes the closed marker first, then interrupts the context's in-flight turn
-(`turn/error`: "interrupted by peer/context/close"). The transcript and
+(`turn/error`: "interrupted by peer/context/close"), and releases the
+kernel's handles to the context's memory stores. The transcript, stores and
 workspace stay on disk; the host owns retention. A closed id is never
 reopened (`peer_context_closed`); hosts mint a new id per client generation.
 
@@ -132,7 +136,9 @@ For a session whose topic is `peer-<slug>` of a host-owned peer, or any
 `peerctx-` topic:
 
 - **Workspace**: the session runs in the bound workspace. `session/open`
-  without `cwd` gets it; a different `cwd` is refused. Bindings record the
+  without `cwd` gets it; a different `cwd` is refused. It gets none of the
+  profile's shared zones (`research/`, `skills/`), even when the kernel
+  provisioned its workspace under the data dir. Bindings record the
   canonical folder, and a folder that no longer canonicalizes to exactly that
   path (it, or an ancestor, was replaced by a symlink or moved) refuses to
   bootstrap instead of following the link; `peer/context/open` on such a

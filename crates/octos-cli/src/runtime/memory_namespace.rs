@@ -169,6 +169,33 @@ fn bundles() -> &'static tokio::sync::Mutex<HashMap<PathBuf, Arc<Bundle>>> {
     BUNDLES.get_or_init(Default::default)
 }
 
+#[cfg_attr(not(feature = "api"), allow(dead_code))]
+fn bundle_key(data_dir: &Path, namespace: &str) -> Option<PathBuf> {
+    let namespace = validate_memory_namespace(namespace).ok()?;
+    let root = memory_namespace_root(data_dir, &namespace);
+    Some(std::fs::canonicalize(&root).unwrap_or(root))
+}
+
+/// Forget this process's handles to `namespace`'s stores (a closed request
+/// context never runs again, UPCR-2026-034). The stores close once the last
+/// runtime still holding them (a cached, now-refusing session) is dropped,
+/// instead of staying open for the life of the process.
+#[cfg_attr(not(feature = "api"), allow(dead_code))]
+pub(crate) async fn release_namespace_stores(data_dir: &Path, namespace: &str) {
+    if let Some(key) = bundle_key(data_dir, namespace) {
+        bundles().lock().await.remove(&key);
+    }
+}
+
+/// Whether this process holds `namespace`'s stores open.
+#[cfg(all(test, feature = "api"))]
+pub(crate) async fn namespace_stores_open(data_dir: &Path, namespace: &str) -> bool {
+    match bundle_key(data_dir, namespace) {
+        Some(key) => bundles().lock().await.contains_key(&key),
+        None => false,
+    }
+}
+
 async fn open_bundle(profile: &ProfileRuntime, root: &Path) -> Result<Arc<Bundle>> {
     std::fs::create_dir_all(root)
         .wrap_err_with(|| format!("create memory namespace root {}", root.display()))?;

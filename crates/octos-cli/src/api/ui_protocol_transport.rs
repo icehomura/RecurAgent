@@ -15288,6 +15288,14 @@ async fn raw_peer_prepare(
         None => None,
     };
 
+    // Host-bound staging is serialized per profile: the resume lookup, the
+    // binding-conflict check below and the staging write form one critical
+    // section, so two concurrent prepares on the same folder or namespace
+    // cannot both pass the check (ADR 0004 review).
+    let _host_staging = match host_namespace {
+        Some(_) => Some(host_peer_staging_lock(&peers_root).lock_owned().await),
+        None => None,
+    };
     let peers_root_for_host = peers_root.clone();
     if let (Some(namespace), true) = (host_namespace.as_deref(), params.resume) {
         let name = &names.as_ref().expect("validated above")[0];
@@ -15443,6 +15451,20 @@ async fn raw_peer_prepare(
     let mut result = entries[0].as_object().cloned().unwrap_or_default();
     result.insert("peers".into(), Value::Array(entries));
     Ok(Value::Object(result))
+}
+
+/// The per-profile (peers root) lock that serializes host-bound
+/// `peer/prepare` staging.
+fn host_peer_staging_lock(peers_root: &Path) -> Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: std::sync::LazyLock<
+        std::sync::Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+    > = std::sync::LazyLock::new(Default::default);
+    LOCKS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .entry(peers_root.to_path_buf())
+        .or_default()
+        .clone()
 }
 
 /// Roll back a half-staged peer fleet: unregister and remove every reserved
@@ -15888,6 +15910,14 @@ async fn raw_peer_context_close(
         .await,
         InterruptOutcome::Captured { .. }
     );
+    // A closed context never runs again: release its memory stores.
+    if let Some(data_dir) = peers_root.parent() {
+        crate::runtime::memory_namespace::release_namespace_stores(
+            data_dir,
+            &binding.memory_namespace,
+        )
+        .await;
+    }
     Ok(json!({
         "session_id": session_id,
         "slug": slug,
@@ -19189,6 +19219,39 @@ const PEER_RESULTS_NOTE_MAX_SLUGS: usize = 4;
 /// Peer sessions are the WORKERS: they can gather on demand (the tool IS
 /// registered there) but are never nudged — the note belongs to the
 /// originating conversation that will synthesize.
+/// The peer notes a turn of `session_id` starts with: finished peer results
+/// and refusals of its `peer_send_input` that arrived after the call had
+/// returned (#2618). Reading them advances their "already told" cursors, so
+/// an EXTERNAL client's turn (UPCR-2026-036, which cannot act on peers and
+/// has no peer tools) neither gets them nor consumes them: the system
+/// agent's own next turn still does.
+fn peer_turn_start_notes(
+    peers_root: &Path,
+    session_id: &SessionKey,
+    external: bool,
+) -> Vec<(ContextEventKind, &'static str, String)> {
+    let mut notes = Vec::new();
+    if external {
+        return notes;
+    }
+    if let Some(note) = peer_results_ready_note(peers_root, session_id) {
+        notes.push((
+            ContextEventKind::PeerResultsReady,
+            "peer-results-ready",
+            note,
+        ));
+    }
+    if let Some(note) = crate::peers::host_tools::peer_input_rejections_note(peers_root, session_id)
+    {
+        notes.push((
+            ContextEventKind::PeerResultsReady,
+            "peer-input-rejected",
+            note,
+        ));
+    }
+    notes
+}
+
 fn peer_results_ready_note(peers_root: &Path, session_id: &SessionKey) -> Option<String> {
     if session_id
         .topic()
@@ -40036,28 +40099,11 @@ async fn run_standalone_turn(
         }
     }
 
-    let mut tail_context_events = Vec::new();
-    if let Some(note) =
-        peer_results_ready_note(&session_runtime.profile.data_dir.join("peers"), &session_id)
-    {
-        tail_context_events.push((
-            ContextEventKind::PeerResultsReady,
-            "peer-results-ready",
-            note,
-        ));
-    }
-    // #2618 — refusals of this session's `peer_send_input` that arrived
-    // after the call had returned.
-    if let Some(note) = crate::peers::host_tools::peer_input_rejections_note(
+    let mut tail_context_events = peer_turn_start_notes(
         &session_runtime.profile.data_dir.join("peers"),
         &session_id,
-    ) {
-        tail_context_events.push((
-            ContextEventKind::PeerResultsReady,
-            "peer-input-rejected",
-            note,
-        ));
-    }
+        ws.is_external(),
+    );
     if let Some(notes) = read_and_clear_goal_progress_notes(
         &session_runtime.profile.data_dir,
         &session_id.to_string(),
@@ -45479,7 +45525,30 @@ fn append_appui_evidence_jsonl(name: &str, value: Value) {
     append_appui_evidence_jsonl_at(&dir, name, value);
 }
 
-fn append_appui_evidence_jsonl_at(dir: &Path, name: &str, value: Value) {
+/// Replace every `host_token` value (UPCR-2026-034: the bearer secret that
+/// authorizes a host's control calls) with a marker, at any depth.
+fn redact_host_tokens(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, inner) in map.iter_mut() {
+                if key == "host_token" {
+                    if !inner.is_null() {
+                        *inner = json!("[redacted]");
+                    }
+                } else {
+                    redact_host_tokens(inner);
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(redact_host_tokens),
+        _ => {}
+    }
+}
+
+fn append_appui_evidence_jsonl_at(dir: &Path, name: &str, mut value: Value) {
+    // Evidence transcripts are test artefacts that get shared; never write
+    // a host's bearer token into them.
+    redact_host_tokens(&mut value);
     if let Err(error) = std::fs::create_dir_all(dir) {
         tracing::debug!(%error, "failed to create AppUI evidence directory");
         return;
