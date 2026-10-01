@@ -1111,6 +1111,47 @@ impl BoundedClaims {
     }
 }
 
+/// [`BoundedClaims`] per partition (a peer's or host session's route), so one
+/// busy route filling its own bound never refuses another route's claims.
+/// Each partition holds at most [`BoundedClaims::MAX`] unexpired claims; a
+/// partition with none left is dropped, so the map only holds routes with
+/// live claims.
+#[derive(Default)]
+struct PartitionedClaims {
+    parts: HashMap<String, BoundedClaims>,
+}
+
+impl PartitionedClaims {
+    fn claim(&mut self, part: &str, key: String, retention: Duration) -> Claim {
+        self.sweep(retention);
+        self.parts
+            .entry(part.to_owned())
+            .or_default()
+            .claim(key, retention)
+    }
+
+    fn remove(&mut self, part: &str, key: &str) {
+        if let Some(claims) = self.parts.get_mut(part) {
+            claims.remove(key);
+            if claims.keys.is_empty() {
+                self.parts.remove(part);
+            }
+        }
+    }
+
+    /// Drop partitions whose claims have all expired, once there are many.
+    fn sweep(&mut self, retention: Duration) {
+        if self.parts.len() < 64 {
+            return;
+        }
+        let now = Instant::now();
+        self.parts.retain(|_, claims| {
+            claims.evict_expired(now, retention);
+            !claims.keys.is_empty()
+        });
+    }
+}
+
 /// Calls the kernel stopped waiting for, kept so a late result is audited.
 const FINISHED_RETENTION: Duration = Duration::from_secs(3_600);
 const FINISHED_MAX: usize = 1_024;
@@ -1118,8 +1159,8 @@ const FINISHED_MAX: usize = 1_024;
 #[derive(Default)]
 struct HostToolHub {
     routes: Mutex<HashMap<String, HostRoute>>,
-    /// `peer/input` deliveries already sent: `(route, input id)`.
-    inputs: Mutex<BoundedClaims>,
+    /// `peer/input` deliveries already sent: input ids, per route.
+    inputs: Mutex<PartitionedClaims>,
     /// Turn ids the kernel handed out in `peer/input`: `(route, turn id)`.
     /// The host starting such a turn runs the system agent's request, on
     /// the person's behalf: it counts as attended.
@@ -1129,7 +1170,8 @@ struct HostToolHub {
     interrupted_turns: Mutex<BoundedClaims>,
     pending: Mutex<HashMap<String, PendingCall>>,
     finished: Mutex<HashMap<String, (CallMeta, Instant)>>,
-    occurrences: Mutex<BoundedClaims>,
+    /// Host tool call occurrences already dispatched, per route.
+    occurrences: Mutex<PartitionedClaims>,
     /// `(route, tool, args digest)` whose outcome is unknown.
     unknown: Mutex<BoundedClaims>,
 }
@@ -1284,13 +1326,12 @@ pub(crate) fn deliver_peer_input(
         .get(&key)
         .map(|route| (route.send.clone(), route.connection))
         .ok_or_else(not_connected)?;
-    let claim_key = format!("{key}\u{0}{input_id}");
-    match HUB
-        .inputs
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .claim(claim_key.clone(), INPUT_RETENTION)
-    {
+    let claim_key = input_id.to_owned();
+    match HUB.inputs.lock().unwrap_or_else(|p| p.into_inner()).claim(
+        &key,
+        claim_key.clone(),
+        INPUT_RETENTION,
+    ) {
         Claim::Claimed => {}
         Claim::AlreadyClaimed => return Ok(PeerInputDelivery::AlreadySent),
         Claim::Full => {
@@ -1338,7 +1379,7 @@ pub(crate) fn deliver_peer_input(
     HUB.inputs
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .remove(&claim_key);
+        .remove(&key, &claim_key);
     drop_route_if(&key, &send);
     Err(not_connected())
 }
@@ -1602,8 +1643,38 @@ fn input_error(kind: &'static str, message: String) -> CompleteError {
     CompleteError { kind, message }
 }
 
+/// Would a `turn/start` with `turn_id` on the host-owned peer `slug`'s own
+/// session be refused because the host refused its input? Changes nothing:
+/// the input is answered only by [`start_peer_input_turn`], once the turn is
+/// actually admitted, so a start the kernel refuses for any other reason
+/// (a turn in progress, a reused turn id, a budget, a bad request) leaves the
+/// input open for `peer/input/reject`.
+pub(crate) fn check_peer_input_turn(
+    peers_root: &Path,
+    slug: &str,
+    turn_id: &str,
+) -> Result<(), CompleteError> {
+    let ledger = INPUT_LEDGER.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(input_id) = ledger.by_turn.get(&InputLedger::turn_key(
+        &route_key(peers_root, slug),
+        turn_id,
+    )) else {
+        return Ok(());
+    };
+    match ledger.entries.get(input_id).map(|entry| entry.answer) {
+        Some(InputAnswer::Rejected) => Err(input_error(
+            "peer_input_rejected",
+            format!(
+                "turn '{turn_id}' was handed out for input '{input_id}', which the app refused; \
+                 it cannot be started"
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// A `turn/start` on the host-owned peer `slug`'s own session with
-/// `turn_id`. If the kernel handed that turn id out in a `peer/input`, the
+/// `turn_id`, at the moment it is admitted. If the kernel handed that turn id out in a `peer/input`, the
 /// input counts as answered (it can no longer be refused), unless the host
 /// already refused it: then its turn id is released and the start is
 /// refused (`peer_input_rejected`).
@@ -2390,17 +2461,18 @@ impl HostToolRouter for TurnHostToolRouter {
         // provider tool-call id) plus the argument digest, scoped to this
         // profile's peers root.
         let key = format!(
-            "{}\u{0}{}/{}/{tool_call_id}/{args_digest}",
-            self.peers_root.display(),
-            self.session_id.0,
-            self.turn_id
+            "{}/{}/{tool_call_id}/{args_digest}",
+            self.session_id.0, self.turn_id
         );
         match HUB
             .occurrences
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .claim(key, OCCURRENCE_RETENTION)
-        {
+            .claim(
+                &self.host.route_key(&self.peers_root),
+                key,
+                OCCURRENCE_RETENTION,
+            ) {
             Claim::Claimed => OccurrenceClaim::Claimed,
             Claim::AlreadyClaimed => OccurrenceClaim::Duplicate,
             Claim::Full => OccurrenceClaim::Busy,
@@ -2726,7 +2798,7 @@ mod tests {
         assert!(set.contains("t1", retention));
     }
 
-    fn unknown_router(peers_root: &Path, slug: &str) -> TurnHostToolRouter {
+    fn claims_router(peers_root: &Path, slug: &str) -> TurnHostToolRouter {
         TurnHostToolRouter {
             peers_root: peers_root.to_path_buf(),
             host: ToolHost::Peer(slug.to_owned()),
@@ -2748,18 +2820,67 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let peers = root.path().join("peers");
         std::fs::create_dir_all(&peers).unwrap();
-        unknown_router(&peers, "news").mark_outcome_unknown("news_post", "digest-1");
+        claims_router(&peers, "news").mark_outcome_unknown("news_post", "digest-1");
 
         forget_unknown_outcomes_in_memory(&peers); // the kernel restarts
-        let after = unknown_router(&peers, "news");
+        let after = claims_router(&peers, "news");
         assert!(after.outcome_unknown_before("news_post", "digest-1"));
         assert!(!after.outcome_unknown_before("news_post", "digest-2"));
-        assert!(!unknown_router(&peers, "other").outcome_unknown_before("news_post", "digest-1"));
+        assert!(!claims_router(&peers, "other").outcome_unknown_before("news_post", "digest-1"));
 
         // A resolved outcome stays resolved across the next restart too.
         after.clear_outcome_unknown("news_post", "digest-1");
         forget_unknown_outcomes_in_memory(&peers);
-        assert!(!unknown_router(&peers, "news").outcome_unknown_before("news_post", "digest-1"));
+        assert!(!claims_router(&peers, "news").outcome_unknown_before("news_post", "digest-1"));
+    }
+
+    #[test]
+    fn should_keep_other_peers_claiming_when_one_peer_fills_its_occurrences() {
+        // Security review (ADR 0004): the occurrence set was one process-wide
+        // 4 096-entry set that refuses when full, so one busy app blocked
+        // every other app's tool calls for a day. Bounds are per route.
+        let root = tempfile::tempdir().unwrap();
+        let busy = claims_router(root.path(), "busy");
+        for i in 0..BoundedClaims::MAX {
+            assert_eq!(
+                busy.claim_occurrence(&format!("call-{i}"), "d"),
+                OccurrenceClaim::Claimed
+            );
+        }
+        assert_eq!(
+            busy.claim_occurrence("one-more", "d"),
+            OccurrenceClaim::Busy,
+            "one route stays bounded"
+        );
+        let quiet = claims_router(root.path(), "quiet");
+        assert_eq!(
+            quiet.claim_occurrence("call-0", "d"),
+            OccurrenceClaim::Claimed,
+            "another peer is not blocked"
+        );
+    }
+
+    #[test]
+    fn should_bound_each_partition_and_drop_it_when_empty() {
+        let retention = Duration::from_secs(3_600);
+        let mut claims = PartitionedClaims::default();
+        for i in 0..BoundedClaims::MAX {
+            assert_eq!(
+                claims.claim("a", format!("k{i}"), retention),
+                Claim::Claimed
+            );
+        }
+        assert_eq!(claims.claim("a", "x".into(), retention), Claim::Full);
+        assert_eq!(claims.claim("b", "x".into(), retention), Claim::Claimed);
+        assert_eq!(
+            claims.claim("b", "x".into(), retention),
+            Claim::AlreadyClaimed
+        );
+        claims.remove("b", "x");
+        assert!(
+            !claims.parts.contains_key("b"),
+            "an emptied partition is dropped"
+        );
     }
 
     fn tool(name: &str, risk: &str) -> ToolInput {
