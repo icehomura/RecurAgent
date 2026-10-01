@@ -319,13 +319,6 @@ Accessor defaults:
 - `browser.remote_debugging_port` (integer): CDP debugging port (default `9222`).
 - `browser.domain_allowlist` (array of strings): Restricts browser navigation to approved hosts.
 
-### Web Remote & Collab
-
-- `web.port` (integer): Port for `ra web` WebSocket server (default `8080`).
-- `web.bind_mode` (string): `"loopback"`, `"tailscale"`, `"lan"`.
-- `web.view_only` (bool): Restricts all remote clients to view-only mode.
-- `web.max_viewers` (integer): Max concurrent viewer connections (default `4`).
-
 ## Full reference
 
 `src/config.rs` is the authoritative list of supported fields and defaulting behavior.

@@ -136,8 +136,6 @@ files = [
     "computer",
     "browser",
     "clean_release_commit",
-    "web_remote",
-    "web_security",
     "status_line",
     "markdown_rich",
     "overlay_system",

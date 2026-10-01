@@ -3197,34 +3197,6 @@ async fn handle_subcommand(
                 println!("{}", ra::usage::render_usage_text(&rows));
             }
         }
-        cli::Commands::Web {
-            port,
-            bind,
-            view_only,
-            max_viewers,
-        } => {
-            let bind_mode: ra::web_remote::BindMode = bind
-                .parse()
-                .map_err(|e| ra::Error::Config(format!("invalid bind mode '{bind}': {e}")))?;
-            let settings = ra::web_remote::WebRemoteSettings {
-                port,
-                bind_mode,
-                view_only,
-                max_viewers,
-                require_auth_token: true,
-                enable_audit_log: true,
-            };
-            let manager = ra::web_remote::WebRemoteManager::new(settings);
-            let token = manager.issue_token(
-                format!("tok-{}", uuid::Uuid::new_v4().simple()),
-                ra::web_remote::TokenKind::Steer,
-            );
-            println!(
-                "Recur Agent Web Remote server listening on {bind}:{port} (view_only={view_only})"
-            );
-            println!("Web client interface: http://127.0.0.1:{port}");
-            println!("Pairing token: {}", token.token);
-        }
         cli::Commands::Gallery { format } => {
             let matrix = ra::gallery::GalleryMatrix::new();
             if format.eq_ignore_ascii_case("json") {

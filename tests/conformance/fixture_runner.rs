@@ -1030,18 +1030,6 @@ fn command_value(command: Option<&Commands>) -> Value {
             "format": format,
             "refresh": refresh,
         }),
-        Some(Commands::Web {
-            port,
-            bind,
-            view_only,
-            max_viewers,
-        }) => json!({
-            "name": "web",
-            "port": port,
-            "bind": bind,
-            "view_only": view_only,
-            "max_viewers": max_viewers,
-        }),
         Some(Commands::Gallery { format }) => json!({
             "name": "gallery",
             "format": format,

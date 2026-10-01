@@ -2367,14 +2367,6 @@
           "justification": "inspect_image tool schema, fixture analysis, and missing-file error surfaces."
         },
         {
-          "path": "tests/web_remote.rs",
-          "justification": "Web remote frame protocol, client authentication/capacity limits, and QR console pairing rendering."
-        },
-        {
-          "path": "tests/web_security.rs",
-          "justification": "Web remote threat-model document validity, canary-secret obfuscation in frames, and local approval for remote mutating actions."
-        },
-        {
           "path": "tests/e2e_ssh_workspace.rs",
           "justification": "Fixture-sshd end-to-end coverage for ssh:// workspace tools (bd-cv653.6.5)."
         },

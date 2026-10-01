@@ -382,7 +382,6 @@ pub mod validation_broker;
 pub mod vcr;
 #[doc(hidden)]
 pub mod version_check;
-pub mod web_remote;
 pub mod web_search;
 pub mod workspace;
 pub mod workspace_trust;

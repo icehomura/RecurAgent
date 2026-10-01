@@ -412,7 +412,6 @@ This document is the current source-file coverage inventory for `src/**/*.rs`. I
 | `src/validation_broker.rs` | Validation admission and slot broker | Unit; `tests/validation_broker_contract.rs`, `tests/validation_broker_store.rs`, `tests/validation_broker_cli.rs`, and `tests/validation_broker_e2e.rs`. |
 | `src/vcr.rs` | VCR playback/record | Unit; `tests/vcr_parity_validation.rs`, `tests/vcr_redaction_scan.rs`, provider/RPC VCR suites. |
 | `src/version_check.rs` | Version checks | Unit; cross-platform and release-readiness tests exercise the surrounding behavior. |
-| `src/web_remote.rs` | Web-remote access: ftui-web WASM browser client over WebSocket frame diffs (OMP-ADOPT / bd-cv653.10.1, .10.2) | Unit (3 tests); `tests/web_remote.rs`, `tests/web_security.rs`. |
 | `src/web_search.rs` | Web search tool | `tests/e2e_web_search.rs`, `tests/web_search_rungs.rs`. |
 | `src/workspace.rs` | Multi-root workspace state and the unified path-confinement helper (bd-cv653.3.12) | Unit (7 tests); `tests/tools_conformance.rs`, `tests/main_cli_selection.rs`, `tests/branch_edge_failure_coverage.rs`. |
 | `src/workspace_trust.rs` | Workspace trust | Covered through config/CLI suites. |
