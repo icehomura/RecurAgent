@@ -16,29 +16,50 @@
 //! reply is the tool's rendered text, or a rejected Promise carrying the
 //! tool's error text.
 //!
-//! | Function | Host tool | Notes |
-//! |----------|-----------|-------|
-//! | `sdk.read(path)` | `read` | file text |
-//! | `sdk.grep(pattern, path?)` | `grep` | optional path |
-//! | `sdk.find(glob, path?)` | `find` | glob search, optional dir |
-//! | `sdk.ls(path)` | `ls` | directory listing |
-//! | `sdk.call(tool, args)` | any **whitelisted** tool | escape hatch; still whitelist-gated |
+//! Each helper accepts the positional shorthand **or** an options object, and
+//! the object form forwards every key to the host tool (so `offset`, `limit`,
+//! `hashline`, `encoding`, `glob`, `context`, ... all take effect):
+//!
+//! | Call | Host tool |
+//! |------|-----------|
+//! | `sdk.read(path)` / `sdk.read({ path, offset, limit, hashline, encoding })` | `read` |
+//! | `sdk.grep(pattern, path?)` / `sdk.grep({ pattern, path, glob, ignoreCase, literal, context, limit, hashline })` | `grep` |
+//! | `sdk.find(glob, path?)` / `sdk.find({ pattern, path, limit })` | `find` |
+//! | `sdk.ls(path?)` / `sdk.ls({ path, limit })` | `ls` |
+//! | `sdk.call(tool, args)` | any **whitelisted** tool (escape hatch, still whitelist-gated) |
 //!
 //! The SDK exposes only the four read-only whitelisted tools plus the `call`
 //! escape hatch. `write`, `edit`, and `bash` are intentionally **absent** —
 //! they are outside [`BRIDGE_WHITELIST`], so exposing them would advertise
 //! bindings the host always rejects. Adding them requires routing through the
-//! approval pipeline first (port plan §7). The SDK never exposes raw `fs` or
-//! `child_process` to the program.
+//! approval pipeline first (port plan §7).
+//!
+//! # Output discipline
+//!
+//! stdout carries the protocol, so program output is kept off it: `console.*`
+//! and any stray `process.stdout.write` are redirected to stderr, and the
+//! protocol writes through a handle captured before the program runs. Only the
+//! program's `return`ed value comes back to the model.
 //!
 //! # Security boundary
 //!
-//! - The child runs with [`BRIDGE_WHITELIST`]-only tools; every call is
-//!   dispatched through the *same* [`Tool`] implementations a direct call uses
-//!   (see [`RunCodeTool::bridge_call`]), so path confinement, workspace roots,
-//!   and read settings are identical — no policy bypass.
-//! - All four whitelisted tools are read-only and thus need no approval; the
-//!   bridge can never reach an approval-gated tool.
+//! Two independent layers, both reported in the tool result's `details`:
+//!
+//! - **Tool layer.** Every bridge call is dispatched through the *same*
+//!   [`Tool`] implementations a direct call uses (see
+//!   [`RunCodeTool::bridge_call`]), so path confinement, workspace roots, and
+//!   read settings are identical — no policy bypass. All four whitelisted tools
+//!   are read-only and thus need no approval; the bridge can never reach an
+//!   approval-gated tool.
+//! - **Process layer.** When the runtime supports it, the child is spawned under
+//!   Node's permission model (see [`SandboxMode`]): reads are confined to the
+//!   program's scratch directory plus the session workspace roots, and writes,
+//!   `child_process`, and reads outside those roots fail with
+//!   `ERR_ACCESS_DENIED`. This is what makes the read-only contract real for a
+//!   program that reaches for `node:fs` or `node:child_process` directly instead
+//!   of going through the bridge. On a runtime without the permission model the
+//!   flag is omitted, `details.sandbox` reads `"unavailable"`, and the process
+//!   layer is absent (the tool layer still holds).
 //! - A node child owns its process group: a wall-clock timeout kills the whole
 //!   tree, including anything the program spawned.
 
@@ -72,6 +93,62 @@ pub const PTC_RUN_CODE_SCHEMA: &str = "ra.ptc.run_code.v1";
 /// open question in the port plan, §7).
 const BRIDGE_WHITELIST: [&str; 4] = ["read", "grep", "find", "ls"];
 
+/// Node permission-model flags, most-preferred first.
+///
+/// `--permission` is the stable spelling (Node >= 23, and accepted as an alias
+/// in 22.x); `--experimental-permission` is the 20.x/22.x spelling. Whichever
+/// the installed runtime accepts is used; if neither is accepted the child runs
+/// without the process layer and reports [`SandboxMode::Unavailable`].
+const PERMISSION_FLAGS: [&str; 2] = ["--permission", "--experimental-permission"];
+
+/// Maximum stack frames carried into the model-facing error text.
+const MAX_ERROR_FRAMES: usize = 8;
+
+/// What confinement the node child actually ran under.
+///
+/// Reported in the tool result's `details.sandbox` so the boundary is
+/// auditable instead of assumed: a runtime without the permission model cannot
+/// confine the process, and saying so is better than claiming a sandbox that
+/// does not exist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SandboxMode {
+    /// Node's permission model: read-only, confined to the allowed roots, with
+    /// `child_process` and writes denied by the runtime.
+    NodePermission,
+    /// The runtime does not accept a permission-model flag; the child is an
+    /// unconfined node process (the tool-layer policy still applies).
+    Unavailable,
+    /// Explicitly disabled by the caller or `PTC_SANDBOX`.
+    Disabled,
+}
+
+impl SandboxMode {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::NodePermission => "node-permission",
+            Self::Unavailable => "unavailable",
+            Self::Disabled => "disabled",
+        }
+    }
+}
+
+/// Whether the process layer is enabled, from `PTC_SANDBOX`.
+///
+/// Confinement is on by default because it is what makes the module's
+/// read-only contract true for a program that reaches for `node:fs` or
+/// `node:child_process` directly; opting out therefore has to be explicit.
+fn sandbox_enabled_from_env() -> bool {
+    !matches!(
+        std::env::var("PTC_SANDBOX")
+            .ok()
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("off" | "0" | "false" | "no")
+    )
+}
+
 /// Input parameters for the `run_code` tool.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +177,9 @@ pub struct RunCodeTool {
     image_auto_resize: bool,
     /// `read` image-blocking flag, matching the live registry.
     block_images: bool,
+    /// Whether to confine the child with Node's permission model when the
+    /// runtime supports it (default: on; `PTC_SANDBOX=off` opts out).
+    sandbox: bool,
 }
 
 impl RunCodeTool {
@@ -117,6 +197,7 @@ impl RunCodeTool {
             search_backend: search_backend_from_config(None),
             image_auto_resize: true,
             block_images: false,
+            sandbox: sandbox_enabled_from_env(),
         }
     }
 
@@ -125,6 +206,26 @@ impl RunCodeTool {
     pub const fn with_timeout_secs(mut self, timeout_secs: u64) -> Self {
         self.timeout_secs = timeout_secs;
         self
+    }
+
+    /// Override process-layer confinement (used by tests and config wiring).
+    #[must_use]
+    pub const fn with_sandbox(mut self, sandbox: bool) -> Self {
+        self.sandbox = sandbox;
+        self
+    }
+
+    /// Read-only roots the confined child may touch: its own scratch directory
+    /// (for the SDK and the program) plus every session workspace root, so a
+    /// direct `fs` read of a workspace file still works from the program.
+    ///
+    /// Nothing outside this set is readable, and no write access is granted at
+    /// all — the child is a read-only program by contract.
+    fn sandbox_read_roots(&self, scratch: &Scratch) -> Vec<PathBuf> {
+        let mut roots = vec![scratch.dir.clone(), self.cwd.clone()];
+        roots.extend(self.workspace.roots());
+        roots.dedup();
+        roots
     }
 
     /// Share the session workspace root set with the bridge's inner tools so
@@ -257,6 +358,28 @@ fn probe_node() -> NodeProbe {
     probe_command("node")
 }
 
+/// Which permission-model flag (if any) the installed `node` accepts, probed
+/// once per process.
+///
+/// `None` means the runtime cannot confine the child; the caller then reports
+/// [`SandboxMode::Unavailable`] rather than implying a boundary that is absent.
+fn probe_permission_flag() -> Option<&'static str> {
+    static FLAG: std::sync::OnceLock<Option<&'static str>> = std::sync::OnceLock::new();
+    *FLAG.get_or_init(|| {
+        PERMISSION_FLAGS.into_iter().find(|flag| {
+            Command::new("node")
+                .arg(flag)
+                .arg("-e")
+                .arg("")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+        })
+    })
+}
+
 /// The actionable error returned when the node runtime is unavailable.
 fn node_missing_error() -> Error {
     Error::tool(
@@ -270,26 +393,110 @@ fn node_missing_error() -> Error {
 
 /// Render the SDK's terminal `error` field for the model.
 ///
-/// The SDK serializes thrown errors as `{ name, message, stack }`; surface the
-/// human-facing `message` (prefixed by the name when it adds signal) instead of
-/// dumping the whole JSON object with a multi-line stack.
+/// The SDK serializes thrown errors as `{ name, message, stack, code? }` and
+/// rebases `<anonymous>` frames onto the program's own line numbers. Surface the
+/// human-facing `message` (prefixed by the name and error code when they add
+/// signal) plus a short trace pointing at the program, instead of dumping the
+/// whole JSON object.
 fn render_program_error(error: &Value) -> String {
-    match error {
-        Value::String(s) => s.clone(),
-        Value::Object(_) => {
-            let name = error.get("name").and_then(Value::as_str).unwrap_or("Error");
-            let message = error
-                .get("message")
-                .and_then(Value::as_str)
-                .map_or_else(|| error.to_string(), str::to_string);
-            if name == "Error" || name.is_empty() {
-                message
+    let Value::Object(_) = error else {
+        return match error {
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+    };
+    let name = error.get("name").and_then(Value::as_str).unwrap_or("Error");
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .map_or_else(|| error.to_string(), str::to_string);
+    let mut head = if name == "Error" || name.is_empty() {
+        message
+    } else {
+        format!("{name}: {message}")
+    };
+    let code_suffix = error
+        .get("code")
+        .and_then(Value::as_str)
+        .filter(|code| !code.is_empty() && !head.contains(*code))
+        .map_or_else(String::new, |code| format!(" [{code}]"));
+    head.push_str(&code_suffix);
+    match error.get("stack").and_then(Value::as_str) {
+        Some(stack) => {
+            let frames = render_error_frames(stack);
+            if frames.is_empty() {
+                head
             } else {
-                format!("{name}: {message}")
+                format!("{head}\n{}", frames.join("\n"))
             }
         }
-        other => other.to_string(),
+        None => head,
     }
+}
+
+/// Extract `<marker><line>:<col>` from one stack frame, if present.
+///
+/// `marker` includes its trailing colon (`"ptc-program:"`).
+fn extract_frame_site(frame: &str, marker: &str) -> Option<String> {
+    let start = frame.find(marker)?;
+    let rest = &frame[start + marker.len()..];
+    let line_end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
+    if line_end == 0 || !rest[line_end..].starts_with(':') {
+        return None;
+    }
+    let col_rest = &rest[line_end + 1..];
+    let col_end = col_rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(col_rest.len());
+    if col_end == 0 {
+        return None;
+    }
+    Some(format!(
+        "{marker}{}:{}",
+        &rest[..line_end],
+        &col_rest[..col_end]
+    ))
+}
+
+/// Pick the actionable frames out of a rebased stack.
+///
+/// Program frames win: they point at the exact line of the `code` the model
+/// wrote. Only when the program has no frame (an error raised inside the SDK
+/// itself, e.g. argument validation on a malformed call) fall back to the SDK
+/// helper frames. Node internals, the scratch directory, and the harness entry
+/// point are dropped as noise.
+fn render_error_frames(stack: &str) -> Vec<String> {
+    let frames: Vec<&str> = stack.lines().skip(1).collect();
+    let collect = |marker: &str| -> Vec<String> {
+        frames
+            .iter()
+            .filter_map(|frame| extract_frame_site(frame, marker))
+            .take(MAX_ERROR_FRAMES)
+            .map(|site| format!("  at {site}"))
+            .collect()
+    };
+    let program = collect("ptc-program:");
+    if program.is_empty() {
+        collect("ptc_sdk.js:")
+    } else {
+        program
+    }
+}
+
+/// First ~160 chars of a stray protocol line, for diagnostics.
+///
+/// A non-protocol line means something wrote to the protocol channel; the
+/// offending bytes are the only way to tell what. The SDK redirects
+/// `process.stdout.write` to stderr, so this should stay rare — it is the
+/// diagnostic for the residue (a native addon writing to fd 1, say).
+fn protocol_snippet(line: &str) -> String {
+    let mut out: String = line.chars().take(160).collect();
+    if line.chars().count() > 160 {
+        out.push('…');
+    }
+    out
 }
 
 /// Per-invocation scratch directory holding the SDK and code files.
@@ -348,6 +555,8 @@ struct PtcChild {
     lines: std::sync::Mutex<std::sync::mpsc::Receiver<Option<String>>>,
     /// Set by the first kill(): guards against pid-reuse double-kill.
     killed: bool,
+    /// Which confinement the child was actually spawned under.
+    sandbox: SandboxMode,
 }
 
 impl PtcChild {
@@ -356,7 +565,18 @@ impl PtcChild {
     /// `tool_timeout_ms` becomes the SDK's per-call timeout: the program can
     /// never wait on a host reply longer than the enclosing run budget, so a
     /// stalled bridge fails the call instead of hanging the whole run.
-    fn spawn(scratch: &Scratch, cwd: &Path, tool_timeout_ms: u64) -> Result<Self> {
+    ///
+    /// When `sandbox` is set, the child is confined with Node's permission
+    /// model (see [`SandboxMode`]): `read_roots` become the only readable
+    /// paths, and every other read, all writes, and `child_process` are denied
+    /// by the runtime. The mode actually obtained is recorded on the child.
+    fn spawn(
+        scratch: &Scratch,
+        cwd: &Path,
+        tool_timeout_ms: u64,
+        sandbox: bool,
+        read_roots: &[PathBuf],
+    ) -> Result<Self> {
         // Fail fast with an actionable message when node is absent, rather
         // than surfacing a bare ENOENT (or, on odd shims, hanging).
         match probe_node() {
@@ -364,6 +584,25 @@ impl PtcChild {
             NodeProbe::Missing | NodeProbe::Broken => return Err(node_missing_error()),
         }
         let mut command = Command::new("node");
+        let sandbox_mode = if sandbox {
+            match probe_permission_flag() {
+                Some(flag) => {
+                    let allowed: Vec<String> = read_roots
+                        .iter()
+                        .map(|root| root.to_string_lossy().into_owned())
+                        .filter(|root| !root.is_empty())
+                        .collect();
+                    command.arg(flag);
+                    if !allowed.is_empty() {
+                        command.arg(format!("--allow-fs-read={}", allowed.join(",")));
+                    }
+                    SandboxMode::NodePermission
+                }
+                None => SandboxMode::Unavailable,
+            }
+        } else {
+            SandboxMode::Disabled
+        };
         command
             .arg(scratch.sdk_path())
             .arg("--code-file")
@@ -431,6 +670,7 @@ impl PtcChild {
             stdin,
             lines: std::sync::Mutex::new(rx),
             killed: false,
+            sandbox: sandbox_mode,
         })
     }
 
@@ -503,9 +743,15 @@ impl Tool for RunCodeTool {
         "Execute a JavaScript program against the available tools. Takes two \
          arguments: `code`, the BODY of an async function (top-level `await` and \
          `return` work), and `description`, a short summary of what the program \
-         does. Call tools as `await sdk.read(...)`, `await sdk.grep(...)`, \
-         `await sdk.find(...)`, or `await sdk.ls(...)`. Only what you return is \
-         program output — curate it. One run_code replaces many model round-trips."
+         does. Call tools as `await sdk.read('path')`, `await sdk.grep('needle', \
+         'dir')`, `await sdk.find('*.rs', 'dir')`, or `await sdk.ls('dir')`; every \
+         helper also accepts an options object (`await sdk.read({ path: \
+         'src/main.rs', offset: 1, limit: 40 })`, `await sdk.ls({ limit: 20 })`), \
+         and `await sdk.call(tool, args)` reaches the full argument set. Only what \
+         you return is program output — curate it; `console.*` and stray stdout \
+         writes go to stderr. The program is read-only (writes, `child_process`, \
+         and reads outside the workspace are denied) and `process.exit` is \
+         refused with an error. One run_code replaces many model round-trips."
     }
 
     fn parameters(&self) -> Value {
@@ -563,7 +809,10 @@ impl Tool for RunCodeTool {
         let tool_timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
 
         let scratch = Scratch::materialize(code)?;
-        let mut proc = PtcChild::spawn(&scratch, &self.cwd, tool_timeout_ms)?;
+        let read_roots = self.sandbox_read_roots(&scratch);
+        let mut proc =
+            PtcChild::spawn(&scratch, &self.cwd, tool_timeout_ms, self.sandbox, &read_roots)?;
+        let sandbox = proc.sandbox.as_str();
 
         // Protocol loop: service tool calls until the terminal result line.
         let final_line = loop {
@@ -582,7 +831,11 @@ impl Tool for RunCodeTool {
                 proc.kill();
                 Error::tool(
                     "run_code",
-                    format!("PTC_PROTOCOL: non-protocol output on the channel ({err})"),
+                    format!(
+                        "PTC_PROTOCOL: non-protocol output on the channel ({err}); \
+                         first bytes: {}",
+                        protocol_snippet(trimmed)
+                    ),
                 )
             })?;
             let Some(id) = parsed.get("id").cloned() else {
@@ -614,9 +867,13 @@ impl Tool for RunCodeTool {
             .map_err(|err| Error::tool("run_code", format!("PTC_PROTOCOL: {err}")))?;
         let ok = terminal.get("ok").and_then(Value::as_bool).unwrap_or(false);
         if !ok {
-            let error = terminal
-                .get("error")
+            let error_value = terminal.get("error");
+            let error = error_value
                 .map_or_else(|| "run_code failed".to_string(), render_program_error);
+            let error_code = error_value
+                .and_then(|value| value.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
             return Ok(ToolOutput {
                 content: vec![ContentBlock::Text(TextContent::new(format!(
                     "run_code failed: {error}"
@@ -625,6 +882,8 @@ impl Tool for RunCodeTool {
                     "schema": PTC_RUN_CODE_SCHEMA,
                     "ok": false,
                     "error": error,
+                    "errorCode": error_code,
+                    "sandbox": sandbox,
                 })),
                 is_error: true,
             });
@@ -644,6 +903,7 @@ impl Tool for RunCodeTool {
                 "ok": true,
                 "truncated": truncation.truncated,
                 "description": input.description,
+                "sandbox": sandbox,
             })),
             is_error: false,
         })
@@ -665,6 +925,33 @@ mod tests {
     /// Whether the host machine can actually run the node-backed cases.
     fn node_available() -> bool {
         probe_node() == NodeProbe::Available
+    }
+
+    /// Concatenated text of a tool result.
+    fn output_text(output: &ToolOutput) -> String {
+        output
+            .content
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Whether this runtime can confine the child with the permission model.
+    fn sandbox_available() -> bool {
+        node_available() && probe_permission_flag().is_some()
+    }
+
+    /// An absolute path that exists on this platform and sits outside every
+    /// allowed root (used as the sandbox escape probe).
+    fn outside_system_path() -> &'static str {
+        if cfg!(windows) {
+            "C:/Windows/win.ini"
+        } else {
+            "/etc/hostname"
+        }
     }
 
     #[test]
@@ -818,6 +1105,80 @@ mod tests {
             render_program_error(&json!({ "name": "Error", "message": "nope" })),
             "nope"
         );
+        // Rebased program frames and an error code are carried through.
+        assert_eq!(
+            render_program_error(&json!({
+                "name": "TypeError",
+                "message": "x is not a function",
+                "code": "ERR_TEST",
+                "stack": "TypeError: x is not a function\n    at ptc-program:4:9",
+            })),
+            "TypeError: x is not a function [ERR_TEST]\n  at ptc-program:4:9"
+        );
+        // A code already spelled out in the message is not duplicated.
+        assert_eq!(
+            render_program_error(&json!({
+                "name": "Error",
+                "message": "PTC_EXIT: nope",
+                "code": "PTC_EXIT",
+            })),
+            "PTC_EXIT: nope"
+        );
+    }
+
+    #[test]
+    fn error_frames_prefer_program_lines() {
+        // Program frames win over the SDK helper and harness frames; node
+        // internals never reach the model.
+        let mixed = "Error: boom\n    \
+                     at eval (eval at main (C:/tmp/x/ptc_sdk.js:585:21), ptc-program:3:7)\n    \
+                     at main (C:/tmp/x/ptc_sdk.js:586:26)\n    \
+                     at node:internal/vm:209:10";
+        assert_eq!(
+            render_error_frames(mixed),
+            vec!["  at ptc-program:3:7".to_string()]
+        );
+
+        // With no program frame (the error was raised inside the SDK itself),
+        // the helper frames are the fallback.
+        let sdk_only = "Error: bad\n    \
+                        at normalizeArgs (C:/tmp/x/ptc_sdk.js:337:13)\n    \
+                        at Object.read (C:/tmp/x/ptc_sdk.js:375:23)";
+        assert_eq!(
+            render_error_frames(sdk_only),
+            vec![
+                "  at ptc_sdk.js:337:13".to_string(),
+                "  at ptc_sdk.js:375:23".to_string()
+            ]
+        );
+
+        // A stack with nothing recognizable yields no frames.
+        assert!(render_error_frames("Error: boom\n    at <anonymous>:1:1").is_empty());
+    }
+
+    #[test]
+    fn frame_site_requires_line_and_column() {
+        assert_eq!(
+            extract_frame_site("  at ptc-program:12:5)", "ptc-program:").as_deref(),
+            Some("ptc-program:12:5")
+        );
+        // Trailing frame with no closing punctuation still parses.
+        assert_eq!(
+            extract_frame_site("  at ptc-program:9:4", "ptc-program:").as_deref(),
+            Some("ptc-program:9:4")
+        );
+        // A marker with no digits is not a site.
+        assert_eq!(extract_frame_site("  at ptc-program:)", "ptc-program:"), None);
+        assert_eq!(extract_frame_site("  at other.js:1:2", "ptc-program:"), None);
+    }
+
+    #[test]
+    fn protocol_snippet_is_bounded() {
+        let long = "x".repeat(500);
+        let snippet = protocol_snippet(&long);
+        assert_eq!(snippet.chars().count(), 161, "160 chars plus the ellipsis");
+        assert!(snippet.ends_with('…'), "{snippet}");
+        assert_eq!(protocol_snippet("short"), "short");
     }
 
     #[test]
@@ -835,7 +1196,7 @@ mod tests {
             return; // Only meaningful on machines without node.
         }
         let scratch = Scratch::materialize("return 1;").expect("scratch");
-        let err = PtcChild::spawn(&scratch, Path::new("."), 5_000)
+        let err = PtcChild::spawn(&scratch, Path::new("."), 5_000, false, &[])
             .err()
             .expect("spawn must fail without node");
         assert!(err.to_string().contains("PTC_NODE_MISSING"), "{err}");
@@ -924,5 +1285,162 @@ mod tests {
         assert!(text.contains("\"hasAlpha\":true"), "{text}");
         assert!(text.contains("\"hasBeta\":true"), "{text}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bridge_helpers_forward_options_objects() {
+        // The options-object form must forward every key, not just `path`:
+        // `limit: 1` has to reach ReadTool and actually truncate, while the
+        // positional form keeps working unchanged.
+        if !node_available() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("pi-ptc-opts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::write(dir.join("multi.txt"), "one\ntwo\nthree\n").expect("write");
+        let code = r"
+            const limited = String(await sdk.read({ path: 'multi.txt', limit: 1 }));
+            const full = String(await sdk.read('multi.txt'));
+            return {
+                limitedHasThree: limited.includes('three'),
+                fullHasThree: full.includes('three'),
+                limitedHasOne: limited.includes('one'),
+            };
+        ";
+        let out = run(
+            &RunCodeTool::new(&dir),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("options-object read should succeed");
+        assert!(!out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        assert!(text.contains(r#""limitedHasThree":false"#), "{text}");
+        assert!(text.contains(r#""fullHasThree":true"#), "{text}");
+        assert!(text.contains(r#""limitedHasOne":true"#), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stray_stdout_write_cannot_corrupt_the_protocol() {
+        // stdout carries the protocol. The SDK redirects program stdout to
+        // stderr, so even a deliberate write — or clobbering the writer —
+        // must leave the run intact instead of surfacing PTC_PROTOCOL.
+        if !node_available() {
+            return;
+        }
+        let code = "process.stdout.write('NOISE\\n'); \
+                    process.stdout.write = () => true; return 'clean';";
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("a stray stdout write must not fail the run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        assert!(output_text(&out).contains("clean"), "{}", output_text(&out));
+    }
+
+    #[test]
+    fn process_exit_is_refused_and_reported() {
+        // Without the SDK guard this surfaces as PTC_EOF (a child that died
+        // without answering). With it, the refusal is an ordinary error.
+        if !node_available() {
+            return;
+        }
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": "process.exit(0);", "timeoutMs": 30_000 }),
+        )
+        .expect("process.exit must surface as a tool error, not EOF");
+        assert!(out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        assert!(text.contains("PTC_EXIT"), "{text}");
+        assert!(text.contains("process.exit"), "{text}");
+    }
+
+    #[test]
+    fn sandbox_confines_direct_fs_reads() {
+        // Layer 2 contract (see the module docs): a program that reaches for
+        // `node:fs` directly still cannot read outside the scratch dir and the
+        // workspace roots. The unsandboxed run is the control that proves the
+        // denial comes from the sandbox rather than a missing file.
+        if !sandbox_available() {
+            return;
+        }
+        let outside = outside_system_path();
+        assert!(
+            Path::new(outside).exists(),
+            "sandbox escape probe needs {outside} to exist"
+        );
+        let dir = std::env::temp_dir().join(format!("pi-ptc-sbx-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::write(dir.join("inside.txt"), "inside-ok").expect("write");
+        let code = format!(
+            r"
+            const fs = await import('node:fs');
+            const probe = (p) => {{ try {{ fs.readFileSync(p); return 'read'; }} catch (err) {{ return String(err.code); }} }};
+            return {{ outside: probe({outside:?}), inside: probe('inside.txt') }};
+            ",
+            outside = outside
+        );
+        let confined = run(
+            &RunCodeTool::new(&dir).with_sandbox(true),
+            json!({ "code": code.clone(), "timeoutMs": 30_000 }),
+        )
+        .expect("sandboxed run");
+        let open = run(
+            &RunCodeTool::new(&dir).with_sandbox(false),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("unsandboxed run");
+        let confined_text = output_text(&confined);
+        let open_text = output_text(&open);
+        // The workspace is still readable inside the sandbox...
+        assert!(
+            confined_text.contains(r#""inside":"read""#),
+            "{confined_text}"
+        );
+        // ...but the escape is denied, and the control shows it is the sandbox
+        // doing the denying.
+        assert!(
+            !confined_text.contains(r#""outside":"read""#),
+            "{confined_text}"
+        );
+        assert!(open_text.contains(r#""outside":"read""#), "{open_text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sandbox_mode_is_reported_in_details() {
+        if !node_available() {
+            return;
+        }
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": "return 1;", "timeoutMs": 30_000 }),
+        )
+        .expect("run");
+        let mode = out
+            .details
+            .as_ref()
+            .and_then(|details| details.get("sandbox"))
+            .and_then(Value::as_str);
+        let expected = if sandbox_available() {
+            "node-permission"
+        } else {
+            "unavailable"
+        };
+        assert_eq!(mode, Some(expected));
+
+        // An explicit opt-out is reported honestly rather than implied away.
+        let off = RunCodeTool::new(".").with_sandbox(false);
+        let out_off = run(&off, json!({ "code": "return 1;", "timeoutMs": 30_000 })).expect("run");
+        assert_eq!(
+            out_off
+                .details
+                .as_ref()
+                .and_then(|details| details.get("sandbox"))
+                .and_then(Value::as_str),
+            Some("disabled")
+        );
     }
 }
