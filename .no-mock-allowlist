@@ -35,3 +35,7 @@ tests/full_suite_gate/certification_dossier.md:MockHostActions
 tests/qa_certification_dossier.rs:MockHostActions
 tests/qa_docs_policy_validation.rs:MockHttp
 tests/tui_state.rs:MockRssReader
+
+# === File-scoped allowlist (tech debt audited 2026-10-01) ===
+tests/bench_schema.rs:FakePersistenceFault
+tests/conformance/fixtures/github_tool.json:Stubbed
