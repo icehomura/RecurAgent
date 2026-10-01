@@ -2390,9 +2390,9 @@ async fn run(
     // into the same registry cannot form an Arc cycle.
     if enabled_tools.contains(&"dag") {
         let dag_registry = agent_session.agent.shared_tools();
-        agent_session.agent.extend_tools(vec![
-            Box::new(ra::dag_tool::DagTool::new(&dag_registry)) as Box<dyn ra::tools::Tool>
-        ]);
+        agent_session.agent.extend_tools(vec![Box::new(
+            ra::dag_tool::DagTool::new(&dag_registry).with_settings(config.dag.clone()),
+        ) as Box<dyn ra::tools::Tool>]);
     }
     // submit_plan shares the agent's plan-mode state (bd-cv653.3.5); it is
     // always registered — the tool self-errors outside plan mode.

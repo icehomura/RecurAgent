@@ -2989,10 +2989,9 @@ pub(crate) async fn create_agent_session_deferred_mcp(
     // handle avoids an Arc cycle once it is published into that registry.
     if enabled_tools.contains(&"dag") {
         let dag_registry = agent_session.agent.shared_tools();
-        agent_session
-            .agent
-            .extend_tools(vec![Box::new(crate::dag_tool::DagTool::new(&dag_registry))
-                as Box<dyn crate::tools::Tool>]);
+        agent_session.agent.extend_tools(vec![Box::new(
+            crate::dag_tool::DagTool::new(&dag_registry).with_settings(config.dag.clone()),
+        ) as Box<dyn crate::tools::Tool>]);
     }
     // The host picker always exists. Enabling "ask" grants the model the
     // structured-question tool by exposing this same shared handle in the
