@@ -53,10 +53,11 @@ use ftui::widgets::Widget;
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::spinner::{DOTS, SpinnerState};
 use ftui::widgets::textarea::TextArea;
-use ftui::{Cmd, Event, Frame, KeyCode, Model, Modifiers, MouseEventKind};
+use ftui::{Cmd, Event, Frame, KeyCode, Model, Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::ask::{AskAnswer, AskResponse, AskUiRequest, QuestionReply};
 use crate::autocomplete::{AutocompleteCatalog, AutocompleteItem, AutocompleteItemKind};
+use crate::dag_view;
 use crate::extensions::{ExtensionUiRequest, ExtensionUiResponse};
 use crate::interactive::{AutocompleteState, RaMsg, extension_commands_for_catalog};
 use crate::interactive::{format_extension_ui_prompt, parse_extension_ui_response};
@@ -82,6 +83,11 @@ pub enum RaFtuiMsg {
     /// The process came back from a SIGTSTP suspension: the terminal has
     /// been re-acquired and the next frame must repaint everything.
     Resumed,
+    /// A run of printable keystrokes accumulated since the last editor
+    /// mutation is ready to be inserted as one `insert_text`. Voice/IME input
+    /// arrives as a storm of individual key events; folding them keeps the
+    /// editor's per-mutation line work from being paid once per character.
+    FlushInput,
     /// The external editor (ctrl+g) closed and the terminal is back: the
     /// saved draft (or why there is none) and the size for a full repaint.
     Edited {
@@ -134,6 +140,16 @@ const AGENT_EVENT_POLL: Duration = Duration::from_millis(50);
 
 /// Spinner animation cadence while the agent works.
 const SPINNER_INTERVAL: Duration = Duration::from_millis(120);
+
+/// How long a run of printable keystrokes may accumulate before it is
+/// inserted into the editor as one mutation. Long enough to fold a voice-input
+/// burst into a handful of inserts, short enough that it is imperceptible.
+const INPUT_COALESCE_IDLE: Duration = Duration::from_millis(10);
+
+/// Hard cap on an accumulated run. A dictation that never pauses flushes in
+/// chunks this large, so the editor is never left arbitrarily far behind and
+/// each insert stays bounded.
+const INPUT_COALESCE_MAX: usize = 1024;
 
 /// Key hint shown in the footer while a picker overlay is open.
 const PICKER_HINT: &str = "type to filter · ↑/↓ navigate · Enter apply · Esc close";
@@ -537,19 +553,30 @@ impl Subscription<RaFtuiMsg> for AgentEventSubscription {
 /// fall back to the built-in palette per-field.
 #[derive(Debug, Clone, Copy)]
 pub struct FtuiPalette {
+    /// Glyph set for the status row (`statusLine.chrome` in settings).
+    pub chrome: crate::status_line::StatusLineChrome,
     accent: ftui::PackedRgba,
     muted: ftui::PackedRgba,
     error: ftui::PackedRgba,
     warning: ftui::PackedRgba,
+    /// Success green (`colors.success`): the transient status-row
+    /// confirmation after a drag-selection copy.
+    success: ftui::PackedRgba,
+    /// Drag-selection background (`ui.selection`), used to mark the cells
+    /// the mouse has selected in the conversation body.
+    selection: ftui::PackedRgba,
 }
 
 impl Default for FtuiPalette {
     fn default() -> Self {
         Self {
+            chrome: crate::status_line::StatusLineChrome::default(),
             accent: ftui::PackedRgba::rgb(97, 175, 239),
             muted: ftui::PackedRgba::rgb(130, 137, 151),
             error: ftui::PackedRgba::rgb(220, 80, 80),
             warning: ftui::PackedRgba::rgb(229, 192, 123),
+            success: ftui::PackedRgba::rgb(78, 201, 176),
+            selection: ftui::PackedRgba::rgb(38, 79, 120),
         }
     }
 }
@@ -563,11 +590,22 @@ impl FtuiPalette {
                 .map_or(fallback, |(r, g, b)| ftui::PackedRgba::rgb(r, g, b))
         };
         Self {
+            chrome: fallback.chrome,
             accent: parse(&theme.colors.accent, fallback.accent),
             muted: parse(&theme.colors.muted, fallback.muted),
             error: parse(&theme.colors.error, fallback.error),
             warning: parse(&theme.colors.warning, fallback.warning),
+            success: parse(&theme.colors.success, fallback.success),
+            selection: parse(&theme.ui.selection, fallback.selection),
         }
+    }
+
+    /// Same palette with a different status-row glyph set, from
+    /// `statusLine.chrome` in settings.
+    #[must_use]
+    pub fn with_chrome(mut self, chrome: crate::status_line::StatusLineChrome) -> Self {
+        self.chrome = chrome;
+        self
     }
 }
 
@@ -738,6 +776,7 @@ fn push_card_block(
     state: CardState,
     text: &str,
     detail: Option<&String>,
+    styled_detail: Option<&[ftui::text::Line<'static>]>,
     diff_styled: bool,
     group_count: u32,
     palette: &FtuiPalette,
@@ -747,9 +786,9 @@ fn push_card_block(
     let (glyph, style) = match state {
         CardState::Pending => (
             DOTS[spinner_frame % DOTS.len()],
-            ftui::Style::new().dim().fg(palette.accent),
+            ftui::Style::new().dim().fg(palette.success),
         ),
-        CardState::Ok => ("✓", ftui::Style::new().fg(palette.accent)),
+        CardState::Ok => ("✓", ftui::Style::new().fg(palette.success)),
         CardState::Err => ("✗", ftui::Style::new().bold().fg(palette.error)),
     };
     let head = if group_count > 1 {
@@ -758,6 +797,12 @@ fn push_card_block(
         format!("{glyph} {text}")
     };
     lines.push(ftui::text::Line::styled(head, style));
+    // Pre-rendered styled detail (the `dag` tree view) replaces the plain
+    // text detail entirely: per-node colors were applied at fold time.
+    if let Some(styled) = styled_detail {
+        push_styled_detail(lines, styled, expanded, palette);
+        return;
+    }
     let Some(detail) = detail else {
         return;
     };
@@ -811,6 +856,25 @@ fn push_card_block(
     }
 }
 
+/// Append pre-styled detail lines, capped by the same fold as plain detail.
+fn push_styled_detail(
+    lines: &mut Vec<ftui::text::Line<'static>>,
+    styled: &[ftui::text::Line<'static>],
+    expanded: bool,
+    palette: &FtuiPalette,
+) {
+    if expanded || styled.len() <= COLLAPSED_DETAIL_LINES {
+        lines.extend(styled.iter().cloned());
+        return;
+    }
+    lines.extend(styled.iter().take(COLLAPSED_DETAIL_LINES).cloned());
+    let dim = |s: String| ftui::text::Span::styled(s, ftui::Style::new().dim().fg(palette.muted));
+    lines.push(ftui::text::Line::from_spans(vec![dim(format!(
+        "  … +{} more lines (ctrl+o to expand)",
+        styled.len() - COLLAPSED_DETAIL_LINES
+    ))]));
+}
+
 /// Render one role block: assistant content as markdown, everything else
 /// with the role prefix on the first line and role style throughout.
 fn push_role_block(
@@ -838,6 +902,60 @@ fn push_role_block(
     if content.is_empty() {
         lines.push(ftui::text::Line::styled(prefix.to_string(), style));
     }
+}
+
+/// The image mime type of a locally referenced file, from its magic bytes —
+/// the same detector the `read`/`@file` path uses, so display and attachment
+/// agree on what counts as an image. `None` for anything else (or an
+/// unreadable file), so a non-image `@file` ref produces no attachment box.
+fn image_mime_for_attachment(path: &str) -> Option<&'static str> {
+    use std::io::Read as _;
+    let mut head = [0u8; 16];
+    let mut file = std::fs::File::open(path).ok()?;
+    let read = file.read(&mut head).ok()?;
+    crate::tools::detect_supported_image_mime_type_from_bytes(&head[..read])
+}
+
+/// Truncate `input` to at most `max` display columns, appending `…` when it
+/// does not fit. Grapheme-safe enough for box alignment: CJK glyphs count as
+/// two columns, so the border stays square.
+fn truncate_display_width(input: &str, max: usize) -> String {
+    use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+    if input.width() <= max {
+        return input.to_string();
+    }
+    let mut out = String::new();
+    let mut width = 0usize;
+    for ch in input.chars() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width > max.saturating_sub(1) {
+            break;
+        }
+        out.push(ch);
+        width += ch_width;
+    }
+    out.push('…');
+    out
+}
+
+/// A compact bordered box standing in for an attached image file. Terminal
+/// output cannot carry the bitmap, so this is the attachment's whole visual
+/// surface; the base64 bytes still travel to the model.
+fn image_attachment_box(name: &str, mime: &str) -> String {
+    use unicode_width::UnicodeWidthStr;
+    const INNER: usize = 40;
+    let row = |text: &str| {
+        let text = truncate_display_width(text, INNER);
+        let width = text.width();
+        format!("{text}{}", " ".repeat(INNER.saturating_sub(width)))
+    };
+    let title = "─ image ";
+    let top = format!(
+        "╭{title}{}╮",
+        "─".repeat((INNER + 2).saturating_sub(title.width()))
+    );
+    let bottom = format!("╰{}╯", "─".repeat(INNER + 2));
+    format!("{top}\n│ {} │\n│ {} │\n{bottom}", row(name), row(mime))
 }
 
 /// Whether a rendered markdown line is a spacing boundary for compact mode
@@ -1210,6 +1328,10 @@ struct TranscriptEntry {
     pair_key: Option<String>,
     /// Folded result preview for tool cards (sanitized, size-capped).
     detail: Option<String>,
+    /// Pre-rendered styled detail lines (the `dag` tree view): when present it
+    /// replaces the plain `detail` in the frame, so each box can carry its
+    /// node-state color instead of the uniform dim card styling.
+    styled_detail: Option<Vec<ftui::text::Line<'static>>>,
     /// Detail lines are diff content (edit/hashline_edit): style added and
     /// removed markers.
     diff_styled: bool,
@@ -1227,40 +1349,36 @@ struct TranscriptEntry {
 /// handling — silence — so unrelated namespaces never leak into the frame.
 const DAG_SCHEMA_PREFIX: &str = "ra.dag.";
 
-/// Layer depth beyond which rows stop indenting, so a deep graph still fits
-/// on screen instead of walking off the right edge.
-const MAX_DAG_INDENT_LAYERS: usize = 6;
 /// Tail of a node's streaming output kept at all (lines, then characters).
 const DAG_NODE_OUTPUT_MAX_LINES: usize = 4;
 const DAG_NODE_OUTPUT_MAX_CHARS: usize = 400;
-/// Characters of a node's most recent output line shown in its row preview.
-const DAG_OUTPUT_PREVIEW_CHARS: usize = 60;
 
-/// Live list-style progress for one `dag` tool call (plan §4.5). The TUI
-/// deliberately renders a layered check-list, never a graphical DAG.
+/// Live progress for one `dag` tool call. The card detail renders the graph
+/// as a vertical ASCII tree ([`dag_view`]): a virtual “开始” root on the
+/// first layer, every node in a box on the layers below, joined by right-angle
+/// box-drawing connectors. Box width is computed from display columns, so CJK
+/// and ASCII content never push the border out of alignment.
 #[derive(Debug, Default)]
 struct DagProgress {
     /// Nodes in topology order (`nodes` of `ra.dag.topology.v1`).
     nodes: Vec<DagNodeView>,
-    /// `layers` of `ra.dag.topology.v1`: layer index → node ids.
-    layers: Vec<Vec<u32>>,
 }
 
-/// One node row of the DAG list view.
+/// One node of the DAG tree view.
 #[derive(Debug)]
 struct DagNodeView {
     id: u32,
+    /// AI-authored semantic name (may be empty → fall back to `tool_name`).
+    name: String,
     /// Sanitized `toolName`.
     tool_name: String,
-    /// 0-based layer (from `layers`, falling back to the node's own field).
-    layer: usize,
     depends_on: Vec<u32>,
     state: DagNodeVisual,
     /// Sanitized, tail-capped streaming output (`ra.dag.node_output.v1`).
     output: String,
 }
 
-/// Node state as the list view shows it (marker + label).
+/// Node state as the tree view shows it (box color + marker).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DagNodeVisual {
     Pending,
@@ -1283,23 +1401,14 @@ impl DagNodeVisual {
         }
     }
 
-    const fn marker(self) -> &'static str {
+    /// Map onto the tree renderer's state (which owns marker + color).
+    const fn to_tree_state(self) -> dag_view::DagViewState {
         match self {
-            Self::Pending => "[ ]",
-            Self::Running => "[>]",
-            Self::Ok => "[✓]",
-            Self::Error => "[✗]",
-            Self::Skipped => "[-]",
-        }
-    }
-
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Running => "running",
-            Self::Ok => "ok",
-            Self::Error => "error",
-            Self::Skipped => "skipped",
+            Self::Pending => dag_view::DagViewState::Pending,
+            Self::Running => dag_view::DagViewState::Running,
+            Self::Ok => dag_view::DagViewState::Succeeded,
+            Self::Error => dag_view::DagViewState::Failed,
+            Self::Skipped => dag_view::DagViewState::Skipped,
         }
     }
 
@@ -1317,7 +1426,7 @@ fn dag_json_u32(value: Option<&serde_json::Value>) -> u32 {
         .unwrap_or(0)
 }
 
-/// One-line DAG card head: node count plus settled progress (plan §4.5).
+/// One-line DAG card head: node count plus settled progress.
 fn dag_card_head(progress: &DagProgress) -> String {
     let total = progress.nodes.len();
     if total == 0 {
@@ -1331,53 +1440,66 @@ fn dag_card_head(progress: &DagProgress) -> String {
     format!("◇ task graph · {total} nodes · {settled}/{total} done")
 }
 
-/// Layered list rendering (plan §4.5): rows sorted by layer then id, indented
-/// by depth so fan-out/rejoin stays readable. One line per node, so a chatty
-/// graph never floods the card; the card's own fold caps the block further.
-fn dag_detail_text(progress: &DagProgress) -> String {
-    let mut order: Vec<&DagNodeView> = progress.nodes.iter().collect();
-    order.sort_by_key(|node| (node.layer, node.id));
-    let mut out = String::new();
-    for node in order {
-        if !out.is_empty() {
-            out.push('\n');
-        }
-        let indent = "  ".repeat(node.layer.min(MAX_DAG_INDENT_LAYERS));
-        let mut row = format!(
-            "{indent}{} {}. {} · {}",
-            node.state.marker(),
-            node.id,
-            node.tool_name,
-            node.state.label()
-        );
-        if !node.depends_on.is_empty() {
-            let deps = node
-                .depends_on
-                .iter()
-                .map(u32::to_string)
-                .collect::<Vec<_>>()
-                .join(",");
-            let _ = write!(row, " · ← {deps}");
-        }
-        if let Some(preview) = dag_output_preview(&node.output) {
-            let _ = write!(row, " · ⤷ {preview}");
-        }
-        out.push_str(&row);
-    }
-    out
+/// Convert the live progress into the tree renderer's input.
+fn dag_view_input(progress: &DagProgress) -> Vec<dag_view::DagViewNode> {
+    progress
+        .nodes
+        .iter()
+        .map(|node| dag_view::DagViewNode {
+            id: node.id,
+            name: node.name.clone(),
+            tool_name: node.tool_name.clone(),
+            depends_on: node.depends_on.clone(),
+            state: node.state.to_tree_state(),
+            output: node.output.clone(),
+        })
+        .collect()
 }
 
-/// Truncated single-line preview of a node's most recent output — the whole
-/// stream stays out of the list (`ra.dag.node_output.v1` is high-frequency).
-fn dag_output_preview(output: &str) -> Option<String> {
-    let last = output.lines().rev().find(|line| !line.trim().is_empty())?;
-    let last = last.trim();
-    let clipped: String = last.chars().take(DAG_OUTPUT_PREVIEW_CHARS).collect();
-    if last.chars().count() > DAG_OUTPUT_PREVIEW_CHARS {
-        Some(format!("{clipped}…"))
-    } else {
-        Some(clipped)
-    }
+/// Plain-text rendering (sanitized downstream, width-correct). Kept as the
+/// card's `detail` string so copy/paste and tests see the full diagram.
+fn dag_view_text(rows: &[Vec<dag_view::DagViewCell>]) -> String {
+    rows.iter()
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.text.as_str())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Styled tree rendering: every box carries its node-state color (gray =
+/// pending, yellow = running, red = failed, green = done), tree connectors
+/// stay neutral. Built from the laid-out rows, so colors
+/// update live without re-laying-out the tree.
+fn dag_view_styled(
+    rows: &[Vec<dag_view::DagViewCell>],
+    palette: &FtuiPalette,
+) -> Vec<ftui::text::Line<'static>> {
+    rows.iter()
+        .map(|row| {
+            let spans: Vec<ftui::text::Span<'static>> = row
+                .iter()
+                .map(|cell| {
+                    let style = match cell.state {
+                        dag_view::DagViewCellState::Neutral => {
+                            ftui::Style::new().dim().fg(palette.muted)
+                        }
+                        dag_view::DagViewCellState::Root => {
+                            ftui::Style::new().bold().fg(palette.success)
+                        }
+                        dag_view::DagViewCellState::Node(state) => {
+                            let (r, g, b) = state.rgb();
+                            ftui::Style::new().fg(ftui::PackedRgba::rgb(r, g, b))
+                        }
+                    };
+                    ftui::text::Span::styled(cell.text.clone(), style)
+                })
+                .collect();
+            ftui::text::Line::from_spans(spans)
+        })
+        .collect()
 }
 
 /// Bound a node's stored streaming output to a trailing window (lines, then
@@ -1468,7 +1590,7 @@ impl PickerOverlay {
             // Same matching as the classic stack's model selector, provider
             // aliases included ("grok" finds xai models).
             PickerKind::Model => crate::model_selector::full_id_matches_query(query, item),
-            PickerKind::Theme | PickerKind::Session => {
+            PickerKind::Theme | PickerKind::Session | PickerKind::ForkContext => {
                 crate::model_selector::fuzzy_match(query, item)
             }
         }
@@ -1527,6 +1649,8 @@ enum PickerKind {
     /// Session picker (`/resume`): items are display labels, values are
     /// session file paths; selection routes `UiCommand::ResumeSession`.
     Session,
+    /// Fork picker (bare `/fork`): values are `full` | `auto`.
+    ForkContext,
 }
 
 /// Text the user typed in answer to a `/login` prompt. It may be an API key
@@ -1596,7 +1720,8 @@ pub enum UiCommand {
     /// `/logout [provider]`: remove stored credentials (default: active
     /// provider).
     Logout { args: String },
-    /// `/fork [list|index|id]`: branch a new session from a user message.
+    /// `/fork`: start a new session carrying a continuation brief from this
+    /// one. `/fork [list|index|id]`: branch a new session from a user message.
     Fork { args: String },
     /// `/reload`: rebuild the session from its file with resources re-read.
     Reload,
@@ -1636,7 +1761,7 @@ pub enum UiCommand {
     Share,
     /// Run `work` in a background child agent and deliver its answer at the
     /// next turn boundary (`/tan`, bd-ydz1t.2). The UI rejects an empty
-    /// argument; the driver enforces that the opt-in `subagent` tool is on.
+    /// argument; the driver enforces that the `subagent` tool is on.
     Tan(String),
     /// Print a textual branch-tree summary (`/tree`). The interactive tree
     /// selector overlay arrives with bd-cv653.9.8; until then /tree reports
@@ -1888,8 +2013,33 @@ pub struct RaFtuiModel {
     /// from the live terminal size so a resize re-clamps against fresh
     /// geometry rather than the pre-resize frame.
     rendered_total_lines: std::cell::Cell<usize>,
+    /// Active drag-selection in the conversation body, in screen cells
+    /// `(anchor, cursor)`. Set on a left-button press inside the body and
+    /// cleared on release, which copies the selected text to the clipboard.
+    mouse_selection: Option<MouseSelection>,
+    /// Plain-text snapshot of the visible body rows, filled by the frame
+    /// drawn while `mouse_selection` is active. `lines[row]` is the text of
+    /// screen row `rect.y + row`. Interior mutability because `view()` takes
+    /// `&self`; never populated outside an active selection (a per-frame
+    /// allocation on the hot path is exactly what this avoids).
+    selection_snapshot: std::cell::RefCell<Option<BodySnapshot>>,
+    /// Transient status-row confirmation: the message and when it was shown.
+    /// Set by a selection copy and by a file-path paste that attached `@file`
+    /// references. Expires after [`COPY_NOTICE_TTL`].
+    copy_notice: Option<(String, Instant)>,
     /// The input editor (ftui-widgets TextArea replaces bubbles TextArea).
     input: TextArea,
+    /// Printable keystrokes accumulated since the last editor mutation.
+    /// Drained by [`RaFtuiModel::flush_pending_input`]; exists because voice
+    /// input is a burst of individual key events and every `insert_text` into
+    /// a single long line re-wraps that whole line.
+    pending_input: String,
+    /// Whether an idle flush is already scheduled for `pending_input`.
+    flush_scheduled: bool,
+    /// Working directory for `@`-file and pasted-path resolution. Set by the
+    /// launch path from [`AutocompleteLaunch::cwd`], the same cwd the
+    /// completion provider and the driver expand references against.
+    cwd: std::path::PathBuf,
     /// Slash-command completion popup (issue #208). Shares the dropdown
     /// state machine and the [`crate::autocomplete`] provider with the
     /// charmed stack, so both surfaces complete from the same command list.
@@ -1983,6 +2133,25 @@ pub struct RaFtuiModel {
 struct CachedBlock {
     revision: u64,
     lines: Vec<ftui::text::Line<'static>>,
+}
+
+/// A drag-selection in the conversation body, in screen cells. `anchor` is
+/// where the left button went down (always inside the body rect); `cursor`
+/// follows the pointer and may leave it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MouseSelection {
+    anchor: (u16, u16),
+    cursor: (u16, u16),
+}
+
+/// The frame-accurate plain text a drag-selection is resolved against: the
+/// visible body rows in screen order, captured while a selection is active.
+#[derive(Debug)]
+struct BodySnapshot {
+    /// Body region that produced `lines`; `lines[row]` belongs to `rect.y + row`.
+    rect: Rect,
+    /// One plain-text string per visible body row.
+    lines: Vec<String>,
 }
 
 /// A long out-of-turn driver operation the status region is animating
@@ -2162,6 +2331,9 @@ impl RaFtuiModel {
             term: (80, 24),
             scroll_from_tail: 0,
             rendered_total_lines: std::cell::Cell::new(0),
+            mouse_selection: None,
+            selection_snapshot: std::cell::RefCell::new(None),
+            copy_notice: None,
             agent_rx: Arc::new(Mutex::new(Some(agent_rx))),
 
             alt_screen: false,
@@ -2188,6 +2360,9 @@ impl RaFtuiModel {
                 .with_placeholder("Type a message (Enter to send, Alt+Enter for newline)")
                 .with_focus(true)
                 .with_soft_wrap(true),
+            pending_input: String::new(),
+            flush_scheduled: false,
+            cwd: std::path::PathBuf::from("."),
             autocomplete: {
                 let mut state = AutocompleteState::new(
                     std::path::PathBuf::from("."),
@@ -2206,6 +2381,7 @@ impl RaFtuiModel {
     /// driver's session exists.
     #[must_use]
     pub fn with_autocomplete(mut self, launch: AutocompleteLaunch) -> Self {
+        self.cwd = launch.cwd.clone();
         self.autocomplete.provider.set_cwd(launch.cwd);
         self.autocomplete.provider.set_catalog(launch.catalog);
         self.autocomplete.max_visible = launch.max_visible.clamp(1, 20);
@@ -2340,11 +2516,63 @@ impl RaFtuiModel {
         let lines = if self.input.is_empty() {
             1
         } else {
-            self.input.text().lines().count().max(1)
+            // `line_count` reads the rope's line index; `text().lines().count()`
+            // cloned the whole draft and scanned it.
+            self.input.line_count().max(1)
         };
         u16::try_from(lines)
             .unwrap_or(MAX_INPUT_ROWS)
             .min(MAX_INPUT_ROWS)
+    }
+
+    /// Whether the draft's first non-whitespace character is `/` — the only
+    /// shape that can open the completion popup. Reads the rope directly so an
+    /// ordinary prose draft is rejected in O(1) instead of cloned whole.
+    fn draft_starts_slash_command(&self) -> bool {
+        self.input
+            .editor()
+            .rope()
+            .chars()
+            .find(|c| !c.is_whitespace())
+            == Some('/')
+    }
+
+    /// Whether a key is a plain printable character bound for the editor, i.e.
+    /// part of the burst worth folding into one `insert_text`. `None` for
+    /// everything the keybinding catalog, the completion popup, or a picker
+    /// must see individually.
+    fn key_folds_into_pending(&self, key: &ftui::KeyEvent) -> Option<char> {
+        if !self.input_active() || self.completion_visible() || self.picker.is_some() {
+            return None;
+        }
+        if key.modifiers.contains(Modifiers::CTRL) || key.modifiers.contains(Modifiers::ALT) {
+            return None;
+        }
+        let KeyCode::Char(c) = key.code else {
+            return None;
+        };
+        if c.is_control() {
+            return None;
+        }
+        // A printable character the user bound to an action keeps that meaning.
+        if KeyBinding::from_ftui_key(key)
+            .is_some_and(|binding| !self.keybindings.matching_actions(&binding).is_empty())
+        {
+            return None;
+        }
+        Some(c)
+    }
+
+    /// Insert the accumulated keystroke run as one editor mutation and refresh
+    /// the completion popup for it. Safe to call when nothing is pending.
+    fn flush_pending_input(&mut self) {
+        self.flush_scheduled = false;
+        if self.pending_input.is_empty() {
+            return;
+        }
+        let run = std::mem::take(&mut self.pending_input);
+        self.input.insert_text(&run);
+        self.maybe_trigger_autocomplete();
     }
 
     /// Visible conversation rows given the tracked terminal size.
@@ -2396,11 +2624,11 @@ impl RaFtuiModel {
             self.autocomplete.close();
             return;
         }
-        let text = self.input.text();
-        if !text.trim_start().starts_with('/') {
+        if !self.draft_starts_slash_command() {
             self.autocomplete.close();
             return;
         }
+        let text = self.input.text();
         let editor = self.input.editor();
         let cursor = ftui::text::CursorNavigator::new(editor.rope()).to_byte_index(editor.cursor());
         let response = self.autocomplete.provider.suggest(&text, cursor);
@@ -2487,7 +2715,11 @@ impl RaFtuiModel {
             .transcript
             .iter()
             .map(|e| {
-                e.text.lines().count().max(1) + e.detail.as_ref().map_or(0, |d| d.lines().count())
+                let detail_lines = e.styled_detail.as_ref().map_or_else(
+                    || e.detail.as_ref().map_or(0, |d| d.lines().count()),
+                    Vec::len,
+                );
+                e.text.lines().count().max(1) + detail_lines
             })
             .sum();
         let streaming = if self.streaming.is_empty() {
@@ -2515,10 +2747,36 @@ impl RaFtuiModel {
             card: None,
             pair_key: None,
             detail: None,
+            styled_detail: None,
             diff_styled: false,
             tool_name: None,
             group_count: 1,
         });
+    }
+
+    /// Show a compact box for each image file the just-submitted prompt
+    /// references through an `@` ref. The terminal cannot render the bitmap,
+    /// so this box is the attachment's entire visual surface; the base64
+    /// bytes still reach the model as an image block. Display only: the
+    /// prompt sent to the driver is untouched, so non-image `@file` refs
+    /// behave exactly as before.
+    fn push_image_attachment_boxes(&mut self, prompt: &str) {
+        let cwd = self.cwd.clone();
+        let (_, refs) = crate::interactive::extract_file_references(prompt, |path| {
+            let resolved = crate::tools::resolve_read_path(path, &cwd);
+            resolved
+                .exists()
+                .then(|| resolved.to_string_lossy().to_string())
+        });
+        for path in refs {
+            let Some(mime) = image_mime_for_attachment(&path) else {
+                continue;
+            };
+            let name = std::path::Path::new(&path)
+                .file_name()
+                .map_or_else(|| path.clone(), |name| name.to_string_lossy().to_string());
+            self.push_entry(EntryRole::System, image_attachment_box(&name, mime));
+        }
     }
 
     /// Remember a sent prompt for recall (consecutive repeats collapse) and
@@ -2616,6 +2874,7 @@ impl RaFtuiModel {
             card: Some(CardState::Pending),
             pair_key: Some(pair_id.to_string()),
             detail: None,
+            styled_detail: None,
             diff_styled: false,
             tool_name: Some(sanitized_name.to_string()),
             group_count: 1,
@@ -2659,6 +2918,12 @@ impl RaFtuiModel {
         self.transcript[idx].card = Some(if ok { CardState::Ok } else { CardState::Err });
         self.transcript[idx].revision = revision;
         if let Some(output) = sanitized_output {
+            // The terminal detail replaces any live pre-rendered view (the
+            // `dag` tree): `push_card_block` renders `styled_detail` INSTEAD
+            // of `detail`, so leaving it set would shadow the aggregate
+            // report (including the failure summary) for the card's whole
+            // life.
+            self.transcript[idx].styled_detail = None;
             self.transcript[idx].detail = Some(output);
             self.transcript[idx].diff_styled = diff_styled;
         }
@@ -2712,14 +2977,14 @@ impl RaFtuiModel {
                     for node in nodes {
                         progress.nodes.push(DagNodeView {
                             id: dag_json_u32(node.get("id")),
+                            name: node
+                                .get("name")
+                                .and_then(serde_json::Value::as_str)
+                                .map_or_else(String::new, |n| sanitize(n).into_owned()),
                             tool_name: node
                                 .get("toolName")
                                 .and_then(serde_json::Value::as_str)
                                 .map_or_else(|| String::from("?"), |n| sanitize(n).into_owned()),
-                            // `u32 as usize` is lossless on every target
-                            // (`usize` is at least 32 bits), so no lint-safe
-                            // conversion helper is needed here.
-                            layer: dag_json_u32(node.get("layer")) as usize,
                             depends_on: node
                                 .get("dependsOn")
                                 .and_then(serde_json::Value::as_array)
@@ -2728,30 +2993,6 @@ impl RaFtuiModel {
                             state: DagNodeVisual::Pending,
                             output: String::new(),
                         });
-                    }
-                }
-                progress.layers = details
-                    .get("layers")
-                    .and_then(serde_json::Value::as_array)
-                    .map(|layers| {
-                        layers
-                            .iter()
-                            .map(|layer| {
-                                layer
-                                    .as_array()
-                                    .map(|ids| ids.iter().map(|v| dag_json_u32(Some(v))).collect())
-                                    .unwrap_or_default()
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                // `layers` is authoritative for depth (the per-node `layer`
-                // carries the same value; the array survives a node omitting it).
-                for (layer, ids) in progress.layers.iter().enumerate() {
-                    for id in ids {
-                        if let Some(node) = progress.nodes.iter_mut().find(|n| n.id == *id) {
-                            node.layer = layer;
-                        }
                     }
                 }
                 self.dag_progress.insert(key.clone(), progress);
@@ -2795,15 +3036,20 @@ impl RaFtuiModel {
     /// summary, detail = the layered node list. Falls back to pushing a card
     /// when the `ToolStart` card is missing, so progress is never lost.
     fn refresh_dag_card(&mut self, key: &str, name: &str) {
-        // Render both strings inside the borrow so the immutable look-up never
-        // overlaps the `&mut self` revisions below.
-        let (head, detail) = {
+        // Render head / plain tree / styled tree inside the borrow so the
+        // immutable look-up never overlaps the `&mut self` revisions below.
+        let (head, detail, styled) = {
             let Some(progress) = self.dag_progress.get(key) else {
                 return;
             };
+            // Same orientation for the copyable `detail` and the rendered
+            // lines: width from the last frame's conversation body.
+            let width = usize::from(self.render_cache_width.get());
+            let rows = dag_view::render_auto(&dag_view_input(progress), 0, width);
             (
                 sanitize(&dag_card_head(progress)).into_owned(),
-                sanitize(&dag_detail_text(progress)).into_owned(),
+                sanitize(&dag_view_text(&rows)).into_owned(),
+                dag_view_styled(&rows, &self.palette),
             )
         };
         let revision = self.next_revision();
@@ -2815,6 +3061,7 @@ impl RaFtuiModel {
         {
             entry.text = head;
             entry.detail = Some(detail);
+            entry.styled_detail = Some(styled);
             entry.revision = revision;
             return;
         }
@@ -2822,6 +3069,7 @@ impl RaFtuiModel {
         self.push_tool_card(key, &head, &tool);
         let idx = self.transcript.len() - 1;
         self.transcript[idx].detail = Some(detail);
+        self.transcript[idx].styled_detail = Some(styled);
         // push_tool_card took a revision for the head; the detail write needs
         // its own so the render cache cannot reuse a stale block.
         let revision = self.next_revision();
@@ -2880,6 +3128,92 @@ impl RaFtuiModel {
 
     const fn scroll_down(&mut self, lines: usize) {
         self.scroll_from_tail = self.scroll_from_tail.saturating_sub(lines);
+    }
+
+    /// Body region the current model state lays out. Used to hit-test mouse
+    /// presses; `render_frame` recomputes the same layout each frame, and the
+    /// snapshot it records is what extraction reads.
+    fn body_rect(&self) -> Rect {
+        layout_regions(
+            Rect::new(0, 0, self.term.0, self.term.1),
+            self.input_rows(),
+            u16::from(self.error_banner.is_some()),
+            self.completion_rows(),
+        )
+        .body
+    }
+
+    /// Mouse routing: wheel scroll plus drag-select-to-copy in the body. The
+    /// copy happens on release, so a plain click selects nothing.
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Cmd<RaFtuiMsg> {
+        match mouse.kind {
+            MouseEventKind::ScrollUp => self.scroll_up(3),
+            MouseEventKind::ScrollDown => self.scroll_down(3),
+            MouseEventKind::Down(MouseButton::Left) => {
+                // A modal picker covers the body; no selection there.
+                if self.picker.is_none() && self.body_rect().contains(mouse.x, mouse.y) {
+                    self.mouse_selection = Some(MouseSelection {
+                        anchor: (mouse.x, mouse.y),
+                        cursor: (mouse.x, mouse.y),
+                    });
+                }
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some(selection) = self.mouse_selection.as_mut() {
+                    selection.cursor = (mouse.x, mouse.y);
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                let Some(selection) = self.mouse_selection.take() else {
+                    return Cmd::none();
+                };
+                if selection.anchor == selection.cursor {
+                    return Cmd::none();
+                }
+                let Some(text) = self.extract_selection_text(selection) else {
+                    return Cmd::none();
+                };
+                let message = crate::interactive::copy_text_to_clipboard(&text);
+                let notice = if message == CLIPBOARD_COPIED {
+                    String::from(COPY_NOTICE_TEXT)
+                } else {
+                    message
+                };
+                self.copy_notice = Some((notice, Instant::now()));
+                return Cmd::tick(SPINNER_INTERVAL);
+            }
+            _ => {}
+        }
+        Cmd::none()
+    }
+
+    /// Resolve a selection against the frame that was drawn while it was
+    /// active. `None` when no snapshot exists (the body never rendered) or
+    /// nothing but whitespace was selected.
+    fn extract_selection_text(&self, selection: MouseSelection) -> Option<String> {
+        let snapshot = self.selection_snapshot.borrow();
+        let snapshot = snapshot.as_ref()?;
+        let rect = snapshot.rect;
+        if rect.is_empty() {
+            return None;
+        }
+        let (start, end) = selection_bounds(selection);
+        let row = |y: u16| usize::from(y.clamp(rect.y, rect.bottom().saturating_sub(1)) - rect.y);
+        let mut parts = Vec::new();
+        for index in row(start.1)..=row(end.1) {
+            let line = snapshot.lines.get(index).map_or("", |line| line.as_str());
+            let (from, to) = selection_columns_on_row(
+                rect.y
+                    .saturating_add(u16::try_from(index).unwrap_or(u16::MAX)),
+                display_width(line),
+                selection,
+                rect,
+            )
+            .unwrap_or((0, 0));
+            parts.push(slice_by_columns(line, from, to).trim_end().to_string());
+        }
+        let text = parts.join("\n");
+        (!text.trim().is_empty()).then_some(text)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -3402,6 +3736,7 @@ impl RaFtuiModel {
         self.autocomplete.close();
         self.scroll_from_tail = 0;
         self.push_entry(EntryRole::User, clean.clone());
+        self.push_image_attachment_boxes(&clean);
 
         // Bash routing comes before slash commands, matching submit_message:
         // `!cmd` shows output and submits it to the agent, `!!cmd` shows only.
@@ -3704,7 +4039,7 @@ impl RaFtuiModel {
                      /export [path], /copy, /share, /tan <task>, /usage, /mcp, \
                      /add-dir <dir>, /remove-dir <dir>, /crash [list|show|delete], \
                      /thinking [level], /theme, /changelog, /clear, /hotkeys, \
-                     /login [provider], /logout [provider], /fork [n|id|list], /reload, \
+                     /login [provider], /logout [provider], /fork [n|id|list] (bare: choose how the new session starts), /reload, \
                      /rename <name>, /plan-review, /btw <question>, /tools, /extensions, \
                      /skills, /dirs, /history, /fresh, /retry, /shake, /checkpoint [name], /rewind [name], /rules, /omfg <complaint>, \
                      /commit [--dry-run], /review [target], /handoff, /approval [mode], \
@@ -3737,6 +4072,39 @@ impl RaFtuiModel {
                 self.current_tool = None;
                 self.scroll_from_tail = 0;
                 self.push_entry(EntryRole::System, String::from("Conversation cleared"));
+                return true;
+            }
+            "/statusline" | "/statusbar" => {
+                let value = cmd_args.trim();
+                let current = self.palette.chrome;
+                if value.is_empty() {
+                    self.push_entry(
+                        EntryRole::System,
+                        format!(
+                            "status line glyphs: {} (unicode | ascii | nerd) — \
+                             `nerd` needs a Nerd Font; persist it as \
+                             statusLine.chrome in settings",
+                            current.name(),
+                        ),
+                    );
+                    return true;
+                }
+                match crate::status_line::StatusLineChrome::from_name(value) {
+                    Some(chrome) => {
+                        self.palette.chrome = chrome;
+                        self.push_entry(
+                            EntryRole::System,
+                            format!("status line glyphs set to {}", chrome.name()),
+                        );
+                    }
+                    None => self.push_entry(
+                        EntryRole::Error,
+                        format!(
+                            "unknown status line glyph set '{value}' \
+                             (expected unicode | ascii | nerd)"
+                        ),
+                    ),
+                }
                 return true;
             }
             "/session" | "/info" => {
@@ -3852,6 +4220,24 @@ impl RaFtuiModel {
             }
             "/fork" => {
                 let args = cmd_args.trim();
+                if args.is_empty() {
+                    // Ask first: the picker routes `UiCommand::Fork { args }`
+                    // with the chosen mode ("full" | "auto").
+                    self.picker = Some(PickerOverlay::new(
+                        "Fork: how should the new session start?",
+                        vec![
+                            String::from(
+                                "Start a new session with the full context of this conversation.",
+                            ),
+                            String::from(
+                                "Start a new session empty and let it pull in the context it needs.",
+                            ),
+                        ],
+                        vec![String::from("full"), String::from("auto")],
+                        PickerKind::ForkContext,
+                    ));
+                    return true;
+                }
                 if !(args.eq_ignore_ascii_case("list") || args.eq_ignore_ascii_case("ls")) {
                     self.begin_busy("forking session ...");
                 }
@@ -4063,6 +4449,14 @@ impl RaFtuiModel {
                     path: choice.to_string(),
                 });
             }
+            PickerKind::ForkContext => {
+                self.push_entry(EntryRole::System, String::from("forking session ..."));
+                self.scroll_from_tail = 0;
+                self.begin_busy("forking session ...");
+                self.send_command(UiCommand::Fork {
+                    args: choice.to_string(),
+                });
+            }
         }
     }
 
@@ -4257,6 +4651,35 @@ impl RaFtuiModel {
 
     #[allow(clippy::too_many_lines)]
     fn handle_term(&mut self, event: &Event) -> Cmd<RaFtuiMsg> {
+        // Voice/IME input arrives as a storm of individual `Key` events. Fold
+        // a run of plain printable characters and insert it as one
+        // `insert_text`, so a dictation into one line pays the editor's
+        // line-wide work once per run instead of once per character.
+        if let Event::Key(key) = event
+            && key_event_is_input(key)
+            && let Some(c) = self.key_folds_into_pending(key)
+        {
+            self.pending_input.push(c);
+            let over_cap = self.pending_input.len() >= INPUT_COALESCE_MAX;
+            if over_cap {
+                // Never let a continuous burst run the editor arbitrarily far
+                // behind: flush in bounded chunks.
+                self.flush_pending_input();
+            } else if !self.flush_scheduled {
+                self.flush_scheduled = true;
+                return Cmd::task(|| {
+                    // The simulator runs task closures synchronously inside the
+                    // test thread; a real sleep there would only slow the suite.
+                    #[cfg(not(test))]
+                    std::thread::sleep(INPUT_COALESCE_IDLE);
+                    RaFtuiMsg::FlushInput
+                });
+            }
+            return Cmd::none();
+        }
+        // Any other event ends the run; insert it first so ordering (text,
+        // then cursor move / Enter / paste) is preserved.
+        self.flush_pending_input();
         match event {
             Event::Tick => {
                 // While a ctrl+z stop is in flight the model must not
@@ -4264,6 +4687,16 @@ impl RaFtuiModel {
                 // in the window between terminal restore and SIGTSTP.
                 if self.suspending {
                     return Cmd::none();
+                }
+                // Retire the drag-selection copy confirmation once its window
+                // elapses. Keep ticking while it is live so an otherwise idle
+                // session actually reaches that point.
+                let notice_live = self
+                    .copy_notice
+                    .as_ref()
+                    .is_some_and(|(_, at)| at.elapsed() < COPY_NOTICE_TTL);
+                if !notice_live {
+                    self.copy_notice = None;
                 }
                 // Spinner heartbeat: advance and reschedule only while
                 // something animated needs it — a working turn, an
@@ -4274,6 +4707,9 @@ impl RaFtuiModel {
                     || self.has_pending_cards()
                 {
                     self.spinner.tick();
+                    return Cmd::tick(SPINNER_INTERVAL);
+                }
+                if notice_live {
                     return Cmd::tick(SPINNER_INTERVAL);
                 }
                 return Cmd::none();
@@ -4419,7 +4855,6 @@ impl RaFtuiModel {
                     .or_else(|| pick(AppAction::PasteImage))
                     .or_else(|| pick(AppAction::CursorUp))
                     .or_else(|| pick(AppAction::CursorDown));
-                let page = self.body_height().saturating_sub(1).max(1);
                 match action {
                     Some(AppAction::Suspend) => {
                         // Freeze model mutations synchronously (the flag is
@@ -4443,8 +4878,12 @@ impl RaFtuiModel {
                             return Cmd::none();
                         }
                     }
-                    Some(AppAction::PageUp) => return self.consume_scroll(|m| m.scroll_up(page)),
+                    Some(AppAction::PageUp) => {
+                        let page = self.body_height().saturating_sub(1).max(1);
+                        return self.consume_scroll(|m| m.scroll_up(page));
+                    }
                     Some(AppAction::PageDown) => {
+                        let page = self.body_height().saturating_sub(1).max(1);
                         return self.consume_scroll(|m| m.scroll_down(page));
                     }
                     Some(AppAction::Exit) if self.input.is_empty() => return Cmd::quit(),
@@ -4612,11 +5051,7 @@ impl RaFtuiModel {
                     self.maybe_trigger_autocomplete();
                 }
             }
-            Event::Mouse(mouse) => match mouse.kind {
-                MouseEventKind::ScrollUp => self.scroll_up(3),
-                MouseEventKind::ScrollDown => self.scroll_down(3),
-                _ => {}
-            },
+            Event::Mouse(mouse) => return self.handle_mouse(mouse),
             Event::Resize { width, height } => {
                 // Cached blocks are wrapped (issue #227) and their tables
                 // fitted (gh #195) for one width; drop them when it changes.
@@ -4638,6 +5073,25 @@ impl RaFtuiModel {
             Event::Paste(paste) if self.picker.is_some() => {
                 if let Some(picker) = self.picker.as_mut() {
                     picker.push_query_str(&paste.text);
+                }
+            }
+            // Drag/drop and terminal paste of existing file paths become
+            // `@file` references, exactly as the classic stack does (GH #242
+            // parity); the prompt layer expands `@image.png` into an image
+            // attachment. Pasted prose — the common case — still reaches the
+            // editor unchanged, because `normalize_pasted_file_refs` returns
+            // `None` on the first line that is not a path.
+            Event::Paste(paste) if self.input_active() => {
+                if let Some((insert, count)) =
+                    crate::interactive::normalize_pasted_file_refs(&paste.text, &self.cwd)
+                {
+                    self.input.insert_text(&insert);
+                    self.copy_notice = Some((
+                        format!("Attached {count} file{}", if count == 1 { "" } else { "s" }),
+                        Instant::now(),
+                    ));
+                } else if self.input.handle_event(event) {
+                    self.maybe_trigger_autocomplete();
                 }
             }
             _ => {
@@ -4911,11 +5365,27 @@ impl RaFtuiModel {
                 cache[idx] = None;
                 rendered_blocks += 1;
                 let mut block_lines: Vec<ftui::text::Line<'static>> = Vec::new();
+                // A live `dag` card re-renders every frame so the running
+                // node's braille spinner animates; `render_auto` picks the
+                // horizontal layout when the body is wide enough.
+                let live_styled = entry
+                    .pair_key
+                    .as_deref()
+                    .and_then(|key| self.dag_progress.get(key))
+                    .map(|progress| {
+                        let rows = dag_view::render_auto(
+                            &dag_view_input(progress),
+                            self.spinner.current_frame,
+                            wrap_width,
+                        );
+                        dag_view_styled(&rows, &palette)
+                    });
                 push_card_block(
                     &mut block_lines,
                     CardState::Pending,
                     &entry.text,
                     entry.detail.as_ref(),
+                    live_styled.as_deref().or(entry.styled_detail.as_deref()),
                     entry.diff_styled,
                     entry.group_count,
                     &palette,
@@ -4941,6 +5411,7 @@ impl RaFtuiModel {
                     state,
                     &entry.text,
                     entry.detail.as_ref(),
+                    entry.styled_detail.as_deref(),
                     entry.diff_styled,
                     entry.group_count,
                     &palette,
@@ -4990,7 +5461,9 @@ impl Model for RaFtuiModel {
     fn update(&mut self, msg: RaFtuiMsg) -> Cmd<RaFtuiMsg> {
         let probe = self.watchdog.start();
         let phase = match &msg {
-            RaFtuiMsg::Term(_) | RaFtuiMsg::Edited { .. } => LoopPhase::Input,
+            RaFtuiMsg::Term(_) | RaFtuiMsg::Edited { .. } | RaFtuiMsg::FlushInput => {
+                LoopPhase::Input
+            }
             RaFtuiMsg::Agent(_) | RaFtuiMsg::Resumed => LoopPhase::AgentEvent,
         };
         let cmd = match msg {
@@ -5012,6 +5485,11 @@ impl Model for RaFtuiModel {
                 cmd
             }
             RaFtuiMsg::Agent(agent) => self.handle_agent(agent),
+            // The accumulated keystroke run is ready; see `handle_term`.
+            RaFtuiMsg::FlushInput => {
+                self.flush_pending_input();
+                Cmd::none()
+            }
             // Back from a SIGTSTP stop: the suspend task already re-acquired
             // raw mode / alt screen / mouse; the next frame repaints the
             // freshly-cleared alternate buffer in full.
@@ -5233,8 +5711,51 @@ impl RaFtuiModel {
         // instead of the tail — which wrapping (issue #227) makes a long
         // session reach several times sooner. Slicing also means the widget
         // measures a screenful instead of the entire history each frame.
-        let window = Text::from_lines(body_text.lines().iter().skip(offset).take(visible).cloned());
-        Paragraph::new(window).render(regions.body, frame);
+        // Drag-selection (mouse copy): highlight the selected cells and keep
+        // a plain-text snapshot of exactly these rows so the release event can
+        // resolve the selection against the frame the user actually saw.
+        let selection = self.mouse_selection.filter(|sel| sel.anchor != sel.cursor);
+        let mut window_lines: Vec<ftui::text::Line<'static>> = Vec::with_capacity(visible);
+        for (row, line) in body_text
+            .lines()
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .enumerate()
+        {
+            let rendered = match selection {
+                Some(sel) => highlight_selected_line(
+                    line,
+                    regions
+                        .body
+                        .y
+                        .saturating_add(u16::try_from(row).unwrap_or(u16::MAX)),
+                    sel,
+                    regions.body,
+                    self.palette.selection,
+                ),
+                None => line.clone(),
+            };
+            window_lines.push(rendered);
+        }
+        // The snapshot is only taken while a selection is live: every other
+        // frame would pay an allocation it never reads.
+        if self.mouse_selection.is_some() {
+            let lines = body_text
+                .lines()
+                .iter()
+                .skip(offset)
+                .take(visible)
+                .map(ftui::text::Line::to_plain_text)
+                .collect();
+            *self.selection_snapshot.borrow_mut() = Some(BodySnapshot {
+                rect: regions.body,
+                lines,
+            });
+        } else {
+            *self.selection_snapshot.borrow_mut() = None;
+        }
+        Paragraph::new(Text::from_lines(window_lines)).render(regions.body, frame);
 
         // Pinned error banner (bd-cv653.9.2): sits between the conversation
         // and the status line until the next sent input dismisses it.
@@ -5272,6 +5793,17 @@ impl RaFtuiModel {
                 .as_ref()
                 .map_or_else(String::new, |todo| format!("todo {todo}"))
         };
+        // A drag-selection copy confirms itself for a moment at the right
+        // end of this row; reserve its width before fitting the powerline so
+        // the powerline never pushes it off screen.
+        let copy_notice = self
+            .copy_notice
+            .as_ref()
+            .filter(|(_, at)| at.elapsed() < COPY_NOTICE_TTL)
+            .map(|(message, _)| message.clone());
+        let notice_width = copy_notice
+            .as_ref()
+            .map_or(0, |message| display_width(message) + 2);
         // The powerline (OMP-ADOPT bd-cv653.9.4) fills the rest of the row:
         // model, thinking, mode, path, VCS, context, cost.
         let powerline = self
@@ -5285,26 +5817,43 @@ impl RaFtuiModel {
                 };
                 render_powerline(
                     snapshot,
-                    usize::from(regions.status.width).saturating_sub(used),
+                    usize::from(regions.status.width).saturating_sub(used + notice_width),
+                    self.palette.chrome,
                 )
             });
-        if !status_line.is_empty() || !powerline.is_empty() {
+        if !status_line.is_empty() || !powerline.is_empty() || copy_notice.is_some() {
             let status_style = if self.state == AgentUiState::Working || self.busy.is_some() {
                 ftui::Style::new().fg(self.palette.warning)
             } else {
                 ftui::Style::new().dim().fg(self.palette.muted)
             };
             let mut spans = Vec::new();
+            let mut width_used = 0_usize;
             if !status_line.is_empty() {
+                width_used += display_width(&status_line);
                 spans.push(ftui::text::Span::styled(status_line, status_style));
             }
             if !powerline.is_empty() {
                 if !spans.is_empty() {
                     spans.push(ftui::text::Span::raw(String::from("  ")));
+                    width_used += 2;
                 }
+                width_used += display_width(&powerline);
                 spans.push(ftui::text::Span::styled(
                     powerline,
                     ftui::Style::new().fg(self.palette.accent),
+                ));
+            }
+            if let Some(notice) = &copy_notice {
+                // Pad so the hint sits at the far right edge of the row.
+                let gap = usize::from(regions.status.width)
+                    .saturating_sub(width_used + display_width(notice));
+                if gap > 0 {
+                    spans.push(ftui::text::Span::raw(" ".repeat(gap)));
+                }
+                spans.push(ftui::text::Span::styled(
+                    notice.clone(),
+                    ftui::Style::new().bold().fg(self.palette.success),
                 ));
             }
             Paragraph::new(Text::from_lines([ftui::text::Line::from_spans(spans)]))
@@ -5852,6 +6401,14 @@ type TurnAbortSlot = Arc<Mutex<Option<crate::agent::AbortHandle>>>;
 const BTW_USAGE: &str = "Usage: /btw <question>";
 /// OMP's double-tap window: a second ctrl+c this soon after the first quits.
 const CTRL_C_EXIT_WINDOW: std::time::Duration = std::time::Duration::from_millis(500);
+/// How long the status row's "copied" confirmation stays after a
+/// drag-selection copy. The tick chain started on copy clears it.
+const COPY_NOTICE_TTL: Duration = Duration::from_millis(2000);
+/// The success message [`crate::interactive::copy_text_to_clipboard`] returns
+/// when the text reached the real clipboard (vs. the temp-file fallback).
+const CLIPBOARD_COPIED: &str = crate::interactive::COPY_OK_MESSAGE;
+/// Shown at the right end of the status row while a selection copy succeeded.
+const COPY_NOTICE_TEXT: &str = "copied";
 const BTW_UNAVAILABLE: &str =
     "/btw unavailable: no smol role model configured (set --smol or model_roles.smol)";
 
@@ -6037,8 +6594,8 @@ async fn run_share_command(
 ///
 /// The runner is `ra::subagents::SubagentTool::run_background_tan`, shared with
 /// the classic stack (bd-ydz1t.2). What this contributes is the gating and the
-/// delivery: the `subagent` tool is opt-in, so a session without it must say so
-/// rather than fail obscurely, and the completion is addressed to the session
+/// delivery: `/tan` rides the `subagent` tool, so a session without it must say
+/// so rather than fail obscurely, and the completion is addressed to the session
 /// that ASKED, so an answer cannot land in a different session the user
 /// switched to meanwhile.
 ///
@@ -6054,7 +6611,7 @@ async fn run_tan_command(
 ) {
     if !handle.has_tool("subagent") {
         let _ = agent_tx.send(RaMsg::AgentError(String::from(
-            "/tan unavailable: enable the opt-in subagent tool with --tools ...subagent",
+            "/tan unavailable: the subagent tool is disabled in this session; enable it with --tools ...subagent",
         )));
         return;
     }
@@ -7101,9 +7658,119 @@ async fn send_status_snapshot(
     ));
 }
 
+/// Order a drag-selection's endpoints into reading order: top-left first.
+fn selection_bounds(selection: MouseSelection) -> ((u16, u16), (u16, u16)) {
+    if (selection.anchor.1, selection.anchor.0) <= (selection.cursor.1, selection.cursor.0) {
+        (selection.anchor, selection.cursor)
+    } else {
+        (selection.cursor, selection.anchor)
+    }
+}
+
+/// The half-open display-column range `[start, end)` a selection covers on
+/// screen row `y`, clamped to `line_width`. `None` when the row is outside the
+/// selection or the body rect.
+fn selection_columns_on_row(
+    y: u16,
+    line_width: usize,
+    selection: MouseSelection,
+    rect: Rect,
+) -> Option<(usize, usize)> {
+    if rect.is_empty() {
+        return None;
+    }
+    let (start, end) = selection_bounds(selection);
+    if y < start.1 || y > end.1 {
+        return None;
+    }
+    let col = |x: u16| usize::from(x.saturating_sub(rect.x)).min(line_width);
+    let from = if y == start.1 { col(start.0) } else { 0 };
+    let to = if y == end.1 { col(end.0) } else { line_width };
+    Some((from.min(line_width), to))
+}
+
+/// A copy of `line` whose cells inside the selection get `bg` as a
+/// background, leaving every other style (and the text) untouched.
+fn highlight_selected_line(
+    line: &ftui::text::Line<'static>,
+    y: u16,
+    selection: MouseSelection,
+    rect: Rect,
+    bg: ftui::PackedRgba,
+) -> ftui::text::Line<'static> {
+    let Some((from, to)) = selection_columns_on_row(y, line.width(), selection, rect) else {
+        return line.clone();
+    };
+    if from >= to {
+        return line.clone();
+    }
+    let mut spans = Vec::with_capacity(line.spans().len() + 2);
+    let mut cell = 0_usize;
+    for span in line.spans() {
+        let width = span.width();
+        if width == 0 {
+            spans.push(span.clone());
+            continue;
+        }
+        let span_start = cell;
+        let span_end = cell + width;
+        cell = span_end;
+        if span_end <= from || span_start >= to {
+            spans.push(span.clone());
+            continue;
+        }
+        let local_from = from.saturating_sub(span_start);
+        let local_to = to.min(span_end) - span_start;
+        let (left, rest) = span.split_at_cell(local_from);
+        let (mid, right) = rest.split_at_cell(local_to - local_from);
+        if !left.is_empty() {
+            spans.push(left);
+        }
+        if !mid.is_empty() {
+            let mut mid = mid;
+            mid.style = Some(
+                mid.style
+                    .map_or_else(|| ftui::Style::new().bg(bg), |s| s.bg(bg)),
+            );
+            spans.push(mid);
+        }
+        if !right.is_empty() {
+            spans.push(right);
+        }
+    }
+    ftui::text::Line::from_spans(spans)
+}
+
+/// Plain text of the display cells of `line` inside `[from, to)`. A wide
+/// character is kept when any of its cells is selected; zero-width characters
+/// follow the cell before them.
+fn slice_by_columns(line: &str, from: usize, to: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
+
+    let mut out = String::new();
+    let mut cell = 0_usize;
+    for ch in line.chars() {
+        let width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        let char_start = cell;
+        cell += width;
+        if width == 0 {
+            if char_start >= from && char_start < to {
+                out.push(ch);
+            }
+        } else if char_start < to && cell > from {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 /// The powerline for the FTUI status row, fitted to `width` cells; segments
 /// drop by priority as the row narrows.
-fn render_powerline(snapshot: &crate::interactive::FtuiStatusSnapshot, width: usize) -> String {
+fn render_powerline(
+    snapshot: &crate::interactive::FtuiStatusSnapshot,
+    width: usize,
+    chrome: crate::status_line::StatusLineChrome,
+) -> String {
     let ctx = crate::status_line::StatusContext {
         model: &snapshot.model,
         thinking_level: snapshot.thinking.as_deref(),
@@ -7118,8 +7785,9 @@ fn render_powerline(snapshot: &crate::interactive::FtuiStatusSnapshot, width: us
         session_name: &snapshot.session_name,
         timestamp_str: "",
     };
-    crate::status_line::PowerlineStatusLine::with_preset(
+    crate::status_line::PowerlineStatusLine::with_preset_and_chrome(
         crate::status_line::StatusLinePreset::Default,
+        chrome,
     )
     .render(&ctx, width)
 }
@@ -7522,6 +8190,196 @@ fn build_fork_session(
     Ok((forked, selected_text))
 }
 
+/// Fork option chosen by the picker: what the new session starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ForkMode {
+    /// The full transcript of the source's current path is copied over.
+    Full,
+    /// Empty transcript plus one prompt; the successor picks its own context.
+    Auto,
+}
+
+impl ForkMode {
+    fn parse(args: &str) -> Self {
+        if args.eq_ignore_ascii_case("full") {
+            Self::Full
+        } else {
+            Self::Auto
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Auto => "auto",
+        }
+    }
+}
+
+/// Compose the prompt injected for [`ForkMode::Auto`].
+///
+/// The successor's transcript stays empty; this message names the previous
+/// session (id + saved file) and tells it to pull in only the context it
+/// needs, so the picker copy stays free of implementation detail.
+fn render_self_select_prompt(session_id: &str, session_path: Option<&str>) -> String {
+    let mut prompt = String::from("[Session continuation]\n");
+    prompt.push_str(&format!(
+        "You are continuing an earlier session (id: `{session_id}`).\n"
+    ));
+    if let Some(path) = session_path {
+        prompt.push_str(&format!("Its full transcript is saved at: {path}\n"));
+    }
+    prompt.push_str("That history is not inlined here. Use the `sessions` tool ");
+    prompt.push_str(&format!("(action=\"read\", session=\"{session_id}\") "));
+    prompt.push_str(
+        "to read it and pull in only the parts relevant to the current task; ",
+    );
+    prompt.push_str("action=\"search\" finds specific topics.\n");
+    prompt
+}
+
+/// Build the new session for a bare `/fork` in the chosen mode.
+///
+/// `full` copies every entry on the source's current path; `auto` copies
+/// nothing and seeds one prompt that points at the `sessions` tool. Both set
+/// `branchedFrom` so the lineage is recorded.
+fn build_continuation_session(
+    source: &crate::session::Session,
+    mode: ForkMode,
+    provider: String,
+    model_id: String,
+) -> (crate::session::Session, String) {
+    let session_id = source.header.id.clone();
+    let mut forked = crate::session::Session::create_with_dir(source.session_dir.clone());
+    forked.header.provider = Some(provider);
+    forked.header.model_id = Some(model_id);
+    forked
+        .header
+        .thinking_level
+        .clone_from(&source.header.thinking_level);
+    if let Some(parent) = source.path.as_ref() {
+        forked.set_branched_from(Some(parent.display().to_string()));
+    }
+    match mode {
+        ForkMode::Full => {
+            let plan = crate::session::ForkPlan {
+                entries: source.entries_for_current_path().into_iter().cloned().collect(),
+                leaf_id: source.leaf_id().map(str::to_string),
+                selected_text: String::new(),
+            };
+            forked.init_from_fork_plan(plan);
+        }
+        ForkMode::Auto => {
+            let source_path = source.path.as_ref().map(|path| path.display().to_string());
+            let prompt = render_self_select_prompt(&session_id, source_path.as_deref());
+            forked.append_message(crate::session::SessionMessage::User {
+                content: crate::model::UserContent::Text(prompt),
+                timestamp: None,
+            });
+        }
+    }
+    (forked, session_id)
+}
+
+/// Handle bare `/fork` (or the picker's `full`/`auto` choice): start a NEW
+/// session, carrying the source's context either in full or by reference so
+/// the successor pulls in what it needs.
+async fn fork_continuation_session(
+    mode: &str,
+    template: &crate::sdk::SessionOptions,
+    handle: &mut crate::sdk::AgentSessionHandle,
+    current_ask: &CurrentAsk,
+    ext_handler: &Arc<FtuiExtensionUiHandler>,
+    agent_tx: &Sender<RaMsg>,
+    runtime_handle: &asupersync::runtime::RuntimeHandle,
+) -> std::result::Result<(), String> {
+    use crate::extensions::{EXTENSION_EVENT_TIMEOUT_MS, ExtensionEventName};
+
+    let mode = ForkMode::parse(mode);
+    let source = match handle.with_session(|session| session.clone()).await {
+        Ok(session) => session,
+        Err(err) => {
+            let _ = agent_tx.send(RaMsg::AgentError(format!("fork: {err}")));
+            return Ok(());
+        }
+    };
+    if source.entries.is_empty() {
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
+            "fork: this session is empty, so there is no context to carry over",
+        )));
+        return Ok(());
+    }
+
+    let session_id = source.header.id.clone();
+    if let Some(manager) = handle.extension_manager() {
+        let cancelled = manager
+            .dispatch_cancellable_event(
+                ExtensionEventName::SessionBeforeFork,
+                Some(serde_json::json!({
+                    "sessionId": session_id.clone(),
+                    "mode": mode.as_str(),
+                })),
+                EXTENSION_EVENT_TIMEOUT_MS,
+            )
+            .await
+            .unwrap_or(false);
+        if cancelled {
+            let _ = agent_tx.send(RaMsg::System(String::from("Fork cancelled by extension")));
+            return Ok(());
+        }
+    }
+
+    let (provider, model_id) = handle.model();
+    let (mut forked, source_id) = build_continuation_session(&source, mode, provider, model_id);
+    let new_session_id = forked.header.id.clone();
+    if let Err(err) = forked.save().await {
+        let _ = agent_tx.send(RaMsg::AgentError(format!(
+            "Failed to save continuation session: {err}"
+        )));
+        return Ok(());
+    }
+    let Some(path) = forked.path.clone() else {
+        let _ = agent_tx.send(RaMsg::AgentError(String::from(
+            "Failed to save continuation session: the session has no file",
+        )));
+        return Ok(());
+    };
+    Box::pin(resume_session_command(
+        &path.to_string_lossy(),
+        template,
+        handle,
+        current_ask,
+        ext_handler,
+        agent_tx,
+        runtime_handle,
+    ))
+    .await?;
+    // The resume path reports its own failures and keeps the old session; only
+    // a completed switch gets the confirmation and the fork event.
+    let switched = handle
+        .with_session(|session| session.header.id == new_session_id)
+        .await
+        .unwrap_or(false);
+    if switched {
+        let _ = agent_tx.send(RaMsg::System(format!(
+            "Started a new session carrying context from {source_id}",
+        )));
+        if let Some(manager) = handle.extension_manager() {
+            let _ = manager
+                .dispatch_event(
+                    ExtensionEventName::SessionFork,
+                    Some(serde_json::json!({
+                        "sessionId": source_id,
+                        "newSessionId": new_session_id,
+                        "mode": mode.as_str(),
+                    })),
+                )
+                .await;
+        }
+    }
+    Ok(())
+}
+
 /// Handle `/fork [list|index|id]` in the driver: pick a user message, let
 /// extensions veto (`session_before_fork`), save the forked session, and
 /// switch to it through the `/resume` path. The selected message returns to
@@ -7539,6 +8397,21 @@ async fn fork_session_command(
     use crate::extensions::{EXTENSION_EVENT_TIMEOUT_MS, ExtensionEventName};
 
     let args = args.trim();
+    // `full` / `auto` come from the bare-`/fork` picker; explicit
+    // `list|<index>|<id>` keeps the original branch-from-a-user-message
+    // behavior below.
+    if args.is_empty() || args.eq_ignore_ascii_case("full") || args.eq_ignore_ascii_case("auto") {
+        return Box::pin(fork_continuation_session(
+            if args.is_empty() { "auto" } else { args },
+            template,
+            handle,
+            current_ask,
+            ext_handler,
+            agent_tx,
+            runtime_handle,
+        ))
+        .await;
+    }
     let snapshot = handle
         .with_session(|session| {
             // Ids are backfilled on a copy so the candidates and the fork
@@ -8057,6 +8930,9 @@ fn terminal_replacement_error(
 pub struct FtuiSettings {
     /// Conversation spacing for the markdown renderer.
     pub markdown_spacing: crate::config::MarkdownSpacing,
+    /// Glyph set for the status row (`statusLine.chrome`). Portable Unicode
+    /// when unset; `nerd` needs a patched font.
+    pub status_chrome: crate::status_line::StatusLineChrome,
     /// Model used for automatic session titling, from the `tiny` role falling
     /// back to `smol` (`app::titling_model_entry`). `None` disables titling —
     /// the same silent no-op the classic stack has when no cheap role resolves
@@ -8096,6 +8972,7 @@ pub fn run(
     const DRIVER_STACK_BYTES: usize = 16 * 1024 * 1024;
     let FtuiSettings {
         markdown_spacing,
+        status_chrome,
         title_model_entry,
         gh_path,
         disable_mouse_capture,
@@ -8658,7 +9535,7 @@ pub fn run(
         .with_turn_control(turn_control)
         .with_btw_client(btw_client)
         .with_ask_reply_channel(ask_reply_tx)
-        .with_palette(FtuiPalette::from_theme(theme))
+        .with_palette(FtuiPalette::from_theme(theme).with_chrome(status_chrome))
         .with_available_models(available_models)
         .with_available_sessions(available_sessions)
         .with_alt_screen(!inline)
@@ -8727,7 +9604,7 @@ mod tests {
     use ftui::{KeyEvent, KeyEventKind};
     use std::sync::mpsc;
 
-    fn key(code: KeyCode, modifiers: Modifiers) -> Event {
+    pub(super) fn key(code: KeyCode, modifiers: Modifiers) -> Event {
         Event::Key(KeyEvent {
             code,
             modifiers,
@@ -8735,7 +9612,7 @@ mod tests {
         })
     }
 
-    fn new_model() -> (mpsc::Sender<RaMsg>, RaFtuiModel) {
+    pub(super) fn new_model() -> (mpsc::Sender<RaMsg>, RaFtuiModel) {
         let (tx, rx) = mpsc::channel();
         (tx, RaFtuiModel::new(rx))
     }
@@ -9240,7 +10117,7 @@ mod tests {
     }
 
     /// Flatten a captured frame to plain text, one row per line.
-    fn buffer_text(buf: &ftui::Buffer, width: u16, height: u16) -> String {
+    pub(super) fn buffer_text(buf: &ftui::Buffer, width: u16, height: u16) -> String {
         let mut out = String::new();
         for y in 0..height {
             for x in 0..width {
@@ -9274,6 +10151,72 @@ mod tests {
             rendered.contains("Type a message"),
             "frame missing input placeholder: {rendered:?}"
         );
+    }
+
+    #[test]
+    fn mouse_drag_selection_extracts_visible_body_text() {
+        let (_tx, mut model) = new_model();
+        // Extraction is a pure function of the frame the release resolves
+        // against, so seed the snapshot directly instead of driving a render.
+        let rect = Rect::new(0, 1, 20, 3);
+        model.selection_snapshot = std::cell::RefCell::new(Some(BodySnapshot {
+            rect,
+            lines: vec![
+                String::from("hello world"),
+                String::from("second line"),
+                String::from("third"),
+            ],
+        }));
+        // Drag from row 0 col 0 through row 1 col 6: first row to its end,
+        // second row up to column 6.
+        let selection = MouseSelection {
+            anchor: (rect.x, rect.y),
+            cursor: (rect.x + 6, rect.y + 1),
+        };
+        assert_eq!(
+            model.extract_selection_text(selection).as_deref(),
+            Some("hello world\nsecond")
+        );
+    }
+
+    #[test]
+    fn slice_by_columns_keeps_wide_characters_whole() {
+        assert_eq!(slice_by_columns("模型ab", 0, 2), "模");
+        assert_eq!(slice_by_columns("模型ab", 0, 4), "模型");
+        assert_eq!(slice_by_columns("模型ab", 2, 4), "型");
+        assert_eq!(slice_by_columns("abc", 1, 3), "bc");
+    }
+
+    #[test]
+    fn mouse_click_without_drag_selects_nothing() {
+        let (_tx, mut model) = new_model();
+        model.mouse_selection = Some(MouseSelection {
+            anchor: (1, 1),
+            cursor: (1, 1),
+        });
+        let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
+            MouseEventKind::Up(MouseButton::Left),
+            1,
+            1,
+        )));
+        assert!(model.mouse_selection.is_none());
+        assert!(model.copy_notice.is_none(), "a click must not copy");
+    }
+
+    #[test]
+    fn copy_notice_expires_on_tick() {
+        let (_tx, mut model) = new_model();
+        model.copy_notice = Some((String::from("copied"), Instant::now()));
+        let _ = model.handle_term(&Event::Tick);
+        assert!(model.copy_notice.is_some(), "fresh notice survives a tick");
+        model.copy_notice = Some((
+            String::from("copied"),
+            Instant::now()
+                .checked_sub(COPY_NOTICE_TTL + Duration::from_millis(1))
+                .expect("instant arithmetic"),
+        ));
+        let _ = model.handle_term(&Event::Tick);
+        assert!(model.copy_notice.is_none(), "aged notice is retired");
     }
 
     #[test]
@@ -11589,7 +12532,7 @@ mod tests {
     }
 
     #[test]
-    fn dag_details_prefix_gates_the_list_view() {
+    fn dag_details_prefix_gates_the_tree_view() {
         let (_tx, mut model) = new_model();
 
         // Non-DAG details (e.g. the approval audit schema) keep the existing
@@ -11608,7 +12551,7 @@ mod tests {
         );
 
         // Topology builds the card: head carries the node count, the detail
-        // carries the layered list.
+        // carries the vertical ASCII tree (virtual “开始” root + boxed nodes).
         model.apply_tool_update(
             "dag",
             "t1",
@@ -11616,8 +12559,8 @@ mod tests {
                 "schema": "ra.dag.topology.v1",
                 "graphId": "t1",
                 "nodes": [
-                    {"id": 1, "toolName": "search", "dependsOn": [], "layer": 0},
-                    {"id": 2, "toolName": "math", "dependsOn": [1], "layer": 1},
+                    {"id": 1, "toolName": "search", "name": "查询", "dependsOn": [], "layer": 0},
+                    {"id": 2, "toolName": "math", "name": "计算", "dependsOn": [1], "layer": 1},
                 ],
                 "layers": [[1], [2]],
             })),
@@ -11631,13 +12574,25 @@ mod tests {
             card.text
         );
         let detail = card.detail.clone().unwrap_or_default();
-        assert!(detail.contains("1. search"), "missing node 1: {detail:?}");
+        assert!(detail.contains("开始"), "missing 开始: {detail:?}");
+        assert!(detail.contains("结束"), "missing 结束: {detail:?}");
+        assert!(detail.contains("[ ] 1. 查询"), "missing node 1: {detail:?}");
+        assert!(detail.contains("[ ] 2. 计算"), "missing node 2: {detail:?}");
         assert!(
-            detail.contains("← 1"),
-            "missing dependency marker: {detail:?}"
+            detail.contains("┌") && detail.contains("┴") && detail.contains("│"),
+            "missing box / connector glyphs: {detail:?}"
+        );
+        // Full-name legend below the diagram carries the tool name.
+        assert!(
+            detail.contains("1. 查询 (search)"),
+            "missing full-name legend: {detail:?}"
+        );
+        assert!(
+            card.styled_detail.is_some(),
+            "tree must also carry styled detail for node colors"
         );
 
-        // node_state flips the row's marker in place (no new card).
+        // node_state flips the box's marker in place (no new card).
         model.apply_tool_update(
             "dag",
             "t1",
@@ -11650,11 +12605,12 @@ mod tests {
         assert_eq!(model.transcript.len(), 1);
         let detail = model.transcript[0].detail.clone().unwrap_or_default();
         assert!(
-            detail.contains("[✓] 1. search"),
+            detail.contains("[✓] 1. 查询"),
             "state not applied: {detail:?}"
         );
 
-        // node_output shows a truncated preview on the row.
+        // node_output no longer draws a preview box (the centered layout keeps
+        // nodes single-line); it must at least not disturb the card.
         model.apply_tool_update(
             "dag",
             "t1",
@@ -11663,11 +12619,7 @@ mod tests {
                 "graphId": "t1", "nodeId": 1, "delta": "8848 m", "seq": 2,
             })),
         );
-        let detail = model.transcript[0].detail.clone().unwrap_or_default();
-        assert!(
-            detail.contains("⤷ 8848 m"),
-            "output preview missing: {detail:?}"
-        );
+        assert_eq!(model.transcript.len(), 1);
 
         // An unknown `ra.dag.*` schema is ignored, not rendered.
         model.apply_tool_update(
@@ -11676,6 +12628,52 @@ mod tests {
             Some(&serde_json::json!({"schema": "ra.dag.future.v9", "x": 1})),
         );
         assert_eq!(model.transcript.len(), 1);
+    }
+
+    /// Regression: a finished `dag` card must surface its aggregate report.
+    /// `finish_tool_card` writes `detail`, but `push_card_block` renders
+    /// `styled_detail` *instead* of `detail` whenever the former is set — so a
+    /// stale live tree silently shadows the report (including the failure
+    /// summary) for the rest of the card's life.
+    #[test]
+    fn dag_tool_end_replaces_tree_with_aggregate_report() {
+        let (_tx, mut model) = new_model();
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.topology.v1",
+                "graphId": "t1",
+                "nodes": [
+                    {"id": 1, "toolName": "search", "dependsOn": [], "layer": 0},
+                ],
+                "layers": [[1]],
+            })),
+        );
+        assert!(
+            model.transcript[0].styled_detail.is_some(),
+            "live tree must be staged while the call is running"
+        );
+
+        model.finish_tool_card(
+            "t1",
+            "dag",
+            false,
+            Some("1 node failed: search".to_string()),
+            false,
+        );
+
+        let card = &model.transcript[0];
+        assert_eq!(card.card, Some(CardState::Err));
+        assert_eq!(
+            card.detail.as_deref(),
+            Some("1 node failed: search"),
+            "aggregate report must land as the card detail"
+        );
+        assert!(
+            card.styled_detail.is_none(),
+            "terminal report must not be shadowed by the stale tree"
+        );
     }
 
     #[test]
@@ -12111,6 +13109,101 @@ mod tests {
         // A paste of only control characters leaves the filter alone.
         sim.inject_event(Event::Paste(ftui::PasteEvent::new("\n", true)));
         assert_eq!(sim.model().picker.as_ref().unwrap().query, "claude");
+    }
+
+    /// Build a model whose `@`-ref and pasted-path resolution uses `cwd`.
+    fn model_with_cwd(cwd: std::path::PathBuf) -> RaFtuiModel {
+        let (_tx, rx) = mpsc::channel();
+        RaFtuiModel::new(rx).with_autocomplete(AutocompleteLaunch {
+            catalog: AutocompleteCatalog::default(),
+            cwd,
+            max_visible: DEFAULT_COMPLETION_ROWS,
+            resources: None,
+            resource_source: None,
+        })
+    }
+
+    /// Drag/drop and terminal paste of an existing path become an `@file`
+    /// reference (GH #242 parity with the classic stack), not raw text.
+    #[test]
+    fn paste_of_an_existing_path_attaches_an_at_ref() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("shot.png");
+        std::fs::write(&file, b"png").expect("write");
+        let mut sim = ProgramSimulator::new(model_with_cwd(dir.path().to_path_buf()));
+        sim.init();
+        sim.inject_event(Event::Paste(ftui::PasteEvent::new(
+            format!("{}\n", file.display()),
+            true,
+        )));
+        assert_eq!(sim.model().input.text(), "@shot.png ");
+        assert!(
+            sim.model().copy_notice.is_some(),
+            "an attach confirmation is shown"
+        );
+    }
+
+    /// Pasted prose is not a path and must reach the editor unchanged.
+    #[test]
+    fn paste_of_prose_still_reaches_the_editor() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut sim = ProgramSimulator::new(model_with_cwd(dir.path().to_path_buf()));
+        sim.init();
+        sim.inject_event(Event::Paste(ftui::PasteEvent::new("hello world", true)));
+        assert_eq!(sim.model().input.text(), "hello world");
+        assert!(sim.model().copy_notice.is_none());
+    }
+
+    /// The attachment box is square, so a long name or a CJK glyph cannot
+    /// push the right border out of line.
+    #[test]
+    fn image_attachment_box_lines_align() {
+        use unicode_width::UnicodeWidthStr;
+        let boxed = image_attachment_box("截图-很长的名字.png", "image/png");
+        let widths: Vec<usize> = boxed.lines().map(|line| line.width()).collect();
+        assert_eq!(widths.len(), 4, "{boxed}");
+        assert!(
+            widths.windows(2).all(|pair| pair[0] == pair[1]),
+            "unequal line widths: {widths:?}"
+        );
+        assert!(boxed.contains("image/png"), "{boxed}");
+    }
+
+    /// Submitting a prompt that references an image shows a box representing
+    /// the file (the terminal cannot render the bitmap).
+    #[test]
+    fn submitting_an_image_ref_pushes_an_attachment_box() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // PNG magic is all `detect_supported_image_mime_type_from_bytes` needs.
+        let png_head: &[u8] = &[
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52,
+        ];
+        let file = dir.path().join("shot.png");
+        std::fs::write(&file, png_head).expect("write png");
+        let (submit_tx, _submit_rx) = mpsc::channel::<UiCommand>();
+        let (_tx, rx) = mpsc::channel();
+        let model = RaFtuiModel::new(rx)
+            .with_submit_channel(submit_tx)
+            .with_autocomplete(AutocompleteLaunch {
+                catalog: AutocompleteCatalog::default(),
+                cwd: dir.path().to_path_buf(),
+                max_visible: DEFAULT_COMPLETION_ROWS,
+                resources: None,
+                resource_source: None,
+            });
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        type_str(&mut sim, &format!("@{} describe this", file.display()));
+        sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
+        let boxed = sim
+            .model()
+            .transcript
+            .iter()
+            .find(|entry| entry.text.contains("╭─ image"))
+            .expect("attachment box in transcript");
+        assert!(boxed.text.contains("shot.png"), "{}", boxed.text);
+        assert!(boxed.text.contains("image/png"), "{}", boxed.text);
     }
 
     /// GH #182: `!command` on this stack honors `shell_path` and
@@ -12894,6 +13987,132 @@ mod tests {
         assert_eq!(forked.header.model_id.as_deref(), Some("claude-test"));
         assert_eq!(forked.header.thinking_level.as_deref(), Some("high"));
         assert_eq!(forked.session_dir.as_deref(), Some(dir.path()));
+    }
+
+    /// `auto`: the successor starts with one injected prompt that points back
+    /// at the previous session and names the `sessions` tool.
+    #[test]
+    fn build_continuation_session_auto_seeds_one_reference_message() {
+        use crate::model::UserContent;
+        use crate::session::{Session, SessionMessage};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut source = Session::create_with_dir(Some(dir.path().to_path_buf()));
+        source.header.id = String::from("prev-session-id");
+        source.path = Some(dir.path().join("prev.jsonl"));
+        source.header.thinking_level = Some(String::from("high"));
+        source.append_message(SessionMessage::User {
+            content: UserContent::Text(String::from("keep the API stable")),
+            timestamp: Some(0),
+        });
+        source.ensure_entry_ids();
+        let expected_parent = source.path.as_ref().map(|path| path.display().to_string());
+
+        let (forked, source_id) = build_continuation_session(
+            &source,
+            ForkMode::Auto,
+            String::from("anthropic"),
+            String::from("claude-test"),
+        );
+
+        assert_eq!(source_id, "prev-session-id");
+        assert_ne!(forked.header.id, source.header.id);
+        assert_eq!(forked.header.provider.as_deref(), Some("anthropic"));
+        assert_eq!(forked.header.model_id.as_deref(), Some("claude-test"));
+        assert_eq!(forked.header.thinking_level.as_deref(), Some("high"));
+        assert_eq!(forked.header.parent_session, expected_parent);
+        assert_eq!(forked.session_dir.as_deref(), Some(dir.path()));
+
+        let texts = forked
+            .to_messages_for_current_path()
+            .iter()
+            .filter_map(|message| match message {
+                crate::model::Message::User(user) => match &user.content {
+                    UserContent::Text(text) => Some(text.clone()),
+                    UserContent::Blocks(_) => None,
+                },
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(texts.len(), 1, "only the injected prompt is present");
+        assert!(texts[0].contains("prev-session-id"));
+        assert!(texts[0].contains("prev.jsonl"));
+        assert!(
+            texts[0].contains("sessions` tool"),
+            "the prompt points at the sessions tool"
+        );
+        assert!(
+            !texts[0].contains("keep the API stable"),
+            "auto mode must not inline the old transcript"
+        );
+    }
+
+    /// `full`: every entry on the source's current path is copied over and
+    /// no prompt is injected.
+    #[test]
+    fn build_continuation_session_full_copies_every_current_path_entry() {
+        use crate::model::UserContent;
+        use crate::session::{Session, SessionMessage};
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut source = Session::create_with_dir(Some(dir.path().to_path_buf()));
+        source.header.id = String::from("prev-session-id");
+        source.path = Some(dir.path().join("prev.jsonl"));
+        for text in ["first question", "second question"] {
+            source.append_message(SessionMessage::User {
+                content: UserContent::Text(text.to_string()),
+                timestamp: Some(0),
+            });
+        }
+        source.ensure_entry_ids();
+
+        let (forked, source_id) = build_continuation_session(
+            &source,
+            ForkMode::Full,
+            String::from("anthropic"),
+            String::from("claude-test"),
+        );
+
+        assert_eq!(source_id, "prev-session-id");
+        assert_ne!(forked.header.id, source.header.id);
+        assert_eq!(
+            forked.header.parent_session,
+            source.path.as_ref().map(|path| path.display().to_string()),
+            "branchedFrom records the full source path"
+        );
+        let texts = forked
+            .to_messages_for_current_path()
+            .iter()
+            .filter_map(|message| match message {
+                crate::model::Message::User(user) => match &user.content {
+                    UserContent::Text(text) => Some(text.clone()),
+                    UserContent::Blocks(_) => None,
+                },
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            texts,
+            vec![
+                String::from("first question"),
+                String::from("second question")
+            ],
+            "full mode carries the whole current path"
+        );
+    }
+
+    #[test]
+    fn render_self_select_prompt_handles_a_missing_path() {
+        let prompt = render_self_select_prompt("sid", None);
+        assert!(prompt.contains("sid"));
+        assert!(
+            !prompt.contains("transcript is saved"),
+            "no saved path means no file pointer"
+        );
+        assert!(
+            prompt.contains("sessions` tool"),
+            "even without a path the prompt points at the tool"
+        );
     }
 
     /// While a login waits for input, the next line is the secret: it goes to
@@ -15035,7 +16254,10 @@ mod tests {
 
 #[cfg(test)]
 mod loop_watchdog_tests {
+    use super::tests::{buffer_text, key, new_model};
     use super::{LOOP_STALL_BUDGET, LoopPhase, LoopWatchdog};
+    use ftui::runtime::simulator::ProgramSimulator;
+    use ftui::{KeyCode, Modifiers};
     use std::time::{Duration, Instant};
 
     /// A probe start far enough in the past that `finish` sees `over` as the
@@ -15130,6 +16352,48 @@ mod loop_watchdog_tests {
         assert!(
             !wd.stalled.get(),
             "an in-budget phase clears the latch for the next stall"
+        );
+    }
+
+    /// Regression guard for the reported freeze: composing a draft whose text
+    /// exceeds one rendered row (newlines and/or soft-wrapped IME text) must
+    /// still produce a frame, and `input_rows` must grow with it.
+    ///
+    /// The frame is captured twice because the first render is what seeds
+    /// `TextArea`'s viewport width; the second exercises the soft-wrap path
+    /// with a non-zero viewport, which is where a stall would live.
+    #[test]
+    fn multiline_and_wrapping_input_renders_frame() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+
+        // A wrapped, unbroken CJK run is the IME/voice shape: many graphemes,
+        // no spaces, so the wrapper must split mid-segment.
+        let cjk = "中文输入法测试内容".repeat(6);
+        for ch in cjk.chars() {
+            sim.inject_event(key(KeyCode::Char(ch), Modifiers::empty()));
+        }
+        let _ = sim.capture_frame(40, 8);
+        assert!(
+            sim.model().input.text().chars().count() >= cjk.chars().count(),
+            "typed text landed in the editor"
+        );
+
+        // Now add explicit newlines, so the region has to grow as well.
+        for _ in 0..2 {
+            sim.inject_event(key(KeyCode::Enter, Modifiers::ALT));
+            sim.inject_event(key(KeyCode::Char('x'), Modifiers::empty()));
+        }
+        assert!(
+            sim.model().input_rows() >= 2,
+            "a multi-line draft grows the input region"
+        );
+
+        let rendered = buffer_text(sim.capture_frame(40, 8), 40, 8);
+        assert!(
+            rendered.contains('x'),
+            "frame rendered with a multi-line/wrapped draft: {rendered:?}"
         );
     }
 }
