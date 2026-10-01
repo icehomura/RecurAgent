@@ -998,12 +998,131 @@ fn hanging_indent(
     (cells, split_leading_indent(line, cells).0)
 }
 
+/// ftui-text 0.7.0's [`WrapMode::WordChar`] hard-break fallback can spin
+/// forever, deadlocking the render thread. When a width-2 grapheme (CJK,
+/// emoji) is split against a row with exactly one cell left,
+/// [`ftui::text::Span::split_at_cell`] returns an empty left half; the loop in
+/// `wrap_line_words` forces progress only when the current row is empty, so it
+/// consumes nothing and never advances. A CJK sentence has no spaces, so a
+/// single over-long unbroken run is the norm, and any resize that lands on
+/// such a width (odd widths, or any one-cell remainder) freezes the UI
+/// permanently: it does not recover when the drag stops. This is the resize
+/// hang, not a slow frame.
+///
+/// [`WrapMode::Word`] cannot stall -- it parks an over-wide token on its own
+/// line -- so wrap with `Word` and hard-break the few lines that still exceed
+/// `width` ourselves, taking whole graphemes and always consuming at least
+/// one. Word boundaries everywhere else are preserved exactly as before.
+fn wrap_line_wordchar_safe(
+    line: &ftui::text::Line<'static>,
+    width: usize,
+) -> Vec<ftui::text::Line<'static>> {
+    let over_wide_run = line
+        .to_plain_text()
+        .split_whitespace()
+        .any(|run| display_width(run) > width);
+    if !over_wide_run {
+        // No token exceeds the row, so ftui never enters its char fallback.
+        return line.wrap(width, WrapMode::WordChar);
+    }
+    let mut out = Vec::new();
+    for piece in line.wrap(width, WrapMode::Word) {
+        if piece.width() > width {
+            out.extend(hard_break_wide_line(piece, width));
+        } else {
+            out.push(piece);
+        }
+    }
+    out
+}
+
+/// Greedy grapheme-safe hard break: fill a row up to `width` cells, moving a
+/// wide grapheme that would straddle the edge onto the next row, and consuming
+/// at least one grapheme per row even when one grapheme alone overflows a
+/// one-cell row. Guaranteed to progress, which is what the upstream fallback
+/// fails to do.
+fn hard_break_wide_line(
+    line: ftui::text::Line<'static>,
+    width: usize,
+) -> Vec<ftui::text::Line<'static>> {
+    let mut out: Vec<ftui::text::Line<'static>> = Vec::new();
+    let mut current = ftui::text::Line::new();
+    let mut current_width = 0_usize;
+    let flush = |out: &mut Vec<ftui::text::Line<'static>>,
+                 current: &mut ftui::text::Line<'static>,
+                 current_width: &mut usize| {
+        out.push(std::mem::replace(current, ftui::text::Line::new()));
+        *current_width = 0;
+    };
+    for span in line.spans().iter().cloned() {
+        let mut rest = span;
+        while !rest.is_empty() {
+            let available = width.saturating_sub(current_width);
+            let (left, right) = rest.split_at_cell(available);
+            if left.is_empty() {
+                // The next grapheme does not fit the space left on this row.
+                if current_width > 0 {
+                    // Close the row and retry the same grapheme on a fresh one.
+                    flush(&mut out, &mut current, &mut current_width);
+                    continue;
+                }
+                // The row is already empty, so the grapheme is wider than
+                // `width` itself (only reachable at the one-column floor).
+                // Take it anyway; a row that cannot hold one grapheme would
+                // otherwise spin forever.
+                let (forced, next) = split_at_width_forcing_progress(&rest, width);
+                current.push_span(forced);
+                flush(&mut out, &mut current, &mut current_width);
+                rest = next;
+                continue;
+            }
+            current_width += left.width();
+            current.push_span(left);
+            if current_width >= width {
+                flush(&mut out, &mut current, &mut current_width);
+            }
+            rest = right;
+        }
+    }
+    if !current.is_empty() || out.is_empty() {
+        out.push(current);
+    }
+    out
+}
+
+/// Split `span` at `width` cells; if its first grapheme is wider than `width`
+/// (so the split would be empty), widen the split until it lands on a grapheme
+/// boundary. Always returns a non-empty left half for a non-empty span, which
+/// is exactly the progress guarantee `wrap_line_words` is missing.
+fn split_at_width_forcing_progress(
+    span: &ftui::text::Span<'static>,
+    width: usize,
+) -> (ftui::text::Span<'static>, ftui::text::Span<'static>) {
+    let (head, tail) = span.split_at_cell(width);
+    if !head.is_empty() {
+        return (head, tail);
+    }
+    let mut cell = width.saturating_add(1);
+    loop {
+        let (head, tail) = span.split_at_cell(cell);
+        if !head.is_empty() {
+            return (head, tail);
+        }
+        if cell >= span.width() {
+            return (span.clone(), ftui::text::Span::default());
+        }
+        cell = cell.saturating_add(1);
+    }
+}
+
 /// Wrap one rendered conversation line to `width` cells (issue #227).
 ///
-/// [`WrapMode::WordChar`] breaks at word boundaries and falls back to
-/// grapheme boundaries for a token longer than the row, so an unbroken URL
-/// hard-breaks instead of overflowing; splits are measured in display cells,
-/// so CJK and emoji never straddle the edge. ftui's word wrap left-trims
+/// Breaks at word boundaries and falls back to grapheme boundaries for a token
+/// longer than the row, so an unbroken URL hard-breaks instead of overflowing;
+/// splits are measured in display cells, so CJK and emoji never straddle the
+/// edge. The fallback goes through [`wrap_line_wordchar_safe`] rather than
+/// ftui's own `WordChar` path, which can spin forever on wide graphemes.
+/// ftui's word wrap left-trims
 /// wrapped rows, so the hanging indent is re-applied here — otherwise list
 /// items and fenced code slide back to the margin on every continuation.
 fn wrap_body_line(
@@ -1019,10 +1138,10 @@ fn wrap_body_line(
     // text; deep indents (and whitespace-only lines, whose indent is the
     // whole line) wrap flush instead of squeezing text into a sliver.
     if indent_cells == 0 || indent_cells.saturating_mul(2) >= width {
-        return line.wrap(width, WrapMode::WordChar);
+        return wrap_line_wordchar_safe(line, width);
     }
     let (own_prefix, rest) = split_leading_indent(line, indent_cells);
-    rest.wrap(width - indent_cells, WrapMode::WordChar)
+    wrap_line_wordchar_safe(&rest, width - indent_cells)
         .into_iter()
         .enumerate()
         .map(|(row, piece)| {
@@ -14506,6 +14625,37 @@ mod tests {
                 words, expected,
                 "width {width}: wrapping altered the answer text"
             );
+        }
+    }
+
+    /// Regression: ftui-text 0.7.0's `WrapMode::WordChar` fallback deadlocks
+    /// the render thread when a width-2 grapheme is split against a one-cell
+    /// remainder. A terminal resize lands on such a width (odd widths, or any
+    /// one-cell remainder), and `wrap_body_line` re-wraps the whole transcript
+    /// on the resize, so the UI froze permanently. A long unbroken CJK run
+    /// (which has no spaces, so it is one over-wide token) must wrap.
+    #[test]
+    fn wide_graphemes_wrap_at_one_cell_remainders_without_hanging() {
+        let source: String = std::iter::repeat('漢').take(60).collect();
+        // 3, 39 and 79 leave a one-cell remainder for width-2 graphemes; 1 is
+        // the degenerate floor; the rest are even/typical neighbours.
+        for width in [1_usize, 2, 3, 39, 40, 41, 79, 80, 81, 240] {
+            let line = ftui::text::Line::raw(source.clone());
+            let pieces = wrap_line_wordchar_safe(&line, width);
+            assert!(!pieces.is_empty(), "width {width}: nothing produced");
+            // Wrapping moves cells between rows; it must never drop, duplicate
+            // or reorder them.
+            let rebuilt: String = pieces.iter().map(ftui::text::Line::to_plain_text).collect();
+            assert_eq!(rebuilt, source, "width {width}: wrapping lost content");
+            for piece in &pieces {
+                // A single wide grapheme cannot fit a one-column row; every
+                // other row must fit the requested width.
+                assert!(
+                    piece.width() <= width.max(2),
+                    "width {width}: row overflows to {} cells",
+                    piece.width()
+                );
+            }
         }
     }
 
