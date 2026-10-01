@@ -13,5 +13,12 @@ check-headless:
     cargo check --locked --no-default-features --features headless --bin ra-headless
 
 # Print the two release binary paths for packaging scripts.
+#
+# Ask cargo rather than hardcoding: the target directory is a local choice
+# (`.cargo/config.toml` may move it, or drop the setting entirely), and a
+# hardcoded path silently kept pointing at a stale copy once the config changed.
 paths:
-    @printf '%s\n' "D:/cargo-target/pi_agent/release/ra" "D:/cargo-target/pi_agent/release/ra-headless"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo metadata --format-version 1 --no-deps \
+        | python3 -c "import json,os.path,sys; d=json.load(sys.stdin)['target_directory']; [print(os.path.join(d,'release',n)) for n in ('ra','ra-headless')]"
