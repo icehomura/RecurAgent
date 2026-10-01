@@ -1852,7 +1852,7 @@ pub(crate) fn drop_routes_for_connection(connection: u64) {
 /// `peer/purge`: end every host call in flight for peer `slug` at once
 /// (`peer_purged`; the host hears `peer/tool/cancel` with reason `purged`),
 /// drop its route, and forget every per-peer claim and marker (delivered
-/// inputs, `peer/input` turn ids, unknown outcomes), so
+/// inputs, `peer/input` turn ids, unknown outcomes, tool-call occurrences), so
 /// a new peer later staged under the same slug starts clean. Returns how many
 /// calls were failed.
 pub(crate) fn purge_peer_host_state(peers_root: &Path, slug: &str) -> usize {
@@ -1873,8 +1873,16 @@ pub(crate) fn purge_peer_host_state(peers_root: &Path, slug: &str) -> usize {
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .remove(&key);
+    // Per-route partitions go whole; the flat sets lose this route's keys.
+    for claims in [&HUB.inputs, &HUB.occurrences] {
+        claims
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .parts
+            .remove(&key);
+    }
     let prefix = format!("{key}\u{0}");
-    for claims in [&HUB.inputs, &HUB.input_turns, &HUB.unknown] {
+    for claims in [&HUB.input_turns, &HUB.unknown] {
         claims
             .lock()
             .unwrap_or_else(|p| p.into_inner())
