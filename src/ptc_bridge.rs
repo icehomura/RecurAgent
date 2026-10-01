@@ -1515,6 +1515,99 @@ mod tests {
     }
 
     #[test]
+    fn bridge_denial_surfaces_to_program_code() {
+        // The whitelist is enforced host-side, but the program must observe the
+        // refusal as an ordinary catchable error — not a hang, not a silent
+        // no-op, and not an escape.
+        let code = r"
+            const outcomes = {};
+            try { await sdk.call('bash', { command: 'echo hi' }); outcomes.bash = 'allowed'; }
+            catch (err) { outcomes.bash = String(err && err.message); }
+            try { await sdk.call('write', { path: 'x', content: 'y' }); outcomes.write = 'allowed'; }
+            catch (err) { outcomes.write = String(err && err.message); }
+            return outcomes;
+        ";
+        let text = run_text(&RunCodeTool::new("."), code);
+        assert!(!text.contains("allowed"), "{text}");
+        assert!(text.contains("PTC_BRIDGE_DENIED"), "{text}");
+        assert!(text.contains("bash"), "{text}");
+        assert!(text.contains("write"), "{text}");
+    }
+
+    #[test]
+    fn host_tool_errors_reject_the_await() {
+        // A host tool failure becomes a JS rejection carrying the host's error
+        // text: it never hangs, and it never silently returns a value.
+        let missing = "pi-ptc-definitely-missing.txt";
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": format!("await sdk.read('{missing}');"), "timeoutMs": 30_000 }),
+        )
+        .expect("a failed bridge call still yields a ToolOutput");
+        assert!(out.is_error, "{}", output_text(&out));
+        // The failure is attributed to the tool that actually ran. (The `read`
+        // tool's not-found text is platform-localized here, so it is asserted
+        // by attribution rather than by filename.)
+        assert!(output_text(&out).contains("read"), "{}", output_text(&out));
+
+        // Caught: the program keeps running and sees an ordinary Error whose
+        // `message` is the host's text, not an empty husk.
+        let code = format!(
+            "try {{\n  await sdk.read('{missing}');\n  return 'no-error';\n}} catch (err) {{\n  return 'caught:' + typeof (err && err.message) + ':' + (String(err && err.message).length > 0);\n}}"
+        );
+        assert_eq!(
+            run_text(&RunCodeTool::new("."), &code),
+            "caught:string:true"
+        );
+    }
+
+    #[test]
+    fn bridge_ls_cannot_escape_the_workspace_roots() {
+        // The tool layer is the security boundary the module docs rely on: a
+        // bridge call goes through the SAME LsTool a direct call uses, so an
+        // absolute directory outside the cwd is refused rather than listed.
+        let outside = if cfg!(windows) { "C:/Windows" } else { "/etc" };
+        if !std::path::Path::new(outside).is_dir() {
+            return;
+        }
+        let code = format!("await sdk.ls({outside:?});");
+        let out = run(
+            &RunCodeTool::new("."),
+            json!({ "code": code, "timeoutMs": 30_000 }),
+        )
+        .expect("run");
+        assert!(
+            out.is_error,
+            "listing outside the roots must fail: {}",
+            output_text(&out)
+        );
+        assert!(
+            output_text(&out).contains("outside"),
+            "{}",
+            output_text(&out)
+        );
+    }
+
+    #[test]
+    fn unrepresentable_returns_fall_back_to_text() {
+        // Plain strings come back verbatim...
+        assert_eq!(run_text(&RunCodeTool::new("."), "return 'hello';"), "hello");
+        // ...`undefined` renders as JSON null (the old node contract)...
+        assert_eq!(
+            run_text(&RunCodeTool::new("."), "return undefined;"),
+            "null"
+        );
+        // ...and values JSON cannot express fall back to their text form
+        // instead of failing the whole run.
+        assert_eq!(run_text(&RunCodeTool::new("."), "return 5n;"), "5");
+        let circular = "const a = {}; a.self = a; return a;";
+        assert_eq!(
+            run_text(&RunCodeTool::new("."), circular),
+            "[object Object]"
+        );
+    }
+
+    #[test]
     fn program_source_keeps_line_numbers() {
         let source = program_source("first;\nsecond;");
         assert!(source.starts_with("(async () => {first;"), "{source}");
