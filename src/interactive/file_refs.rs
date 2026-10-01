@@ -573,4 +573,60 @@ mod tests {
         assert_eq!(token, "bc");
         assert_eq!(end, 4);
     }
+
+    #[test]
+    fn normalize_pasted_file_refs_attaches_an_existing_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("screenshot.png"), b"png").expect("write");
+        let pasted = format!("{}\n", dir.path().join("screenshot.png").display());
+        let (insert, count) =
+            normalize_pasted_file_refs(&pasted, dir.path()).expect("existing path resolves");
+        assert_eq!(count, 1);
+        assert_eq!(insert, "@screenshot.png ");
+    }
+
+    #[test]
+    fn normalize_pasted_file_refs_joins_multiple_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.png"), b"a").expect("a");
+        std::fs::write(dir.path().join("b.png"), b"b").expect("b");
+        let pasted = format!(
+            "{}\n{}\n",
+            dir.path().join("a.png").display(),
+            dir.path().join("b.png").display()
+        );
+        let (insert, count) =
+            normalize_pasted_file_refs(&pasted, dir.path()).expect("both paths resolve");
+        assert_eq!(count, 2);
+        assert_eq!(insert, "@a.png @b.png ");
+    }
+
+    #[test]
+    fn normalize_pasted_file_refs_quotes_paths_with_spaces() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("my shot.png"), b"png").expect("write");
+        let pasted = format!("\"{}\"", dir.path().join("my shot.png").display());
+        let (insert, count) =
+            normalize_pasted_file_refs(&pasted, dir.path()).expect("quoted path resolves");
+        assert_eq!(count, 1);
+        assert_eq!(insert, "@\"my shot.png\" ");
+    }
+
+    #[test]
+    fn normalize_pasted_file_refs_leaves_prose_alone() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert!(
+            normalize_pasted_file_refs("hello there\nhow are you?", dir.path()).is_none(),
+            "prose must reach the editor unchanged"
+        );
+    }
+
+    #[test]
+    fn normalize_pasted_file_refs_rejects_missing_and_at_prefixed_input() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // A missing path on any line disqualifies the whole paste.
+        assert!(normalize_pasted_file_refs("/no/such/file.png", dir.path()).is_none());
+        // An already-`@`-prefixed reference is not re-normalized.
+        assert!(normalize_pasted_file_refs("@already/ref.png", dir.path()).is_none());
+    }
 }
