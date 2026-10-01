@@ -3771,6 +3771,10 @@ fn dispatch_probe_request(method: &str) -> RpcRequest<Value> {
             "peer": "probe",
             "host_token": "probe",
         }),
+        APPUI_METHOD_PEER_TOOLS_UNREGISTER => json!({
+            "session_id": session_id,
+            "peer": "probe",
+        }),
         APPUI_METHOD_TURN_STEER => json!({
             "session_id": session_id,
             "input": [{ "kind": "text", "text": "steer probe" }],
