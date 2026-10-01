@@ -2238,6 +2238,7 @@ async fn run(
             ftui_sessions,
             ra::interactive_ftui::FtuiSettings {
                 markdown_spacing: config.markdown_spacing(),
+                status_chrome: config.status_line_chrome(),
                 // Automatic session titling (bd-cv653.3.1): the `tiny` role
                 // falling back to `smol`, exactly as the classic stack resolves
                 // it. `None` keeps titling a silent no-op.
