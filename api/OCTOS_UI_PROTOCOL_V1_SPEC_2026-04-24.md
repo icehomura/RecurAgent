@@ -641,6 +641,17 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   gated call's wait to the approval TTL; an unanswered non-read call ends as
   `outcome_unknown`; typed `data.kind` `peer_tool_call_not_found` for a
   finished, timed-out or cancelled call, whose late result is audited)
+- `peer/purge` (accepted `UPCR-2026-034` amendment, #2604: the host erases
+  a host-owned app peer. `{session_id, peer, host_token, profile_id?}` →
+  `{session_id, profile_id, slug, name, purged, already_purged, purged_at,
+  was_open, contexts, contexts_closed, interrupted, host_calls_failed,
+  prompts_cancelled, erased, errors}`; closes an open peer first, fails its
+  in-flight host tool calls (`peer_purged`), stops its and its contexts'
+  running turns, then erases their transcripts, the memory namespace, the
+  blackboard and a kernel-provisioned workspace, and frees the (app,
+  account) binding; a retry with the same token answers `already_purged`;
+  host connection only; typed `data.kind` `peer_purge_not_owner`,
+  `peer_purge_busy`, `peer_purge_in_progress`, `peer_not_host_bound`)
 - `peer/input/reject` (accepted `UPCR-2026-035`, #2618: the host refuses a
   `peer/input`; `{session_id, peer, host_token, input_id, reason:
   "signed_out" | "no_consent" | "busy" | "other", message?}` → `{input_id,

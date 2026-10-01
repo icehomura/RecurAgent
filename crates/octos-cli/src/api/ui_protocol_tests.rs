@@ -3771,6 +3771,11 @@ fn dispatch_probe_request(method: &str) -> RpcRequest<Value> {
             "generic_tools": [],
         }),
         APPUI_METHOD_SESSION_TOOL_LIST_GET => json!({ "session_id": session_id }),
+        APPUI_METHOD_PEER_PURGE => json!({
+            "session_id": session_id,
+            "peer": "probe",
+            "host_token": "probe",
+        }),
         APPUI_METHOD_PEER_TOOLS_UNREGISTER => json!({
             "session_id": session_id,
             "peer": "probe",

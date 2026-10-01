@@ -6699,6 +6699,293 @@ async fn should_intersect_with_the_live_session_set_when_both_are_given() {
 }
 
 // ---------------------------------------------------------------------------
+// UPCR-2026-034 `peer/purge` (#2604)
+// ---------------------------------------------------------------------------
+
+/// `peer/purge` of the News peer from `ws`, on the process-wide turn registry.
+async fn purge(
+    state: &Arc<AppState>,
+    ws: &WsConnection,
+    system: &SessionKey,
+    peer: &str,
+    token: &str,
+) -> Result<Value, RpcError> {
+    let ledger = Arc::new(UiProtocolLedger::new(64));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    peer_purge::raw_peer_purge(
+        ws,
+        state,
+        &ledger,
+        &contracts,
+        &active_turns_registry(),
+        &rpc(
+            APPUI_METHOD_PEER_PURGE,
+            json!({"session_id": system, "peer": peer, "host_token": token}),
+        ),
+        None,
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_erase_the_peers_stores_and_let_a_new_peer_bind_when_it_is_purged() {
+    let llm = ScriptedHostToolLlm::new("news_list", json!({"topic": "rust"}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [news_list()] })).await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    // A real turn on the peer, and a request context with its own folder.
+    e2e_turn_with(
+        &mut e,
+        &session,
+        &llm,
+        "PURGE-MARK-7 what's new?",
+        TurnId::new(),
+    )
+    .await;
+    open_context_from(&e, Some(&e.ws), "reader-1", json!({})).expect("open a context");
+    // The peer's memory namespace holds something, with its stores open.
+    let runtime = e.state.profiles.get("dev").unwrap().clone();
+    crate::runtime::memory_namespace::SessionMemory::namespaced(&runtime, "app/news/acct-1")
+        .await
+        .expect("open the peer's memory");
+    let ns_root =
+        crate::runtime::memory_namespace::memory_namespace_root(&e.data_dir, "app/news/acct-1");
+    std::fs::write(
+        ns_root.join("MEMORY.md"),
+        "- PURGE-MARK-7 the account's fact\n",
+    )
+    .unwrap();
+    assert!(!files_containing(&e.data_dir, "PURGE-MARK-7").is_empty());
+    let apps = e.data_dir.parent().unwrap().join("apps/news");
+    assert!(apps.join("contexts/reader-1").is_dir());
+
+    let result = purge(&e.state, &e.ws, &e.system, "News", &e.token)
+        .await
+        .expect("the host purges its peer");
+    assert_eq!(result["purged"], true);
+    assert_eq!(result["already_purged"], false);
+    assert_eq!(result["slug"], "news");
+    assert_eq!(result["was_open"], true);
+    assert_eq!(result["contexts"], json!(["reader-1"]));
+    assert_eq!(result["errors"], json!([]), "{result}");
+    assert_eq!(result["erased"]["workspace"], "kept");
+
+    // Nothing the peer said or stored is left in the kernel's data...
+    assert_eq!(
+        files_containing(&e.data_dir, "PURGE-MARK-7"),
+        Vec::<PathBuf>::new()
+    );
+    assert!(!e.data_dir.join("peers/news").exists());
+    assert!(!ns_root.exists());
+    // ...the host's own folder stays, without the kernel's context folders.
+    assert!(apps.is_dir());
+    assert!(!apps.join("contexts").exists());
+    // The purge is audited outside `peers/`.
+    let audit =
+        std::fs::read_to_string(e.data_dir.join(crate::peers::purge::PEER_PURGE_AUDIT_LEAF))
+            .unwrap();
+    assert!(audit.contains("\"event\":\"peer_purged\"") && audit.contains("\"slug\":\"news\""));
+    assert!(
+        !audit.contains(&e.token),
+        "the audit never records the token"
+    );
+    // A stale client of the erased peer cannot run it as a profile session.
+    assert!(matches!(
+        crate::peers::app_binding::resolve_session_app_binding(&e.data_dir.join("peers"), &session),
+        crate::peers::app_binding::SessionAppBinding::Refused(_)
+    ));
+
+    // The same (app, account) binding can be prepared again: a new peer.
+    let again = raw_peer_prepare(
+        &e.state,
+        &rpc(
+            APPUI_METHOD_PEER_PREPARE,
+            json!({
+                "brief": "You are the News app's assistant.",
+                "names": ["News"],
+                "cwd": apps.to_string_lossy(),
+                "session_id": e.system,
+                "memory_namespace": "app/news/acct-1",
+                "resume": true,
+            }),
+        ),
+        None,
+    )
+    .await
+    .expect("a new peer binds the same app and account");
+    assert_eq!(again["resumed"], false);
+    assert_eq!(again["slug"], "news");
+    assert_ne!(again["host_token"].as_str().unwrap(), e.token);
+    // Its memory starts empty (no stale open handle on the erased stores).
+    crate::runtime::memory_namespace::SessionMemory::namespaced(&runtime, "app/news/acct-1")
+        .await
+        .expect("open the new peer's memory");
+    assert!(!ns_root.join("MEMORY.md").exists());
+    assert!(matches!(
+        crate::peers::app_binding::resolve_session_app_binding(&e.data_dir.join("peers"), &session),
+        crate::peers::app_binding::SessionAppBinding::Bound { .. }
+    ));
+}
+
+#[tokio::test]
+async fn should_answer_already_purged_when_a_purge_is_retried() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    let (ws, _rx) = ws_connection_for_test(32);
+    let first = purge(&fx.state, &ws, &fx.system, "news", &token)
+        .await
+        .unwrap();
+    assert_eq!(first["purged"], true);
+    let again = purge(&fx.state, &ws, &fx.system, "news", &token)
+        .await
+        .expect("a retry succeeds");
+    assert_eq!(again["purged"], false);
+    assert_eq!(again["already_purged"], true);
+    assert_eq!(again["purged_at"], first["purged_at"]);
+    // The old credential stays answered after a new peer took the name, and
+    // never touches the new peer.
+    let new_token = prepare_news(&fx).await;
+    let old = purge(&fx.state, &ws, &fx.system, "News", &token)
+        .await
+        .unwrap();
+    assert_eq!(old["already_purged"], true);
+    assert!(peers_root(&fx).join("news/brief.md").exists());
+    // Without the right token nothing is said about a purge.
+    let error = purge(&fx.state, &ws, &fx.system, "news", "not-the-token")
+        .await
+        .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_host_token_mismatch");
+    drop(new_token);
+}
+
+#[tokio::test]
+async fn should_refuse_a_purge_when_the_caller_is_not_the_peers_host() {
+    let fx = fixture().await;
+    let token = prepare_news(&fx).await;
+    // An external client of a host-managed server: refused at the gate and
+    // in the handler, even with the host token.
+    let params = json!({"session_id": fx.system, "peer": "news", "host_token": token});
+    let error = super::super::host_managed::external_gate(
+        APPUI_METHOD_PEER_PURGE,
+        &params,
+        &HashSet::new(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.data.unwrap()["kind"],
+        super::super::host_managed::EXTERNAL_METHOD_DENIED
+    );
+    let (ext, mut ext_rx) = external_ws(8);
+    let handled = handle_raw_appui_rpc(
+        &ext,
+        &fx.state,
+        &Arc::new(UiProtocolLedger::new(16)),
+        &Arc::new(UiProtocolContractStores::default()),
+        &active_turns_registry(),
+        &Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        ConnectionUiFeatures::stdio_defaults(),
+        None,
+        "ext-purge".into(),
+        &RpcRequest::new("ext-purge".to_string(), APPUI_METHOD_PEER_PURGE, params),
+    )
+    .await;
+    assert!(handled);
+    assert_eq!(
+        rpc_error_kind(ext_rx.recv().await.unwrap()),
+        super::super::host_managed::EXTERNAL_METHOD_DENIED
+    );
+    // Another session (not the originator), and a missing token.
+    let (ws, _rx) = ws_connection_for_test(8);
+    let stranger = SessionKey::with_profile_topic("dev", "api", "stranger", "system");
+    let error = purge(&fx.state, &ws, &stranger, "news", &token)
+        .await
+        .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_originator_mismatch");
+    // A connection other than the one that drives the peer.
+    let (host_ws, _host_rx) = ws_connection_for_test(8);
+    register(&fx, &host_ws, &token, json!({})).unwrap();
+    let error = purge(&fx.state, &ws, &fx.system, "news", &token)
+        .await
+        .unwrap_err();
+    assert_eq!(error.data.unwrap()["kind"], "peer_purge_not_owner");
+    assert!(
+        peers_root(&fx).join("news/brief.md").exists(),
+        "nothing erased"
+    );
+    crate::peers::host_tools::drop_routes_for_connection(host_ws.connection_id.0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_fail_the_host_call_and_stop_the_turn_when_the_peer_is_purged_mid_call() {
+    let llm = ScriptedHostToolLlm::new("news_topics_set", json!({"topics": ["rust"]}));
+    let mut e = e2e_fixture(llm.clone(), json!({ "tools": [news_topics_set()] })).await;
+    let session = SessionKey(format!("{}#peer-news", e.system.base_key()));
+    let mut rx = e.rx.take().unwrap();
+    let ledger = Arc::new(UiProtocolLedger::new(256));
+    let contracts = Arc::new(UiProtocolContractStores::default());
+    let connection_turns: SharedConnectionTurns = Arc::new(TokioMutex::new(HashMap::new()));
+    let turn_id = TurnId::new();
+    handle_turn_start(
+        &e.ws,
+        &e.state,
+        &ledger,
+        &contracts,
+        &active_turns_registry(),
+        &connection_turns,
+        None,
+        None,
+        ConnectionUiFeatures::stdio_defaults(),
+        "start-1".into(),
+        TurnStartParams {
+            session_id: session.clone(),
+            turn_id: turn_id.clone(),
+            input: vec![InputItem::Text {
+                text: "follow rust".into(),
+            }],
+            media: Vec::new(),
+            topic: None,
+            rewrite_for: None,
+            reasoning_effort: None,
+            tool_context: None,
+            live_video: false,
+            origin: None,
+        },
+    )
+    .await;
+    // The host is working on the call (never answers) when it purges. A
+    // loaded test run can take a while to reach the call.
+    let call = loop {
+        let message = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
+            .await
+            .expect("the call reaches the host")
+            .expect("connection open");
+        let frame = frame_json(message);
+        if frame["method"] == "peer/tool/call" {
+            break frame["params"].clone();
+        }
+    };
+    let result = purge(&e.state, &e.ws, &e.system, "news", &e.token)
+        .await
+        .expect("purge while a call is in flight");
+    assert_eq!(result["host_calls_failed"], 1);
+    assert_eq!(result["interrupted"], json!([session]));
+    // The host is told to stop that call because the peer was purged...
+    let cancel = next_frame(&mut rx, "peer/tool/cancel").await;
+    assert_eq!(cancel["call_id"], call["call_id"]);
+    assert_eq!(cancel["reason"], "purged");
+    // ...the turn is over, and nothing is pending for the peer.
+    let registry = active_turns_registry();
+    let active = registry.lock().await;
+    if let Some(turn) = active.get(&session) {
+        assert!(matches!(&*turn.state.lock().await, TurnState::Terminal(_)));
+    }
+    drop(active);
+    assert!(
+        crate::peers::host_tools::pending_calls_for(&e.data_dir.join("peers"), "news").is_empty()
+    );
+    assert!(!e.data_dir.join("peers/news").exists());
+}
+
+// ---------------------------------------------------------------------------
 // UPCR-2026-034 `read_parent`: a request context's read-only view of its
 // peer's folder (#2603).
 // ---------------------------------------------------------------------------
