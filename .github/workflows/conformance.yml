@@ -125,7 +125,7 @@ jobs:
           sudo apt-get clean || true
           df -h /
 
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         if: env.SHOULD_RUN == 'true'
         uses: actions/checkout@v4
         with:
@@ -179,7 +179,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             RecurAgent/target/
-          key: conformance-${{ runner.os }}-${{ hashFiles('pi_agent_rust/Cargo.lock') }}
+          key: conformance-${{ runner.os }}-${{ hashFiles('RecurAgent/Cargo.lock') }}
           restore-keys: conformance-${{ runner.os }}-
 
       - name: Install Bun
@@ -221,11 +221,11 @@ jobs:
         with:
           name: conformance-${{ matrix.name }}-${{ github.sha }}
           path: |
-            pi_agent_rust/conformance-${{ matrix.name }}.log
-            pi_agent_rust/flake_events.jsonl
-            pi_agent_rust/tests/ext_conformance/reports/**/*.json
-            pi_agent_rust/tests/ext_conformance/reports/**/*.jsonl
-            pi_agent_rust/tests/ext_conformance/reports/**/*.md
+            RecurAgent/conformance-${{ matrix.name }}.log
+            RecurAgent/flake_events.jsonl
+            RecurAgent/tests/ext_conformance/reports/**/*.json
+            RecurAgent/tests/ext_conformance/reports/**/*.jsonl
+            RecurAgent/tests/ext_conformance/reports/**/*.md
           if-no-files-found: warn
 
   # ─── Trend report (nightly only) ──────────────────────────────────────
@@ -248,7 +248,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p tests/ext_conformance/reports
-          # download-artifact strips the common pi_agent_rust/ prefix, so the
+          # download-artifact strips the common RecurAgent/ prefix, so the
           # summary lands directly in tests/ext_conformance/reports/.
           # Verify it exists (it may also already be there from the checkout).
           if [ -f tests/ext_conformance/reports/conformance_summary.json ]; then

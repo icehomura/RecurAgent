@@ -59,7 +59,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -82,8 +82,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            pi_agent_rust/fuzz/target/
-          key: fuzz-quick-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('pi_agent_rust/fuzz/Cargo.toml', 'pi_agent_rust/fuzz/Cargo.lock') }}
+            RecurAgent/fuzz/target/
+          key: fuzz-quick-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('RecurAgent/fuzz/Cargo.toml', 'RecurAgent/fuzz/Cargo.lock') }}
           restore-keys: |
             fuzz-quick-${{ runner.os }}-${{ matrix.target }}-
             fuzz-quick-${{ runner.os }}-
@@ -149,8 +149,8 @@ jobs:
         with:
           name: fuzz-quick-${{ matrix.target }}-${{ github.run_id }}
           path: |
-            pi_agent_rust/fuzz/reports/${{ matrix.target }}_quick.log
-            pi_agent_rust/fuzz/reports/${{ matrix.target }}_quick_summary.json
+            RecurAgent/fuzz/reports/${{ matrix.target }}_quick.log
+            RecurAgent/fuzz/reports/${{ matrix.target }}_quick_summary.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -185,7 +185,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -208,8 +208,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            pi_agent_rust/fuzz/target/
-          key: fuzz-nightly-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('pi_agent_rust/fuzz/Cargo.toml', 'pi_agent_rust/fuzz/Cargo.lock') }}
+            RecurAgent/fuzz/target/
+          key: fuzz-nightly-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('RecurAgent/fuzz/Cargo.toml', 'RecurAgent/fuzz/Cargo.lock') }}
           restore-keys: |
             fuzz-nightly-${{ runner.os }}-${{ matrix.target }}-
             fuzz-nightly-${{ runner.os }}-
@@ -283,8 +283,8 @@ jobs:
         with:
           name: fuzz-nightly-${{ matrix.target }}-${{ github.run_id }}
           path: |
-            pi_agent_rust/fuzz/reports/${{ matrix.target }}_nightly.log
-            pi_agent_rust/fuzz/reports/${{ matrix.target }}_nightly_summary.json
+            RecurAgent/fuzz/reports/${{ matrix.target }}_nightly.log
+            RecurAgent/fuzz/reports/${{ matrix.target }}_nightly_summary.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -322,7 +322,7 @@ jobs:
       FUZZ_TARGET: fuzz_sse_parser
       FUZZ_COVERAGE_SECONDS: "120"
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -346,8 +346,8 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            pi_agent_rust/fuzz/target/
-          key: fuzz-coverage-${{ runner.os }}-${{ hashFiles('pi_agent_rust/fuzz/Cargo.toml', 'pi_agent_rust/fuzz/Cargo.lock') }}
+            RecurAgent/fuzz/target/
+          key: fuzz-coverage-${{ runner.os }}-${{ hashFiles('RecurAgent/fuzz/Cargo.toml', 'RecurAgent/fuzz/Cargo.lock') }}
           restore-keys: |
             fuzz-coverage-${{ runner.os }}-
             fuzz-nightly-${{ runner.os }}-
@@ -476,12 +476,12 @@ jobs:
         with:
           name: fuzz-coverage-dashboard-${{ env.FUZZ_TARGET }}-${{ github.run_id }}
           path: |
-            pi_agent_rust/fuzz/reports/${{ env.FUZZ_TARGET }}_coverage.log
-            pi_agent_rust/fuzz/coverage/${{ env.FUZZ_TARGET }}/
-            pi_agent_rust/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_raw_summary.json
-            pi_agent_rust/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_dashboard.json
-            pi_agent_rust/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_dashboard.md
-            pi_agent_rust/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_report.txt
-            pi_agent_rust/fuzz/coverage/dashboard/html/${{ env.FUZZ_TARGET }}/
+            RecurAgent/fuzz/reports/${{ env.FUZZ_TARGET }}_coverage.log
+            RecurAgent/fuzz/coverage/${{ env.FUZZ_TARGET }}/
+            RecurAgent/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_raw_summary.json
+            RecurAgent/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_dashboard.json
+            RecurAgent/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_dashboard.md
+            RecurAgent/fuzz/coverage/dashboard/${{ env.FUZZ_TARGET }}_report.txt
+            RecurAgent/fuzz/coverage/dashboard/html/${{ env.FUZZ_TARGET }}/
           if-no-files-found: warn
           retention-days: 30

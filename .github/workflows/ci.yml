@@ -45,7 +45,7 @@ jobs:
           sudo apt-get clean || true
           df -h /
 
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -760,8 +760,8 @@ jobs:
         with:
           name: inclusion-manifest-${{ matrix.os }}-${{ github.sha }}
           path: |
-            pi_agent_rust/docs/extension-inclusion-list.json
-            pi_agent_rust/tests/ext_conformance/reports/inclusion_manifest/**
+            RecurAgent/docs/extension-inclusion-list.json
+            RecurAgent/tests/ext_conformance/reports/inclusion_manifest/**
           if-no-files-found: warn
 
       - name: Reclaim disk space before wasm-host tests [linux]
@@ -871,8 +871,8 @@ jobs:
         with:
           name: scenario-cell-gate-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            pi_agent_rust/${{ env.PERF_SCENARIO_CELL_STATUS_JSON }}
-            pi_agent_rust/${{ env.PERF_SCENARIO_CELL_STATUS_MD }}
+            RecurAgent/${{ env.PERF_SCENARIO_CELL_STATUS_JSON }}
+            RecurAgent/${{ env.PERF_SCENARIO_CELL_STATUS_MD }}
           if-no-files-found: warn
 
       - name: CI gate promotion (strict/rollback) [linux]
@@ -1646,8 +1646,8 @@ jobs:
         with:
           name: coverage
           path: |
-            pi_agent_rust/llvm-cov-summary.txt
-            pi_agent_rust/lcov.info
+            RecurAgent/llvm-cov-summary.txt
+            RecurAgent/lcov.info
             RecurAgent/target/llvm-cov/html
 
       - name: Upload conformance reports
@@ -1656,14 +1656,14 @@ jobs:
         with:
           name: conformance-reports
           path: |
-            pi_agent_rust/tests/ext_conformance/reports/**/*.json
-            pi_agent_rust/tests/ext_conformance/reports/**/*.jsonl
-            pi_agent_rust/tests/e2e_results/**/*.json
-            pi_agent_rust/tests/e2e_results/**/*.jsonl
-            pi_agent_rust/tests/e2e_results/**/*.log
-            pi_agent_rust/tests/quarantine_report.json
-            pi_agent_rust/tests/quarantine_audit.jsonl
-            pi_agent_rust/release_gate_report.json
+            RecurAgent/tests/ext_conformance/reports/**/*.json
+            RecurAgent/tests/ext_conformance/reports/**/*.jsonl
+            RecurAgent/tests/e2e_results/**/*.json
+            RecurAgent/tests/e2e_results/**/*.jsonl
+            RecurAgent/tests/e2e_results/**/*.log
+            RecurAgent/tests/quarantine_report.json
+            RecurAgent/tests/quarantine_audit.jsonl
+            RecurAgent/release_gate_report.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -1673,10 +1673,10 @@ jobs:
         with:
           name: provider-test-artifacts-${{ github.sha }}
           path: |
-            pi_agent_rust/tests/full_suite_gate/**/*.json
-            pi_agent_rust/tests/full_suite_gate/**/*.jsonl
-            pi_agent_rust/tests/full_suite_gate/**/*.md
-            pi_agent_rust/tests/cross_platform_reports/**/*.json
+            RecurAgent/tests/full_suite_gate/**/*.json
+            RecurAgent/tests/full_suite_gate/**/*.jsonl
+            RecurAgent/tests/full_suite_gate/**/*.md
+            RecurAgent/tests/cross_platform_reports/**/*.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -1693,7 +1693,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -1708,7 +1708,7 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: pi_agent_rust -> target
+          workspaces: RecurAgent -> target
           prefix-key: release-evidence-gate
 
       - name: Release evidence gate
@@ -1778,7 +1778,7 @@ jobs:
       RUST_BACKTRACE: "1"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
-      SHARD_ARTIFACT_DIR: ${{ github.workspace }}/pi_agent_rust/tests/e2e_results/ci-shards/${{ matrix.shard.name }}
+      SHARD_ARTIFACT_DIR: ${{ github.workspace }}/RecurAgent/tests/e2e_results/ci-shards/${{ matrix.shard.name }}
       SHARD_CORRELATION_ID: ${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard.name }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/RecurAgent/target/ci-shards/${{ matrix.shard.name }}
     defaults:
@@ -1786,7 +1786,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -1808,7 +1808,7 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: pi_agent_rust -> target
+          workspaces: RecurAgent -> target
           prefix-key: qa-shards-${{ matrix.shard.name }}
 
       - name: Execute shard lane
@@ -1962,7 +1962,7 @@ jobs:
         with:
           name: ci-shard-${{ matrix.shard.name }}-${{ github.sha }}
           path: |
-            pi_agent_rust/tests/e2e_results/ci-shards/${{ matrix.shard.name }}/
+            RecurAgent/tests/e2e_results/ci-shards/${{ matrix.shard.name }}/
           if-no-files-found: warn
           retention-days: 30
 
@@ -2504,7 +2504,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -2519,7 +2519,7 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: pi_agent_rust -> target
+          workspaces: RecurAgent -> target
           prefix-key: library-no-default-features
 
       - name: cargo check (lib, no default features, no TUI)

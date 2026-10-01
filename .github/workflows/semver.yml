@@ -61,7 +61,7 @@ jobs:
           sudo apt-get clean || true
           df -h /
 
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent
@@ -103,7 +103,7 @@ jobs:
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
           manifest-path: RecurAgent/Cargo.toml
-          package: pi_agent_rust
+          package: recur_agent
           baseline-rev: ${{ steps.baseline.outputs.rev }}
           rust-toolchain: nightly-2026-07-05
           shared-key: pi-agent-rust-semver

@@ -36,7 +36,7 @@ jobs:
           sudo apt-get clean || true
           df -h /
 
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@v4
         with:
           path: RecurAgent

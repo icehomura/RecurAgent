@@ -266,7 +266,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: RecurAgent
@@ -345,7 +345,7 @@ jobs:
       - name: Cache frozen release gate artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          workspaces: pi_agent_rust -> target
+          workspaces: RecurAgent -> target
           key: release-gate-${{ needs.plan.outputs.commit }}-internal-legacy-capture
 
       - name: Run mandatory frozen-SHA Cargo gates
@@ -428,7 +428,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: RecurAgent
@@ -535,7 +535,7 @@ jobs:
         working-directory: RecurAgent
         shell: bash
     steps:
-      - name: Checkout pi_agent_rust
+      - name: Checkout RecurAgent
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: RecurAgent
@@ -672,7 +672,7 @@ jobs:
       - name: Cargo cache
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          workspaces: pi_agent_rust -> target
+          workspaces: RecurAgent -> target
           key: release-${{ needs.plan.outputs.commit }}-${{ matrix.target }}
 
       - name: Build release binary
@@ -1070,7 +1070,7 @@ jobs:
                   "target": os.environ["RELEASE_TARGET"],
                   "asset": asset_name,
                   "runner_os": os.environ["RELEASE_RUNNER_OS"],
-                  "pi_agent_rust": os.environ["PI_AGENT_RUST_SHA"],
+                  "recur_agent": os.environ["PI_AGENT_RUST_SHA"],
                   "source_blobs": {
                       "cargo_toml": os.environ["CARGO_TOML_BLOB"],
                       "cargo_lock": os.environ["CARGO_LOCK_BLOB"],
@@ -1245,7 +1245,7 @@ jobs:
           import zipfile
           from pathlib import Path
 
-          root = Path("pi_agent_rust")
+          root = Path("RecurAgent")
           dist = Path("dist")
           tag = os.environ["RELEASE_TAG"]
           version = os.environ["RELEASE_VERSION"]
@@ -1501,7 +1501,7 @@ jobs:
 
           manifest_keys = {
               "schema", "tag", "version", "target", "asset", "runner_os",
-              "pi_agent_rust", "source_blobs", "selected_locked_registry_packages",
+              "recur_agent", "source_blobs", "selected_locked_registry_packages",
               "rustc", "archive", "binary",
           }
           rustc_keys = {
@@ -1517,7 +1517,7 @@ jobs:
               expected_fields = {
                   "schema": "pi.release.build_manifest.v1", "tag": tag, "version": version,
                   "target": target, "asset": asset, "runner_os": runner_os,
-                  "pi_agent_rust": commit, "source_blobs": source_blobs,
+                  "recur_agent": commit, "source_blobs": source_blobs,
                   "selected_locked_registry_packages": selected,
               }
               for field, expected in expected_fields.items():
@@ -1564,12 +1564,12 @@ jobs:
           done
 
           # Include install script
-          if [ ! -f pi_agent_rust/install.sh ] || [ -L pi_agent_rust/install.sh ]; then
+          if [ ! -f RecurAgent/install.sh ] || [ -L RecurAgent/install.sh ]; then
             echo "::error::Frozen install.sh is missing, non-regular, or a symlink"
             exit 1
           fi
-          cp pi_agent_rust/install.sh release/
-          cmp --silent pi_agent_rust/install.sh release/install.sh
+          cp RecurAgent/install.sh release/
+          cmp --silent RecurAgent/install.sh release/install.sh
 
           ls -lah release/
 
@@ -1595,7 +1595,7 @@ jobs:
         run: |
           set -euxo pipefail
           TAG="${{ needs.plan.outputs.tag }}"
-          CHANGELOG="pi_agent_rust/CHANGELOG.md"
+          CHANGELOG="RecurAgent/CHANGELOG.md"
 
           # Extract only the exact `## [vX.Y.Z] ...` heading and its body.
           CHANGELOG="$CHANGELOG" TAG="$TAG" python3 - <<'PY'
@@ -1626,7 +1626,7 @@ jobs:
           # Every release must disclose the strict drop-in claim status. A
           # missing verdict is allowed for an ordinary early-development
           # release, but is represented honestly as NOT_CERTIFIED.
-          DROPIN_VERDICT_PATH="pi_agent_rust/docs/evidence/dropin-certification-verdict.json"
+          DROPIN_VERDICT_PATH="RecurAgent/docs/evidence/dropin-certification-verdict.json"
           DROPIN_STATUS="$(python3 - "$DROPIN_VERDICT_PATH" <<'PY'
           import json
           import sys
@@ -1659,7 +1659,7 @@ jobs:
 
           **${DROPIN_STATUS}** — ${DROPIN_COPY}
 
-          Evidence: [drop-in certification verdict](https://github.com/Dicklesworthstone/pi_agent_rust/blob/${TAG}/docs/evidence/dropin-certification-verdict.json)
+          Evidence: [drop-in certification verdict](https://github.com/icehomura/RecurAgent/blob/${TAG}/docs/evidence/dropin-certification-verdict.json)
           EOF
 
           # Append install instructions
@@ -1670,7 +1670,7 @@ jobs:
           ### Quick Install
 
           ```bash
-          curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/pi_agent_rust/TAG_PLACEHOLDER/install.sh | bash -s -- --version TAG_PLACEHOLDER
+          curl -fsSL https://raw.githubusercontent.com/icehomura/RecurAgent/TAG_PLACEHOLDER/install.sh | bash -s -- --version TAG_PLACEHOLDER
           ```
 
           ### Manual Install
@@ -2361,7 +2361,7 @@ jobs:
           print(package["name"], package["version"])
           ' <<< "$metadata")"
           read -r package_name package_version <<< "$package_fields"
-          if [ "$package_name" != "pi_agent_rust" ] || [ "$package_version" != "$RELEASE_VERSION" ]; then
+          if [ "$package_name" != "recur_agent" ] || [ "$package_version" != "$RELEASE_VERSION" ]; then
             echo "::error::Root package identity differs from release tag: ${package_name} ${package_version}"
             exit 1
           fi
@@ -2733,7 +2733,7 @@ jobs:
               return result
 
           directory = Path("../crate-payload")
-          crate_name = f"pi_agent_rust-{os.environ['PACKAGE_VERSION']}.crate"
+          crate_name = f"recur_agent-{os.environ['PACKAGE_VERSION']}.crate"
           expected_names = {crate_name, "pi-crates-publish-receipt.json"}
           entries = list(directory.iterdir()) if directory.is_dir() and not directory.is_symlink() else []
           if len(entries) != 2 or {entry.name for entry in entries} != expected_names:
@@ -2756,7 +2756,7 @@ jobs:
               or receipt.get("schema") != "pi.release.verified_crate.v1" \
               or receipt.get("commit") != os.environ["RELEASE_COMMIT"] \
               or receipt.get("tag_oid") != os.environ["RELEASE_TAG_OID"] \
-              or receipt.get("name") != "pi_agent_rust" \
+              or receipt.get("name") != "recur_agent" \
               or receipt.get("version") != os.environ["PACKAGE_VERSION"] \
               or receipt.get("crate_sha256") != digest \
               or receipt.get("crate_size") != len(crate_bytes) \
@@ -3601,7 +3601,7 @@ jobs:
 
           if not expected_prerelease:
               endpoint = (
-                  "https://crates.io/api/v1/crates/pi_agent_rust/"
+                  "https://crates.io/api/v1/crates/recur_agent/"
                   f"{urllib.parse.quote(os.environ['RELEASE_TAG'][1:], safe='')}"
               )
               request = urllib.request.Request(
@@ -3618,7 +3618,7 @@ jobs:
               crate_payload = json.loads(crate_body, object_pairs_hook=strict_object)
               version = crate_payload.get("version") if isinstance(crate_payload, dict) else None
               if not isinstance(version, dict) \
-                  or version.get("crate") != "pi_agent_rust" \
+                  or version.get("crate") != "recur_agent" \
                   or version.get("num") != os.environ["RELEASE_TAG"][1:] \
                   or version.get("yanked") is not False \
                   or version.get("checksum") != os.environ["CRATE_SHA256"] \
