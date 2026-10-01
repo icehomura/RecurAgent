@@ -1456,6 +1456,23 @@ fn dag_view_input(progress: &DagProgress) -> Vec<dag_view::DagViewNode> {
         .collect()
 }
 
+/// Structural fingerprint of a dag render input: everything that can change a
+/// box's display width. Node **state** is deliberately excluded — every state
+/// marker (`[ ]`, `[✓]`, `[⠋]`, `[x]`, `[-]`) is exactly three columns, so a
+/// state flip can never change the layout decision.
+fn dag_input_fingerprint(nodes: &[dag_view::DagViewNode]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    nodes.len().hash(&mut hasher);
+    for node in nodes {
+        node.id.hash(&mut hasher);
+        node.name.hash(&mut hasher);
+        node.tool_name.hash(&mut hasher);
+        node.depends_on.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
 /// Plain-text rendering (sanitized downstream, width-correct). Kept as the
 /// card's `detail` string so copy/paste and tests see the full diagram.
 fn dag_view_text(rows: &[Vec<dag_view::DagViewCell>]) -> String {
@@ -2125,6 +2142,14 @@ pub struct RaFtuiModel {
     /// (plan §4.1) and folded into the dag card; dropped when the call ends
     /// (plan §4.5 keeps the TUI list-shaped, not graphical).
     dag_progress: std::collections::HashMap<String, DagProgress>,
+    /// Cached orientation decision for the live dag card, keyed by
+    /// `(structural fingerprint, body_width)`. The decision is
+    /// frame-independent (braille glyphs are one column wide), so a live card
+    /// re-renders every frame with the cached choice instead of re-running the
+    /// whole fit search (`dag_view::choose_orientation`) on each spinner tick.
+    /// The fingerprint covers ids / names / edges, so a `resume` patch that
+    /// changes the graph but not the node count still invalidates it.
+    dag_orientation: std::cell::Cell<Option<(u64, u16, dag_view::Orientation)>>,
 }
 
 /// One cached transcript block (issue #201): the styled lines produced for
@@ -2347,6 +2372,7 @@ impl RaFtuiModel {
             busy: None,
             markdown_spacing: crate::config::MarkdownSpacing::Comfortable,
             dag_progress: std::collections::HashMap::new(),
+            dag_orientation: std::cell::Cell::new(None),
             #[cfg(test)]
             suspend_task_override: None,
             pending_task: None,
@@ -3032,6 +3058,26 @@ impl RaFtuiModel {
         self.refresh_dag_card(&key, name);
     }
 
+    /// Orientation for the live dag card at `width`, memoized on
+    /// `(structural fingerprint, width)`. A live card calls this every spinner
+    /// tick; the fingerprint makes reuse safe across a `resume` patch that
+    /// changes the graph without changing the node count.
+    fn dag_orientation_for(&self, progress: &DagProgress, width: usize) -> dag_view::Orientation {
+        let input = dag_view_input(progress);
+        let fingerprint = dag_input_fingerprint(&input);
+        let width = u16::try_from(width).unwrap_or(u16::MAX);
+        if let Some((cached_fp, cached_width, decision)) = self.dag_orientation.get()
+            && cached_fp == fingerprint
+            && cached_width == width
+        {
+            return decision;
+        }
+        let decision = dag_view::choose_orientation(&input, usize::from(width));
+        self.dag_orientation
+            .set(Some((fingerprint, width, decision)));
+        decision
+    }
+
     /// Render the live DAG progress into the dag tool's card: head = one-line
     /// summary, detail = the layered node list. Falls back to pushing a card
     /// when the `ToolStart` card is missing, so progress is never lost.
@@ -3045,7 +3091,8 @@ impl RaFtuiModel {
             // Same orientation for the copyable `detail` and the rendered
             // lines: width from the last frame's conversation body.
             let width = usize::from(self.render_cache_width.get());
-            let rows = dag_view::render_auto(&dag_view_input(progress), 0, width);
+            let orientation = self.dag_orientation_for(progress, width);
+            let rows = dag_view::render_with(&dag_view_input(progress), 0, orientation);
             (
                 sanitize(&dag_card_head(progress)).into_owned(),
                 sanitize(&dag_view_text(&rows)).into_owned(),
@@ -5373,10 +5420,11 @@ impl RaFtuiModel {
                     .as_deref()
                     .and_then(|key| self.dag_progress.get(key))
                     .map(|progress| {
-                        let rows = dag_view::render_auto(
+                        let orientation = self.dag_orientation_for(progress, wrap_width);
+                        let rows = dag_view::render_with(
                             &dag_view_input(progress),
                             self.spinner.current_frame,
-                            wrap_width,
+                            orientation,
                         );
                         dag_view_styled(&rows, &palette)
                     });
