@@ -1102,7 +1102,7 @@ fn classify_ts_file(content: &str, rel_path: &str) -> EntryPointScan {
 
         // pi.ui.*
         if !has_pi_ui
-            && (trimmed.contains("ra.ui."")
+            && (trimmed.contains("ra.ui.")
                 || trimmed.contains(".setHeader(")
                 || trimmed.contains(".setFooter("))
         {

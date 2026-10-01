@@ -1227,7 +1227,7 @@ fn perf_sli_workload_partition_contract_is_versioned_and_complete() {
         .as_str()
         .expect("workload_partition_contract.schema must be present");
     assert!(
-        schema.starts_with("ra.perf.workload_partition_contract.""),
+        schema.starts_with("ra.perf.workload_partition_contract."),
         "workload_partition_contract.schema must be versioned, got: {schema}"
     );
 
