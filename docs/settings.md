@@ -85,6 +85,28 @@ Example:
 }
 ```
 
+### Output language
+
+- `output_language` (string): Natural language for the agent's own prose output.
+  Accepts a BCP-47 tag (`zh-CN`, `ja`, `pt-BR`) or a plain language name
+  (`Chinese`, `English`). Common tags are spelled out for the model; anything not
+  listed is passed through verbatim, so unlisted languages still work. Unset
+  leaves the model's own default. Alias: `outputLanguage`.
+
+  This governs **prose only** — explanations, summaries, plans, questions, and
+  free-text tool fields such as the `dag` node `name` label or `todo` / `ask`
+  text. Tool names, parameter names and enum values (`read`, `dag`, `upsert`,
+  `dependsOn`) are protocol identifiers matched by the dispatcher, the JSON
+  Schemas and the ACP/extension contract; they stay English unconditionally and
+  are never translated. The directive is appended last in the system prompt, so
+  it outranks a language implied by `AGENTS.md`.
+
+```json
+{
+  "output_language": "zh-CN"
+}
+```
+
 ### Message delivery (queue modes)
 
 - `steering_mode` (string): `one-at-a-time` or `all` (default `one-at-a-time`).

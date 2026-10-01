@@ -185,6 +185,22 @@ pub struct Config {
     #[serde(alias = "askPolicy")]
     pub ask_policy: Option<String>,
 
+    /// Natural language for the agent's own prose output.
+    ///
+    /// Accepts a BCP-47 tag (`zh-CN`, `ja`, `pt-BR`) or a plain language name
+    /// (`Chinese`, `English`); common tags are spelled out in the prompt,
+    /// anything unrecognised is passed through verbatim so the setting stays
+    /// open-ended. Unset means the model's own default.
+    ///
+    /// This governs prose only — explanations, summaries, plans, questions,
+    /// and free-text tool fields such as the `dag` node `name` label. Tool
+    /// names, parameter names and enum values (`read`, `dag`, `upsert`,
+    /// `depends_on`) are protocol identifiers matched by the dispatcher, the
+    /// JSON Schemas and the ACP/extension contract, so they stay English
+    /// unconditionally and are never translated.
+    #[serde(alias = "outputLanguage")]
+    pub output_language: Option<String>,
+
     // Compaction
     pub compaction: Option<CompactionSettings>,
 
@@ -1127,6 +1143,7 @@ impl Config {
             search_backend: other.search_backend.or(base.search_backend),
             foreign_rules: other.foreign_rules.or(base.foreign_rules),
             ask_policy: other.ask_policy.or(base.ask_policy),
+            output_language: other.output_language.or(base.output_language),
 
             // Compaction
             compaction: merge_compaction(base.compaction, other.compaction),
@@ -1298,6 +1315,18 @@ impl Config {
 
     pub fn follow_up_queue_mode(&self) -> QueueMode {
         parse_queue_mode_or_default(self.follow_up_mode.as_deref())
+    }
+
+    /// Resolved natural language for the agent's prose output.
+    ///
+    /// Returns `None` when the setting is unset or blank, so callers fall back
+    /// to the model's own default instead of emitting an empty directive.
+    #[must_use]
+    pub fn output_language(&self) -> Option<&str> {
+        self.output_language
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
     }
 
     /// Resolved auto-compaction mode (bd-cv653.3.18).
@@ -3400,6 +3429,60 @@ mod tests {
         let config = Config::load_with_roots(None, &global_dir, &cwd).expect("load config");
         assert_eq!(config.steering_queue_mode(), QueueMode::OneAtATime);
         assert_eq!(config.follow_up_queue_mode(), QueueMode::OneAtATime);
+    }
+
+    // ── output_language accessor ───────────────────────────────────────
+
+    #[test]
+    fn output_language_is_unset_by_default_and_blank_reads_as_unset() {
+        assert_eq!(Config::default().output_language(), None);
+
+        // Whitespace is not a language. Emitting a directive for it would put
+        // an empty instruction in the system prompt of every turn.
+        let mut config = Config::default();
+        config.output_language = Some("   ".to_string());
+        assert_eq!(config.output_language(), None);
+    }
+
+    #[test]
+    fn output_language_accepts_both_spellings_and_stays_visible_to_doctor() {
+        // `ra doctor` decides "typo or valid setting?" by asking serde, so both
+        // the canonical and the camelCase spelling have to move the probe.
+        // Getting this wrong tells users to fix configuration that is correct.
+        assert!(recognises_setting_key("output_language"));
+        assert!(recognises_setting_key("outputLanguage"));
+        assert!(unrecognised_setting_keys(r#"{ "output_language": "zh-CN" }"#).is_empty());
+
+        let temp = TempDir::new().expect("create tempdir");
+        let cwd = temp.path().join("cwd");
+        let global_dir = temp.path().join("global");
+        write_file(
+            &global_dir.join("settings.json"),
+            r#"{ "outputLanguage": "zh-CN" }"#,
+        );
+
+        let config = Config::load_with_roots(None, &global_dir, &cwd).expect("load config");
+        assert_eq!(config.output_language(), Some("zh-CN"));
+    }
+
+    #[test]
+    fn output_language_project_setting_overrides_global() {
+        let temp = TempDir::new().expect("create tempdir");
+        let cwd = temp.path().join("cwd");
+        let global_dir = temp.path().join("global");
+        write_file(
+            &global_dir.join("settings.json"),
+            r#"{ "output_language": "en" }"#,
+        );
+        write_file(
+            &cwd.join(".ra/settings.json"),
+            r#"{ "output_language": "ja" }"#,
+        );
+
+        let config = Config::load_with_roots(None, &global_dir, &cwd).expect("load config");
+        // Project wins: a workspace that pins its own language must not inherit
+        // the global one.
+        assert_eq!(config.output_language(), Some("ja"));
     }
 
     // ── thinking_budget accessor ───────────────────────────────────────

@@ -262,6 +262,14 @@ pub fn build_system_prompt(
         prompt.push_str(skills_prompt);
     }
 
+    // Output language goes last before the footer, not next to the tool
+    // guidelines: recency is what decides adherence, and this has to outrank an
+    // `AGENTS.md` that implies a different language.
+    if let Some(directive) = output_language_directive(config.output_language()) {
+        prompt.push_str("\n\n");
+        prompt.push_str(&directive);
+    }
+
     let date_time = if test_mode {
         "<TIMESTAMP>".to_string()
     } else {
@@ -293,6 +301,56 @@ fn resolve_prompt_input(input: Option<&str>, description: &str) -> Result<Option
     } else {
         Ok(Some(value.to_string()))
     }
+}
+
+/// System-prompt block pinning the natural language of the agent's prose.
+///
+/// Only prose is covered. Tool names, parameter names and enum values are
+/// matched by the dispatcher, the JSON Schemas and the ACP/extension contract,
+/// so a translated one is not a translation but a broken call — the directive
+/// therefore keeps them English whatever the setting says.
+fn output_language_directive(language: Option<&str>) -> Option<String> {
+    let language = language?.trim();
+    if language.is_empty() {
+        return None;
+    }
+
+    let display = language_display_name(language);
+    Some(format!(
+        "# Output Language\n\n\
+         Write your prose in {display}. This covers explanations, summaries, plans, \
+         questions, and free-text tool fields such as the `dag` node `name` label and \
+         `todo` / `ask` / `subagent` task text.\n\n\
+         Tool names, parameter names and enum values (`read`, `dag`, `upsert`, \
+         `depends_on`, ...) are protocol identifiers: emit them verbatim in English, \
+         never translated, and never invent a translated alias for them."
+    ))
+}
+
+/// Spell out a language tag for the prompt, or pass it through unchanged.
+///
+/// A bare `zh-CN` reads as an internal code rather than an instruction, so the
+/// common tags are named. Anything not listed is passed through verbatim: the
+/// setting is open-ended, and rejecting an unlisted language would be worse
+/// than handing the model a name it may well understand.
+fn language_display_name(language: &str) -> String {
+    let lower = language.to_ascii_lowercase();
+    let named = match lower.as_str() {
+        "zh" | "zh-cn" | "zh-hans" | "zh-sg" | "chinese" | "simplified chinese" => {
+            "Simplified Chinese (简体中文)"
+        }
+        "zh-tw" | "zh-hk" | "zh-hant" | "traditional chinese" => "Traditional Chinese (繁體中文)",
+        "en" | "en-us" | "en-gb" | "english" => "English",
+        "ja" | "jp" | "ja-jp" | "japanese" => "Japanese (日本語)",
+        "ko" | "ko-kr" | "korean" => "Korean (한국어)",
+        "es" | "spanish" => "Spanish (Español)",
+        "fr" | "french" => "French (Français)",
+        "de" | "german" => "German (Deutsch)",
+        "pt" | "pt-br" | "portuguese" => "Portuguese (Português)",
+        "ru" | "russian" => "Russian (Русский)",
+        _ => return language.to_string(),
+    };
+    named.to_string()
 }
 
 fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
@@ -3363,6 +3421,101 @@ mod tests {
         std::fs::write(odd.path().join("docs"), "").expect("write docs file");
         let prompt = default_system_prompt(&["read"], odd.path());
         assert!(!prompt.contains("RecurAgent documentation"));
+    }
+
+    // ── output_language directive ───────────────────────────────────────
+
+    #[test]
+    fn output_language_directive_pins_prose_and_keeps_identifiers_english() {
+        let directive = output_language_directive(Some("zh-CN")).expect("directive");
+
+        assert!(directive.starts_with("# Output Language"));
+        assert!(directive.contains("Simplified Chinese"));
+        // The load-bearing half. A translated identifier is not a translation
+        // but a broken tool call, so the directive has to say so outright
+        // instead of leaving it to inference.
+        assert!(directive.contains("protocol identifiers"));
+        assert!(directive.contains("verbatim in English"));
+        assert!(directive.contains("`upsert`"));
+    }
+
+    #[test]
+    fn output_language_directive_spells_out_common_tags_and_passes_the_rest_through() {
+        assert_eq!(
+            language_display_name("ZH-CN"),
+            "Simplified Chinese (简体中文)"
+        );
+        assert_eq!(language_display_name("English"), "English");
+        assert_eq!(
+            language_display_name("zh-Hant"),
+            "Traditional Chinese (繁體中文)"
+        );
+        // An unlisted value keeps the user's own spelling: the setting is
+        // open-ended, and rejecting a language we did not enumerate would be
+        // worse than handing the model a name it may well understand.
+        assert_eq!(language_display_name("is"), "is");
+        assert_eq!(language_display_name("Klingon"), "Klingon");
+    }
+
+    #[test]
+    fn output_language_directive_is_absent_when_unset_or_blank() {
+        assert_eq!(output_language_directive(None), None);
+        assert_eq!(output_language_directive(Some("")), None);
+        assert_eq!(output_language_directive(Some("   ")), None);
+    }
+
+    #[test]
+    fn built_prompt_carries_the_language_directive_last() {
+        let cli = cli::Cli::parse_from(["pi"]);
+        let cwd = Path::new(".");
+        let global_dir = Path::new("/global");
+        let package_dir = Path::new("/package");
+
+        let mut config = Config::default();
+        config.output_language = Some("zh-CN".to_string());
+        let prompt = build_system_prompt(
+            &cli,
+            cwd,
+            &["read"],
+            None,
+            global_dir,
+            package_dir,
+            true,
+            false,
+            None,
+            &config,
+        )
+        .expect("build prompt");
+
+        let directive = prompt
+            .find("# Output Language")
+            .expect("directive must be present when the setting is set");
+        assert!(prompt.contains("Simplified Chinese"));
+        // Placement is the mechanism: recency decides adherence, and this block
+        // has to outrank an AGENTS.md that implies another language.
+        let footer = prompt
+            .find("Current date and time:")
+            .expect("footer must be present");
+        assert!(
+            directive < footer,
+            "the language directive must precede the footer: {prompt}"
+        );
+
+        // Unset means no block at all, not an empty one.
+        let bare = build_system_prompt(
+            &cli,
+            cwd,
+            &["read"],
+            None,
+            global_dir,
+            package_dir,
+            true,
+            false,
+            None,
+            &Config::default(),
+        )
+        .expect("build prompt");
+        assert!(!bare.contains("# Output Language"));
     }
 
     /// The subagent guideline is generated from `subagents::BUILTIN_AGENTS`, so
