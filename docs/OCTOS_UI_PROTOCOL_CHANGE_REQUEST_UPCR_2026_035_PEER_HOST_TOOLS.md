@@ -384,8 +384,11 @@ Accepted only:
 - for an input the kernel sent to that peer and still remembers (24 hours,
   4 096 inputs; `peer_input_not_found` otherwise);
 - once per `input_id` (`peer_input_already_rejected`), and only while the
-  input is unanswered: no `turn/start` with its `turn_id` yet
-  (`peer_input_already_started`).
+  input is unanswered: no `turn/start` with its `turn_id` admitted yet
+  (`peer_input_already_started`). A `turn/start` the kernel refuses
+  (`turn_in_progress`, a reused turn id, a budget or request error, …) does
+  not answer the input: the host may still refuse it, for example with
+  `busy`.
 
 Effect:
 
@@ -595,9 +598,12 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   refused (`duplicate`): it neither asks again nor reaches the host again. A
   provider that reuses tool-call ids (`call_1`) with other arguments is a
   different occurrence. `read` calls may repeat. Claims are kept 24 h and
-  only expired claims are evicted: when 4 096 unexpired claims are held, a
-  new non-`read` call is refused (`busy`, host_busy) rather than forgetting
-  a claim.
+  only expired claims are evicted: when one tool set (the peer, or the host
+  session a set is registered on) holds 4 096 unexpired claims, its next
+  non-`read` call is refused (`busy`, host_busy) rather than forgetting a
+  claim. The bound is per tool set, so a busy app never refuses another
+  app's calls; the same per-peer bound applies to the `peer/input`
+  deliveries remembered for de-duplication.
 - **No retry after an unknown outcome.** A non-`read` call whose outcome is
   unknown — it timed out, or its turn was interrupted while the host was
   working on it — marks `(tool set, tool, argument digest)` for 24 h, where
