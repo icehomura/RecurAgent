@@ -975,6 +975,12 @@ impl BoundedClaims {
             self.order.retain(|(k, _)| k != key);
         }
     }
+
+    /// Forget every claim whose key starts with `prefix`.
+    fn remove_prefix(&mut self, prefix: &str) {
+        self.keys.retain(|k| !k.starts_with(prefix));
+        self.order.retain(|(k, _)| !k.starts_with(prefix));
+    }
 }
 
 /// [`BoundedClaims`] per partition (a peer's or host session's route), so one
@@ -1853,6 +1859,48 @@ pub(crate) fn drop_routes_for_connection(connection: u64) {
         .retain(|_, registered| registered.connection != connection);
 }
 
+/// `peer/purge`: end every host call in flight for peer `slug` at once
+/// (`peer_purged`; the host hears `peer/tool/cancel` with reason `purged`),
+/// drop its route, and forget every per-peer claim and marker (delivered
+/// inputs, `peer/input` turn ids, unknown outcomes, tool-call occurrences), so
+/// a new peer later staged under the same slug starts clean. Returns how many
+/// calls were failed.
+pub(crate) fn purge_peer_host_state(peers_root: &Path, slug: &str) -> usize {
+    let key = route_key(peers_root, slug);
+    let mut failed = 0;
+    for call in HUB
+        .pending
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .values()
+    {
+        if call.meta.route_key == key {
+            call.cancel.fire("purged");
+            failed += 1;
+        }
+    }
+    HUB.routes
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(&key);
+    // Per-route partitions go whole; the flat sets lose this route's keys.
+    for claims in [&HUB.inputs, &HUB.occurrences] {
+        claims
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .parts
+            .remove(&key);
+    }
+    let prefix = format!("{key}\u{0}");
+    for claims in [&HUB.input_turns, &HUB.unknown] {
+        claims
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove_prefix(&prefix);
+    }
+    failed
+}
+
 /// Drop the peer `slug`'s route at its host's request (`peer/tools/unregister`):
 /// its calls in flight end `host_gone` and later input is refused as "not
 /// connected", as if its connection had closed. Whether a route was held.
@@ -2537,11 +2585,21 @@ impl HostToolRouter for TurnHostToolRouter {
                     // Interrupted turn or closed host connection: stop now.
                     let reason = cancel.reason();
                     // The host is told `cancelled` either way (a closed
-                    // connection will not hear it).
-                    guard.reason = "cancelled";
+                    // connection will not hear it), or `purged` when the
+                    // host erased the peer (`peer/purge`).
+                    guard.reason = if reason == "purged" { "purged" } else { "cancelled" };
                     drop(guard);
                     if let Ok(outcome) = rx.try_recv() {
                         return outcome;
+                    }
+                    if reason == "purged" {
+                        // The peer and everything it stored are being erased:
+                        // there is nothing left to retry or check.
+                        return Self::error(
+                            "peer_purged",
+                            "the app's agent was erased (peer/purge) while this call was \
+                             in flight; stop working",
+                        );
                     }
                     let (kind, what) = if reason == "host_gone" {
                         ("host_unavailable", "the app's host connection closed")

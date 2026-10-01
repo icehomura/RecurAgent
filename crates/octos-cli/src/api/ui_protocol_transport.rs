@@ -427,6 +427,9 @@ const APPUI_METHOD_PEER_TOOL_RESULT: &str = "peer/tool/result";
 /// `peer/input/reject` (UPCR-2026-035, #2618): the host refuses a
 /// `peer/input` it received; the system agent learns why.
 const APPUI_METHOD_PEER_INPUT_REJECT: &str = "peer/input/reject";
+/// UPCR-2026-034 `peer/purge` (#2604): the host erases a host-owned app peer
+/// (closing it first) and frees its (app, account) binding.
+const APPUI_METHOD_PEER_PURGE: &str = "peer/purge";
 /// UPCR-2026-035 `peer/tools/unregister`: the host releases a host-owned app
 /// peer (the app closed, or its agent was turned off) without closing its
 /// connection; the peer's route is dropped, so later input fails visibly.
@@ -547,6 +550,7 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_PEER_TOOLS_REGISTER,
     APPUI_METHOD_PEER_TOOL_RESULT,
     APPUI_METHOD_PEER_INPUT_REJECT,
+    APPUI_METHOD_PEER_PURGE,
     APPUI_METHOD_PEER_TOOLS_UNREGISTER,
     APPUI_METHOD_TURN_STEER,
     APPUI_METHOD_PROFILE_SKILLS_LIST,
@@ -1926,6 +1930,8 @@ enum InterruptOrigin {
     PeerClose,
     /// UPCR-2026-034 `peer/context/close` released the request context.
     ContextClose,
+    /// UPCR-2026-034 `peer/purge` erased the peer (#2604).
+    PeerPurge,
 }
 
 impl InterruptOrigin {
@@ -1940,6 +1946,10 @@ impl InterruptOrigin {
             Self::ContextClose => {
                 "turn interrupted by peer/context/close — the request context was \
                  released, so its in-flight work was discarded"
+            }
+            Self::PeerPurge => {
+                "turn interrupted by peer/purge — the app's agent was erased, so its \
+                 in-flight work was discarded"
             }
         }
     }
@@ -18801,119 +18811,146 @@ fn build_peer_close_callback(
                 "peer '{slug}' no longer exists (its staged directory was removed)"
             ));
         };
-        // Durable close marker FIRST, written atomically (same helper as the
-        // brief / originator / result files). The body records the closing
-        // session id and a unix timestamp for post-mortems; its mere existence
-        // is the signal that `read_peer_blackboard` reads back as `closed`.
-        // Writing the marker before evicting the wire means a marker-write
-        // failure leaves the peer fully OPEN — never partially closed (wire
-        // gone but no marker, which would silently drop input).
-        let now_unix = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_secs())
-            .unwrap_or(0);
-        let body = format!("{origin_session}\n{now_unix}\n");
-        if let Err(err) = peer_io::write_peer_file_atomic(&peer_dir, "closed", &body) {
-            return Err(format!(
-                "failed to write close marker for peer '{slug}': {err}"
-            ));
-        }
-        // The fence branch lives in the peer's own clone, so pull it into the
-        // workspace repo now that the peer is done — otherwise its work is
-        // invisible from the workspace and looks like it never happened.
-        // AFTER the marker: collection is best-effort and must never leave a
-        // peer un-closed.
-        collect_peer_branch(&peer_dir, &slug);
-        // #436 leak fix — the marker now refuses NEW sends; actively CANCEL +
-        // tombstone any injection queued for this peer BEFORE the close so
-        // nothing stays stranded in the durable queue (the drain gates skip a
-        // closed target without ever popping/capping/tombstoning it).
-        let cancelled = default_agent_orchestrator()
-            .cancel_peer_send_input_continuations_for_peer(&profile_id, &slug);
-        if cancelled > 0 {
-            tracing::debug!(
-                slug = %slug,
-                cancelled,
-                "cancelled pending peer_send_input injections on peer close"
-            );
-        }
-        // #1842(a) — ABORT the peer's in-flight turn through the interrupt path
-        // `run_standalone_turn` honors, so a closed peer definitively STOPS and
-        // cannot park again after the sweep below. Ordered after the durable
-        // marker (which already refuses any new park, #1842(b)) and before the
-        // wire eviction (which removes the slug→session mapping this resolves
-        // through). Best-effort and non-blocking.
-        interrupt_closed_peer_turn(&profile_id, &slug);
-        // #P1-2 — cancel any pending approval/question this peer is parked on
-        // (from the authoritative store) so its in-flight turn is released
-        // fail-closed. BEFORE the wire eviction below, which removes the
-        // slug→session mapping the cancel derives its trusted session key from.
-        cancel_peer_pending_on_close(&contracts, &profile_id, &slug, &|event| {
-            emit_cancelled(event)
-        });
-        // #1967 — the cancel above released the live oneshot, but the
-        // escalation row written at park time
-        // (`model_goal_record_peer_escalation`) is DURABLE: with the peer now
-        // closed, `peer_respond` refuses it, so nothing would ever flip the
-        // row off `open` — a permanent phantom on the master's goal_get
-        // escalation surface. Resolve it bulk-by-peer (the depth-1 peer has
-        // at most one open escalation, and every open row of a closed peer is
-        // by definition abandoned). Best-effort: a goal-less peer / missing
-        // ledger is a benign Ok(0), and a ledger failure must never fail the
-        // close (the marker is already durable).
-        let goal_id = peer_io::read_peer_file(&peer_dir, "goal", peer_io::PEER_FILE_READ_CAP_SMALL)
-            .and_then(|body| body.lines().next().map(|l| l.trim().to_owned()))
-            .filter(|s| !s.is_empty());
-        if let (Some(goal_id), Some(data_dir)) = (goal_id, peers_root.parent()) {
-            if let Err(err) = default_agent_orchestrator().model_goal_resolve_peer_escalation(
-                data_dir,
-                &goal_id,
-                &slug,
-                "[closed] peer closed before answering",
-                &origin_session,
-            ) {
-                tracing::warn!(
-                    slug = %slug,
-                    goal_id = %goal_id,
-                    error = %err,
-                    "peer-goal: failed to resolve open escalation on peer close (close proceeds)"
-                );
-            }
-        }
-        // Peer-fleet auto-synthesis RESET — the close marker now excludes this
-        // peer from the master's owned fleet. If it was the LAST owned peer, the
-        // fleet is fully retired: drop the `.synthesized` marker so a genuinely
-        // fresh fleet (spawned later under the same master) synthesizes once.
-        // No-op while any owned peer remains. `origin_session` is the master
-        // (the authorized originator).
-        reset_peer_fleet_synthesis_if_cleared(&peers_root, &origin_session);
-        // Marker durable + queue cleared; now evict the live wire if the peer
-        // is open so a still-connected peer stops being an injection target
-        // immediately (the marker already covers the offline / reconnect case).
-        let key = peer_wire_key(&profile_id, &slug);
-        if let Some(wire) = peer_wire_registry().resolve(&key) {
-            evict_peer_wire_session(&wire);
-        }
-        // Outer-loop #4 (§4.2): safety-net slot release (Retired). The
-        // PRIMARY release is the per-turn terminal; a peer whose last turn
-        // already finished finds nothing here (registry take → None), but a
-        // peer closed WITH a turn in flight — or one staged and never booted —
-        // would otherwise hold its flock until serve exit. Idempotent.
-        release_staged_peer_build_cache_slot(&peers_root, &slug);
-        // Close succeeded (marker durable, queue cleared, wire evicted). Emit
-        // the durable `peer/closed` so the client tears down the peer pane it
-        // opened. Mirrors the `peer/staged` emit — routing keys off the
-        // ORIGINATING session; `topic` (`peer-<slug>`) is the closed peer's.
-        emit_closed(PeerClosedEvent {
-            session_id: SessionKey(origin_session.clone()),
-            topic: format!("peer-{slug}"),
-            slug: slug.clone(),
-            profile_id: profile_id.clone(),
-        });
+        close_authorized_peer(
+            &peers_root,
+            &peer_dir,
+            &slug,
+            &origin_session,
+            &profile_id,
+            &contracts,
+            &|event| emit_closed(event),
+            &|event| emit_cancelled(event),
+        )?;
         Ok(format!(
             "peer '{slug}' closed — it will receive no further input"
         ))
     })
+}
+
+/// Close peer `slug` for good, the caller already authorized as its
+/// originator: the durable `closed` marker first, then the queue, the
+/// in-flight turn, pending prompts, the escalation row, the fleet synthesis
+/// marker, the wire and the build-cache slot, and finally `peer/closed`.
+/// Shared by `peer_close` and `peer/purge` (#2604).
+#[allow(clippy::too_many_arguments)]
+fn close_authorized_peer(
+    peers_root: &Path,
+    peer_dir: &Path,
+    slug: &str,
+    origin_session: &str,
+    profile_id: &str,
+    contracts: &UiProtocolContractStores,
+    emit_closed: &dyn Fn(PeerClosedEvent),
+    emit_cancelled: &dyn Fn(ApprovalCancelledEvent),
+) -> Result<(), String> {
+    // Durable close marker FIRST, written atomically (same helper as the
+    // brief / originator / result files). The body records the closing
+    // session id and a unix timestamp for post-mortems; its mere existence
+    // is the signal that `read_peer_blackboard` reads back as `closed`.
+    // Writing the marker before evicting the wire means a marker-write
+    // failure leaves the peer fully OPEN — never partially closed (wire
+    // gone but no marker, which would silently drop input).
+    let now_unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let body = format!("{origin_session}\n{now_unix}\n");
+    if let Err(err) = peer_io::write_peer_file_atomic(peer_dir, "closed", &body) {
+        return Err(format!(
+            "failed to write close marker for peer '{slug}': {err}"
+        ));
+    }
+    // The fence branch lives in the peer's own clone, so pull it into the
+    // workspace repo now that the peer is done — otherwise its work is
+    // invisible from the workspace and looks like it never happened.
+    // AFTER the marker: collection is best-effort and must never leave a
+    // peer un-closed.
+    collect_peer_branch(peer_dir, slug);
+    // #436 leak fix — the marker now refuses NEW sends; actively CANCEL +
+    // tombstone any injection queued for this peer BEFORE the close so
+    // nothing stays stranded in the durable queue (the drain gates skip a
+    // closed target without ever popping/capping/tombstoning it).
+    let cancelled = default_agent_orchestrator()
+        .cancel_peer_send_input_continuations_for_peer(profile_id, slug);
+    if cancelled > 0 {
+        tracing::debug!(
+            slug = %slug,
+            cancelled,
+            "cancelled pending peer_send_input injections on peer close"
+        );
+    }
+    // #1842(a) — ABORT the peer's in-flight turn through the interrupt path
+    // `run_standalone_turn` honors, so a closed peer definitively STOPS and
+    // cannot park again after the sweep below. Ordered after the durable
+    // marker (which already refuses any new park, #1842(b)) and before the
+    // wire eviction (which removes the slug→session mapping this resolves
+    // through). Best-effort and non-blocking.
+    interrupt_closed_peer_turn(profile_id, slug);
+    // #P1-2 — cancel any pending approval/question this peer is parked on
+    // (from the authoritative store) so its in-flight turn is released
+    // fail-closed. BEFORE the wire eviction below, which removes the
+    // slug→session mapping the cancel derives its trusted session key from.
+    cancel_peer_pending_on_close(contracts, profile_id, slug, emit_cancelled);
+    // #1967 — the cancel above released the live oneshot, but the
+    // escalation row written at park time
+    // (`model_goal_record_peer_escalation`) is DURABLE: with the peer now
+    // closed, `peer_respond` refuses it, so nothing would ever flip the
+    // row off `open` — a permanent phantom on the master's goal_get
+    // escalation surface. Resolve it bulk-by-peer (the depth-1 peer has
+    // at most one open escalation, and every open row of a closed peer is
+    // by definition abandoned). Best-effort: a goal-less peer / missing
+    // ledger is a benign Ok(0), and a ledger failure must never fail the
+    // close (the marker is already durable).
+    let goal_id = peer_io::read_peer_file(peer_dir, "goal", peer_io::PEER_FILE_READ_CAP_SMALL)
+        .and_then(|body| body.lines().next().map(|l| l.trim().to_owned()))
+        .filter(|s| !s.is_empty());
+    if let (Some(goal_id), Some(data_dir)) = (goal_id, peers_root.parent()) {
+        if let Err(err) = default_agent_orchestrator().model_goal_resolve_peer_escalation(
+            data_dir,
+            &goal_id,
+            slug,
+            "[closed] peer closed before answering",
+            origin_session,
+        ) {
+            tracing::warn!(
+                slug = %slug,
+                goal_id = %goal_id,
+                error = %err,
+                "peer-goal: failed to resolve open escalation on peer close (close proceeds)"
+            );
+        }
+    }
+    // Peer-fleet auto-synthesis RESET — the close marker now excludes this
+    // peer from the master's owned fleet. If it was the LAST owned peer, the
+    // fleet is fully retired: drop the `.synthesized` marker so a genuinely
+    // fresh fleet (spawned later under the same master) synthesizes once.
+    // No-op while any owned peer remains. `origin_session` is the master
+    // (the authorized originator).
+    reset_peer_fleet_synthesis_if_cleared(peers_root, origin_session);
+    // Marker durable + queue cleared; now evict the live wire if the peer
+    // is open so a still-connected peer stops being an injection target
+    // immediately (the marker already covers the offline / reconnect case).
+    let key = peer_wire_key(profile_id, slug);
+    if let Some(wire) = peer_wire_registry().resolve(&key) {
+        evict_peer_wire_session(&wire);
+    }
+    // Outer-loop #4 (§4.2): safety-net slot release (Retired). The
+    // PRIMARY release is the per-turn terminal; a peer whose last turn
+    // already finished finds nothing here (registry take → None), but a
+    // peer closed WITH a turn in flight — or one staged and never booted —
+    // would otherwise hold its flock until serve exit. Idempotent.
+    release_staged_peer_build_cache_slot(peers_root, slug);
+    // Close succeeded (marker durable, queue cleared, wire evicted). Emit
+    // the durable `peer/closed` so the client tears down the peer pane it
+    // opened. Mirrors the `peer/staged` emit — routing keys off the
+    // ORIGINATING session; `topic` (`peer-<slug>`) is the closed peer's.
+    emit_closed(PeerClosedEvent {
+        session_id: SessionKey(origin_session.to_owned()),
+        topic: format!("peer-{slug}"),
+        slug: slug.to_owned(),
+        profile_id: profile_id.to_owned(),
+    });
+    Ok(())
 }
 
 /// Mailbox nudge (#1801 v3 fan-in): slugs named in the ready-note before the
@@ -20777,6 +20814,7 @@ async fn handle_raw_appui_rpc(
         APPUI_METHOD_PEER_TOOLS_REGISTER
         | APPUI_METHOD_PEER_TOOL_RESULT
         | APPUI_METHOD_PEER_INPUT_REJECT
+        | APPUI_METHOD_PEER_PURGE
         | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             if ws.is_external() =>
         {
@@ -20793,6 +20831,20 @@ async fn handle_raw_appui_rpc(
         }
         APPUI_METHOD_PEER_INPUT_REJECT => {
             raw_peer_input_reject(ws.connection_id.0, state, request, connection_profile_id)
+        }
+        // Boxed: the purge future is large, and this dispatch future is
+        // nested inside every connection's (and the stdio runtime's) stack.
+        APPUI_METHOD_PEER_PURGE => {
+            Box::pin(peer_purge::raw_peer_purge(
+                ws,
+                state,
+                ledger,
+                contracts,
+                active_turns,
+                request,
+                connection_profile_id,
+            ))
+            .await
         }
         APPUI_METHOD_PROFILE_SKILLS_LIST => {
             raw_profile_skills_list(state, request, connection_profile_id)
@@ -21238,6 +21290,7 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
             | APPUI_METHOD_PEER_TOOLS_REGISTER
             | APPUI_METHOD_PEER_TOOL_RESULT
             | APPUI_METHOD_PEER_INPUT_REJECT
+            | APPUI_METHOD_PEER_PURGE
             | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             | APPUI_METHOD_PROFILE_SKILLS_LIST
             | APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH
@@ -47047,6 +47100,9 @@ fn flush_replay_lossy(
     }
     emit_replay_lossy_opportunistic(ws, ledger, &session_id.0);
 }
+
+#[path = "ui_protocol_peer_purge.rs"]
+mod peer_purge;
 
 #[cfg(test)]
 #[path = "ui_protocol_tests.rs"]

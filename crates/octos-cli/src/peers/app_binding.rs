@@ -395,6 +395,12 @@ pub(crate) fn resolve_session_app_binding(
                 read_view: None,
             };
         }
+        // A purged host-owned app peer (`peer/purge`) never runs again, not
+        // even as an ordinary profile session, until a new peer is staged
+        // under its slug.
+        if super::purge::slug_is_purged(peers_root, slug) {
+            return SessionAppBinding::Refused(format!("peer '{slug}' was purged"));
+        }
         // Fail closed on a torn or tampered peer dir that still carries a
         // host binding (brief missing, symlinked dir): never run it as an
         // ordinary profile session with the profile's memory.
