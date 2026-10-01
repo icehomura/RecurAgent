@@ -427,6 +427,12 @@ const APPUI_METHOD_PEER_TOOL_RESULT: &str = "peer/tool/result";
 /// `peer/input/reject` (UPCR-2026-035, #2618): the host refuses a
 /// `peer/input` it received; the system agent learns why.
 const APPUI_METHOD_PEER_INPUT_REJECT: &str = "peer/input/reject";
+/// #2605 (UPCR-2026-035 "Durable host session tool list")
+/// `session/tool_list/set`: the host sets (or clears) the exact kernel tool
+/// list of one of its own sessions; durable, applied to every turn on it.
+const APPUI_METHOD_SESSION_TOOL_LIST_SET: &str = "session/tool_list/set";
+/// #2605 `session/tool_list/get`: the host reads that list back.
+const APPUI_METHOD_SESSION_TOOL_LIST_GET: &str = "session/tool_list/get";
 /// UPCR-2026-034 `peer/purge` (#2604): the host erases a host-owned app peer
 /// (closing it first) and frees its (app, account) binding.
 const APPUI_METHOD_PEER_PURGE: &str = "peer/purge";
@@ -550,6 +556,8 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_PEER_TOOLS_REGISTER,
     APPUI_METHOD_PEER_TOOL_RESULT,
     APPUI_METHOD_PEER_INPUT_REJECT,
+    APPUI_METHOD_SESSION_TOOL_LIST_SET,
+    APPUI_METHOD_SESSION_TOOL_LIST_GET,
     APPUI_METHOD_PEER_PURGE,
     APPUI_METHOD_PEER_TOOLS_UNREGISTER,
     APPUI_METHOD_TURN_STEER,
@@ -16184,6 +16192,43 @@ fn raw_peer_tools_unregister(
 /// peer's tools, whichever connection it happens to run on; the host drives
 /// the peer's runs itself. An external client of a host-managed server is
 /// never a peer's host either (UPCR-2026-036).
+/// The host's rosters for one serve turn of `session_id`, applied to its
+/// finished registry (after the profile policy):
+///
+/// 1. #2605: the host session's durable kernel tool list narrows every turn
+///    on the session (before any app tool is added: it names kernel tools);
+/// 2. UPCR-2026-035: a host-owned app peer's (or request context's) set;
+/// 3. UPCR-2026-035: a host session's live set (its app tools, and its
+///    `generic_tools`, which narrow too).
+fn apply_turn_host_tool_rosters(
+    registry: &mut octos_agent::ToolRegistry,
+    data_dir: &Path,
+    session_id: &SessionKey,
+    turn_id: &str,
+    turn_connection: Option<u64>,
+) {
+    crate::peers::session_tool_list::retain_session_tool_list(registry, data_dir, session_id);
+    let peers_root = data_dir.join("peers");
+    let resolved = crate::peers::host_tools::resolve_session_host_tools(&peers_root, session_id);
+    crate::peers::host_tools::apply_session_host_tools(
+        registry,
+        &resolved,
+        &peers_root,
+        session_id,
+        turn_id,
+        turn_connection,
+    );
+    // A host SESSION tool set (e.g. the system agent calling the app tools
+    // the host granted it): only the host's own turns on it.
+    crate::peers::host_tools::apply_session_owned_host_tools(
+        registry,
+        &peers_root,
+        session_id,
+        turn_id,
+        turn_connection,
+    );
+}
+
 fn host_tools_turn_connection(ws: &WsConnection, internal_continuation: bool) -> Option<u64> {
     (!internal_continuation && !ws.is_external()).then_some(ws.connection_id.0)
 }
@@ -16291,6 +16336,177 @@ fn raw_session_tools_register(
         "approval_ttl_secs": set.approval_ttl_secs,
         "max_result_bytes": set.max_result_bytes,
         "applies": "next_turn",
+    }))
+}
+
+/// #2605 — who may set or read a host session's durable kernel tool list:
+/// never an external connection; the host's own connection (the `serve
+/// --stdio` pipe, or a host-token connection of `serve --host-managed`)
+/// needs nothing more; elsewhere the
+/// holder of the host token of an app peer that `session` prepared (as for a
+/// host session tool set). An app peer's session or request context is
+/// refused: its kernel tools come from its peer's `generic_tools`.
+fn authorize_session_tool_list_call(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    method: &str,
+    peers_root: &Path,
+    session: &SessionKey,
+    host_token: Option<&str>,
+) -> Result<(), RpcError> {
+    if ws.is_external() {
+        return Err(external_host_tools_denied(method));
+    }
+    if !crate::peers::session_tool_list::session_is_eligible(session) {
+        return Err(RpcError::invalid_params(
+            "an app peer's session takes its kernel tools from its peer's generic_tools \
+             (peer/tools/register)"
+                .to_owned(),
+        )
+        .with_data(json!({ "kind": "session_tool_list_invalid" })));
+    }
+    // The host's own connection, as for a host session tool set: the private
+    // `serve --stdio` pipe, or (not external) a host-token connection of
+    // `serve --host-managed`.
+    let host_connection = ws.is_stdio() || state.host_managed.is_some();
+    authorize_host_session_call(peers_root, session, host_token, host_connection)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSessionToolListParams {
+    session_id: SessionKey,
+    #[serde(default)]
+    host_token: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+    /// `set` only: the exact kernel tool names (`[]` keeps none); `null`
+    /// clears the list. Required on `set` (checked on the raw params, so a
+    /// misspelt key never clears a list).
+    #[serde(default)]
+    generic_tools: Option<Vec<String>>,
+    /// `set` only: refuse unless the list is at this version.
+    #[serde(default)]
+    if_version: Option<u64>,
+}
+
+fn session_tool_list_scope(
+    state: &Arc<AppState>,
+    params: &RawSessionToolListParams,
+    connection_profile_id: Option<&str>,
+) -> Result<(String, PathBuf), RpcError> {
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    Ok((profile_id, data_dir))
+}
+
+/// #2605 `session/tool_list/set` — set (or with `generic_tools: null` clear)
+/// the durable, exact kernel tool list of the host session `session_id`.
+fn raw_session_tool_list_set(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::session_tool_list::{
+        SetSessionToolListError, normalize_tool_list, set_session_tool_list,
+    };
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
+    if request.params.get("generic_tools").is_none() {
+        return Err(RpcError::invalid_params(
+            "generic_tools is required: a list of kernel tool names, or null to clear".to_owned(),
+        )
+        .with_data(json!({ "kind": "session_tool_list_invalid" })));
+    }
+    let params: RawSessionToolListParams = parse_raw_params(request)?;
+    let (profile_id, data_dir) = session_tool_list_scope(state, &params, connection_profile_id)?;
+    authorize_session_tool_list_call(
+        ws,
+        state,
+        &request.method,
+        &data_dir.join("peers"),
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    let generic_tools = params
+        .generic_tools
+        .map(normalize_tool_list)
+        .transpose()
+        .map_err(|err| {
+            RpcError::invalid_params(err).with_data(json!({ "kind": "session_tool_list_invalid" }))
+        })?;
+    let (previous, list) = set_session_tool_list(
+        &data_dir,
+        &params.session_id,
+        generic_tools,
+        params.if_version,
+    )
+    .map_err(|err| match err {
+        SetSessionToolListError::VersionConflict(current) => {
+            RpcError::invalid_params(format!("the session's tool list is at version {current}"))
+                .with_data(json!({
+                    "kind": "session_tool_list_version_conflict",
+                    "current_version": current,
+                }))
+        }
+        SetSessionToolListError::NotEligible => RpcError::invalid_params(
+            "an app peer's session takes its kernel tools from its peer".to_owned(),
+        )
+        .with_data(json!({ "kind": "session_tool_list_invalid" })),
+        SetSessionToolListError::Io(message) => RpcError::internal_error(message),
+    })?;
+    Ok(json!({
+        "session_id": params.session_id,
+        "profile_id": profile_id,
+        "version": list.version,
+        "previous_version": previous,
+        "generic_tools": list.generic_tools,
+        "applies": "next_turn",
+    }))
+}
+
+/// #2605 `session/tool_list/get` — the host reads the durable list back.
+fn raw_session_tool_list_get(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    use crate::peers::session_tool_list::{StoredSessionToolList, read_session_tool_list};
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
+    let params: RawSessionToolListParams = parse_raw_params(request)?;
+    let (profile_id, data_dir) = session_tool_list_scope(state, &params, connection_profile_id)?;
+    authorize_session_tool_list_call(
+        ws,
+        state,
+        &request.method,
+        &data_dir.join("peers"),
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    let stored = read_session_tool_list(&data_dir, &params.session_id);
+    let status = match &stored {
+        StoredSessionToolList::None => "none",
+        StoredSessionToolList::Set(list) if list.generic_tools.is_none() => "cleared",
+        StoredSessionToolList::Set(_) => "set",
+        StoredSessionToolList::Unreadable => "unreadable",
+    };
+    Ok(json!({
+        "session_id": params.session_id,
+        "profile_id": profile_id,
+        "version": stored.version(),
+        "status": status,
+        // What every turn keeps: `null` = the usual roster; an unreadable
+        // list keeps nothing (fail closed).
+        "generic_tools": stored.allowed(),
     }))
 }
 
@@ -20814,6 +21030,8 @@ async fn handle_raw_appui_rpc(
         APPUI_METHOD_PEER_TOOLS_REGISTER
         | APPUI_METHOD_PEER_TOOL_RESULT
         | APPUI_METHOD_PEER_INPUT_REJECT
+        | APPUI_METHOD_SESSION_TOOL_LIST_SET
+        | APPUI_METHOD_SESSION_TOOL_LIST_GET
         | APPUI_METHOD_PEER_PURGE
         | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             if ws.is_external() =>
@@ -20831,6 +21049,12 @@ async fn handle_raw_appui_rpc(
         }
         APPUI_METHOD_PEER_INPUT_REJECT => {
             raw_peer_input_reject(ws.connection_id.0, state, request, connection_profile_id)
+        }
+        APPUI_METHOD_SESSION_TOOL_LIST_SET => {
+            raw_session_tool_list_set(ws, state, request, connection_profile_id)
+        }
+        APPUI_METHOD_SESSION_TOOL_LIST_GET => {
+            raw_session_tool_list_get(ws, state, request, connection_profile_id)
         }
         // Boxed: the purge future is large, and this dispatch future is
         // nested inside every connection's (and the stdio runtime's) stack.
@@ -21290,6 +21514,8 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
             | APPUI_METHOD_PEER_TOOLS_REGISTER
             | APPUI_METHOD_PEER_TOOL_RESULT
             | APPUI_METHOD_PEER_INPUT_REJECT
+            | APPUI_METHOD_SESSION_TOOL_LIST_SET
+            | APPUI_METHOD_SESSION_TOOL_LIST_GET
             | APPUI_METHOD_PEER_PURGE
             | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             | APPUI_METHOD_PROFILE_SKILLS_LIST
@@ -35757,7 +35983,17 @@ async fn run_native_code_review_turn(
         &profile_id,
         &session_runtime.profile.data_dir,
     );
-    let tools = Arc::new(session_runtime.tools.snapshot_excluding(&[]));
+    let tools = {
+        let mut tools = session_runtime.tools.snapshot_excluding(&[]);
+        // #2605: the host session's durable kernel tool list binds review
+        // specialists too.
+        crate::peers::session_tool_list::retain_session_tool_list(
+            &mut tools,
+            &session_runtime.profile.data_dir,
+            &session_id,
+        );
+        Arc::new(tools)
+    };
     let agent_config = session_runtime.agent.agent_config();
     // UPCR follow-up to #1561: refresh named prompt segments (memory) on
     // the cached session agent BEFORE snapshotting — WS turns build a
@@ -39677,28 +39913,13 @@ async fn run_standalone_turn(
     // with a registered tool set: the host's own turns keep the usual tools
     // and gain the host's app tools (routed to the host); any other turn gets
     // none. Re-read every turn, so a registration applies from the next turn.
-    {
-        let peers_root = session_runtime.profile.data_dir.join("peers");
-        let resolved =
-            crate::peers::host_tools::resolve_session_host_tools(&peers_root, &session_id);
-        crate::peers::host_tools::apply_session_host_tools(
-            &mut tool_registry,
-            &resolved,
-            &peers_root,
-            &session_id,
-            &turn_id.0.to_string(),
-            host_tools_turn_connection(&ws, internal_master_continuation),
-        );
-        // A host SESSION tool set (e.g. the system agent calling the app
-        // tools the host granted it): only the host's own turns on it.
-        crate::peers::host_tools::apply_session_owned_host_tools(
-            &mut tool_registry,
-            &peers_root,
-            &session_id,
-            &turn_id.0.to_string(),
-            host_tools_turn_connection(&ws, internal_master_continuation),
-        );
-    }
+    apply_turn_host_tool_rosters(
+        &mut tool_registry,
+        &session_runtime.profile.data_dir,
+        &session_id,
+        &turn_id.0.to_string(),
+        host_tools_turn_connection(&ws, internal_master_continuation),
+    );
     // `octos serve --host-managed`: an external client's turn keeps only the
     // external tool allowlist, applied to the FINISHED registry so nothing
     // registered above (spawn, peer_*, send_file, task tools, MCP, plugins)

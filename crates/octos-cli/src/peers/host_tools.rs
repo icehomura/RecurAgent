@@ -164,7 +164,7 @@ pub(crate) fn validate_app_tool_name(name: &str) -> Result<(), String> {
 }
 
 /// A kernel tool name: `[A-Za-z0-9_-]`, no `.` (app tools are dotted).
-fn validate_generic_name(name: &str) -> Result<(), String> {
+pub(crate) fn validate_generic_name(name: &str) -> Result<(), String> {
     let ok = !name.is_empty()
         && name.len() <= MAX_MODEL_NAME_BYTES
         && name
