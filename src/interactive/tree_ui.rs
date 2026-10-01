@@ -1,5 +1,7 @@
 use super::*;
 
+use rust_i18n::t;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TreeNavigationPersistenceOutcome {
     Confirmed,
@@ -69,16 +71,14 @@ async fn stage_and_commit_tree_navigation(
         .map_err(|err| crate::error::Error::session(err.to_string()))?;
     if live.header.id != expected_session_id || live.leaf_id() != expected_leaf_id {
         return Err(crate::error::Error::session(
-            "Session changed while switching branches; the switch was not applied".to_string(),
+            t!("tree_ui_err_session_changed").to_string(),
         ));
     }
 
     let mut candidate = live.clone();
     if let Some(target_id) = target_leaf_id {
         if !candidate.navigate_to(target_id) {
-            return Err(crate::error::Error::session(format!(
-                "Branch target not found: {target_id}"
-            )));
+            return Err(crate::error::Error::session(t!("tree_ui_err_target_not_found", target_id = target_id).to_string()));
         }
     } else {
         candidate.reset_leaf();
@@ -122,9 +122,7 @@ async fn stage_and_commit_tree_navigation(
         .await
         .is_none()
         {
-            return Err(crate::error::Error::session(format!(
-                "Branch switch persistence was not confirmed ({err}), current disk state could not be reconciled, and the active in-memory session was left unchanged"
-            )));
+            return Err(crate::error::Error::session(t!("tree_ui_err_persistence_unconfirmed", error = err).to_string()));
         }
         TreeNavigationPersistenceOutcome::ReconciledButUnconfirmed
     } else {
@@ -168,7 +166,7 @@ impl RaApp {
                         }
                     }
                     KeyType::Esc | KeyType::CtrlC => {
-                        self.status_message = Some("Tree navigation cancelled".to_string());
+                        self.status_message = Some(t!("tree_ui_cancelled").to_string());
                         self.tree_ui = None;
                         return None;
                     }
@@ -190,13 +188,13 @@ impl RaApp {
 
                         // No-op if already at target leaf.
                         if selector.current_leaf_id.as_deref() == new_leaf_id.as_deref() {
-                            self.status_message = Some("Already on that branch".to_string());
+                            self.status_message = Some(t!("tree_ui_already_on_branch").to_string());
                             self.tree_ui = None;
                             return None;
                         }
 
                         let Ok(session_guard) = self.session.try_lock() else {
-                            self.status_message = Some("Session busy; try again".to_string());
+                            self.status_message = Some(t!("tree_ui_err_session_busy").to_string());
                             self.tree_ui = None;
                             return None;
                         };
@@ -258,7 +256,7 @@ impl RaApp {
                         prompt.selected += 1;
                     }
                     KeyType::Esc | KeyType::CtrlC => {
-                        self.status_message = Some("Tree navigation cancelled".to_string());
+                        self.status_message = Some(t!("tree_ui_cancelled").to_string());
                         self.tree_ui = None;
                         return None;
                     }
@@ -350,7 +348,7 @@ impl RaApp {
             }
             KeyType::Esc | KeyType::CtrlC => {
                 self.branch_picker = None;
-                self.status_message = Some("Branch picker cancelled".to_string());
+                self.status_message = Some(t!("tree_ui_branch_picker_cancelled").to_string());
             }
             KeyType::Runes if key.runes == ['q'] => {
                 self.branch_picker = None;
@@ -364,7 +362,7 @@ impl RaApp {
     /// Switch the active branch to a different leaf. Reloads the conversation.
     fn switch_to_branch_leaf(&mut self, leaf_id: &str) -> bool {
         let Ok(session_guard) = self.session.try_lock() else {
-            self.status_message = Some("Session busy; try again".to_string());
+            self.status_message = Some(t!("tree_ui_err_session_busy").to_string());
             return false;
         };
         let session_id = session_guard.header.id.clone();
@@ -386,12 +384,12 @@ impl RaApp {
     /// Open the branch picker if the session has sibling branches.
     pub fn open_branch_picker(&mut self) {
         if self.agent_state != AgentState::Idle {
-            self.status_message = Some("Cannot switch branches while processing".to_string());
+            self.status_message = Some(t!("tree_ui_err_busy").to_string());
             return;
         }
 
         let Ok(session_guard) = self.session.try_lock() else {
-            self.status_message = Some("Session busy; try again".to_string());
+            self.status_message = Some(t!("tree_ui_err_session_busy").to_string());
             return;
         };
         let branches = session_guard.sibling_branches().map(|(_, b)| b);
@@ -405,7 +403,7 @@ impl RaApp {
             }
             _ => {
                 self.status_message =
-                    Some("No branches to pick (use /fork to create one)".to_string());
+                    Some(t!("tree_ui_no_branches").to_string());
             }
         }
     }
@@ -413,12 +411,12 @@ impl RaApp {
     /// Cycle to the next or previous sibling branch (Ctrl+Right / Ctrl+Left).
     pub fn cycle_sibling_branch(&mut self, forward: bool) {
         if self.agent_state != AgentState::Idle {
-            self.status_message = Some("Cannot switch branches while processing".to_string());
+            self.status_message = Some(t!("tree_ui_err_busy").to_string());
             return;
         }
 
         let Ok(session_guard) = self.session.try_lock() else {
-            self.status_message = Some("Session busy; try again".to_string());
+            self.status_message = Some(t!("tree_ui_err_session_busy").to_string());
             return;
         };
         let target = session_guard.sibling_branches().and_then(|(_, branches)| {
@@ -438,7 +436,7 @@ impl RaApp {
         if let Some(leaf_id) = target {
             self.switch_to_branch_leaf(&leaf_id);
         } else {
-            self.status_message = Some("No sibling branches (use /fork to create one)".to_string());
+            self.status_message = Some(t!("tree_ui_no_sibling_branches").to_string());
         }
     }
 
@@ -458,17 +456,17 @@ impl RaApp {
         // through the staged async path so a failed save cannot claim success.
         if !summary_requested && self.extensions.is_none() && !self.save_enabled {
             let Ok(mut agent_guard) = self.agent.try_lock() else {
-                self.status_message = Some("Agent busy; try again".to_string());
+                self.status_message = Some(t!("tree_ui_err_agent_busy").to_string());
                 return false;
             };
             let Ok(mut session_guard) = self.session.try_lock() else {
-                self.status_message = Some("Session busy; try again".to_string());
+                self.status_message = Some(t!("tree_ui_err_session_busy").to_string());
                 return false;
             };
 
             if let Some(target_id) = &pending.new_leaf_id {
                 if !session_guard.navigate_to(target_id) {
-                    self.status_message = Some(format!("Branch target not found: {target_id}"));
+                    self.status_message = Some(t!("tree_ui_err_target_not_found", target_id = target_id).to_string());
                     return false;
                 }
             } else {
@@ -493,7 +491,7 @@ impl RaApp {
             self.agent_state = AgentState::Idle;
             self.current_tool = None;
             self.abort_handle = None;
-            self.status_message = Some(format!("Switched to {status_leaf}"));
+            self.status_message = Some(t!("tree_ui_switched", leaf = status_leaf).to_string());
             if let Err(message) = self.sync_runtime_selection_from_session_header() {
                 self.status_message = Some(message);
             }
@@ -516,7 +514,7 @@ impl RaApp {
         let save_enabled = self.save_enabled;
 
         let Ok(agent_guard) = self.agent.try_lock() else {
-            self.status_message = Some("Agent busy; try again".to_string());
+            self.status_message = Some(t!("tree_ui_err_agent_busy").to_string());
             self.agent_state = AgentState::Idle;
             return false;
         };
@@ -526,7 +524,7 @@ impl RaApp {
 
         self.tree_ui = None;
         self.agent_state = AgentState::Processing;
-        self.status_message = Some("Switching branches...".to_string());
+        self.status_message = Some(t!("tree_ui_switching").to_string());
 
         runtime_handle.spawn(async move {
             let cx = Cx::for_request();
@@ -557,7 +555,7 @@ impl RaApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                        RaMsg::System("Session switch cancelled by extension".to_string()),
+                        RaMsg::System(t!("tree_ui_switch_cancelled_by_extension").to_string()),
                     )
                     .await;
                     return;
@@ -583,7 +581,7 @@ impl RaApp {
                         let _ = crate::interactive::enqueue_pi_event(
                             &event_tx,
                             &cx,
-                            RaMsg::AgentError(format!("Branch summary failed: {err}")),
+                            RaMsg::AgentError(t!("tree_ui_err_summary_failed", error = err).to_string()),
                         )
                         .await;
                         return;
@@ -602,7 +600,7 @@ impl RaApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        RaMsg::AgentError(format!("Failed to lock agent: {err}")),
+                        RaMsg::AgentError(t!("tree_ui_err_lock_agent", error = err).to_string()),
                     )
                     .await;
                     return;
@@ -627,7 +625,7 @@ impl RaApp {
                     let _ = crate::interactive::enqueue_pi_event(
                         &event_tx,
                         &cx,
-                        RaMsg::AgentError(format!("Branch switch could not be confirmed: {err}")),
+                        RaMsg::AgentError(t!("tree_ui_err_switch_unconfirmed", error = err).to_string()),
                     )
                     .await;
                     return;
@@ -652,16 +650,12 @@ impl RaApp {
                 TreeNavigationPersistenceOutcome::Confirmed
                 | TreeNavigationPersistenceOutcome::Disabled => {
                     if summary_skipped {
-                        Some(format!(
-                            "Switched to {switched_to} (no summary: missing API key)"
-                        ))
+                        Some(t!("tree_ui_switched_no_summary", leaf = switched_to.as_str()).to_string())
                     } else {
-                        Some(format!("Switched to {switched_to}"))
+                        Some(t!("tree_ui_switched", leaf = switched_to.as_str()).to_string())
                     }
                 }
-                TreeNavigationPersistenceOutcome::ReconciledButUnconfirmed => Some(format!(
-                    "Persistence warning: branch switch is present in the current disk and active session state, but final durability was not confirmed (switched to {switched_to})"
-                )),
+                TreeNavigationPersistenceOutcome::ReconciledButUnconfirmed => Some(t!("tree_ui_persistence_warning", leaf = switched_to.as_str()).to_string()),
             };
 
             let delivered = crate::interactive::enqueue_pi_event(
