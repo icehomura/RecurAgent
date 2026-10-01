@@ -4,7 +4,9 @@
       "id": "REQ-002",
       "issue": "exit_code=7",
       "kind": "failed_command",
-      "refs": ["command[0]:python3 -c 'import sys; sys.exit(7)'"],
+      "refs": [
+        "command[0]:python3 -c 'import sys; sys.exit(7)'"
+      ],
       "remediation": "Fix or rerun the failed command and include its passing transcript.",
       "requirement_kind": "command",
       "status": "failed"
@@ -12,7 +14,9 @@
   ],
   "decision": "closeout_blocked",
   "generated_at": "[GENERATED_AT]",
-  "operator_next_actions": ["Fix or rerun the failed command and include its passing transcript."],
+  "operator_next_actions": [
+    "Fix or rerun the failed command and include its passing transcript."
+  ],
   "schema": "ra.completion_audit.closeout_gate.v1",
   "source": {
     "completion_allowed": false,
