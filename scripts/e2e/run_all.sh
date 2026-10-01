@@ -734,6 +734,18 @@ for record in filter(None, index_bytes.split(b"\0")):
         fail(f"duplicate path in index: {os.fsdecode(path)!r}")
 allow_dirty = os.environ.get("E2E_ALLOW_DIRTY", "").lower() in ("1", "true", "yes")
 
+if index != tree:
+    import hashlib as _h
+    print(f"[capture-dbg] head={head[:10]} tree={len(tree)} index={len(index)} "
+          f"tree_sha={_h.sha256(tree_bytes).hexdigest()[:10]} index_sha={_h.sha256(index_bytes).hexdigest()[:10]}")
+    _n = 0
+    for _p in sorted(set(tree) | set(index)):
+        if tree.get(_p) != index.get(_p):
+            _n += 1
+            if _n <= 20:
+                print(f"[capture-dbg] DIFF {os.fsdecode(_p)!r} tree={tree.get(_p)!r} index={index.get(_p)!r}")
+    print(f"[capture-dbg] TOTAL DIFFS {_n}")
+
 if not allow_dirty and index != tree:
     fail("index entries do not match the HEAD tree exactly")
 
