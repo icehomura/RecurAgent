@@ -70,15 +70,3 @@ linker = "rust-lld"
 # reserve has to come from the linker. 8 MiB matches the project's other
 # deep-frame reservations (16 MiB for spawned threads, `SQLITE_THREAD_STACK_BYTES`).
 rustflags = ["-C", "link-arg=/STACK:8388608"]
-
-# Build artifacts live off the system drive.
-#
-# C: reached 100% (0 bytes free) and `cargo clean` reclaimed 99.2 GiB across
-# 35,511 files: this repo has 381 test targets, and on MSVC each build hash
-# directory carries a ~248 MB exe plus a ~787 MB PDB. Pointing `target-dir`
-# at the scratch drive keeps the system volume free without giving up any
-# profile or incremental caching.
-#
-# Delete this `[build]` section to fall back to the in-repo `target/`.
-[build]
-target-dir = "D:/cargo-target/pi_agent"
