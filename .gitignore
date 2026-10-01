@@ -335,4 +335,9 @@ root@*
 # these patterns so new strays never land in the tree.
 /.handoff-*
 /_handoff-*
+# Root-level handoff markdown scratch: any `*handoff*.md` at the repo root is a
+# stray agent artifact. Scoped to the root on purpose — a global `*handoff*.md`
+# would also match vendored conformance fixtures such as
+# `tests/ext_conformance/artifacts/**/session-handoff/SKILL.md`.
+/*handoff*.md
 
