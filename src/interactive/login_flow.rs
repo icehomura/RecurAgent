@@ -8,6 +8,8 @@
 
 use std::path::Path;
 
+use rust_i18n::t;
+
 use crate::auth::{AuthCredential, AuthStorage, DeviceFlowPollResult, OAuthCallbackServer};
 use crate::error::Error;
 use crate::extensions::ExtensionManager;
@@ -69,13 +71,14 @@ fn device_flow_message(
     verification_uri: &str,
     expires_in: u64,
 ) -> String {
-    format!(
-        "OAuth login: {provider}\n\n\
-Open this URL:\n{verification_uri}\n\n\
-If prompted, enter this code: {user_code}\n\
-Code expires in {expires_in} seconds.\n\n\
-After approving access in the browser, press Enter in Pi to complete login."
+    t!(
+        "login_flow_device_flow_message",
+        provider = provider,
+        uri = verification_uri,
+        code = user_code,
+        seconds = expires_in
     )
+    .to_string()
 }
 
 fn copilot_config() -> crate::auth::CopilotOAuthConfig {
@@ -104,10 +107,10 @@ pub async fn start_login(
 ) -> Result<LoginStart, String> {
     let args = args.trim();
     let bindings = registered_extension_provider_bindings(extensions)
-        .map_err(|err| format!("Unable to load extension login providers: {err}"))?;
+        .map_err(|err| t!("login_flow_err_extension_providers", error = err).to_string())?;
     if args.is_empty() {
         let auth = AuthStorage::load(auth_path.to_path_buf())
-            .map_err(|err| format!("Unable to load auth status: {err}"))?;
+            .map_err(|err| t!("login_flow_err_auth_status", error = err).to_string())?;
         return Ok(LoginStart::Listing(format_login_provider_listing(
             &auth,
             available_models,
@@ -128,7 +131,8 @@ pub async fn start_login(
         None
     };
     if let Some(device) = device {
-        let device = device.map_err(|err| format!("OAuth login failed: {err}"))?;
+        let device = device
+            .map_err(|err| t!("login_flow_err_oauth_failed", error = err).to_string())?;
         let verification_uri = device
             .verification_uri_complete
             .unwrap_or(device.verification_uri);
@@ -181,9 +185,8 @@ pub async fn start_login(
             let config =
                 extension_oauth_config_for_provider(available_models, &bindings, &provider)
                     .ok_or_else(|| {
-                        format!(
-                            "Login not supported for {provider} (no built-in flow or OAuth config)"
-                        )
+                        t!("login_flow_err_provider_unsupported", provider = provider.as_str())
+                            .to_string()
                     })?;
             (
                 crate::auth::start_extension_oauth(&provider, &config),
@@ -191,7 +194,7 @@ pub async fn start_login(
             )
         }
     };
-    let info = info.map_err(|err| format!("OAuth login failed: {err}"))?;
+    let info = info.map_err(|err| t!("login_flow_err_oauth_failed", error = err).to_string())?;
 
     // Use the pre-bound callback server when the provider created one
     // (Copilot/GitLab with a random port); otherwise start one for localhost
@@ -203,29 +206,24 @@ pub async fn start_login(
             .and_then(|uri| crate::auth::start_oauth_callback_server(uri).ok())
     });
 
-    let mut message = format!(
-        "OAuth login: {}\n\nOpen this URL:\n{}\n",
-        info.provider, info.url
-    );
+    let mut message = t!(
+        "login_flow_oauth_heading",
+        provider = info.provider.as_str(),
+        url = info.url.as_str()
+    )
+    .to_string();
     if info.provider == "anthropic" {
-        message.push_str(
-            "\nWARNING: Anthropic OAuth (Claude Code consumer account) is no longer recommended.\n\
-Using consumer OAuth tokens outside the official client may violate Anthropic's consumer Terms of Service and can\n\
-result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_API_KEY) instead.\n",
-        );
+        message.push_str(&t!("login_flow_anthropic_warning"));
     }
     if callback.is_some() {
-        message.push_str(
-            "\nListening for callback — complete authorization in your browser.\n\
-             Pi will continue automatically, or you can paste the code manually.",
-        );
+        message.push_str(&t!("login_flow_callback_listening"));
     } else {
         if let Some(instructions) = info.instructions {
             message.push('\n');
             message.push_str(&instructions);
             message.push('\n');
         }
-        message.push_str("\nPaste the callback URL or authorization code into Pi to continue.");
+        message.push_str(&t!("login_flow_paste_prompt"));
     }
 
     Ok(LoginStart::Pending {
@@ -309,9 +307,10 @@ pub(super) async fn obtain_credential(
                         ))
                         .await
                     }
-                    None => Err(Error::auth(format!(
-                        "OAuth provider not supported: {provider}"
-                    ))),
+                    None => Err(Error::auth(
+                        t!("login_flow_err_oauth_provider_unsupported", provider = provider)
+                            .to_string(),
+                    )),
                 },
             };
             result.map_err(terminal)
@@ -319,7 +318,7 @@ pub(super) async fn obtain_credential(
         PendingLoginKind::DeviceFlow => {
             let Some(device_code) = pending.device_code.as_deref() else {
                 return Err(terminal(Error::auth(
-                    "Device flow missing device_code".to_string(),
+                    t!("login_flow_err_device_code_missing").to_string(),
                 )));
             };
             let poll = if provider == "kimi-for-coding" {
@@ -331,30 +330,29 @@ pub(super) async fn obtain_credential(
                 ))
                 .await
             } else {
-                DeviceFlowPollResult::Error(format!(
-                    "Device flow polling not supported for {provider}"
-                ))
+                DeviceFlowPollResult::Error(
+                    t!("login_flow_err_device_polling_unsupported", provider = provider)
+                        .to_string(),
+                )
             };
             match poll {
                 DeviceFlowPollResult::Success(credential) => Ok(credential),
                 DeviceFlowPollResult::Error(err) => Err(terminal(Error::auth(err))),
-                DeviceFlowPollResult::Expired => Err(terminal(Error::auth(format!(
-                    "Device code expired for {provider}. Run /login {provider} again."
-                )))),
-                DeviceFlowPollResult::AccessDenied => Err(terminal(Error::auth(format!(
-                    "Access denied for {provider}."
-                )))),
+                DeviceFlowPollResult::Expired => Err(terminal(Error::auth(
+                    t!("login_flow_err_device_code_expired", provider = provider).to_string(),
+                ))),
+                DeviceFlowPollResult::AccessDenied => Err(terminal(Error::auth(
+                    t!("login_flow_err_access_denied", provider = provider).to_string(),
+                ))),
                 DeviceFlowPollResult::Pending => Err((
                     true,
-                    Error::auth(format!(
-                        "Authorization for {provider} is still pending. Complete the browser step and submit again."
-                    )),
+                    Error::auth(
+                        t!("login_flow_err_still_pending", provider = provider).to_string(),
+                    ),
                 )),
                 DeviceFlowPollResult::SlowDown => Err((
                     true,
-                    Error::auth(format!(
-                        "Authorization server asked to slow down for {provider}. Wait a few seconds and submit again."
-                    )),
+                    Error::auth(t!("login_flow_err_slow_down", provider = provider).to_string()),
                 )),
             }
         }
@@ -376,10 +374,10 @@ pub(super) async fn save_credential(
 pub(super) fn success_status(provider: &str, kind: PendingLoginKind) -> String {
     match kind {
         PendingLoginKind::ApiKey => {
-            format!("API key saved for {provider}. Credentials saved to auth.json.")
+            t!("login_flow_success_api_key", provider = provider).to_string()
         }
         PendingLoginKind::OAuth | PendingLoginKind::DeviceFlow => {
-            format!("OAuth login successful for {provider}. Credentials saved to auth.json.")
+            t!("login_flow_success_oauth", provider = provider).to_string()
         }
     }
 }
@@ -427,9 +425,9 @@ pub fn logout(
     let removed = remove_provider_credentials(&mut auth, &requested);
     auth.save()?;
     let status = if removed {
-        format!("Removed stored credentials for {provider}.")
+        t!("login_flow_logout_removed", provider = provider.as_str()).to_string()
     } else {
-        format!("No stored credentials for {provider}.")
+        t!("login_flow_logout_absent", provider = provider.as_str()).to_string()
     };
     Ok((provider, status))
 }

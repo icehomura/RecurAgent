@@ -1,0 +1,145 @@
+# RecurAgent TUI strings.
+#
+# _version: 2 keeps every locale side by side on one key, so a reviewer sees the
+# English and the Chinese on the same screen and the two sets cannot drift into
+# different key sets without the file looking obviously wrong. The CI parity
+# gate (`scripts/check_i18n_keys.py`) enforces that mechanically.
+#
+# KEY CONVENTION: `{module}_{slug}` — symbolic, never the English source text.
+# Consequence worth remembering: a missing key renders as the KEY itself
+# (`login_flow_logout_absent`), not as English. There is no silent fallback to
+# the literal, which is exactly why the parity gate is mandatory rather than
+# nice-to-have.
+#
+# Multi-line values use double-quoted scalars with `\n` escapes rather than `|`
+# block scalars: a block scalar's trailing-newline behaviour (`|` vs `|-` vs
+# `|+`) is easy to get wrong by one byte, and these strings are handed straight
+# to the terminal.
+#
+# PLACEHOLDERS use rust-i18n's `%{name}` form, supplied as `t!("key", name = x)`.
+_version: 2
+
+# ── /login — device flow ───────────────────────────────────────────────
+
+login_flow_device_flow_message:
+  en: "OAuth login: %{provider}\n\nOpen this URL:\n%{uri}\n\nIf prompted, enter this code: %{code}\nCode expires in %{seconds} seconds.\n\nAfter approving access in the browser, press Enter in Pi to complete login."
+  zh-CN: "OAuth 登录：%{provider}\n\n请在浏览器中打开此链接：\n%{uri}\n\n如提示输入，请输入此验证码：%{code}\n验证码将在 %{seconds} 秒后过期。\n\n在浏览器中批准访问后，在 Pi 中按 Enter 完成登录。"
+
+# ── /login — OAuth browser flow ─────────────────────────────────────────
+
+login_flow_oauth_heading:
+  en: "OAuth login: %{provider}\n\nOpen this URL:\n%{url}\n"
+  zh-CN: "OAuth 登录：%{provider}\n\n请在浏览器中打开此链接：\n%{url}\n"
+
+login_flow_anthropic_warning:
+  en: "\nWARNING: Anthropic OAuth (Claude Code consumer account) is no longer recommended.\nUsing consumer OAuth tokens outside the official client may violate Anthropic's consumer Terms of Service and can\nresult in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_API_KEY) instead.\n"
+  zh-CN: "\n警告：不再推荐使用 Anthropic OAuth（Claude Code 消费者账户）。\n在官方客户端之外使用消费者 OAuth 令牌可能违反 Anthropic 消费者服务条款，并可能导致账户被暂停或封禁。请改用 Anthropic API 密钥（ANTHROPIC_API_KEY）。\n"
+
+login_flow_callback_listening:
+  en: "\nListening for callback — complete authorization in your browser.\nPi will continue automatically, or you can paste the code manually."
+  zh-CN: "\n正在监听回调——请在浏览器中完成授权。\nPi 将自动继续，你也可以手动粘贴授权码。"
+
+login_flow_paste_prompt:
+  en: "\nPaste the callback URL or authorization code into Pi to continue."
+  zh-CN: "\n请将回调 URL 或授权码粘贴到 Pi 以继续。"
+
+# ── Errors ─────────────────────────────────────────────────────────────
+
+login_flow_err_extension_providers:
+  en: "Unable to load extension login providers: %{error}"
+  zh-CN: "无法加载扩展登录提供方：%{error}"
+
+login_flow_err_auth_status:
+  en: "Unable to load auth status: %{error}"
+  zh-CN: "无法加载认证状态：%{error}"
+
+login_flow_err_oauth_failed:
+  en: "OAuth login failed: %{error}"
+  zh-CN: "OAuth 登录失败：%{error}"
+
+login_flow_err_provider_unsupported:
+  en: "Login not supported for %{provider} (no built-in flow or OAuth config)"
+  zh-CN: "%{provider} 不支持登录（没有内置流程或 OAuth 配置）"
+
+login_flow_err_oauth_provider_unsupported:
+  en: "OAuth provider not supported: %{provider}"
+  zh-CN: "不支持该 OAuth 提供方：%{provider}"
+
+login_flow_err_device_code_missing:
+  en: "Device flow missing device_code"
+  zh-CN: "设备流程缺少 device_code"
+
+login_flow_err_device_polling_unsupported:
+  en: "Device flow polling not supported for %{provider}"
+  zh-CN: "不支持 %{provider} 的设备流程轮询"
+
+login_flow_err_device_code_expired:
+  en: "Device code expired for %{provider}. Run /login %{provider} again."
+  zh-CN: "%{provider} 的设备码已过期。请重新运行 /login %{provider}。"
+
+login_flow_err_access_denied:
+  en: "Access denied for %{provider}."
+  zh-CN: "%{provider} 访问被拒绝。"
+
+login_flow_err_still_pending:
+  en: "Authorization for %{provider} is still pending. Complete the browser step and submit again."
+  zh-CN: "%{provider} 的授权仍在等待中。请在浏览器中完成该步骤后再次提交。"
+
+login_flow_err_slow_down:
+  en: "Authorization server asked to slow down for %{provider}. Wait a few seconds and submit again."
+  zh-CN: "授权服务器要求 %{provider} 放慢请求。请等待几秒后再次提交。"
+
+# ── Success / logout ───────────────────────────────────────────────────
+
+login_flow_success_api_key:
+  en: "API key saved for %{provider}. Credentials saved to auth.json."
+  zh-CN: "%{provider} 的 API 密钥已保存。凭据已保存到 auth.json。"
+
+login_flow_success_oauth:
+  en: "OAuth login successful for %{provider}. Credentials saved to auth.json."
+  zh-CN: "%{provider} 的 OAuth 登录成功。凭据已保存到 auth.json。"
+
+login_flow_logout_removed:
+  en: "Removed stored credentials for %{provider}."
+  zh-CN: "已移除 %{provider} 的已存凭据。"
+
+login_flow_logout_absent:
+  en: "No stored credentials for %{provider}."
+  zh-CN: "%{provider} 没有已存凭据。"
+
+# ── RESERVED: status_line machine prefixes (optional translation) ───────
+#
+# These are the compact machine labels a status line draws — `git:`, `ctx:`,
+# `think:`, `agents:`, `session:`, and the `tok` unit. They are NOT prose, and
+# the glyphs that carry them (``, `󰭻`, the separators) must never enter a
+# translation: `StatusSegment::render_with_chrome` already renders each segment
+# in three tiers (nerd icon / portable symbol / plain ASCII), so a glyph baked
+# into a translated literal would need 3 translations per locale instead of 1
+# and would break the ASCII preset's `is_ascii()` assertion.
+#
+# The hook is deliberately commented out rather than shipped as an identity
+# entry, because an active key with no call site is an orphan that the CI gate
+# would flag. To translate a prefix: move its line out of this comment block
+# and add the `t!()` call at the site in `src/status_line.rs`.
+#
+# login_flow-style identity default is the symbol itself, so enabling a
+# translation is a one-line edit and disabling it restores the symbol.
+#
+# status_line_prefix_git:
+#   en: "git:"
+#   zh-CN: "分支:"
+# status_line_prefix_ctx:
+#   en: "ctx:"
+#   zh-CN: "上下文:"
+# status_line_prefix_think:
+#   en: "think:"
+#   zh-CN: "思考:"
+# status_line_prefix_agents:
+#   en: "agents:"
+#   zh-CN: "子代理:"
+# status_line_prefix_session:
+#   en: "session:"
+#   zh-CN: "会话:"
+# status_line_unit_tokens:
+#   en: "tok"
+#   zh-CN: "令牌"

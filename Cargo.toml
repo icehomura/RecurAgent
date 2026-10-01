@@ -291,6 +291,19 @@ arboard = { version = "3.6.1", optional = true }
 # crossterm backend for now (pi already ships crossterm via `tui`); the Unix
 # native-backend (ftui-tty) switch is a later rollout step per the bead.
 ftui = { version = "0.7", default-features = false, features = ["runtime", "crossterm"], optional = true }
+
+# Terminal-UI localization (TUI chrome only — menus, hints, dialogs, status
+# text). Deliberately NOT used for agent prose: that language is chosen by the
+# model and governed by the `output_language` setting, which is a different
+# concern from the strings this crate owns. Gated behind `tui` so `ra-headless`
+# never links a translation runtime.
+#
+# Why this crate: its whole transitive set stays inside `deny.toml`'s
+# exhaustive licence allow-list. Verified against crates.io for the 17 packages
+# it adds to the lockfile: every one is MIT or Apache-2.0, all already allowed.
+# `fluent-templates` (15 deps) and `i18n-embed` (17) buy plurals, gender and
+# CLDR negotiation that two locales do not use.
+rust-i18n = { version = "4.2", optional = true }
 # Markdown rendering for the ftui conversation view. Direct dep because the
 # facade's `extras` feature enables no ftui-extras features (markdown stays
 # off); default-features off keeps the heavy extras (charts, doom, ...) out.
@@ -511,6 +524,14 @@ win32job = "2.0.3"
 # to build on stable. See `src/file_identity.rs`.
 winapi-util = "0.1.11"
 
+# Translation extraction config, read ONLY by `cargo i18n` (rust-i18n-cli).
+# Nothing here is needed to build; keeping `load-path` in step with the path
+# passed to `rust_i18n::i18n!` is what lets the extractor find the catalogue.
+[package.metadata.i18n]
+available-locales = ["en", "zh-CN"]
+default-locale = "en"
+load-path = "locales"
+
 [features]
 default = ["sqlite-sessions", "tui", "bpe-tokens", "ftui"]
 full = [
@@ -554,6 +575,7 @@ tui = [
     "dep:bubbles",
     "dep:glamour",
     "dep:textwrap",
+    "dep:rust-i18n",
     # Clipboard image paste (arboard) and image resize/encode are
     # interactive-only concerns. Attaching them to `tui` turns them on
     # automatically for every interactive `ra` build (default features) while

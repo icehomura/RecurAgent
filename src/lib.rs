@@ -220,6 +220,18 @@ pub mod http;
 pub mod http_shim;
 #[doc(hidden)]
 pub mod hub;
+// Terminal-UI localization. Gated with `tui` because its dependency is: a
+// headless build draws no chrome, so it has no strings to translate and must
+// not link a translation runtime or embed a catalogue.
+// The catalogue registration must happen at the CRATE ROOT. `t!` expands to a
+// reference to `crate::_rust_i18n_t`, and only the `i18n!` invocation generates
+// that item — invoking it inside a submodule leaves every `t!` in the crate
+// unable to find it (E0433: cannot find `_rust_i18n_t` in the crate root).
+#[cfg(feature = "tui")]
+rust_i18n::i18n!("locales", fallback = "en");
+#[cfg(feature = "tui")]
+#[doc(hidden)]
+pub mod i18n;
 #[cfg(feature = "tui")]
 #[doc(hidden)]
 pub mod interactive;

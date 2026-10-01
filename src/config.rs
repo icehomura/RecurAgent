@@ -201,6 +201,21 @@ pub struct Config {
     #[serde(alias = "outputLanguage")]
     pub output_language: Option<String>,
 
+    /// Language for the terminal chrome RecurAgent draws itself.
+    ///
+    /// Distinct from `output_language`, which governs the *model's* prose. The
+    /// model authors that text; this crate authors the chrome, menus and
+    /// hints, and the two can legitimately differ — a Chinese UI with English
+    /// model output is a reasonable preference. When unset, this inherits
+    /// `output_language`, so setting one value feels like it sets both.
+    ///
+    /// Accepts `en`, `zh-CN`, or the aliases `i18n::normalize_locale`
+    /// recognises. An unrecognised value (including `zh-TW`, which this build
+    /// ships no catalogue for) falls back to English rather than silently
+    /// serving a different script.
+    #[serde(alias = "uiLanguage")]
+    pub ui_language: Option<String>,
+
     // Compaction
     pub compaction: Option<CompactionSettings>,
 
@@ -1144,6 +1159,7 @@ impl Config {
             foreign_rules: other.foreign_rules.or(base.foreign_rules),
             ask_policy: other.ask_policy.or(base.ask_policy),
             output_language: other.output_language.or(base.output_language),
+            ui_language: other.ui_language.or(base.ui_language),
 
             // Compaction
             compaction: merge_compaction(base.compaction, other.compaction),
@@ -1327,6 +1343,20 @@ impl Config {
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
+    }
+
+    /// Resolved language for terminal chrome.
+    ///
+    /// `ui_language` wins when set; otherwise it inherits `output_language`.
+    /// Returns `None` when neither is set, so the caller installs its own
+    /// default rather than this type guessing at one.
+    #[must_use]
+    pub fn ui_language(&self) -> Option<&str> {
+        self.ui_language
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .or_else(|| self.output_language())
     }
 
     /// Resolved auto-compaction mode (bd-cv653.3.18).

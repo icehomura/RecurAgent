@@ -1573,6 +1573,11 @@ async fn run(
         ra::http::client::set_request_timeout_override(secs);
     }
 
+    // Install the UI locale before anything can draw. Placed here, after the
+    // CLI overrides, because `ui_language` may inherit `output_language` and
+    // both come from the merged settings just loaded.
+    ra::i18n::init_from_config(&config);
+
     let startup_mode = cli.mode.clone().unwrap_or_else(|| {
         if !cli.print && cli.export.is_none() {
             "interactive".to_string()

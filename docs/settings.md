@@ -107,6 +107,38 @@ Example:
 }
 ```
 
+- `ui_language` (string): Language for the terminal chrome `ra` draws **itself** —
+  menus, key hints, dialogs, status text. Alias: `uiLanguage`.
+
+  This is deliberately separate from `output_language`, which governs the
+  *model's* prose. The model authors that text and `ra` cannot translate what it
+  did not write, so the two can legitimately differ: a Chinese UI with English
+  model output is a reasonable preference, and so is the reverse. When
+  `ui_language` is unset it **inherits** `output_language`, so setting one value
+  feels like it sets both.
+
+  | Locale | Accepted spellings |
+  |--------|--------------------|
+  | `en` | `en`, `en-US`, `en-GB`, `English`, `英语` |
+  | `zh-CN` | `zh`, `zh-CN`, `zh-Hans`, `zh-SG`, `Chinese`, `中文`, `简体中文` |
+
+  Anything else — including `zh-TW` / `zh-Hant`, for which this build ships no
+  catalogue — falls back to English. Traditional Chinese is *not* aliased onto
+  Simplified: serving the wrong script is not obviously wrong to a reader, so it
+  is a worse failure than serving English until a `zh-Hant` catalogue exists.
+
+  Tool names, parameter names and enum values are protocol identifiers and are
+  never translated, in either setting. The Chinese catalogue lives in
+  `locales/messages.yml` and is guarded by `scripts/check_i18n_keys.py`, which
+  fails on a key missing a locale or a dropped `%{placeholder}`.
+
+```json
+{
+  "output_language": "en",
+  "ui_language": "zh-CN"
+}
+```
+
 ### Message delivery (queue modes)
 
 - `steering_mode` (string): `one-at-a-time` or `all` (default `one-at-a-time`).
