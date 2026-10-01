@@ -1817,86 +1817,9 @@ jobs:
           set -euxo pipefail
           echo "ts=$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_OUTPUT"
 
-      - name: Diagnose snapshot index delta
-        run: |
-          set -euxo pipefail
-          git --version
-          python3 - <<'PY'
-          import hashlib
-          import os
-          import re
-          import stat
-          import subprocess
-          import sys
-          from pathlib import Path
-
-          root = Path(os.getcwd()).resolve(strict=True)
-          artifact = root / "tests" / "e2e_results" / os.environ["TS"]
-          cargo_target = root / "target"
-
-          def fail(detail):
-              print(detail, file=sys.stderr)
-              raise SystemExit(1)
-
-          def git(*args):
-              env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-              env["GIT_CONFIG_GLOBAL"] = os.devnull
-              env["GIT_CONFIG_NOSYSTEM"] = "1"
-              env["GIT_LITERAL_PATHSPECS"] = "1"
-              env["GIT_NO_REPLACE_OBJECTS"] = "1"
-              env["GIT_OPTIONAL_LOCKS"] = "0"
-              env["GIT_TERMINAL_PROMPT"] = "0"
-              r = subprocess.run(["git", "--git-dir", str(root / ".git"), "--work-tree", str(root),
-                                  "-c", "core.bare=false", "-c", "core.fsmonitor=false",
-                                  "-c", f"core.worktree={root}", *args], capture_output=True, check=False, env=env)
-              if r.returncode != 0:
-                  fail(f"git {' '.join(args)} failed: {r.stderr.decode('utf-8','replace').strip()}")
-              return r.stdout
-
-          def snapshot(label):
-              head = git("rev-parse", "--verify", "HEAD^{commit}").decode("ascii", "strict").strip()
-              tb = git("ls-tree", "-r", "-z", "--full-tree", head)
-              tree = {}
-              for rec in filter(None, tb.split(b"\0")):
-                  metadata, path = rec.split(b"\t", 1)
-                  fields = metadata.split(b" ")
-                  tree[path] = (fields[0], fields[2])
-              ib = git("ls-files", "--stage", "-z")
-              idx = {}
-              for rec in filter(None, ib.split(b"\0")):
-                  metadata, path = rec.split(b"\t", 1)
-                  fields = metadata.split(b" ")
-                  idx[path] = (fields[0], fields[1])
-              idx_path = root / ".git" / "index"
-              idx_stat = idx_path.stat()
-              print(f"[{label}] head={head[:10]} tree={len(tree)} index={len(idx)} "
-                    f"index_sha={hashlib.sha256(ib).hexdigest()[:10]} "
-                    f"index_bytes={idx_stat.st_size} mtime={idx_stat.st_mtime_ns}")
-              if tree != idx:
-                  n = 0
-                  for p in sorted(set(tree) | set(idx)):
-                      if tree.get(p) != idx.get(p):
-                          n += 1
-                          if n <= 15:
-                              print(f"[{label}] DIFF {p.decode('utf-8','replace')!r} "
-                                    f"tree={tree.get(p)} index={idx.get(p)}")
-                  print(f"[{label}] TOTAL DIFFS {n}")
-                  raise SystemExit(1)
-              print(f"[{label}] CLEAN")
-
-          artifact.mkdir(parents=True, exist_ok=True)
-          os.environ["E2E_ARTIFACT_DIR"] = str(artifact)
-          os.environ["CARGO_TARGET_DIR"] = str(cargo_target)
-          snapshot("before-status")
-          subprocess.run(["git", "status", "--porcelain"], capture_output=True, check=True)
-          snapshot("after-status")
-          PY
-        env:
-          TS: ${{ steps.ts.outputs.ts }}
-
       - name: Execute shard lane
         env:
-          SHARD_ARTIFACT_DIR: ${{ github.workspace }}/RecurAgent/tests/e2e_results/${{ steps.ts.outputs.ts }}
+          SHARD_ARTIFACT_DIR: ${{ github.workspace }}/shard-evidence/${{ steps.ts.outputs.ts }}
         run: |
           set -euxo pipefail
           mkdir -p "$SHARD_ARTIFACT_DIR"
@@ -2003,7 +1926,7 @@ jobs:
       - name: Build shard artifact index
         if: always()
         env:
-          SHARD_ARTIFACT_DIR: ${{ github.workspace }}/RecurAgent/tests/e2e_results/${{ steps.ts.outputs.ts }}
+          SHARD_ARTIFACT_DIR: ${{ github.workspace }}/shard-evidence/${{ steps.ts.outputs.ts }}
           SHARD_NAME: ${{ matrix.shard.name }}
           SHARD_LANE: ${{ matrix.shard.lane }}
           JOB_STATUS: ${{ job.status }}
@@ -2048,7 +1971,7 @@ jobs:
         with:
           name: ci-shard-${{ matrix.shard.name }}-${{ github.sha }}
           path: |
-            RecurAgent/tests/e2e_results/${{ steps.ts.outputs.ts }}/
+            shard-evidence/${{ steps.ts.outputs.ts }}/
           if-no-files-found: warn
           retention-days: 30
 

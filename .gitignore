@@ -6,6 +6,9 @@ a.out
 rustc-ice-*.txt
 *.snap.new
 
+# E2E run-time evidence (shard and local verification outputs)
+tests/e2e_results/
+
 # bv (beads viewer) local config and caches
 .bv/
 
