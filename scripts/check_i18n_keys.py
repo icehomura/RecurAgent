@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Locale-catalogue gate for the RecurAgent TUI.
 
-Three checks, each one pinning a failure mode that is invisible until a user
+Four checks, each one pinning a failure mode that is invisible until a user
 sees it:
+
+0. SOURCE <-> CATALOGUE, both directions — every key the code looks up must
+   exist, and every catalogue key must be looked up. This is the check that
+   makes "is the translation complete?" answerable: parity alone cannot see a
+   typo at the call site.
 
 1. KEY PARITY — every key must carry every locale listed under
    `[package.metadata.i18n] available-locales`. Keys are symbolic
@@ -187,6 +192,71 @@ def check_placeholders(entries: dict[str, dict[str, str]]) -> list[str]:
     return problems
 
 
+# Keys that are deliberately absent. Each needs a reason: this list is the only
+# way an intentional miss can be told apart from a typo, and a bare entry with
+# no reason converts "someone noticed" into "someone silenced it".
+DELIBERATELY_MISSING_KEYS = {
+    # Pins the behaviour the whole gate exists for: a key with no entry renders
+    # as the KEY, so an omission is visible rather than silently English.
+    "login_flow_this_key_does_not_exist",
+}
+
+
+def check_source_keys(entries: dict[str, dict[str, str]]) -> list[str]:
+    """Every key the code looks up must exist, and every key must be looked up.
+
+    This is the check that makes "is the translation complete?" answerable.
+    Parity alone cannot see a typo at the call site — `t!("login_flow_logout_removd")`
+    has no entry, so it renders the misspelled identifier on screen, and nothing
+    else in this file would notice. The reverse direction catches the other
+    silent outcome: a key translated, paid for, and then renamed in the code,
+    leaving stale text nobody reads.
+    """
+    used: dict[str, list[str]] = {}
+    # The lookbehind matters: without it `format!("AKIA")` matches, because it
+    # contains the substring `t!(`. `format!` is everywhere in this codebase, so
+    # an unanchored pattern reports a pile of unrelated string literals as
+    # missing translations.
+    pattern = re.compile(r'(?<![A-Za-z0-9_:])(?:rust_i18n::)?t!\(\s*"([A-Za-z0-9_]+)"')
+    for path in sorted(ROOT.glob("src/**/*.rs")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        # Blank comment lines to equal-length whitespace rather than deleting
+        # them or filtering line by line. Deleting shifts every offset; filtering
+        # per line cannot see the multi-line form
+        #
+        #     t!(
+        #         "login_flow_device_flow_message",
+        #
+        # which is how the longer templates are written and whose key therefore
+        # sits on the line AFTER the macro. Both matter, so neither is traded away.
+        code = "".join(
+            ("".join("\n" if ch == "\n" else " " for ch in line))
+            if line.lstrip().startswith("//")
+            else line
+            for line in text.splitlines(keepends=True)
+        )
+        for match in pattern.finditer(code):
+            number = text.count("\n", 0, match.start()) + 1
+            used.setdefault(match.group(1), []).append(
+                f"{path.relative_to(ROOT)}:{number}"
+            )
+
+    problems = []
+    for key, sites in sorted(used.items()):
+        if key in entries or key in DELIBERATELY_MISSING_KEYS:
+            continue
+        problems.append(
+            f"{', '.join(sites[:3])}: looks up {key!r}, which has no catalogue "
+            f"entry — the user would see the identifier itself"
+        )
+    for key in sorted(set(entries) - set(used)):
+        problems.append(
+            f"catalogue key {key!r} is never looked up — either the call site was "
+            f"renamed and this text is now dead, or the migration missed a site"
+        )
+    return problems
+
+
 def check_inline_cjk() -> tuple[int, list[str]]:
     offenders: list[str] = []
     total = 0
@@ -235,6 +305,7 @@ def main() -> int:
 
     problems.extend(check_parity(entries, locales))
     problems.extend(check_placeholders(entries))
+    problems.extend(check_source_keys(entries))
 
     total_cjk, offenders = check_inline_cjk()
     cjk_ok = total_cjk <= CJK_BASELINE

@@ -2,6 +2,8 @@ use super::commands::{model_entry_matches, resolve_model_key_from_default_auth};
 use super::*;
 use crate::models::model_requires_configured_credential;
 
+use rust_i18n::t;
+
 impl RaApp {
     fn normalize_model_key(entry: &ModelEntry) -> (String, String) {
         let canonical_provider =
@@ -54,12 +56,12 @@ impl RaApp {
     /// Open the model selector overlay.
     pub fn open_model_selector(&mut self) {
         if self.agent_state != AgentState::Idle {
-            self.status_message = Some("Cannot switch models while processing".to_string());
+            self.status_message = Some(t!("model_selector_err_busy").to_string());
             return;
         }
 
         if self.available_models.is_empty() {
-            self.status_message = Some("No models available".to_string());
+            self.status_message = Some(t!("model_selector_err_no_models").to_string());
             return;
         }
 
@@ -70,21 +72,18 @@ impl RaApp {
 
     pub(super) fn open_model_selector_configured_only(&mut self) {
         if self.agent_state != AgentState::Idle {
-            self.status_message = Some("Cannot switch models while processing".to_string());
+            self.status_message = Some(t!("model_selector_err_busy").to_string());
             return;
         }
 
         if self.available_models.is_empty() {
-            self.status_message = Some("No models available".to_string());
+            self.status_message = Some(t!("model_selector_err_no_models").to_string());
             return;
         }
 
         let filtered = self.available_models_with_credentials();
         if filtered.is_empty() {
-            self.status_message = Some(
-                "No models are ready to use. Configure credentials with /login <provider>."
-                    .to_string(),
-            );
+            self.status_message = Some(t!("model_selector_err_no_ready").to_string());
             return;
         }
 
@@ -113,13 +112,13 @@ impl RaApp {
                 if let Some(selected) = selected {
                     self.apply_model_selection(&selected);
                 } else {
-                    self.status_message = Some("No model selected".to_string());
+                    self.status_message = Some(t!("model_selector_err_none_selected").to_string());
                 }
                 return None;
             }
             KeyType::Esc | KeyType::CtrlC => {
                 self.model_selector = None;
-                self.status_message = Some("Model selector cancelled".to_string());
+                self.status_message = Some(t!("model_selector_cancelled").to_string());
             }
             _ => {} // consume all other input while selector is open
         }
@@ -140,21 +139,28 @@ impl RaApp {
             .cloned();
 
         let Some(next) = entry else {
-            self.status_message = Some(format!("Model {} not found", selected.full_id()));
+            self.status_message = Some(
+                t!("model_selector_err_not_found", model = selected.full_id()).to_string(),
+            );
             return;
         };
 
         if model_entry_matches(&next, &self.model_entry) {
-            self.status_message = Some(format!("Already using {}", selected.full_id()));
+            self.status_message = Some(
+                t!("model_selector_already_using", model = selected.full_id()).to_string(),
+            );
             return;
         }
 
         let resolved_key_opt = resolve_model_key_from_default_auth(&next);
         if model_requires_configured_credential(&next) && resolved_key_opt.is_none() {
-            self.status_message = Some(format!(
-                "Missing credentials for provider {}. Run /login {}.",
-                next.model.provider, next.model.provider
-            ));
+            self.status_message = Some(
+                t!(
+                    "model_selector_err_missing_credentials",
+                    provider = next.model.provider.as_str()
+                )
+                .to_string(),
+            );
             return;
         }
 
@@ -175,7 +181,9 @@ impl RaApp {
             self.status_message = Some(message);
             return;
         }
-        self.status_message = Some(format!("Switched model: {}", next.model.display_label()));
+        self.status_message = Some(
+            t!("model_selector_switched", model = next.model.display_label()).to_string(),
+        );
     }
 
     /// Render the model selector overlay.
@@ -187,14 +195,18 @@ impl RaApp {
         use std::fmt::Write;
         let mut output = String::new();
 
-        let _ = writeln!(output, "\n  {}", self.styles.title.render("Select a model"));
+        let _ = writeln!(
+            output,
+            "\n  {}",
+            self.styles.title.render(&t!("model_selector_title"))
+        );
         if selector.configured_only() {
             let _ = writeln!(
                 output,
                 "  {}",
                 self.styles
                     .muted
-                    .render("Only showing models that are ready to use (see README for details)")
+                    .render(&t!("model_selector_configured_only_hint"))
             );
         }
 
@@ -204,7 +216,11 @@ impl RaApp {
             if selector.configured_only() {
                 "  >".to_string()
             } else {
-                "  > (type to filter)".to_string()
+                // `  >` is the prompt SYMBOL and stays here; only the prose half
+                // comes from the catalogue. Folding the symbol into the
+                // translated string would duplicate it per locale and defeat the
+                // ASCII/unicode glyph split the renderer already maintains.
+                format!("  > {}", t!("model_selector_filter_hint"))
             }
         } else {
             format!("  > {query}")
@@ -221,7 +237,7 @@ impl RaApp {
             let _ = writeln!(
                 output,
                 "  {}",
-                self.styles.muted_italic.render("No matching models.")
+                self.styles.muted_italic.render(&t!("model_selector_no_matches"))
             );
         } else {
             let offset = selector.scroll_offset();
@@ -269,12 +285,15 @@ impl RaApp {
                 let _ = writeln!(
                     output,
                     "  {}",
-                    self.styles.muted.render(&format!(
-                        "({}-{} of {})",
-                        offset + 1,
-                        end,
-                        selector.filtered_len()
-                    ))
+                    self.styles.muted.render(
+                        &t!(
+                            "model_selector_range",
+                            from = offset + 1,
+                            to = end,
+                            total = selector.filtered_len()
+                        )
+                        .to_string(),
+                    )
                 );
             }
 
@@ -282,11 +301,14 @@ impl RaApp {
                 let _ = writeln!(
                     output,
                     "  {}",
-                    self.styles.muted.render(&format!(
-                        "({}/{})",
-                        selector.filtered_len(),
-                        selector.source_total()
-                    ))
+                    self.styles.muted.render(
+                        &t!(
+                            "model_selector_count",
+                            shown = selector.filtered_len(),
+                            total = selector.source_total()
+                        )
+                        .to_string(),
+                    )
                 );
             }
 
@@ -304,7 +326,10 @@ impl RaApp {
                     "\n  {}",
                     self.styles
                         .muted
-                        .render(&format!("Model Name: {}", entry.model.name))
+                        .render(
+                            &t!("model_selector_model_name", name = entry.model.name.as_str())
+                                .to_string(),
+                        )
                 );
 
                 if let Some(evidence) = selector.routing_evidence_for(selected) {
@@ -314,7 +339,9 @@ impl RaApp {
                     let _ = writeln!(
                         output,
                         "  {}",
-                        self.styles.muted.render(&format!("Routing: {summary}"))
+                        self.styles.muted.render(
+                            &t!("model_selector_routing", summary = summary).to_string(),
+                        )
                     );
                 }
             }
@@ -325,7 +352,7 @@ impl RaApp {
             "\n  {}",
             self.styles
                 .muted_italic
-                .render("↑/↓/j/k/PgUp/PgDn: navigate  Enter: select  Esc: cancel  * = current")
+                .render(&t!("model_selector_key_hint"))
         );
         output
     }

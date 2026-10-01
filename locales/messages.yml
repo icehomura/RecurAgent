@@ -107,6 +107,88 @@ login_flow_logout_absent:
   en: "No stored credentials for %{provider}."
   zh-CN: "%{provider} 没有已存凭据。"
 
+# ── /model selector overlay ────────────────────────────────────────────
+
+model_selector_title:
+  en: "Select a model"
+  zh-CN: "选择模型"
+
+model_selector_configured_only_hint:
+  en: "Only showing models that are ready to use (see README for details)"
+  zh-CN: "仅显示可直接使用的模型（详见 README）"
+
+# The `  >` prefix is a SYMBOL and stays in the code; only this prose half is
+# translated. Same rule as the status-line prefixes below.
+model_selector_filter_hint:
+  en: "(type to filter)"
+  zh-CN: "（输入以筛选）"
+
+model_selector_no_matches:
+  en: "No matching models."
+  zh-CN: "没有匹配的模型。"
+
+model_selector_range:
+  en: "(%{from}-%{to} of %{total})"
+  zh-CN: "（第 %{from}-%{to} 个，共 %{total} 个）"
+
+model_selector_count:
+  en: "(%{shown}/%{total})"
+  zh-CN: "（%{shown}/%{total}）"
+
+model_selector_model_name:
+  en: "Model Name: %{name}"
+  zh-CN: "模型名称：%{name}"
+
+model_selector_routing:
+  en: "Routing: %{summary}"
+  zh-CN: "路由：%{summary}"
+
+# Key NAMES stay as-is in both locales -- they are what the user presses, not
+# words. Only the verbs translate. Same reasoning as the protocol-identifier
+# rule: translating a key name would tell the user to press a key that does not
+# exist.
+model_selector_key_hint:
+  en: "↑/↓/j/k/PgUp/PgDn: navigate  Enter: select  Esc: cancel  * = current"
+  zh-CN: "↑/↓/j/k/PgUp/PgDn: 导航  Enter: 选择  Esc: 取消  * = 当前"
+
+# ── /model selector status messages ────────────────────────────────────
+
+model_selector_err_busy:
+  en: "Cannot switch models while processing"
+  zh-CN: "正在处理时无法切换模型"
+
+model_selector_err_no_models:
+  en: "No models available"
+  zh-CN: "没有可用的模型"
+
+model_selector_err_no_ready:
+  en: "No models are ready to use. Configure credentials with /login <provider>."
+  zh-CN: "没有可直接使用的模型。请用 /login <provider> 配置凭据。"
+
+model_selector_err_none_selected:
+  en: "No model selected"
+  zh-CN: "未选择模型"
+
+model_selector_cancelled:
+  en: "Model selector cancelled"
+  zh-CN: "已取消模型选择"
+
+model_selector_err_not_found:
+  en: "Model %{model} not found"
+  zh-CN: "找不到模型 %{model}"
+
+model_selector_already_using:
+  en: "Already using %{model}"
+  zh-CN: "已在使用 %{model}"
+
+model_selector_err_missing_credentials:
+  en: "Missing credentials for provider %{provider}. Run /login %{provider}."
+  zh-CN: "提供方 %{provider} 缺少凭据。请运行 /login %{provider}。"
+
+model_selector_switched:
+  en: "Switched model: %{model}"
+  zh-CN: "已切换模型：%{model}"
+
 # ── RESERVED: status_line machine prefixes (optional translation) ───────
 #
 # These are the compact machine labels a status line draws — `git:`, `ctx:`,
