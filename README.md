@@ -1293,7 +1293,7 @@ These are the concrete invariants we rely on in this implementation:
 
 1. **Turn-scoped agent lifecycle**
    - The main loop emits `AgentStart`, `TurnStart`, `TurnEnd`, and `AgentEnd` in a stable order.
-   - Tool recursion is bounded by `max_tool_iterations` (default `50`) to avoid unbounded self-tool loops.
+   - Tool recursion is bounded by `max_tool_iterations` (default `500`) to avoid unbounded self-tool loops.
    - Benefit: stable event ordering for TUI/RPC consumers and predictable termination behavior.
 
 2. **Abort and timeout behavior is explicit**

@@ -559,7 +559,7 @@ pub fn tool_effect_batch_plan_evidence(
 /// [`AgentConfig::max_tool_iterations`] directly. Resolved through
 /// [`resolve_max_tool_iterations`] which clamps invalid values back to this
 /// default rather than failing the run.
-pub const MAX_TOOL_ITERATIONS_DEFAULT: usize = 50;
+pub const MAX_TOOL_ITERATIONS_DEFAULT: usize = 500;
 
 /// Sanity ceiling for `max_tool_iterations` overrides.
 ///

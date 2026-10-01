@@ -4338,15 +4338,16 @@ fn vcr_tool_read_cassette_template_matches_provider_request() {
 // ============================================================================
 // Tool-call stress e2e (bd-d4um2): one turn with dozens of sequential real
 // tool executions through the live binary in tmux, then scroll integrity.
-// The agent's max_tool_iterations default is 50, so the round count stays
-// under it while still exercising the "lots of tool calls" failure mode HN
-// reported (frozen scrolling / corrupted transcript).
+// The agent's max_tool_iterations default is 500, so the round count stays
+// far under it while still exercising the "lots of tool calls" failure mode
+// HN reported (frozen scrolling / corrupted transcript).
 // ============================================================================
 
 const VCR_STRESS_TEST_NAME: &str = "e2e_tui_tool_stress";
-// 35 = 70% of the default max_tool_iterations (50). At >=80% the agent
-// injects a "[runtime] Tool-iteration budget" notice into the conversation,
-// which a pre-recorded cassette cannot predict.
+// 35 rounds stays far below the default max_tool_iterations (500) and its 80%
+// warn threshold. At >=80% the agent injects a "[runtime] Tool-iteration
+// budget" notice into the conversation, which a pre-recorded cassette cannot
+// predict.
 const STRESS_TOOL_ROUNDS: usize = 35;
 const STRESS_PROMPT: &str = "Stress-read sample.txt thirty-five times";
 const STRESS_DONE_MARKER: &str = "STRESS-DONE";
