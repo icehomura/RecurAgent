@@ -736,8 +736,29 @@ allow_dirty = os.environ.get("E2E_ALLOW_DIRTY", "").lower() in ("1", "true", "ye
 
 if index != tree:
     import hashlib as _h
+    _idxp = root / ".git" / "index"
+    try:
+        _idxstat = _idxp.stat()
+        _idxfile = f"size={_idxstat.st_size} mtime={_idxstat.st_mtime_ns}"
+    except OSError:
+        _idxfile = "NO-INDEX-FILE"
+    _nul = index_bytes.count(b"\0")
+    _first = index_bytes[:160] if index_bytes else b"<EMPTY>"
     print(f"[capture-dbg] head={head[:10]} tree={len(tree)} index={len(index)} "
-          f"tree_sha={_h.sha256(tree_bytes).hexdigest()[:10]} index_sha={_h.sha256(index_bytes).hexdigest()[:10]}")
+          f"tree_sha={_h.sha256(tree_bytes).hexdigest()[:10]} index_sha={_h.sha256(index_bytes).hexdigest()[:10]} "
+          f"index_bytes_len={len(index_bytes)} nulls={_nul} index_file={_idxfile} "
+          f"GIT_INDEX_FILE={os.environ.get('GIT_INDEX_FILE')!r}")
+    print(f"[capture-dbg] index_bytes_head={_first!r}")
+    print(f"[capture-dbg] status_len={len(git('status', '--porcelain', '-z'))}")
+    import subprocess as _sp
+    _r_shell_status = _sp.run(["git", "status", "--porcelain", "-z"], capture_output=True)
+    _r_shell_lsfiles = _sp.run(["git", "ls-files", "--stage", "-z"], capture_output=True)
+    _r_shell_toplevel = _sp.run(["git", "rev-parse", "--show-toplevel"], capture_output=True)
+    print(f"[capture-dbg] shell_status_len={len(_r_shell_status.stdout)} "
+          f"shell_lsfiles_len={len(_r_shell_lsfiles.stdout)} "
+          f"shell_lsfiles_head={_r_shell_lsfiles.stdout[:120]!r} "
+          f"shell_toplevel={_r_shell_toplevel.stdout.decode('utf-8','replace').strip()!r} "
+          f"stderr={_r_shell_lsfiles.stderr.decode('utf-8','replace')[:120]!r}")
     _n = 0
     for _p in sorted(set(tree) | set(index)):
         if tree.get(_p) != index.get(_p):
