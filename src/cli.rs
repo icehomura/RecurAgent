@@ -1460,6 +1460,7 @@ mod tests {
                 "current_time",
                 "run_code",
                 "json_query",
+                "dag",
             ]
         );
     }

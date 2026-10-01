@@ -133,13 +133,14 @@ fn registry_arm_names() -> BTreeSet<String> {
 }
 
 /// Tools the registry adds outside the enabled-name arms: the host-coupled
-/// tools joined via `extend_tools` (`ask`, `todo`, `submit_plan`), the
+/// tools joined via `extend_tools` (`ask`, `todo`, `submit_plan`, `dag`), the
 /// always-present `manage_skill`, the `xdev` dispatcher, and the memory bank.
 fn non_arm_names() -> BTreeSet<String> {
     [
         "ask",
         "todo",
         "submit_plan",
+        "dag",
         "manage_skill",
         "xdev",
         "retain",

@@ -729,7 +729,7 @@ mod tests {
             ..Default::default()
         };
         let details = serde_json::json!({
-            "tools": "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time",
+            "tools": "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query,dag",
             "extension": [],
             "extension_flags": [],
             "theme_path": [],
