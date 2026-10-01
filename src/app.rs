@@ -347,41 +347,43 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
     let has_read = has_tool("read");
     let has_hashline_edit = has_tool("hashline_edit");
 
-    let mut guidelines_list = Vec::new();
+    let mut guidelines_list: Vec<String> = Vec::new();
     if has_bash && !has_grep && !has_find && !has_ls {
-        guidelines_list.push("Use bash for file operations like ls, rg, find");
+        guidelines_list.push("Use bash for file operations like ls, rg, find".into());
     } else if has_bash && (has_grep || has_find || has_ls) {
         guidelines_list.push(
-            "Prefer grep/find/ls tools over bash for file exploration (faster, respects .gitignore)",
+            "Prefer grep/find/ls tools over bash for file exploration (faster, respects .gitignore)"
+                .into(),
         );
     }
 
     if has_read && has_edit {
         guidelines_list.push(
-            "Use read to examine files before editing. You must use this tool instead of cat or sed.",
+            "Use read to examine files before editing. You must use this tool instead of cat or sed."
+                .into(),
         );
     }
     if has_edit {
-        guidelines_list.push("Use edit for precise changes (old text must match exactly)");
+        guidelines_list.push("Use edit for precise changes (old text must match exactly)".into());
     }
     if has_hashline_edit && has_read {
         guidelines_list.push(
-            "For large files or complex multi-site edits, use read or grep with hashline=true to get LINE#HASH tags, then use hashline_edit for precise line-addressed edits",
+            "For large files or complex multi-site edits, use read or grep with hashline=true to get LINE#HASH tags, then use hashline_edit for precise line-addressed edits".into(),
         );
     }
     if has_write {
-        guidelines_list.push("Use write only for new files or complete rewrites");
+        guidelines_list.push("Use write only for new files or complete rewrites".into());
     }
     if has_edit || has_write {
         guidelines_list.push(
-            "When summarizing your actions, output plain text directly - do NOT use cat or bash to display what you did",
+            "When summarizing your actions, output plain text directly - do NOT use cat or bash to display what you did".into(),
         );
     }
     if has_tool("current_time") {
         // The prompt carries only the date (#103); point the model at the
         // clock for anything time-of-day dependent (#207).
         guidelines_list.push(
-            "The date below is not a clock: call current_time whenever a task depends on the current time of day",
+            "The date below is not a clock: call current_time whenever a task depends on the current time of day".into(),
         );
     }
     if has_tool("run_code") && has_bash {
@@ -390,7 +392,7 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
         // output still has to be parsed back out of text. Orchestration
         // belongs in the former; a shell stays for what only a shell does.
         guidelines_list.push(
-            "When an operation can be expressed as a JavaScript program against these tools, use run_code instead of bash: it finishes the whole job in one round trip and returns structured results. Reach for bash only for what needs a real shell (build tools, package managers, git)",
+            "When an operation can be expressed as a JavaScript program against these tools, use run_code instead of bash: it finishes the whole job in one round trip and returns structured results. Reach for bash only for what needs a real shell (build tools, package managers, git)".into(),
         );
     }
 
@@ -400,13 +402,18 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
         // slices one by one; the value of the tool is being the first thing
         // reached for. `dag` fans out tool calls in this session, `subagent`
         // fans out work that deserves its own context window.
-        guidelines_list.push(
-            "Delegate with `subagent` instead of working serially in this context: a user intent usually decomposes into more than three independent slices, so default to a single `subagent` call whose `tasks` array runs one child per slice (up to 8, bounded concurrency), then converge on the children's results. Use `chain` only when a step needs the previous child's output. The built-in agents `general` (full toolset) and `explore` (read-only investigation) are always available; user or project definitions in `.ra/agents/` override them by name",
-        );
+        //
+        // The roster is generated from the subagent module's built-in table, so
+        // the names the model is told about cannot drift from the names
+        // discovery actually seeds.
+        guidelines_list.push(format!(
+            "Delegate with `subagent` instead of working serially in this context: a user intent usually decomposes into more than two independent slices, so default to a single `subagent` call whose `tasks` array runs one child per slice (up to 8, bounded concurrency), then converge on the children's results. Use `chain` only when a step needs the previous child's output. After implementing a change, delegate an independent check to the `verify` child before declaring the work done, and hand any defect it reports to `fixer` rather than editing a test to make it pass. The built-in agents {} are always available; user or project definitions in `.ra/agents/` override them by name",
+            crate::subagents::builtin_agent_roster()
+        ));
     }
 
-    guidelines_list.push("Be concise in your responses");
-    guidelines_list.push("Show file paths clearly when working with files");
+    guidelines_list.push("Be concise in your responses".into());
+    guidelines_list.push("Show file paths clearly when working with files".into());
 
     let guidelines = guidelines_list
         .iter()
@@ -3356,6 +3363,36 @@ mod tests {
         std::fs::write(odd.path().join("docs"), "").expect("write docs file");
         let prompt = default_system_prompt(&["read"], odd.path());
         assert!(!prompt.contains("RecurAgent documentation"));
+    }
+
+    /// The subagent guideline is generated from `subagents::BUILTIN_AGENTS`, so
+    /// every role discovery seeds must also be named to the model. The
+    /// implement -> verify -> fix loop is spelled out because those roles are
+    /// only useful if the model reaches for them.
+    #[test]
+    fn default_system_prompt_names_every_builtin_subagent_and_the_verify_loop() {
+        let dir = tempdir().expect("tempdir");
+        let prompt = default_system_prompt(&["read", "bash", "subagent"], dir.path());
+
+        for name in ra::subagents::builtin_agent_names() {
+            assert!(
+                prompt.contains(&format!("`{name}`")),
+                "prompt omits built-in subagent {name:?}"
+            );
+        }
+        assert!(
+            prompt.contains("delegate an independent check to the `verify` child"),
+            "prompt must tell the model to verify after implementing: {prompt}"
+        );
+        assert!(
+            prompt.contains("hand any defect it reports to `fixer`"),
+            "prompt must route verify findings to fixer: {prompt}"
+        );
+
+        // Without the tool there is no guideline to make: the roster must not
+        // leak into a session that cannot delegate.
+        let without = default_system_prompt(&["read", "bash"], dir.path());
+        assert!(!without.contains("`fixer`"));
     }
 
     /// Partial installs advertise exactly the files that exist — nothing more.

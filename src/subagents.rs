@@ -19,7 +19,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 #[cfg(all(test, unix))]
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 mod deadline;
@@ -49,18 +49,135 @@ const STRUCTURED_BLOCK_LIMIT_BYTES: usize = 16 * 1024;
 const STRUCTURED_BLOCK_OPEN: &str = "<subagent-structured-result>";
 const STRUCTURED_BLOCK_CLOSE: &str = "</subagent-structured-result>";
 const STRUCTURED_TRUNCATION_MARKER: &str = "…[truncated]";
-const DEFAULT_CHILD_TOOLS: &str = "read,bash,edit,write,grep,find,ls,hashline_edit";
+const DEFAULT_CHILD_TOOLS: &str =
+    "read,bash,edit,write,grep,find,ls,hashline_edit,ast_grep,ast_edit,run_code,json_query";
 const TAN_RESULT_SCHEMA: &str = "pi.background-tan.result.v1";
 const TAN_AGENT_NAME: &str = "tan";
 const TAN_SYSTEM_PROMPT: &str = "You are a background tangential coding agent. Complete the assigned work autonomously in the current working directory. Keep your final response concise and lead with the concrete outcome, changed files, and verification performed. Do not ask follow-up questions.";
 
-/// Always-present child agents, so a `subagent` call works before the user has
-/// written any `agents/*.md`. Names are defaults, not reserved words: a user or
-/// project definition of the same name replaces the built-in during discovery.
-const GENERAL_AGENT_NAME: &str = "general";
-const EXPLORE_AGENT_NAME: &str = "explore";
-const GENERAL_AGENT_PROMPT: &str = "You are a general-purpose coding subagent. Complete the assigned slice of work autonomously in the current working directory: read before you edit, make the change, and verify it. Keep the final response concise and lead with the concrete outcome, changed files, and verification performed. Do not ask follow-up questions.";
-const EXPLORE_AGENT_PROMPT: &str = "You are a read-only investigation subagent. Answer the assigned question with evidence from the codebase: cite file paths and line numbers, quote the relevant lines, and say plainly what you could not determine. Never edit files or run mutating commands. Keep the final response concise.";
+/// A child agent that is always present, so a `subagent` call works before the
+/// user has written any `agents/*.md`. Names are defaults, not reserved words:
+/// a user or project definition of the same name replaces the built-in during
+/// discovery.
+///
+/// This table is the single source of truth for the built-in roster. The tool
+/// description, the system-prompt guideline, and [`builtin_agent_definitions`]
+/// all read it, so adding a role is one entry here instead of an edit to three
+/// prose strings that then drift apart.
+struct BuiltinAgent {
+    name: &'static str,
+    /// One-line role summary rendered into the roster prose.
+    description: &'static str,
+    /// The child's `--tools` list. `None` means [`DEFAULT_CHILD_TOOLS`], which
+    /// is a *writer*; a read-only role must enumerate, and the enumeration is
+    /// the only harness-enforced part of its guarantee.
+    tools: Option<&'static [&'static str]>,
+    system_prompt: &'static str,
+}
+
+/// Read-only scout: answers a question from the codebase, never mutates.
+///
+/// No `bash` and no write tools, so "read-only" is enforced by the tool list
+/// rather than by this prompt.
+const BUILTIN_EXPLORE_PROMPT: &str = "You are a read-only investigation subagent. Answer the assigned question with evidence from the codebase: cite file paths and line numbers, quote the relevant lines, and say plainly what you could not determine. Never edit files or run mutating commands. Keep the final response concise.";
+
+/// Independent verification: may run commands, may not write.
+///
+/// The no-write tool list is deliberate and is the only harness-enforced part
+/// of the guarantee (a `bash`-bearing child cannot be barrier-gated), so the
+/// prompt spells out the cheating shapes it must not take.
+const BUILTIN_VERIFY_PROMPT: &str = "You are an independent verification subagent. You have read and command tools but no write tools at all, and you must not modify anything: never edit a file, never edit or delete a test, never regenerate a snapshot or golden file, and never weaken an assertion to make something pass. Run the relevant tests, build, and linters, then report exactly what passed and what failed with the evidence (the command, an output excerpt, and file:line). If you cannot verify something, say so instead of guessing. A change that fails verification is a useful result: report it, do not fix it.";
+
+/// Fixer: applies the defects a `verify` child reported. Separate role so the
+/// verifier itself never gains a write path.
+const BUILTIN_FIXER_PROMPT: &str = "You are a fixer subagent. Another agent verified a change and reported specific defects. Apply the fixes in the current working directory: read the cited files and evidence first, make the smallest change that addresses each finding, and re-run the verification that exposed it. Change only what the findings call for; do not reformat, refactor, or \"improve\" adjacent code, and never edit or delete a test to make it pass. Keep the final response concise and lead with the concrete outcome, the files changed, and the commands you re-ran.";
+
+const BUILTIN_GENERAL_PROMPT: &str = "You are a general-purpose coding subagent. Complete the assigned slice of work autonomously in the current working directory: read before you edit, make the change, and verify it. Keep the final response concise and lead with the concrete outcome, changed files, and verification performed. Do not ask follow-up questions.";
+
+/// The always-present built-in roster, ordered read-only -> writer so the
+/// prompt reads as a widening of capability.
+///
+/// Every entry's `tools` must name only real tools; `builtin_tools_are_known`
+/// fails the build-tests if one drifts from `ToolRegistry::KNOWN_TOOL_NAMES`.
+const BUILTIN_AGENTS: &[BuiltinAgent] = &[
+    BuiltinAgent {
+        name: "explore",
+        description: "read-only investigation (read, grep, find, ls, ast_grep, json_query)",
+        tools: Some(&["read", "grep", "find", "ls", "ast_grep", "json_query"]),
+        system_prompt: BUILTIN_EXPLORE_PROMPT,
+    },
+    BuiltinAgent {
+        name: "verify",
+        description: "independent verification: runs tests and reports, but cannot edit",
+        tools: Some(&[
+            "read",
+            "grep",
+            "find",
+            "ls",
+            "ast_grep",
+            "run_code",
+            "json_query",
+            "bash",
+        ]),
+        system_prompt: BUILTIN_VERIFY_PROMPT,
+    },
+    BuiltinAgent {
+        name: "fixer",
+        description: "applies the fixes a verify child reported (writer)",
+        tools: Some(&[
+            "read",
+            "bash",
+            "edit",
+            "write",
+            "grep",
+            "find",
+            "ls",
+            "hashline_edit",
+            "ast_grep",
+            "ast_edit",
+            "run_code",
+            "json_query",
+        ]),
+        system_prompt: BUILTIN_FIXER_PROMPT,
+    },
+    BuiltinAgent {
+        name: "general",
+        description: "general-purpose worker with the full child toolset, including session search",
+        tools: Some(&[
+            "read",
+            "bash",
+            "edit",
+            "write",
+            "grep",
+            "find",
+            "ls",
+            "hashline_edit",
+            "ast_grep",
+            "ast_edit",
+            "run_code",
+            "json_query",
+            "sessions",
+        ]),
+        system_prompt: BUILTIN_GENERAL_PROMPT,
+    },
+];
+
+/// Names of the always-present built-in agents, in roster order.
+#[must_use]
+pub fn builtin_agent_names() -> Vec<&'static str> {
+    BUILTIN_AGENTS.iter().map(|agent| agent.name).collect()
+}
+
+/// The built-in roster rendered as `name (description), …` for a prompt
+/// surface. Single source of truth for what the parent model is told exists.
+#[must_use]
+pub fn builtin_agent_roster() -> String {
+    BUILTIN_AGENTS
+        .iter()
+        .map(|agent| format!("`{}` ({})", agent.name, agent.description))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 type UpdateCallback = Arc<dyn Fn(ToolUpdate) + Send + Sync>;
 
@@ -349,7 +466,15 @@ impl Tool for SubagentTool {
     }
 
     fn description(&self) -> &'static str {
-        "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {previous}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md; the built-in agents `general` (full child toolset) and `explore` (read-only) are always available and a user or project definition of the same name overrides them. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {worktree_path, diff_stat, patch} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>)."
+        // Generated from `BUILTIN_AGENTS` so the roster the model reads cannot
+        // drift from the roster discovery actually seeds.
+        static DESCRIPTION: OnceLock<String> = OnceLock::new();
+        DESCRIPTION.get_or_init(|| {
+            format!(
+                "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {{previous}}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md; the built-in agents {} are always available and a user or project definition of the same name overrides them. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {{worktree_path, diff_stat, patch}} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>).",
+                builtin_agent_roster()
+            )
+        })
     }
 
     fn parameters(&self) -> Value {
@@ -667,45 +792,56 @@ fn tan_agent_definition() -> AgentDefinition {
     }
 }
 
-fn general_agent_definition() -> AgentDefinition {
+fn builtin_agent_definition(agent: &BuiltinAgent) -> AgentDefinition {
     AgentDefinition {
-        name: GENERAL_AGENT_NAME.to_string(),
-        description: "General-purpose coding subagent with the default child toolset".to_string(),
+        name: agent.name.to_string(),
+        description: agent.description.to_string(),
         model: None,
         reasoning: None,
-        tools: None,
+        tools: agent.tools.map(|tools| {
+            tools
+                .iter()
+                .map(|tool| (*tool).to_string())
+                .collect::<Vec<String>>()
+        }),
         skills: Vec::new(),
-        system_prompt: GENERAL_AGENT_PROMPT.to_string(),
+        system_prompt: agent.system_prompt.to_string(),
         output_schema: None,
         source: AgentSource::BuiltIn,
-        file_path: PathBuf::from("<built-in:general>"),
+        file_path: PathBuf::from(format!("<built-in:{}>", agent.name)),
     }
 }
 
-fn explore_agent_definition() -> AgentDefinition {
-    AgentDefinition {
-        name: EXPLORE_AGENT_NAME.to_string(),
-        description: "Read-only investigation subagent (read, grep, find, ls)".to_string(),
-        model: None,
-        reasoning: None,
-        tools: Some(vec![
-            "read".to_string(),
-            "grep".to_string(),
-            "find".to_string(),
-            "ls".to_string(),
-        ]),
-        skills: Vec::new(),
-        system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
-        output_schema: None,
-        source: AgentSource::BuiltIn,
-        file_path: PathBuf::from("<built-in:explore>"),
-    }
-}
-
-/// Built-ins seeded before on-disk definitions, so `general`/`explore` exist
-/// even when no `agents/*.md` do. Later loads of the same name overwrite them.
+/// Built-ins seeded before on-disk definitions, so `explore`/`verify`/`fixer`/
+/// `general` exist even when no `agents/*.md` do. Later loads of the same name
+/// overwrite them, so a user or project definition still wins.
 fn builtin_agent_definitions() -> Vec<AgentDefinition> {
-    vec![general_agent_definition(), explore_agent_definition()]
+    BUILTIN_AGENTS.iter().map(builtin_agent_definition).collect()
+}
+
+/// Reject a definition whose `tools:` names something `--tools` would silently
+/// drop.
+///
+/// [`crate::tools::ToolRegistry`]'s build match ends in `_ => {}`, so an
+/// unknown name is dropped without a word and the child runs with fewer tools
+/// than the author wrote (`tools.rs` documents this). For a read-only role that
+/// is the difference between "cannot edit" and "cannot do anything", so this is
+/// the one place where a mis-spelled request is worth failing loudly.
+fn validate_agent_tools(tools: &[String], path: &Path) -> Result<()> {
+    let requested = tools.iter().map(String::as_str).collect::<Vec<_>>();
+    let unknown = crate::tools::unknown_tool_names(&requested);
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    Err(Error::tool(
+        "subagent",
+        format!(
+            "Agent definition {} lists tool name(s) {unknown:?} that `--tools` does not provide, \
+             so the child would silently run without them. Check the spelling against \
+             `ToolRegistry::KNOWN_TOOL_NAMES`.",
+            path.display()
+        ),
+    ))
 }
 
 fn discover_agents_with_roots(
@@ -778,6 +914,9 @@ fn load_agent_dir(
         let name = required_agent_field(&frontmatter, "name", &path)?;
         let description = required_agent_field(&frontmatter, "description", &path)?;
         let tools = frontmatter.get("tools").map(|value| split_csv(value));
+        if let Some(tools) = &tools {
+            validate_agent_tools(tools, &path)?;
+        }
         let definition_dir = path.parent().unwrap_or(directory);
         let skills = frontmatter
             .get("skills")
@@ -1384,6 +1523,187 @@ mod tests {
         );
         assert_eq!(scout.system_prompt, "project prompt");
         assert!(matches!(scout.source, AgentSource::Project));
+    }
+
+    // === Built-in roster drift guards (see `BUILTIN_AGENTS`) ===
+
+    #[test]
+    fn builtin_roster_names_are_unique_and_seeded_by_discovery() {
+        let names = builtin_agent_names();
+        let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
+        assert_eq!(unique.len(), names.len(), "duplicate built-in agent name");
+        for role in ["explore", "verify", "fixer", "general"] {
+            assert!(names.contains(&role), "roster is missing {role:?}: {names:?}");
+        }
+
+        // No `agents/` directory anywhere: discovery must still seed the roster
+        // so a bare `subagent` call works before the user writes a definition.
+        let temp = TempDir::new().expect("tempdir");
+        let agents =
+            discover_agents_with_roots(temp.path(), &temp.path().join("global"), AgentScope::Both)
+                .expect("discover");
+        for name in &names {
+            assert!(
+                agents.contains_key(*name),
+                "built-in {name:?} was not seeded when no agents/*.md exist"
+            );
+        }
+        assert!(matches!(agents["explore"].source, AgentSource::BuiltIn));
+    }
+
+    /// The read-only roles must not gain a write or a command-execution escape.
+    /// The tool list is the harness-enforced half of that guarantee (a
+    /// `bash`-bearing child cannot be barrier-gated), so it is asserted, not
+    /// trusted to the prompt.
+    #[test]
+    fn builtin_read_only_roles_never_list_a_write_tool() {
+        let forbidden = [
+            "edit",
+            "write",
+            "hashline_edit",
+            "ast_edit",
+            "sessions",
+            "bash",
+            "run_code",
+        ];
+        for agent in BUILTIN_AGENTS {
+            if agent.name != "explore" && agent.name != "verify" {
+                continue;
+            }
+            let tools = agent
+                .tools
+                .expect("a read-only role must enumerate its tools");
+            for tool in tools {
+                assert!(
+                    !forbidden.contains(tool),
+                    "read-only built-in {:?} lists {tool:?}",
+                    agent.name
+                );
+            }
+        }
+
+        let explore = BUILTIN_AGENTS
+            .iter()
+            .find(|agent| agent.name == "explore")
+            .expect("explore built-in");
+        let explore_tools = explore.tools.expect("explore enumerates tools");
+        assert!(
+            !explore_tools.contains(&"bash") && !explore_tools.contains(&"run_code"),
+            "explore must not execute anything: {explore_tools:?}"
+        );
+
+        // `verify` exists to run the gates, so it needs bash; the absence of a
+        // write tool is what keeps its report honest.
+        let verify = BUILTIN_AGENTS
+            .iter()
+            .find(|agent| agent.name == "verify")
+            .expect("verify built-in");
+        let verify_tools = verify.tools.expect("verify enumerates tools");
+        assert!(verify_tools.contains(&"bash"));
+        assert!(!verify_tools.contains(&"edit") && !verify_tools.contains(&"write"));
+    }
+
+    /// Every tool a built-in names must be one `--tools` actually provides, or
+    /// the child silently runs without it (`tools.rs` documents the silent
+    /// drop). This binds the table to the registry's name list.
+    #[test]
+    fn builtin_tools_are_known() {
+        for agent in BUILTIN_AGENTS {
+            let Some(tools) = agent.tools else { continue };
+            let requested = tools.to_vec();
+            let unknown = crate::tools::unknown_tool_names(&requested);
+            assert!(
+                unknown.is_empty(),
+                "built-in {:?} names tools `--tools` does not provide: {unknown:?}",
+                agent.name
+            );
+        }
+    }
+
+    /// `general` is the "full child toolset" role, so it must cover everything
+    /// the default child list grants plus the newer read/analysis tools the
+    /// orchestrators reach for. Without this, widening `DEFAULT_CHILD_TOOLS`
+    /// silently leaves `general` behind.
+    #[test]
+    fn builtin_general_covers_default_child_tools_and_newer_tooling() {
+        let general = BUILTIN_AGENTS
+            .iter()
+            .find(|agent| agent.name == "general")
+            .expect("general built-in");
+        let tools = general.tools.expect("general enumerates tools");
+        for name in DEFAULT_CHILD_TOOLS.split(',') {
+            assert!(
+                tools.contains(&name),
+                "general is missing default child tool {name:?}"
+            );
+        }
+        for name in ["ast_grep", "ast_edit", "run_code", "json_query", "sessions"] {
+            assert!(tools.contains(&name), "general is missing {name:?}");
+        }
+
+        // `fixer` edits code, so it needs the writer tools too.
+        let fixer = BUILTIN_AGENTS
+            .iter()
+            .find(|agent| agent.name == "fixer")
+            .expect("fixer built-in");
+        let fixer_tools = fixer.tools.expect("fixer enumerates tools");
+        for name in ["read", "bash", "edit", "write", "hashline_edit", "ast_edit"] {
+            assert!(fixer_tools.contains(&name), "fixer is missing {name:?}");
+        }
+    }
+
+    /// The roster the model is told about is generated from the table, so it
+    /// cannot drift from what discovery seeds.
+    #[test]
+    fn generated_roster_and_tool_description_name_every_builtin() {
+        let roster = builtin_agent_roster();
+        let description = SubagentTool::new(Path::new(".")).description().to_string();
+        for agent in BUILTIN_AGENTS {
+            let token = format!("`{}`", agent.name);
+            assert!(roster.contains(&token), "roster omits {}: {roster}", token);
+            assert!(
+                description.contains(&token),
+                "tool description omits {}",
+                token
+            );
+        }
+    }
+
+    /// A user or project definition of the same name still wins over the
+    /// built-in, so the table is a floor rather than a reserved namespace.
+    #[test]
+    fn on_disk_definition_overrides_builtin_of_same_name() {
+        let temp = TempDir::new().expect("tempdir");
+        let global = temp.path().join("global");
+        write_agent(
+            &global.join("agents"),
+            "explore",
+            "---\nname: explore\ndescription: mine\ntools: read\n---\nmy prompt",
+        );
+        let agents =
+            discover_agents_with_roots(temp.path(), &global, AgentScope::Both).expect("discover");
+        let explore = agents.get("explore").expect("explore");
+        assert_eq!(explore.description, "mine");
+        assert!(matches!(explore.source, AgentSource::User));
+    }
+
+    /// A mis-spelled `tools:` entry is the difference between "cannot edit"
+    /// and "cannot do anything", so a definition carrying one fails to load
+    /// instead of silently losing the tool.
+    #[test]
+    fn agent_definition_rejects_unknown_tool_names() {
+        let temp = TempDir::new().expect("tempdir");
+        let global = temp.path().join("global");
+        write_agent(
+            &global.join("agents"),
+            "broken",
+            "---\nname: broken\ndescription: broken\ntools: reed,grep\n---\nbody",
+        );
+        let error = discover_agents_with_roots(temp.path(), &global, AgentScope::User)
+            .expect_err("an unknown tool name must fail agent loading");
+        let message = error.to_string();
+        assert!(message.contains("reed"), "{message}");
+        assert!(message.contains("broken.md"), "{message}");
     }
 
     /// bd-cv653.3.1: agent-def `model:` pin beats the role spec; the role
