@@ -12666,15 +12666,15 @@ mod tests {
         let detail = card.detail.clone().unwrap_or_default();
         assert!(detail.contains("开始"), "missing 开始: {detail:?}");
         assert!(detail.contains("结束"), "missing 结束: {detail:?}");
-        assert!(detail.contains("[ ] 1. 查询"), "missing node 1: {detail:?}");
-        assert!(detail.contains("[ ] 2. 计算"), "missing node 2: {detail:?}");
+        assert!(detail.contains("[ ] 查询"), "missing node 1: {detail:?}");
+        assert!(detail.contains("[ ] 计算"), "missing node 2: {detail:?}");
         assert!(
             detail.contains("┌") && detail.contains("┴") && detail.contains("│"),
             "missing box / connector glyphs: {detail:?}"
         );
         // Full-name legend below the diagram carries the tool name.
         assert!(
-            detail.contains("1. 查询 (search)"),
+            detail.contains("查询 (search)"),
             "missing full-name legend: {detail:?}"
         );
         assert!(
@@ -12695,7 +12695,7 @@ mod tests {
         assert_eq!(model.transcript.len(), 1);
         let detail = model.transcript[0].detail.clone().unwrap_or_default();
         assert!(
-            detail.contains("[✓] 1. 查询"),
+            detail.contains("[✓] 查询"),
             "state not applied: {detail:?}"
         );
 

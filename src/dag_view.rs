@@ -324,9 +324,9 @@ fn render_layout(
         rows.push(Vec::new());
         for node in src {
             let text = if node.name.is_empty() {
-                format!("{}. {}", node.id, node.tool_name)
+                node.tool_name.clone()
             } else {
-                format!("{}. {} ({})", node.id, node.name, node.tool_name)
+                format!("{} ({})", node.name, node.tool_name)
             };
             rows.push(vec![DagViewCell {
                 text,
@@ -768,9 +768,9 @@ fn render_horizontal_cfg(
         out.push(Vec::new());
         for node in src {
             let text = if node.name.is_empty() {
-                format!("{}. {}", node.id, node.tool_name)
+                node.tool_name.clone()
             } else {
-                format!("{}. {} ({})", node.id, node.name, node.tool_name)
+                format!("{} ({})", node.name, node.tool_name)
             };
             out.push(vec![DagViewCell {
                 text,
@@ -901,12 +901,7 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
         } else {
             node.name.as_str()
         };
-        let label = format!(
-            "{} {}. {}",
-            node.state.marker(frame),
-            node.id,
-            short_name(display, cap)
-        );
+        let label = format!("{} {}", node.state.marker(frame), short_name(display, cap));
         let width = box_width(&label);
         ln.push(LNode {
             label,
@@ -1038,8 +1033,8 @@ mod tests {
         for bad in ["└┐", "┌┘", "┴┬", "┬┴", "└┬", "┴┐"] {
             assert!(!joined.contains(bad), "jog {bad:?} in:\n{joined}");
         }
-        assert!(joined.contains("[✓] 1. read"), "{joined}");
-        assert!(joined.contains("[ ] 2. write"), "{joined}");
+        assert!(joined.contains("[✓] read"), "{joined}");
+        assert!(joined.contains("[ ] write"), "{joined}");
     }
 
     #[test]
@@ -1093,18 +1088,18 @@ mod tests {
             n(4, "write", &[2, 3], DagViewState::Pending),
         ])
         .join("\n");
-        // 只数图本体（全称列表在空行之后，id 会再出现一次）。
+        // 只数图本体（全称列表在空行之后，名字会再出现一次）。
         let diagram = joined.split("\n\n").next().unwrap();
-        for id in 1..=4 {
+        for name in ["read", "parse", "fetch", "write"] {
             assert_eq!(
-                diagram.matches(&format!("{id}. ")).count(),
+                diagram.matches(name).count(),
                 1,
-                "node {id} not exactly once in diagram:\n{joined}"
+                "node {name} not exactly once in diagram:\n{joined}"
             );
         }
-        let p2 = diagram.find("2. parse").unwrap();
-        let p3 = diagram.find("3. fetch").unwrap();
-        let c4 = diagram.find("4. write").unwrap();
+        let p2 = diagram.find("parse").unwrap();
+        let p3 = diagram.find("fetch").unwrap();
+        let c4 = diagram.find("write").unwrap();
         assert!(p2 < c4 && p3 < c4, "{joined}");
     }
 
@@ -1116,7 +1111,7 @@ mod tests {
             n(3, "b", &[2], DagViewState::Pending),
         ])
         .join("\n");
-        for needle in ["1. orphan", "2. a", "3. b"] {
+        for needle in ["[ ] orphan", "[ ] a", "[ ] b"] {
             assert!(joined.contains(needle), "missing {needle}:\n{joined}");
         }
     }
@@ -1270,7 +1265,7 @@ mod tests {
             "{joined}"
         );
         assert!(
-            joined.contains("[✓] 1. read") && joined.contains("[ ] 2. write"),
+            joined.contains("[✓] read") && joined.contains("[ ] write"),
             "{joined}"
         );
         // 宽裕时 render_auto 选横排（开始/结束与节点同一行）。
