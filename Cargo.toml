@@ -550,6 +550,13 @@ tui = [
     "dep:bubbles",
     "dep:glamour",
     "dep:textwrap",
+    # Clipboard image paste (arboard) and image resize/encode are
+    # interactive-only concerns. Attaching them to `tui` turns them on
+    # automatically for every interactive `ra` build (default features) while
+    # `ra-headless` (--no-default-features --features headless, which excludes
+    # `tui`) stays lean and never links arboard or the image codecs.
+    "clipboard",
+    "image-resize",
 ]
 # FrankenTUI migration stack (bd-cv653.9.1): default-OFF while the interactive
 # runtime is ported. Requires `tui` because the bridge reuses RaMsg and the

@@ -2266,9 +2266,11 @@ threshold of `48.0 MiB` (the harness computes bytes / 1024 / 1024; raised from
 the MCP client, and eval kernels — and originally from `22.0 MiB` with the
 FrankenSQLite cutover). A fresh
 release measurement is required before reporting the achieved size.
-Default release builds keep heavyweight extras opt-in; use `--features full`
-when you need the image, clipboard, wasm, jemalloc, and syntax-highlighting
-extras in one build.
+Clipboard image paste and image resize/encode are interactive-only concerns, so
+the default `ra` build enables them automatically through the `tui` feature;
+`ra-headless` (`--no-default-features --features headless`, which excludes
+`tui`) never links arboard or the image codecs. Use `--features full` when you
+also need wasm, jemalloc, syntax-highlighting, and PDF extraction in one build.
 
 ### Benchmark Evidence vs Shipping Artifacts
 
