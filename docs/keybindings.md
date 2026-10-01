@@ -100,7 +100,7 @@ Keys are specified as `modifier+key`.
 | Action ID | Default Keys | Description |
 |-----------|--------------|-------------|
 | `copy` | `ctrl+c` | Copy selection |
-| `pasteImage` | `ctrl+v` | Paste image from clipboard |
+| `pasteImage` | `ctrl+v`, `alt+v` | Paste image from clipboard (`alt+v` for terminals that capture `ctrl+v`) |
 | `yank` | *(none)* | Paste most recently deleted text (reserved) |
 | `yankPop` | *(none)* | Cycle through deleted text (reserved) |
 | `undo` | `ctrl+-` | Undo last edit |

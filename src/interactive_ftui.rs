@@ -2383,7 +2383,9 @@ impl RaFtuiModel {
             history_cursor: None,
             history_draft: String::new(),
             input: TextArea::new()
-                .with_placeholder("Type a message (Enter to send, Alt+Enter for newline)")
+                .with_placeholder(
+                    "Type a message (Enter to send, Alt+Enter for newline, Alt+V to paste image)",
+                )
                 .with_focus(true)
                 .with_soft_wrap(true),
             pending_input: String::new(),
@@ -7085,6 +7087,18 @@ fn prepare_prompt(
     auto_resize_images: bool,
 ) -> std::result::Result<(String, Vec<crate::model::ImageContent>), String> {
     let expand = |text: &str| resources.map_or_else(|| text.to_string(), |r| r.expand_input(text));
+    // A terminal that delivers a drop as literal typed characters leaves the
+    // path in the editor with no `@`, and `extract_file_references` only
+    // rewrites `@tokens`. Normalize a whole-message path run — and stage any
+    // out-of-cwd file — exactly as a bracketed paste would.
+    let normalized = if crate::interactive::looks_like_dropped_paths(prompt)
+        && let Some((at_refs, _)) = crate::interactive::normalize_pasted_file_refs(prompt, cwd)
+    {
+        std::borrow::Cow::Owned(at_refs)
+    } else {
+        std::borrow::Cow::Borrowed(prompt)
+    };
+    let prompt = normalized.as_ref();
     let (without_refs, refs) = crate::interactive::extract_file_references(prompt, |path| {
         crate::tools::resolve_read_path(path, cwd)
             .exists()

@@ -3457,7 +3457,16 @@ After approving access in the browser, press Enter in Pi to complete login."
             return None;
         }
 
-        let message_owned = message.to_string();
+        let message_owned = if looks_like_dropped_paths(message)
+            && let Some((normalized, _)) = normalize_pasted_file_refs(message, &self.cwd)
+        {
+            // A drop delivered as typed characters (no bracketed paste) has no
+            // `@`; normalize it here so it attaches like a paste would, and
+            // stage any path that sits outside the read scope.
+            normalized
+        } else {
+            message.to_string()
+        };
         let (message_without_refs, file_refs) = self.extract_file_references(&message_owned);
         let keyword_scan_source = message_without_refs.trim().to_string();
         let message_for_agent = if file_refs.is_empty() {

@@ -141,7 +141,9 @@ pub(crate) fn resolve_output_path(cwd: &Path, raw: &str) -> PathBuf {
 }
 use self::ext_session::{InteractiveExtensionHostActions, InteractiveExtensionSession};
 pub use self::ext_session::{format_extension_ui_prompt, parse_extension_ui_response};
-pub(crate) use self::file_refs::{extract_file_references, normalize_pasted_file_refs};
+pub(crate) use self::file_refs::{
+    extract_file_references, looks_like_dropped_paths, normalize_pasted_file_refs,
+};
 use self::file_refs::{format_file_ref, path_for_display};
 use self::perf::{
     CRITICAL_KEEP_MESSAGES, FrameTimingStats, MemoryLevel, MemoryMonitor, MessageRenderCache,

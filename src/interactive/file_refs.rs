@@ -288,14 +288,31 @@ pub fn extract_file_references(
 /// when any non-empty line is not an existing path: ordinary pasted prose
 /// must reach the editor untouched. Shared by the classic and ftui stacks so
 /// the two surfaces cannot drift.
+///
+/// A dropped path outside the session cwd would be refused later by the read
+/// scope (`process_file_arguments`), so it is staged into `<agent dir>/pastes`
+/// first and the returned ref points at that copy.
 pub fn normalize_pasted_file_refs(pasted: &str, cwd: &Path) -> Option<(String, usize)> {
+    let stage_dir = crate::config::Config::global_dir().join("pastes");
+    normalize_pasted_file_refs_staged(pasted, cwd, Some(&stage_dir))
+}
+
+/// [`normalize_pasted_file_refs`] with the staging directory injectable, so a
+/// test can prove out-of-cwd paths are copied without touching the real agent
+/// directory. `None` leaves every path where it is and lets the read scope
+/// make the decision.
+pub fn normalize_pasted_file_refs_staged(
+    pasted: &str,
+    cwd: &Path,
+    stage_dir: Option<&Path>,
+) -> Option<(String, usize)> {
     let mut refs = Vec::new();
     for line in pasted.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        refs.push(normalize_pasted_path(trimmed, cwd)?);
+        refs.push(normalize_pasted_path(trimmed, cwd, stage_dir)?);
     }
 
     if refs.is_empty() {
@@ -314,7 +331,35 @@ pub fn normalize_pasted_file_refs(pasted: &str, cwd: &Path) -> Option<(String, u
     Some((insert, refs.len()))
 }
 
-fn normalize_pasted_path(raw: &str, cwd: &Path) -> Option<String> {
+/// Whether a raw prompt is shaped like one or more dropped filesystem paths
+/// rather than prose. Used at submit time for terminals that deliver a drop as
+/// literal typed characters instead of a bracketed paste: every non-empty line
+/// carries a path separator, or the whole text is quoted / a `file://` URL.
+/// A bare relative word (`README.md`) is deliberately excluded, so an ordinary
+/// single-word message is never turned into an attachment.
+#[must_use]
+pub fn looks_like_dropped_paths(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed.contains('@') {
+        return false;
+    }
+    if trimmed.starts_with("file://") {
+        return true;
+    }
+    if strip_wrapping_quotes(trimmed) != trimmed {
+        return true;
+    }
+    trimmed
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .all(|line| {
+            let line = strip_wrapping_quotes(line);
+            line.contains('/') || line.contains('\\')
+        })
+}
+
+fn normalize_pasted_path(raw: &str, cwd: &Path, stage_dir: Option<&Path>) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed.starts_with('@') {
         return None;
@@ -328,7 +373,49 @@ fn normalize_pasted_path(raw: &str, cwd: &Path) -> Option<String> {
         return None;
     }
 
-    Some(path_for_display(&resolved, cwd))
+    let attached = stage_out_of_scope_path(&resolved, cwd, stage_dir)?;
+    Some(path_for_display(&attached, cwd))
+}
+
+/// Keep a path that is readable as-is; copy one that sits outside the cwd and
+/// the agent dir into `stage_dir` so the read scope admits it. Returns `None`
+/// when the path is out of scope and cannot be staged (e.g. it is a directory).
+fn stage_out_of_scope_path(
+    resolved: &Path,
+    cwd: &Path,
+    stage_dir: Option<&Path>,
+) -> Option<PathBuf> {
+    let canonical = crate::extensions::safe_canonicalize(resolved);
+    if canonical.starts_with(crate::extensions::safe_canonicalize(cwd)) {
+        return Some(resolved.to_path_buf());
+    }
+
+    let Some(stage_dir) = stage_dir else {
+        // No staging configured: hand the path back and let the read scope
+        // return its own explicit error.
+        return Some(resolved.to_path_buf());
+    };
+
+    // A clipboard paste already lives under the agent dir; keep it in place.
+    let inside_agent_dir = stage_dir.parent().is_some_and(|agent_root| {
+        canonical.starts_with(crate::extensions::safe_canonicalize(agent_root))
+    });
+    if inside_agent_dir {
+        return Some(resolved.to_path_buf());
+    }
+
+    if !resolved.is_file() {
+        return None;
+    }
+
+    let name = resolved.file_name().map_or_else(
+        || String::from("dropped"),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    std::fs::create_dir_all(stage_dir).ok()?;
+    let dest = stage_dir.join(format!("drop-{}-{}", uuid::Uuid::new_v4().simple(), name));
+    std::fs::copy(resolved, &dest).ok()?;
+    Some(dest)
 }
 
 #[cfg(test)]
@@ -628,5 +715,45 @@ mod tests {
         assert!(normalize_pasted_file_refs("/no/such/file.png", dir.path()).is_none());
         // An already-`@`-prefixed reference is not re-normalized.
         assert!(normalize_pasted_file_refs("@already/ref.png", dir.path()).is_none());
+    }
+
+    #[test]
+    fn normalize_pasted_file_refs_stages_a_path_outside_cwd() {
+        let cwd = tempfile::tempdir().expect("cwd");
+        let outside = tempfile::tempdir().expect("outside");
+        let stage_root = tempfile::tempdir().expect("stage root");
+        let stage = stage_root.path().join("pastes");
+        let file = outside.path().join("shot.png");
+        std::fs::write(&file, b"png-bytes").expect("write");
+
+        let pasted = format!("{}\n", file.display());
+        let (insert, count) = normalize_pasted_file_refs_staged(&pasted, cwd.path(), Some(&stage))
+            .expect("an out-of-cwd path is staged");
+
+        assert_eq!(count, 1);
+        assert!(insert.contains("shot.png"), "{insert}");
+        let staged: Vec<_> = std::fs::read_dir(&stage)
+            .expect("stage dir")
+            .map(|entry| entry.expect("entry").path())
+            .collect();
+        assert_eq!(staged.len(), 1, "exactly one staged copy");
+        assert_eq!(
+            std::fs::read(&staged[0]).expect("read staged"),
+            b"png-bytes",
+            "the staged copy carries the original bytes"
+        );
+        assert_ne!(staged[0], file, "the original is not referenced in place");
+    }
+
+    #[test]
+    fn looks_like_dropped_paths_accepts_paths_and_rejects_prose() {
+        assert!(looks_like_dropped_paths(r"C:\Users\me\shot.png"));
+        assert!(looks_like_dropped_paths("/home/me/shot.png"));
+        assert!(looks_like_dropped_paths("\"my shot.png\""));
+        assert!(looks_like_dropped_paths("file:///tmp/shot.png"));
+        assert!(!looks_like_dropped_paths("README.md"));
+        assert!(!looks_like_dropped_paths("hello there, how are you?"));
+        assert!(!looks_like_dropped_paths("@already.png"));
+        assert!(!looks_like_dropped_paths(""));
     }
 }

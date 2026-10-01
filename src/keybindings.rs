@@ -1592,7 +1592,13 @@ impl KeyBindings {
 
         // Clipboard
         m.insert(AppAction::Copy, vec![KeyBinding::ctrl("c")]);
-        m.insert(AppAction::PasteImage, vec![KeyBinding::ctrl("v")]);
+        // ctrl+v is captured by terminals that bind it to their own paste
+        // (Windows Terminal does), so an image-only clipboard can never reach
+        // the app through it. alt+v is not claimed by those terminals.
+        m.insert(
+            AppAction::PasteImage,
+            vec![KeyBinding::ctrl("v"), KeyBinding::alt("v")],
+        );
 
         // Application
         m.insert(AppAction::Interrupt, vec![KeyBinding::plain("escape")]);
@@ -1733,6 +1739,18 @@ mod tests {
         // The reverse lookup returns one of them
         let action = bindings.lookup(&ctrl_c);
         assert!(action == Some(AppAction::Copy) || action == Some(AppAction::Clear));
+    }
+
+    #[test]
+    fn paste_image_is_reachable_without_a_terminal_captured_ctrl_v() {
+        let bindings = KeyBindings::new();
+        let keys = bindings.get_bindings(AppAction::PasteImage);
+        assert!(keys.contains(&KeyBinding::ctrl("v")));
+        assert!(
+            keys.contains(&KeyBinding::alt("v")),
+            "alt+v must be bound: Windows Terminal captures ctrl+v for its own paste, \
+             so an image-only clipboard never reaches the app through that chord"
+        );
     }
 
     #[test]
@@ -2165,6 +2183,7 @@ mod tests {
             "ctrl+-",
             "ctrl+c",
             "ctrl+v",
+            "alt+v",
             "escape",
             "ctrl+z",
             "ctrl+g",

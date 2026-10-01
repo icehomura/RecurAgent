@@ -40,6 +40,12 @@ If none is found, the `bash` tool fails with a message listing these options. Yo
 
 Pi attempts to use the system clipboard for `/copy` and image pasting.
 
+- Paste an image with **`Alt+V`** (or `Ctrl+V` where the terminal forwards it). Windows
+  Terminal binds `Ctrl+V` to its own text paste and never sends the key to the app, so
+  with an image-only clipboard `Ctrl+V` produces nothing — use `Alt+V` there.
+- Drag a file onto the window to attach it. A file outside the session working
+  directory is copied into `<agent dir>/pastes` first, so it can be read under the
+  same scope as a pasted clipboard image.
 - Ensure you are running in a terminal that supports clipboard access if using remote sessions (e.g. via SSH).
 - If clipboard operations fail, Pi will typically fall back to printing the content or ignoring the paste.
 - **WSL**: the Linux `ra` binary has no X11/Wayland display inside WSL (unless WSLg is running), so Pi detects WSL and uses Windows' `clip.exe` for `/copy` and `/share`, and `powershell.exe` for image paste. Both are on `PATH` in a default WSL setup; no extra configuration is needed.

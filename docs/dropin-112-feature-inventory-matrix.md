@@ -606,7 +606,7 @@
 | External editor | Y | P | Ctrl+G | Classic only; inert on ftui |
 | Follow up | Y | P | Alt+Enter | Classic only. On ftui the chord reaches the editor and inserts a newline |
 | Dequeue | Y | P | Alt+Up | Classic only; inert on ftui |
-| Paste image | Y | P | Ctrl+V | Classic only; inert on ftui |
+| Paste image | Y | Y | Ctrl+V, Alt+V | Alt+V reaches terminals (Windows Terminal) that capture Ctrl+V for their own paste |
 | New session | Y | X | (none) | No default key in pi's catalog on either side; the action is reachable as `/new` |
 | Tree | Y | X | (none) | No default key in pi's catalog; reachable as `/tree` |
 | Fork | Y | X | (none) | No default key in pi's catalog; reachable as `/fork` (classic) |
