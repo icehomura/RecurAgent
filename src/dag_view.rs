@@ -913,13 +913,22 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
             key: i,
         });
     }
+    // The virtual sink only turns green once every real node succeeded. While
+    // anything is still running/pending, or after a failure/skip, the flow
+    // never reached 结束, so it stays the same gray as the connectors.
+    let reached_end =
+        !src.is_empty() && src.iter().all(|node| node.state == DagViewState::Succeeded);
     let end_idx = ln.len();
     ln.push(LNode {
         label: END_LABEL.to_string(),
         width: box_width(END_LABEL),
         layer: max_real + 1,
         x: 0,
-        state: DagViewCellState::Root,
+        state: if reached_end {
+            DagViewCellState::Root
+        } else {
+            DagViewCellState::Neutral
+        },
         is_dummy: false,
         key: usize::MAX,
     });
@@ -1123,6 +1132,61 @@ mod tests {
             joined.contains("开始") && joined.contains("结束"),
             "{joined}"
         );
+    }
+
+    /// The virtual sink is green only after the whole graph succeeded. A
+    /// failure/skip (or a node still running) means the flow never reached
+    /// 结束, so it must keep the neutral gray instead of claiming success.
+    #[test]
+    fn end_node_greens_only_after_full_success() {
+        let end_state = |states: [DagViewState; 2]| {
+            let rows = render(&[n(1, "a", &[], states[0]), n(2, "b", &[1], states[1])]);
+            rows.iter()
+                .flatten()
+                .find(|cell| cell.text.contains("结束"))
+                .map(|cell| cell.state.clone())
+                .expect("结束 box rendered")
+        };
+
+        assert_eq!(
+            end_state([DagViewState::Succeeded, DagViewState::Running]),
+            DagViewCellState::Neutral,
+            "a running node means 结束 is not reached yet"
+        );
+        assert_eq!(
+            end_state([DagViewState::Succeeded, DagViewState::Failed]),
+            DagViewCellState::Neutral,
+            "a failed node means 结束 is not reached"
+        );
+        assert_eq!(
+            end_state([DagViewState::Succeeded, DagViewState::Skipped]),
+            DagViewCellState::Neutral,
+            "a skipped node means 结束 is not reached"
+        );
+        assert_eq!(
+            end_state([DagViewState::Succeeded, DagViewState::Succeeded]),
+            DagViewCellState::Root,
+            "full success turns 结束 green"
+        );
+    }
+
+    /// No node label may carry an `N. ` ordinal: the box shows only the state
+    /// marker and the name, and the legend only `name (tool)`.
+    #[test]
+    fn node_labels_have_no_ordinal_prefix() {
+        let out = render_to_string(&[
+            n(1, "read", &[], DagViewState::Succeeded),
+            n(2, "write", &[1], DagViewState::Pending),
+        ])
+        .join("\n");
+        for prefix in ["1. ", "2. "] {
+            assert!(
+                !out.contains(prefix),
+                "ordinal {prefix:?} leaked into the DAG view:\n{out}"
+            );
+        }
+        assert!(out.contains("[✓] read"), "{out}");
+        assert!(out.contains("[ ] write"), "{out}");
     }
 
     #[test]
