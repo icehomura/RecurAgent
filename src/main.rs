@@ -2378,7 +2378,7 @@ async fn run(
             .set_foreign_scoped_rules(foreign_rules.rules.clone(), cwd.clone());
     }
     // The todo tool needs the live session for todo_list.v1 persistence, so
-    // it joins after construction (opt-in via --tools ...todo, like subagent).
+    // it joins after construction (selected by the --tools list).
     if enabled_tools.contains(&"todo") {
         let todo_session = Arc::clone(&agent_session.session);
         agent_session.agent.extend_tools(vec![

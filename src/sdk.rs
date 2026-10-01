@@ -75,7 +75,7 @@ use crate::tools::{
 
 /// Built-in tool names included in the default non-delegating SDK registry.
 ///
-/// The opt-in `subagent` tool is configured through the CLI/session delegation
+/// The `subagent` tool is configured through the CLI/session delegation
 /// surface and is intentionally not constructed by [`create_all_tools`].
 pub const BUILTIN_TOOL_NAMES: &[&str] = &[
     "read",
@@ -1957,9 +1957,10 @@ impl AgentSessionHandle {
 
     /// Whether a tool of this name is installed on the live agent.
     ///
-    /// `/tan` is the caller this exists for: the `subagent` tool is opt-in, so
-    /// a session without it has to say so plainly rather than fail somewhere
-    /// inside the child launch (bd-ydz1t.2).
+    /// `/tan` is the caller this exists for: the `subagent` tool is on by
+    /// default but can be dropped, so a session without it has to say so
+    /// plainly rather than fail somewhere inside the child launch
+    /// (bd-ydz1t.2).
     #[must_use]
     pub fn has_tool(&self, name: &str) -> bool {
         self.session.agent.has_tool(name)

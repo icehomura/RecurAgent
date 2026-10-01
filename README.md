@@ -42,7 +42,7 @@ You want an AI coding assistant in your terminal, but existing tools are:
 
 ## The Solution
 
-**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 44 built-in tools (23 in the default `--tools` list; 15 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
+**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 44 built-in tools (24 in the default `--tools` list; 20 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
 
 ### Current product direction
 
@@ -546,7 +546,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 | `inspect_image` / `generate_image` / `tts` | Vision analysis of local images, image generation/editing, and text-to-speech through provider adapters; settings-gated |
 | `read_media` | Attaches a local video/audio file (mp4, webm, mov, mp3, wav, m4a, ogg, flac) as an inline media block. Gemini, Gemini CLI, and Vertex Gemini models receive it natively as `inline_data`; every other provider sees `[media omitted: <name>, <mime>, <size>]`. Hard cap 5 MiB per file (`media.maxBytes`); settings-gated |
 | `subagent` | Delegate isolated work to named Rust Pi child agents |
-| `dag` | Execute a dependency DAG of tool calls in parallel within this session: one `dag` call carries the complete `nodes[]` graph (`id`/`toolName`/`args`/`dependsOn`), independent nodes run concurrently under the compatible-tool limit, write/append/process barriers stay serialized, and a failed node skips its downstream. Results and per-node failures aggregate back into one tool result for the model. Enabled by default (discoverable tier; promote via `xdev`); nodes may not invoke `dag` itself |
+| `dag` | Execute a dependency DAG of tool calls in parallel within this session: one `dag` call carries the complete `nodes[]` graph (`id`/`toolName`/`args`/`dependsOn`), independent nodes run concurrently under the compatible-tool limit, write/append/process barriers stay serialized, and a failed node skips its downstream. Results and per-node failures aggregate back into one tool result for the model. Enabled by default (essential tier); nodes may not invoke `dag` itself |
 
 All tools include automatic truncation for large outputs (2000 lines /
 1MB), detailed metadata in responses, and process-tree cleanup for bash.
@@ -579,10 +579,23 @@ the slices serially.
 Agent definitions are Markdown files in `$RECUR_AGENT_DIR/agents/*.md`
 (normally `~/.ra/agent/agents/*.md`) or the nearest
 `.ra/agents/*.md`. Project definitions take precedence over same-named user
-definitions. Two built-in agents are always available — `general` (full child
-toolset) and `explore` (read-only investigation) — so the tool works before any
-definition is written; a user or project definition of the same name overrides
-the built-in. The process inherits the parent's provider, router, authentication,
+definitions. Four built-in agents are always available, so the tool works
+before any definition is written; a user or project definition of the same name
+overrides the built-in:
+
+- `explore` — read-only investigation (`read`, `grep`, `find`, `ls`, `ast_grep`,
+  `json_query`). No command execution, so it cannot mutate anything.
+- `verify` — independent verification: runs the tests, build, and linters and
+  reports what passed and what failed. It has **no write tool**, so it cannot
+  edit a test, delete a failing assertion, or regenerate a golden file to make
+  something pass. A failing verification is a report, not a fix.
+- `fixer` — applies the specific defects a `verify` child reported, re-running
+  the verification that exposed them. It is a separate role precisely so the
+  verifier itself never gains a write path.
+- `general` — general-purpose worker with the full child toolset, including
+  `run_code`, `ast_grep`/`ast_edit`, and session search.
+
+The process inherits the parent's provider, router, authentication,
 and model-registry environment, including `RECUR_AGENT_DIR`.
 
 ```markdown
@@ -605,7 +618,9 @@ child's final output. Children run headlessly in isolated ephemeral sessions,
 stream progress into the parent TUI/JSON output, return structured status and
 stderr details, and are killed/reaped if the parent is cancelled. Child agents
 receive the declared tool allowlist; the default child allowlist deliberately
-excludes `subagent` to prevent accidental recursive delegation.
+excludes `subagent` to prevent accidental recursive delegation. A definition
+whose `tools:` names something `--tools` does not provide fails to load with the
+offending name, rather than silently running the child without it.
 
 In interactive mode, `/tan <work>` starts the same task-role child machinery
 without interrupting the main conversation. The child runs in the current
@@ -3023,7 +3038,7 @@ A: Yes. Point any provider at a custom base URL via `models.json`. Pi normalizes
 | **Startup** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Memory** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Providers** | 11 native provider implementation modules + OpenAI-compatible presets | Anthropic | Many | Many |
-| **Tools** | 44 built-in (23 in the default `--tools` list) | Many | File-focused | IDE-integrated |
+| **Tools** | 44 built-in (24 in the default `--tools` list) | Many | File-focused | IDE-integrated |
 | **Sessions** | JSONL tree | Proprietary | Git-based | Proprietary |
 | **Open source** | Yes | Yes | Yes | No |
 

@@ -5,7 +5,8 @@
 //! degrades model tool-selection. Load modes split the surface in two:
 //!
 //! - **Essential** tools are always in the schema (read/write/edit/bash/
-//!   grep/find/ls/hashline_edit/ask/todo/xdev).
+//!   grep/find/ls/hashline_edit/ask/todo/xdev, plus the orchestrators
+//!   `dag`, `run_code`, and `subagent`).
 //! - **Discoverable** tools stay out of the schema; a compact index in the
 //!   system prompt (name + one-line purpose) advertises them, and the single
 //!   `xdev` dispatcher tool lists, describes, runs, and promotes them.
