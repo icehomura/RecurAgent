@@ -1,1 +1,10 @@
 legacy_pi_mono_code/pi-mono/** -whitespace
+# Shell scripts must stay LF on every platform: WSL/Linux bash reads a CRLF
+# `set -euo pipefail` line as the invalid option `pipefail\r`, so scripts
+# checked out on Windows with core.autocrlf=true could not execute there.
+# This is also what DSR's `bash tests/installer_regression.sh` check needs.
+*.sh text eol=lf
+# The installer-managed skill is compared byte-for-byte against the inline
+# template in install.sh by scripts/skill-smoke.sh; CRLF there fails the
+# "frontmatter delimiter" and "marker comment" checks.
+.claude/skills/** text eol=lf

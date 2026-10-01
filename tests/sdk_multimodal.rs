@@ -133,7 +133,21 @@ fn read_request(stream: &mut TcpStream, deadline: Instant) -> Value {
     let mut buffer = [0_u8; 4096];
     let (header_end, body_len) = loop {
         assert!(Instant::now() < deadline, "fixture headers timed out");
-        let read = stream.read(&mut buffer).expect("read request headers");
+        let read = match stream.read(&mut buffer) {
+            Ok(read) => read,
+            // A read timeout means "nothing yet", not "fail" (bd-eg6ng): the
+            // client may simply not have been scheduled. The wall deadline at
+            // the top of the loop is what bounds the wait.
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                continue;
+            }
+            Err(error) => panic!("read request headers: {error}"),
+        };
         assert!(read > 0, "request ended before headers");
         bytes.extend_from_slice(&buffer[..read]);
         assert!(bytes.len() <= LIMIT, "oversized fixture request");
@@ -160,7 +174,19 @@ fn read_request(stream: &mut TcpStream, deadline: Instant) -> Value {
     };
     while bytes.len() < header_end + body_len {
         assert!(Instant::now() < deadline, "fixture body timed out");
-        let read = stream.read(&mut buffer).expect("read request body");
+        let read = match stream.read(&mut buffer) {
+            Ok(read) => read,
+            // Same as the header loop: a timeout is "not yet", not a failure.
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                continue;
+            }
+            Err(error) => panic!("read request body: {error}"),
+        };
         assert!(read > 0, "request ended before body");
         bytes.extend_from_slice(&buffer[..read]);
         assert!(bytes.len() <= LIMIT + 16 * 1024);
