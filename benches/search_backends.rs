@@ -5,6 +5,14 @@
 //! synthetic source tree. The external lanes are skipped silently when the
 //! binaries are not installed.
 //!
+//! It also prices the structural `ast_grep` backend against `grep` on the same
+//! tree. That lane is deliberately a *full-scan, zero-match* query: ripgrep and
+//! tree-sitter do the same amount of file walking, no result set is serialized
+//! by either, and `ast_grep`'s 1000-match hard cap cannot make it stop early
+//! while grep keeps going. Any matched-pattern lane would not be comparable,
+//! because `ast_grep` returns at most `HARD_MATCH_LIMIT` matches and aborts the
+//! scan on reaching it, so it would do strictly less work than grep.
+//!
 //! Run with: `cargo bench --bench search_backends`
 
 #[path = "bench_env.rs"]
@@ -48,7 +56,7 @@ fn registry_for(root: &Path, backend: &str) -> ToolRegistry {
         "search_backend": backend,
     }))
     .expect("backend config");
-    ToolRegistry::new(&["grep", "find"], root, Some(&config))
+    ToolRegistry::new(&["grep", "find", "ast_grep"], root, Some(&config))
 }
 
 /// Runs the tool once with a per-iteration `limit` nudge so the tool-output
@@ -67,6 +75,21 @@ fn run_tool(
         tool.execute("bench", input.clone(), None)
             .await
             .expect("tool run");
+    });
+}
+
+/// `ast_grep` rejects any `limit` above its own `HARD_MATCH_LIMIT` (1000), so it
+/// cannot share [`run_tool`]'s `5000 + iteration` cache-busting nudge, which the
+/// tool would reject as out of range. This runner still varies the limit — so the
+/// tool-output cache never answers twice — but stays inside the accepted range.
+fn run_ast_tool(registry: &ToolRegistry, mut input: serde_json::Value, iteration: &mut u64) {
+    *iteration += 1;
+    input["limit"] = serde_json::Value::Number(serde_json::Number::from(1_000 - (*iteration % 10)));
+    let tool = registry.get("ast_grep").expect("ast_grep registered");
+    asupersync::test_utils::run_test(|| async {
+        tool.execute("bench", input.clone(), None)
+            .await
+            .expect("ast_grep run");
     });
 }
 
@@ -115,6 +138,21 @@ fn bench_search_backends(c: &mut Criterion) {
             b.iter(|| run_tool(&external, "find", find_input.clone(), &mut iteration));
         });
     }
+
+    // Head-to-head with the structural backend. Both patterns match nothing, so
+    // each tool walks the same 2k files, reads the same bytes, and serializes an
+    // empty result — the only difference left is the matcher itself (ripgrep's
+    // literal/regex scan vs. tree-sitter parsing every file). `$$$ARGS` keeps the
+    // pattern a syntactically valid Rust call expression, which is the shape
+    // `ast_grep` requires.
+    let nomatch_grep = serde_json::json!({ "pattern": "zzz_absent_symbol" });
+    let nomatch_ast = serde_json::json!({ "pattern": "zzz_absent_symbol($$$ARGS)" });
+    group.bench_function("grep_inproc_nomatch_2k_files", |b| {
+        b.iter(|| run_tool(&inproc, "grep", nomatch_grep.clone(), &mut iteration));
+    });
+    group.bench_function("ast_grep_inproc_nomatch_2k_files", |b| {
+        b.iter(|| run_ast_tool(&inproc, nomatch_ast.clone(), &mut iteration));
+    });
 
     group.finish();
 }
