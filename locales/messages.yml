@@ -189,6 +189,96 @@ model_selector_switched:
   en: "Switched model: %{model}"
   zh-CN: "已切换模型：%{model}"
 
+# ── /tree branch navigation + branch picker ────────────────────────────
+#
+# Several of these strings recur verbatim at multiple call sites ("Session busy;
+# try again" appears five times). They share one key deliberately: the same
+# sentence in the same voice should not drift into two translations.
+
+tree_ui_err_session_changed:
+  en: "Session changed while switching branches; the switch was not applied"
+  zh-CN: "切换分支时会话已变化；本次切换未生效"
+
+tree_ui_err_target_not_found:
+  en: "Branch target not found: %{target_id}"
+  zh-CN: "找不到分支目标：%{target_id}"
+
+tree_ui_err_persistence_unconfirmed:
+  en: "Branch switch persistence was not confirmed (%{error}), current disk state could not be reconciled, and the active in-memory session was left unchanged"
+  zh-CN: "分支切换的持久化未能确认（%{error}），无法与当前磁盘状态对账，活动的内存会话保持不变"
+
+tree_ui_cancelled:
+  en: "Tree navigation cancelled"
+  zh-CN: "已取消树导航"
+
+tree_ui_already_on_branch:
+  en: "Already on that branch"
+  zh-CN: "已在该分支上"
+
+tree_ui_err_session_busy:
+  en: "Session busy; try again"
+  zh-CN: "会话忙，请重试"
+
+tree_ui_err_agent_busy:
+  en: "Agent busy; try again"
+  zh-CN: "Agent 忙，请重试"
+
+tree_ui_branch_picker_cancelled:
+  en: "Branch picker cancelled"
+  zh-CN: "已取消分支选择器"
+
+tree_ui_err_busy:
+  en: "Cannot switch branches while processing"
+  zh-CN: "正在处理时无法切换分支"
+
+tree_ui_no_branches:
+  en: "No branches to pick (use /fork to create one)"
+  zh-CN: "没有可选择的分支（用 /fork 创建一个）"
+
+tree_ui_no_sibling_branches:
+  en: "No sibling branches (use /fork to create one)"
+  zh-CN: "没有同级分支（用 /fork 创建一个）"
+
+tree_ui_switched:
+  en: "Switched to %{leaf}"
+  zh-CN: "已切换到 %{leaf}"
+
+# `...` not `…`: the English source used three ASCII dots, and changing the
+# glyph would be a silent visual edit smuggled in with a translation.
+tree_ui_switching:
+  en: "Switching branches..."
+  zh-CN: "正在切换分支…"
+
+tree_ui_switched_no_summary:
+  en: "Switched to %{leaf} (no summary: missing API key)"
+  zh-CN: "已切换到 %{leaf}（未生成摘要：缺少 API 密钥）"
+
+tree_ui_persistence_warning:
+  en: "Persistence warning: branch switch is present in the current disk and active session state, but final durability was not confirmed (switched to %{leaf})"
+  zh-CN: "持久化警告：分支切换已存在于当前磁盘和活动会话状态中，但最终持久性未获确认（已切换到 %{leaf}）"
+
+tree_ui_switch_cancelled_by_extension:
+  en: "Session switch cancelled by extension"
+  zh-CN: "会话切换被扩展取消"
+
+tree_ui_err_summary_failed:
+  en: "Branch summary failed: %{error}"
+  zh-CN: "分支摘要失败：%{error}"
+
+tree_ui_err_lock_agent:
+  en: "Failed to lock agent: %{error}"
+  zh-CN: "无法锁定 Agent：%{error}"
+
+tree_ui_err_switch_unconfirmed:
+  en: "Branch switch could not be confirmed: %{error}"
+  zh-CN: "无法确认分支切换：%{error}"
+
+# ── Interactive status notices ─────────────────────────────────────────
+
+interactive_copied_chars:
+  en: "copied %{count} chars"
+  zh-CN: "已复制 %{count} 个字符"
+
 # ── RESERVED: status_line machine prefixes (optional translation) ───────
 #
 # These are the compact machine labels a status line draws — `git:`, `ctx:`,

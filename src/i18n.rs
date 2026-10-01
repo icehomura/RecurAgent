@@ -237,4 +237,15 @@ mod tests {
             assert!(rendered.contains("900"), "{locale}: seconds dropped");
         }
     }
+
+    #[test]
+    fn copied_notice_carries_the_count_in_both_locales() {
+        // The ftui copy-on-select status notice must interpolate the character
+        // count the same way in every locale, or a translator can drop it and
+        // the confirmation silently stops saying how much was copied.
+        for locale in SUPPORTED {
+            let rendered = rust_i18n::t!("interactive_copied_chars", locale = locale, count = 7);
+            assert!(rendered.contains('7'), "{locale}: count dropped from {rendered}");
+        }
+    }
 }

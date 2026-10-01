@@ -3264,7 +3264,7 @@ impl RaFtuiModel {
                 };
                 let message = crate::interactive::copy_text_to_clipboard(&text);
                 let notice = if message == CLIPBOARD_COPIED {
-                    String::from(COPY_NOTICE_TEXT)
+                    copy_notice_text(text.chars().count())
                 } else {
                     message
                 };
@@ -6497,8 +6497,12 @@ const COPY_NOTICE_TTL: Duration = Duration::from_millis(2000);
 /// The success message [`crate::interactive::copy_text_to_clipboard`] returns
 /// when the text reached the real clipboard (vs. the temp-file fallback).
 const CLIPBOARD_COPIED: &str = crate::interactive::COPY_OK_MESSAGE;
-/// Shown at the right end of the status row while a selection copy succeeded.
-const COPY_NOTICE_TEXT: &str = "copied";
+/// Shown at the right end of the status row while a selection copy succeeded,
+/// carrying how many characters were copied. Localized through
+/// `interactive_copied_chars` so the notice is translatable.
+fn copy_notice_text(count: usize) -> String {
+    rust_i18n::t!("interactive_copied_chars", count = count).to_string()
+}
 const BTW_UNAVAILABLE: &str =
     "/btw unavailable: no smol role model configured (set --smol or model_roles.smol)";
 
