@@ -5634,6 +5634,16 @@ impl Agent {
             return (Self::tool_not_found_output(&tool_call.name), true);
         };
 
+        // One authorization of the outer `run_code` call authorizes its whole
+        // bridge. Reaching this point means the call already passed the
+        // approval pipeline (a human approval, `write`-mode approval, or an
+        // auto-approving `yolo` mode), so the inner bridge tools must not
+        // prompt a second time. The grant lives in the session registry and is
+        // shared with the tool instance — the program can never set it.
+        if tool_call.name == "run_code" {
+            self.tools.authorize_ptc_bridge();
+        }
+
         let tool_name = tool_call.name.clone();
         let tool_id = tool_call.id.clone();
         let tool_args = tool_call.arguments.clone();

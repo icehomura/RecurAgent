@@ -5384,6 +5384,10 @@ pub struct ToolRegistry {
     /// Session undo recorder shared with write/edit/hashline_edit
     /// (bd-cv653.3.13); the interactive host reads it back for /undo //redo.
     mutation_recorder: Option<Arc<crate::undo::FileMutationRecorder>>,
+    /// Session-scoped authorization for `run_code`'s approval-gated bridge
+    /// tools. The agent flips it once the outer `run_code` call is approved;
+    /// it is shared with the `RunCodeTool` instance so a program cannot set it.
+    ptc_bridge_grant: crate::ptc_bridge::BridgeGrant,
     /// Host-owned picker surface shared by permission-gated built-ins and the
     /// optional model-facing ask tool. This exists even when `ask` is not in
     /// the model schema: host authorization must not disappear merely because
@@ -5564,6 +5568,7 @@ impl ToolRegistry {
             config.and_then(|config| config.ask_policy.as_deref()),
         ));
         let mut tools: Vec<Box<dyn Tool>> = Vec::new();
+        let ptc_bridge_grant = crate::ptc_bridge::new_bridge_grant();
         let job_session_scope = crate::jobs::JobSessionScope::default();
         let shell_path = config.and_then(|c| c.shell_path.clone());
         let shell_command_prefix = config.and_then(|c| c.shell_command_prefix.clone());
@@ -5643,7 +5648,8 @@ impl ToolRegistry {
                             search_backend_from_config(config),
                             image_auto_resize,
                             block_images,
-                        ),
+                        )
+                        .with_bridge_grant(ptc_bridge_grant.clone()),
                 )),
                 "github" => tools.push(Box::new(crate::github::GithubTool::new(
                     cwd,
@@ -5892,6 +5898,7 @@ impl ToolRegistry {
             job_session_scope,
             discoverable: discoverable_names,
             mutation_recorder,
+            ptc_bridge_grant,
             host_ask,
             shared: None,
         }
@@ -5907,6 +5914,24 @@ impl ToolRegistry {
         self.host_ask.clone()
     }
 
+    /// Authorize `run_code`'s bridge for this session.
+    ///
+    /// Called once the outer `run_code` call has been approved (a human
+    /// approval, `write`-mode approval, or an auto-approving `yolo` mode), so
+    /// the program may use the approval-gated bridge tools without a second,
+    /// nested prompt. This is a property of the session, never of the program.
+    pub fn authorize_ptc_bridge(&self) {
+        self.ptc_bridge_grant
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Whether `run_code`'s bridge has been authorized for this session.
+    #[must_use]
+    pub fn ptc_bridge_authorized(&self) -> bool {
+        self.ptc_bridge_grant
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// Construct a registry from a pre-built tool list.
     pub fn from_tools(mut tools: Vec<Box<dyn Tool>>) -> Self {
         let job_session_scope = crate::jobs::JobSessionScope::default();
@@ -5920,6 +5945,7 @@ impl ToolRegistry {
             job_session_scope,
             discoverable: std::collections::HashSet::new(),
             mutation_recorder: None,
+            ptc_bridge_grant: crate::ptc_bridge::new_bridge_grant(),
             host_ask,
             shared: None,
         }
@@ -5936,6 +5962,7 @@ impl ToolRegistry {
             job_session_scope: self.job_session_scope.clone(),
             discoverable: self.discoverable.clone(),
             mutation_recorder: self.mutation_recorder.clone(),
+            ptc_bridge_grant: self.ptc_bridge_grant.clone(),
             host_ask: self.host_ask.clone(),
             shared: self.shared.clone(),
         }
@@ -6121,6 +6148,12 @@ impl SharedToolRegistry {
     #[must_use]
     pub fn version(&self) -> u64 {
         self.inner.version.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Authorize the `run_code` bridge for this session (see
+    /// [`ToolRegistry::authorize_ptc_bridge`]); shared across snapshots.
+    pub fn authorize_ptc_bridge(&self) {
+        self.snapshot().authorize_ptc_bridge();
     }
 
     /// A non-owning handle for tools that need the live registry without

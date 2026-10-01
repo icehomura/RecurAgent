@@ -143,6 +143,22 @@ const GRANTABLE_TOOLS: [&str; 6] = [
     "web_search",
 ];
 
+/// Session-scoped authorization for the approval-gated bridge tools.
+///
+/// The OPERATOR flips this to `true` when the outer `run_code` call is
+/// authorized — a human approval, or an auto-approving mode such as `yolo` —
+/// so the bridge's write/process/network tools become reachable without a
+/// second, nested prompt. It is shared through
+/// [`crate::tools::ToolRegistry`] and never derived from anything the program
+/// can set.
+pub type BridgeGrant = std::sync::Arc<std::sync::atomic::AtomicBool>;
+
+/// A fresh, unauthorized bridge grant.
+#[must_use]
+pub fn new_bridge_grant() -> BridgeGrant {
+    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+}
+
 /// Script file name QuickJS reports in stack frames, so an error points at the
 /// model's own `code` rather than at an anonymous eval.
 const PROGRAM_FILENAME: &str = "ptc-program";
@@ -210,6 +226,10 @@ pub struct RunCodeTool {
     /// Operator-granted, approval-gated tools the bridge may reach (empty =
     /// read-only, the default).
     capabilities: Vec<&'static str>,
+    /// Session-scoped authorization flipped by the agent once the outer
+    /// `run_code` call is approved. When set, every *constructible* bridge
+    /// tool is reachable without a nested prompt; the program cannot set it.
+    bridge_grant: BridgeGrant,
 }
 
 impl RunCodeTool {
@@ -228,7 +248,20 @@ impl RunCodeTool {
             image_auto_resize: true,
             block_images: false,
             capabilities: capabilities_from_env(),
+            bridge_grant: new_bridge_grant(),
         }
+    }
+
+    /// Share the session's bridge grant.
+    ///
+    /// The agent flips the grant once the outer `run_code` call is authorized,
+    /// which is what makes "authorize `run_code` once" (or `yolo`) enough to
+    /// use the approval-gated tools — with no nested per-tool approval. The
+    /// grant is owned by [`crate::tools::ToolRegistry`], never by the program.
+    #[must_use]
+    pub fn with_bridge_grant(mut self, grant: BridgeGrant) -> Self {
+        self.bridge_grant = grant;
+        self
     }
 
     /// Override the default budget (used by config wiring).
@@ -327,10 +360,35 @@ impl RunCodeTool {
         }
     }
 
+    /// The tool names this run can reach, for `sdk.tools()`: the read-only set,
+    /// the operator's static grant, and — once the outer call is authorized —
+    /// every approval-gated tool the bridge can construct.
+    fn reachable_tools(&self) -> Vec<String> {
+        let mut reachable: Vec<String> = BRIDGE_WHITELIST
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect();
+        for name in &self.capabilities {
+            if !reachable.iter().any(|existing| existing == name) {
+                reachable.push((*name).to_string());
+            }
+        }
+        if self.bridge_grant.load(Ordering::SeqCst) {
+            for name in GRANTABLE_TOOLS {
+                if !reachable.iter().any(|existing| existing == name) {
+                    reachable.push(name.to_string());
+                }
+            }
+        }
+        reachable
+    }
+
     /// Whether the bridge may reach `tool_name`: the read-only default plus
     /// whatever the operator granted.
     fn allowed(&self, tool_name: &str) -> bool {
-        BRIDGE_WHITELIST.contains(&tool_name) || self.capabilities.contains(&tool_name)
+        BRIDGE_WHITELIST.contains(&tool_name)
+            || self.capabilities.contains(&tool_name)
+            || self.bridge_grant.load(Ordering::SeqCst)
     }
 
     /// Dispatch one whitelisted bridge call through the SAME tool
@@ -432,7 +490,7 @@ struct JsRealm {
 }
 
 impl JsRealm {
-    fn spawn(code: &str, budget: Duration) -> Result<Self> {
+    fn spawn(code: &str, budget: Duration, reachable: Vec<String>) -> Result<Self> {
         let (tx, rx) = std::sync::mpsc::channel();
         let cancelled = Arc::new(AtomicBool::new(false));
         let flags = RealmFlags::new(budget, Arc::clone(&cancelled));
@@ -440,7 +498,7 @@ impl JsRealm {
         std::thread::Builder::new()
             .name("ptc-quickjs".into())
             .stack_size(REALM_THREAD_STACK_BYTES)
-            .spawn(move || realm_thread(&code, &flags, &tx, budget))
+            .spawn(move || realm_thread(&code, &flags, &tx, budget, &reachable))
             .map_err(|err| Error::tool("run_code", format!("PTC_SPAWN: {err}")))?;
         Ok(Self {
             inbox: Mutex::new(rx),
@@ -497,7 +555,13 @@ enum ProgramOutcome {
     Failed(Value),
 }
 
-fn realm_thread(code: &str, flags: &RealmFlags, tx: &Sender<RealmMessage>, budget: Duration) {
+fn realm_thread(
+    code: &str,
+    flags: &RealmFlags,
+    tx: &Sender<RealmMessage>,
+    budget: Duration,
+    reachable: &[String],
+) {
     let console: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
     let outcome = match rquickjs::Runtime::new() {
         Ok(runtime) => match rquickjs::Context::full(&runtime) {
@@ -508,7 +572,7 @@ fn realm_thread(code: &str, flags: &RealmFlags, tx: &Sender<RealmMessage>, budge
                     let flags = flags.clone();
                     runtime.set_interrupt_handler(Some(Box::new(move || flags.tripped())));
                 }
-                match context.with(|ctx| install_globals(&ctx, &console, tx, flags, budget)) {
+                match context.with(|ctx| install_globals(&ctx, &console, tx, flags, budget, reachable)) {
                     Ok(()) => run_program(&context, &runtime, code, flags),
                     Err(err) => ProgramOutcome::Failed(protocol_error(&err.to_string())),
                 }
@@ -554,6 +618,7 @@ fn install_globals<'js>(
     tx: &Sender<RealmMessage>,
     flags: &RealmFlags,
     budget: Duration,
+    reachable: &[String],
 ) -> rquickjs::Result<()> {
     let globals = ctx.globals();
 
@@ -695,6 +760,20 @@ fn install_globals<'js>(
         },
     );
     sdk.set("call", call)?;
+
+    // Runtime introspection: the model can ask which tools this session can
+    // actually reach, including a grant applied after the run started. Returns
+    // a JSON array, as a Promise like every other helper.
+    let names: Vec<String> = reachable.to_vec();
+    let tools_fn = Func::from(
+        move |ctx: Ctx<'js>| -> rquickjs::Result<Promise<'js>> {
+            let (promise, resolve, _reject) = Promise::new(&ctx)?;
+            let json = serde_json::to_string(&names).unwrap_or_else(|_| "[]".to_string());
+            resolve.call::<_, ()>((json,))?;
+            Ok(promise)
+        },
+    );
+    sdk.set("tools", tools_fn)?;
 
     globals.set("sdk", sdk)?;
     Ok(())
@@ -1378,7 +1457,7 @@ impl Tool for RunCodeTool {
         );
         let deadline = Instant::now() + timeout;
 
-        let realm = JsRealm::spawn(code, timeout)?;
+        let realm = JsRealm::spawn(code, timeout, self.reachable_tools())?;
         // The realm enforces the budget itself via its interrupt handler; this
         // is only the backstop for a worker wedged in a native call.
         let host_deadline = deadline + HOST_DEADLINE_GRACE;
@@ -2192,5 +2271,25 @@ mod tests {
         let text = output_text(&out);
         assert!(text.contains("debug-line-xyz"), "{text}");
         assert!(text.contains("boom"), "{text}");
+    }
+
+    #[test]
+    fn operator_grant_widens_the_bridge() {
+        // A fresh run is read-only; the session grant is what opens the
+        // approval-gated tools, and the program cannot set it.
+        let tool = RunCodeTool::new(".");
+        assert!(!tool.allowed("bash"));
+        assert!(!tool.allowed("web_search"));
+        assert!(tool.allowed("ast_grep"), "read-only extras stay allowed");
+
+        let grant = new_bridge_grant();
+        let tool = tool.with_bridge_grant(Arc::clone(&grant));
+        assert!(!tool.allowed("bash"), "grant starts unauthorized");
+        grant.store(true, Ordering::SeqCst);
+        assert!(tool.allowed("bash"));
+        assert!(tool.allowed("write"));
+        assert!(tool.allowed("ast_edit"));
+        assert!(tool.allowed("sessions"));
+        assert!(tool.allowed("web_search"));
     }
 }
