@@ -207,7 +207,7 @@
       ],
       "id": "pushed_commits",
       "issue": null,
-      "requirement": "Current HEAD is pushed to both origin/main and legacy origin/master.",
+      "requirement": "Current HEAD is pushed to origin/main.",
       "status": "pass"
     },
     {

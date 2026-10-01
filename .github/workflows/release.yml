@@ -120,7 +120,7 @@ jobs:
             exit 1
           fi
           if [ "$tag_commit" != "$main_commit" ] || [ "$tag_commit" != "$master_commit" ]; then
-            echo "::error::Release tag must point at the synchronized origin/main and origin/master tips"
+            echo "::error::Release tag must point at the origin/main tip"
             exit 1
           fi
           {

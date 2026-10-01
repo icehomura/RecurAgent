@@ -19256,7 +19256,7 @@ def build_autopilot_decision_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "Current HEAD is pushed to both origin/main and legacy origin/master.",
+            "Current HEAD is pushed to origin/main.",
             pushed,
             [
                 {
@@ -19923,7 +19923,7 @@ def build_context_intelligence_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "Current HEAD is pushed to both origin/main and legacy origin/master before closeout artifact generation.",
+            "Current HEAD is pushed to origin/main before closeout artifact generation.",
             pushed,
             [
                 {
@@ -20556,7 +20556,7 @@ def build_runtime_intelligence_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All implementation child commits are already pushed to origin/main and legacy origin/master before final closeout generation.",
+            "All implementation child commits are already pushed to origin/main before final closeout generation.",
             pushed,
             [
                 {
@@ -21310,7 +21310,7 @@ def build_fourth_wave_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All prerequisite child commits are pushed to origin/main and legacy origin/master before final closeout generation.",
+            "All prerequisite child commits are pushed to origin/main before final closeout generation.",
             pushed,
             [
                 {
@@ -28004,7 +28004,7 @@ def build_adaptive_execution_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All prerequisite child commits are pushed to origin/main and legacy origin/master before final closeout generation.",
+            "All prerequisite child commits are pushed to origin/main before final closeout generation.",
             pushed,
             [
                 {
@@ -28764,7 +28764,7 @@ def build_sixth_wave_validation_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All prerequisite child commits are pushed to origin/main and legacy origin/master before final closeout generation.",
+            "All prerequisite child commits are pushed to origin/main before final closeout generation.",
             pushed,
             [
                 {
@@ -29485,7 +29485,7 @@ def build_seventh_wave_runtime_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All prerequisite child commits are pushed to origin/main and legacy origin/master before final closeout generation.",
+            "All prerequisite child commits are pushed to origin/main before final closeout generation.",
             pushed,
             [
                 {
@@ -31862,7 +31862,7 @@ def build_predictive_operations_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All child implementation commits are pushed to origin/main and mirrored to legacy origin/master before closeout generation.",
+            "All child implementation commits are pushed to origin/main before closeout generation.",
             pushed,
             [
                 {
@@ -32852,7 +32852,7 @@ def _draft_build_ninth_wave_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All child implementation commits are pushed to origin/main and mirrored to legacy origin/master before closeout generation.",
+            "All child implementation commits are pushed to origin/main before closeout generation.",
             pushed,
             [
                 {
@@ -33870,7 +33870,7 @@ def build_ninth_wave_closeout_gate_summary(
     checklist.append(
         gate_check(
             "pushed_commits",
-            "All child implementation commits are pushed to origin/main and mirrored to legacy origin/master before closeout generation.",
+            "All child implementation commits are pushed to origin/main before closeout generation.",
             pushed,
             [
                 {
