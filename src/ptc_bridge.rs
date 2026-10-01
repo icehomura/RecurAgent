@@ -159,6 +159,22 @@ pub fn new_bridge_grant() -> BridgeGrant {
     std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
 }
 
+/// Whether a run-time bridge grant may be applied in this process.
+///
+/// Delegated subagent children inherit only the operator's static
+/// `PTC_CAPABILITIES` grant; the run-time approval grant is deliberately
+/// confined to the top-level session, so a child can never widen a read-only
+/// agent (e.g. `explore`) into a writer through `run_code`. The child marker
+/// (`RECUR_AGENT_SUBAGENT_DEPTH`, set by `subagents::execution`) is a positive
+/// depth for every child.
+#[must_use]
+pub fn bridge_runtime_grant_allowed() -> bool {
+    std::env::var("RECUR_AGENT_SUBAGENT_DEPTH")
+        .ok()
+        .and_then(|depth| depth.parse::<u32>().ok())
+        .is_none_or(|depth| depth == 0)
+}
+
 /// Script file name QuickJS reports in stack frames, so an error points at the
 /// model's own `code` rather than at an anonymous eval.
 const PROGRAM_FILENAME: &str = "ptc-program";
@@ -1372,7 +1388,8 @@ impl Tool for RunCodeTool {
          also accepts an options object (`await sdk.read({ path: 'src/main.rs', \
          offset: 1, limit: 40 })`, `await sdk.ls({ limit: 20 })`), and `await \
          sdk.call(tool, args)` reaches the full argument set. Every helper \
-         returns a Promise, so `await` it. The program runs on the built-in \
+         returns a Promise, so `await` it. `await sdk.tools()` lists the tools \
+         this session can currently reach. The program runs on the built-in \
          QuickJS engine with no filesystem, process, or network API of its own: \
          `sdk.*` is the only way out, and it reaches the read-only tools \
          `read`, `grep`, `find`, `ls`, `ast_grep` (`sdk.astGrep`), `json_query` \
@@ -2291,5 +2308,32 @@ mod tests {
         assert!(tool.allowed("ast_edit"));
         assert!(tool.allowed("sessions"));
         assert!(tool.allowed("web_search"));
+    }
+
+    #[test]
+    fn sdk_tools_lists_reachable_set() {
+        // Default: read-only extras present, approval-gated tools absent.
+        let text = run_text(&RunCodeTool::new("."), "return String(await sdk.tools());");
+        assert!(text.contains("ast_grep"), "{text}");
+        assert!(text.contains("json_query"), "{text}");
+        assert!(!text.contains("bash"), "{text}");
+    }
+
+    #[test]
+    fn sdk_tools_reflects_static_and_runtime_grants() {
+        let granted_static = run_text(
+            &RunCodeTool::new(".").with_capabilities(vec!["bash"]),
+            "return String(await sdk.tools());",
+        );
+        assert!(granted_static.contains("bash"), "{granted_static}");
+
+        let grant = new_bridge_grant();
+        let tool = RunCodeTool::new(".").with_bridge_grant(Arc::clone(&grant));
+        grant.store(true, Ordering::SeqCst);
+        let granted_runtime = run_text(&tool, "return String(await sdk.tools());");
+        assert!(granted_runtime.contains("bash"), "{granted_runtime}");
+        assert!(granted_runtime.contains("ast_edit"), "{granted_runtime}");
+        assert!(granted_runtime.contains("sessions"), "{granted_runtime}");
+        assert!(granted_runtime.contains("web_search"), "{granted_runtime}");
     }
 }

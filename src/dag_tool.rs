@@ -246,6 +246,15 @@ impl NodeExecutor for RegistryExecutor {
                 )
             })?;
             let node_call_id = format!("{dag_call_id}#n{node_id}");
+            // A dag node that runs `run_code` reaches the bridge here rather
+            // than through the agent's per-call executor; the outer `dag` call
+            // already passed approval. Children are excluded so a read-only
+            // agent cannot widen through the bridge.
+            if node.tool_name == "run_code"
+                && crate::ptc_bridge::bridge_runtime_grant_allowed()
+            {
+                registry.authorize_ptc_bridge();
+            }
             // 节点工具的增量输出 → dag 的 node_output 消息（带共享 seq）。
             let forward: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>> =
                 on_update.as_ref().map(|emit| {

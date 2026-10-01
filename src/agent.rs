@@ -5512,6 +5512,13 @@ impl Agent {
                         true,
                     ));
                 };
+                // `xdev run run_code` reaches the bridge through this inner
+                // dispatch rather than `execute_tool_without_hooks`; the outer
+                // xdev call already passed approval. Children are excluded so a
+                // read-only agent cannot widen through the bridge.
+                if name == "run_code" && crate::ptc_bridge::bridge_runtime_grant_allowed() {
+                    self.tools.authorize_ptc_bridge();
+                }
                 let mut output = inner
                     .execute(&tool_call.id, inner_args, None)
                     .await
@@ -5640,7 +5647,7 @@ impl Agent {
         // auto-approving `yolo` mode), so the inner bridge tools must not
         // prompt a second time. The grant lives in the session registry and is
         // shared with the tool instance — the program can never set it.
-        if tool_call.name == "run_code" {
+        if tool_call.name == "run_code" && crate::ptc_bridge::bridge_runtime_grant_allowed() {
             self.tools.authorize_ptc_bridge();
         }
 
