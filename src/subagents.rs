@@ -102,13 +102,13 @@ const BUILTIN_GENERAL_PROMPT: &str = "You are a general-purpose coding subagent.
 const BUILTIN_AGENTS: &[BuiltinAgent] = &[
     BuiltinAgent {
         name: "explore",
-        description: "read-only investigation (read, grep, find, ls, ast_grep, json_query)",
+        description: "read-only investigation without writes or shell",
         tools: Some(&["read", "grep", "find", "ls", "ast_grep", "json_query"]),
         system_prompt: BUILTIN_EXPLORE_PROMPT,
     },
     BuiltinAgent {
         name: "verify",
-        description: "independent verification: runs tests and reports, but cannot edit",
+        description: "independent verification that runs the gates and cannot edit",
         tools: Some(&[
             "read",
             "grep",
@@ -142,7 +142,7 @@ const BUILTIN_AGENTS: &[BuiltinAgent] = &[
     },
     BuiltinAgent {
         name: "general",
-        description: "general-purpose worker with the full child toolset, including session search",
+        description: "general-purpose worker with the full writer toolset",
         tools: Some(&[
             "read",
             "bash",
@@ -816,7 +816,10 @@ fn builtin_agent_definition(agent: &BuiltinAgent) -> AgentDefinition {
 /// `general` exist even when no `agents/*.md` do. Later loads of the same name
 /// overwrite them, so a user or project definition still wins.
 fn builtin_agent_definitions() -> Vec<AgentDefinition> {
-    BUILTIN_AGENTS.iter().map(builtin_agent_definition).collect()
+    BUILTIN_AGENTS
+        .iter()
+        .map(builtin_agent_definition)
+        .collect()
 }
 
 /// Reject a definition whose `tools:` names something `--tools` would silently
@@ -1533,7 +1536,10 @@ mod tests {
         let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
         assert_eq!(unique.len(), names.len(), "duplicate built-in agent name");
         for role in ["explore", "verify", "fixer", "general"] {
-            assert!(names.contains(&role), "roster is missing {role:?}: {names:?}");
+            assert!(
+                names.contains(&role),
+                "roster is missing {role:?}: {names:?}"
+            );
         }
 
         // No `agents/` directory anywhere: discovery must still seed the roster
