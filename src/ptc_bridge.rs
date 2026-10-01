@@ -38,20 +38,21 @@
 //! Every member declares strictly read-only effects, so reaching it cannot
 //! bypass the approval pipeline.
 //!
-//! The write/process/network tools (`bash`, `write`, `edit`, `ast_edit`,
-//! `sessions`, `web_search`) are **not** reachable by default. They become
-//! reachable only when the OPERATOR grants them at construction
-//! ([`GRANTABLE_TOOLS`], `RunCodeTool::with_capabilities`); a program can never
-//! grant itself one. Grant them by launching the agent with
-//! `PTC_CAPABILITIES=bash,write,edit,ast_edit,sessions,web_search`, then
-//! `await sdk.call('bash', { command: '...' })` and friends work.
+//! Every other internal tool — `bash`, `write`, `edit`, `ast_edit`, `lsp`,
+//! `debug`, `sessions`, `web_search`, memory, `jobs`, `hub`, `browser`, … — is
+//! reachable through `sdk.call(name, args)` once the run is authorized: either
+//! by the OPERATOR naming it in `PTC_CAPABILITIES` (`bash,write,lsp,...`), or
+//! by approving the outer `run_code` call (a human approval, or an
+//! auto-approving `yolo` mode). The bridge dispatches through the LIVE tool
+//! registry, so it reaches the exact instances the session has; a program can
+//! never grant itself anything. `await sdk.tools()` lists what is reachable.
 //!
 //! **Authorization model (no nested approval).** A run that the operator has
 //! authorized at the outer `run_code` gate (or that runs under `yolo`) is not
 //! re-prompted per inner tool; the grant is decided once, outside model code.
-//! Read-only tools never need authorization at all. Mutating/process/network
-//! tools require the operator grant above — which is the same decision the
-//! outer `run_code` approval represents.
+//! Read-only tools never need authorization at all. Delegated subagent children
+//! inherit only the static `PTC_CAPABILITIES` grant, never a parent session's
+//! run-time approval, so a read-only agent cannot widen through the bridge.
 //!
 //! # Error locations
 //!
@@ -122,18 +123,14 @@ const BRIDGE_WHITELIST: [&str; 7] = [
     "current_time",
 ];
 
-/// Approval-gated tools a run may reach only when the OPERATOR granted them at
-/// construction ([`RunCodeTool::with_capabilities`]).
+/// Curated approval-gated tools, used only as the `sdk.tools()` fallback when
+/// no live registry is bound (bare `RunCodeTool`, i.e. unit tests).
 ///
-/// They must never become reachable because the *program* asked. `run_code`
-/// executes model-authored code, so honouring a model-supplied grant would be
-/// self-escalation past the per-call approval gate in the agent loop
-/// (`ToolApprovalHandler`); the grant is therefore a property of the tool
-/// instance, decided outside the model's control.
-///
-/// This is the same class as `bash`: writing, process, and network tools.
-/// `ast_edit` writes, `sessions` can delete/restore, and `web_search` is a
-/// network operation — none may sit in [`BRIDGE_WHITELIST`].
+/// With a live registry bound, *any* registered tool is reachable once the run
+/// is authorized (see [`RunCodeTool::with_capabilities`]); this list is a
+/// representative fallback, not the reachable set. Their write/process/network
+/// nature is why they must never sit in [`BRIDGE_WHITELIST`]: `ast_edit` writes,
+/// `sessions` can delete/restore, and `web_search` is a network operation.
 const GRANTABLE_TOOLS: [&str; 6] = [
     "bash",
     "write",
@@ -239,13 +236,20 @@ pub struct RunCodeTool {
     image_auto_resize: bool,
     /// `read` image-blocking flag, matching the live registry.
     block_images: bool,
-    /// Operator-granted, approval-gated tools the bridge may reach (empty =
-    /// read-only, the default).
-    capabilities: Vec<&'static str>,
+    /// Operator-granted tools the bridge may reach beyond the read-only
+    /// default (empty = read-only). Names are not validated here; an unknown
+    /// name simply fails at dispatch. `PTC_CAPABILITIES` is the interim source.
+    capabilities: Vec<String>,
     /// Session-scoped authorization flipped by the agent once the outer
-    /// `run_code` call is approved. When set, every *constructible* bridge
-    /// tool is reachable without a nested prompt; the program cannot set it.
+    /// `run_code` call is approved. When set, every tool the session has is
+    /// reachable without a nested prompt; the program cannot set it.
     bridge_grant: BridgeGrant,
+    /// Live registry, bound when this tool's registry is wrapped in a
+    /// `SharedToolRegistry`. When present the bridge dispatches to the real
+    /// tool instances (including `lsp`, `debug`, memory, `jobs`, `hub`, …)
+    /// instead of rebuilding a subset.
+    shared_registry:
+        std::sync::OnceLock<std::sync::Weak<crate::tools::SharedToolRegistryInner>>,
 }
 
 impl RunCodeTool {
@@ -265,6 +269,7 @@ impl RunCodeTool {
             block_images: false,
             capabilities: capabilities_from_env(),
             bridge_grant: new_bridge_grant(),
+            shared_registry: std::sync::OnceLock::new(),
         }
     }
 
@@ -313,18 +318,19 @@ impl RunCodeTool {
         self
     }
 
-    /// Grant approval-gated tools to this bridge instance.
+    /// Grant tools to this bridge instance beyond the read-only default.
     ///
-    /// An operator decision, never a model one (see [`GRANTABLE_TOOLS`]). Names
-    /// outside that list are dropped, so a typo cannot silently widen the
-    /// surface. This is the seam the config/CLI wiring should call once
-    /// `run_code` capabilities become a real setting; `PTC_CAPABILITIES` is the
-    /// interim source.
+    /// An operator decision, never a model one. Any non-empty name is kept and
+    /// resolved against the live registry at dispatch time, so every internal
+    /// tool (`bash`, `lsp`, `debug`, `sessions`, memory, `jobs`, `hub`, …) can
+    /// be granted. `PTC_CAPABILITIES` is the interim source.
     #[must_use]
     pub(crate) fn with_capabilities(mut self, capabilities: Vec<&'static str>) -> Self {
         self.capabilities = capabilities
             .into_iter()
-            .filter(|name| GRANTABLE_TOOLS.contains(name))
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
             .collect();
         self
     }
@@ -378,7 +384,7 @@ impl RunCodeTool {
 
     /// The tool names this run can reach, for `sdk.tools()`: the read-only set,
     /// the operator's static grant, and — once the outer call is authorized —
-    /// every approval-gated tool the bridge can construct.
+    /// every tool the live registry exposes.
     fn reachable_tools(&self) -> Vec<String> {
         let mut reachable: Vec<String> = BRIDGE_WHITELIST
             .iter()
@@ -386,47 +392,46 @@ impl RunCodeTool {
             .collect();
         for name in &self.capabilities {
             if !reachable.iter().any(|existing| existing == name) {
-                reachable.push((*name).to_string());
+                reachable.push(name.clone());
             }
         }
         if self.bridge_grant.load(Ordering::SeqCst) {
-            for name in GRANTABLE_TOOLS {
-                if !reachable.iter().any(|existing| existing == name) {
-                    reachable.push(name.to_string());
+            let live: Option<Vec<String>> = self
+                .shared_registry
+                .get()
+                .and_then(crate::tools::SharedToolRegistry::upgrade)
+                .map(|shared| {
+                    shared
+                        .snapshot()
+                        .tools()
+                        .iter()
+                        .map(|tool| tool.name().to_string())
+                        .collect()
+                });
+            let names = live
+                .unwrap_or_else(|| GRANTABLE_TOOLS.iter().map(|n| (*n).to_string()).collect());
+            for name in names {
+                if name != "run_code" && !reachable.iter().any(|existing| existing == &name) {
+                    reachable.push(name);
                 }
             }
         }
         reachable
     }
 
-    /// Whether the bridge may reach `tool_name`: the read-only default plus
-    /// whatever the operator granted.
+    /// Whether the bridge may reach `tool_name`: the read-only default, the
+    /// operator's static grant, or the session's run-time grant.
     fn allowed(&self, tool_name: &str) -> bool {
         BRIDGE_WHITELIST.contains(&tool_name)
-            || self.capabilities.contains(&tool_name)
+            || self.capabilities.iter().any(|name| name == tool_name)
             || self.bridge_grant.load(Ordering::SeqCst)
     }
 
-    /// Dispatch one whitelisted bridge call through the SAME tool
-    /// implementations a direct call uses — identical path policy.
-    async fn bridge_call(
-        &self,
-        tool_name: &str,
+    /// Run one tool and keep only its text.
+    async fn dispatch_bridge_tool(
+        tool: &dyn Tool,
         input: Value,
     ) -> std::result::Result<String, String> {
-        if !self.allowed(tool_name) {
-            return Err(format!(
-                "PTC_BRIDGE_DENIED: tool `{tool_name}` was not granted to this run \
-                 (read-only default: {}; operator-grantable: {})",
-                BRIDGE_WHITELIST.join("|"),
-                GRANTABLE_TOOLS.join("|")
-            ));
-        }
-        let Some(tool) = self.bridge_tool(tool_name) else {
-            return Err(format!(
-                "PTC_BRIDGE_DENIED: `{tool_name}` is not a bridge tool"
-            ));
-        };
         match tool.execute("run-code-bridge", input, None).await {
             Ok(output) => {
                 let mut text = String::new();
@@ -439,6 +444,42 @@ impl RunCodeTool {
             }
             Err(err) => Err(err.to_string()),
         }
+    }
+
+    /// Dispatch one bridge call through the LIVE registry when available, so
+    /// every tool the session has is reachable (not just the ones the bridge
+    /// can rebuild standalone), and fall back to a locally-built tool for a
+    /// bare `RunCodeTool` (unit tests). Errors name the reachable set.
+    async fn bridge_call(
+        &self,
+        tool_name: &str,
+        input: Value,
+    ) -> std::result::Result<String, String> {
+        if !self.allowed(tool_name) {
+            return Err(format!(
+                "PTC_BRIDGE_DENIED: tool `{tool_name}` is not reachable in this run \
+                 (read-only default: {}; approve run_code or set PTC_CAPABILITIES to \
+                 widen; `await sdk.tools()` lists what is reachable)",
+                BRIDGE_WHITELIST.join("|"),
+            ));
+        }
+        if tool_name == "run_code" {
+            return Err("PTC_BRIDGE_DENIED: `run_code` cannot call itself".to_string());
+        }
+        if let Some(weak) = self.shared_registry.get()
+            && let Some(shared) = crate::tools::SharedToolRegistry::upgrade(weak)
+        {
+            let snapshot = shared.snapshot();
+            if let Some(tool) = snapshot.get(tool_name) {
+                return Self::dispatch_bridge_tool(tool, input).await;
+            }
+        }
+        let Some(tool) = self.bridge_tool(tool_name) else {
+            return Err(format!(
+                "PTC_BRIDGE_DENIED: `{tool_name}` is not a registered tool"
+            ));
+        };
+        Self::dispatch_bridge_tool(tool.as_ref(), input).await
     }
 }
 
@@ -602,19 +643,20 @@ fn realm_thread(
     let _ = tx.send(RealmMessage::Done(terminal));
 }
 
-/// Operator grant for the approval-gated bridge tools, from `PTC_CAPABILITIES`.
+/// Operator grant for bridge tools, from `PTC_CAPABILITIES`.
 ///
 /// Interim wiring until the config/CLI carries it: the value is read once at
 /// construction, from the environment of whatever launched the agent — a human
-/// decision, not something model-authored code can set. Unrecognized names are
-/// dropped by [`RunCodeTool::with_capabilities`].
-fn capabilities_from_env() -> Vec<&'static str> {
+/// decision, not something model-authored code can set. Any non-empty name is
+/// kept; an unknown one fails at dispatch against the live registry.
+fn capabilities_from_env() -> Vec<String> {
     let Ok(raw) = std::env::var("PTC_CAPABILITIES") else {
         return Vec::new();
     };
-    GRANTABLE_TOOLS
-        .into_iter()
-        .filter(|name| raw.split(',').any(|part| part.trim() == *name))
+    raw.split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(str::to_string)
         .collect()
 }
 
@@ -1399,11 +1441,12 @@ impl Tool for RunCodeTool {
          `ptc-program:<line>` frames pointing at your own code; `console.log` \
          is captured separately and never throws. Only what you return is \
          program output — curate it. One run_code \
-         replaces many model round-trips. The operator may also grant `bash`, \
-         `write`, `edit`, `ast_edit`, `sessions` and `web_search` for this \
-         session, in which case `await sdk.call('bash', { command: '...' })` and \
-         friends are reachable; otherwise such a call is refused with \
-         PTC_BRIDGE_DENIED."
+         replaces many model round-trips. Every other internal tool (`bash`, \
+         `edit`, `lsp`, `debug`, `sessions`, `web_search`, memory, `jobs`, …) is \
+         reachable via `await sdk.call(name, args)` once the run is authorized — \
+         approve run_code, run under yolo, or name tools in PTC_CAPABILITIES; \
+         `await sdk.tools()` lists what is reachable. Unauthorized calls are \
+         refused with PTC_BRIDGE_DENIED."
     }
 
     fn parameters(&self) -> Value {
@@ -1429,6 +1472,13 @@ impl Tool for RunCodeTool {
             },
             "required": ["code"]
         })
+    }
+
+    fn bind_shared_registry(
+        &self,
+        shared: &std::sync::Weak<crate::tools::SharedToolRegistryInner>,
+    ) {
+        let _ = self.shared_registry.set(shared.clone());
     }
 
     fn effects(&self) -> ToolEffects {
@@ -2047,14 +2097,14 @@ mod tests {
     }
 
     #[test]
-    fn grant_is_limited_to_grantable_names() {
-        // A typo (or an attempt to grant something outside the list) cannot
-        // widen the surface.
-        let tool = RunCodeTool::new(".").with_capabilities(vec!["bash", "read", "nope"]);
+    fn capabilities_keep_names_and_drop_empties() {
+        // Every internal tool can be granted; only empty entries are dropped.
+        // An unknown name stays "allowed" here and fails at dispatch against
+        // the live registry, so a typo surfaces as a clear tool error.
+        let tool = RunCodeTool::new(".").with_capabilities(vec!["bash", "lsp", "", "  "]);
         assert!(tool.allowed("bash"));
-        assert!(tool.allowed("read"));
-        assert!(!tool.allowed("nope"));
-        assert_eq!(tool.capabilities, vec!["bash"]);
+        assert!(tool.allowed("lsp"));
+        assert_eq!(tool.capabilities, vec!["bash".to_string(), "lsp".to_string()]);
     }
 
     #[test]
@@ -2335,5 +2385,40 @@ mod tests {
         assert!(granted_runtime.contains("ast_edit"), "{granted_runtime}");
         assert!(granted_runtime.contains("sessions"), "{granted_runtime}");
         assert!(granted_runtime.contains("web_search"), "{granted_runtime}");
+    }
+
+    #[test]
+    fn live_registry_reaches_tools_the_bridge_cannot_rebuild() {
+        // With the grant set, a call dispatches through the live registry, so a
+        // tool the bridge does NOT rebuild standalone (`hashline_edit`) is
+        // reachable: the failure must be that tool's own validation error, never
+        // `PTC_BRIDGE_DENIED`.
+        let registry = crate::tools::ToolRegistry::new(
+            &["run_code", "hashline_edit"],
+            std::path::Path::new("."),
+            None,
+        );
+        let shared = crate::tools::SharedToolRegistry::new(registry);
+        shared.authorize_ptc_bridge();
+        let snapshot = shared.snapshot();
+        let tool = snapshot.get("run_code").expect("run_code registered");
+        let runtime = asupersync::runtime::RuntimeBuilder::new()
+            .build()
+            .expect("runtime build");
+        let out = runtime
+            .block_on(tool.execute(
+                "t1",
+                json!({
+                    "code": "try { await sdk.call('hashline_edit', {}); return 'no-error'; } catch (e) { return 'err:' + String(e && e.message); }",
+                    "timeoutMs": 30_000,
+                }),
+                None,
+            ))
+            .expect("run");
+        let text = output_text(&out);
+        assert!(
+            !text.contains("PTC_BRIDGE_DENIED"),
+            "live registry did not dispatch: {text}"
+        );
     }
 }

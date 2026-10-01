@@ -198,6 +198,19 @@ pub trait Tool: Send + Sync {
     /// Non-job tools intentionally ignore it.
     fn bind_job_session_scope(&mut self, _scope: crate::jobs::JobSessionScope) {}
 
+    /// Attach the owning registry's shared handle.
+    ///
+    /// Lets a tool dispatch to sibling tools through the live registry instead
+    /// of rebuilding them — the `run_code` bridge uses this to reach every tool
+    /// the session actually has (`lsp`, `debug`, `sessions`, memory, `jobs`,
+    /// `hub`, …). Default no-op; tools that need it store the `Weak` behind
+    /// interior mutability so the hook can take `&self`.
+    fn bind_shared_registry(
+        &self,
+        _shared: &std::sync::Weak<SharedToolRegistryInner>,
+    ) {
+    }
+
     /// Where the tool comes from. Extension-registered tools answer
     /// [`ToolOrigin::Extension`] so `setActiveTools` can shelve and restore
     /// them without touching built-in or MCP tools.
@@ -6120,6 +6133,12 @@ impl SharedToolRegistry {
     pub fn new(mut registry: ToolRegistry) -> Self {
         let inner = Arc::new_cyclic(|weak| {
             registry.shared = Some(weak.clone());
+            // Let tools that dispatch to siblings (the `run_code` bridge) reach
+            // this live registry. `Weak` avoids a registry → tool → registry
+            // `Arc` cycle.
+            for tool in &registry.tools {
+                tool.bind_shared_registry(weak);
+            }
             SharedToolRegistryInner {
                 registry: std::sync::RwLock::new(Arc::new(registry)),
                 version: std::sync::atomic::AtomicU64::new(0),
