@@ -5654,16 +5654,26 @@ impl ToolRegistry {
                 // so they must receive the same workspace + search backend as
                 // the direct-call tools above (otherwise their path/backend
                 // policy silently diverges from a direct `read`).
-                "run_code" => tools.push(Box::new(
-                    crate::ptc_bridge::RunCodeTool::new(cwd)
+                "run_code" => {
+                    let tool = crate::ptc_bridge::RunCodeTool::new(cwd)
                         .with_workspace(workspace.clone())
                         .with_read_config(
                             search_backend_from_config(config),
                             image_auto_resize,
                             block_images,
                         )
-                        .with_bridge_grant(ptc_bridge_grant.clone()),
-                )),
+                        .with_bridge_grant(ptc_bridge_grant.clone());
+                    // Config capabilities override the `PTC_CAPABILITIES`
+                    // fallback baked into `new()`.
+                    let tool = match config
+                        .and_then(|c| c.ptc.as_ref())
+                        .and_then(|p| p.capabilities.clone())
+                    {
+                        Some(names) => tool.with_capability_names(names),
+                        None => tool,
+                    };
+                    tools.push(Box::new(tool));
+                }
                 "github" => tools.push(Box::new(crate::github::GithubTool::new(
                     cwd,
                     config.and_then(|c| c.gh_path.as_deref()),

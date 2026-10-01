@@ -325,12 +325,18 @@ impl RunCodeTool {
     /// tool (`bash`, `lsp`, `debug`, `sessions`, memory, `jobs`, `hub`, …) can
     /// be granted. `PTC_CAPABILITIES` is the interim source.
     #[must_use]
-    pub(crate) fn with_capabilities(mut self, capabilities: Vec<&'static str>) -> Self {
+    pub(crate) fn with_capabilities(self, capabilities: Vec<&'static str>) -> Self {
+        self.with_capability_names(capabilities.into_iter().map(String::from).collect())
+    }
+
+    /// Same as [`Self::with_capabilities`] but for owned names, which config
+    /// values provide (they are not `'static`).
+    #[must_use]
+    pub(crate) fn with_capability_names(mut self, capabilities: Vec<String>) -> Self {
         self.capabilities = capabilities
             .into_iter()
-            .map(str::trim)
+            .map(|name| name.trim().to_string())
             .filter(|name| !name.is_empty())
-            .map(str::to_string)
             .collect();
         self
     }
@@ -427,7 +433,11 @@ impl RunCodeTool {
             || self.bridge_grant.load(Ordering::SeqCst)
     }
 
-    /// Run one tool and keep only its text.
+    /// Run one tool and keep its text. Non-text blocks are not silently
+    /// dropped: an image/media block leaves a marker with its MIME type and
+    /// approximate size, so a program can tell the model something was there
+    /// (the realm channel is text-only; full base64 pass-through is a separate
+    /// design task).
     async fn dispatch_bridge_tool(
         tool: &dyn Tool,
         input: Value,
@@ -436,8 +446,20 @@ impl RunCodeTool {
             Ok(output) => {
                 let mut text = String::new();
                 for block in &output.content {
-                    if let ContentBlock::Text(t) = block {
-                        text.push_str(&t.text);
+                    match block {
+                        ContentBlock::Text(t) => text.push_str(&t.text),
+                        ContentBlock::Image(image) => text.push_str(&format!(
+                            "\n[image omitted: {}, {} bytes]",
+                            image.mime_type,
+                            approx_decoded_bytes(&image.data)
+                        )),
+                        ContentBlock::Media(media) => text.push_str(&format!(
+                            "\n[media omitted: {}, {}, {} bytes]",
+                            media.name.as_deref().unwrap_or("media"),
+                            media.mime_type,
+                            approx_decoded_bytes(&media.data)
+                        )),
+                        _ => {}
                     }
                 }
                 if output.is_error { Err(text) } else { Ok(text) }
@@ -1042,6 +1064,11 @@ fn render_console_text<'js>(ctx: &Ctx<'js>, value: &JsValue<'js>) -> String {
     }
 }
 
+/// Approximate decoded byte length of a base64 payload, for omission markers.
+fn approx_decoded_bytes(base64: &str) -> usize {
+    base64.len() / 4 * 3
+}
+
 /// Normalize the first helper argument: positional shorthand or options object.
 ///
 /// Mirrors the documented contract — a non-empty string becomes `{ key: value }`,
@@ -1497,6 +1524,16 @@ impl Tool for RunCodeTool {
             // run write-class, so a barrier/plan gate never treats a granted
             // run as read-only.
             effects = effects.union(ToolEffects::write());
+        }
+        // Once the session grant is set, the reach is the whole live registry
+        // (network, UI, process, …), so declare the union of what it exposes.
+        if self.bridge_grant.load(Ordering::SeqCst)
+            && let Some(weak) = self.shared_registry.get()
+            && let Some(shared) = crate::tools::SharedToolRegistry::upgrade(weak)
+        {
+            for tool in shared.snapshot().tools() {
+                effects = effects.union(tool.effects());
+            }
         }
         effects
     }
@@ -2419,6 +2456,79 @@ mod tests {
         assert!(
             !text.contains("PTC_BRIDGE_DENIED"),
             "live registry did not dispatch: {text}"
+        );
+    }
+
+    /// Emits a text block plus an image block, to exercise the marker path.
+    struct ImageProbeTool;
+
+    #[async_trait::async_trait]
+    impl Tool for ImageProbeTool {
+        fn name(&self) -> &str {
+            "image_probe"
+        }
+        fn label(&self) -> &str {
+            "image probe"
+        }
+        fn description(&self) -> &str {
+            ""
+        }
+        fn parameters(&self) -> Value {
+            json!({})
+        }
+        fn effects(&self) -> ToolEffects {
+            ToolEffects::read()
+        }
+        async fn execute(
+            &self,
+            _tool_call_id: &str,
+            _input: Value,
+            _on_update: Option<Box<dyn Fn(ToolUpdate) + Send + Sync>>,
+        ) -> Result<ToolOutput> {
+            Ok(ToolOutput {
+                content: vec![
+                    ContentBlock::Text(TextContent::new("probe-text")),
+                    ContentBlock::Image(crate::model::ImageContent {
+                        data: "AAAA".to_string(),
+                        mime_type: "image/png".to_string(),
+                    }),
+                ],
+                details: None,
+                is_error: false,
+            })
+        }
+    }
+
+    #[test]
+    fn image_blocks_are_marked_not_dropped() {
+        let grant = new_bridge_grant();
+        let run_code = RunCodeTool::new(".").with_bridge_grant(Arc::clone(&grant));
+        let registry = crate::tools::ToolRegistry::from_tools(vec![
+            Box::new(ImageProbeTool),
+            Box::new(run_code),
+        ]);
+        let shared = crate::tools::SharedToolRegistry::new(registry);
+        grant.store(true, Ordering::SeqCst);
+        let snapshot = shared.snapshot();
+        let tool = snapshot.get("run_code").expect("run_code registered");
+        let runtime = asupersync::runtime::RuntimeBuilder::new()
+            .build()
+            .expect("runtime build");
+        let out = runtime
+            .block_on(tool.execute(
+                "t1",
+                json!({
+                    "code": "return await sdk.call('image_probe', {});",
+                    "timeoutMs": 30_000,
+                }),
+                None,
+            ))
+            .expect("run");
+        let text = output_text(&out);
+        assert!(text.contains("probe-text"), "{text}");
+        assert!(
+            text.contains("[image omitted: image/png"),
+            "image block was not surfaced: {text}"
         );
     }
 }

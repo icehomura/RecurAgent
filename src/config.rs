@@ -76,6 +76,8 @@ pub struct Config {
     pub model_roles: Option<ModelRoleSettings>,
     /// Automatic session titling (see [`TitlingSettings`], bd-cv653.3.1).
     pub titling: Option<TitlingSettings>,
+    /// Programmatic-tool-calling (`run_code`) bridge settings.
+    pub ptc: Option<PtcSettings>,
     /// Providers whose models are hidden from selection and cycling
     /// (bd-cv653.3.2). Canonical ids or aliases, case-insensitive.
     #[serde(alias = "disabledProviders")]
@@ -497,6 +499,21 @@ pub struct TitlingSettings {
     /// Master switch for automatic session titling (default: true).
     #[serde(alias = "autoTitle", alias = "auto")]
     pub auto_title: Option<bool>,
+}
+
+/// `run_code` (programmatic tool calling) bridge settings.
+///
+/// The bridge is read-only by default. `capabilities` names the extra tools a
+/// program may reach via `sdk.call(name, args)`; approving the outer `run_code`
+/// call (or running under `yolo`) already authorizes the whole live registry,
+/// so this is mainly the headless / `PTC_CAPABILITIES` equivalent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PtcSettings {
+    /// Tool names grantable to the bridge beyond the read-only default, e.g.
+    /// `["bash", "lsp", "sessions"]`. Any name the session has works. When set,
+    /// overrides the `PTC_CAPABILITIES` environment variable.
+    pub capabilities: Option<Vec<String>>,
 }
 
 /// A path-scoped model-set override (bd-cv653.3.2).
@@ -1117,6 +1134,7 @@ impl Config {
             enabled_models: other.enabled_models.or(base.enabled_models),
             model_roles: merge_model_roles(base.model_roles, other.model_roles),
             titling: merge_titling(base.titling, other.titling),
+            ptc: merge_ptc(base.ptc, other.ptc),
             disabled_providers: other.disabled_providers.or(base.disabled_providers),
             model_scope_overrides: other.model_scope_overrides.or(base.model_scope_overrides),
             tools: merge_tools(base.tools, other.tools),
@@ -2208,6 +2226,18 @@ fn merge_titling(
     match (base, other) {
         (Some(base), Some(other)) => Some(TitlingSettings {
             auto_title: other.auto_title.or(base.auto_title),
+        }),
+        (None, Some(other)) => Some(other),
+        (Some(base), None) => Some(base),
+        (None, None) => None,
+    }
+}
+
+/// Merge PTC bridge settings (other wins).
+fn merge_ptc(base: Option<PtcSettings>, other: Option<PtcSettings>) -> Option<PtcSettings> {
+    match (base, other) {
+        (Some(base), Some(other)) => Some(PtcSettings {
+            capabilities: other.capabilities.or(base.capabilities),
         }),
         (None, Some(other)) => Some(other),
         (Some(base), None) => Some(base),

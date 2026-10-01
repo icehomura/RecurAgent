@@ -534,7 +534,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 | `lsp` / `debug` | Language-server (14 ops) and DAP debugging (29 ops) bridges |
 | `sessions` | Manage stored agent sessions: `list` the store, `read` a transcript (including the head of this conversation after compaction dropped it), `search` across sessions, soft-`delete` a session to the GC trash, or `restore` one from it. Deletion is recoverable (the file is moved, never unlinked) and refuses named, pinned, active, or live sessions; `scope: "current"` pins an action to the live conversation so it cannot reach another session. Discoverable tier (promote via `xdev`) |
 | `eval` | Persistent Python and JS kernels with cell semantics |
-| `run_code` | Programmatic tool orchestration (PTC): one round-trip batch that runs generated code calling the `read` / `grep` / `find` / `ls` tools directly; default-enabled |
+| `run_code` | Programmatic tool orchestration (PTC): one round-trip batch that runs generated JS against the tools. `sdk.read` / `grep` / `find` / `ls` / `astGrep` / `jsonQuery` / `currentTime` are always available (read-only, no approval); `sdk.call(name, args)` reaches any other tool the session has once the outer call is approved (a human approval or `yolo`) — with no nested per-tool prompt — or named via `PTC_CAPABILITIES` / `ptc.capabilities`. `sdk.tools()` lists what is reachable; default-enabled |
 | `jobs` / `hub` | Background bash job control; PTY service supervision |
 | `github` | `gh`-backed PR/issue/run operations |
 | `security_scan` | Rule-pack security scanning to SARIF (`plan`/`run`/`disposition`/`compare`) |
@@ -583,8 +583,12 @@ definitions. Four built-in agents are always available, so the tool works
 before any definition is written; a user or project definition of the same name
 overrides the built-in:
 
-- `explore` — read-only investigation (`read`, `grep`, `find`, `ls`, `ast_grep`,
-  `json_query`). No command execution, so it cannot mutate anything.
+- `explore` — read-only investigation: `read`, `grep`, `find`, `ls`, `ast_grep`,
+  `json_query`, plus `bash` and `run_code` so it can run read-only inspection
+  (`git log/show/diff`, `rg`, `cargo metadata`, listing tests) instead of
+  guessing. Carrying a shell means its read-only property is
+  **prompt-enforced** — `bash_mediation` blocks catastrophic commands, not
+  ordinary mutation — so the definition spells out what the shell may not do.
 - `verify` — independent verification: runs the tests, build, and linters and
   reports what passed and what failed. It has **no write tool**, so it cannot
   edit a test, delete a failing assertion, or regenerate a golden file to make
@@ -592,8 +596,9 @@ overrides the built-in:
 - `fixer` — applies the specific defects a `verify` child reported, re-running
   the verification that exposed them. It is a separate role precisely so the
   verifier itself never gains a write path.
-- `general` — general-purpose worker with the full child toolset, including
-  `run_code`, `ast_grep`/`ast_edit`, and session search.
+- `implement` — owns a goal end to end and builds it. Holds the full writer
+  toolset (including `run_code`, `ast_grep`/`ast_edit`, and session search) and
+  is told to change code rather than stop at a plan.
 
 The process inherits the parent's provider, router, authentication,
 and model-registry environment, including `RECUR_AGENT_DIR`.
