@@ -67,8 +67,7 @@ impl DagViewState {
 }
 
 /// Docker 风格盲文转圈（10 帧）；TUI 每帧递增 `frame` 即可动起来。
-pub const SPINNER_FRAMES: [&str; 10] =
-    ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+pub const SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 #[derive(Debug, Clone)]
 pub struct DagViewNode {
@@ -108,7 +107,11 @@ pub fn render_with_frame(nodes: &[DagViewNode], frame: usize) -> Vec<Vec<DagView
 /// 宽度感知渲染：自然宽度超过 `max_width` 时，先缩节点间距、再逐级缩短框内
 /// 名字（4 列下限），尽量塞进终端宽度；仍塞不下则按最紧配置输出，交给调用方裁剪。
 #[must_use]
-pub fn render_fitted(nodes: &[DagViewNode], frame: usize, max_width: usize) -> Vec<Vec<DagViewCell>> {
+pub fn render_fitted(
+    nodes: &[DagViewNode],
+    frame: usize,
+    max_width: usize,
+) -> Vec<Vec<DagViewCell>> {
     for gap in [H_GAP, 1] {
         for cap in (4..=10usize).rev() {
             let rows = render_layout(nodes, frame, cap, gap);
@@ -156,7 +159,13 @@ struct Cell {
 
 impl Cell {
     fn empty() -> Self {
-        Self { conn: 0, lit: ' ', has_lit: false, skip: false, state: DagViewCellState::Neutral }
+        Self {
+            conn: 0,
+            lit: ' ',
+            has_lit: false,
+            skip: false,
+            state: DagViewCellState::Neutral,
+        }
     }
 }
 
@@ -220,10 +229,20 @@ struct Prepared {
     preds: Vec<Vec<usize>>,
 }
 
-fn render_layout(src: &[DagViewNode], frame: usize, cap: usize, gap: usize) -> Vec<Vec<DagViewCell>> {
+fn render_layout(
+    src: &[DagViewNode],
+    frame: usize,
+    cap: usize,
+    gap: usize,
+) -> Vec<Vec<DagViewCell>> {
     let truncated = src.len() > MAX_VIEW_NODES;
     let src = &src[..src.len().min(MAX_VIEW_NODES)];
-    let Prepared { mut ln, layers, edges, preds } = prepare(src, frame, cap);
+    let Prepared {
+        mut ln,
+        layers,
+        edges,
+        preds,
+    } = prepare(src, frame, cap);
     let max_layer = ln.iter().map(|x| x.layer).max().unwrap_or(0);
 
     // --- x positions: align each node under its parents so single-parent
@@ -280,8 +299,18 @@ fn render_layout(src: &[DagViewNode], frame: usize, cap: usize, gap: usize) -> V
         } else if parents.is_empty() || children.is_empty() {
             0
         } else {
-            let lo = parents.iter().chain(children.iter()).copied().min().unwrap();
-            let hi = parents.iter().chain(children.iter()).copied().max().unwrap();
+            let lo = parents
+                .iter()
+                .chain(children.iter())
+                .copied()
+                .min()
+                .unwrap();
+            let hi = parents
+                .iter()
+                .chain(children.iter())
+                .copied()
+                .max()
+                .unwrap();
             (lo + hi).div_euclid(2)
         };
     }
@@ -299,7 +328,10 @@ fn render_layout(src: &[DagViewNode], frame: usize, cap: usize, gap: usize) -> V
             } else {
                 format!("{}. {} ({})", node.id, node.name, node.tool_name)
             };
-            rows.push(vec![DagViewCell { text, state: DagViewCellState::Neutral }]);
+            rows.push(vec![DagViewCell {
+                text,
+                state: DagViewCellState::Neutral,
+            }]);
         }
     }
     if truncated {
@@ -337,7 +369,8 @@ fn compute_layers(n: usize, deps: &[Vec<usize>], dependents: &[Vec<usize>]) -> V
     layer
 }
 
-fn barycenter(layers: &mut [Vec<usize>], preds: &[Vec<usize>], succs: &[Vec<usize>]) {    for _ in 0..4 {
+fn barycenter(layers: &mut [Vec<usize>], preds: &[Vec<usize>], succs: &[Vec<usize>]) {
+    for _ in 0..4 {
         for l in 1..layers.len() {
             let scores: Vec<f64> = layers[l]
                 .iter()
@@ -370,7 +403,12 @@ fn reorder(layer: &mut [usize], scores: &[f64]) {
     }
 }
 
-fn barycenter_of(id: usize, adj: &[Vec<usize>], layers: &[Vec<usize>], other: usize) -> Option<f64> {
+fn barycenter_of(
+    id: usize,
+    adj: &[Vec<usize>],
+    layers: &[Vec<usize>],
+    other: usize,
+) -> Option<f64> {
     if layers[other].is_empty() {
         return None;
     }
@@ -386,7 +424,11 @@ fn barycenter_of(id: usize, adj: &[Vec<usize>], layers: &[Vec<usize>], other: us
             count += 1.0;
         }
     }
-    if count == 0.0 { None } else { Some(sum / count) }
+    if count == 0.0 {
+        None
+    } else {
+        Some(sum / count)
+    }
 }
 
 /// Anchor column (box center) per node, chosen to straighten edges: a node with
@@ -469,7 +511,13 @@ fn place_box(
     state: DagViewCellState,
 ) {
     for i in 0..w {
-        let conn = if i == 0 { D | R } else if i + 1 == w { D | L } else { L | R };
+        let conn = if i == 0 {
+            D | R
+        } else if i + 1 == w {
+            D | L
+        } else {
+            L | R
+        };
         add_conn(grid, x + i, y, conn, state);
     }
     add_conn(grid, x, y + 1, U | D, state);
@@ -489,7 +537,13 @@ fn place_box(
         col += 1;
     }
     for i in 0..w {
-        let conn = if i == 0 { U | R } else if i + 1 == w { U | L } else { L | R };
+        let conn = if i == 0 {
+            U | R
+        } else if i + 1 == w {
+            U | L
+        } else {
+            L | R
+        };
         add_conn(grid, x + i, y + 2, conn, state);
     }
 }
@@ -571,15 +625,25 @@ fn rle(row: &[Cell]) -> Vec<DagViewCell> {
     for cell in row {
         let state = cell.state;
         if Some(state) != cur_state && !buf.is_empty() {
-            out.push(DagViewCell { text: std::mem::take(&mut buf), state: cur_state.unwrap() });
+            out.push(DagViewCell {
+                text: std::mem::take(&mut buf),
+                state: cur_state.unwrap(),
+            });
         }
         cur_state = Some(state);
         if !cell.skip {
-            buf.push(if cell.has_lit { cell.lit } else { glyph(cell.conn) });
+            buf.push(if cell.has_lit {
+                cell.lit
+            } else {
+                glyph(cell.conn)
+            });
         }
     }
     if !buf.is_empty() {
-        out.push(DagViewCell { text: buf, state: cur_state.unwrap() });
+        out.push(DagViewCell {
+            text: buf,
+            state: cur_state.unwrap(),
+        });
     }
     loop {
         match out.last() {
@@ -615,7 +679,12 @@ fn render_horizontal_cfg(
 ) -> Vec<Vec<DagViewCell>> {
     let truncated = nodes.len() > MAX_VIEW_NODES;
     let src = &nodes[..nodes.len().min(MAX_VIEW_NODES)];
-    let Prepared { mut ln, layers, edges, preds } = prepare(src, frame, cap);
+    let Prepared {
+        mut ln,
+        layers,
+        edges,
+        preds,
+    } = prepare(src, frame, cap);
     let nlayers = layers.len();
 
     // cross-axis (row) anchors: every box is 3 rows tall.
@@ -703,7 +772,10 @@ fn render_horizontal_cfg(
             } else {
                 format!("{}. {} ({})", node.id, node.name, node.tool_name)
             };
-            out.push(vec![DagViewCell { text, state: DagViewCellState::Neutral }]);
+            out.push(vec![DagViewCell {
+                text,
+                state: DagViewCellState::Neutral,
+            }]);
         }
     }
     if truncated {
@@ -775,8 +847,17 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
         key: usize::MAX,
     });
     for (i, node) in src.iter().enumerate() {
-        let display = if node.name.is_empty() { node.tool_name.as_str() } else { node.name.as_str() };
-        let label = format!("{} {}. {}", node.state.marker(frame), node.id, short_name(display, cap));
+        let display = if node.name.is_empty() {
+            node.tool_name.as_str()
+        } else {
+            node.name.as_str()
+        };
+        let label = format!(
+            "{} {}. {}",
+            node.state.marker(frame),
+            node.id,
+            short_name(display, cap)
+        );
         let width = box_width(&label);
         ln.push(LNode {
             label,
@@ -871,7 +952,12 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
     }
     barycenter(&mut layers, &preds, &succs);
 
-    Prepared { ln, layers, edges, preds }
+    Prepared {
+        ln,
+        layers,
+        edges,
+        preds,
+    }
 }
 
 #[cfg(test)]
@@ -989,7 +1075,10 @@ mod tests {
     #[test]
     fn empty_graph_renders_start_and_end() {
         let joined = render_to_string(&[]).join("\n");
-        assert!(joined.contains("开始") && joined.contains("结束"), "{joined}");
+        assert!(
+            joined.contains("开始") && joined.contains("结束"),
+            "{joined}"
+        );
     }
 
     #[test]
@@ -1013,7 +1102,10 @@ mod tests {
             .map(|l| UnicodeWidthStr::width(l.as_str()))
             .max()
             .unwrap();
-        assert!(fitted_w < natural_w, "fitted {fitted_w} !< natural {natural_w}");
+        assert!(
+            fitted_w < natural_w,
+            "fitted {fitted_w} !< natural {natural_w}"
+        );
     }
 
     fn rows_to_string(rows: &[Vec<DagViewCell>]) -> Vec<String> {
@@ -1034,7 +1126,8 @@ mod tests {
         let start = lines.iter().position(|l| l.contains("开始")).unwrap();
         let end = lines.iter().position(|l| l.contains("结束")).unwrap();
         assert_eq!(
-            start, end,
+            start,
+            end,
             "expected horizontal at width 100:\n{}",
             lines.join("\n")
         );
@@ -1090,8 +1183,14 @@ mod tests {
             .map(|r| r.into_iter().map(|c| c.text).collect::<String>())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(joined.contains("开始") && joined.contains("结束"), "{joined}");
-        assert!(joined.contains("[✓] 1. read") && joined.contains("[ ] 2. write"), "{joined}");
+        assert!(
+            joined.contains("开始") && joined.contains("结束"),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("[✓] 1. read") && joined.contains("[ ] 2. write"),
+            "{joined}"
+        );
         // 宽裕时 render_auto 选横排（开始/结束与节点同一行）。
         let auto = render_auto(&nodes, 0, 200)
             .into_iter()
