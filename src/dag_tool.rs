@@ -91,16 +91,33 @@ struct DagPatch {
     remove_depends_on: Vec<(u32, u32)>,
 }
 
-/// Apply `patch` to `nodes` in place; return the ids whose definition changed
-/// (the "dirty roots"). Removals dirty the nodes that pointed at them.
+/// What a [`DagPatch`] changed.
+///
+/// Two distinct questions, deliberately separated:
+/// - [`Self::dirty`] — whose **execution** is invalidated (tool / args / edges
+///   changed, or a dependency was removed). These re-run, along with every
+///   transitive dependent.
+/// - [`Self::touched`] — whose **definition** changed at all, including a
+///   display-only rename. These need a `node_update.v1` so the frontend
+///   redraws the box, but a rename alone must not re-execute anything.
+#[derive(Debug, Default)]
+struct PatchEffect {
+    dirty: HashSet<u32>,
+    touched: HashSet<u32>,
+}
+
+/// Apply `patch` to `nodes` in place; report what changed.
 ///
 /// Uses **camelCase JSON keys** and validates that edge endpoints exist, so a
 /// typo fails loudly instead of silently producing a graph that ignores it.
-fn apply_patch(nodes: &mut Vec<TaskNode>, patch: &DagPatch) -> Result<HashSet<u32>> {
-    let mut dirty: HashSet<u32> = HashSet::new();
+fn apply_patch(nodes: &mut Vec<TaskNode>, patch: &DagPatch) -> Result<PatchEffect> {
+    let mut effect = PatchEffect::default();
 
     if !patch.remove.is_empty() {
         let removed: HashSet<u32> = patch.remove.iter().copied().collect();
+        for id in &removed {
+            effect.touched.insert(*id);
+        }
         nodes.retain(|node| !removed.contains(&node.id.value()));
         // Deleting a node drops every edge into it — a dangling `depends_on`
         // would be rejected by `TaskGraph::build`. A node that lost a
@@ -111,7 +128,8 @@ fn apply_patch(nodes: &mut Vec<TaskNode>, patch: &DagPatch) -> Result<HashSet<u3
             node.depends_on
                 .retain(|dep| !removed.contains(&dep.value()));
             if node.depends_on.len() != before {
-                dirty.insert(node.id.value());
+                effect.dirty.insert(node.id.value());
+                effect.touched.insert(node.id.value());
             }
         }
     }
@@ -119,16 +137,21 @@ fn apply_patch(nodes: &mut Vec<TaskNode>, patch: &DagPatch) -> Result<HashSet<u3
     for upsert in &patch.upsert {
         let id = upsert.id.value();
         if let Some(existing) = nodes.iter_mut().find(|node| node.id.value() == id) {
-            if existing.tool_name != upsert.tool_name
+            let exec_changed = existing.tool_name != upsert.tool_name
                 || existing.args != upsert.args
-                || existing.depends_on != upsert.depends_on
-            {
+                || existing.depends_on != upsert.depends_on;
+            let view_changed = exec_changed || existing.name != upsert.name;
+            if view_changed {
                 *existing = upsert.clone();
-                dirty.insert(id);
+                effect.touched.insert(id);
+            }
+            if exec_changed {
+                effect.dirty.insert(id);
             }
         } else {
             nodes.push(upsert.clone());
-            dirty.insert(id);
+            effect.dirty.insert(id);
+            effect.touched.insert(id);
         }
     }
 
@@ -141,7 +164,8 @@ fn apply_patch(nodes: &mut Vec<TaskNode>, patch: &DagPatch) -> Result<HashSet<u3
         let parent_id = TaskNodeId::new(parent);
         if !node.depends_on.contains(&parent_id) {
             node.depends_on.push(parent_id);
-            dirty.insert(child);
+            effect.dirty.insert(child);
+            effect.touched.insert(child);
         }
     }
 
@@ -155,11 +179,12 @@ fn apply_patch(nodes: &mut Vec<TaskNode>, patch: &DagPatch) -> Result<HashSet<u3
         let before = node.depends_on.len();
         node.depends_on.retain(|dep| *dep != parent_id);
         if node.depends_on.len() != before {
-            dirty.insert(child);
+            effect.dirty.insert(child);
+            effect.touched.insert(child);
         }
     }
 
-    Ok(dirty)
+    Ok(effect)
 }
 
 /// Expand `dirty` to every transitive dependent: changing a node invalidates
@@ -442,6 +467,10 @@ impl DagTool {
         if input.get("patch").is_some() && resume_id.is_none() {
             return Err(Error::validation("dag `patch` requires `resume`"));
         }
+        // Every event this call emits keys on the **graph** id, not the tool-call
+        // id: a resume must fold back into the card the original call opened
+        // (same key ⇒ in-place redraw), so the stable id is the resumed one.
+        let graph_id = resume_id.clone().unwrap_or_else(|| tool_call_id.clone());
 
         // 1. 组装节点定义：`resume` 从会话表取回旧图再打 patch；否则用 `nodes`。
         let mut nodes: Vec<TaskNode> = if let Some(graph_id) = &resume_id {
@@ -468,14 +497,15 @@ impl DagTool {
                 .map_err(|err| Error::validation(format!("dag nodes are malformed: {err}")))?
         };
 
-        // 2. 结构性修补（仅 resume 允许）。`dirty` = 定义变了的节点 id。
-        let dirty: HashSet<u32> = if let Some(value) = input.get("patch") {
+        // 2. 结构性修补（仅 resume 允许）。`dirty` 驱动重跑，`touched` 驱动视图刷新。
+        let effect = if let Some(value) = input.get("patch") {
             let patch: DagPatch = serde_json::from_value(value.clone())
                 .map_err(|err| Error::validation(format!("dag patch is malformed: {err}")))?;
             apply_patch(&mut nodes, &patch)?
         } else {
-            HashSet::new()
+            PatchEffect::default()
         };
+        let (dirty, touched) = (effect.dirty, effect.touched);
         if nodes.is_empty() {
             return Err(Error::validation("dag graph has no nodes"));
         }
@@ -548,7 +578,29 @@ impl DagTool {
         // 首帧即拓扑（M4：ra.dag.topology.v1），保证前端先拿到图形状。
         // resume 复用同一 graphId → 前端就地重画那张卡片，不新开卡。
         if let Some(emit) = &on_update {
-            emit_topology(emit, &tool_call_id, &graph, &layer_of);
+            emit_topology(emit, &graph_id, &graph, &layer_of);
+            // Patch 改过的节点再逐条发 node_update：支持"只改那个方框"的
+            // 增量前端，不必整图重建。**视图变化**（含纯改名）都发，但只有
+            // 执行相关的变化才进 `dirty`、才会重跑。
+            for node in &node_meta {
+                if !touched.contains(&node.id.value()) {
+                    continue;
+                }
+                let n = seq.fetch_add(1, Ordering::SeqCst);
+                emit(ToolUpdate {
+                    content: vec![],
+                    details: Some(json!({
+                        "schema": "ra.dag.node_update.v1",
+                        "graphId": graph_id,
+                        "nodeId": node.id.value(),
+                        "name": node.name,
+                        "toolName": node.tool_name,
+                        "dependsOn": node.depends_on.iter().map(|d| d.value()).collect::<Vec<_>>(),
+                        "layer": layer_of.get(&node.id).copied().unwrap_or(0),
+                        "revision": n,
+                    })),
+                });
+            }
             // 被复用的节点不再触发 state 事件，直接补发终态。
             for id in &seed_succeeded {
                 let n = seq.fetch_add(1, Ordering::SeqCst);
@@ -556,7 +608,7 @@ impl DagTool {
                     content: vec![],
                     details: Some(json!({
                         "schema": "ra.dag.node_state.v1",
-                        "graphId": tool_call_id,
+                        "graphId": graph_id,
                         "nodeId": id.value(),
                         "state": "succeeded",
                         "seq": n,
@@ -570,7 +622,7 @@ impl DagTool {
         // 6. 本实例三层调度执行。
         let executor = Arc::new(RegistryExecutor {
             registry,
-            dag_call_id: tool_call_id.clone(),
+            dag_call_id: graph_id.clone(),
             on_update: on_update.clone(),
             seq: Arc::clone(&seq),
         });
@@ -581,7 +633,7 @@ impl DagTool {
         {
             let emit = on_update.clone();
             let seq = Arc::clone(&seq);
-            let graph_id = tool_call_id.clone();
+            let graph_id = graph_id.clone();
             let layer_of = layer_of.clone();
             scheduler = scheduler.on_state(move |id, state| {
                 let Some(emit) = &emit else { return };
@@ -622,7 +674,7 @@ impl DagTool {
         // 8. 存回会话表：图定义 + 本轮成功的输出（含复用），供后续 resume。
         //    只有 Succeeded 才有可复用的输出；Failed/Skipped 不能污染输出表。
         //    resume 时沿用**原 graphId**，这样反复修复都用同一个 id。
-        let store_key = resume_id.unwrap_or_else(|| tool_call_id.clone());
+        let store_key = graph_id.clone();
         let succeeded_ids: HashSet<TaskNodeId> = report
             .iter()
             .filter(|(_, _, state, _)| *state == Some(TaskNodeState::Succeeded))
@@ -1184,5 +1236,53 @@ mod tests {
             d2["nodes"][1]["reused"], true,
             "renaming a node must not invalidate its output"
         );
+    }
+
+    /// A patch emits `node_update.v1` for exactly the changed nodes, so an
+    /// incremental frontend can repaint one box instead of rebuilding the graph.
+    #[test]
+    fn dag_resume_emits_node_update_for_changed_nodes_only() {
+        let shared = registry(&["current_time"]);
+        let tool = tool_over(&shared);
+        let runtime = rt();
+
+        let first = json!({"nodes": [
+            node_json(1, "current_time", &[]),
+            node_json(2, "current_time", &[1]),
+        ]});
+        let _ = runtime
+            .block_on(tool.execute("call-upd-1", first, None))
+            .expect("dag should succeed");
+
+        let seen: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+        let second = json!({
+            "resume": "call-upd-1",
+            "patch": {"upsert": [
+                {"id": 2, "toolName": "current_time", "name": "改过的节点", "args": {}, "dependsOn": [1]}
+            ]}
+        });
+        let _ = runtime
+            .block_on(tool.execute(
+                "call-upd-2",
+                second,
+                Some(Box::new(move |update: ToolUpdate| {
+                    if let Some(details) = update.details {
+                        sink.lock().expect("sink lock").push(details);
+                    }
+                })),
+            ))
+            .expect("resume should run");
+
+        let seen = seen.lock().expect("sink lock");
+        let updates: Vec<&Value> = seen
+            .iter()
+            .filter(|d| d["schema"] == "ra.dag.node_update.v1")
+            .collect();
+        assert_eq!(updates.len(), 1, "only the patched node may be updated");
+        assert_eq!(updates[0]["graphId"], "call-upd-1");
+        assert_eq!(updates[0]["nodeId"], 2);
+        assert_eq!(updates[0]["name"], "改过的节点");
+        assert_eq!(updates[0]["dependsOn"], json!([1]));
     }
 }
