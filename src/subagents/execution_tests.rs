@@ -61,6 +61,55 @@ fn result(output: &ToolOutput) -> &Value {
 }
 
 #[test]
+fn dag_resolves_an_upstream_node_into_a_dependent_task() {
+    let (_dir, tool) = fixture(&emit(&[ended("answer", "stop")]));
+    let output = run(
+        &tool,
+        json!({"dag": [
+            {"id": 1, "agent": "worker", "task": "first"},
+            {"id": 2, "agent": "worker", "task": "second saw {{node.1.content}}", "dependsOn": [1]}
+        ]}),
+    );
+    assert!(!output.is_error, "{output:?}");
+    let results = output.details.as_ref().unwrap()["results"]
+        .as_array()
+        .unwrap();
+    assert_eq!(results.len(), 2, "both nodes report: {output:?}");
+    assert_eq!(results[0]["task"], "first");
+    // The scheduler substitutes the upstream child's text before the second
+    // child is spawned, so the recorded task is the resolved one.
+    let second = results[1]["task"].as_str().unwrap();
+    assert!(second.contains("answer"), "template unresolved: {second:?}");
+    assert!(!second.contains("{{node"), "token left verbatim: {second:?}");
+    for result in results {
+        assert_eq!(result["status"], "completed");
+    }
+}
+
+#[test]
+fn dag_skips_downstream_nodes_when_a_dependency_fails() {
+    // `exit 0` with no `agent_end` is a failed delegation (see the first test).
+    let (_dir, tool) = fixture("exit 0");
+    let output = run(
+        &tool,
+        json!({"dag": [
+            {"id": 1, "agent": "worker", "task": "first"},
+            {"id": 2, "agent": "worker", "task": "second", "dependsOn": [1]}
+        ]}),
+    );
+    let results = output.details.as_ref().unwrap()["results"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        results.len(),
+        1,
+        "a skipped node must not run or report: {output:?}"
+    );
+    assert_eq!(results[0]["status"], "failed");
+    assert!(output.is_error, "a failed node marks the tool result an error");
+}
+
+#[test]
 fn zero_exit_without_an_agent_completion_is_a_failed_delegation() {
     let (_dir, tool) = fixture("exit 0");
     let output = run(&tool, request());
