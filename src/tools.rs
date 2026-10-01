@@ -5492,6 +5492,7 @@ impl ToolRegistry {
         "read_media",
         "run_code",
         "security_scan",
+        "sessions",
         "subagent",
         "tts",
         "web_search",
@@ -5620,6 +5621,9 @@ impl ToolRegistry {
                 }
                 "json_query" => {
                     tools.push(Box::new(crate::json_query::JsonQueryTool::new()));
+                }
+                "sessions" => {
+                    tools.push(Box::new(crate::sessions::SessionsTool::new()));
                 }
                 "security_scan" => {
                     tools.push(Box::new(crate::security_scan::SecurityScanTool::new(cwd)));

@@ -319,6 +319,7 @@ pub mod session_picker;
 pub mod session_sqlite;
 #[doc(hidden)]
 pub mod session_store_v2;
+pub mod sessions;
 pub mod skill_hub;
 pub mod skill_merge;
 #[doc(hidden)]
