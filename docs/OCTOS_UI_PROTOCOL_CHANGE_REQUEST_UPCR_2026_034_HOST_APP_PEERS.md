@@ -123,7 +123,8 @@ reopened (`peer_context_closed`); hosts mint a new id per client generation.
 
 Other kinds: `peer_not_found`, `peer_not_host_bound`,
 `peer_context_not_found`, `peer_context_namespace_too_long`,
-`share_history_host_only`, `read_parent_host_only`, `peer_binding_mismatch`.
+`share_history_host_only`, `read_parent_host_only`, `peer_binding_mismatch`,
+`peer_workspace_changed`.
 
 ### Session enforcement
 
@@ -131,7 +132,11 @@ For a session whose topic is `peer-<slug>` of a host-owned peer, or any
 `peerctx-` topic:
 
 - **Workspace**: the session runs in the bound workspace. `session/open`
-  without `cwd` gets it; a different `cwd` is refused.
+  without `cwd` gets it; a different `cwd` is refused. Bindings record the
+  canonical folder, and a folder that no longer canonicalizes to exactly that
+  path (it, or an ancestor, was replaced by a symlink or moved) refuses to
+  bootstrap instead of following the link; `peer/context/open` on such a
+  peer is refused with `peer_workspace_changed`.
 - **Refusal**: a closed peer, a closed context, a never-opened context, a
   malformed `peerctx-` topic, or a torn or tampered peer dir that still carries
   a host binding (brief missing, symlinked dir) cannot bootstrap. It fails

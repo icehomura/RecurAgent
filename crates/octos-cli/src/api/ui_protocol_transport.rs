@@ -15711,12 +15711,12 @@ fn raw_peer_context_open_from(
         &context_memory_namespace(&peer.memory_namespace, &context_id),
     )
     .map_err(|err| host_peer_error("peer_context_namespace_too_long", err))?;
-    let peer_root = dunce::canonicalize(&peer.cwd).map_err(|err| {
-        RpcError::internal_error(format!(
-            "peer workspace {} is not usable: {err}",
-            peer.cwd.display()
-        ))
-    })?;
+    // The peer's folder must still be exactly its bound (canonical) path: a
+    // symlink swapped in for it would place every new context's folder at
+    // the link's target.
+    crate::peers::app_binding::verify_bound_dir(&peer.cwd)
+        .map_err(|reason| host_peer_error("peer_workspace_changed", reason))?;
+    let peer_root = peer.cwd.clone();
     let requested_cwd = match params.cwd.as_deref() {
         Some(cwd) => {
             let canonical = dunce::canonicalize(cwd).map_err(|err| {

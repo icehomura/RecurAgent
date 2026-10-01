@@ -797,6 +797,93 @@ async fn should_accept_only_a_contexts_own_folder_as_its_workspace() {
     }
 }
 
+/// Replace the directory `dir` with a symlink to `target` (what a process
+/// with write access to the parent could do after the binding was made).
+#[cfg(unix)]
+fn swap_dir_for_symlink(dir: &Path, target: &Path) {
+    std::fs::rename(dir, dir.with_extension("moved")).unwrap();
+    std::os::unix::fs::symlink(target, dir).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn should_refuse_a_bound_session_when_its_workspace_became_a_symlink() {
+    // Security review (ADR 0004): a bound workspace swapped for a symlink
+    // re-rooted the session at the link's target, because bootstrap
+    // canonicalized (following links) without comparing to the bound path.
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let elsewhere = fx._tmp.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    swap_dir_for_symlink(&fx.apps.join("rinx"), &elsewhere);
+
+    let key = SessionKey(format!("{}#peer-rinx", fx.system.base_key()));
+    let err = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key, None)
+        .await
+        .err()
+        .expect("a re-rooted workspace refuses the session");
+    assert!(err.to_string().contains("no longer"), "{err}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn should_refuse_to_open_a_context_when_the_peer_workspace_became_a_symlink() {
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let elsewhere = fx._tmp.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    swap_dir_for_symlink(&fx.apps.join("rinx"), &elsewhere);
+
+    let err = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"),
+                    "peer": "Rinx", "context_id": "ctx-a" }),
+        ),
+        None,
+    )
+    .expect_err("a re-rooted peer workspace refuses new contexts");
+    assert_eq!(err.data.unwrap()["kind"], "peer_workspace_changed");
+    assert!(
+        !elsewhere.join("contexts").exists(),
+        "nothing created at the link target"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn should_refuse_a_context_session_when_its_folder_became_a_symlink() {
+    let fx = fixture().await;
+    prepare_app(&fx, "Rinx", "rinx", "app/rinx/acct-1", true)
+        .await
+        .unwrap();
+    let opened = raw_peer_context_open(
+        &fx.state,
+        &rpc(
+            APPUI_METHOD_PEER_CONTEXT_OPEN,
+            json!({ "session_id": fx.system, "host_token": tok(&fx, "Rinx"),
+                    "peer": "Rinx", "context_id": "ctx-a" }),
+        ),
+        None,
+    )
+    .unwrap();
+    let elsewhere = fx._tmp.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    swap_dir_for_symlink(Path::new(opened["cwd"].as_str().unwrap()), &elsewhere);
+
+    let key = SessionKey(opened["session_id"].as_str().unwrap().to_owned());
+    let err = crate::runtime::SessionRuntime::bootstrap(&fx.runtime, key, None)
+        .await
+        .err()
+        .expect("a re-rooted context folder refuses the session");
+    assert!(err.to_string().contains("no longer"), "{err}");
+}
+
 #[tokio::test]
 async fn should_refuse_model_peer_close_when_the_peer_is_host_owned() {
     // Security review (ADR 0004): the system agent's model could retire a
