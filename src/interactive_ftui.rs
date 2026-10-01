@@ -786,7 +786,7 @@ fn push_card_block(
     let (glyph, style) = match state {
         CardState::Pending => (
             DOTS[spinner_frame % DOTS.len()],
-            ftui::Style::new().dim().fg(palette.success),
+            ftui::Style::new().dim().fg(palette.warning),
         ),
         CardState::Ok => ("✓", ftui::Style::new().fg(palette.success)),
         CardState::Err => ("✗", ftui::Style::new().bold().fg(palette.error)),
