@@ -27,7 +27,7 @@ Tools are partitioned into two architectural tiers per `xdev` load mode principl
 | `web_search` | `src/web_search.rs` | **Default-On** | Built-in / `--tools` | Multi-provider Search |
 | `lsp` | `src/tools.rs` | **Default-On** | Built-in / LSP server | Code Intelligence |
 | `ast_grep`, `ast_edit` | `src/ast_tools.rs` | **Default-On** | Built-in | Structural Code Refactoring |
-| `subagent` | `src/subagents.rs` | **Opt-in** | `--tools subagent` | Child Agent Delegation |
+| `subagent` | `src/subagents.rs` | **Default-On** | Built-in (`--tools` includes it) | Child Agent Delegation |
 | `memory` | `src/tools.rs` | **Opt-in** | `[memory] enable=true` | SQLite Memory Bank |
 | `github` | `src/github.rs` | **Opt-in** | `--tools github` | GitHub CLI Operations |
 | `browser` | `src/browser.rs` | **Opt-in** | `[browser] enable_browser=true` | Headless Chromium Automation |

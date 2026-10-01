@@ -522,8 +522,8 @@ pub struct Cli {
     pub no_tools: bool,
 
     /// Specific tools to enable (comma-separated). Default: the essential
-    /// set plus discoverable tools behind the xdev dispatcher (bd-cv653.1.6);
-    /// `subagent` stays opt-in only.
+    /// set plus discoverable tools behind the xdev dispatcher (bd-cv653.1.6),
+    /// including the native `subagent` delegation tool.
     #[arg(
         long,
         value_name = "TOOLS",

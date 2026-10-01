@@ -42,7 +42,7 @@ You want an AI coding assistant in your terminal, but existing tools are:
 
 ## The Solution
 
-**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 43 built-in tools (22 in the default `--tools` list; 15 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
+**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 44 built-in tools (23 in the default `--tools` list; 15 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
 
 ### Current product direction
 
@@ -487,7 +487,7 @@ ra "Write a quicksort implementation"
 
 Watch the response appear incrementally, with thinking blocks shown inline.
 
-### 43 Built-in Tools
+### 44 Built-in Tools
 
 Tools are tiered so the model's live schema stays small while everything
 remains reachable. The tier table lives in `src/xdev.rs`; the default
@@ -496,15 +496,15 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 - **Essential** (always in the provider schema): `read`, `write`, `edit`,
   `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`,
   `web_search`, `submit_plan`, `current_time`, `json_query`, `ast_grep`,
-  `ast_edit`, `dag`, `run_code`, `xdev`
+  `ast_edit`, `dag`, `run_code`, `subagent`, `xdev`
 - **Discoverable** (registered, hidden from the schema until promoted via
   `xdev list/describe/run/promote`): `lsp`,
-  `debug`, `manage_skill` — plus the memory-bank tools (`retain`,
+  `debug`, `sessions`, `manage_skill` — plus the memory-bank tools (`retain`,
   `recall`, `reflect`, `memory_edit`, `learn`) when `memory.backend` is
   `local`
 - **Default-enabled**: `jobs` (background bash job control) and `hub` (PTY
   service supervision), alongside the essential tier. The default `--tools`
-  list names 22 tools; the registry always adds `manage_skill` and, when any
+  list names 24 tools; the registry always adds `manage_skill` and, when any
   discoverable tool is enabled, the `xdev` dispatcher
 - **`--tools` opt-in extras**: `eval`, `github`, `security_scan`
 - **Skills**: `skills_list` and `skill_view` are always registered (read-only
@@ -517,8 +517,6 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
   `generate_image`, `tts` (`media.enableInspectImage` /
   `media.enableGenerateImage` / `media.enableTts`), and `read_media`
   (`media.enableReadMedia`; inline video/audio for Gemini-family models)
-- **Opt-in only**: `subagent` (it can start additional coding-agent
-  processes)
 
 | Tool | Description |
 |------|-------------|
@@ -534,6 +532,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 | `xdev` | Dispatcher exposing the discoverable tier (`list/describe/run/promote`) |
 | `ast_grep` / `ast_edit` | Structural code search and rewrite |
 | `lsp` / `debug` | Language-server (14 ops) and DAP debugging (29 ops) bridges |
+| `sessions` | Manage stored agent sessions: `list` the store, `read` a transcript (including the head of this conversation after compaction dropped it), `search` across sessions, soft-`delete` a session to the GC trash, or `restore` one from it. Deletion is recoverable (the file is moved, never unlinked) and refuses named, pinned, active, or live sessions; `scope: "current"` pins an action to the live conversation so it cannot reach another session. Discoverable tier (promote via `xdev`) |
 | `eval` | Persistent Python and JS kernels with cell semantics |
 | `run_code` | Programmatic tool orchestration (PTC): one round-trip batch that runs generated code calling the `read` / `grep` / `find` / `ls` tools directly; default-enabled |
 | `jobs` / `hub` | Background bash job control; PTY service supervision |
@@ -564,7 +563,7 @@ wins:
 
 ```bash
 ra --tools read,bash,edit,write,grep,find,ls,hashline_edit,subagent \
-  "Use the scout agent to inspect the provider implementation."
+  "Fan out: use the explore agent to inspect the provider implementation."
 ```
 
 ### Native Subagents and Orchestration
@@ -573,12 +572,17 @@ Rust Pi includes a native `subagent` tool; it does not depend on a QuickJS
 extension and never resolves a child executable by assuming a `ra` binary on
 `PATH`. By default it starts the current Rust Pi executable. Set
 `RECUR_AGENT_SUBAGENT_PI_BINARY=/absolute/path/to/rpi` only when an explicit binary
-override is needed.
+override is needed. The tool is in the default schema; the system prompt tells
+the model to fan a user intent out into parallel children rather than working
+the slices serially.
 
 Agent definitions are Markdown files in `$RECUR_AGENT_DIR/agents/*.md`
 (normally `~/.ra/agent/agents/*.md`) or the nearest
 `.ra/agents/*.md`. Project definitions take precedence over same-named user
-definitions. The process inherits the parent's provider, router, authentication,
+definitions. Two built-in agents are always available — `general` (full child
+toolset) and `explore` (read-only investigation) — so the tool works before any
+definition is written; a user or project definition of the same name overrides
+the built-in. The process inherits the parent's provider, router, authentication,
 and model-registry environment, including `RECUR_AGENT_DIR`.
 
 ```markdown
@@ -607,8 +611,9 @@ In interactive mode, `/tan <work>` starts the same task-role child machinery
 without interrupting the main conversation. The child runs in the current
 directory, appears in `hub agent roster` with `kind=tan`, and sends its bounded
 completion summary through the follow-up queue at the next idle turn boundary.
-Because `/tan` inherits the delegation safety gate, it is available only when
-the opt-in `subagent` tool is enabled.
+Because `/tan` inherits the delegation safety gate, it is available whenever
+the `subagent` tool is enabled — which it is by default — and unavailable only
+in sessions that drop it (`--tools` without `subagent`, or `--no-tools`).
 
 ### Session Management
 
@@ -3016,7 +3021,7 @@ A: Yes. Point any provider at a custom base URL via `models.json`. Pi normalizes
 | **Startup** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Memory** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Providers** | 11 native provider implementation modules + OpenAI-compatible presets | Anthropic | Many | Many |
-| **Tools** | 43 built-in (22 in the default `--tools` list) | Many | File-focused | IDE-integrated |
+| **Tools** | 44 built-in (23 in the default `--tools` list) | Many | File-focused | IDE-integrated |
 | **Sessions** | JSONL tree | Proprietary | Git-based | Proprietary |
 | **Open source** | Yes | Yes | Yes | No |
 

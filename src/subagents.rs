@@ -54,6 +54,14 @@ const TAN_RESULT_SCHEMA: &str = "pi.background-tan.result.v1";
 const TAN_AGENT_NAME: &str = "tan";
 const TAN_SYSTEM_PROMPT: &str = "You are a background tangential coding agent. Complete the assigned work autonomously in the current working directory. Keep your final response concise and lead with the concrete outcome, changed files, and verification performed. Do not ask follow-up questions.";
 
+/// Always-present child agents, so a `subagent` call works before the user has
+/// written any `agents/*.md`. Names are defaults, not reserved words: a user or
+/// project definition of the same name replaces the built-in during discovery.
+const GENERAL_AGENT_NAME: &str = "general";
+const EXPLORE_AGENT_NAME: &str = "explore";
+const GENERAL_AGENT_PROMPT: &str = "You are a general-purpose coding subagent. Complete the assigned slice of work autonomously in the current working directory: read before you edit, make the change, and verify it. Keep the final response concise and lead with the concrete outcome, changed files, and verification performed. Do not ask follow-up questions.";
+const EXPLORE_AGENT_PROMPT: &str = "You are a read-only investigation subagent. Answer the assigned question with evidence from the codebase: cite file paths and line numbers, quote the relevant lines, and say plainly what you could not determine. Never edit files or run mutating commands. Keep the final response concise.";
+
 type UpdateCallback = Arc<dyn Fn(ToolUpdate) + Send + Sync>;
 
 /// Settled result from an interactive `/tan` background child.
@@ -175,7 +183,7 @@ impl SubagentTool {
     /// Run one built-in tangential child in the current working directory.
     ///
     /// This uses the same process, task-role, cancellation, transcript, and
-    /// hub machinery as the opt-in `subagent` tool while avoiding a required
+    /// hub machinery as the `subagent` tool while avoiding a required
     /// user-authored agent definition for the `/tan` host command.
     pub async fn run_background_tan(&self, task: &str) -> Result<TanCompletion> {
         if current_subagent_depth() >= MAX_SUBAGENT_DEPTH {
@@ -341,7 +349,7 @@ impl Tool for SubagentTool {
     }
 
     fn description(&self) -> &'static str {
-        "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {previous}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {worktree_path, diff_stat, patch} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>)."
+        "Delegate an isolated task to a named Pi child agent. Supports one task, bounded parallel tasks, or a sequential chain whose tasks may reference {previous}. timeoutSeconds bounds the entire request, including queued tasks and retries, and cannot extend the host limit (900 seconds by default). Agent definitions live in $RECUR_AGENT_DIR/agents/*.md or .ra/agents/*.md; the built-in agents `general` (full child toolset) and `explore` (read-only) are always available and a user or project definition of the same name overrides them. Workspace isolation: per-task `isolation: \"worktree\"` runs the child in a git worktree carrying the parent's uncommitted state, returning {worktree_path, diff_stat, patch} and applying per `isoApply` (keep|apply|drop; serial application, conflicts reported never forced). Coordination: isolated worktree children need no file reservations by construction; NON-isolated children share the parent checkout, so concurrent edits to the same files should be coordinated (e.g. Agent Mail file reservations with reason=<task id>)."
     }
 
     fn parameters(&self) -> Value {
@@ -659,12 +667,56 @@ fn tan_agent_definition() -> AgentDefinition {
     }
 }
 
+fn general_agent_definition() -> AgentDefinition {
+    AgentDefinition {
+        name: GENERAL_AGENT_NAME.to_string(),
+        description: "General-purpose coding subagent with the default child toolset".to_string(),
+        model: None,
+        reasoning: None,
+        tools: None,
+        skills: Vec::new(),
+        system_prompt: GENERAL_AGENT_PROMPT.to_string(),
+        output_schema: None,
+        source: AgentSource::BuiltIn,
+        file_path: PathBuf::from("<built-in:general>"),
+    }
+}
+
+fn explore_agent_definition() -> AgentDefinition {
+    AgentDefinition {
+        name: EXPLORE_AGENT_NAME.to_string(),
+        description: "Read-only investigation subagent (read, grep, find, ls)".to_string(),
+        model: None,
+        reasoning: None,
+        tools: Some(vec![
+            "read".to_string(),
+            "grep".to_string(),
+            "find".to_string(),
+            "ls".to_string(),
+        ]),
+        skills: Vec::new(),
+        system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
+        output_schema: None,
+        source: AgentSource::BuiltIn,
+        file_path: PathBuf::from("<built-in:explore>"),
+    }
+}
+
+/// Built-ins seeded before on-disk definitions, so `general`/`explore` exist
+/// even when no `agents/*.md` do. Later loads of the same name overwrite them.
+fn builtin_agent_definitions() -> Vec<AgentDefinition> {
+    vec![general_agent_definition(), explore_agent_definition()]
+}
+
 fn discover_agents_with_roots(
     cwd: &Path,
     global_dir: &Path,
     scope: AgentScope,
 ) -> Result<BTreeMap<String, AgentDefinition>> {
     let mut agents = BTreeMap::new();
+    for definition in builtin_agent_definitions() {
+        agents.insert(definition.name.clone(), definition);
+    }
     if !matches!(scope, AgentScope::Project) {
         load_agent_dir(&global_dir.join("agents"), AgentSource::User, &mut agents)?;
     }

@@ -394,6 +394,17 @@ fn default_system_prompt(enabled_tools: &[&str], package_dir: &Path) -> String {
         );
     }
 
+    if has_tool("subagent") {
+        // Delegation is an orchestrator, like `dag`. Left unstated, the model
+        // treats it as a last resort and burns this context window walking the
+        // slices one by one; the value of the tool is being the first thing
+        // reached for. `dag` fans out tool calls in this session, `subagent`
+        // fans out work that deserves its own context window.
+        guidelines_list.push(
+            "Delegate with `subagent` instead of working serially in this context: a user intent usually decomposes into more than three independent slices, so default to a single `subagent` call whose `tasks` array runs one child per slice (up to 8, bounded concurrency), then converge on the children's results. Use `chain` only when a step needs the previous child's output. The built-in agents `general` (full toolset) and `explore` (read-only investigation) are always available; user or project definitions in `.ra/agents/` override them by name",
+        );
+    }
+
     guidelines_list.push("Be concise in your responses");
     guidelines_list.push("Show file paths clearly when working with files");
 

@@ -92,20 +92,26 @@ const ESSENTIAL_DEFAULTS: &[&str] = &[
     // guideline telling the model to prefer it over bash is worthless if the
     // tool it names is not in the schema.
     "run_code",
+    // The third orchestrator, and the one that buys a fresh context window per
+    // slice. The system prompt tells the model to fan a user intent out into
+    // parallel children; a tool the guideline names must be in the schema or
+    // the guideline is a lie. It only starts child coding-agent processes, and
+    // the default child allowlist excludes `subagent`, so default-on does not
+    // open recursion.
+    "subagent",
 ];
 
-/// Tools that are opt-in ONLY (never in the default enabled set, never
-/// discoverable-by-default): they spawn additional agent processes.
-const OPT_IN_ONLY: &[&str] = &["subagent"];
-
 /// The default tier for a tool name (before config overrides).
+///
+/// Everything outside [`ESSENTIAL_DEFAULTS`] is discoverable: registered and
+/// reachable through `xdev`, but hidden from the provider schema until the
+/// model promotes it. What gets registered at all is decided by `--tools` and
+/// `tools.loadMode.<name>` (`Cli::enabled_tools`); this function only decides
+/// how an already-enabled tool is exposed.
 #[must_use]
 pub fn default_tier(name: &str) -> LoadMode {
     if ESSENTIAL_DEFAULTS.contains(&name) {
         return LoadMode::Essential;
-    }
-    if OPT_IN_ONLY.contains(&name) {
-        return LoadMode::Off;
     }
     LoadMode::Discoverable
 }
@@ -132,11 +138,11 @@ pub fn tier_for(name: &str, config: Option<&Config>) -> LoadMode {
 /// drift once — `json_query` was added to the clap literal and to
 /// [`ESSENTIAL_DEFAULTS`] but not to the function, which is what the
 /// "must stay in lockstep" comment was warning about.
-pub const DEFAULT_ENABLED_TOOLS: &str = "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query,dag";
+pub const DEFAULT_ENABLED_TOOLS: &str = "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query,dag,sessions,subagent";
 
 /// Names of built-in tools enabled by default when the user passes no
-/// `--tools`: the essential set plus the discoverable set. Opt-in-only tools
-/// (subagent) stay out. See [`DEFAULT_ENABLED_TOOLS`].
+/// `--tools`: the essential set plus the discoverable set. See
+/// [`DEFAULT_ENABLED_TOOLS`].
 #[must_use]
 pub fn default_enabled_tools() -> Vec<&'static str> {
     DEFAULT_ENABLED_TOOLS.split(',').collect()
@@ -181,6 +187,9 @@ pub fn builtin_one_liner(name: &str) -> Option<&'static str> {
         "json_query" => "Query a JSON document with a jq filter expression",
         "run_code" => "Execute a JavaScript program against the available tools",
         "dag" => "Execute a dependency DAG of tool calls in parallel within this session",
+        "sessions" => {
+            "Manage stored agent sessions: list, read, search, soft-delete to trash, or restore"
+        }
         _ => return None,
     })
 }
@@ -405,7 +414,7 @@ mod tests {
         // was in exactly that state while sitting in ESSENTIAL_DEFAULTS.
         use crate::tools::ToolRegistry;
         let mut missing = Vec::new();
-        for name in ESSENTIAL_DEFAULTS.iter().chain(OPT_IN_ONLY) {
+        for name in ESSENTIAL_DEFAULTS {
             let known = ToolRegistry::KNOWN_TOOL_NAMES.contains(name);
             let unselectable = ToolRegistry::TOOLS_NOT_SELECTED_BY_FLAG
                 .iter()
@@ -423,12 +432,14 @@ mod tests {
     }
 
     #[test]
-    fn default_tiers_cover_core_and_opt_in() {
+    fn default_tiers_cover_core_and_delegation() {
         assert_eq!(default_tier("read"), LoadMode::Essential);
         assert_eq!(default_tier("bash"), LoadMode::Essential);
         assert_eq!(default_tier("xdev"), LoadMode::Essential);
         assert_eq!(default_tier("ask"), LoadMode::Essential);
-        assert_eq!(default_tier("subagent"), LoadMode::Off);
+        // Delegation is a first-class orchestrator: the prompt tells the model
+        // to reach for it, so it must be in the schema (was LoadMode::Off).
+        assert_eq!(default_tier("subagent"), LoadMode::Essential);
         assert_eq!(default_tier("web_search"), LoadMode::Essential);
         // Structural search, staged rewrite and the DAG scheduler are
         // first-class: reaching them through `xdev run` was the whole cost.
@@ -478,9 +489,9 @@ mod tests {
     }
 
     #[test]
-    fn default_enabled_excludes_opt_in_only() {
+    fn default_enabled_includes_delegation() {
         let enabled = default_enabled_tools();
-        assert!(!enabled.contains(&"subagent"));
+        assert!(enabled.contains(&"subagent"));
         assert!(enabled.contains(&"read"));
         assert!(enabled.contains(&"ast_grep"));
         assert!(enabled.contains(&"dag"));
