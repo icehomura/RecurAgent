@@ -977,7 +977,7 @@ fn protocol_error(detail: &str) -> Value {
 }
 
 fn terminal_message(outcome: ProgramOutcome, console: &str) -> Value {
-    let console = bound_console(&console);
+    let console = bound_console(console);
     match outcome {
         ProgramOutcome::Ok(result) => json!({ "ok": true, "result": result, "console": console }),
         ProgramOutcome::Failed(error) => json!({ "ok": false, "error": error, "console": console }),
