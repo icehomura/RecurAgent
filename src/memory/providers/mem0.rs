@@ -81,13 +81,15 @@ impl Mem0Config {
                 config.base_url = base_url.trim().to_string();
             }
         } else if let Ok(host) = std::env::var("MEM0_HOST")
-            && !host.trim().is_empty() {
-                config.base_url = host.trim().to_string();
-            }
+            && !host.trim().is_empty()
+        {
+            config.base_url = host.trim().to_string();
+        }
         if let Ok(user_id) = std::env::var("MEM0_USER_ID")
-            && !user_id.trim().is_empty() {
-                config.user_id = user_id.trim().to_string();
-            }
+            && !user_id.trim().is_empty()
+        {
+            config.user_id = user_id.trim().to_string();
+        }
         config
     }
 

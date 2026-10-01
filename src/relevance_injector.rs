@@ -90,7 +90,8 @@ impl RelevanceInjector {
                     kind: m.kind,
                     source: "memory".to_string(),
                     created_at_ms: m.created_at_ms,
-                    relevance_score: f64::from(u32::try_from(total - i).unwrap_or(u32::MAX)) / denom,
+                    relevance_score: f64::from(u32::try_from(total - i).unwrap_or(u32::MAX))
+                        / denom,
                 }
             })
             .collect();

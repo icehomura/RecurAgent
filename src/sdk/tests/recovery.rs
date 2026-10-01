@@ -232,7 +232,7 @@ fn aborting_at_retry_start_returns_abort_not_the_original_capacity_error() {
                 .to_ascii_lowercase()
                 .contains("abort")
         );
-            drop(events);
+        drop(events);
     }
 }
 
@@ -419,7 +419,7 @@ fn retry_save_failure_quarantines_later_calls_even_after_the_path_is_repaired() 
                 .unwrap()
                 .contains(Error::SESSION_PERSISTENCE_PREFIX)
         );
-            drop(events);
+        drop(events);
     }
     handle.session_store().try_lock().unwrap().path = Some(original_path);
     assert_quarantined_entrypoints(&mut handle, &calls);
@@ -676,7 +676,7 @@ fn the_terminal_event_excludes_history_from_earlier_public_calls() {
             .contains("earlier input")
     );
     assert_eq!(run_async(handle.messages()).unwrap().len(), 4);
-        drop(events);
+    drop(events);
 }
 
 #[test]
@@ -710,7 +710,7 @@ fn an_aborted_retry_reports_one_failed_terminal_event_not_a_premature_503_end() 
             .to_ascii_lowercase()
             .contains("abort")
     );
-        drop(events);
+    drop(events);
 }
 
 /// A bounded local HTTP fixture: exercises the real provider factory, request
@@ -854,7 +854,6 @@ fn completion_response() -> (u16, &'static str, String) {
     )
 }
 
-
 /// Build the retry fixture's agent: an ad-hoc `openai-completions` entry
 /// bound to `base_url` with a write-only tool registry.
 ///
@@ -987,7 +986,7 @@ fn abort_after_the_second_swap_closes_both_hops_without_contacting_its_provider(
             .to_ascii_lowercase()
             .contains("abort")
     );
-        drop(events);
+    drop(events);
 }
 
 #[test]
@@ -1134,7 +1133,7 @@ fn real_tool_work_survives_retry_once_and_terminal_end_follows_persistence() {
         events.last().unwrap()["messages"],
         serde_json::to_value(reopened.to_messages_for_current_path()).unwrap()
     );
-        drop(requests);
+    drop(requests);
 }
 
 struct TransportDropProvider;
@@ -1199,5 +1198,5 @@ fn a_typed_transport_failure_can_fail_over_without_transient_words_in_display() 
             "agent_end",
         ]
     );
-        drop(events);
+    drop(events);
 }

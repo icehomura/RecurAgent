@@ -313,11 +313,15 @@ tests/ext_conformance/artifacts/doom-overlay/doom-debug.log
 README.md:*
 root@*
 
-# Local tool scratch: alternate cargo target dirs and agent tool state
-/.yan-t/
-/.yan-vt/
-/.yan-verify/
-/.yan-verify2/
-/.omc/
-/.workbuddy-ai/
+# Local tool scratch: alternate cargo target dirs and agent tool state.
+#
+# Deliberately NOT rooted: these directories are created wherever the tool was
+# invoked, so `src/.omc/` is as normal as `/.omc/`. Rooting the pattern let a
+# runtime state file under `src/` slip into a commit once already.
+.yan-t/
+.yan-vt/
+.yan-verify/
+.yan-verify2/
+.omc/
+.workbuddy-ai/
 /pi_test_out.txt

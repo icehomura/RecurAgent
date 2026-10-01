@@ -46,7 +46,9 @@ impl Fts5Provider {
 impl MemoryProvider for Fts5Provider {
     async fn save(&self, namespace: &str, key: &str, value: &str) -> Result<()> {
         let tag = Self::slot_tag(namespace, key);
-        if let Some(id) = self.find_slot(namespace, key)? { self.store.edit(id, MemoryEditOp::Update, Some(value)) } else {
+        if let Some(id) = self.find_slot(namespace, key)? {
+            self.store.edit(id, MemoryEditOp::Update, Some(value))
+        } else {
             self.store.retain(MemoryKind::Fact, value, &[tag], None)?;
             Ok(())
         }

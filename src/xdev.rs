@@ -127,8 +127,7 @@ pub fn tier_for(name: &str, config: Option<&Config>) -> LoadMode {
 /// drift once — `json_query` was added to the clap literal and to
 /// [`ESSENTIAL_DEFAULTS`] but not to the function, which is what the
 /// "must stay in lockstep" comment was warning about.
-pub const DEFAULT_ENABLED_TOOLS: &str =
-    "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query,dag";
+pub const DEFAULT_ENABLED_TOOLS: &str = "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query,dag";
 
 /// Names of built-in tools enabled by default when the user passes no
 /// `--tools`: the essential set plus the discoverable set. Opt-in-only tools

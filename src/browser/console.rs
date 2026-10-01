@@ -60,11 +60,7 @@ pub(super) async fn execute(
     let total = entries.len();
     let selected: Vec<&super::cdp::ConsoleEntry> = entries
         .iter()
-        .filter(|entry| {
-            filter
-                .as_deref()
-                .is_none_or(|wanted| entry.level == wanted)
-        })
+        .filter(|entry| filter.as_deref().is_none_or(|wanted| entry.level == wanted))
         .collect();
 
     let rendered = selected
@@ -75,7 +71,9 @@ pub(super) async fn execute(
 
     let shown = selected.len();
     let summary = match filter.as_deref() {
-        Some(level) => format!("{shown} of {total} console entr(ies) at level {level} on tab {tab}"),
+        Some(level) => {
+            format!("{shown} of {total} console entr(ies) at level {level} on tab {tab}")
+        }
         None => format!("{shown} console entr(ies) on tab {tab}"),
     };
     let text = if rendered.is_empty() {

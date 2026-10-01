@@ -1204,7 +1204,11 @@ fn dag_card_head(progress: &DagProgress) -> String {
     if total == 0 {
         return String::from("◇ task graph");
     }
-    let settled = progress.nodes.iter().filter(|n| n.state.is_settled()).count();
+    let settled = progress
+        .nodes
+        .iter()
+        .filter(|n| n.state.is_settled())
+        .count();
     format!("◇ task graph · {total} nodes · {settled}/{total} done")
 }
 
@@ -2600,9 +2604,7 @@ impl RaFtuiModel {
                             depends_on: node
                                 .get("dependsOn")
                                 .and_then(serde_json::Value::as_array)
-                                .map(|deps| {
-                                    deps.iter().map(|v| dag_json_u32(Some(v))).collect()
-                                })
+                                .map(|deps| deps.iter().map(|v| dag_json_u32(Some(v))).collect())
                                 .unwrap_or_default(),
                             state: DagNodeVisual::Pending,
                             output: String::new(),
@@ -2686,9 +2688,12 @@ impl RaFtuiModel {
             )
         };
         let revision = self.next_revision();
-        if let Some(entry) = self.transcript.iter_mut().rev().find(|e| {
-            e.card == Some(CardState::Pending) && e.pair_key.as_deref() == Some(key)
-        }) {
+        if let Some(entry) = self
+            .transcript
+            .iter_mut()
+            .rev()
+            .find(|e| e.card == Some(CardState::Pending) && e.pair_key.as_deref() == Some(key))
+        {
             entry.text = head;
             entry.detail = Some(detail);
             entry.revision = revision;
@@ -8961,7 +8966,10 @@ mod tests {
             rendered.contains("session restored"),
             "frame missing transcript line: {rendered:?}"
         );
-        assert!(rendered.contains("RecurAgent · ready"), "frame missing header");
+        assert!(
+            rendered.contains("RecurAgent · ready"),
+            "frame missing header"
+        );
         assert!(
             rendered.contains("Type a message"),
             "frame missing input placeholder: {rendered:?}"
@@ -11263,12 +11271,14 @@ mod tests {
             },
         });
         match msgs.as_slice() {
-            [RaMsg::ToolUpdate {
-                name,
-                tool_id,
-                details: Some(forwarded),
-                ..
-            }] => {
+            [
+                RaMsg::ToolUpdate {
+                    name,
+                    tool_id,
+                    details: Some(forwarded),
+                    ..
+                },
+            ] => {
                 assert_eq!(name, "dag");
                 assert_eq!(tool_id, "t1");
                 assert_eq!(forwarded, &details, "details must pass through verbatim");
@@ -11322,7 +11332,10 @@ mod tests {
         );
         let detail = card.detail.clone().unwrap_or_default();
         assert!(detail.contains("1. search"), "missing node 1: {detail:?}");
-        assert!(detail.contains("← 1"), "missing dependency marker: {detail:?}");
+        assert!(
+            detail.contains("← 1"),
+            "missing dependency marker: {detail:?}"
+        );
 
         // node_state flips the row's marker in place (no new card).
         model.apply_tool_update(
@@ -11336,7 +11349,10 @@ mod tests {
         );
         assert_eq!(model.transcript.len(), 1);
         let detail = model.transcript[0].detail.clone().unwrap_or_default();
-        assert!(detail.contains("[✓] 1. search"), "state not applied: {detail:?}");
+        assert!(
+            detail.contains("[✓] 1. search"),
+            "state not applied: {detail:?}"
+        );
 
         // node_output shows a truncated preview on the row.
         model.apply_tool_update(
@@ -11348,7 +11364,10 @@ mod tests {
             })),
         );
         let detail = model.transcript[0].detail.clone().unwrap_or_default();
-        assert!(detail.contains("⤷ 8848 m"), "output preview missing: {detail:?}");
+        assert!(
+            detail.contains("⤷ 8848 m"),
+            "output preview missing: {detail:?}"
+        );
 
         // An unknown `ra.dag.*` schema is ignored, not rendered.
         model.apply_tool_update(

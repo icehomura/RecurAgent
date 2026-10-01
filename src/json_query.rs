@@ -40,9 +40,8 @@ const JSON_QUERY_MAX_RESULT_CHARS: usize = 4000;
 /// Returns a validation error when the filter does not parse, does not
 /// compile, or the first output value is itself an error.
 pub fn run_filter(filter_source: &str, input_json: &str) -> Result<Vec<String>> {
-    let input: Val = read::parse_single(input_json.as_bytes()).map_err(|err| {
-        Error::validation(format!("json_query: input is not valid JSON: {err}"))
-    })?;
+    let input: Val = read::parse_single(input_json.as_bytes())
+        .map_err(|err| Error::validation(format!("json_query: input is not valid JSON: {err}")))?;
 
     let program = File {
         code: filter_source,
@@ -259,8 +258,8 @@ mod tests {
     #[test]
     fn selects_and_projects_fields() {
         let doc = r#"[{"name":"a","status":"open"},{"name":"b","status":"closed"}]"#;
-        let out = run_filter(r#"[.[] | select(.status == "open") | .name]"#, doc)
-            .expect("filter runs");
+        let out =
+            run_filter(r#"[.[] | select(.status == "open") | .name]"#, doc).expect("filter runs");
         assert_eq!(out, vec!["[\"a\"]"]);
     }
 

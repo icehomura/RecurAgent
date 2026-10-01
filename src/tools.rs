@@ -6796,11 +6796,8 @@ impl Tool for ReadTool {
                     .await
                     .map_err(|e| Error::tool("read", e.to_string()))?;
                 total_bytes_read = total_bytes_read.saturating_add(n as u64);
-                let (result, read, written, _errors) = decoder.decode_to_utf8(
-                    &buf[..carry + n],
-                    &mut decoded_chunk,
-                    n == 0,
-                );
+                let (result, read, written, _errors) =
+                    decoder.decode_to_utf8(&buf[..carry + n], &mut decoded_chunk, n == 0);
                 if result == encoding_rs::CoderResult::OutputFull {
                     // Unreachable: `decoded_chunk` is sized for the widest
                     // expansion any WHATWG encoding can produce.
@@ -19228,8 +19225,14 @@ mod tests {
                 .await
                 .unwrap();
             let text = get_text(&out.content);
-            assert!(text.contains("中文"), "expected decoded GBK text, got: {text}");
-            assert!(!text.contains('\u{FFFD}'), "gbk decode should not emit U+FFFD: {text}");
+            assert!(
+                text.contains("中文"),
+                "expected decoded GBK text, got: {text}"
+            );
+            assert!(
+                !text.contains('\u{FFFD}'),
+                "gbk decode should not emit U+FFFD: {text}"
+            );
         });
     }
 
@@ -19255,9 +19258,18 @@ mod tests {
                 .await
                 .unwrap();
             let text = get_text(&out.content);
-            assert!(text.contains("alpha"), "expected decoded UTF-16LE text, got: {text}");
-            assert!(text.contains("beta"), "expected both decoded lines, got: {text}");
-            assert!(!text.contains('\u{FFFD}'), "BOM decode should not emit U+FFFD: {text}");
+            assert!(
+                text.contains("alpha"),
+                "expected decoded UTF-16LE text, got: {text}"
+            );
+            assert!(
+                text.contains("beta"),
+                "expected both decoded lines, got: {text}"
+            );
+            assert!(
+                !text.contains('\u{FFFD}'),
+                "BOM decode should not emit U+FFFD: {text}"
+            );
         });
     }
 

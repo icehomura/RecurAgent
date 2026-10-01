@@ -141,7 +141,8 @@ pub(super) async fn execute(
             // modifiers is required by the protocol even when zero.
             "modifiers": 0,
         });
-        cdp.command(owner, "Input.dispatchDragEvent", payload).await?;
+        cdp.command(owner, "Input.dispatchDragEvent", payload)
+            .await?;
     }
 
     Ok(output(

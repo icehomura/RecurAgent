@@ -36,7 +36,10 @@ pub(super) fn validate(args: &Value) -> Result<()> {
         .as_object()
         .ok_or_else(|| error("trace arguments must be an object"))?;
     for field in object.keys() {
-        if !matches!(field.as_str(), "action" | "operation" | "output_path" | "tab") {
+        if !matches!(
+            field.as_str(),
+            "action" | "operation" | "output_path" | "tab"
+        ) {
             return Err(error(format!("unsupported trace argument: {field}")));
         }
     }
@@ -101,13 +104,10 @@ pub(super) async fn execute(
             let bytes = serde_json::to_vec(&document)
                 .map_err(|err| error(format!("could not serialize the trace: {err}")))?;
 
-            let requested = args
-                .get("output_path")
-                .and_then(Value::as_str)
-                .map_or_else(
-                    || format!("traces/browser_{}.json", uuid::Uuid::new_v4().simple()),
-                    ToString::to_string,
-                );
+            let requested = args.get("output_path").and_then(Value::as_str).map_or_else(
+                || format!("traces/browser_{}.json", uuid::Uuid::new_v4().simple()),
+                ToString::to_string,
+            );
             let target = crate::artifact_output::resolve_new(cwd, &requested, "browser")?;
             crate::artifact_output::publish(&target, &bytes, "browser")?;
 

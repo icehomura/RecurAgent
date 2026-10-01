@@ -1366,9 +1366,11 @@ mod tests {
         let relocated_artifact_path = std::fs::canonicalize(relocated_artifact_path)
             .expect("canonicalize relocated Criterion estimate");
         let mut relocated_control = control.clone();
-        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(unavailable_producer(&format!(
-            "target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/hello/new/estimates.json"
-        )));
+        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(
+            unavailable_producer(&format!(
+                "target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/hello/new/estimates.json"
+            ))
+        );
         let relocated_control_path = temp.path().join("cold-load-relocated.json");
         write_json(&relocated_control_path, &relocated_control);
         assert!(verify_cold_load_measurement_control(&relocated_control_path, "hello").is_err());
@@ -1380,9 +1382,11 @@ mod tests {
         .expect("relocated Criterion bytes satisfy the producer control");
         assert_eq!(relocated.artifact_path, relocated_artifact_path);
 
-        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(unavailable_producer(&format!(
-            "target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/pirate/new/estimates.json"
-        )));
+        relocated_control["measurements"]["hello"]["artifact_path"] = serde_json::json!(
+            unavailable_producer(&format!(
+                "target/criterion/pi-perf-runs/{run_instance_id}/criterion_extensions/ext_load_init/load_init_cold/pirate/new/estimates.json"
+            ))
+        );
         write_json(&relocated_control_path, &relocated_control);
         assert!(
             verify_cold_load_measurement_control_with_relocated_artifact(

@@ -501,10 +501,12 @@ impl SecretVault {
                 // A remembered numeric token may be echoed as a JSON number.
                 // Preserve nonsecret primitives; secret ones become strings
                 // holding placeholders rather than disclosing their value.
-                self.by_value.get(&other.to_string()).is_some_and(|placeholder| {
-                    *other = serde_json::Value::String(placeholder.clone());
-                    true
-                })
+                self.by_value
+                    .get(&other.to_string())
+                    .is_some_and(|placeholder| {
+                        *other = serde_json::Value::String(placeholder.clone());
+                        true
+                    })
             }
         }
     }
@@ -534,7 +536,10 @@ impl SecretVault {
             // Strip CRLF first, then LF, else keep the line verbatim — the
             // same three-way split, expressed without the if/else chain.
             let (body, ending) = line.strip_suffix("\r\n").map_or_else(
-                || line.strip_suffix('\n').map_or((line, ""), |body| (body, "\n")),
+                || {
+                    line.strip_suffix('\n')
+                        .map_or((line, ""), |body| (body, "\n"))
+                },
                 |body| (body, "\r\n"),
             );
             if body.trim().is_empty() {

@@ -77,13 +77,15 @@ impl SupermemoryConfig {
             config.api_key = api_key;
         }
         if let Ok(base_url) = std::env::var("SUPERMEMORY_BASE_URL")
-            && !base_url.trim().is_empty() {
-                config.base_url = base_url.trim().to_string();
-            }
+            && !base_url.trim().is_empty()
+        {
+            config.base_url = base_url.trim().to_string();
+        }
         if let Ok(tag) = std::env::var("SUPERMEMORY_CONTAINER_TAG")
-            && !tag.trim().is_empty() {
-                config.container_tag = tag.trim().to_string();
-            }
+            && !tag.trim().is_empty()
+        {
+            config.container_tag = tag.trim().to_string();
+        }
         config
     }
 

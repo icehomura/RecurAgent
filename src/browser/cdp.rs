@@ -51,9 +51,22 @@ fn console_arg_text(arg: &Value) -> String {
     let text = arg
         .get("value")
         .map(std::string::ToString::to_string)
-        .or_else(|| arg.get("description").and_then(Value::as_str).map(str::to_string))
-        .or_else(|| arg.get("unserializableValue").and_then(Value::as_str).map(str::to_string))
-        .unwrap_or_else(|| arg.get("type").and_then(Value::as_str).unwrap_or("?").to_string());
+        .or_else(|| {
+            arg.get("description")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            arg.get("unserializableValue")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| {
+            arg.get("type")
+                .and_then(Value::as_str)
+                .unwrap_or("?")
+                .to_string()
+        });
     if text.chars().count() <= MAX_CONSOLE_VALUE_CHARS {
         return text;
     }
@@ -613,17 +626,20 @@ impl Cdp {
                 }),
             ),
             // No route, or an explicit continue: let it reach the network.
-            Some(RouteAction::Continue) | None => (
-                "Fetch.continueRequest",
-                json!({"requestId": request_id}),
-            ),
+            Some(RouteAction::Continue) | None => {
+                ("Fetch.continueRequest", json!({"requestId": request_id}))
+            }
         };
         self.send_request(owner, method, params, true).await?;
         Ok(true)
     }
 
     /// Replace the route table, enabling or disabling interception accordingly.
-    pub(super) async fn set_routes(&mut self, owner: &AgentCx, routes: Vec<NetworkRoute>) -> Result<()> {
+    pub(super) async fn set_routes(
+        &mut self,
+        owner: &AgentCx,
+        routes: Vec<NetworkRoute>,
+    ) -> Result<()> {
         let had = !self.routes.is_empty();
         self.routes = routes;
         match (had, self.routes.is_empty()) {
@@ -692,8 +708,7 @@ impl Cdp {
                 .process_dialog(owner, &response, method == "Page.handleJavaScriptDialog")
                 .await?;
             let handled_paused = self.process_paused_request(owner, &response).await?;
-            if !handled_dialog && !handled_paused && response["id"].as_u64() == Some(id)
-            {
+            if !handled_dialog && !handled_paused && response["id"].as_u64() == Some(id) {
                 if primary.is_some() {
                     return Err(Error::tool("browser", "duplicate CDP command response"));
                 }
@@ -1372,7 +1387,11 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].level, "log");
         assert!(entries[0].text.contains("hello"), "{:?}", entries[0].text);
-        assert!(entries[0].text.contains("Widget {}"), "{:?}", entries[0].text);
+        assert!(
+            entries[0].text.contains("Widget {}"),
+            "{:?}",
+            entries[0].text
+        );
         assert!(entries[0].text.contains("NaN"), "{:?}", entries[0].text);
 
         assert!(record_console_event_into(

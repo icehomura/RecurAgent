@@ -1265,7 +1265,9 @@ mod tests {
         assert!(
             // Separators are normalized before comparing: the loader reports
             // the native path, which is backslash-separated on Windows.
-            message.replace('\\', "/").contains("project/themes/shared.json"),
+            message
+                .replace('\\', "/")
+                .contains("project/themes/shared.json"),
             "unexpected error: {message}"
         );
     }

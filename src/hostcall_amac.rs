@@ -118,7 +118,12 @@ impl AmacGroupKey {
     pub const fn interleave_safe(&self) -> bool {
         matches!(
             self,
-            Self::SessionRead | Self::EventRead | Self::Tool | Self::Http | Self::Log | Self::FsRead
+            Self::SessionRead
+                | Self::EventRead
+                | Self::Tool
+                | Self::Http
+                | Self::Log
+                | Self::FsRead
         )
     }
 

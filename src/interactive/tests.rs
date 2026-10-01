@@ -324,7 +324,10 @@ fn a_model_display_name_renders_but_identity_stays_provider_id() {
     app.model_entry.model.name = "GPT Five Two".to_string();
     let view = app.view();
     assert!(view.contains("(GPT Five Two)"), "header: {view}");
-    assert!(view.contains("RecurAgent · GPT Five Two"), "terminal title: {view}");
+    assert!(
+        view.contains("RecurAgent · GPT Five Two"),
+        "terminal title: {view}"
+    );
     assert_eq!(app.model, "openai/gpt-5.2", "identity is untouched");
     assert_eq!(
         session_model_line(&app.model_entry),

@@ -245,15 +245,12 @@ pub(super) struct Snapshot {
 
 impl Snapshot {
     pub(super) fn checkout(&self, repo: &Path, path: &Path, branch: &str) -> Result<()> {
-        let parent = canonicalize(
-            path.parent()
-                .ok_or_else(|| {
-                    failure(
-                        "RECUR_AGENT_ISO_WORKTREE_PATH",
-                        "Missing worktree parent directory",
-                    )
-                })?,
-        )
+        let parent = canonicalize(path.parent().ok_or_else(|| {
+            failure(
+                "RECUR_AGENT_ISO_WORKTREE_PATH",
+                "Missing worktree parent directory",
+            )
+        })?)
         .map_err(|_| {
             failure(
                 "RECUR_AGENT_ISO_WORKTREE_PATH",

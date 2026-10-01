@@ -235,10 +235,8 @@ fn operation_and_text_edit_counts_have_finite_admission_limits() {
     let dir = tempfile::tempdir().expect("temp dir");
     let uri = crate::lsp::client::path_to_uri(&dir.path().join("a.rs"));
 
-    let entries = vec![
-        json!({"textDocument":{"uri":uri,"version":null},"edits":[]});
-        MAX_STEPS + 1
-    ];
+    let entries =
+        vec![json!({"textDocument":{"uri":uri,"version":null},"edits":[]}); MAX_STEPS + 1];
     let error = parse_workspace_edit(&json!({"documentChanges":entries})).expect_err("step bound");
     assert!(error.to_string().contains("LSP_EDIT_LIMIT"));
 

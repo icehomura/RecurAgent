@@ -24,11 +24,11 @@ use crate::error::Result;
 use crate::extensions::EXTENSION_EVENT_TIMEOUT_MS;
 use crate::extensions::{
     DangerousCommandClass, ExecMediationResult, ExtensionBody, ExtensionMessage, ExtensionPolicy,
-    ExtensionSession, ExtensionUiRequest, ExtensionUiResponse, FsConnector, FsScopes, HostCallError,
-    HostCallErrorCode, HostCallPayload, HostResultPayload, HostStreamChunk, PROTOCOL_VERSION,
-    PolicyCheck, PolicyDecision, PolicyProfile, PolicySnapshot, classify_ui_hostcall_error,
-    evaluate_exec_mediation, hash_canonical_json, required_capability_for_host_call_static,
-    ui_response_value_for_op, validate_host_call,
+    ExtensionSession, ExtensionUiRequest, ExtensionUiResponse, FsConnector, FsScopes,
+    HostCallError, HostCallErrorCode, HostCallPayload, HostResultPayload, HostStreamChunk,
+    PROTOCOL_VERSION, PolicyCheck, PolicyDecision, PolicyProfile, PolicySnapshot,
+    classify_ui_hostcall_error, evaluate_exec_mediation, hash_canonical_json,
+    required_capability_for_host_call_static, ui_response_value_for_op, validate_host_call,
 };
 use crate::extensions_js::{HostcallKind, HostcallRequest, RaJsRuntime, js_to_json, json_to_js};
 use crate::hostcall_amac::{AmacBatchExecutor, AmacBatchExecutorConfig};
@@ -1404,7 +1404,10 @@ fn protocol_params_from_request(request: &HostcallRequest) -> Value {
             Value::Object(object)
         }
         HostcallKind::Http | HostcallKind::Log => request.payload.clone(),
-        HostcallKind::Session { op } | HostcallKind::Ui { op } | HostcallKind::Events { op } | HostcallKind::Fs { op } => {
+        HostcallKind::Session { op }
+        | HostcallKind::Ui { op }
+        | HostcallKind::Events { op }
+        | HostcallKind::Fs { op } => {
             let mut object = match &request.payload {
                 Value::Object(map) => clone_payload_object_without_key(map, "op"),
                 Value::Null => serde_json::Map::new(),
@@ -2502,8 +2505,13 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
                 .await
             }
             HostcallKind::Fs { op } => {
-                self.dispatch_fs_ref(&request.call_id, op, &request.payload, request.extension_id.as_deref())
-                    .await
+                self.dispatch_fs_ref(
+                    &request.call_id,
+                    op,
+                    &request.payload,
+                    request.extension_id.as_deref(),
+                )
+                .await
             }
             HostcallKind::Log => {
                 tracing::info!(

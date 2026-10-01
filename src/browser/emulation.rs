@@ -130,13 +130,8 @@ pub(super) async fn execute(
             true,
         )
         .await?;
-        cdp.call(
-            owner,
-            "Emulation.clearGeolocationOverride",
-            json!({}),
-            true,
-        )
-        .await?;
+        cdp.call(owner, "Emulation.clearGeolocationOverride", json!({}), true)
+            .await?;
         // Drop the geolocation grant too, or the next page keeps a permission
         // the caller asked to have cleared.
         cdp.call(owner, "Browser.resetPermissions", json!({}), false)
@@ -254,7 +249,11 @@ pub(super) async fn execute(
         ));
     }
     Ok(output(
-        format!("Applied {} emulation setting(s) on tab {tab}: {}", applied.len(), applied.join(", ")),
+        format!(
+            "Applied {} emulation setting(s) on tab {tab}: {}",
+            applied.len(),
+            applied.join(", ")
+        ),
         json!({"applied": applied, "backend": "cdp"}),
     ))
 }

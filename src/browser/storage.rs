@@ -38,13 +38,11 @@ pub(super) fn validate(args: &Value) -> Result<()> {
         .ok_or_else(|| error("cookie and storage arguments must be an object"))?;
     match action {
         "cookies" => {
-            let operation = args
-                .get("operation")
-                .map_or(Ok("get"), |value| {
-                    value
-                        .as_str()
-                        .ok_or_else(|| error("operation must be a string"))
-                })?;
+            let operation = args.get("operation").map_or(Ok("get"), |value| {
+                value
+                    .as_str()
+                    .ok_or_else(|| error("operation must be a string"))
+            })?;
             match operation {
                 "get" => {}
                 "set" => {
@@ -75,10 +73,7 @@ pub(super) fn validate(args: &Value) -> Result<()> {
             }
         }
         "storage" => {
-            let area = args
-                .get("area")
-                .and_then(Value::as_str)
-                .unwrap_or("local");
+            let area = args.get("area").and_then(Value::as_str).unwrap_or("local");
             if !matches!(area, "local" | "session") {
                 return Err(error("storage area must be local or session"));
             }
@@ -107,12 +102,7 @@ pub(super) async fn execute(
     }
 }
 
-async fn cookies(
-    owner: &AgentCx,
-    cdp: &mut Cdp,
-    tab: &str,
-    args: &Value,
-) -> Result<ToolOutput> {
+async fn cookies(owner: &AgentCx, cdp: &mut Cdp, tab: &str, args: &Value) -> Result<ToolOutput> {
     let operation = args
         .get("operation")
         .and_then(Value::as_str)
@@ -136,10 +126,7 @@ async fn cookies(
                 }
             }
             let result = cdp.call(owner, "Network.getCookies", params, false).await?;
-            let cookies = result
-                .get("cookies")
-                .cloned()
-                .unwrap_or_else(|| json!([]));
+            let cookies = result.get("cookies").cloned().unwrap_or_else(|| json!([]));
             let count = cookies.as_array().map_or(0, Vec::len);
             Ok(output(
                 format!("{count} cookie(s) for tab {tab}"),
@@ -153,7 +140,9 @@ async fn cookies(
                 .ok_or_else(|| error("cookies set requires a cookie object"))?;
             // `Network.setCookie` takes the cookie fields flattened, with the
             // same names this tool accepts.
-            let result = cdp.call(owner, "Network.setCookie", cookie.clone(), false).await?;
+            let result = cdp
+                .call(owner, "Network.setCookie", cookie.clone(), false)
+                .await?;
             let stored = result
                 .get("success")
                 .and_then(Value::as_bool)
@@ -168,7 +157,9 @@ async fn cookies(
             ))
         }
         "clear" => {
-            let result = cdp.call(owner, "Network.clearBrowserCookies", json!({}), false).await?;
+            let result = cdp
+                .call(owner, "Network.clearBrowserCookies", json!({}), false)
+                .await?;
             let _ = result;
             Ok(output(
                 format!("Cleared cookies for tab {tab}"),
@@ -179,16 +170,8 @@ async fn cookies(
     }
 }
 
-async fn storage(
-    owner: &AgentCx,
-    cdp: &mut Cdp,
-    tab: &str,
-    args: &Value,
-) -> Result<ToolOutput> {
-    let area = args
-        .get("area")
-        .and_then(Value::as_str)
-        .unwrap_or("local");
+async fn storage(owner: &AgentCx, cdp: &mut Cdp, tab: &str, args: &Value) -> Result<ToolOutput> {
+    let area = args.get("area").and_then(Value::as_str).unwrap_or("local");
     // Storage is per-origin and only reachable from a live document, so read it
     // through the page rather than through `DOMStorage`, which needs an origin
     // the caller would have to name and could name wrongly.
