@@ -1563,15 +1563,8 @@ mod tests {
     /// trusted to the prompt.
     #[test]
     fn builtin_read_only_roles_never_list_a_write_tool() {
-        let forbidden = [
-            "edit",
-            "write",
-            "hashline_edit",
-            "ast_edit",
-            "sessions",
-            "bash",
-            "run_code",
-        ];
+        // Write tools are forbidden for every role that must not mutate.
+        let write_tools = ["edit", "write", "hashline_edit", "ast_edit", "sessions"];
         for agent in BUILTIN_AGENTS {
             if agent.name != "explore" && agent.name != "verify" {
                 continue;
@@ -1581,8 +1574,8 @@ mod tests {
                 .expect("a read-only role must enumerate its tools");
             for tool in tools {
                 assert!(
-                    !forbidden.contains(tool),
-                    "read-only built-in {:?} lists {tool:?}",
+                    !write_tools.contains(tool),
+                    "read-only built-in {:?} lists the write tool {tool:?}",
                     agent.name
                 );
             }
@@ -1593,10 +1586,15 @@ mod tests {
             .find(|agent| agent.name == "explore")
             .expect("explore built-in");
         let explore_tools = explore.tools.expect("explore enumerates tools");
-        assert!(
-            !explore_tools.contains(&"bash") && !explore_tools.contains(&"run_code"),
-            "explore must not execute anything: {explore_tools:?}"
-        );
+        // `explore` is the total read-only role: it must not execute at all.
+        // `verify` is allowed `bash`/`run_code` (running the gates is its job),
+        // so only its lack of write tools is asserted above.
+        for tool in explore_tools {
+            assert!(
+                !["bash", "run_code"].contains(tool),
+                "explore must not execute anything, but lists {tool:?}"
+            );
+        }
 
         // `verify` exists to run the gates, so it needs bash; the absence of a
         // write tool is what keeps its report honest.
