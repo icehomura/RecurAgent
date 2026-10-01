@@ -2028,6 +2028,10 @@ pub struct RaFtuiModel {
     /// any `Event::Resize` arrives), so a terminal taller than the initial
     /// default left `body_rect` covering only the top of the screen.
     rendered_size: std::cell::Cell<(u16, u16)>,
+    /// Body rect of the last rendered frame, recorded in `render_frame`.
+    /// Hit-testing prefers this so it is byte-for-byte the region that was
+    /// drawn, including when a completion popup changes the body's height.
+    rendered_body: std::cell::Cell<Rect>,
     /// Total rendered conversation lines from the last frame. Markdown
     /// rendering expands the raw text (blank lines after blocks, fence
     /// chrome), so the raw-line approximation in `conversation_line_count()`
@@ -2366,6 +2370,7 @@ impl RaFtuiModel {
             scroll_from_tail: 0,
             scroll_hint_phase: 0,
             rendered_size: std::cell::Cell::new((0, 0)),
+            rendered_body: std::cell::Cell::new(Rect::new(0, 0, 0, 0)),
             rendered_total_lines: std::cell::Cell::new(0),
             mouse_selection: None,
             selection_snapshot: std::cell::RefCell::new(None),
@@ -3277,6 +3282,10 @@ impl RaFtuiModel {
     }
 
     fn body_rect(&self) -> Rect {
+        let drawn = self.rendered_body.get();
+        if !drawn.is_empty() {
+            return drawn;
+        }
         layout_regions(
             self.frame_area(),
             self.input_rows(),
@@ -3284,6 +3293,67 @@ impl RaFtuiModel {
             self.completion_rows(),
         )
         .body
+    }
+
+    /// Region the input editor occupies, recomputed from the frame area. Used
+    /// to hit-test clicks that place the caret.
+    fn input_rect(&self) -> Rect {
+        layout_regions(
+            self.frame_area(),
+            self.input_rows(),
+            u16::from(self.error_banner.is_some()),
+            self.completion_rows(),
+        )
+        .input
+    }
+
+    /// Move the caret to the cell clicked inside the input region, returning
+    /// whether it moved.
+    ///
+    /// `TextArea` keeps its soft-wrap layout and vertical scroll anchor
+    /// private, so a screen-to-caret mapping is only exact when no line wraps
+    /// and nothing is scrolled out of view — the common case for a draft that
+    /// fits. Anywhere else this is a deliberate no-op rather than landing the
+    /// caret in the wrong place.
+    fn place_input_cursor(&mut self, x: u16, y: u16) -> bool {
+        let rect = self.input_rect();
+        if rect.is_empty() || x < rect.x || y < rect.y {
+            return false;
+        }
+        let local_row = usize::from(y - rect.y);
+        let target_col = usize::from(x - rect.x);
+        let width = usize::from(rect.width);
+        let line_count = self.input.line_count();
+        if width == 0 || local_row >= line_count || line_count > usize::from(rect.height) {
+            return false;
+        }
+        // Every line must occupy exactly one visual row, or the row/column
+        // mapping would need TextArea's private wrap state.
+        for line in 0..line_count {
+            let Some(text) = self.input.editor().line_text(line) else {
+                return false;
+            };
+            if display_width(&text) > width {
+                return false;
+            }
+        }
+        let Some(text) = self.input.editor().line_text(local_row) else {
+            return false;
+        };
+        let mut grapheme = 0_usize;
+        let mut column = 0_usize;
+        for glyph in ftui::text::wrap::graphemes(&text) {
+            let glyph_width = display_width(glyph);
+            if column + glyph_width > target_col {
+                break;
+            }
+            grapheme += 1;
+            column += glyph_width;
+        }
+        self.input.set_cursor_position(ftui::text::CursorPosition::new(
+            local_row, grapheme, column,
+        ));
+        true
     }
 
     /// Mouse routing: wheel scroll plus drag-select-to-copy in the body. The
@@ -3305,6 +3375,15 @@ impl RaFtuiModel {
                     && rect.contains(mouse.x, mouse.y)
                 {
                     self.scroll_from_tail = 0;
+                    return Cmd::none();
+                }
+                // Input editor: a click places the caret (classic-stack
+                // parity). Body selection starts only below.
+                if self.picker.is_none()
+                    && self.input_active()
+                    && self.input_rect().contains(mouse.x, mouse.y)
+                    && self.place_input_cursor(mouse.x, mouse.y)
+                {
                     return Cmd::none();
                 }
                 // A modal picker covers the body; no selection there.
@@ -5846,6 +5925,7 @@ impl RaFtuiModel {
             u16::from(self.error_banner.is_some()),
             self.completion_rows(),
         );
+        self.rendered_body.set(regions.body);
 
         // Header: identity + agent state.
         let header = format!("RecurAgent · {}", self.state.label());
@@ -10512,6 +10592,39 @@ mod tests {
             model.mouse_selection.is_some(),
             "a press near the bottom of the drawn body must start a selection"
         );
+    }
+
+    #[test]
+    fn clicking_the_input_places_the_caret() {
+        let (_tx, mut model) = new_model();
+        model.rendered_size.set((80, 24));
+        model.input.set_text("hello world");
+        let rect = model.input_rect();
+        let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
+            MouseEventKind::Down(MouseButton::Left),
+            rect.x + 1,
+            rect.y,
+        )));
+        let cursor = model.input.cursor();
+        assert_eq!(cursor.line, 0, "first line");
+        assert_eq!(cursor.grapheme, 1, "the caret lands just after `h`");
+    }
+
+    #[test]
+    fn clicking_a_wrapped_input_line_leaves_the_caret_alone() {
+        let (_tx, mut model) = new_model();
+        model.rendered_size.set((80, 24));
+        model.input.set_text(&"x".repeat(200));
+        let before = model.input.cursor();
+        let rect = model.input_rect();
+        let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
+            MouseEventKind::Down(MouseButton::Left),
+            rect.x + 1,
+            rect.y,
+        )));
+        let after = model.input.cursor();
+        assert_eq!(after.line, before.line, "no wrong-place jump");
+        assert_eq!(after.grapheme, before.grapheme, "no wrong-place jump");
     }
 
     #[test]
