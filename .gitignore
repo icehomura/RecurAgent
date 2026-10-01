@@ -6,6 +6,11 @@ a.out
 rustc-ice-*.txt
 *.snap.new
 
+# Local build/scratch output (machine-specific, not source)
+/.build/
+/_build_logs/
+/.probe*.log
+
 # E2E run-time evidence (shard and local verification outputs)
 tests/e2e_results/
 
