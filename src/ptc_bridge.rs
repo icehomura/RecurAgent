@@ -19,7 +19,8 @@
 //!
 //! Each helper accepts the positional shorthand **or** an options object, and
 //! the object form forwards every key to the host tool (so `offset`, `limit`,
-//! `hashline`, `encoding`, `glob`, `context`, ... all take effect):
+//! `hashline`, `encoding`, `glob`, `context`, ... all take effect). Every
+//! helper returns an already-settled `Promise`, so `await` it:
 //!
 //! | Call | Host tool |
 //! |------|-----------|
@@ -27,13 +28,30 @@
 //! | `sdk.grep(pattern, path?)` / `sdk.grep({ pattern, path, glob, ignoreCase, literal, context, limit, hashline })` | `grep` |
 //! | `sdk.find(glob, path?)` / `sdk.find({ pattern, path, limit })` | `find` |
 //! | `sdk.ls(path?)` / `sdk.ls({ path, limit })` | `ls` |
-//! | `sdk.call(tool, args)` | any **whitelisted** tool (escape hatch, still whitelist-gated) |
+//! | `sdk.astGrep(pattern, path?)` | `ast_grep` (structural search) |
+//! | `sdk.jsonQuery(filter, path?)` / `sdk.jsonQuery({ json, filter })` | `json_query` |
+//! | `sdk.currentTime()` | `current_time` |
+//! | `sdk.call(tool, args)` | any **reachable** tool (escape hatch, still gated) |
 //!
-//! The SDK exposes only the four read-only whitelisted tools plus the `call`
-//! escape hatch. `write`, `edit`, and `bash` are intentionally **absent** —
-//! they are outside [`BRIDGE_WHITELIST`], so exposing them would advertise
-//! bindings the host always rejects. Adding them requires routing through the
-//! approval pipeline first (port plan §7).
+//! The always-available set is [`BRIDGE_WHITELIST`] — the read-only tools
+//! `read`, `grep`, `find`, `ls`, `ast_grep`, `json_query`, and `current_time`.
+//! Every member declares strictly read-only effects, so reaching it cannot
+//! bypass the approval pipeline.
+//!
+//! The write/process/network tools (`bash`, `write`, `edit`, `ast_edit`,
+//! `sessions`, `web_search`) are **not** reachable by default. They become
+//! reachable only when the OPERATOR grants them at construction
+//! ([`GRANTABLE_TOOLS`], `RunCodeTool::with_capabilities`); a program can never
+//! grant itself one. Grant them by launching the agent with
+//! `PTC_CAPABILITIES=bash,write,edit,ast_edit,sessions,web_search`, then
+//! `await sdk.call('bash', { command: '...' })` and friends work.
+//!
+//! **Authorization model (no nested approval).** A run that the operator has
+//! authorized at the outer `run_code` gate (or that runs under `yolo`) is not
+//! re-prompted per inner tool; the grant is decided once, outside model code.
+//! Read-only tools never need authorization at all. Mutating/process/network
+//! tools require the operator grant above — which is the same decision the
+//! outer `run_code` approval represents.
 //!
 //! # Error locations
 //!
@@ -86,9 +104,23 @@ pub const DEFAULT_RUN_CODE_TIMEOUT_SECS: u64 = 120;
 /// Schema tag for run_code outputs.
 pub const PTC_RUN_CODE_SCHEMA: &str = "ra.ptc.run_code.v1";
 
-/// Bridge whitelist. Read-only tools only — they need no approval, so the
-/// bridge cannot bypass pi's permission pipeline for these.
-const BRIDGE_WHITELIST: [&str; 4] = ["read", "grep", "find", "ls"];
+/// Bridge whitelist: tools the bridge may *always* reach.
+///
+/// Every member must declare strictly read-only effects (no write, append,
+/// process, or network), so reaching it cannot bypass pi's permission
+/// pipeline. The invariant is enforced by
+/// `whitelist_tools_are_effectively_read_only`; adding a tool whose effects
+/// are not read-only fails that test rather than silently widening the
+/// surface.
+const BRIDGE_WHITELIST: [&str; 7] = [
+    "read",
+    "grep",
+    "find",
+    "ls",
+    "ast_grep",
+    "json_query",
+    "current_time",
+];
 
 /// Approval-gated tools a run may reach only when the OPERATOR granted them at
 /// construction ([`RunCodeTool::with_capabilities`]).
@@ -98,7 +130,18 @@ const BRIDGE_WHITELIST: [&str; 4] = ["read", "grep", "find", "ls"];
 /// self-escalation past the per-call approval gate in the agent loop
 /// (`ToolApprovalHandler`); the grant is therefore a property of the tool
 /// instance, decided outside the model's control.
-const GRANTABLE_TOOLS: [&str; 3] = ["bash", "write", "edit"];
+///
+/// This is the same class as `bash`: writing, process, and network tools.
+/// `ast_edit` writes, `sessions` can delete/restore, and `web_search` is a
+/// network operation — none may sit in [`BRIDGE_WHITELIST`].
+const GRANTABLE_TOOLS: [&str; 6] = [
+    "bash",
+    "write",
+    "edit",
+    "ast_edit",
+    "sessions",
+    "web_search",
+];
 
 /// Script file name QuickJS reports in stack frames, so an error points at the
 /// model's own `code` rather than at an anonymous eval.
@@ -261,6 +304,12 @@ impl RunCodeTool {
             "ls" => Some(Box::new(
                 LsTool::new(&self.cwd).with_workspace(self.workspace.clone()),
             )),
+            // Read-only extras: no approval needed, so they join the
+            // always-allowed set alongside read/grep/find/ls. Constructed the
+            // same way the registry builds them.
+            "ast_grep" => Some(Box::new(crate::ast_tools::AstGrepTool::new(&self.cwd))),
+            "json_query" => Some(Box::new(crate::json_query::JsonQueryTool::new())),
+            "current_time" => Some(Box::new(crate::current_time::CurrentTimeTool::new())),
             // Approval-gated tools. Constructed exactly the way the registry
             // builds them, but reachable only when the operator granted them:
             // `bridge_call` gates on `allowed` before it ever gets here.
@@ -271,6 +320,9 @@ impl RunCodeTool {
             "edit" => Some(Box::new(
                 EditTool::new(&self.cwd).with_workspace(self.workspace.clone()),
             )),
+            "ast_edit" => Some(Box::new(crate::ast_tools::AstEditTool::new(&self.cwd))),
+            "sessions" => Some(Box::new(crate::sessions::SessionsTool::new())),
+            "web_search" => Some(Box::new(crate::web_search::WebSearchTool::new())),
             _ => None,
         }
     }
@@ -581,13 +633,56 @@ fn install_globals<'js>(
         flags,
         budget,
     )?;
+    // Read-only extras, exposed as named helpers like read/grep/find/ls.
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "astGrep",
+            tool: "ast_grep",
+            key: "pattern",
+            optional: false,
+            scope: true,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "jsonQuery",
+            tool: "json_query",
+            key: "filter",
+            optional: false,
+            scope: true,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
+    set_sdk_helper(
+        &sdk,
+        SdkSpec {
+            name: "currentTime",
+            tool: "current_time",
+            key: "path",
+            optional: true,
+            scope: false,
+        },
+        tx,
+        flags,
+        budget,
+    )?;
 
     // Escape hatch: full argument set for any whitelisted tool. The host is
     // still the thing that decides whether the tool exists.
     let call_tx = tx.clone();
     let call_flags = flags.clone();
     let call = Func::from(
-        move |ctx: Ctx<'js>, tool: String, args: Opt<JsValue<'js>>| {
+        move |ctx: Ctx<'js>,
+              tool: String,
+              args: Opt<JsValue<'js>>|
+              -> rquickjs::Result<Promise<'js>> {
             let (promise, resolve, reject) = Promise::new(&ctx)?;
             let payload = args
                 .0
@@ -637,7 +732,10 @@ fn set_sdk_helper<'js>(
     let tx = tx.clone();
     let flags = flags.clone();
     let func = Func::from(
-        move |ctx: Ctx<'js>, first: Opt<JsValue<'js>>, second: Opt<JsValue<'js>>| {
+        move |ctx: Ctx<'js>,
+              first: Opt<JsValue<'js>>,
+              second: Opt<JsValue<'js>>|
+              -> rquickjs::Result<Promise<'js>> {
             let (promise, resolve, reject) = Promise::new(&ctx)?;
             let outcome = normalize_args(&ctx, first.0.as_ref(), key, name, optional)
                 .and_then(|args| {
@@ -1198,15 +1296,18 @@ impl Tool for RunCodeTool {
          returns a Promise, so `await` it. The program runs on the built-in \
          QuickJS engine with no filesystem, process, or network API of its own: \
          `sdk.*` is the only way out, and it reaches the read-only tools \
-         `read`, `grep`, `find`, and `ls`. Note that `read` can fetch http(s) \
-         URLs, so network reads are reachable through it. Errors carry \
+         `read`, `grep`, `find`, `ls`, `ast_grep` (`sdk.astGrep`), `json_query` \
+         (`sdk.jsonQuery`) and `current_time` (`sdk.currentTime`). Note that \
+         `read` can fetch http(s) URLs, so network reads are reachable through \
+         it. Errors carry \
          `ptc-program:<line>` frames pointing at your own code; `console.log` \
          is captured separately and never throws. Only what you return is \
          program output — curate it. One run_code \
-         replaces many model round-trips. The operator may also grant the \
-         approval-gated tools `bash`, `write` and `edit` for this session, in \
-         which case `await sdk.call('bash', { command: '...' })` and friends are \
-         reachable; otherwise such a call is refused with PTC_BRIDGE_DENIED."
+         replaces many model round-trips. The operator may also grant `bash`, \
+         `write`, `edit`, `ast_edit`, `sessions` and `web_search` for this \
+         session, in which case `await sdk.call('bash', { command: '...' })` and \
+         friends are reachable; otherwise such a call is refused with \
+         PTC_BRIDGE_DENIED."
     }
 
     fn parameters(&self) -> Value {
@@ -1236,15 +1337,22 @@ impl Tool for RunCodeTool {
 
     fn effects(&self) -> ToolEffects {
         // Arbitrary code execution: serialized fail-closed, same policy as
-        // bash/eval. A run whose bridge can reach the write/bash tools declares
-        // those effects too, so outer barriers and plan gates see the real
+        // bash/eval. A run whose bridge can reach approval-gated tools declares
+        // their effects too, so outer barriers and plan gates see the real
         // reach of the call instead of the read-only default.
-        let base = ToolEffects::process();
-        if self.capabilities.iter().any(|name| !name.is_empty()) {
-            base.union(ToolEffects::write())
-        } else {
-            base
+        let mut effects = ToolEffects::process();
+        for name in &self.capabilities {
+            if let Some(tool) = self.bridge_tool(name) {
+                effects = effects.union(tool.effects());
+            }
         }
+        if self.capabilities.iter().any(|name| !name.is_empty()) {
+            // Conservative belt-and-braces: any operator grant also marks the
+            // run write-class, so a barrier/plan gate never treats a granted
+            // run as read-only.
+            effects = effects.union(ToolEffects::write());
+        }
+        effects
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1431,19 +1539,20 @@ mod tests {
 
     #[test]
     fn whitelist_is_read_only() {
-        // Safety invariant: the read-only set is the only thing the bridge may
-        // reach unless the OPERATOR granted more, and the grant is never
-        // something model-authored code can set.
-        for name in BRIDGE_WHITELIST {
-            assert!(matches!(name, "read" | "grep" | "find" | "ls"));
-        }
-        // Every read-only name is constructible and always allowed.
+        // Safety invariant: every always-allowed bridge tool must declare
+        // strictly read-only effects, so the bridge cannot bypass the approval
+        // pipeline. Adding a write/process/network tool to BRIDGE_WHITELIST
+        // fails here instead of silently widening the surface.
         let tool = RunCodeTool::new(".");
         for name in BRIDGE_WHITELIST {
             assert!(tool.allowed(name), "{name} is read-only and always allowed");
+            let inner = tool
+                .bridge_tool(name)
+                .unwrap_or_else(|| panic!("{name} should be buildable"));
+            let effects = inner.effects();
             assert!(
-                tool.bridge_tool(name).is_some(),
-                "{name} should be buildable"
+                !effects.writes() && !effects.appends() && !effects.processes() && !effects.networks(),
+                "{name} must declare only read effects"
             );
         }
         // Approval-gated tools are constructible for a granted run, but a
@@ -1455,7 +1564,32 @@ mod tests {
                 "{name} must be constructible when granted"
             );
         }
-        assert!(!tool.allowed("ast_edit"));
+        assert!(!tool.allowed("lsp"));
+        assert!(!tool.allowed("debug"));
+    }
+
+    #[test]
+    fn read_only_extras_are_reachable() {
+        // ast_grep / json_query / current_time join the always-allowed set and
+        // are exposed as named helpers.
+        let dir = scratch_dir("extras", &[("a.rs", "fn alpha() {}\n")]);
+        let code = r#"
+            const t = String(await sdk.currentTime());
+            const q = String(await sdk.jsonQuery({ json: '{"n": 41}', filter: '.n + 1' }));
+            const g = String(await sdk.astGrep('fn $NAME', '.'));
+            return { time: t.length > 0, json: q.includes('42'), ast: g.includes('alpha') };
+        "#;
+        let out = run(
+            &RunCodeTool::new(&dir),
+            json!({ "code": code, "timeoutMs": 60_000 }),
+        )
+        .expect("run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        assert!(text.contains(r#""time":true"#), "{text}");
+        assert!(text.contains(r#""json":true"#), "{text}");
+        assert!(text.contains(r#""ast":true"#), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
