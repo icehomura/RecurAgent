@@ -639,6 +639,9 @@ registered set, or any `peerctx-<slug>.<context>` of it, every turn start:
   sent unless the person approves it through an approval whose text says the
   earlier outcome is unknown (`approved_after_unknown`, which clears the
   mark); without an approval channel it is refused (`outcome_unknown_before`).
+  The marks are durable: they are kept in `peers/.host_tool_unknown_outcomes.json`
+  (the argument digest, never the arguments) and restored before the
+  profile's first interlock decision after a kernel restart.
 - **Routing and waiting.** At most 16 calls in flight per peer
   (`host_busy`). A call waits `call_timeout_ms`; a `confirm_required` call
   waits the approval TTL instead (the app's sheet may take as long as an
