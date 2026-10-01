@@ -305,14 +305,14 @@ Session persistence + index (JSONL, default-enabled SQLite backend support)
 - Tool definitions with JSON Schema
 
 **Built-in Tools** (43 total; the tier table is `ESSENTIAL_DEFAULTS` / `OPT_IN_ONLY` in `src/xdev.rs`, the default `--tools` list is in `src/cli.rs`, and README "43 Built-in Tools" is the user-facing inventory — keep all three in sync):
-- Essential, always in the schema: `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`, `web_search`, `submit_plan`, `current_time`, `xdev`
-- Discoverable behind `xdev`: `ast_grep`, `ast_edit`, `lsp`, `debug`, `manage_skill`, plus the memory bank (`retain`, `recall`, `reflect`, `memory_edit`, `learn`) when `memory.backend` is `local`
+- Essential, always in the schema: `read`, `write`, `edit`, `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`, `web_search`, `submit_plan`, `current_time`, `json_query`, `ast_grep`, `ast_edit`, `dag`, `xdev`
+- Discoverable behind `xdev`: `lsp`, `debug`, `manage_skill`, plus the memory bank (`retain`, `recall`, `reflect`, `memory_edit`, `learn`) when `memory.backend` is `local`
 - Default-enabled: `jobs`, `hub`, `run_code`
 - Skills: `skills_list`, `skill_view` (always registered, read-only progressive disclosure); `skill_hub_search`, `skill_hub_install` (opt-in via `skillHub.enable`)
 - `--tools` opt-in: `eval`, `github`, `security_scan`
 - Settings-gated: `browser`, `computer`, `inspect_image`, `generate_image`, `tts`, `read_media`
 - `subagent` - Native isolated Rust Pi child-agent delegation (opt-in only via `--tools ...subagent`)
-- `dag` - One-call parallel execution of a dependency DAG inside the current session (opt-in via `--tools ...dag`)
+- `dag` - One-call parallel execution of a dependency DAG inside the current session (essential tier: in the schema without promotion)
 
 **Session Management:**
 - JSONL format (version 3)

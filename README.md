@@ -42,7 +42,7 @@ You want an AI coding assistant in your terminal, but existing tools are:
 
 ## The Solution
 
-**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 43 built-in tools (21 in the default `--tools` list; 15 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
+**recur_agent** is a from-scratch Rust port of [Recur Agent](https://github.com/badlogic/pi) by [Mario Zechner](https://github.com/badlogic) (made with his blessing!). Official release archives install the single end-user binary `ra`, with streaming responses and 43 built-in tools (22 in the default `--tools` list; 15 always in the model's schema, the rest reachable through the `xdev` dispatcher or enabled in settings).
 
 ### Current product direction
 
@@ -495,16 +495,17 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 
 - **Essential** (always in the provider schema): `read`, `write`, `edit`,
   `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`,
-  `web_search`, `submit_plan`, `current_time`, `json_query`, `xdev`
+  `web_search`, `submit_plan`, `current_time`, `json_query`, `ast_grep`,
+  `ast_edit`, `dag`, `xdev`
 - **Discoverable** (registered, hidden from the schema until promoted via
-  `xdev list/describe/run/promote`): `ast_grep`, `ast_edit`, `lsp`,
+  `xdev list/describe/run/promote`): `lsp`,
   `debug`, `manage_skill` — plus the memory-bank tools (`retain`,
   `recall`, `reflect`, `memory_edit`, `learn`) when `memory.backend` is
   `local`
 - **Default-enabled**: `jobs` (background bash job control), `hub` (PTY
   service supervision), and `run_code` (programmatic tool orchestration),
   alongside the essential tier. The default `--tools`
-  list names 21 tools; the registry always adds `manage_skill` and, when any
+  list names 22 tools; the registry always adds `manage_skill` and, when any
   discoverable tool is enabled, the `xdev` dispatcher
 - **`--tools` opt-in extras**: `eval`, `github`, `security_scan`
 - **Skills**: `skills_list` and `skill_view` are always registered (read-only
@@ -518,8 +519,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
   `media.enableGenerateImage` / `media.enableTts`), and `read_media`
   (`media.enableReadMedia`; inline video/audio for Gemini-family models)
 - **Opt-in only**: `subagent` (it can start additional coding-agent
-  processes) and `dag` (one-call parallel execution of a dependency DAG
-  inside the current session)
+  processes)
 
 | Tool | Description |
 |------|-------------|
@@ -548,7 +548,7 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 | `inspect_image` / `generate_image` / `tts` | Vision analysis of local images, image generation/editing, and text-to-speech through provider adapters; settings-gated |
 | `read_media` | Attaches a local video/audio file (mp4, webm, mov, mp3, wav, m4a, ogg, flac) as an inline media block. Gemini, Gemini CLI, and Vertex Gemini models receive it natively as `inline_data`; every other provider sees `[media omitted: <name>, <mime>, <size>]`. Hard cap 5 MiB per file (`media.maxBytes`); settings-gated |
 | `subagent` | Delegate isolated work to named Rust Pi child agents |
-| `dag` | Execute a dependency DAG of tool calls in parallel within this session: one `dag` call carries the complete `nodes[]` graph (`id`/`toolName`/`args`/`dependsOn`), independent nodes run concurrently under the compatible-tool limit, write/append/process barriers stay serialized, and a failed node skips its downstream. Results and per-node failures aggregate back into one tool result for the model. Opt-in via `--tools ...dag`; nodes may not invoke `dag` itself |
+| `dag` | Execute a dependency DAG of tool calls in parallel within this session: one `dag` call carries the complete `nodes[]` graph (`id`/`toolName`/`args`/`dependsOn`), independent nodes run concurrently under the compatible-tool limit, write/append/process barriers stay serialized, and a failed node skips its downstream. Results and per-node failures aggregate back into one tool result for the model. Enabled by default (discoverable tier; promote via `xdev`); nodes may not invoke `dag` itself |
 
 All tools include automatic truncation for large outputs (2000 lines /
 1MB), detailed metadata in responses, and process-tree cleanup for bash.
@@ -3017,7 +3017,7 @@ A: Yes. Point any provider at a custom base URL via `models.json`. Pi normalizes
 | **Startup** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Memory** | Fresh comparative measurement pending | Not measured here | Not measured here | Not measured here |
 | **Providers** | 11 native provider implementation modules + OpenAI-compatible presets | Anthropic | Many | Many |
-| **Tools** | 43 built-in (21 in the default `--tools` list) | Many | File-focused | IDE-integrated |
+| **Tools** | 43 built-in (22 in the default `--tools` list) | Many | File-focused | IDE-integrated |
 | **Sessions** | JSONL tree | Proprietary | Git-based | Proprietary |
 | **Open source** | Yes | Yes | Yes | No |
 
