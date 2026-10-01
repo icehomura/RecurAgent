@@ -83,6 +83,10 @@ name = "basic_sdk"
 path = "examples/basic_sdk.rs"
 
 [[example]]
+name = "dag_bench"
+path = "examples/dag_bench.rs"
+
+[[example]]
 name = "dialect_bench"
 path = "examples/dialect_bench.rs"
 
