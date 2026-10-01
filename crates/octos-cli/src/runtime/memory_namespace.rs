@@ -188,7 +188,7 @@ pub(crate) async fn release_namespace_stores(data_dir: &Path, namespace: &str) {
 }
 
 /// Whether this process holds `namespace`'s stores open.
-#[cfg(test)]
+#[cfg(all(test, feature = "api"))]
 pub(crate) async fn namespace_stores_open(data_dir: &Path, namespace: &str) -> bool {
     match bundle_key(data_dir, namespace) {
         Some(key) => bundles().lock().await.contains_key(&key),
