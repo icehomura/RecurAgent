@@ -496,15 +496,14 @@ remains reachable. The tier table lives in `src/xdev.rs`; the default
 - **Essential** (always in the provider schema): `read`, `write`, `edit`,
   `bash`, `grep`, `find`, `ls`, `hashline_edit`, `ask`, `todo`,
   `web_search`, `submit_plan`, `current_time`, `json_query`, `ast_grep`,
-  `ast_edit`, `dag`, `xdev`
+  `ast_edit`, `dag`, `run_code`, `xdev`
 - **Discoverable** (registered, hidden from the schema until promoted via
   `xdev list/describe/run/promote`): `lsp`,
   `debug`, `manage_skill` — plus the memory-bank tools (`retain`,
   `recall`, `reflect`, `memory_edit`, `learn`) when `memory.backend` is
   `local`
-- **Default-enabled**: `jobs` (background bash job control), `hub` (PTY
-  service supervision), and `run_code` (programmatic tool orchestration),
-  alongside the essential tier. The default `--tools`
+- **Default-enabled**: `jobs` (background bash job control) and `hub` (PTY
+  service supervision), alongside the essential tier. The default `--tools`
   list names 22 tools; the registry always adds `manage_skill` and, when any
   discoverable tool is enabled, the `xdev` dispatcher
 - **`--tools` opt-in extras**: `eval`, `github`, `security_scan`

@@ -87,6 +87,11 @@ const ESSENTIAL_DEFAULTS: &[&str] = &[
     // before every multi-step fan-out will not use it, and its whole value is
     // being the first thing reached for when work parallelizes.
     "dag",
+    // Same argument as `dag`, one level down: `run_code` is the preferred way
+    // to express any operation that is really tool orchestration, and a
+    // guideline telling the model to prefer it over bash is worthless if the
+    // tool it names is not in the schema.
+    "run_code",
 ];
 
 /// Tools that are opt-in ONLY (never in the default enabled set, never
@@ -174,6 +179,7 @@ pub fn builtin_one_liner(name: &str) -> Option<&'static str> {
             "Return the host's current wall-clock time: UTC and local ISO-8601 timestamps, UTC offset,…"
         }
         "json_query" => "Query a JSON document with a jq filter expression",
+        "run_code" => "Execute a JavaScript program against the available tools",
         "dag" => "Execute a dependency DAG of tool calls in parallel within this session",
         _ => return None,
     })
@@ -429,6 +435,7 @@ mod tests {
         assert_eq!(default_tier("ast_grep"), LoadMode::Essential);
         assert_eq!(default_tier("ast_edit"), LoadMode::Essential);
         assert_eq!(default_tier("dag"), LoadMode::Essential);
+        assert_eq!(default_tier("run_code"), LoadMode::Essential);
         assert_eq!(default_tier("lsp"), LoadMode::Discoverable);
     }
 
