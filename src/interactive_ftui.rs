@@ -2019,6 +2019,9 @@ pub struct RaFtuiModel {
     /// semantics as `follow_stream_tail` in the bubbletea stack, but derived
     /// instead of stored so update() never needs the rendered line count.
     scroll_from_tail: usize,
+    /// Animation phase for the "scroll to bottom" badge. Advanced once per
+    /// tick while the badge is visible, so an idle session still pulses it.
+    scroll_hint_phase: u8,
     /// Total rendered conversation lines from the last frame. Markdown
     /// rendering expands the raw text (blank lines after blocks, fence
     /// chrome), so the raw-line approximation in `conversation_line_count()`
@@ -2355,6 +2358,7 @@ impl RaFtuiModel {
             btw_client: None,
             term: (80, 24),
             scroll_from_tail: 0,
+            scroll_hint_phase: 0,
             rendered_total_lines: std::cell::Cell::new(0),
             mouse_selection: None,
             selection_snapshot: std::cell::RefCell::new(None),
@@ -3219,6 +3223,36 @@ impl RaFtuiModel {
         self.scroll_from_tail = self.scroll_from_tail.saturating_sub(lines);
     }
 
+    /// The badge's heartbeat: restart the tick chain after a scroll so its
+    /// pulse animates even though nothing else is running. `none` once the
+    /// conversation is back at the tail.
+    fn scroll_hint_tick(&self) -> Cmd<RaFtuiMsg> {
+        if self.scroll_from_tail > 0 {
+            Cmd::tick(SPINNER_INTERVAL)
+        } else {
+            Cmd::none()
+        }
+    }
+
+    /// Where the "scroll to bottom" badge sits: the body's bottom row,
+    /// horizontally centered and exactly as wide as its label (plus one cell
+    /// of padding on each side). `None` while the conversation is already at
+    /// the bottom or the body has no room.
+    fn scroll_hint_rect(&self) -> Option<Rect> {
+        if self.scroll_from_tail == 0 {
+            return None;
+        }
+        let body = self.body_rect();
+        if body.height == 0 || body.width == 0 {
+            return None;
+        }
+        let width = u16::try_from(display_width(&scroll_hint_label()) + 2)
+            .unwrap_or(u16::MAX)
+            .min(body.width);
+        let x = body.x + body.width.saturating_sub(width) / 2;
+        Some(Rect::new(x, body.bottom().saturating_sub(1), width, 1))
+    }
+
     /// Body region the current model state lays out. Used to hit-test mouse
     /// presses; `render_frame` recomputes the same layout each frame, and the
     /// snapshot it records is what extraction reads.
@@ -3236,9 +3270,23 @@ impl RaFtuiModel {
     /// copy happens on release, so a plain click selects nothing.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Cmd<RaFtuiMsg> {
         match mouse.kind {
-            MouseEventKind::ScrollUp => self.scroll_up(3),
-            MouseEventKind::ScrollDown => self.scroll_down(3),
+            MouseEventKind::ScrollUp => {
+                self.scroll_up(3);
+                return self.scroll_hint_tick();
+            }
+            MouseEventKind::ScrollDown => {
+                self.scroll_down(3);
+                return self.scroll_hint_tick();
+            }
             MouseEventKind::Down(MouseButton::Left) => {
+                // The badge overlays the body's last row: a press on it jumps
+                // to the tail instead of starting a selection.
+                if let Some(rect) = self.scroll_hint_rect()
+                    && rect.contains(mouse.x, mouse.y)
+                {
+                    self.scroll_from_tail = 0;
+                    return Cmd::none();
+                }
                 // A modal picker covers the body; no selection there.
                 if self.picker.is_none() && self.body_rect().contains(mouse.x, mouse.y) {
                     self.mouse_selection = Some(MouseSelection {
@@ -4787,6 +4835,12 @@ impl RaFtuiModel {
                 if !notice_live {
                     self.copy_notice = None;
                 }
+                // The "scroll to bottom" badge pulses while it is up; it
+                // reuses the same heartbeat, advancing one phase per tick.
+                let hint_live = self.scroll_from_tail > 0;
+                if hint_live {
+                    self.scroll_hint_phase = self.scroll_hint_phase.wrapping_add(1);
+                }
                 // Spinner heartbeat: advance and reschedule only while
                 // something animated needs it — a working turn, an
                 // out-of-turn busy operation (issue #203), or a pending
@@ -4799,6 +4853,9 @@ impl RaFtuiModel {
                     return Cmd::tick(SPINNER_INTERVAL);
                 }
                 if notice_live {
+                    return Cmd::tick(SPINNER_INTERVAL);
+                }
+                if hint_live {
                     return Cmd::tick(SPINNER_INTERVAL);
                 }
                 return Cmd::none();
@@ -5389,7 +5446,7 @@ impl RaFtuiModel {
 
     fn consume_scroll(&mut self, scroll: impl FnOnce(&mut Self)) -> Cmd<RaFtuiMsg> {
         scroll(self);
-        Cmd::none()
+        self.scroll_hint_tick()
     }
 
     /// Markdown table budget for a terminal `cols` wide: the conversation
@@ -5846,6 +5903,23 @@ impl RaFtuiModel {
             *self.selection_snapshot.borrow_mut() = None;
         }
         Paragraph::new(Text::from_lines(window_lines)).render(regions.body, frame);
+
+        // "Scroll to bottom" badge: an animated block pinned over the body's
+        // last row while the transcript is scrolled up. It is an overlay, so
+        // the body layout never changes; a click on it (routed in
+        // `handle_mouse`) returns to the tail.
+        if let Some(rect) = self.scroll_hint_rect() {
+            let label = format!(" {} ", scroll_hint_label());
+            let style = ftui::Style::new()
+                .bg(scroll_hint_background(
+                    self.palette.accent,
+                    self.scroll_hint_phase,
+                ))
+                .fg(ftui::PackedRgba::BLACK)
+                .bold();
+            Paragraph::new(Text::from_lines([ftui::text::Line::styled(label, style)]))
+                .render(rect, frame);
+        }
 
         // Pinned error banner (bd-cv653.9.2): sits between the conversation
         // and the status line until the next sent input dismisses it.
@@ -6502,6 +6576,30 @@ const CLIPBOARD_COPIED: &str = crate::interactive::COPY_OK_MESSAGE;
 /// `interactive_copied_chars` so the notice is translatable.
 fn copy_notice_text(count: usize) -> String {
     rust_i18n::t!("interactive_copied_chars", count = count).to_string()
+}
+
+/// The "scroll to bottom" badge's label, localized. Kept a constant width so
+/// the badge's hit-test rect does not move as it animates.
+fn scroll_hint_label() -> String {
+    rust_i18n::t!("interactive_scroll_to_bottom").to_string()
+}
+
+/// A gentle pulse for the badge background: blend toward white and back over a
+/// six-frame triangle so the block reads as animated without flicker.
+fn scroll_hint_background(base: ftui::PackedRgba, phase: u8) -> ftui::PackedRgba {
+    let step = match phase % 6 {
+        0 => 0_u16,
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 2,
+        _ => 1,
+    };
+    let mix = |channel: u8| -> u8 {
+        let channel = u16::from(channel);
+        u8::try_from(channel + (255 - channel) * step / 4).unwrap_or(u8::MAX)
+    };
+    ftui::PackedRgba::rgb(mix(base.r()), mix(base.g()), mix(base.b()))
 }
 const BTW_UNAVAILABLE: &str =
     "/btw unavailable: no smol role model configured (set --smol or model_roles.smol)";
@@ -10325,6 +10423,41 @@ mod tests {
         ));
         let _ = model.handle_term(&Event::Tick);
         assert!(model.copy_notice.is_none(), "aged notice is retired");
+    }
+
+    #[test]
+    fn scroll_hint_appears_while_scrolled_up_and_click_returns_to_tail() {
+        let (_tx, mut model) = new_model();
+        assert!(
+            model.scroll_hint_rect().is_none(),
+            "no badge while parked at the tail"
+        );
+
+        model.scroll_from_tail = 5;
+        let rect = model.scroll_hint_rect().expect("badge while scrolled up");
+        assert_eq!(rect.height, 1);
+        assert!(rect.x > 0, "centered, not flush left: {rect:?}");
+
+        let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
+            MouseEventKind::Down(MouseButton::Left),
+            rect.x + rect.width / 2,
+            rect.y,
+        )));
+        assert_eq!(model.scroll_from_tail, 0, "the click returns to the tail");
+        assert!(
+            model.scroll_hint_rect().is_none(),
+            "the badge retires once back at the tail"
+        );
+    }
+
+    #[test]
+    fn scroll_hint_pulse_stays_in_a_six_frame_cycle() {
+        let base = ftui::PackedRgba::rgb(10, 20, 30);
+        assert_eq!(scroll_hint_background(base, 0), base);
+        assert_eq!(scroll_hint_background(base, 6), base, "wraps at six");
+        // Frame 3 is the triangle's brightest point, so every channel rises.
+        let bright = scroll_hint_background(base, 3);
+        assert!(bright.r() > base.r() && bright.g() > base.g() && bright.b() > base.b());
     }
 
     #[test]

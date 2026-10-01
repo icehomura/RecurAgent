@@ -248,4 +248,16 @@ mod tests {
             assert!(rendered.contains('7'), "{locale}: count dropped from {rendered}");
         }
     }
+
+    #[test]
+    fn scroll_to_bottom_badge_is_translated_in_both_locales() {
+        for locale in SUPPORTED {
+            let rendered = rust_i18n::t!("interactive_scroll_to_bottom", locale = locale);
+            assert!(!rendered.is_empty(), "{locale}: badge label is empty");
+            assert!(
+                rendered.contains('↓'),
+                "{locale}: badge lost its arrow: {rendered}"
+            );
+        }
+    }
 }

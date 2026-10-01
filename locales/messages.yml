@@ -279,6 +279,10 @@ interactive_copied_chars:
   en: "copied %{count} chars"
   zh-CN: "已复制 %{count} 个字符"
 
+interactive_scroll_to_bottom:
+  en: "↓ scroll to bottom"
+  zh-CN: "↓ 回到底部"
+
 # ── RESERVED: status_line machine prefixes (optional translation) ───────
 #
 # These are the compact machine labels a status line draws — `git:`, `ctx:`,
