@@ -659,8 +659,8 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   generic_tools, applies: "next_turn"}`; `null` clears; it narrows every turn
   on the session in the serve and gateway paths, survives reconnects and
   restarts, never widens the profile policy, and an unreadable list keeps no
-  tools; never from an external client; on a host-managed server the host's
-  connection, elsewhere the host token of an app peer the session prepared;
+  tools; never from an external client; the host's own connection (`serve --stdio`, or
+  a host-managed host-token connection), elsewhere the host token of an app peer the session prepared;
   typed `data.kind` `session_tool_list_invalid`,
   `session_tool_list_version_conflict`, `peer_host_token_mismatch`,
   `external_method_denied`)
@@ -668,6 +668,13 @@ Runtime, auth, profile, and onboarding inspection (server-handled
   that list back; `{session_id, host_token?, profile_id?}` → `{session_id,
   profile_id, version, status: "none" | "set" | "cleared" | "unreadable",
   generic_tools}`; same authorization)
+- `peer/tools/unregister` (accepted `UPCR-2026-035`: the host releases a
+  host-owned app peer it no longer serves while its connection stays open;
+  `{session_id, peer, host_token, profile_id?}` → `{slug, profile_id,
+  unregistered}`; drops the peer's route and ends its calls in flight
+  `host_gone`, so the system agent's later `peer_send_input` fails "not
+  connected"; idempotent; `peer/tools/register` restores the route; refused
+  to external clients)
 - `peer/gather` (#1801 v2 blackboard read: per staged peer its brief + the
   latest `result.md` — written server-side on every peer-session turn
   terminal — with per-field truncation flags and `result_updated_unix`;

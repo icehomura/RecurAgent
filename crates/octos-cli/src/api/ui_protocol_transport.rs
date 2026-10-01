@@ -433,6 +433,10 @@ const APPUI_METHOD_PEER_INPUT_REJECT: &str = "peer/input/reject";
 const APPUI_METHOD_SESSION_TOOL_LIST_SET: &str = "session/tool_list/set";
 /// #2605 `session/tool_list/get`: the host reads that list back.
 const APPUI_METHOD_SESSION_TOOL_LIST_GET: &str = "session/tool_list/get";
+/// UPCR-2026-035 `peer/tools/unregister`: the host releases a host-owned app
+/// peer (the app closed, or its agent was turned off) without closing its
+/// connection; the peer's route is dropped, so later input fails visibly.
+const APPUI_METHOD_PEER_TOOLS_UNREGISTER: &str = "peer/tools/unregister";
 /// `turn/steer` — mid-turn prompt injection into the ACTIVE turn (codex
 /// parity: app-server `turn/steer` → `Session::steer_input`). Params
 /// `{session_id, expected_turn_id?, input}`; result `{turn_id, steered}`.
@@ -551,6 +555,7 @@ const APPUI_EXTRA_METHODS: &[&str] = &[
     APPUI_METHOD_PEER_INPUT_REJECT,
     APPUI_METHOD_SESSION_TOOL_LIST_SET,
     APPUI_METHOD_SESSION_TOOL_LIST_GET,
+    APPUI_METHOD_PEER_TOOLS_UNREGISTER,
     APPUI_METHOD_TURN_STEER,
     APPUI_METHOD_PROFILE_SKILLS_LIST,
     APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH,
@@ -16116,6 +16121,61 @@ fn raw_peer_input_reject(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawPeerToolsUnregisterParams {
+    session_id: SessionKey,
+    peer: String,
+    #[serde(default)]
+    host_token: Option<String>,
+    #[serde(default)]
+    profile_id: Option<String>,
+}
+
+/// `peer/tools/unregister` — the host releases a host-owned app peer it no
+/// longer serves (the app closed, or its agent was turned off) while its
+/// connection stays open for other apps. The peer's route is dropped and its
+/// calls in flight end `host_gone`, exactly as if its connection had closed:
+/// the system agent's later `peer_send_input` fails ("not connected") instead
+/// of being accepted with nobody to run it. Host token and a non-external
+/// connection required; idempotent; `peer/tools/register` restores it.
+fn raw_peer_tools_unregister(
+    ws: &WsConnection,
+    state: &Arc<AppState>,
+    request: &RpcRequest<Value>,
+    connection_profile_id: Option<&str>,
+) -> Result<Value, RpcError> {
+    if ws.is_external() {
+        return Err(external_host_tools_denied(&request.method));
+    }
+    let params: RawPeerToolsUnregisterParams = parse_raw_params(request)?;
+    let profile_id = raw_scoped_llm_profile_id(
+        params.profile_id.clone(),
+        Some(&params.session_id),
+        connection_profile_id,
+    )?;
+    let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
+    let peers_root = data_dir.join("peers");
+    let slug = authorize_host_peer_call(
+        &peers_root,
+        &params.peer,
+        &params.session_id,
+        params.host_token.as_deref(),
+    )?;
+    if crate::peers::app_binding::read_peer_host_binding(&peers_root, &slug).is_none() {
+        return Err(host_peer_error(
+            "peer_not_host_bound",
+            format!("peer '{slug}' is not a host-owned app peer"),
+        ));
+    }
+    let unregistered = crate::peers::host_tools::unregister_peer_route(&peers_root, &slug);
+    Ok(json!({
+        "slug": slug,
+        "profile_id": profile_id,
+        "unregistered": unregistered,
+    }))
+}
+
 /// The connection a turn counts as driven by for a host peer's tools
 /// (UPCR-2026-035). A kernel-internal continuation (a peer_send_input
 /// injection, a background result) is nobody's turn: it never gets a host
@@ -16179,6 +16239,7 @@ fn authorize_host_session_call(
     peers_root: &Path,
     session: &SessionKey,
     host_token: Option<&str>,
+    host_connection: bool,
 ) -> Result<(), RpcError> {
     if session.topic().is_some_and(|topic| {
         topic.starts_with("peer-")
@@ -16188,6 +16249,10 @@ fn authorize_host_session_call(
             "an app peer's session takes its tools from its peer: name the peer".to_owned(),
         )
         .with_data(json!({ "kind": "peer_tools_invalid" })));
+    }
+    // The host's own connection (OctoSense#146) needs no app peer's token.
+    if host_connection {
+        return Ok(());
     }
     let proven = crate::peers::app_binding::host_bound_peers(peers_root)
         .into_iter()
@@ -16216,11 +16281,17 @@ fn raw_session_tools_register(
     peers_root: &Path,
     profile_id: &str,
     params: RawPeerToolsRegisterParams,
+    host_connection: bool,
 ) -> Result<Value, RpcError> {
     use crate::peers::host_tools::{
         SessionRegisterError, build_tool_set, register_session_tool_set,
     };
-    authorize_host_session_call(peers_root, &params.session_id, params.host_token.as_deref())?;
+    authorize_host_session_call(
+        peers_root,
+        &params.session_id,
+        params.host_token.as_deref(),
+        host_connection,
+    )?;
     let set = build_tool_set(params.tools, params.generic_tools, params.options)
         .map_err(|err| host_peer_error("peer_tools_invalid", err))?;
     let route_ws = ws.clone();
@@ -16259,8 +16330,9 @@ fn raw_session_tools_register(
 }
 
 /// #2605 — who may set or read a host session's durable kernel tool list:
-/// never an external connection; on `serve --host-managed` the host's own
-/// connection (authenticated with the server's host token); elsewhere the
+/// never an external connection; the host's own connection (the `serve
+/// --stdio` pipe, or a host-token connection of `serve --host-managed`)
+/// needs nothing more; elsewhere the
 /// holder of the host token of an app peer that `session` prepared (as for a
 /// host session tool set). An app peer's session or request context is
 /// refused: its kernel tools come from its peer's `generic_tools`.
@@ -16283,12 +16355,11 @@ fn authorize_session_tool_list_call(
         )
         .with_data(json!({ "kind": "session_tool_list_invalid" })));
     }
-    if state.host_managed.is_some() {
-        // Not external on a host-managed server: authenticated with the
-        // server's host token, the host itself.
-        return Ok(());
-    }
-    authorize_host_session_call(peers_root, session, host_token)
+    // The host's own connection, as for a host session tool set: the private
+    // `serve --stdio` pipe, or (not external) a host-token connection of
+    // `serve --host-managed`.
+    let host_connection = ws.is_stdio() || state.host_managed.is_some();
+    authorize_host_session_call(peers_root, session, host_token, host_connection)
 }
 
 #[derive(Debug, Deserialize)]
@@ -16471,7 +16542,11 @@ fn raw_peer_tools_register(
     let (_, data_dir) = resolve_profile_data_dir(state, Some(&profile_id))?;
     let peers_root = data_dir.join("peers");
     let Some(peer) = params.peer.clone() else {
-        return raw_session_tools_register(ws, &peers_root, &profile_id, params);
+        // The host's own connection: the private `serve --stdio` pipe, or a
+        // host-token connection of `serve --host-managed` (an external one
+        // was refused above).
+        let host_connection = ws.is_stdio() || state.host_managed.is_some();
+        return raw_session_tools_register(ws, &peers_root, &profile_id, params, host_connection);
     };
     let slug = authorize_host_peer_call(
         &peers_root,
@@ -16596,10 +16671,16 @@ fn raw_peer_tool_result(
             crate::peers::host_tools::ToolHost::Peer(slug)
         }
         None => {
+            // The connection that registered the session's set answers its
+            // calls without a token (only it is sent them).
+            let registrant =
+                crate::peers::host_tools::session_set_connection(&peers_root, &params.session_id)
+                    == Some(connection);
             authorize_host_session_call(
                 &peers_root,
                 &params.session_id,
                 params.host_token.as_deref(),
+                registrant,
             )?;
             crate::peers::host_tools::ToolHost::Session(params.session_id.clone())
         }
@@ -20914,9 +20995,13 @@ async fn handle_raw_appui_rpc(
         | APPUI_METHOD_PEER_INPUT_REJECT
         | APPUI_METHOD_SESSION_TOOL_LIST_SET
         | APPUI_METHOD_SESSION_TOOL_LIST_GET
+        | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             if ws.is_external() =>
         {
             Err(external_host_tools_denied(&request.method))
+        }
+        APPUI_METHOD_PEER_TOOLS_UNREGISTER => {
+            raw_peer_tools_unregister(ws, state, request, connection_profile_id)
         }
         APPUI_METHOD_PEER_TOOLS_REGISTER => {
             raw_peer_tools_register(ws, state, request, connection_profile_id)
@@ -21379,6 +21464,7 @@ fn raw_method_is_dispatched(method: &str, stdio_transport: bool) -> bool {
             | APPUI_METHOD_PEER_INPUT_REJECT
             | APPUI_METHOD_SESSION_TOOL_LIST_SET
             | APPUI_METHOD_SESSION_TOOL_LIST_GET
+            | APPUI_METHOD_PEER_TOOLS_UNREGISTER
             | APPUI_METHOD_PROFILE_SKILLS_LIST
             | APPUI_METHOD_PROFILE_SKILLS_REGISTRY_SEARCH
             | APPUI_METHOD_PROFILE_SKILLS_INSTALL
