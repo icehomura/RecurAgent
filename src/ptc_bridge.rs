@@ -60,8 +60,9 @@
 use crate::error::{Error, Result};
 use crate::model::{ContentBlock, TextContent};
 use crate::tools::{
-    DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, FindTool, GrepTool, LsTool, ReadTool, SearchBackend,
-    Tool, ToolEffects, ToolOutput, ToolUpdate, search_backend_from_config, truncate_head,
+    BashTool, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, EditTool, FindTool, GrepTool, LsTool, ReadTool,
+    SearchBackend, Tool, ToolEffects, ToolOutput, ToolUpdate, WriteTool,
+    search_backend_from_config, truncate_head,
 };
 use crate::workspace::WorkspaceHandle;
 use async_trait::async_trait;
@@ -84,10 +85,18 @@ pub const DEFAULT_RUN_CODE_TIMEOUT_SECS: u64 = 120;
 pub const PTC_RUN_CODE_SCHEMA: &str = "ra.ptc.run_code.v1";
 
 /// Bridge whitelist. Read-only tools only — they need no approval, so the
-/// bridge cannot bypass pi's permission pipeline. Extending this list to
-/// write/bash requires routing through the approval path first (tracked as an
-/// open question in the port plan, §7).
+/// bridge cannot bypass pi's permission pipeline for these.
 const BRIDGE_WHITELIST: [&str; 4] = ["read", "grep", "find", "ls"];
+
+/// Approval-gated tools a run may reach only when the OPERATOR granted them at
+/// construction ([`RunCodeTool::with_capabilities`]).
+///
+/// They must never become reachable because the *program* asked. `run_code`
+/// executes model-authored code, so honouring a model-supplied grant would be
+/// self-escalation past the per-call approval gate in the agent loop
+/// (`ToolApprovalHandler`); the grant is therefore a property of the tool
+/// instance, decided outside the model's control.
+const GRANTABLE_TOOLS: [&str; 3] = ["bash", "write", "edit"];
 
 /// Script file name QuickJS reports in stack frames, so an error points at the
 /// model's own `code` rather than at an anonymous eval.
@@ -153,6 +162,9 @@ pub struct RunCodeTool {
     image_auto_resize: bool,
     /// `read` image-blocking flag, matching the live registry.
     block_images: bool,
+    /// Operator-granted, approval-gated tools the bridge may reach (empty =
+    /// read-only, the default).
+    capabilities: Vec<&'static str>,
 }
 
 impl RunCodeTool {
@@ -170,6 +182,7 @@ impl RunCodeTool {
             search_backend: search_backend_from_config(None),
             image_auto_resize: true,
             block_images: false,
+            capabilities: capabilities_from_env(),
         }
     }
 
@@ -206,6 +219,22 @@ impl RunCodeTool {
         self
     }
 
+    /// Grant approval-gated tools to this bridge instance.
+    ///
+    /// An operator decision, never a model one (see [`GRANTABLE_TOOLS`]). Names
+    /// outside that list are dropped, so a typo cannot silently widen the
+    /// surface. This is the seam the config/CLI wiring should call once
+    /// `run_code` capabilities become a real setting; `PTC_CAPABILITIES` is the
+    /// interim source.
+    #[must_use]
+    pub(crate) fn with_capabilities(mut self, capabilities: Vec<&'static str>) -> Self {
+        self.capabilities = capabilities
+            .into_iter()
+            .filter(|name| GRANTABLE_TOOLS.contains(name))
+            .collect();
+        self
+    }
+
     /// Build the whitelisted tool exactly the way the live registry does:
     /// same workspace handle, same search backend, same read settings.
     ///
@@ -230,8 +259,24 @@ impl RunCodeTool {
             "ls" => Some(Box::new(
                 LsTool::new(&self.cwd).with_workspace(self.workspace.clone()),
             )),
+            // Approval-gated tools. Constructed exactly the way the registry
+            // builds them, but reachable only when the operator granted them:
+            // `bridge_call` gates on `allowed` before it ever gets here.
+            "bash" => Some(Box::new(BashTool::new(&self.cwd))),
+            "write" => Some(Box::new(
+                WriteTool::new(&self.cwd).with_workspace(self.workspace.clone()),
+            )),
+            "edit" => Some(Box::new(
+                EditTool::new(&self.cwd).with_workspace(self.workspace.clone()),
+            )),
             _ => None,
         }
+    }
+
+    /// Whether the bridge may reach `tool_name`: the read-only default plus
+    /// whatever the operator granted.
+    fn allowed(&self, tool_name: &str) -> bool {
+        BRIDGE_WHITELIST.contains(&tool_name) || self.capabilities.contains(&tool_name)
     }
 
     /// Dispatch one whitelisted bridge call through the SAME tool
@@ -241,10 +286,17 @@ impl RunCodeTool {
         tool_name: &str,
         input: Value,
     ) -> std::result::Result<String, String> {
+        if !self.allowed(tool_name) {
+            return Err(format!(
+                "PTC_BRIDGE_DENIED: tool `{tool_name}` was not granted to this run \
+                 (read-only default: {}; operator-grantable: {})",
+                BRIDGE_WHITELIST.join("|"),
+                GRANTABLE_TOOLS.join("|")
+            ));
+        }
         let Some(tool) = self.bridge_tool(tool_name) else {
             return Err(format!(
-                "PTC_BRIDGE_DENIED: tool `{tool_name}` is not on the bridge whitelist ({})",
-                BRIDGE_WHITELIST.join("|")
+                "PTC_BRIDGE_DENIED: `{tool_name}` is not a bridge tool"
             ));
         };
         match tool.execute("run-code-bridge", input, None).await {
@@ -334,7 +386,7 @@ impl JsRealm {
         std::thread::Builder::new()
             .name("ptc-quickjs".into())
             .stack_size(REALM_THREAD_STACK_BYTES)
-            .spawn(move || realm_thread(&code, flags, tx, budget))
+            .spawn(move || realm_thread(&code, &flags, &tx, budget))
             .map_err(|err| Error::tool("run_code", format!("PTC_SPAWN: {err}")))?;
         Ok(Self {
             inbox: Mutex::new(rx),
@@ -391,7 +443,7 @@ enum ProgramOutcome {
     Failed(Value),
 }
 
-fn realm_thread(code: &str, flags: RealmFlags, tx: Sender<RealmMessage>, budget: Duration) {
+fn realm_thread(code: &str, flags: &RealmFlags, tx: &Sender<RealmMessage>, budget: Duration) {
     let console: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
     let outcome = match rquickjs::Runtime::new() {
         Ok(runtime) => match rquickjs::Context::full(&runtime) {
@@ -402,8 +454,8 @@ fn realm_thread(code: &str, flags: RealmFlags, tx: Sender<RealmMessage>, budget:
                     let flags = flags.clone();
                     runtime.set_interrupt_handler(Some(Box::new(move || flags.tripped())));
                 }
-                match context.with(|ctx| install_globals(&ctx, &console, &tx, &flags, budget)) {
-                    Ok(()) => run_program(&context, &runtime, code, &flags),
+                match context.with(|ctx| install_globals(&ctx, &console, tx, flags, budget)) {
+                    Ok(()) => run_program(&context, &runtime, code, flags),
                     Err(err) => ProgramOutcome::Failed(protocol_error(&err.to_string())),
                 }
             }
@@ -411,8 +463,25 @@ fn realm_thread(code: &str, flags: RealmFlags, tx: Sender<RealmMessage>, budget:
         },
         Err(err) => ProgramOutcome::Failed(protocol_error(&format!("runtime: {err}"))),
     };
-    let terminal = terminal_message(outcome, std::mem::take(&mut *console.borrow_mut()));
+    let console_text = std::mem::take(&mut *console.borrow_mut());
+    let terminal = terminal_message(outcome, &console_text);
     let _ = tx.send(RealmMessage::Done(terminal));
+}
+
+/// Operator grant for the approval-gated bridge tools, from `PTC_CAPABILITIES`.
+///
+/// Interim wiring until the config/CLI carries it: the value is read once at
+/// construction, from the environment of whatever launched the agent — a human
+/// decision, not something model-authored code can set. Unrecognized names are
+/// dropped by [`RunCodeTool::with_capabilities`].
+fn capabilities_from_env() -> Vec<&'static str> {
+    let Ok(raw) = std::env::var("PTC_CAPABILITIES") else {
+        return Vec::new();
+    };
+    GRANTABLE_TOOLS
+        .into_iter()
+        .filter(|name| raw.split(',').any(|part| part.trim() == *name))
+        .collect()
 }
 
 /// Wrap the model's body in an async IIFE.
@@ -527,6 +596,7 @@ fn install_globals<'js>(
 }
 
 /// Which host tool one `sdk` helper maps onto, and how it reads its arguments.
+#[derive(Clone, Copy)]
 struct SdkSpec {
     /// The binding's name on `sdk` (also the name used in error messages).
     name: &'static str,
@@ -776,12 +846,12 @@ fn run_program(
             ctx.eval_with_options(source.as_bytes(), options);
         match evaluated {
             Err(err) => Phase1::Done(ProgramOutcome::Failed(error_payload(&ctx, &err))),
-            Ok(value) => match Promise::from_value(value.clone()) {
-                Ok(promise) => Phase1::Pending(rquickjs::Persistent::save(&ctx, promise)),
-                // Not an async program (a syntax-level surprise); take the
-                // completion value as the result.
-                Err(_) => Phase1::Done(ProgramOutcome::Ok(serialize_value(&ctx, &value))),
-            },
+            // A non-promise completion is a syntax-level surprise; take the
+            // completion value as the result.
+            Ok(value) => Promise::from_value(value.clone()).map_or_else(
+                |_| Phase1::Done(ProgramOutcome::Ok(serialize_value(&ctx, &value))),
+                |promise| Phase1::Pending(rquickjs::Persistent::save(&ctx, promise)),
+            ),
         }
     });
 
@@ -906,7 +976,7 @@ fn protocol_error(detail: &str) -> Value {
     })
 }
 
-fn terminal_message(outcome: ProgramOutcome, console: String) -> Value {
+fn terminal_message(outcome: ProgramOutcome, console: &str) -> Value {
     let console = bound_console(&console);
     match outcome {
         ProgramOutcome::Ok(result) => json!({ "ok": true, "result": result, "console": console }),
@@ -1038,7 +1108,10 @@ impl Tool for RunCodeTool {
          tools `read`, `grep`, `find`, and `ls`. Errors carry `ptc-program:<line>` \
          frames pointing at your own code; `console.log` is captured separately. \
          Only what you return is program output — curate it. One run_code \
-         replaces many model round-trips."
+         replaces many model round-trips. The operator may also grant the \
+         approval-gated tools `bash`, `write` and `edit` for this session, in \
+         which case `await sdk.call('bash', { command: '...' })` and friends are \
+         reachable; otherwise such a call is refused with PTC_BRIDGE_DENIED."
     }
 
     fn parameters(&self) -> Value {
@@ -1068,8 +1141,15 @@ impl Tool for RunCodeTool {
 
     fn effects(&self) -> ToolEffects {
         // Arbitrary code execution: serialized fail-closed, same policy as
-        // bash/eval.
-        ToolEffects::process()
+        // bash/eval. A run whose bridge can reach the write/bash tools declares
+        // those effects too, so outer barriers and plan gates see the real
+        // reach of the call instead of the read-only default.
+        let base = ToolEffects::process();
+        if self.capabilities.iter().any(|name| !name.is_empty()) {
+            base.union(ToolEffects::write())
+        } else {
+            base
+        }
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1156,9 +1236,7 @@ impl Tool for RunCodeTool {
         });
         attach_console(&mut details, &console);
         Ok(ToolOutput {
-            content: vec![ContentBlock::Text(TextContent::new(
-                truncation.content.clone(),
-            ))],
+            content: vec![ContentBlock::Text(TextContent::new(truncation.content))],
             details: Some(details),
             is_error: false,
         })
@@ -1244,22 +1322,31 @@ mod tests {
 
     #[test]
     fn whitelist_is_read_only() {
-        // Safety invariant: the bridge must never gain an approval-bypassing
-        // tool without routing through the approval pipeline first.
+        // Safety invariant: the read-only set is the only thing the bridge may
+        // reach unless the OPERATOR granted more, and the grant is never
+        // something model-authored code can set.
         for name in BRIDGE_WHITELIST {
             assert!(matches!(name, "read" | "grep" | "find" | "ls"));
         }
-        // Every whitelisted name is constructible; nothing else is.
+        // Every read-only name is constructible and always allowed.
         let tool = RunCodeTool::new(".");
         for name in BRIDGE_WHITELIST {
+            assert!(tool.allowed(name), "{name} is read-only and always allowed");
             assert!(
                 tool.bridge_tool(name).is_some(),
                 "{name} should be buildable"
             );
         }
-        assert!(tool.bridge_tool("write").is_none());
-        assert!(tool.bridge_tool("bash").is_none());
-        assert!(tool.bridge_tool("edit").is_none());
+        // Approval-gated tools are constructible for a granted run, but a
+        // default run cannot reach them — and the program cannot ask for them.
+        for name in GRANTABLE_TOOLS {
+            assert!(!tool.allowed(name), "{name} must not be granted by default");
+            assert!(
+                tool.bridge_tool(name).is_some(),
+                "{name} must be constructible when granted"
+            );
+        }
+        assert!(!tool.allowed("ast_edit"));
     }
 
     #[test]
@@ -1605,6 +1692,73 @@ mod tests {
             run_text(&RunCodeTool::new("."), circular),
             "[object Object]"
         );
+    }
+
+    #[test]
+    fn bash_grant_is_off_by_default() {
+        // There is no model-supplied grant: the read-only set is always there,
+        // and the approval-gated tools are not.
+        let tool = RunCodeTool::new(".");
+        assert!(tool.allowed("read"));
+        assert!(tool.allowed("grep"));
+        assert!(!tool.allowed("bash"));
+        assert!(!tool.allowed("write"));
+        assert!(!tool.allowed("edit"));
+        assert!(tool.capabilities.is_empty());
+    }
+
+    #[test]
+    fn grant_is_limited_to_grantable_names() {
+        // A typo (or an attempt to grant something outside the list) cannot
+        // widen the surface.
+        let tool = RunCodeTool::new(".").with_capabilities(vec!["bash", "read", "nope"]);
+        assert!(tool.allowed("bash"));
+        assert!(tool.allowed("read"));
+        assert!(!tool.allowed("nope"));
+        assert_eq!(tool.capabilities, vec!["bash"]);
+    }
+
+    #[test]
+    fn granting_bash_escalates_declared_effects() {
+        // Outer barriers and plan gates must see the real reach of the call.
+        assert_eq!(RunCodeTool::new(".").effects(), ToolEffects::process());
+        let granted = RunCodeTool::new(".")
+            .with_capabilities(vec!["bash"])
+            .effects();
+        assert!(granted.processes() && granted.writes(), "{granted:?}");
+    }
+
+    #[test]
+    fn granted_bash_runs_multiple_commands_and_combines_output() {
+        // The point of the grant: several commands in ONE round trip, combined
+        // with program logic instead of a shell pipeline.
+        let tool = RunCodeTool::new(".").with_capabilities(vec!["bash"]);
+        let code = r"
+            const a = String(await sdk.call('bash', { command: 'echo alpha' }));
+            const b = String(await sdk.call('bash', { command: 'echo beta' }));
+            return { both: a.includes('alpha') && b.includes('beta'),
+                     separate: !a.includes('beta') && !b.includes('alpha') };
+        ";
+        let out = run(&tool, json!({ "code": code, "timeoutMs": 60_000 })).expect("run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        let text = output_text(&out);
+        assert!(text.contains(r#""both":true"#), "{text}");
+        assert!(text.contains(r#""separate":true"#), "{text}");
+    }
+
+    #[test]
+    fn granted_write_reaches_the_real_write_tool() {
+        let dir = scratch_dir("grant-write", &[]);
+        let tool = RunCodeTool::new(&dir).with_capabilities(vec!["write"]);
+        let code = "await sdk.call('write', { path: 'out.txt', content: 'written' }); return 'ok';";
+        let out = run(&tool, json!({ "code": code, "timeoutMs": 30_000 })).expect("run");
+        assert!(!out.is_error, "{}", output_text(&out));
+        assert_eq!(output_text(&out), "ok");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("out.txt")).expect("file must exist"),
+            "written"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
