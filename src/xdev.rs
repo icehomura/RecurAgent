@@ -78,6 +78,15 @@ const ESSENTIAL_DEFAULTS: &[&str] = &[
     // Reading JSON is common enough (session files, tool output, fixtures) that
     // the model should not have to shell out to a `jq` binary that may be absent.
     "json_query",
+    // Structural search and staged rewrite: the schema cost is paid back the
+    // first time a question is about code shape rather than text, and routing
+    // them through `xdev run` made the model reach for regex instead.
+    "ast_grep",
+    "ast_edit",
+    // The DAG scheduler is an orchestrator: a model that has to discover it
+    // before every multi-step fan-out will not use it, and its whole value is
+    // being the first thing reached for when work parallelizes.
+    "dag",
 ];
 
 /// Tools that are opt-in ONLY (never in the default enabled set, never
@@ -119,7 +128,7 @@ pub fn tier_for(name: &str, config: Option<&Config>) -> LoadMode {
 /// [`ESSENTIAL_DEFAULTS`] but not to the function, which is what the
 /// "must stay in lockstep" comment was warning about.
 pub const DEFAULT_ENABLED_TOOLS: &str =
-    "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query";
+    "read,bash,edit,write,grep,find,ls,hashline_edit,web_search,ast_grep,ast_edit,lsp,debug,ask,todo,submit_plan,jobs,hub,current_time,run_code,json_query,dag";
 
 /// Names of built-in tools enabled by default when the user passes no
 /// `--tools`: the essential set plus the discoverable set. Opt-in-only tools
@@ -166,6 +175,7 @@ pub fn builtin_one_liner(name: &str) -> Option<&'static str> {
             "Return the host's current wall-clock time: UTC and local ISO-8601 timestamps, UTC offset,…"
         }
         "json_query" => "Query a JSON document with a jq filter expression",
+        "dag" => "Execute a dependency DAG of tool calls in parallel within this session",
         _ => return None,
     })
 }
@@ -415,7 +425,11 @@ mod tests {
         assert_eq!(default_tier("ask"), LoadMode::Essential);
         assert_eq!(default_tier("subagent"), LoadMode::Off);
         assert_eq!(default_tier("web_search"), LoadMode::Essential);
-        assert_eq!(default_tier("ast_grep"), LoadMode::Discoverable);
+        // Structural search, staged rewrite and the DAG scheduler are
+        // first-class: reaching them through `xdev run` was the whole cost.
+        assert_eq!(default_tier("ast_grep"), LoadMode::Essential);
+        assert_eq!(default_tier("ast_edit"), LoadMode::Essential);
+        assert_eq!(default_tier("dag"), LoadMode::Essential);
         assert_eq!(default_tier("lsp"), LoadMode::Discoverable);
     }
 
@@ -463,6 +477,7 @@ mod tests {
         assert!(!enabled.contains(&"subagent"));
         assert!(enabled.contains(&"read"));
         assert!(enabled.contains(&"ast_grep"));
+        assert!(enabled.contains(&"dag"));
     }
 
     #[test]
