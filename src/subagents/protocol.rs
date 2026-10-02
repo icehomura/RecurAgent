@@ -56,20 +56,23 @@ pub(super) fn read_frame<R: BufRead>(reader: &mut R) -> Result<Option<Vec<u8>>, 
 #[derive(Debug, Clone, Default)]
 pub(super) struct ChildProtocol {
     completed: bool,
-    failure: Option<&'static str>,
+    /// The sticky protocol failure. Owned because a child `error` frame is
+    /// enriched with its non-secret `code`/`phase`/`exitCode` fields; the
+    /// child's own `message` is deliberately never echoed.
+    failure: Option<String>,
 }
 
 impl ChildProtocol {
     /// Update a bounded preview. `true` means callers should publish an update.
     /// A protocol failure is sticky and can never be rescued by a later frame.
-    pub(super) fn ingest(&mut self, line: &str, output: &mut String) -> Result<bool, &'static str> {
-        if let Some(error) = self.failure {
-            return Err(error);
+    pub(super) fn ingest(&mut self, line: &str, output: &mut String) -> Result<bool, String> {
+        if let Some(error) = &self.failure {
+            return Err(error.clone());
         }
         let outcome = self.ingest_inner(line, output);
-        if let Err(error) = outcome {
+        if let Err(error) = &outcome {
             self.completed = false;
-            self.failure = Some(error);
+            self.failure = Some(error.clone());
         }
         outcome
     }
@@ -79,7 +82,7 @@ impl ChildProtocol {
     /// Split out of [`Self::ingest_inner`], which the nested match over the
     /// update's own type pushed past the line limit. It is the only arm that
     /// has to distinguish several event shapes rather than one.
-    fn ingest_message_update(event: &Value, output: &mut String) -> Result<bool, &'static str> {
+    fn ingest_message_update(event: &Value, output: &mut String) -> Result<bool, String> {
         let update = event.get("assistantMessageEvent").ok_or(INVALID_FRAME)?;
         match update.get("type").and_then(Value::as_str) {
             Some("start") => {
@@ -108,13 +111,13 @@ impl ChildProtocol {
             // Never interpret a bare delta as prose: both thinking and tool
             // argument events also contain a `delta` field.
             Some(_) => Ok(false),
-            None => Err(INVALID_FRAME),
+            None => Err(INVALID_FRAME.to_string()),
         }
     }
 
-    fn ingest_inner(&mut self, line: &str, output: &mut String) -> Result<bool, &'static str> {
+    fn ingest_inner(&mut self, line: &str, output: &mut String) -> Result<bool, String> {
         if line.len() > MAX_FRAME_BYTES {
-            return Err(FRAME_LIMIT);
+            return Err(FRAME_LIMIT.to_string());
         }
         let event: Value = serde_json::from_str(line).map_err(|_| INVALID_FRAME)?;
         let kind = event
@@ -149,7 +152,10 @@ impl ChildProtocol {
                 Ok(false)
             }
             "agent_end" => self.finish_agent_end(&event, output),
-            "error" => Err("RECUR_AGENT_SUBAGENT_FAILED: child emitted an error event"),
+            "error" => Err(format!(
+                "RECUR_AGENT_SUBAGENT_FAILED: child emitted an error event{}",
+                failure_detail(&event)
+            )),
             "turn_start" | "tool_execution_start" => {
                 self.completed = false;
                 Ok(false)
@@ -162,13 +168,12 @@ impl ChildProtocol {
     ///
     /// Split out of `ingest_inner`: this branch alone carries the answer
     /// validation, stop-reason mapping and completion latch.
-    fn finish_agent_end(
-        &mut self,
-        event: &Value,
-        output: &mut String,
-    ) -> Result<bool, &'static str> {
-        if event.get("error").is_some_and(|error| !error.is_null()) {
-            return Err("RECUR_AGENT_SUBAGENT_FAILED: child agent reported an unsuccessful run");
+    fn finish_agent_end(&mut self, event: &Value, output: &mut String) -> Result<bool, String> {
+        if let Some(error) = event.get("error").filter(|error| !error.is_null()) {
+            return Err(format!(
+                "RECUR_AGENT_SUBAGENT_FAILED: child agent reported an unsuccessful run{}",
+                failure_detail(error)
+            ));
         }
         let last = event
             .get("messages")
@@ -179,33 +184,42 @@ impl ChildProtocol {
         // actual run ended on an unresolved tool result or new input.
         if last.get("role").and_then(Value::as_str) != Some("assistant") {
             return Err(
-                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child ended without a final assistant answer",
+                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child ended without a final assistant answer"
+                    .to_string(),
             );
         }
         replace_answer(last, output)?;
         match last.get("stopReason").and_then(Value::as_str) {
             Some("stop") => {}
             Some("length") => {
-                return Err("RECUR_AGENT_SUBAGENT_TRUNCATED: child answer hit its output limit");
+                return Err(
+                    "RECUR_AGENT_SUBAGENT_TRUNCATED: child answer hit its output limit".to_string(),
+                );
             }
             Some("toolUse" | "pauseTurn") => {
                 return Err(
-                    "RECUR_AGENT_SUBAGENT_INCOMPLETE: child requires another tool or continuation turn",
+                    "RECUR_AGENT_SUBAGENT_INCOMPLETE: child requires another tool or continuation turn"
+                        .to_string(),
                 );
             }
             Some("refusal") => {
-                return Err("RECUR_AGENT_SUBAGENT_REFUSAL: child declined the task");
+                return Err("RECUR_AGENT_SUBAGENT_REFUSAL: child declined the task".to_string());
             }
             Some("error" | "aborted") => {
-                return Err("RECUR_AGENT_SUBAGENT_FAILED: child generation failed or was aborted");
+                return Err(
+                    "RECUR_AGENT_SUBAGENT_FAILED: child generation failed or was aborted"
+                        .to_string(),
+                );
             }
-            _ => return Err(INVALID_MESSAGE),
+            _ => return Err(INVALID_MESSAGE.to_string()),
         }
         if last
             .get("errorMessage")
             .is_some_and(|error| !error.is_null())
         {
-            return Err("RECUR_AGENT_SUBAGENT_FAILED: child final message contains an error");
+            return Err(
+                "RECUR_AGENT_SUBAGENT_FAILED: child final message contains an error".to_string(),
+            );
         }
         if last
             .get("content")
@@ -217,44 +231,76 @@ impl ChildProtocol {
             })
         {
             return Err(
-                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child final answer contains unresolved tool calls",
+                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child final answer contains unresolved tool calls"
+                    .to_string(),
             );
         }
         if output.trim().is_empty() {
-            return Err("RECUR_AGENT_SUBAGENT_EMPTY_RESULT: child completed without an answer");
+            return Err(
+                "RECUR_AGENT_SUBAGENT_EMPTY_RESULT: child completed without an answer".to_string(),
+            );
         }
         self.completed = true;
         Ok(true)
     }
 
-    pub(super) const fn finish(&self) -> Result<(), &'static str> {
-        if let Some(error) = self.failure {
-            return Err(error);
+    pub(super) fn finish(&self) -> Result<(), String> {
+        if let Some(error) = &self.failure {
+            return Err(error.clone());
         }
         if !self.completed {
             return Err(
-                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child exited before a successful agent_end",
+                "RECUR_AGENT_SUBAGENT_INCOMPLETE: child exited before a successful agent_end"
+                    .to_string(),
             );
         }
         Ok(())
     }
 }
 
-fn append_answer(output: &mut String, text: &str) -> Result<(), &'static str> {
+/// The machine-readable, non-secret fields of a child failure.
+///
+/// [`ChildProtocol`] never echoes the child's own `message`/`errorMessage`:
+/// those can carry an API key or a filesystem path, and the parent hands this
+/// string to the model. `code`, `phase` and the exit code are identifiers, so
+/// they are safe to surface and turn "child emitted an error event" into a
+/// diagnosable cause.
+fn failure_detail(source: &Value) -> String {
+    let mut fields = Vec::new();
+    for key in ["code", "phase"] {
+        if let Some(value) = source.get(key).and_then(Value::as_str) {
+            fields.push(format!("{key}={value}"));
+        }
+    }
+    if let Some(code) = source
+        .get("exitCode")
+        .or_else(|| source.get("exit_code"))
+        .and_then(Value::as_i64)
+    {
+        fields.push(format!("exitCode={code}"));
+    }
+    if fields.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", fields.join(", "))
+    }
+}
+
+fn append_answer(output: &mut String, text: &str) -> Result<(), String> {
     if text.len() > MAX_ANSWER_BYTES.saturating_sub(output.len()) {
-        return Err(ANSWER_LIMIT);
+        return Err(ANSWER_LIMIT.to_string());
     }
     output.push_str(text);
     Ok(())
 }
 
-fn replace_answer(message: &Value, output: &mut String) -> Result<(), &'static str> {
+fn replace_answer(message: &Value, output: &mut String) -> Result<(), String> {
     let blocks = message
         .get("content")
         .and_then(Value::as_array)
         .ok_or(INVALID_MESSAGE)?;
     if blocks.len() > MAX_CONTENT_BLOCKS {
-        return Err(INVALID_MESSAGE);
+        return Err(INVALID_MESSAGE.to_string());
     }
     let mut answer = String::new();
     for block in blocks {
@@ -284,11 +330,7 @@ mod tests {
         json!({"type":"agent_end","messages":[message(text, reason)]})
     }
 
-    fn feed(
-        state: &mut ChildProtocol,
-        output: &mut String,
-        event: &Value,
-    ) -> Result<bool, &'static str> {
+    fn feed(state: &mut ChildProtocol, output: &mut String, event: &Value) -> Result<bool, String> {
         state.ingest(&event.to_string(), output)
     }
 
@@ -401,6 +443,32 @@ mod tests {
             assert!(!error.contains("secret-value"));
             assert!(state.finish().is_err());
         }
+    }
+
+    /// A child `error` frame surfaces its structural fields so a crash is
+    /// diagnosable, and never echoes the child's own `message` (which can
+    /// carry a secret or a path).
+    #[test]
+    fn error_frame_surfaces_structural_fields_without_echoing_message() {
+        let mut state = ChildProtocol::default();
+        let mut output = String::new();
+        let error = feed(
+            &mut state,
+            &mut output,
+            &json!({
+                "type": "error",
+                "phase": "run",
+                "code": "stack_overflow",
+                "message": "api key secret-value",
+                "exit_code": -1073741571,
+            }),
+        )
+        .unwrap_err();
+        assert!(error.contains("code=stack_overflow"), "{error}");
+        assert!(error.contains("phase=run"), "{error}");
+        assert!(error.contains("exitCode=-1073741571"), "{error}");
+        assert!(!error.contains("secret-value"), "{error}");
+        assert!(state.finish().is_err());
     }
 
     #[test]
