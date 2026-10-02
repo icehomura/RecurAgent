@@ -1644,19 +1644,6 @@ pub async fn run(
     let abort_handle: Arc<Mutex<Option<AbortHandle>>> = Arc::new(Mutex::new(None));
     let bash_state: Arc<Mutex<Option<RunningBash>>> = Arc::new(Mutex::new(None));
     let retry_abort = Arc::new(AtomicBool::new(false));
-    // Extension providers live in the Arc-shared manager, so a clone taken here
-    // still tracks later registrations. The lock-free model listing uses it to
-    // advertise extension rows without touching the session mutex.
-    let rpc_extension_manager = OwnedMutexGuard::lock(Arc::clone(&session), &cx)
-        .await
-        .ok()
-        .and_then(|guard| {
-            guard
-                .extensions
-                .as_ref()
-                .map(crate::extensions::ExtensionRegion::manager)
-                .cloned()
-        });
 
     {
         use futures::future::BoxFuture;
@@ -1749,6 +1736,10 @@ pub async fn run(
             .agent
             .register_initial_follow_up_fetcher(Arc::new(follow_fetcher));
     }
+
+    // Extension providers live in the Arc-shared manager, so a clone taken here
+    // still tracks later registrations. The lock-free model listing uses it to
+    // advertise extension rows without touching the session mutex.
 
     // Set up extension UI channel for RPC mode.
     // When extensions request UI (capability prompts, etc.), we emit them as
