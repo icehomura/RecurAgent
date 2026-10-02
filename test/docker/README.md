@@ -53,22 +53,32 @@ docker compose --profile dev run --rm dev-shell  # shell on the mount
 
 ## Build time
 
-Budget ~25-30 minutes for the first build on this network; almost all of it is
-the last `install-tools.sh` layer, which runs 18 installers serially over a
-throttled link. Measured breakdown of that layer (2026-10-02, 1625 s in the
-second build):
+Budget ~30 minutes for a full build on this network; nearly all of it is the
+last `install-tools.sh` layer, which runs 18 installers serially over a
+throttled link. Measured 2026-10-03 — tool layer 1612 s, whole build 2067 s
+with the base layers cached:
 
-| Cost | Why | Mitigation in the image |
-|------|-----|-------------------------|
-| ~430 s | UBS' installer ran `cargo install ast-grep` (222 crates) because no `ast-grep` binary existed | `ast-grep` is now installed from its release zip, so UBS skips the build |
-| ~590 s | `mcp_agent_mail`'s installer: uv downloaded a 35 MB CPython plus ~160 packages from pypi.org — **uv ignores `PIP_INDEX_URL`** | `UV_DEFAULT_INDEX` + `UV_PYTHON_INSTALL_MIRROR` point uv at the same mirrors |
-| ~200-550 s | Go/Rust tool binaries (bv, jfp) pulled through gh-proxy at 50 KB/s-1 MB/s | none; this is the link |
-| ~420 s | Exporting/unpacking the ~3 GB image layer | none |
+| Cost | Cause | State |
+|------|-------|-------|
+| 591 s | `jfp`'s prebuilt binary is **97 MB**, pulled through gh-proxy at ~165 KB/s | inherent; it is the last install step |
+| 301 s | `ubs`: uv venv (156 packages) plus its own post-install scan | partly inherent |
+| 241 s + 115 s | `bv` (Go binary) and `srps` | link speed |
+| ≤ 80 s each | the remaining thirteen tools | — |
 
-Rebuilds are separated by concern: only `scripts/install-tools.sh` (and anything
-above it in the Dockerfile) invalidates the tool-chain layer. `entrypoint.sh`
-and `run-quality.sh` are copied *after* it, so editing the gate itself costs a
-few seconds. To iterate on the gate without the tool chain at all:
+Four costs that used to dominate are gone; all four were source builds or
+unmirrored downloads, not link speed:
+
+| Was | Cause | Fix |
+|-----|-------|-----|
+| 430 s | UBS' installer ran `cargo install ast-grep` (222 crates) because no `ast-grep` was on PATH | `ast-grep` now ships from its release zip |
+| 525 s | uv downloaded a 35 MB CPython plus ~160 packages from pypi.org — **uv ignores `PIP_INDEX_URL`** | `UV_DEFAULT_INDEX` + `UV_PYTHON_INSTALL_MIRROR` (CPython 49.5 s → 5.2 s) |
+| 314 s | `brenner --verify` failed its container-hostile `doctor --json` check after reinstalling ntm/cass/cm | dropped `--verify` |
+| fail | dcg's installer 404'd because jsdelivr had not cached it | installer entry files now try every mirror, and dcg installs in 10 s |
+
+Rebuilds are separated by concern: only `scripts/install-tools.sh` — or
+anything above it in the Dockerfile — invalidates the tool-chain layer.
+`entrypoint.sh` and `run-quality.sh` are copied *after* it, so editing the gate
+itself costs a few seconds. To iterate on the gate with no tool chain at all:
 
 ```bash
 docker compose build --build-arg TOOLS_STRATEGY=none
@@ -184,7 +194,7 @@ does not fail fast — it proceeds into the coding-agents phase, which stalls on
 | **BV** | `Dicklesworthstone/beads_viewer` | Go / 1705 | `curl …/install.sh \| bash` / `go install ./cmd/bv` |
 | **UBS** | `Dicklesworthstone/ultimate_bug_scanner` | Python / 304 | `curl …/install.sh \| bash` |
 | **DCG** | `Dicklesworthstone/destructive_command_guard` | Rust / 6076 | `curl …/master/install.sh \| bash -s -- --easy-mode` |
-| **AM** | `Dicklesworthstone/mcp_agent_mail` | Python / 2180 | `curl …/scripts/install.sh \| bash -s -- --yes` |
+| **AM** | `Dicklesworthstone/mcp_agent_mail` | Python / 2180 | `curl …/scripts/install.sh \| bash -s -- --yes --no-start` |
 | **CASS** | `Dicklesworthstone/coding_agent_session_search` | Rust / 1158 | `curl …/install.sh \| bash -s -- --easy-mode --verify` |
 | **CM** | `Dicklesworthstone/cass_memory_system` | TypeScript / 442 | `curl …/install.sh \| bash -s -- --easy-mode --verify` |
 | **SLB** | `Dicklesworthstone/slb` | Go / 81 | `curl …/scripts/install.sh \| bash` |
