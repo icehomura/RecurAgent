@@ -1183,10 +1183,14 @@ fn augment_gemini_media_inputs(api: &str, model_id: &str, input: &mut Vec<InputT
 
 fn legacy_generated_models_cache_path() -> Option<PathBuf> {
     let checksum = crate::embedded_assets::legacy_models_generated_ts_crc32c();
+    // The parse now also folds in the per-model catalog overlays, so the cache
+    // identity must move when either asset moves; otherwise a stale parse
+    // would silently omit a newly added provider catalog.
+    let overlays = crate::embedded_assets::model_catalog_overlays_json_crc32c();
     dirs::cache_dir().map(|dir| {
         dir.join("pi")
             .join("models-cache")
-            .join(format!("legacy-generated-models-{checksum:08x}.json"))
+            .join(format!("legacy-generated-models-{checksum:08x}-{overlays:08x}.json"))
     })
 }
 
@@ -1268,6 +1272,39 @@ fn parse_legacy_generated_models() -> Vec<LegacyGeneratedModel> {
         .into_values()
         .flat_map(HashMap::into_values)
         .collect::<Vec<_>>();
+
+    // Merge the unified catalog overlays. The legacy TS snapshot predates
+    // several providers whose catalogs span multiple API dialects (notably
+    // `opencode-go`); those live here as data. A legacy entry always wins on a
+    // duplicate (provider, model) key so the richer captured metadata is kept.
+    let mut seen = models
+        .iter()
+        .map(|entry| {
+            (
+                entry.provider.trim().to_ascii_lowercase(),
+                entry.id.trim().to_ascii_lowercase(),
+            )
+        })
+        .collect::<HashSet<_>>();
+    for entry in parse_catalog_overlays() {
+        let key = (
+            entry.provider.trim().to_ascii_lowercase(),
+            entry.id.trim().to_ascii_lowercase(),
+        );
+        if key.0.is_empty() || key.1.is_empty() {
+            continue;
+        }
+        if seen.insert(key) {
+            models.push(entry);
+        } else {
+            tracing::debug!(
+                provider = %entry.provider,
+                model = %entry.id,
+                "Catalog overlay entry shadowed by legacy catalog entry"
+            );
+        }
+    }
+
     models.sort_by(|a, b| {
         a.provider
             .cmp(&b.provider)
@@ -1275,6 +1312,48 @@ fn parse_legacy_generated_models() -> Vec<LegacyGeneratedModel> {
             .then_with(|| a.api.cmp(&b.api))
     });
     persist_legacy_generated_models_cache(&models);
+    models
+}
+
+/// Parse the embedded per-model catalog overlays.
+///
+/// Schema mirrors the legacy catalog and is deliberately provider-keyed so a
+/// new multi-dialect provider is a data change, not a code change:
+///
+/// ```json
+/// { "<provider>": [ { "id": "…", "api": "…", "baseUrl": "…", … } ] }
+/// ```
+///
+/// The outer key is authoritative for `provider`; an entry that omits it (or
+/// disagrees with it) is stamped from the key. Missing or malformed data is
+/// logged and treated as empty so a bad overlay never breaks startup.
+fn parse_catalog_overlays() -> Vec<LegacyGeneratedModel> {
+    let source = crate::embedded_assets::model_catalog_overlays_json();
+    if source.trim().is_empty() {
+        return Vec::new();
+    }
+    let parsed: HashMap<String, Vec<LegacyGeneratedModel>> = match serde_json::from_str(&source) {
+        Ok(value) => value,
+        Err(err) => {
+            tracing::warn!(error = %err, "Failed to parse embedded model catalog overlays");
+            return Vec::new();
+        }
+    };
+
+    let mut models = Vec::new();
+    for (provider, entries) in parsed {
+        let provider = provider.trim();
+        if provider.is_empty() {
+            tracing::warn!("Model catalog overlay has a blank provider key; ignoring its entries");
+            continue;
+        }
+        for mut entry in entries {
+            if !entry.provider.trim().eq_ignore_ascii_case(provider) {
+                entry.provider = provider.to_string();
+            }
+            models.push(entry);
+        }
+    }
     models
 }
 
@@ -1515,12 +1594,14 @@ pub fn model_autocomplete_candidates() -> &'static [ModelAutocompleteCandidate] 
 pub fn model_catalog_cache_fingerprint() -> u64 {
     *MODEL_CATALOG_CACHE_FINGERPRINT.get_or_init(|| {
         let legacy = u64::from(crate::embedded_assets::legacy_models_generated_ts_crc32c());
+        let overlays = u64::from(crate::embedded_assets::model_catalog_overlays_json_crc32c());
         let upstream = u64::from(crate::embedded_assets::provider_upstream_model_ids_json_crc32c());
         let user_override = u64::from(user_model_overrides_fingerprint());
         // Mix the override CRC into both halves so any change forces cache
         // invalidation regardless of whether the snapshot or the override
-        // moved.
-        (legacy ^ user_override) << 32 | (upstream ^ user_override)
+        // moved. The overlay CRC is folded into the upstream half for the same
+        // reason: adding a provider catalog must invalidate memoized listings.
+        (legacy ^ user_override) << 32 | (upstream ^ overlays ^ user_override)
     })
 }
 

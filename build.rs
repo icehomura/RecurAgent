@@ -10,12 +10,22 @@ struct EmbeddedTextAsset {
     checksum_prefix: Option<&'static str>,
 }
 
-const EMBEDDED_TEXT_ASSETS: [EmbeddedTextAsset; 4] = [
+const EMBEDDED_TEXT_ASSETS: [EmbeddedTextAsset; 5] = [
     EmbeddedTextAsset {
         source: "legacy_pi_mono_code/pi-mono/packages/ai/src/models.generated.ts",
         output_name: "legacy-models-generated.ts.gz",
         metadata_prefix: "LEGACY_MODELS_GENERATED_TS",
         checksum_prefix: Some("LEGACY_MODELS_GENERATED_TS"),
+    },
+    // Unified per-model catalog overlays. Same schema as the legacy catalog
+    // (`{ provider: [LegacyGeneratedModel, ...] }`), so a provider whose
+    // catalog spans more than one API dialect (notably `opencode-go`) can be
+    // added as data instead of code. Parsed and merged in `models.rs`.
+    EmbeddedTextAsset {
+        source: "docs/model-catalog-overlays.json",
+        output_name: "model-catalog-overlays.json.gz",
+        metadata_prefix: "MODEL_CATALOG_OVERLAYS_JSON",
+        checksum_prefix: Some("MODEL_CATALOG_OVERLAYS_JSON"),
     },
     EmbeddedTextAsset {
         source: "docs/provider-upstream-model-ids-snapshot.json",

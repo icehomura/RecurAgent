@@ -262,6 +262,11 @@ static LEGACY_MODELS_GENERATED_TS: EmbeddedText = EmbeddedText::new(
     include_bytes!(concat!(env!("OUT_DIR"), "/legacy-models-generated.ts.gz")),
     LEGACY_MODELS_GENERATED_TS_RAW_LEN,
 );
+static MODEL_CATALOG_OVERLAYS_JSON: EmbeddedText = EmbeddedText::new(
+    "model catalog overlays",
+    include_bytes!(concat!(env!("OUT_DIR"), "/model-catalog-overlays.json.gz")),
+    MODEL_CATALOG_OVERLAYS_JSON_RAW_LEN,
+);
 static PROVIDER_UPSTREAM_MODEL_IDS_JSON: EmbeddedText = EmbeddedText::new(
     "provider upstream model IDs",
     include_bytes!(concat!(
@@ -291,6 +296,14 @@ pub fn legacy_models_generated_ts() -> String {
 
 pub const fn legacy_models_generated_ts_crc32c() -> u32 {
     LEGACY_MODELS_GENERATED_TS_CRC32C
+}
+
+pub fn model_catalog_overlays_json() -> String {
+    MODEL_CATALOG_OVERLAYS_JSON.decode()
+}
+
+pub const fn model_catalog_overlays_json_crc32c() -> u32 {
+    MODEL_CATALOG_OVERLAYS_JSON_CRC32C
 }
 
 pub fn provider_upstream_model_ids_json() -> String {
@@ -425,6 +438,14 @@ mod tests {
             crc32c::crc32c(include_bytes!(
                 "../legacy_pi_mono_code/pi-mono/packages/ai/src/models.generated.ts"
             ))
+        );
+        assert_eq!(
+            super::model_catalog_overlays_json().as_bytes(),
+            include_bytes!("../docs/model-catalog-overlays.json")
+        );
+        assert_eq!(
+            super::model_catalog_overlays_json_crc32c(),
+            crc32c::crc32c(include_bytes!("../docs/model-catalog-overlays.json"))
         );
         assert_eq!(
             super::provider_upstream_model_ids_json().as_bytes(),
