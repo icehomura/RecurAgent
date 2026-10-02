@@ -9,6 +9,7 @@ and DSR config survive between runs.
 test/docker/
 ├── Dockerfile               # Ubuntu 24.04 + Rust pin + Go + Bun + Flywheel tools
 ├── docker-compose.yml       # gate / shell / dev / dev-shell services + volumes
+├── compose.sh               # compose wrapper: takes GITHUB_TOKEN from the gh CLI
 ├── .dockerignore
 ├── .env.example             # copy to .env to override
 ├── scripts/
@@ -34,21 +35,25 @@ test/docker/
 ```bash
 cd test/docker
 cp .env.example .env                    # optional
-docker compose build                    # ~10-20 min (Rust + full toolchain)
-docker compose run --rm gate            # clone fork, run all gates
+./compose.sh build                      # ~30 min: Rust + full tool chain
+./compose.sh run --rm gate              # clone fork, run all gates
 ```
+
+`compose.sh` is a thin `docker compose` wrapper that reads `GITHUB_TOKEN` from
+the `gh` CLI for that invocation (`gh auth token`), so nothing has to be written
+to disk. Plain `docker compose` works too, unauthenticated.
 
 Interactive shell against the persisted workspace:
 
 ```bash
-docker compose run --rm shell
+./compose.sh run --rm shell
 ```
 
 Test **local uncommitted code** (bind-mounts the repo root, no clone):
 
 ```bash
-docker compose --profile dev run --rm dev        # run gates on the mount
-docker compose --profile dev run --rm dev-shell  # shell on the mount
+./compose.sh --profile dev run --rm dev        # run gates on the mount
+./compose.sh --profile dev run --rm dev-shell  # shell on the mount
 ```
 
 ## Build time
@@ -120,11 +125,13 @@ from the first mirror that answers (jsdelivr, then gh-proxy, then
 `raw.githubusercontent.com`), because jsdelivr intermittently 404s a file it has
 not cached.
 
-Pass a token to lift the limit to 5000 requests/hour. Outside the container:
+Pass a token to lift the limit to 5000 requests/hour. Outside the container,
+`compose.sh` does this for you; equivalently:
 
 ```bash
-GITHUB_TOKEN=$(gh auth token) docker compose build      # and/or
-GITHUB_TOKEN=$(gh auth token) docker compose run --rm gate
+./compose.sh build                                   # takes the token from gh
+GITHUB_TOKEN=$(gh auth token) docker compose build   # or pass it explicitly
+GITHUB_TOKEN=ghp_xxx docker compose build            # or set it yourself
 ```
 
 The token reaches the container two ways and is never baked into the image
@@ -256,5 +263,8 @@ Reset everything: `docker compose down -v` (destructive — removes those volume
 - **Docker-in-Docker**: `docker` and `act` are installed so DSR's dependency
   check passes. `dsr quality` works without a daemon; `dsr build`/`dsr release`
   need `/var/run/docker.sock` mounted or a DinD sidecar.
-- **`gh`** is installed but unauthenticated. Anything needing GitHub API auth
-  (rate limits, pushes) must pass `GH_TOKEN` at run time.
+- **`gh` inside the container is installed but unauthenticated.** Anything needing
+  GitHub API auth (rate limits, pushes) must get `GITHUB_TOKEN`/`GH_TOKEN` from
+  outside — `compose.sh` takes it from the host `gh`. On the host,
+  `gh auth status` may report an invalid keyring token while `gh auth token`
+  still returns a working one; trust the latter.
