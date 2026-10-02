@@ -104,7 +104,7 @@ impl ReflectTool {
             trust.trusted,
         )?;
         let auth = AuthStorage::load(Config::auth_path())?;
-        let registry = ModelRegistry::load(&auth, None);
+        let registry = load_model_registry(&auth, &crate::models::default_models_path(&global_dir));
         let entry = select_model(&config, &registry)?;
         let options = options_for_entry(&auth, &entry)?;
         let provider = crate::providers::create_provider(&entry, None)
@@ -149,6 +149,16 @@ impl ReflectTool {
                 .collect())
         })
     }
+}
+
+/// Build the registry reflection resolves roles against.
+///
+/// The persisted catalog must be passed explicitly: `ModelRegistry::load(auth,
+/// None)` loads built-in routes only, so a model discovered by a live catalog
+/// refresh (or declared in the user's `models.json`) would be invisible here and
+/// an explicitly configured reflection role would fail to resolve.
+fn load_model_registry(auth: &AuthStorage, models_path: &std::path::Path) -> ModelRegistry {
+    ModelRegistry::load(auth, Some(models_path.to_path_buf()))
 }
 
 fn provider_disabled(provider: &str, config: &Config) -> bool {
@@ -658,13 +668,44 @@ mod tests {
     fn configured_model_does_not_silently_fall_back() {
         let dir = tempfile::tempdir().unwrap();
         let auth = AuthStorage::load(dir.path().join("auth.json")).unwrap();
-        let registry = ModelRegistry::load(&auth, None);
+        let registry = load_model_registry(&auth, &dir.path().join("models.json"));
         let config = Config {
             default_provider: Some("does-not-exist".into()),
             default_model: Some("missing".into()),
             ..Config::default()
         };
         assert!(select_model(&config, &registry).is_err());
+    }
+
+    #[test]
+    fn models_declared_only_in_persisted_catalog_are_resolvable() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_path = dir.path().join("models.json");
+        let models_json = serde_json::json!({
+            "providers": {
+                "reflection-fixture": {
+                    "baseUrl": "https://reflection.example/v1",
+                    "api": "openai-completions",
+                    "models": [
+                        { "id": "reflection-only-model", "name": "Reflection Only" }
+                    ]
+                }
+            }
+        });
+        std::fs::write(
+            &models_path,
+            serde_json::to_string_pretty(&models_json).expect("serialize models json"),
+        )
+        .expect("write models.json");
+
+        let auth = AuthStorage::load(dir.path().join("auth.json")).unwrap();
+        let registry = load_model_registry(&auth, &models_path);
+        assert!(
+            registry
+                .find("reflection-fixture", "reflection-only-model")
+                .is_some(),
+            "a model declared only in models.json must be resolvable"
+        );
     }
 
     #[test]
