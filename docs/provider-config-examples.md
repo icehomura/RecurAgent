@@ -476,8 +476,9 @@ Common auth issues and their fixes: [provider-auth-troubleshooting.md](provider-
 ## Retry and Cross-Model Failover
 
 When a provider returns a transient failure — a 429, a quota rejection, a 529 or
-another overload — pi can retry the same model, and then continue the turn on a
-different one. Both are off unless you configure them.
+another overload — pi retries the same model, and then can continue the turn on
+a different one. Retry is on by default; the cross-model failover chain has no
+default and only runs once you configure one.
 
 ```jsonc
 {
@@ -485,7 +486,7 @@ different one. Both are off unless you configure them.
     // Every value below is shown at its default, so this block reproduces
     // stock behaviour except for the chain, which has no default.
     "enabled": true,           // false disables retry AND failover
-    "maxRetries": 3,           // same-model attempts before the chain is consulted
+    "maxRetries": 10,          // same-model retries before the chain is consulted
     "baseDelayMs": 2000,       // exponential backoff starts here
     "maxDelayMs": 60000,
 

@@ -189,7 +189,7 @@ Accessor defaults:
 
 Accessor defaults:
 - `retry.enabled`: `true`
-- `retry.max_retries`: `3`
+- `retry.max_retries`: `10`
 - `retry.base_delay_ms`: `2000`
 - `retry.max_delay_ms`: `60000`
 
@@ -197,7 +197,7 @@ Accessor defaults:
 {
   "retry": {
     "enabled": true,
-    "max_retries": 3,
+    "max_retries": 10,
     "base_delay_ms": 2000,
     "max_delay_ms": 60000
   }

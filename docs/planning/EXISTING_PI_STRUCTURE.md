@@ -865,7 +865,7 @@ pub struct CompactionSettings {
 
 pub struct RetrySettings {
     pub enabled: Option<bool>,         // Default: true
-    pub max_retries: Option<u32>,      // Default: 3
+    pub max_retries: Option<u32>,      // Default: 10
     pub base_delay_ms: Option<u32>,    // Default: 2000
     pub max_delay_ms: Option<u32>,     // Default: 60000
 }

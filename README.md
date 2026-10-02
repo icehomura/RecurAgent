@@ -1110,7 +1110,7 @@ is parsed as-is and is never rewritten to snake_case:
 
   "retry": {
     "enabled": true,
-    "max_retries": 3,
+    "max_retries": 10,
     "base_delay_ms": 1000,
     "max_delay_ms": 30000
   },

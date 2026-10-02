@@ -38,7 +38,7 @@ client secret as an API token.
 {
   "retry": {
     "enabled": true,
-    "maxRetries": 3,
+    "maxRetries": 10,
     "baseDelayMs": 1000,
     "maxDelayMs": 30000
   }
