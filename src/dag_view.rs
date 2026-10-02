@@ -694,12 +694,13 @@ pub fn render_horizontal(nodes: &[DagViewNode], frame: usize, cap: usize) -> Vec
 
 /// Compact, boxless rendering for the DAG card: connector lines and node
 /// labels only, no `┌┐└┘` surround. It reuses the horizontal layer layout with
-/// one-row nodes, drops straight into each target's centre so a branch turns
-/// exactly once instead of wrapping, then trims the empty leading/trailing
-/// rows, so a linear chain reads as a single `开始──read──结束` line.
+/// one-row nodes, then trims the empty leading/trailing rows. A branch fans out
+/// through a shared shaft (`┌─` / `└─` into the children) and a merge joins the
+/// parents on one shaft (`├─` into the target), so a linear chain reads as a
+/// single `开始 ─ read ─ 结束` line.
 #[must_use]
 pub fn render_compact(nodes: &[DagViewNode], frame: usize) -> Vec<Vec<DagViewCell>> {
-    let rows = render_horizontal_cfg(nodes, frame, COMPACT_NAME_CAP, COL_GAP, false);
+    let rows = render_horizontal_cfg(nodes, frame, COMPACT_NAME_CAP, 1, false);
     let first = rows.iter().position(|row| !row.is_empty());
     let last = rows.iter().rposition(|row| !row.is_empty());
     match (first, last) {
@@ -759,40 +760,99 @@ fn render_horizontal_cfg(
     for (l, ids) in layers.iter().enumerate() {
         col_w[l] = ids.iter().map(|&i| ln[i].width).max().unwrap_or(1);
     }
-    // One vertical lane per *distinct source* node that has an outgoing edge
-    // across a boundary. The old shape used a single shared bus column per
-    // boundary, which merged every edge into one line and made the graph unable
-    // to answer "which node feeds which" — a whole ready layer looked like it
-    // all fed the same downstream node.
-    let mut lane_of: HashMap<usize, usize> = HashMap::new();
-    let mut lanes_after = vec![0usize; nlayers];
+    // Connector routing plan.
+    //
+    // Boxed: one vertical lane per distinct source, in the gap after its
+    // layer, so a fan-out never merges into a single bus.
+    //
+    // Compact: a shared "fan-out shaft" column for a source with 2+ children,
+    // and a shared "fan-in shaft" column for a target with 2+ parents. The
+    // shafts live in the gap between two layers, so a branch reads
+    //
+    //     ┌─ [child]
+    //     │
+    // ────┤
+    //     │
+    //     └─ [child]
+    //
+    // and a merge reads `[child] ─┐`, `├─ [target]`, `[child] ─┘`. A
+    // single-parent / single-child edge skips the shaft and crosses directly.
+    let mut lane_of: Vec<HashMap<usize, usize>> = vec![HashMap::new(); nlayers];
+    let mut fanout_of: Vec<HashMap<usize, usize>> = vec![HashMap::new(); nlayers];
+    let mut fanin_of: Vec<HashMap<usize, usize>> = vec![HashMap::new(); nlayers];
+    let mut gap_after = vec![col_gap; nlayers];
     for l in 0..nlayers.saturating_sub(1) {
-        let mut next_lane = 0usize;
-        for &(a, _b) in &edges {
-            if ln[a].layer != l {
-                continue;
+        if boxed {
+            let mut lane = 0usize;
+            for &(a, _b) in &edges {
+                if ln[a].layer == l {
+                    lane_of[l].entry(a).or_insert_with(|| {
+                        let col = lane;
+                        lane += 1;
+                        col
+                    });
+                }
             }
-            lane_of.entry(a).or_insert_with(|| {
-                let lane = next_lane;
-                next_lane += 1;
-                lane
-            });
+            gap_after[l] = col_gap.max(lane + 1);
+            continue;
         }
-        lanes_after[l] = next_lane;
+        let mut out_count: HashMap<usize, usize> = HashMap::new();
+        let mut in_count: HashMap<usize, usize> = HashMap::new();
+        for &(a, b) in &edges {
+            if ln[a].layer == l {
+                *out_count.entry(a).or_default() += 1;
+                *in_count.entry(b).or_default() += 1;
+            }
+        }
+        let mut sources: Vec<usize> = out_count
+            .into_iter()
+            .filter(|&(_, c)| c >= 2)
+            .map(|(a, _)| a)
+            .collect();
+        sources.sort_by_key(|&a| row_of(a));
+        let mut targets: Vec<usize> = in_count
+            .into_iter()
+            .filter(|&(_, c)| c >= 2)
+            .map(|(b, _)| b)
+            .collect();
+        targets.sort_by_key(|&b| row_of(b));
+        let count = sources.len() + targets.len();
+        let mut offset = 1usize;
+        for a in sources {
+            fanout_of[l].insert(a, offset);
+            offset += 2;
+        }
+        for b in targets {
+            fanin_of[l].insert(b, offset);
+            offset += 2;
+        }
+        // No shaft: a single dash column. With shafts: `offset` (one dash
+        // column follows the last shaft before the next layer's labels).
+        gap_after[l] = if count == 0 {
+            col_gap.max(1)
+        } else {
+            col_gap.max(offset)
+        };
     }
     let mut x_left = vec![0usize; nlayers];
     let mut cursor = 0usize;
     for l in 0..nlayers {
         x_left[l] = cursor;
-        // The gap after this layer must hold its lanes, so it widens to fit.
-        let gap = if l + 1 < nlayers {
-            col_gap.max(lanes_after[l] + 1)
-        } else {
-            col_gap
-        };
-        cursor += col_w[l] + gap;
+        cursor += col_w[l] + gap_after[l];
     }
     let canvas_w = (x_left[nlayers - 1] + col_w[nlayers - 1]).max(1);
+    for l in 0..nlayers {
+        let base = x_left[l] + col_w[l];
+        for v in lane_of[l].values_mut() {
+            *v += base;
+        }
+        for v in fanout_of[l].values_mut() {
+            *v += base;
+        }
+        for v in fanin_of[l].values_mut() {
+            *v += base;
+        }
+    }
     let max_row = (0..ln.len()).map(&row_of).max().unwrap_or(0);
     let height = max_row + 2;
     let mut grid: Vec<Vec<Cell>> = vec![vec![Cell::empty(); canvas_w]; height];
@@ -838,23 +898,43 @@ fn render_horizontal_cfg(
             if ln[a].layer != l {
                 continue;
             }
-            let (x_band, xb) = if boxed {
-                (
-                    x_left[l] + col_w[l] + lane_of.get(&a).copied().unwrap_or(0),
-                    ln[b].x,
-                )
+            if boxed {
+                let xb = ln[b].x;
+                let x_band = lane_of[l].get(&a).copied().unwrap_or(xb);
+                let ya = row_to_y(anchors[a]);
+                let yb = row_to_y(anchors[b]);
+                let xa = ln[a].x + ln[a].width - 1;
+                add_conn(&mut grid, xa, ya, R, ln[a].state);
+                hline(&mut grid, xa, x_band, ya);
+                if ya < yb {
+                    add_conn(&mut grid, x_band, ya, D, DagViewCellState::Neutral);
+                    for y in (ya + 1)..yb {
+                        add_conn(&mut grid, x_band, y, U | D, DagViewCellState::Neutral);
+                    }
+                    add_conn(&mut grid, x_band, yb, U, DagViewCellState::Neutral);
+                } else if ya > yb {
+                    add_conn(&mut grid, x_band, ya, U, DagViewCellState::Neutral);
+                    for y in (yb + 1)..ya {
+                        add_conn(&mut grid, x_band, y, U | D, DagViewCellState::Neutral);
+                    }
+                    add_conn(&mut grid, x_band, yb, D, DagViewCellState::Neutral);
+                }
+                hline(&mut grid, x_band, xb, yb);
+                add_conn(&mut grid, xb, yb, L, ln[b].state);
+                continue;
+            }
+            let xb = if ln[b].is_dummy {
+                ln[b].x
             } else {
-                // Attach at the target's leading `[`: the padding space sits
-                // at the column's left edge, so the bracket is one cell in.
-                // (A dummy chain node has no label, so it attaches at its own
-                // single column.)
-                let bracket = if ln[b].is_dummy {
-                    ln[b].x
-                } else {
-                    ln[b].x + 1
-                };
-                (bracket, bracket)
+                ln[b].x + 1
             };
+            // A target's fan-in shaft always wins, so every parent lands on
+            // the same merge; otherwise a source's fan-out shaft carries it.
+            let x_band = fanin_of[l]
+                .get(&b)
+                .or_else(|| fanout_of[l].get(&a))
+                .copied()
+                .unwrap_or(xb);
             let ya = row_to_y(anchors[a]);
             let yb = row_to_y(anchors[b]);
             let xa = ln[a].x + ln[a].width - 1;
@@ -873,10 +953,12 @@ fn render_horizontal_cfg(
                 }
                 add_conn(&mut grid, x_band, yb, D, DagViewCellState::Neutral);
             }
-            if boxed {
+            // A shaft needs one more horizontal into the label at its own row;
+            // a direct drop already lands on the bracket.
+            if x_band != xb {
                 hline(&mut grid, x_band, xb, yb);
-                add_conn(&mut grid, xb, yb, L, ln[b].state);
             }
+            add_conn(&mut grid, xb, yb, L, ln[b].state);
         }
     }
 
