@@ -685,7 +685,7 @@ pub struct MemorySettings {
 ///
 /// ```json
 /// "dag": {
-///   "retry": { "attempts": 5, "backoffMs": 500 },
+///   "retry": { "attempts": 10, "backoffMs": 500 },
 ///   "maxConcurrency": 8,
 ///   "keepGraphs": 16
 /// }
@@ -717,7 +717,7 @@ pub struct DagSettings {
 #[serde(default)]
 pub struct DagRetrySettings {
     /// Attempts per node, including the first (`dag.retry.attempts`,
-    /// default 5; 0 or 1 disables retrying).
+    /// default 10; 0 or 1 disables retrying).
     pub attempts: Option<u32>,
     /// Fixed delay between attempts in milliseconds
     /// (`dag.retry.backoffMs`, default 500).
@@ -726,7 +726,12 @@ pub struct DagRetrySettings {
 }
 
 /// Default retry attempts when `dag.retry.attempts` is unset.
-pub const DAG_DEFAULT_RETRY_ATTEMPTS: u32 = 5;
+///
+/// Ten total runs: the first attempt plus up to nine retries, applied only to
+/// read-safe nodes. The `dag` tool retries its own nodes, independently of the
+/// provider auto-retry budget (`retry.maxRetries`), whose default of ten counts
+/// retries *after* the first provider attempt.
+pub const DAG_DEFAULT_RETRY_ATTEMPTS: u32 = 10;
 /// Default retry backoff (milliseconds) when `dag.retry.backoffMs` is unset.
 pub const DAG_DEFAULT_RETRY_BACKOFF_MS: u64 = 500;
 /// Default cap on retained finished graphs for `resume`.
@@ -2798,6 +2803,7 @@ mod tests {
 
         // Unset → the documented defaults.
         let default = DagSettings::default();
+        assert_eq!(DAG_DEFAULT_RETRY_ATTEMPTS, 10);
         assert_eq!(default.retry_attempts(), DAG_DEFAULT_RETRY_ATTEMPTS);
         assert_eq!(
             default.retry_backoff(),
