@@ -499,7 +499,11 @@ impl SubagentTool {
                             .copied()
                             .map(TaskNodeId::new)
                             .collect(),
-                        effects: ToolEffects::process(),
+                        // `spawn()`, not `process()`: each node is an isolated
+                        // subagent child, so a ready layer must run concurrently
+                        // rather than being split one-node-per-batch by the
+                        // scheduler's effect barrier (see `ToolEffects::spawn`).
+                        effects: ToolEffects::spawn(),
                     })
                     .collect();
                 let task_graph = TaskGraph::build(task_nodes).map_err(|error| {
@@ -665,7 +669,14 @@ impl Tool for SubagentTool {
     }
 
     fn effects(&self) -> ToolEffects {
-        ToolEffects::process()
+        // Each subagent runs as an *isolated child process*, so a DAG layer of
+        // them is concurrency-safe and must not be serialized: `process()`
+        // would be a scheduling barrier, collapsing a ready layer into
+        // one-node-per-batch execution (dag_scheduler's `plan_tool_effect_batches`
+        // only batches `parallel_safe` tools). `spawn()` keeps that declaration
+        // honest — it is still a spawn, just one that does not touch the host's
+        // shared mutation surface, unlike the `bash` `process()` barrier.
+        ToolEffects::spawn()
     }
 }
 
