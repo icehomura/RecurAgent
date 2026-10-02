@@ -268,15 +268,15 @@ pub fn platform_tag() -> String {
     format!("{}/{}", os_name(), arch_name())
 }
 
-/// Canonical Pi User-Agent: `"recur_agent/{version}"`.
+/// Canonical RecurAgent User-Agent: `"RecurAgent"`.
 pub fn ra_user_agent() -> String {
-    format!("recur_agent/{VERSION}")
+    "RecurAgent".to_string()
 }
 
-/// Canonical Pi User-Agent with an additional component:
-/// `"recur_agent/{version} {extra}"`.
+/// Canonical RecurAgent User-Agent with an additional component:
+/// `"RecurAgent {extra}"`.
 pub fn ra_user_agent_with(extra: &str) -> String {
-    format!("recur_agent/{VERSION} {extra}")
+    format!("RecurAgent {extra}")
 }
 
 // ---------------------------------------------------------------------------
@@ -335,16 +335,19 @@ mod tests {
     }
 
     #[test]
-    fn ra_user_agent_contains_version() {
+    fn ra_user_agent_is_the_product_name() {
         let ua = ra_user_agent();
-        assert!(ua.starts_with("recur_agent/"), "ua: {ua}");
-        assert!(ua.contains(VERSION), "ua should contain version");
+        assert_eq!(ua, "RecurAgent", "ua: {ua}");
+        assert!(
+            !ua.contains(VERSION),
+            "the user agent must not advertise a version"
+        );
     }
 
     #[test]
     fn ra_user_agent_with_appends() {
         let ua = ra_user_agent_with("Antigravity/1.2.3");
-        assert!(ua.starts_with("recur_agent/"));
+        assert!(ua.starts_with("RecurAgent"));
         assert!(ua.ends_with("Antigravity/1.2.3"));
     }
 

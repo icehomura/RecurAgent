@@ -175,7 +175,7 @@ fn fetch_with_redirects<'a>(
         let client = crate::http::client::Client::new();
         let response = client
             .get(url)
-            .header("User-Agent", "recur_agent/0.2 (url read)")
+            .header("User-Agent", "RecurAgent (url read)")
             .header(
                 "Accept",
                 "text/html,application/pdf,text/plain,application/json,*/*",

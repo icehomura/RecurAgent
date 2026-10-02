@@ -693,18 +693,9 @@ impl Provider for AnthropicProvider {
             request = request
                 .header("anthropic-dangerous-direct-browser-access", "true")
                 .header("x-app", "cli")
-                .header(
-                    "user-agent",
-                    format!("recur_agent/{} (external, cli)", env!("CARGO_PKG_VERSION")),
-                );
+                .header("user-agent", "RecurAgent (external, cli)");
         } else if kimi_oauth_token {
-            request = request.header(
-                "user-agent",
-                format!(
-                    "recur_agent/{} (kimi-oauth, cli)",
-                    env!("CARGO_PKG_VERSION")
-                ),
-            );
+            request = request.header("user-agent", "RecurAgent (kimi-oauth, cli)");
             for (name, value) in kimi_common_headers() {
                 request = request.header(name, value);
             }
@@ -2801,7 +2792,7 @@ mod tests {
             captured
                 .headers
                 .get("user-agent")
-                .is_some_and(|value| value.contains("recur_agent/"))
+                .is_some_and(|value| value.contains("RecurAgent"))
         );
     }
 
