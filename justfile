@@ -10,11 +10,18 @@ build-tui:
 # with a single codegen unit, so it needs a quiet machine. Under load on a
 # shared box it dies before it links (`rustc-LLVM ERROR: out of memory`, exit
 # 0xc0000409) — see `[profile.release-local]` in Cargo.toml for the mechanism.
-# This recipe builds the same shape with thin LTO: no OOM, links in a fraction
-# of the time, but the binary is not the one CI ships, nor the one the 48 MiB
-# size budget is measured on.
+# Same shape, thin LTO, and its final LTO step stays small instead of holding
+# the whole graph in one module. It lands in `release-local/`, beside
+# `release/`, and it is neither what CI ships nor what the 48 MiB size budget
+# measures.
+#
+# `--jobs 6` is not decoration. A profile switch invalidates every dependency
+# artifact, so the first run is a full 714-crate rebuild, and that phase — not
+# LTO — becomes the peak: measured on this box, six jobs took rustc to 15.6 GiB
+# combined and left 0.2 GiB of free physical memory. The default is one job per
+# core, 20 here.
 build-tui-local:
-    cargo build --locked --profile release-local --bin ra
+    cargo build --locked --profile release-local --jobs 6 --bin ra
 
 # RecurCode ACP build. `--no-default-features` is required because Cargo
 # features can add dependencies but cannot turn `tui` off.
