@@ -788,13 +788,13 @@ async fn run(
                 };
                 let (config_options, models) = match session_state.as_ref() {
                     Some(state) => match state.lock(&cx).await {
-                        Ok(guard) => (
-                            config_options_for(&guard, &options.available_models),
-                            session_model_state(
-                                current_model_of(&guard),
-                                &options.available_models,
-                            ),
-                        ),
+                        Ok(guard) => {
+                            let available = session_available_models(&guard, &options);
+                            (
+                                config_options_for(&guard, &available),
+                                session_model_state(current_model_of(&guard), &available),
+                            )
+                        }
                         Err(_) => (None, session_model_state(None, &options.available_models)),
                     },
                     None => (None, session_model_state(None, &options.available_models)),
@@ -897,56 +897,12 @@ async fn run(
             // session's provider/model so clients can change models at runtime
             // (e.g. to gpt-5.5) without restarting or editing static config.
             "session/set_model" => {
-                let session_id = request
-                    .params
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .map(String::from);
-                let Some(session_id) = session_id else {
-                    let _ = out_tx.send(json_rpc_error(
-                        id,
-                        INVALID_PARAMS,
-                        "Missing required parameter: sessionId",
-                    ));
-                    continue;
-                };
-
-                let (provider, model) =
-                    match resolve_set_model_target(&request.params, &options.model_registry) {
-                        Ok(pair) => pair,
-                        Err(msg) => {
-                            let _ = out_tx.send(json_rpc_error(id, INVALID_PARAMS, msg));
-                            continue;
-                        }
-                    };
-
-                let session_state = {
-                    sessions
-                        .lock(&cx)
-                        .await
-                        .map_or_else(|_| None, |guard| guard.get(&session_id).cloned())
-                };
-                let Some(session_state) = session_state else {
-                    let _ = out_tx.send(json_rpc_error(
-                        id,
-                        SESSION_NOT_FOUND,
-                        format!("Session not found: {session_id}"),
-                    ));
-                    continue;
-                };
-
-                match apply_set_model(&session_state, &provider, &model, &cx).await {
-                    Ok((provider, model)) => {
-                        let _ = out_tx.send(json_rpc_ok(
-                            id,
-                            json!({
-                                "sessionId": session_id,
-                                "model": { "provider": provider, "id": model },
-                            }),
-                        ));
+                match handle_set_model(&request.params, &options, &sessions, &cx).await {
+                    Ok(result) => {
+                        let _ = out_tx.send(json_rpc_ok(id, result));
                     }
-                    Err(msg) => {
-                        let _ = out_tx.send(json_rpc_error(id, INVALID_PARAMS, msg));
+                    Err((code, msg)) => {
+                        let _ = out_tx.send(json_rpc_error(id, code, msg));
                     }
                 }
             }
@@ -1038,29 +994,26 @@ async fn run(
                 // `model` is the ACP model selector: same switch as
                 // session/set_model, with the value as `provider/id` or an id.
                 let model_target = if name.eq_ignore_ascii_case("model") {
-                    let target = value.as_str().map(str::trim).map(|raw| {
-                        let params = match raw.split_once('/') {
-                            Some((provider, model))
-                                if options.model_registry.find(provider, model).is_some() =>
-                            {
-                                json!({ "provider": provider, "model": model })
-                            }
-                            _ => json!({ "model": raw }),
-                        };
-                        resolve_set_model_target(&params, &options.model_registry)
-                    });
-                    match target {
-                        Some(Ok(pair)) => Some(pair),
-                        Some(Err(msg)) => {
-                            let _ = out_tx.send(json_rpc_error(id, INVALID_PARAMS, msg));
-                            continue;
-                        }
-                        None => {
-                            let _ = out_tx.send(json_rpc_error(
-                                id,
-                                INVALID_PARAMS,
-                                "Invalid value for config option 'model': expected a model id or provider/id string",
-                            ));
+                    let Some(raw) = value.as_str().map(str::trim) else {
+                        let _ = out_tx.send(json_rpc_error(
+                            id,
+                            INVALID_PARAMS,
+                            "Invalid value for config option 'model': expected a model id or provider/id string",
+                        ));
+                        continue;
+                    };
+                    match resolve_set_config_model_target(
+                        raw,
+                        &options,
+                        &sessions,
+                        &session_id,
+                        &cx,
+                    )
+                    .await
+                    {
+                        Ok(pair) => Some(pair),
+                        Err((code, msg)) => {
+                            let _ = out_tx.send(json_rpc_error(id, code, msg));
                             continue;
                         }
                     }
@@ -1109,7 +1062,7 @@ async fn run(
                     Ok(()) => {
                         // ACP answers with the complete config state.
                         let config_options = session_state.lock(&cx).await.ok().and_then(|guard| {
-                            config_options_for(&guard, &options.available_models)
+                            config_options_for(&guard, &session_available_models(&guard, &options))
                         });
                         let _ = out_tx.send(json_rpc_ok(
                             id,
@@ -1872,6 +1825,28 @@ fn session_config_options(
     ])
 }
 
+/// The model list to advertise for `state`: the session's own (possibly
+/// refreshed) registry when it has one, else the startup snapshot
+/// `options.available_models`.
+///
+/// A long-lived ACP server must not advertise a catalog frozen at process
+/// start. Sessions built by `session/new`/`load`/`resume` carry a live registry
+/// that `session/set_model` refreshes; a session with no registry (or a state
+/// that could not be locked) falls back to the snapshot.
+fn session_available_models<'a>(
+    state: &'a AcpSessionState,
+    options: &'a AcpOptions,
+) -> std::borrow::Cow<'a, [ModelEntry]> {
+    state
+        .agent_session
+        .as_ref()
+        .and_then(AgentSession::model_registry)
+        .map_or_else(
+            || std::borrow::Cow::Borrowed(options.available_models.as_slice()),
+            |registry| std::borrow::Cow::Owned(registry.get_available()),
+        )
+}
+
 /// [`session_config_options`] for a live session, or `None` while a prompt
 /// holds the agent session.
 fn config_options_for(state: &AcpSessionState, available_models: &[ModelEntry]) -> Option<Value> {
@@ -2026,6 +2001,142 @@ async fn apply_set_model(
         .await
         .map_err(|e| e.to_string())?;
     Ok((provider.to_string(), model.to_string()))
+}
+
+/// Run `resolve` against a session's LIVE model registry.
+///
+/// The session's catalog is re-read from disk (`auth.json` and the `models.json`
+/// beside it) first, so a catalog refresh or external `models.json` edit that
+/// landed after the ACP server started stays visible to a long-lived server;
+/// a failed refresh warns and falls back to the session's current registry.
+/// `options.model_registry` is the startup snapshot and is used only when the
+/// session carries no registry of its own.
+///
+/// The session-state lock is held for the duration of `resolve` and released
+/// before this returns; `resolve` must not await (the mutex is non-reentrant
+/// with the `apply_*` helpers).
+async fn with_live_registry<T>(
+    options: &AcpOptions,
+    session_state: &Arc<Mutex<AcpSessionState>>,
+    session_id: &str,
+    cx: &AgentCx,
+    resolve: impl FnOnce(&ModelRegistry) -> T,
+) -> std::result::Result<T, (i64, String)> {
+    let Ok(mut guard) = session_state.lock(cx).await else {
+        return Err((INVALID_PARAMS, "session state lock unavailable".to_string()));
+    };
+    if let Some(agent_session) = guard.agent_session.as_mut()
+        && let Err(err) = agent_session.reload_model_registry(
+            options.auth.path(),
+            &options.auth.models_catalog_path(),
+        )
+    {
+        tracing::warn!(
+            session_id = %session_id,
+            error = %err,
+            "could not refresh the model catalog; resolving against the session's current registry"
+        );
+    }
+    let registry = guard
+        .agent_session
+        .as_ref()
+        .and_then(AgentSession::model_registry)
+        .unwrap_or(&options.model_registry);
+    Ok(resolve(registry))
+}
+
+/// Resolve a `session/set_config_option` `model` value (`provider/id` or a bare
+/// id) against the session's LIVE registry.
+///
+/// Exactly [`handle_set_model`]'s catalog refresh and resolution, so a model the
+/// refreshed `configOptions` reply lists is accepted here too. Returns
+/// `(error_code, message)` matching the historical errors.
+async fn resolve_set_config_model_target(
+    raw: &str,
+    options: &AcpOptions,
+    sessions: &AcpSessionsMap,
+    session_id: &str,
+    cx: &AgentCx,
+) -> std::result::Result<(String, String), (i64, String)> {
+    let session_state = sessions
+        .lock(cx)
+        .await
+        .map_or_else(|_| None, |guard| guard.get(session_id).cloned());
+    let Some(session_state) = session_state else {
+        return Err((
+            SESSION_NOT_FOUND,
+            format!("Session not found: {session_id}"),
+        ));
+    };
+
+    with_live_registry(options, &session_state, session_id, cx, |registry| {
+        let params = match raw.split_once('/') {
+            Some((provider, model)) if registry.find(provider, model).is_some() => {
+                json!({ "provider": provider, "model": model })
+            }
+            _ => json!({ "model": raw }),
+        };
+        resolve_set_model_target(&params, registry)
+    })
+    .await
+    .and_then(|resolved| resolved.map_err(|msg| (INVALID_PARAMS, msg)))
+}
+
+/// Resolve and apply `session/set_model` against the session's LIVE model
+/// registry.
+///
+/// The session's catalog is re-read from disk (`auth.json` and the `models.json`
+/// beside it) before resolution, so a catalog refresh or external `models.json`
+/// edit that landed after the ACP server started stays visible to a long-lived
+/// server. `options.model_registry` is the startup snapshot and is only a
+/// fallback when the session carries no registry of its own.
+///
+/// Returns the JSON-RPC result on success, or `(error_code, message)`; the
+/// codes and messages match the historical `session/set_model` errors.
+async fn handle_set_model(
+    params: &Value,
+    options: &AcpOptions,
+    sessions: &AcpSessionsMap,
+    cx: &AgentCx,
+) -> std::result::Result<Value, (i64, String)> {
+    let session_id = params
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .map(String::from);
+    let Some(session_id) = session_id else {
+        return Err((
+            INVALID_PARAMS,
+            "Missing required parameter: sessionId".to_string(),
+        ));
+    };
+
+    let session_state = sessions
+        .lock(cx)
+        .await
+        .map_or_else(|_| None, |guard| guard.get(&session_id).cloned());
+    let Some(session_state) = session_state else {
+        return Err((
+            SESSION_NOT_FOUND,
+            format!("Session not found: {session_id}"),
+        ));
+    };
+
+    // Refresh and resolve under the session-state lock (released before
+    // `apply_set_model`, which re-locks the same non-reentrant mutex).
+    let (provider, model) =
+        with_live_registry(options, &session_state, &session_id, cx, |registry| {
+            resolve_set_model_target(params, registry)
+        })
+        .await
+        .and_then(|resolved| resolved.map_err(|msg| (INVALID_PARAMS, msg)))?;
+
+    match apply_set_model(&session_state, &provider, &model, cx).await {
+        Ok((provider, model)) => Ok(json!({
+            "sessionId": session_id,
+            "model": { "provider": provider, "id": model },
+        })),
+        Err(msg) => Err((INVALID_PARAMS, msg)),
+    }
 }
 
 /// Apply a parsed `session/set_config_option` to a live session.
@@ -3477,6 +3588,182 @@ mod tests {
             let active = agent_session.agent.provider();
             assert_eq!(active.name(), "openai");
             assert_eq!(active.model_id(), "gpt-4o");
+        });
+    }
+
+    #[test]
+    fn set_model_uses_live_session_registry_after_catalog_refresh() {
+        use crate::agent::{Agent, AgentConfig};
+        use tempfile::tempdir;
+
+        let runtime = RuntimeBuilder::current_thread()
+            .build()
+            .expect("runtime build");
+        let runtime_handle = runtime.handle();
+
+        runtime.block_on(async {
+            let cx = AgentCx::for_testing();
+
+            // A temp catalog dir: auth.json stays empty, and models.json declares
+            // a provider/model row that is absent from the built-in catalog.
+            let dir = tempdir().expect("tempdir");
+            let auth_path = dir.path().join("auth.json");
+            let models_json = json!({
+                "providers": {
+                    "acme": {
+                        "baseUrl": "https://acme.example/v1",
+                        "api": "openai-completions",
+                        "apiKey": "acme-live-key",
+                        "models": [{
+                            "id": "acme-live-model",
+                            "name": "Acme Live",
+                            "contextWindow": 32000,
+                            "maxTokens": 4096,
+                        }, {
+                            "id": "acme-config-model",
+                            "name": "Acme Config",
+                            "contextWindow": 32000,
+                            "maxTokens": 4096,
+                        }],
+                    }
+                }
+            });
+            std::fs::write(
+                dir.path().join("models.json"),
+                serde_json::to_string_pretty(&models_json).expect("serialize models.json"),
+            )
+            .expect("write models.json");
+
+            let auth = AuthStorage::load(auth_path).expect("load auth");
+
+            // The startup snapshot never sees models.json — exactly the frozen
+            // catalog a long-lived ACP server used to resolve against forever.
+            let snapshot = ModelRegistry::load(&auth, None);
+            assert!(
+                snapshot.find("acme", "acme-live-model").is_none(),
+                "the custom row must be invisible to the startup snapshot"
+            );
+
+            // A live session on a built-in model, wired to the snapshot registry.
+            let entry = snapshot
+                .find("anthropic", "claude-sonnet-4-5")
+                .expect("anthropic model in snapshot");
+            let provider = providers::create_provider(&entry, None).expect("create provider");
+            let tools = ToolRegistry::new(&[], std::path::Path::new("."), None);
+            let agent = Agent::new(
+                provider,
+                tools,
+                AgentConfig {
+                    system_prompt: None,
+                    max_tool_iterations: 50,
+                    stream_options: StreamOptions::default(),
+                    block_images: false,
+                    model_accepts_images: true,
+                    fail_closed_hooks: false,
+                    tool_approval: None,
+                    keyword_settings: None,
+                    max_time: None,
+                    turn_recovery: crate::turn_recovery::TurnRecoveryMode::default(),
+                    approval_state: None,
+                    bash_settings: None,
+                    secrets: None,
+                },
+            );
+            let mut session = Session::in_memory();
+            session.header.provider = Some("anthropic".to_string());
+            session.header.model_id = Some("claude-sonnet-4-5".to_string());
+            let agent_session = AgentSession::new(
+                agent,
+                Arc::new(Mutex::new(session)),
+                false,
+                ResolvedCompactionSettings::default(),
+            )
+            .with_model_registry(snapshot.clone())
+            .with_auth_storage(auth.clone());
+            let state = Arc::new(Mutex::new(AcpSessionState {
+                agent_session: Some(agent_session),
+                cwd: PathBuf::from("."),
+            }));
+
+            let sessions: AcpSessionsMap = Arc::new(Mutex::new(HashMap::new()));
+            sessions
+                .lock(&cx)
+                .await
+                .expect("lock sessions")
+                .insert("sess-live".to_string(), Arc::clone(&state));
+
+            let options = AcpOptions {
+                config: Config::default(),
+                available_models: snapshot.get_available(),
+                model_registry: snapshot.clone(),
+                auth,
+                runtime_handle: runtime_handle.clone(),
+                session_dir: None,
+            };
+
+            // The row is absent from the startup snapshot but present in the
+            // catalog beside `options.auth`; set_model must refresh and find it.
+            let params = json!({
+                "sessionId": "sess-live",
+                "provider": "acme",
+                "model": "acme-live-model",
+            });
+            let result = handle_set_model(&params, &options, &sessions, &cx)
+                .await
+                .expect("a row refreshed from models.json must be settable");
+            assert_eq!(result["sessionId"], "sess-live");
+            assert_eq!(result["model"]["provider"], "acme");
+            assert_eq!(result["model"]["id"], "acme-live-model");
+
+            // The live session really switched to the refreshed row.
+            let guard = state.lock(&cx).await.expect("lock state");
+            let active = guard
+                .agent_session
+                .as_ref()
+                .expect("session present")
+                .agent
+                .provider();
+            assert_eq!(active.name(), "acme");
+            assert_eq!(active.model_id(), "acme-live-model");
+            drop(guard);
+
+            // The `session/set_config_option` model path resolves against the
+            // same refreshed registry: a snapshot-based lookup would reject it.
+            let target = resolve_set_config_model_target(
+                "acme/acme-config-model",
+                &options,
+                &sessions,
+                "sess-live",
+                &cx,
+            )
+            .await
+            .expect("config option model path must accept the refreshed row");
+            assert_eq!(target, ("acme".to_string(), "acme-config-model".to_string()));
+            apply_set_model(&state, &target.0, &target.1, &cx)
+                .await
+                .expect("config option model switch applies");
+            let guard = state.lock(&cx).await.expect("lock state");
+            let active = guard
+                .agent_session
+                .as_ref()
+                .expect("session present")
+                .agent
+                .provider();
+            assert_eq!(active.name(), "acme");
+            assert_eq!(active.model_id(), "acme-config-model");
+            drop(guard);
+
+            // A bare model id resolves against the refreshed registry too.
+            let bare = resolve_set_config_model_target(
+                "acme-config-model",
+                &options,
+                &sessions,
+                "sess-live",
+                &cx,
+            )
+            .await
+            .expect("bare catalog-only id resolves from the live registry");
+            assert_eq!(bare, ("acme".to_string(), "acme-config-model".to_string()));
         });
     }
 
