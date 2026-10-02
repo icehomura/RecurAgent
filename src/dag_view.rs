@@ -1562,12 +1562,24 @@ mod tests {
     /// the two shapes.
     #[test]
     fn render_compact_drops_boxes_but_keeps_connectors() {
+        fn col_of(line: &str, needle: char) -> usize {
+            let mut col = 0usize;
+            for ch in line.chars() {
+                if ch == needle {
+                    return col;
+                }
+                col += UnicodeWidthChar::width(ch).unwrap_or(0);
+            }
+            panic!("{needle:?} missing from {line:?}");
+        }
+
         let chain = vec![
             n(1, "read", &[], DagViewState::Succeeded),
             n(2, "parse", &[1], DagViewState::Succeeded),
             n(3, "write", &[2], DagViewState::Running),
         ];
-        let compact = rows_to_string(&render_compact(&chain, 0)).join("\n");
+        let chain_rows = rows_to_string(&render_compact(&chain, 0));
+        let compact = chain_rows.join("\n");
         println!("compact chain:\n{compact}");
         for box_glyph in ["┌", "┐", "└", "┘", "├", "┤", "┬", "┴", "┼"] {
             assert!(
@@ -1584,6 +1596,12 @@ mod tests {
             "{compact}"
         );
         assert!(compact.contains('─'), "connector line dropped:\n{compact}");
+        // One graph row, exactly one blank, then the name legend.
+        assert_eq!(chain_rows[1], "", "{chain_rows:?}");
+        assert!(
+            chain_rows.get(2).is_some_and(|l| l.contains("read")),
+            "{chain_rows:?}"
+        );
 
         let branchy = vec![
             n(1, "read", &[], DagViewState::Succeeded),
@@ -1591,10 +1609,11 @@ mod tests {
             n(3, "fetch", &[1], DagViewState::Pending),
             n(4, "write", &[2, 3], DagViewState::Pending),
         ];
-        let compact = rows_to_string(&render_compact(&branchy, 0)).join("\n");
+        let branchy_rows = rows_to_string(&render_compact(&branchy, 0));
+        let compact = branchy_rows.join("\n");
         println!("compact branchy:\n{compact}");
         // The old near-side lane produced a wrap whose merge junctions were
-        // `┬`/`┴` next to the target. The one-corner route has none.
+        // `┬`/`┴` next to the target. The shared shafts have none.
         for gone in ["┬", "┴"] {
             assert!(
                 !compact.contains(gone),
@@ -1608,5 +1627,16 @@ mod tests {
             compact.contains("开始") && compact.contains("结束"),
             "{compact}"
         );
+        // The branch is a fan-out shaft (`┤`) feeding two children and a
+        // fan-in shaft (`├`) gathering two parents. The shafts must line up
+        // across the three graph rows.
+        let [top, mid, bottom] = [&branchy_rows[0], &branchy_rows[1], &branchy_rows[2]];
+        assert!(top.contains("┌") && top.contains("┐"), "{top:?}");
+        assert!(mid.contains("┤") && mid.contains("├"), "{mid:?}");
+        assert!(bottom.contains("└") && bottom.contains("┘"), "{bottom:?}");
+        assert_eq!(col_of(top, '┌'), col_of(mid, '┤'), "fan-out shaft");
+        assert_eq!(col_of(bottom, '└'), col_of(mid, '┤'), "fan-out shaft");
+        assert_eq!(col_of(top, '┐'), col_of(mid, '├'), "fan-in shaft");
+        assert_eq!(col_of(bottom, '┘'), col_of(mid, '├'), "fan-in shaft");
     }
 }
