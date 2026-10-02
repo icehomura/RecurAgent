@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# wget shim: same release-asset-only github.com rewrite as the curl shim.
+set -uo pipefail
+
+REAL_WGET="${REAL_WGET:-/usr/bin/wget}"
+mode="${GH_RELEASE_MODE:-ghproxy}"
+
+if [[ "$mode" != "ghproxy" ]]; then
+  exec "$REAL_WGET" "$@"
+fi
+
+args=()
+for a in "$@"; do
+  case "$a" in
+    https://github.com/*/releases/download/*) args+=("https://gh-proxy.com/$a") ;;
+    *)                                        args+=("$a") ;;
+  esac
+done
+exec "$REAL_WGET" "${args[@]}"

@@ -465,6 +465,15 @@ pub struct RetrySettings {
     pub max_failovers_per_turn: Option<u32>,
 }
 
+/// Same-provider retries after the first attempt, applied when
+/// `retry.maxRetries` is unset.
+///
+/// Counts EXTRA attempts: the turn gets `1 + DEFAULT_RETRY_MAX_RETRIES` provider
+/// calls before the failover chain is consulted. Every surface that reads the
+/// budget does so through [`Config::retry_max_retries`], so this constant is
+/// the single default for print mode, RPC, the SDK and the default TUI.
+pub const DEFAULT_RETRY_MAX_RETRIES: u32 = 10;
+
 /// Per-role model assignments (bd-cv653.3.1).
 ///
 /// Each value is a model spec string: `"provider/model"` (optionally with a
@@ -1408,8 +1417,14 @@ impl Config {
         self.retry.as_ref().and_then(|r| r.enabled).unwrap_or(true)
     }
 
+    /// Same-provider retries after the first attempt (`retry.maxRetries`).
+    /// Default 10: the first attempt plus up to ten retries before the
+    /// fallback chain is consulted.
     pub fn retry_max_retries(&self) -> u32 {
-        self.retry.as_ref().and_then(|r| r.max_retries).unwrap_or(3)
+        self.retry
+            .as_ref()
+            .and_then(|r| r.max_retries)
+            .unwrap_or(DEFAULT_RETRY_MAX_RETRIES)
     }
 
     pub fn retry_base_delay_ms(&self) -> u32 {
@@ -3201,7 +3216,7 @@ mod tests {
         assert_eq!(config.compaction_reserve_tokens(), 16384);
         assert_eq!(config.compaction_keep_recent_tokens(), 20000);
         assert!(config.retry_enabled());
-        assert_eq!(config.retry_max_retries(), 3);
+        assert_eq!(config.retry_max_retries(), 10);
         assert_eq!(config.retry_base_delay_ms(), 2000);
         assert_eq!(config.retry_max_delay_ms(), 60000);
         assert!(config.image_auto_resize());

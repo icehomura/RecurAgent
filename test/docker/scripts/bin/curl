@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# curl shim: route GitHub *release asset* downloads through a release proxy.
+#
+# On networks where GitHub release assets (objects.githubusercontent.com) are
+# throttled to tens of KB/s, `https://gh-proxy.com/https://github.com/...`
+# streams the same asset an order of magnitude faster.
+#
+# ONLY `/releases/download/` URLs are rewritten. Everything else under
+# github.com must pass through untouched: gh-proxy answers 403 for the
+# `/releases/latest` HTML page, and installers resolve their version by
+# following that redirect (`curl -o /dev/null -w '%{url_effective}'`). Rewriting
+# it made every such installer conclude "no release version found" and build
+# from source instead of downloading the prebuilt binary.
+#
+# Controlled by GH_RELEASE_MODE=ghproxy|direct (see install-tools.sh).
+set -uo pipefail
+
+REAL_CURL="${REAL_CURL:-/usr/bin/curl}"
+mode="${GH_RELEASE_MODE:-ghproxy}"
+
+if [[ "$mode" != "ghproxy" ]]; then
+  exec "$REAL_CURL" "$@"
+fi
+
+args=()
+for a in "$@"; do
+  case "$a" in
+    https://github.com/*/releases/download/*) args+=("https://gh-proxy.com/$a") ;;
+    *)                                        args+=("$a") ;;
+  esac
+done
+exec "$REAL_CURL" "${args[@]}"

@@ -1056,8 +1056,7 @@ impl RetryPolicy {
     ///
     /// One reader for the four config keys, so a surface adopting this policy
     /// cannot accidentally consult a different set (bd-u2qv4). Print mode
-    /// supplies its own `max_retries` from the CLI and so builds its policy
-    /// directly.
+    /// builds its policy directly from the same config values.
     #[must_use]
     pub fn from_config(config: &crate::config::Config) -> Option<Self> {
         config.retry_enabled().then(|| Self {
@@ -1241,6 +1240,41 @@ mod recovery_boundary_tests {
                 );
             }
         }
+    }
+
+    /// The stock configuration must grant ten retries, not the three that
+    /// predated the default change. The budget is read through
+    /// `RetryPolicy::from_config`, the same getter print mode, RPC, the SDK and
+    /// the default TUI use, so this pins the product default once.
+    #[test]
+    fn the_default_policy_grants_ten_retries_then_stops() {
+        let policy = RetryPolicy {
+            // Failover is a separate budget; pinch it off so the retry count is
+            // the only thing this loop can spend.
+            max_failovers_per_turn: 0,
+            ..RetryPolicy::from_config(&crate::config::Config::default())
+                .expect("retry is enabled by default")
+        };
+        assert_eq!(policy.max_retries, 10, "the shipped default is ten retries");
+
+        let error = crate::error::Error::api("503 service unavailable");
+        let mut retry_count = 0;
+        loop {
+            let progress = TurnProgress {
+                retry_count,
+                failovers_this_turn: 0,
+                stream_can_retry: true,
+            };
+            match decide(TurnOutcome::Failed(&error), &progress, &policy, None) {
+                TurnDecision::Retry { attempt, .. } => {
+                    assert_eq!(attempt, retry_count + 1, "attempts advance one at a time");
+                    retry_count = attempt;
+                }
+                TurnDecision::Finish { success: false } => break,
+                other => panic!("unexpected decision at retry_count={retry_count}: {other:?}"),
+            }
+        }
+        assert_eq!(retry_count, 10, "ten retries after the first attempt");
     }
 
     #[test]

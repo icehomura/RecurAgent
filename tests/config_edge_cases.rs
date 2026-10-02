@@ -41,7 +41,7 @@ fn config_default_compaction_settings() {
 fn config_default_retry_settings() {
     let config = Config::default();
     assert!(config.retry_enabled());
-    assert_eq!(config.retry_max_retries(), 3);
+    assert_eq!(config.retry_max_retries(), 10);
     assert_eq!(config.retry_base_delay_ms(), 2000);
     assert_eq!(config.retry_max_delay_ms(), 60000);
 }
