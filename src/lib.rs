@@ -83,6 +83,7 @@ static GLOBAL_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemall
 
 #[doc(hidden)]
 pub mod acp;
+pub mod activity_pane;
 pub mod advisor;
 #[doc(hidden)]
 pub mod agent;
