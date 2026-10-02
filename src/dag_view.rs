@@ -963,6 +963,11 @@ fn render_horizontal_cfg(
     }
 
     let mut out: Vec<Vec<DagViewCell>> = grid.iter().map(|row| rle(row)).collect();
+    // Drop the grid's trailing empty rows before the legend separator, or the
+    // card shows two blank lines between the graph and the name list.
+    while out.last().is_some_and(Vec::is_empty) {
+        out.pop();
+    }
     if !src.is_empty() {
         out.push(Vec::new());
         for node in src {
