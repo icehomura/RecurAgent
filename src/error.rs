@@ -1145,7 +1145,7 @@ pub fn is_retryable_error(
 
     let re = RETRYABLE_RE.get_or_init(|| {
         regex::Regex::new(
-            r"overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error|connection.?error|connection.?refused|connection.?reset|connection.?aborted|connection.?closed|connection.?dropped|other side closed|closed before headers|closed before message|close_notify|broken pipe|unexpected eof|unexpected end of file|transient connection|fetch failed|upstream.?connect|reset before headers|terminated|retry delay",
+            r"overloaded|rate.?limit|too many requests|429|500|502|503|504|service.{0,25}unavailable|temporarily unavailable|server error|internal error|connection.?error|connection.?refused|connection.?reset|connection.?aborted|connection.?closed|connection.?dropped|other side closed|closed before headers|closed before message|close_notify|broken pipe|unexpected eof|unexpected end of file|transient connection|fetch failed|upstream.?connect|upstream.{0,25}unavailable|reset before headers|terminated|retry delay",
         )
         .expect("retryable regex")
     });
@@ -1370,7 +1370,10 @@ fn classify_provider_error(
             return kind;
         }
     }
-    if lower.contains("overloaded") || lower.contains("service unavailable") {
+    if lower.contains("overloaded")
+        || lower.contains("service unavailable")
+        || lower.contains("temporarily unavailable")
+    {
         ProviderErrorKind::Overloaded
     } else if lower.contains("rate limit")
         || lower.contains("rate_limit")
@@ -2826,6 +2829,47 @@ mod tests {
     #[test]
     fn retryable_retry_delay() {
         assert!(is_retryable_error("retry delay 30s", None, None));
+    }
+
+    /// A gateway/proxy "temporarily unavailable" is a transient overload. The
+    /// failover classifier already treated it as [`FailoverClass::Overload`]
+    /// (`OVERLOAD_PATTERNS` in `failover.rs`), so the same-provider classifier
+    /// refusing it left one error classified two ways: no retry in place, yet
+    /// a candidate for cross-provider failover.
+    #[test]
+    fn retryable_temporarily_unavailable_is_transient() {
+        assert!(is_retryable_error(
+            "Upstream service temporarily unavailable",
+            None,
+            None
+        ));
+        assert!(is_retryable_error(
+            "Service temporarily unavailable",
+            None,
+            None
+        ));
+        assert!(is_retryable_error(
+            "upstream service is currently unavailable",
+            None,
+            None
+        ));
+        // The generic "unavailable" word alone is accepted by the classifier,
+        // but a lone HTTP 400 must still refuse (status outranks the prose).
+        assert!(!is_retryable_error("400 invalid request", None, None));
+    }
+
+    #[test]
+    fn temporarily_unavailable_classifies_as_overloaded() {
+        let summary = ProviderErrorSummary::from_error_text(
+            Some("openai"),
+            "Upstream service temporarily unavailable",
+        );
+        assert_eq!(summary.kind, ProviderErrorKind::Overloaded);
+        assert!(summary.retryable, "transient overload must be retryable");
+        assert_eq!(
+            summary.headline(),
+            "Provider error: openai: service unavailable / overloaded"
+        );
     }
 
     #[test]
