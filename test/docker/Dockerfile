@@ -269,6 +269,12 @@ ENV TOOLS_STRATEGY=${TOOLS_STRATEGY} \
     GH_RAW_MODE=${GH_RAW_MODE} \
     GH_RELEASE_MODE=${GH_RELEASE_MODE}
 
+# Optional: a GitHub token lifts the anonymous REST API limit (60 requests/hour
+# per IP) for installers that resolve a release through api.github.com. slb has
+# no fallback and cannot install without one. Pass it as
+#   docker compose build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN
+# It is declared as an ARG, so it stays out of the image environment.
+ARG GITHUB_TOKEN=
 RUN bash /usr/local/share/recur-agent-gates/install-tools.sh
 
 # Gate scripts last: they are what gets edited most often, and this position

@@ -33,6 +33,10 @@ x-common: &common
       UV_DEFAULT_INDEX: ${UV_DEFAULT_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
       UV_PYTHON_INSTALL_MIRROR: ${UV_PYTHON_INSTALL_MIRROR:-https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download}
       NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+      # Lifts the anonymous GitHub REST API limit for installers that resolve a
+      # release through api.github.com (slb has no fallback). Outside the
+      # container: `GITHUB_TOKEN=$(gh auth token) docker compose build`.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # Optional proxy for hosts where raw.githubusercontent.com is blocked
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
@@ -46,6 +50,9 @@ x-common: &common
     FLYWHEEL_BRANCH: ${FLYWHEEL_BRANCH:-main}
     CARGO_BUILD_JOBS: ${CARGO_BUILD_JOBS:-2}
     TMPDIR: /tmp
+    # Runtime copy: the curl/wget shims add a bearer header to api.github.com
+    # calls when this is set, and installers that read GITHUB_TOKEN use it too.
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
   volumes:
     - cargo-registry:/home/${TARGET_USER:-ubuntu}/.cargo/registry
     - cargo-git:/home/${TARGET_USER:-ubuntu}/.cargo/git
