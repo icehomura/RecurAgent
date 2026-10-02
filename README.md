@@ -313,8 +313,7 @@ grammar feature, not adding a tool.
 |---|---|---|
 | [`portable-pty`](https://crates.io/crates/portable-pty) | `bash`, `hub` | PTY allocation, so `isatty`-detecting commands behave normally. `hub` keeps long-lived sessions with on-demand stdin writes, a bounded output ring, and process-tree teardown. |
 | [`crossterm`](https://crates.io/crates/crossterm) | interactive front-end | *(opt-in, `tui` feature)* Low-level terminal control. |
-| [`charmed-bubbletea`](https://crates.io/crates/charmed-bubbletea) / `charmed-lipgloss` / `charmed-bubbles` / `charmed-glamour` | interactive front-end | *(opt-in, `tui` feature)* The Elm-architecture TUI stack and markdown renderer. |
-| [`ftui`](https://crates.io/crates/ftui) / `ftui-extras` | interactive front-end | *(opt-in, `ftui` feature)* The FrankenTUI stack the interactive runtime is being ported to. Coexists with the charmed stack during the migration. |
+| [`ftui`](https://crates.io/crates/ftui) / `ftui-extras` | interactive front-end | *(opt-in, `ftui` feature)* The FrankenTUI stack, the only interactive front-end. |
 | [`arboard`](https://crates.io/crates/arboard) | interactive front-end | *(opt-in, `clipboard` feature)* System clipboard. |
 | [`win32job`](https://crates.io/crates/win32job) / [`winapi-util`](https://crates.io/crates/winapi-util) | Windows process handling | Job objects for reliable child-tree kill, and `GetFileInformationByHandle` for file identity. Both are safe wrappers — this crate forbids `unsafe`, so Win32 access always goes through a safe crate. |
 | [`rustix`](https://crates.io/crates/rustix) / [`sysinfo`](https://crates.io/crates/sysinfo) | process inspection | Filesystem and process primitives; process-tree walking for teardown. |
@@ -691,7 +690,7 @@ Pi runs in four modes, each suited to different workflows:
 | **RPC** | `ra --mode rpc` | Headless JSON protocol over stdin/stdout for IDE integrations |
 | **ACP** | `ra --acp` | JSON-RPC 2.0 Agent Client Protocol over stdin/stdout (e.g. the Zed editor) |
 
-**Interactive mode** provides the full experience: a multi-line text editor with history, scrollable conversation viewport, model selector (`Ctrl+L`), scoped model cycling (`Ctrl+P`/`Ctrl+Shift+P`), session branch navigator (`/tree`), and real-time token/cost tracking. Since v0.4.0 the default interactive stack is the FrankenTUI (`ftui`) runtime; `ra --inline` keeps your shell scrollback by drawing the UI at the bottom of the screen instead of on the alternate screen, and `ra --classic` (aliases `--classic-tui`, `--charmed`, `--bubbletea`) selects the previous charmed_rust stack until it is removed.
+**Interactive mode** provides the full experience: a multi-line text editor with history, scrollable conversation viewport, model selector (`Ctrl+L`), scoped model cycling (`Ctrl+P`/`Ctrl+Shift+P`), session branch navigator (`/tree`), and real-time token/cost tracking. The interactive stack is FrankenTUI (`ftui`) runtime; `ra --inline` keeps your shell scrollback by drawing the UI at the bottom of the screen instead of on the alternate screen.
 
 **Print mode** sends one message, streams the response to stdout, and exits. Useful for shell scripts and one-off queries.
 
@@ -1899,49 +1898,9 @@ These pieces are intentionally conservative: if confidence is weak, Pi holds ste
 
 The default interactive stack is **FrankenTUI** (`src/interactive_ftui.rs`, feature `ftui`, on by default since the 2026-08-25 cutover). It keeps the **Elm Architecture** (Model-Update-View): a driver thread owns an asupersync runtime plus an SDK agent session, agent events arrive through an `AgentEventSubscription`, and `RaFtuiModel` renders header, markdown conversation, status line, growing editor, and footer regions with tail-follow scrolling, per-entry render caching, inline ask cards, and modal overlays. All agent- and tool-originated text is sanitized before it reaches a frame. `ra --inline` draws the UI at the bottom of the terminal and preserves shell scrollback.
 
-The previous stack, built on the `charmed_rust` library family (a Rust port of Go's [Bubble Tea](https://github.com/charmbracelet/bubbletea)), lives in `src/interactive.rs` and is still selectable with `ra --classic` until it is deleted. The diagram below describes that classic stack; the FrankenTUI stack keeps the same agent/UI split and the same `RaMsg` event vocabulary.
+The interactive stack is FrankenTUI; it keeps the same agent/UI split and the same `RaMsg` event vocabulary.
 
-**Component stack (classic `--classic` stack):**
-
-```
-┌────────────────────────────────────────────────────┐
-│                 Terminal (crossterm)                │
-│  Raw mode │ Alt screen │ Keyboard/Mouse events      │
-└──────────────────────┬─────────────────────────────┘
-                       │
-┌──────────────────────▼─────────────────────────────┐
-│             bubbletea Program Loop                  │
-│  Init() → Update(Msg) → View() → render cycle      │
-└──────────────────────┬─────────────────────────────┘
-                       │
-┌──────────────────────▼─────────────────────────────┐
-│                  RaApp (Model)                      │
-│                                                     │
-│  ┌─────────────┐ ┌──────────────┐ ┌─────────────┐  │
-│  │  TextArea    │ │  Viewport    │ │  Spinner     │  │
-│  │  (editor)    │ │  (convo)     │ │  (status)    │  │
-│  └─────────────┘ └──────────────┘ └─────────────┘  │
-│                                                     │
-│  ┌─────────────────────────────────────────────┐    │
-│  │           Overlay Stack                      │    │
-│  │  Model Selector │ Session Picker │ /tree     │    │
-│  │  Settings UI    │ Theme Picker   │ Branches  │    │
-│  │  Capability Prompt (extension UI)            │    │
-│  └─────────────────────────────────────────────┘    │
-└──────────────────────┬─────────────────────────────┘
-                       │
-              async channels (mpsc)
-                       │
-┌──────────────────────▼─────────────────────────────┐
-│             Agent Async Task                        │
-│  Runs on asupersync runtime                         │
-│  Streams provider responses                         │
-│  Executes tools                                     │
-│  Sends RaMsg events back to TUI thread              │
-└────────────────────────────────────────────────────┘
-```
-
-**The async/sync bridge**: The agent runs on the `asupersync` async runtime in a separate thread. It communicates with the bubbletea UI thread through `mpsc` channels. Each streaming event (text delta, tool start, tool update, agent done) becomes a `RaMsg` variant delivered to `RaApp::update()`, keeping the UI responsive during API streaming and tool execution.
+**The async/sync bridge**: The agent runs on the `asupersync` async runtime in the driver thread. It communicates with the UI thread through `mpsc` channels. Each streaming event (text delta, tool start, tool update, agent done) becomes a `RaMsg` variant delivered to the model, keeping the UI responsive during API streaming and tool execution.
 
 **Viewport scrolling**: The conversation viewport tracks whether the user is at the bottom. When new content arrives and the user hasn't scrolled up, the viewport auto-follows the stream tail. Scrolling up disables auto-follow; pressing `End` or typing a new message re-enables it.
 
@@ -3125,7 +3084,7 @@ and published exclusively through Doodlestein Self-Releaser (DSR).
 
 - Tag format: `vX.Y.Z` (pre-releases like `vX.Y.Z-rc.N` are allowed).
 - The tag version **must** match `package.version` in `Cargo.toml`.
-- Publish order for dependencies: `asupersync` → `rich_rust` → `charmed-*` (lipgloss, bubbletea, bubbles, glamour) → `recur_agent`.
+- Publish order for dependencies: `asupersync` → `rich_rust` → `ftui` → `recur_agent`.
 - Cargo registry publication is currently **HOLD** until DSR provides and
   validates a fail-closed crates.io publisher. Neither stable nor pre-release
   tags authorize an ad hoc `cargo publish` fallback.
@@ -3197,7 +3156,7 @@ src/
 ├── session_sqlite.rs       # Default-enabled sqlite-sessions backend support
 ├── compaction.rs           # Context compaction algorithm
 ├── interactive_ftui.rs     # Default FrankenTUI interactive stack (feature `ftui`)
-├── interactive.rs          # Classic charmed_rust TUI app loop/state (`--classic`)
+├── interactive.rs          # Shared interactive surface (RaMsg, status, helpers)
 ├── interactive/            # Bubble Tea-style TUI submodules shared by both stacks
 ├── rpc.rs                  # RPC/stdio mode
 ├── extensions.rs           # Stable extension facade + manager/lifecycle
