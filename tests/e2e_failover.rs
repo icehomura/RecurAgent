@@ -1573,12 +1573,18 @@ fn e2e_path_scope_pins_repo_model_set() {
     )
     .expect("write models.json");
 
-    let settings = format!(
-        r#"{{"enabledModels": ["e2eglobal/global-model"],
-           "modelScopeOverrides": [{{"path": "{}", "enabledModels": ["e2escoped/scoped-model"]}}],
-           "checkForUpdates": false}}"#,
-        repo_a.display()
-    );
+    // Serialize through `serde_json` rather than a raw `format!`: a Windows
+    // path contains backslashes, and interpolating one into a JSON string
+    // literal produced "invalid escape" and made the run fail to start.
+    let settings = serde_json::json!({
+        "enabledModels": ["e2eglobal/global-model"],
+        "modelScopeOverrides": [{
+            "path": repo_a.display().to_string(),
+            "enabledModels": ["e2escoped/scoped-model"],
+        }],
+        "checkForUpdates": false,
+    })
+    .to_string();
     std::fs::write(root.join("settings.json"), settings).expect("write settings.json");
 
     let binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra"));
