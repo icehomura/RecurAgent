@@ -541,6 +541,124 @@ fn first_failover_uses_one_lifecycle_identity_in_memory_and_on_reopen() {
 }
 
 #[test]
+fn a_failover_target_only_in_the_persisted_catalog_is_reachable() {
+    // The fallback names a model the failover options do not carry — the shape
+    // a catalog refresh leaves behind when the chain was built at startup.
+    // Resolution must fall through to the session's live registry, and
+    // `failover-fixture` has no ad-hoc defaults, so before that fallback
+    // existed the walk found nothing and the turn stayed on the failed primary.
+    let dir = tempdir().unwrap();
+    let models_path = dir.path().join("models.json");
+    std::fs::write(
+        &models_path,
+        serde_json::to_string(&serde_json::json!({
+            "providers": {
+                "failover-fixture": {
+                    "baseUrl": spawn_unauthorized_stub(),
+                    "api": "openai-completions",
+                    "apiKey": "test-key",
+                    "models": [{ "id": "catalog-only-model" }]
+                }
+            }
+        }))
+        .expect("serialize catalog"),
+    )
+    .expect("write models.json");
+
+    // The running model needs a credential in the store the reload adopts: in
+    // production `auth.json` holds it, and a turn refuses before streaming when
+    // the running model resolves to no key.
+    let auth_path = dir.path().join("auth.json");
+    let mut auth = AuthStorage::load(auth_path.clone()).expect("auth load");
+    auth.set(
+        "anthropic",
+        crate::auth::AuthCredential::ApiKey {
+            key: "test-key".to_string(),
+        },
+    );
+    auth.save().expect("persist the fixture credential");
+
+    let (handle, calls) = saving_recovery_handle(dir.path());
+    let mut handle = handle.with_retry(Some(crate::failover::RetryPolicy {
+        max_retries: 0,
+        max_failovers_per_turn: 1,
+        base_delay_ms: 0,
+        max_delay_ms: 0,
+    }));
+    handle
+        .session_mut()
+        .reload_model_registry(&auth_path, &models_path)
+        .expect("reload the persisted catalog into the session");
+    // The premise: the session's live registry really offers the row the
+    // failover options omit. Without this the test could pass on an empty
+    // candidate pool for the wrong reason.
+    let available = handle.session().model_registry().expect("registry").get_available();
+    assert!(
+        available.iter().any(|entry| {
+            entry.model.provider == "failover-fixture" && entry.model.id == "catalog-only-model"
+        }),
+        "the reloaded catalog must make the fixture row available"
+    );
+    handle = handle.with_failover(Some(FailoverOptions {
+        chains: HashMap::from([(
+            "default".to_string(),
+            vec!["failover-fixture/catalog-only-model".to_string()],
+        )]),
+        // Deliberately empty: only the session's live registry can answer.
+        available_models: Vec::new(),
+        auth: AuthStorage::empty_at(dir.path().join("auth.json")),
+        cli_api_key: Some("test-key".to_string()),
+        cooldown_secs: 300,
+    }));
+
+    // The exact resolution steps the swap takes, asserted here so a failure
+    // names the step that broke instead of only "no swap happened".
+    let catalog = handle
+        .session()
+        .model_registry()
+        .expect("registry")
+        .get_available();
+    let entry =
+        crate::models::find_model_entry(&catalog, "failover-fixture", "catalog-only-model")
+            .expect("the live catalog resolves the spec");
+    assert!(
+        crate::failover::resolve_chain_spec_preferring(
+            "failover-fixture/catalog-only-model",
+            &[],
+            &catalog,
+        )
+        .is_some(),
+        "chain resolution must fall through to the live catalog"
+    );
+    let swap_auth = AuthStorage::load(auth_path.clone()).expect("auth load");
+    assert!(
+        crate::models::resolve_model_key(Some("test-key"), &swap_auth, &entry).is_some(),
+        "the swap credential gate must pass"
+    );
+    assert!(
+        crate::providers::create_provider(&entry, None).is_ok(),
+        "the resolved entry must build a provider"
+    );
+
+    let (_abort, signal) = AgentSessionHandle::new_abort_handle();
+    let outcome = run_async(handle.prompt_with_abort(
+        "fail over to a catalog-only model",
+        signal,
+        |_| {},
+    ));
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "the primary provider must have been called; turn result: {outcome:?}"
+    );
+    assert!(
+        handle.failover_state.primary().is_some(),
+        "the swap must have recorded the primary it replaced"
+    );
+    assert_eq!(handle.model().1, "catalog-only-model");
+}
+
+#[test]
 fn lenient_primary_restore_cannot_hide_indeterminate_persistence() {
     let dir = tempdir().unwrap();
     let (mut handle, calls) = saving_handle_after_failover(dir.path());
