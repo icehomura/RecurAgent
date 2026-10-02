@@ -11989,12 +11989,13 @@ mod tests {
 
     /// A catalog refresh discovers rows that did not exist when the session
     /// booted. The `/model` picker reads the persisted catalog directly, so
-    /// before the reload the switch path — which resolves against the session's
-    /// startup registry — rejected the very row the picker offered with
-    /// "Unable to switch provider/model to …". The driver's registry-dirty lane
-    /// closes that gap; this pins the reload it performs.
+    /// before the driver adopts the refresh the switch path — which resolves
+    /// against the session's startup registry — rejected the very row the
+    /// picker offered with "Unable to switch provider/model to …", and the
+    /// ctrl+p cycle skipped it. This pins both halves of the adoption, plus the
+    /// rule that a user-scoped cycle is left alone.
     #[test]
-    fn a_catalog_row_absent_at_boot_is_switchable_after_the_registry_reload() {
+    fn a_catalog_refresh_adopts_new_rows_in_the_registry_and_the_cycle() {
         const REFRESH_FIXTURE_MODEL: &str = "ftui-refresh-fixture-model";
         let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
             .build()
@@ -12062,16 +12063,57 @@ mod tests {
         .expect("write models.json");
 
         let (agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
-        reload_session_model_registry(&mut handle, &agent_tx, &auth_path, &models_path);
+        let fixture = format!("openai/{REFRESH_FIXTURE_MODEL}");
+        let mut available = vec![String::from("openai/gpt-4o")];
+        let mut cycle = available.clone();
+        adopt_refreshed_catalog(
+            &mut handle,
+            &agent_tx,
+            vec![fixture.clone()],
+            &mut available,
+            &mut cycle,
+            false,
+            &auth_path,
+            &models_path,
+        );
         assert!(
             agent_rx.try_recv().is_err(),
             "a clean reload must not report an error"
+        );
+        assert_eq!(
+            available,
+            vec![fixture.clone()],
+            "the driver-side list must follow the refreshed membership"
+        );
+        assert_eq!(
+            cycle,
+            vec![fixture.clone()],
+            "an unscoped ctrl+p cycle must follow the refreshed membership"
         );
 
         let accepted = runtime.block_on(handle.set_model("openai", REFRESH_FIXTURE_MODEL));
         assert!(
             accepted.is_ok(),
             "the reloaded registry must accept the refreshed row: {accepted:?}"
+        );
+
+        // A cycle the user scoped is their choice: a refresh must not rewrite
+        // it, even though the available list still moves.
+        let mut scoped = vec![String::from("openai/gpt-4o")];
+        adopt_refreshed_catalog(
+            &mut handle,
+            &agent_tx,
+            vec![fixture],
+            &mut available,
+            &mut scoped,
+            true,
+            &auth_path,
+            &models_path,
+        );
+        assert_eq!(
+            scoped,
+            vec![String::from("openai/gpt-4o")],
+            "a scoped ctrl+p cycle must survive a catalog refresh"
         );
     }
 
