@@ -45,7 +45,6 @@ pub fn list_sessions_for_cwd() -> Vec<SessionMeta> {
     list_sessions_for_project(&cwd, None)
 }
 
-
 pub fn list_sessions_for_project(cwd: &Path, override_dir: Option<&Path>) -> Vec<SessionMeta> {
     let base_dir = override_dir.map_or_else(Config::sessions_dir, PathBuf::from);
     let project_session_dir = base_dir.join(encode_cwd(cwd));
@@ -435,4 +434,3 @@ fn try_trash_with_cmd(path: &Path, trash_cmd: &str) -> bool {
         }
     }
 }
-

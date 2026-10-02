@@ -243,7 +243,6 @@ impl Theme {
         luma >= 128.0
     }
 
-
     /// Discover available theme JSON files.
     #[must_use]
     pub fn discover_themes(cwd: &Path) -> Vec<PathBuf> {
@@ -1150,7 +1149,6 @@ mod tests {
             "unexpected error: {message}"
         );
     }
-
 
     mod proptest_theme {
         use super::*;

@@ -1256,4 +1256,3 @@ fn expand_home_path(raw: &str) -> std::path::PathBuf {
         |rest| std::path::PathBuf::from(home).join(rest),
     )
 }
-

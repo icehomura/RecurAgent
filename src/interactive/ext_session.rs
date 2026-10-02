@@ -1884,7 +1884,6 @@ mod tests {
         });
     }
 
-
     #[test]
     #[allow(clippy::too_many_lines)]
     fn real_js_timer_and_promise_mutations_are_rejected_across_session_replacement() {

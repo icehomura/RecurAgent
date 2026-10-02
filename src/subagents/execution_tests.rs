@@ -80,7 +80,10 @@ fn dag_resolves_an_upstream_node_into_a_dependent_task() {
     // child is spawned, so the recorded task is the resolved one.
     let second = results[1]["task"].as_str().unwrap();
     assert!(second.contains("answer"), "template unresolved: {second:?}");
-    assert!(!second.contains("{{node"), "token left verbatim: {second:?}");
+    assert!(
+        !second.contains("{{node"),
+        "token left verbatim: {second:?}"
+    );
     for result in results {
         assert_eq!(result["status"], "completed");
     }

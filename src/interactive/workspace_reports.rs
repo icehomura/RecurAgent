@@ -49,7 +49,17 @@ pub fn rules(cwd: &Path, args: &str) -> Report {
                 } else {
                     format!("⏸️ {}", t!("workspace_rules_disabled"))
                 };
-                let _ = write!(text, "{}", t!("workspace_rules_row", name = r.name, status = status, pattern = r.pattern, body = r.body));
+                let _ = write!(
+                    text,
+                    "{}",
+                    t!(
+                        "workspace_rules_row",
+                        name = r.name,
+                        status = status,
+                        pattern = r.pattern,
+                        body = r.body
+                    )
+                );
             }
         }
         let count = rules.len();
@@ -72,7 +82,11 @@ pub fn rules(cwd: &Path, args: &str) -> Report {
             .is_none_or(|r| r.enabled);
         return Report::status(match store.toggle_rule(id, !current) {
             Ok(true) => {
-                let st = if current { t!("workspace_rules_disabled") } else { t!("workspace_rules_enabled") };
+                let st = if current {
+                    t!("workspace_rules_disabled")
+                } else {
+                    t!("workspace_rules_enabled")
+                };
                 t!("workspace_rules_toggled", id = id, state = st).to_string()
             }
             _ => t!("workspace_rules_not_found", id = id).to_string(),
@@ -92,7 +106,16 @@ pub fn omfg(cwd: &Path, args: &str) -> Report {
             let candidate = crate::stream_rules::GrievancesLedger::forge_candidate_rule(&g);
             let mut store = crate::stream_rules::StreamRuleStore::load_for_project(cwd);
             let _ = store.add_rule(candidate.clone(), false);
-            let card = t!("workspace_omfg_card", gid = g.id, complaint = g.complaint, rid = candidate.id, name = candidate.name, pattern = candidate.pattern, body = candidate.body).to_string();
+            let card = t!(
+                "workspace_omfg_card",
+                gid = g.id,
+                complaint = g.complaint,
+                rid = candidate.id,
+                name = candidate.name,
+                pattern = candidate.pattern,
+                body = candidate.body
+            )
+            .to_string();
             Report::card(
                 card,
                 t!("workspace_omfg_forged", id = candidate.id).to_string(),
@@ -176,7 +199,16 @@ pub fn commit(cwd: &Path, args: &str) -> Report {
     let mut card = t!("workspace_commit_card_title", count = plan.units.len()).to_string();
     for (idx, unit) in plan.units.iter().enumerate() {
         let msg = unit.formatted_message(None);
-        let _ = write!(card, "{}", t!("workspace_commit_row", index = idx + 1, message = msg, scope = unit.scope));
+        let _ = write!(
+            card,
+            "{}",
+            t!(
+                "workspace_commit_row",
+                index = idx + 1,
+                message = msg,
+                scope = unit.scope
+            )
+        );
         for f in &unit.files {
             let _ = writeln!(card, "   - `{f}`");
         }
@@ -187,7 +219,15 @@ pub fn commit(cwd: &Path, args: &str) -> Report {
         match crate::commit_split::CommitExecutor::execute(cwd, &plan, &options) {
             Ok(results) => {
                 let successful = results.iter().filter(|r| r.success).count();
-                let _ = write!(card, "{}", t!("workspace_commit_done", successful = successful, total = plan.units.len()));
+                let _ = write!(
+                    card,
+                    "{}",
+                    t!(
+                        "workspace_commit_done",
+                        successful = successful,
+                        total = plan.units.len()
+                    )
+                );
                 for res in results {
                     if let Some(ref sha) = res.commit_sha {
                         let _ = writeln!(card, "- `[{sha}]` {}", res.message);
@@ -200,7 +240,10 @@ pub fn commit(cwd: &Path, args: &str) -> Report {
         }
     }
     let units = plan.units.len();
-    Report::card(card, t!("workspace_commit_plan_status", units = units).to_string())
+    Report::card(
+        card,
+        t!("workspace_commit_plan_status", units = units).to_string(),
+    )
 }
 
 /// `/review [target]`: heuristic code review of the working tree (or target).
@@ -287,21 +330,41 @@ fn memory_in(store: &crate::memory::MemoryStore, args: &str) -> Report {
         if memories.is_empty() {
             return Report::status(t!("workspace_memory_none", title = title).to_string());
         }
-        let mut card = t!("workspace_memory_card_title", title = title, count = memories.len()).to_string();
+        let mut card = t!(
+            "workspace_memory_card_title",
+            title = title,
+            count = memories.len()
+        )
+        .to_string();
         for m in &memories {
-            let _ = write!(card, "{}", t!("workspace_memory_row", id = m.id, kind = m.kind, content = m.content));
+            let _ = write!(
+                card,
+                "{}",
+                t!(
+                    "workspace_memory_row",
+                    id = m.id,
+                    kind = m.kind,
+                    content = m.content
+                )
+            );
             if !m.tags.is_empty() {
                 let _ = write!(card, " _({})_", m.tags.join(", "));
             }
             card.push('\n');
         }
-        Report::card(card, t!("workspace_memory_count_status", title = title, count = memories.len()).to_string())
+        Report::card(
+            card,
+            t!(
+                "workspace_memory_count_status",
+                title = title,
+                count = memories.len()
+            )
+            .to_string(),
+        )
     };
     match verb.to_ascii_lowercase().as_str() {
         "" | "view" => match store.mental_model() {
-            Ok(model) if model.is_empty() => {
-                Report::status(t!("workspace_memory_empty"))
-            }
+            Ok(model) if model.is_empty() => Report::status(t!("workspace_memory_empty")),
             Ok(model) => Report::card(
                 t!("workspace_memory_view_card", model = model).to_string(),
                 t!("workspace_memory_view_status"),
@@ -313,14 +376,19 @@ fn memory_in(store: &crate::memory::MemoryStore, args: &str) -> Report {
             Err(e) => Report::status(t!("workspace_memory_err_list", error = e).to_string()),
         },
         "search" if !rest.is_empty() => match store.recall(rest, Some(10)) {
-            Ok(memories) => listing(&t!("workspace_memory_search_title", query = rest).to_string(), memories),
+            Ok(memories) => listing(
+                &t!("workspace_memory_search_title", query = rest).to_string(),
+                memories,
+            ),
             Err(e) => Report::status(t!("workspace_memory_err_search", error = e).to_string()),
         },
         "forget" => rest.trim_start_matches('#').parse::<i64>().map_or_else(
             |_| Report::status(memory_usage()),
             |id| match store.edit(id, crate::memory::MemoryEditOp::Forget, None) {
                 Ok(()) => Report::status(t!("workspace_memory_forgot", id = id).to_string()),
-                Err(e) => Report::status(t!("workspace_memory_err_forget", id = id, error = e).to_string()),
+                Err(e) => Report::status(
+                    t!("workspace_memory_err_forget", id = id, error = e).to_string(),
+                ),
             },
         ),
         _ => Report::status(memory_usage()),
@@ -339,25 +407,53 @@ pub fn security(cwd: &Path, args: &str) -> Report {
     };
     let dispositions = match crate::security_scan::load_dispositions(cwd) {
         Ok(dispositions) => dispositions,
-        Err(e) => return Report::status(t!("workspace_security_err_dispositions", error = e).to_string()),
+        Err(e) => {
+            return Report::status(
+                t!("workspace_security_err_dispositions", error = e).to_string(),
+            );
+        }
     };
     let (active, suppressed) =
         crate::security_scan::partition_by_disposition(findings, &dispositions);
     if active.is_empty() {
-        return Report::status(t!("workspace_security_none", suppressed = suppressed.len()).to_string());
+        return Report::status(
+            t!("workspace_security_none", suppressed = suppressed.len()).to_string(),
+        );
     }
     let mut card = t!("workspace_security_card_title", count = active.len()).to_string();
     if !suppressed.is_empty() {
-        let _ = write!(card, "{}", t!("workspace_security_suppressed", count = suppressed.len()));
+        let _ = write!(
+            card,
+            "{}",
+            t!("workspace_security_suppressed", count = suppressed.len())
+        );
     }
     card.push_str("\n\n");
     for finding in active.iter().take(SHOWN) {
-        let _ = writeln!(card, "{}", t!("workspace_security_row", severity = finding.severity, path = finding.path, line = finding.line, message = finding.message, rule = finding.rule_id));
+        let _ = writeln!(
+            card,
+            "{}",
+            t!(
+                "workspace_security_row",
+                severity = finding.severity,
+                path = finding.path,
+                line = finding.line,
+                message = finding.message,
+                rule = finding.rule_id
+            )
+        );
     }
     if active.len() > SHOWN {
-        let _ = writeln!(card, "{}", t!("workspace_security_more", count = active.len() - SHOWN));
+        let _ = writeln!(
+            card,
+            "{}",
+            t!("workspace_security_more", count = active.len() - SHOWN)
+        );
     }
-    Report::card(card, t!("workspace_security_count", count = active.len()).to_string())
+    Report::card(
+        card,
+        t!("workspace_security_count", count = active.len()).to_string(),
+    )
 }
 
 /// `/plugins`: the packages (extensions, skills, prompts, themes) installed
@@ -378,12 +474,21 @@ pub fn plugins(manager: &crate::package_manager::PackageManager) -> Report {
             PackageScope::Project => "project",
             PackageScope::Temporary => "temporary",
         };
-        let _ = writeln!(card, "{}", t!("workspace_plugins_row", source = package.source, scope = scope));
+        let _ = writeln!(
+            card,
+            "{}",
+            t!(
+                "workspace_plugins_row",
+                source = package.source,
+                scope = scope
+            )
+        );
     }
-    card.push_str(
-        &t!("workspace_plugins_hint"),
-    );
-    Report::card(card, t!("workspace_plugins_count", count = packages.len()).to_string())
+    card.push_str(&t!("workspace_plugins_hint"));
+    Report::card(
+        card,
+        t!("workspace_plugins_count", count = packages.len()).to_string(),
+    )
 }
 
 /// `/hub [id]`: this session's subagent children (bd-cv653.5.3), or one
@@ -397,8 +502,13 @@ pub fn hub(args: &str) -> Report {
         return format_roster(&registry.roster());
     }
     match registry.transcript_page(id) {
-        Ok(page) if page.trim().is_empty() => Report::status(t!("workspace_hub_no_transcript", id = id).to_string()),
-        Ok(page) => Report::card(t!("workspace_hub_transcript_card", id = id, page = page).to_string(), id),
+        Ok(page) if page.trim().is_empty() => {
+            Report::status(t!("workspace_hub_no_transcript", id = id).to_string())
+        }
+        Ok(page) => Report::card(
+            t!("workspace_hub_transcript_card", id = id, page = page).to_string(),
+            id,
+        ),
         Err(e) => Report::status(e.to_string()),
     }
 }
@@ -409,13 +519,28 @@ fn format_roster(roster: &[crate::agent_hub::ChildEntry]) -> Report {
     }
     let mut card = t!("workspace_hub_card_title", count = roster.len()).to_string();
     for child in roster {
-        let _ = writeln!(card, "{}", t!("workspace_hub_row", id = child.id, kind = child.kind.as_str(), status = child.status.as_str(), task = child.task));
+        let _ = writeln!(
+            card,
+            "{}",
+            t!(
+                "workspace_hub_row",
+                id = child.id,
+                kind = child.kind.as_str(),
+                status = child.status.as_str(),
+                task = child.task
+            )
+        );
     }
     card.push_str(&t!("workspace_hub_hint"));
     let running = roster.iter().filter(|c| !c.status.settled()).count();
     Report::card(
         card,
-        t!("workspace_hub_count", count = roster.len(), running = running).to_string(),
+        t!(
+            "workspace_hub_count",
+            count = roster.len(),
+            running = running
+        )
+        .to_string(),
     )
 }
 
@@ -451,9 +576,7 @@ fn advisor_with(
     Report::status(match (enable, configured) {
         (false, _) => t!("workspace_advisor_disabled").to_string(),
         (true, Some(_)) => t!("workspace_advisor_enabled").to_string(),
-        (true, None) => {
-            t!("workspace_advisor_enabled_unassigned").to_string()
-        }
+        (true, None) => t!("workspace_advisor_enabled_unassigned").to_string(),
     })
 }
 
@@ -477,21 +600,25 @@ pub fn approval(
                     .join(", ")
             };
             return (
-                Report::status(t!("workspace_approval_status", mode = state.mode().as_str(), dual = dual).to_string()),
+                Report::status(
+                    t!(
+                        "workspace_approval_status",
+                        mode = state.mode().as_str(),
+                        dual = dual
+                    )
+                    .to_string(),
+                ),
                 None,
             );
         }
-        "always-ask" | "always_ask" | "always" | "ask" => {
-            (ApprovalMode::AlwaysAsk, t!("workspace_approval_set_always_ask"))
+        "always-ask" | "always_ask" | "always" | "ask" => (
+            ApprovalMode::AlwaysAsk,
+            t!("workspace_approval_set_always_ask"),
+        ),
+        "write" | "files" => (ApprovalMode::Write, t!("workspace_approval_set_write")),
+        "yolo" | "auto-approve" | "auto" | "all" => {
+            (ApprovalMode::Yolo, t!("workspace_approval_set_yolo"))
         }
-        "write" | "files" => (
-            ApprovalMode::Write,
-            t!("workspace_approval_set_write"),
-        ),
-        "yolo" | "auto-approve" | "auto" | "all" => (
-            ApprovalMode::Yolo,
-            t!("workspace_approval_set_yolo"),
-        ),
         other => {
             return (
                 Report::status(t!("workspace_approval_unknown", other = other).to_string()),

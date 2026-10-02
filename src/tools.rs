@@ -230,11 +230,7 @@ pub trait Tool: Send + Sync {
     /// the session actually has (`lsp`, `debug`, `sessions`, memory, `jobs`,
     /// `hub`, …). Default no-op; tools that need it store the `Weak` behind
     /// interior mutability so the hook can take `&self`.
-    fn bind_shared_registry(
-        &self,
-        _shared: &std::sync::Weak<SharedToolRegistryInner>,
-    ) {
-    }
+    fn bind_shared_registry(&self, _shared: &std::sync::Weak<SharedToolRegistryInner>) {}
 
     /// Where the tool comes from. Extension-registered tools answer
     /// [`ToolOrigin::Extension`] so `setActiveTools` can shelve and restore

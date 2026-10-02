@@ -13195,10 +13195,11 @@ async fn run_bash_rpc(
     command: &str,
     mut abort_rx: oneshot::Receiver<()>,
 ) -> Result<BashRpcResult> {
-    let shell = shell_path
-        .map_or_else(crate::tools::default_bash_shell, |path| {
-            Ok(path.to_string())
-        })?;
+    let shell =
+        shell_path.map_or_else(
+            crate::tools::default_bash_shell,
+            |path| Ok(path.to_string()),
+        )?;
 
     let command = command_prefix.filter(|p| !p.trim().is_empty()).map_or_else(
         || command.to_string(),

@@ -131,8 +131,8 @@ pub async fn start_login(
         None
     };
     if let Some(device) = device {
-        let device = device
-            .map_err(|err| t!("login_flow_err_oauth_failed", error = err).to_string())?;
+        let device =
+            device.map_err(|err| t!("login_flow_err_oauth_failed", error = err).to_string())?;
         let verification_uri = device
             .verification_uri_complete
             .unwrap_or(device.verification_uri);
@@ -185,8 +185,11 @@ pub async fn start_login(
             let config =
                 extension_oauth_config_for_provider(available_models, &bindings, &provider)
                     .ok_or_else(|| {
-                        t!("login_flow_err_provider_unsupported", provider = provider.as_str())
-                            .to_string()
+                        t!(
+                            "login_flow_err_provider_unsupported",
+                            provider = provider.as_str()
+                        )
+                        .to_string()
                     })?;
             (
                 crate::auth::start_extension_oauth(&provider, &config),
@@ -308,8 +311,11 @@ pub(super) async fn obtain_credential(
                         .await
                     }
                     None => Err(Error::auth(
-                        t!("login_flow_err_oauth_provider_unsupported", provider = provider)
-                            .to_string(),
+                        t!(
+                            "login_flow_err_oauth_provider_unsupported",
+                            provider = provider
+                        )
+                        .to_string(),
                     )),
                 },
             };
@@ -331,8 +337,11 @@ pub(super) async fn obtain_credential(
                 .await
             } else {
                 DeviceFlowPollResult::Error(
-                    t!("login_flow_err_device_polling_unsupported", provider = provider)
-                        .to_string(),
+                    t!(
+                        "login_flow_err_device_polling_unsupported",
+                        provider = provider
+                    )
+                    .to_string(),
                 )
             };
             match poll {

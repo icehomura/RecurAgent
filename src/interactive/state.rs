@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
-
 use crate::agent::{QueueMode, QueuedAgentMessage};
 use crate::autocomplete::{
     AutocompleteCatalog, AutocompleteItem, AutocompleteProvider, AutocompleteResponse,
@@ -1034,7 +1033,6 @@ impl InjectedMessageQueue {
         self.steering.len().saturating_add(self.follow_up.len())
     }
 }
-
 
 /// Progress metrics emitted by long-running tools (e.g. bash).
 #[derive(Debug, Clone)]

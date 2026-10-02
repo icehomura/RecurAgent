@@ -41,9 +41,9 @@ pub mod openai_responses;
 pub mod vertex;
 
 pub use model_fetch::{
-    CatalogRefreshOutcome, DISABLE_CACHE_ENV, MODEL_CACHE_TTL, ModelCatalogSource, ProviderModelCatalog,
-    ProviderModelCatalogFetchPlan, fetch_provider_model_catalog, fetch_provider_models,
-    persist_provider_model_catalog, prepare_provider_model_catalog_fetch,
+    CatalogRefreshOutcome, DISABLE_CACHE_ENV, MODEL_CACHE_TTL, ModelCatalogSource,
+    ProviderModelCatalog, ProviderModelCatalogFetchPlan, fetch_provider_model_catalog,
+    fetch_provider_models, persist_provider_model_catalog, prepare_provider_model_catalog_fetch,
     refresh_credentialed_model_catalogs, refresh_provider_model_catalog, refresh_provider_models,
     static_registry_models,
 };

@@ -89,7 +89,9 @@ pub fn normalize_locale(requested: &str) -> Option<&'static str> {
 /// a caller distinguish "asked for `zh-TW`, got `en`" from "asked for `en`" —
 /// an unshipped request is worth reporting rather than swallowing.
 pub fn init(requested: Option<&str>) -> &'static str {
-    let resolved = requested.and_then(normalize_locale).unwrap_or(DEFAULT_LOCALE);
+    let resolved = requested
+        .and_then(normalize_locale)
+        .unwrap_or(DEFAULT_LOCALE);
     rust_i18n::set_locale(resolved);
     resolved
 }
@@ -133,7 +135,15 @@ mod tests {
     #[test]
     fn recognizes_simplified_chinese_spellings() {
         for value in [
-            "zh", "ZH", "zh-CN", "zh-cn", "zh-Hans", "zh-SG", "Chinese", "中文", "简体中文",
+            "zh",
+            "ZH",
+            "zh-CN",
+            "zh-cn",
+            "zh-Hans",
+            "zh-SG",
+            "Chinese",
+            "中文",
+            "简体中文",
         ] {
             assert_eq!(
                 normalize_locale(value),
@@ -195,8 +205,16 @@ mod tests {
     #[test]
     fn lookup_is_per_locale_and_falls_back_to_the_key_when_absent() {
         // Both locales resolve to *something* for a real key...
-        let en = rust_i18n::t!("login_flow_logout_absent", locale = "en", provider = "openai");
-        let zh = rust_i18n::t!("login_flow_logout_absent", locale = "zh-CN", provider = "openai");
+        let en = rust_i18n::t!(
+            "login_flow_logout_absent",
+            locale = "en",
+            provider = "openai"
+        );
+        let zh = rust_i18n::t!(
+            "login_flow_logout_absent",
+            locale = "zh-CN",
+            provider = "openai"
+        );
         assert!(en.contains("openai"), "en: {en}");
         assert!(zh.contains("openai"), "zh: {zh}");
         assert_ne!(en.to_string(), zh.to_string(), "en and zh must differ");
@@ -245,7 +263,10 @@ mod tests {
         // the confirmation silently stops saying how much was copied.
         for locale in SUPPORTED {
             let rendered = rust_i18n::t!("interactive_copied_chars", locale = locale, count = 7);
-            assert!(rendered.contains('7'), "{locale}: count dropped from {rendered}");
+            assert!(
+                rendered.contains('7'),
+                "{locale}: count dropped from {rendered}"
+            );
         }
     }
 

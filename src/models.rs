@@ -1188,9 +1188,9 @@ fn legacy_generated_models_cache_path() -> Option<PathBuf> {
     // would silently omit a newly added provider catalog.
     let overlays = crate::embedded_assets::model_catalog_overlays_json_crc32c();
     dirs::cache_dir().map(|dir| {
-        dir.join("pi")
-            .join("models-cache")
-            .join(format!("legacy-generated-models-{checksum:08x}-{overlays:08x}.json"))
+        dir.join("pi").join("models-cache").join(format!(
+            "legacy-generated-models-{checksum:08x}-{overlays:08x}.json"
+        ))
     })
 }
 

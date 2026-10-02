@@ -3547,10 +3547,9 @@ impl RaFtuiModel {
             Some(text) if !text.is_empty() => {
                 styled.push(ftui::text::Line::from_spans(Vec::new()));
                 for line in text.split('\n') {
-                    styled.push(ftui::text::Line::from_spans(vec![ftui::text::Span::styled(
-                        line.to_string(),
-                        ftui::Style::new(),
-                    )]));
+                    styled.push(ftui::text::Line::from_spans(vec![
+                        ftui::text::Span::styled(line.to_string(), ftui::Style::new()),
+                    ]));
                 }
                 format!("{tree_text}\n\n{text}")
             }
@@ -3770,9 +3769,8 @@ impl RaFtuiModel {
             grapheme += 1;
             column += glyph_width;
         }
-        self.input.set_cursor_position(ftui::text::CursorPosition::new(
-            local_row, grapheme, column,
-        ));
+        self.input
+            .set_cursor_position(ftui::text::CursorPosition::new(local_row, grapheme, column));
         true
     }
 
@@ -4616,11 +4614,19 @@ impl RaFtuiModel {
             self.scroll_from_tail = 0;
             return true;
         }
-        if canon == "/model-update" || canon == "/update-models"
-            || canon.starts_with("/model-update ") || canon.starts_with("/update-models ")
+        if canon == "/model-update"
+            || canon == "/update-models"
+            || canon.starts_with("/model-update ")
+            || canon.starts_with("/update-models ")
         {
-            let rest = clean.split_once(char::is_whitespace).map_or("", |(_, rest)| rest).trim();
-            self.push_entry(EntryRole::System, String::from("Refreshing model catalogs ..."));
+            let rest = clean
+                .split_once(char::is_whitespace)
+                .map_or("", |(_, rest)| rest)
+                .trim();
+            self.push_entry(
+                EntryRole::System,
+                String::from("Refreshing model catalogs ..."),
+            );
             self.send_command(UiCommand::ModelUpdate {
                 provider: (!rest.is_empty()).then(|| rest.to_string()),
             });
@@ -7846,9 +7852,7 @@ const EXT_COMMAND_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
 /// after `has_command` has already said no.
 fn unrouted_command_message(name: &str, extensions_enabled: bool) -> String {
     if crate::interactive::SlashCommand::parse(&format!("/{name}")).is_some() {
-        return format!(
-            "/{name} is a RecurAgent command that this stack does not implement yet"
-        );
+        return format!("/{name} is a RecurAgent command that this stack does not implement yet");
     }
     if extensions_enabled {
         format!("Unknown command: /{name} (try /help)")
@@ -14212,10 +14216,7 @@ mod tests {
         );
         assert_eq!(model.transcript.len(), 1);
         let detail = model.transcript[0].detail.clone().unwrap_or_default();
-        assert!(
-            detail.contains("[✓] 查询"),
-            "state not applied: {detail:?}"
-        );
+        assert!(detail.contains("[✓] 查询"), "state not applied: {detail:?}");
 
         // node_output no longer draws a preview box (the centered layout keeps
         // nodes single-line); it must at least not disturb the card.

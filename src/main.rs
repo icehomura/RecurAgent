@@ -11226,8 +11226,6 @@ mod tests {
         assert!(provider_choice_from_token("").is_none());
     }
 
-
-
     #[test]
     #[allow(clippy::too_many_lines)]
     fn persist_package_toggles_writes_filters_per_scope() {

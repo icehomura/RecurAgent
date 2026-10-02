@@ -50,10 +50,6 @@ mod tool_summary;
 mod tree;
 pub(crate) mod workspace_reports;
 
-#[cfg(feature = "ftui")]
-pub(crate) use self::tool_summary::tool_invocation_summary;
-use self::tool_summary::build_user_message;
-pub(crate) use self::tool_summary::extension_commands_for_catalog;
 /// Shared with the ftui stack so `/copy` behaves and reports identically on
 /// both; see the function's own note.
 pub(crate) use self::commands::{COPY_OK_MESSAGE, copy_text_to_clipboard};
@@ -61,6 +57,10 @@ pub use self::commands::{
     SlashCommand, model_entry_matches, parse_scoped_model_patterns, resolve_scoped_model_entries,
     strip_thinking_level_suffix,
 };
+use self::tool_summary::build_user_message;
+pub(crate) use self::tool_summary::extension_commands_for_catalog;
+#[cfg(feature = "ftui")]
+pub(crate) use self::tool_summary::tool_invocation_summary;
 // Session→conversation snapshot; re-exported for the ftui migration stack
 // (bd-cv653.9.1) to rebuild its transcript after /resume.
 pub use self::conversation::conversation_from_session;
@@ -177,10 +177,7 @@ pub enum RaMsg {
     /// A model catalog refresh finished (`/model-update` or the startup
     /// background refresh). `models` is the new `provider/id` list; `status`
     /// is the human-readable summary.
-    ModelCatalogRefreshed {
-        models: Vec<String>,
-        status: String,
-    },
+    ModelCatalogRefreshed { models: Vec<String>, status: String },
     /// Text delta from assistant.
     TextDelta(String),
     /// Thinking delta from assistant.
@@ -569,4 +566,3 @@ fn resolve_git_head_path(dot_git: &Path) -> Option<PathBuf> {
 
     None
 }
-
