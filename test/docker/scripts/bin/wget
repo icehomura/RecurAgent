@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
-# wget shim: same release-asset-only github.com rewrite as the curl shim.
+# wget shim: same release-asset-only github.com rewrite and api.github.com token
+# injection as the curl shim. See scripts/bin/curl for the reasoning.
 set -uo pipefail
 
 REAL_WGET="${REAL_WGET:-/usr/bin/wget}"
 mode="${GH_RELEASE_MODE:-ghproxy}"
-
-if [[ "$mode" != "ghproxy" ]]; then
-  exec "$REAL_WGET" "$@"
-fi
+token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 args=()
+want_auth=0
+saw_auth=0
 for a in "$@"; do
   case "$a" in
     https://github.com/*/releases/download/*) args+=("https://gh-proxy.com/$a") ;;
-    *)                                        args+=("$a") ;;
+    https://api.github.com/*)                args+=("$a"); want_auth=1 ;;
+    *)                                       args+=("$a") ;;
   esac
+  [[ "${a,,}" == *authorization* ]] && saw_auth=1
 done
+
+if [[ -n "$token" && "$want_auth" == 1 && "$saw_auth" == 0 ]]; then
+  args+=("--header=Authorization: Bearer ${token}")
+fi
+
+if [[ "$mode" != "ghproxy" ]]; then
+  exec "$REAL_WGET" "${args[@]}"
+fi
 exec "$REAL_WGET" "${args[@]}"

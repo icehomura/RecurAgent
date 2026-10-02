@@ -1,32 +1,56 @@
 #!/usr/bin/env bash
-# curl shim: route GitHub *release asset* downloads through a release proxy.
+# curl shim: route GitHub *release asset* downloads through a release proxy and
+# authenticate GitHub API calls when a token is available.
 #
-# On networks where GitHub release assets (objects.githubusercontent.com) are
-# throttled to tens of KB/s, `https://gh-proxy.com/https://github.com/...`
-# streams the same asset an order of magnitude faster.
+# Release assets
+#   On networks where GitHub release assets (objects.githubusercontent.com) are
+#   throttled to tens of KB/s, `https://gh-proxy.com/https://github.com/...`
+#   streams the same asset an order of magnitude faster.
 #
-# ONLY `/releases/download/` URLs are rewritten. Everything else under
-# github.com must pass through untouched: gh-proxy answers 403 for the
-# `/releases/latest` HTML page, and installers resolve their version by
-# following that redirect (`curl -o /dev/null -w '%{url_effective}'`). Rewriting
-# it made every such installer conclude "no release version found" and build
-# from source instead of downloading the prebuilt binary.
+#   ONLY `/releases/download/` URLs are rewritten. Everything else under
+#   github.com must pass through untouched: gh-proxy answers 403 for the
+#   `/releases/latest` HTML page, and installers resolve their version by
+#   following that redirect (`curl -o /dev/null -w '%{url_effective}'`). Rewriting
+#   it made every such installer conclude "no release version found" and build
+#   from source instead of downloading the prebuilt binary.
+#
+# api.github.com
+#   Anonymous REST calls are limited to 60/hour per IP, and a shared egress IP
+#   burns that in minutes ("API rate limit exceeded for <ip>", HTTP 403). Some
+#   installers resolve their release with a bare `curl api.github.com/...` and
+#   have no fallback, so they cannot be fixed upstream. When GITHUB_TOKEN or
+#   GH_TOKEN is set, an Authorization header is added for those calls; the
+#   caller's own header, if any, wins.
 #
 # Controlled by GH_RELEASE_MODE=ghproxy|direct (see install-tools.sh).
 set -uo pipefail
 
 REAL_CURL="${REAL_CURL:-/usr/bin/curl}"
 mode="${GH_RELEASE_MODE:-ghproxy}"
-
-if [[ "$mode" != "ghproxy" ]]; then
-  exec "$REAL_CURL" "$@"
-fi
+token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 args=()
+want_auth=0
+saw_auth=0
 for a in "$@"; do
   case "$a" in
     https://github.com/*/releases/download/*) args+=("https://gh-proxy.com/$a") ;;
-    *)                                        args+=("$a") ;;
+    https://api.github.com/*)                args+=("$a"); want_auth=1 ;;
+    *)                                       args+=("$a") ;;
   esac
+  [[ "${a,,}" == *authorization* ]] && saw_auth=1
 done
+
+if [[ "$mode" != "ghproxy" ]]; then
+  # Still honour the token path in direct mode.
+  if [[ -n "$token" && "$want_auth" == 1 && "$saw_auth" == 0 ]]; then
+    exec "$REAL_CURL" "${args[@]}" -H "Authorization: Bearer ${token}"
+  fi
+  exec "$REAL_CURL" "${args[@]}"
+fi
+
+if [[ -n "$token" && "$want_auth" == 1 && "$saw_auth" == 0 ]]; then
+  args+=(-H "Authorization: Bearer ${token}")
+fi
+
 exec "$REAL_CURL" "${args[@]}"
