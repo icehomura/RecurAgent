@@ -6763,6 +6763,7 @@ fn tool_output_preview(result: &crate::tools::ToolOutput) -> Option<String> {
 /// refresh so both report the same status format.
 fn model_catalog_refresh_message(
     outcomes: &[crate::providers::CatalogRefreshOutcome],
+    extensions: Option<&crate::extensions::ExtensionManager>,
 ) -> (Vec<String>, String) {
     let models = crate::auth::AuthStorage::load(crate::config::Config::auth_path())
         .ok()
@@ -6770,7 +6771,21 @@ fn model_catalog_refresh_message(
             let models_path = Some(crate::models::default_models_path(
                 &crate::config::Config::global_dir(),
             ));
-            crate::models::ModelRegistry::load_for_listing(&auth, models_path)
+            let mut registry = crate::models::ModelRegistry::load_for_listing(&auth, models_path);
+            // Extension-provided rows exist only in the runtime, so a listing
+            // straight off disk would drop every extension model from the
+            // picker on the first refresh — while the switch registry keeps
+            // them. The listing must carry the same membership.
+            if let Some(manager) = extensions
+                && let Err(err) = merge_runtime_extension_models(&mut registry, manager)
+            {
+                tracing::warn!(
+                    event = "ftui.catalog_refresh.extension_merge_failed",
+                    error = %err,
+                    "catalog listing keeps on-disk membership only"
+                );
+            }
+            registry
                 .get_available()
                 .into_iter()
                 .map(|entry| format!("{}/{}", entry.model.provider, entry.model.id))
@@ -8127,7 +8142,7 @@ async fn run_login_submit(
     input: &str,
     login: &mut Option<Box<DriverLogin>>,
     agent_tx: &Sender<RaMsg>,
-    registry_dirty: &Sender<()>,
+    catalog_refresh: &Sender<Vec<String>>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) {
     use crate::interactive::login_flow::{LoginFailure, complete_login};
@@ -8150,14 +8165,19 @@ async fn run_login_submit(
             // no static membership; refresh in the background so `/model`
             // picks it up without a restart.
             let refresh_tx = agent_tx.clone();
-            let refresh_dirty = registry_dirty.clone();
+            let refresh_catalog = catalog_refresh.clone();
+            let refresh_extensions = handle.extension_manager().cloned();
             runtime_handle.spawn(async move {
                 let outcomes =
                     crate::providers::refresh_credentialed_model_catalogs(None, false).await;
-                let (models, status) = model_catalog_refresh_message(&outcomes);
-                let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                let (models, status) =
+                    model_catalog_refresh_message(&outcomes, refresh_extensions.as_ref());
+                let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed {
+                    models: models.clone(),
+                    status,
+                });
                 if outcomes.iter().any(|outcome| outcome.persisted) {
-                    let _ = refresh_dirty.send(());
+                    let _ = refresh_catalog.send(models);
                 }
             });
         }
@@ -8208,6 +8228,28 @@ fn adopt_stored_credentials(
     }
 }
 
+/// Merge the runtime's extension providers and their declared models into a
+/// freshly loaded registry.
+///
+/// Extension rows exist only in the extension manager, never on disk, so any
+/// registry that replaces one the session booted with must re-merge them or
+/// `/model` silently loses every extension model. Shared by the listing the
+/// picker/cycle adopt and the registry the switch path resolves against.
+fn merge_runtime_extension_models(
+    registry: &mut crate::models::ModelRegistry,
+    manager: &crate::extensions::ExtensionManager,
+) -> std::result::Result<(), String> {
+    let bindings = crate::models::extension_provider_bindings(&manager.extension_providers())
+        .map_err(|err| err.to_string())?;
+    let entries = manager.extension_model_entries();
+    if bindings.is_empty() && entries.is_empty() {
+        return Ok(());
+    }
+    registry
+        .merge_extension_registry(&bindings, entries)
+        .map_err(|err| err.to_string())
+}
+
 /// Re-read `auth.json` and the persisted model catalogs into the live session.
 ///
 /// The `/model` picker is rebuilt from a fresh `load_for_listing`, so a
@@ -8238,31 +8280,43 @@ fn reload_session_model_registry(
     // Extension providers and their declared models live only in the runtime,
     // never in the on-disk catalogs; reloading without them would make
     // `/model` lose every extension row the session booted with.
-    let extension = handle.extension_manager().map(|manager| {
-        (
-            crate::models::extension_provider_bindings(&manager.extension_providers()),
-            manager.extension_model_entries(),
-        )
-    });
-    if let Some((bindings, entries)) = extension {
-        let (bindings, entries) = match bindings {
-            Ok(bindings) => (bindings, entries),
-            Err(err) => {
-                let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
-                return;
-            }
-        };
-        if (!bindings.is_empty() || !entries.is_empty())
-            && let Err(err) = registry.merge_extension_registry(&bindings, entries)
-        {
-            let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
-            return;
-        }
+    if let Some(manager) = handle.extension_manager()
+        && let Err(err) = merge_runtime_extension_models(&mut registry, manager)
+    {
+        let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
+        return;
     }
     handle.session_mut().set_model_registry(registry);
     // Re-resolve the running model's key against the fresh catalog, as
     // `/login` does: the stored credential may be what unlocked it.
     handle.session_mut().adopt_auth_storage(auth);
+}
+
+/// Adopt a catalog refresh the picker has already taken.
+///
+/// `RaMsg::ModelCatalogRefreshed` replaces the UI's `provider/id` list, so the
+/// driver-side state has to follow it: the registry `prepare_model_selection`
+/// resolves against (or a freshly fetched row is offered but rejected with
+/// "Unable to switch provider/model to …") and the ctrl+p cycle list (or the
+/// cycle skips the same rows). A user-scoped cycle is left alone.
+///
+/// Paths are parameters so the adoption can be exercised against a temp
+/// catalog (see the regression test), as in [`reload_session_model_registry`].
+fn adopt_refreshed_catalog(
+    handle: &mut crate::sdk::AgentSessionHandle,
+    agent_tx: &Sender<RaMsg>,
+    models: Vec<String>,
+    available: &mut Vec<String>,
+    cycle: &mut Vec<String>,
+    cycle_scoped: bool,
+    auth_path: &std::path::Path,
+    models_path: &std::path::Path,
+) {
+    *available = models.clone();
+    if !cycle_scoped {
+        *cycle = models;
+    }
+    reload_session_model_registry(handle, agent_tx, auth_path, models_path);
 }
 
 /// Handle a model switch in the driver, reporting the outcome to the UI.
@@ -9974,12 +10028,16 @@ pub fn run(
         btw_client,
     } = settings;
     let driver_btw_client = btw_client.clone();
+    // A non-empty settings list means the user scoped the ctrl+p cycle; an
+    // explicit `/scoped-models` later re-arms this. Only an unscoped cycle
+    // follows a catalog refresh (a scoped one is the user's choice).
+    let mut cycle_scoped = !cycle_models.is_empty();
     let mut cycle_models = if cycle_models.is_empty() {
         available_models.clone()
     } else {
         cycle_models
     };
-    let driver_available_models = available_models.clone();
+    let mut driver_available_models = available_models.clone();
     // Issue #208: the driver re-sends the catalog with extension commands
     // once its session exists; the model starts from the resource catalog.
     let driver_catalog = autocomplete.catalog.clone();
@@ -9992,12 +10050,13 @@ pub fn run(
 
     let (submit_tx, submit_rx) = std::sync::mpsc::channel::<UiCommand>();
     let (agent_tx, agent_rx) = std::sync::mpsc::channel::<RaMsg>();
-    // Driver-internal lane: a background catalog-refresh task pings this once
-    // it has rewritten `models.fetched.json`, so the driver re-reads the
-    // session registry. `RaMsg::ModelCatalogRefreshed` already rebuilds the
-    // picker list, and without this the picker offered rows the switch path
-    // (resolved against the startup registry) rejected.
-    let (registry_dirty_tx, registry_dirty_rx) = std::sync::mpsc::channel::<()>();
+    // Driver-internal lane: a background catalog-refresh task sends the new
+    // `provider/id` membership here once it has rewritten `models.fetched.json`,
+    // so the driver re-reads the session registry and the ctrl+p cycle list.
+    // `RaMsg::ModelCatalogRefreshed` already replaces the picker list; without
+    // this the picker offered rows the switch path (resolved against the
+    // startup registry) rejected, and ctrl+p skipped the same rows.
+    let (catalog_refresh_tx, catalog_refresh_rx) = std::sync::mpsc::channel::<Vec<String>>();
     let (ask_reply_tx, ask_reply_rx) = std::sync::mpsc::channel::<AskUiReply>();
     let (ext_reply_tx, ext_reply_rx) = std::sync::mpsc::channel::<ExtensionUiResponse>();
     let bash_cwd = driver_bash_cwd(&session_options);
@@ -10057,14 +10116,19 @@ pub fn run(
                 // add to cold start. Successes persist to `models.fetched.json`
                 // and the resulting membership is replayed into the picker.
                 let refresh_tx = agent_tx.clone();
-                let refresh_dirty = registry_dirty_tx.clone();
+                let refresh_catalog = catalog_refresh_tx.clone();
+                let refresh_extensions = handle.extension_manager().cloned();
                 runtime_handle.spawn(async move {
                     let outcomes =
                         crate::providers::refresh_credentialed_model_catalogs(None, false).await;
-                    let (models, status) = model_catalog_refresh_message(&outcomes);
-                    let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                    let (models, status) =
+                        model_catalog_refresh_message(&outcomes, refresh_extensions.as_ref());
+                    let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed {
+                        models: models.clone(),
+                        status,
+                    });
                     if outcomes.iter().any(|outcome| outcome.persisted) {
-                        let _ = refresh_dirty.send(());
+                        let _ = refresh_catalog.send(models);
                     }
                 });
                 // Issue #208: extension-contributed slash commands become
@@ -10092,18 +10156,25 @@ pub fn run(
                 let mut login: Option<Box<DriverLogin>> = None;
                 loop {
                     let received = submit_rx.try_recv();
-                    // A background refresh rewrote the persisted catalog: the
-                    // picker already has the new membership, so re-read the
-                    // registry the switch path resolves against.
-                    if registry_dirty_rx.try_recv().is_ok() {
-                        while registry_dirty_rx.try_recv().is_ok() {}
+                    // A background refresh rewrote the persisted catalog. The
+                    // picker already has the new membership, so bring the
+                    // switch path (registry) and the ctrl+p cycle in step.
+                    let mut refreshed = None;
+                    while let Ok(models) = catalog_refresh_rx.try_recv() {
+                        refreshed = Some(models);
+                    }
+                    if let Some(models) = refreshed {
                         let auth_path = crate::config::Config::auth_path();
                         let models_path = crate::models::default_models_path(
                             &crate::config::Config::global_dir(),
                         );
-                        reload_session_model_registry(
+                        adopt_refreshed_catalog(
                             &mut handle,
                             &agent_tx,
+                            models,
+                            &mut driver_available_models,
+                            &mut cycle_models,
+                            cycle_scoped,
                             &auth_path,
                             &models_path,
                         );
@@ -10293,16 +10364,24 @@ pub fn run(
                                     true,
                                 )
                                 .await;
-                            let (models, status) = model_catalog_refresh_message(&outcomes);
-                            let _ = agent_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                            let (models, status) =
+                                model_catalog_refresh_message(&outcomes, handle.extension_manager());
+                            let _ = agent_tx.send(RaMsg::ModelCatalogRefreshed {
+                                models: models.clone(),
+                                status,
+                            });
                             if outcomes.iter().any(|outcome| outcome.persisted) {
                                 let auth_path = crate::config::Config::auth_path();
                                 let models_path = crate::models::default_models_path(
                                     &crate::config::Config::global_dir(),
                                 );
-                                reload_session_model_registry(
+                                adopt_refreshed_catalog(
                                     &mut handle,
                                     &agent_tx,
+                                    models,
+                                    &mut driver_available_models,
+                                    &mut cycle_models,
+                                    cycle_scoped,
                                     &auth_path,
                                     &models_path,
                                 );
@@ -10412,12 +10491,21 @@ pub fn run(
                             run_cycle_thinking_command(&mut handle, &agent_tx).await;
                         }
                         Ok(UiCommand::ScopedModels { args }) => {
-                            let _ = agent_tx.send(run_scoped_models_command(
+                            let before = cycle_models.clone();
+                            let message = run_scoped_models_command(
                                 &args,
                                 &driver_available_models,
                                 &mut cycle_models,
                                 &bash_cwd,
-                            ));
+                            );
+                            let cleared = args.trim().is_empty()
+                                || args.trim().eq_ignore_ascii_case("clear");
+                            // A pattern that matched nothing leaves the cycle
+                            // untouched, so it must not re-arm scoping either.
+                            if cleared || cycle_models != before {
+                                cycle_scoped = !cleared;
+                            }
+                            let _ = agent_tx.send(message);
                         }
                         Ok(UiCommand::CycleModel { forward }) => {
                             run_cycle_model_command(&mut handle, &cycle_models, forward, &agent_tx)
@@ -10439,7 +10527,7 @@ pub fn run(
                                 &input,
                                 &mut login,
                                 &agent_tx,
-                                &registry_dirty_tx,
+                                &catalog_refresh_tx,
                                 &runtime_handle,
                             ))
                             .await;
@@ -10520,7 +10608,7 @@ pub fn run(
                                     &url,
                                     &mut login,
                                     &agent_tx,
-                                    &registry_dirty_tx,
+                                    &catalog_refresh_tx,
                                     &runtime_handle,
                                 ))
                                 .await;
