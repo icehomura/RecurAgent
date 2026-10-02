@@ -1557,7 +1557,7 @@ pub async fn run_stdio(mut session: AgentSession, options: RpcOptions) -> Result
     let (in_tx, in_rx) = mpsc::channel::<String>(1024);
     let (out_tx, out_rx) = std::sync::mpsc::sync_channel::<String>(1024);
 
-    std::thread::spawn(move || {
+    crate::threads::spawn(move || {
         let stdin = io::stdin();
         let mut reader = io::BufReader::new(stdin.lock());
         let mut line = String::new();
@@ -1577,7 +1577,7 @@ pub async fn run_stdio(mut session: AgentSession, options: RpcOptions) -> Result
         }
     });
 
-    let writer_handle = std::thread::spawn(move || {
+    let writer_handle = crate::threads::spawn(move || {
         let stdout = io::stdout();
         let mut writer = io::BufWriter::new(stdout.lock());
         for line in out_rx {
@@ -13238,8 +13238,8 @@ async fn run_bash_rpc(
     let (tx, rx) = std::sync::mpsc::sync_channel::<BashRpcStreamFrame>(1024);
     let tx_stdout = tx.clone();
     let _stdout_handle =
-        std::thread::spawn(move || pump_bash_rpc_stream(stdout, tx_stdout, "stdout"));
-    let _stderr_handle = std::thread::spawn(move || pump_bash_rpc_stream(stderr, tx, "stderr"));
+        crate::threads::spawn(move || pump_bash_rpc_stream(stdout, tx_stdout, "stdout"));
+    let _stderr_handle = crate::threads::spawn(move || pump_bash_rpc_stream(stderr, tx, "stderr"));
 
     let tick = Duration::from_millis(10);
     let cx = asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request);

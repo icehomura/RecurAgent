@@ -570,7 +570,7 @@ impl JsonRpcClient {
                 std::sync::Arc::clone(&server_request_handler),
             );
             // Intentional detach: the reader exits on pipe EOF when the child dies.
-            std::thread::spawn(reader_body); // ubs:ignore intentional detach (EOF-exit)
+            crate::threads::spawn(reader_body); // ubs:ignore intentional detach (EOF-exit)
         }
 
         // Stderr pump: retain a bounded tail for diagnostics surfacing.
@@ -590,7 +590,7 @@ impl JsonRpcClient {
                 }
             };
             // Intentional detach: the pump exits on pipe EOF when the child dies.
-            std::thread::spawn(pump_body); // ubs:ignore intentional detach (EOF-exit)
+            crate::threads::spawn(pump_body); // ubs:ignore intentional detach (EOF-exit)
         }
 
         Ok(Self {

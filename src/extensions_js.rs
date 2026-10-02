@@ -20108,9 +20108,9 @@ impl<C: SchedulerClock + 'static> RaJsRuntime<C> {
                                 let (tx, rx) = std::sync::mpsc::sync_channel::<StreamChunk>(128);
                                 let tx_stdout = tx.clone();
                                 let _stdout_handle =
-                                    std::thread::spawn(move || pump_stream(stdout_pipe, &tx_stdout, StreamKind::Stdout));
+                                    crate::threads::spawn(move || pump_stream(stdout_pipe, &tx_stdout, StreamKind::Stdout));
                                 let _stderr_handle =
-                                    std::thread::spawn(move || pump_stream(stderr_pipe, &tx, StreamKind::Stderr));
+                                    crate::threads::spawn(move || pump_stream(stderr_pipe, &tx, StreamKind::Stderr));
 
                                 let start = Instant::now();
                                 let mut killed = false;

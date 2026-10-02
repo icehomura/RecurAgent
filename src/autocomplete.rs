@@ -676,7 +676,7 @@ impl FileCache {
             let (tx, rx) = std::sync::mpsc::channel();
             self.update_rx = Some(rx);
 
-            std::thread::spawn(move || {
+            crate::threads::spawn(move || {
                 let files = collect_project_files_multi(&cwd_buf, &roots_buf);
                 let _ = tx.send(files);
             });

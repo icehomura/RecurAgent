@@ -552,7 +552,7 @@ fn log_payload(ids: &CaptureRunIds, extension_id: &str, scenario_id: &str) -> Lo
 
 fn child_stdout_thread(stdout: impl std::io::Read + Send + 'static) -> Receiver<String> {
     let (tx, rx) = std::sync::mpsc::channel::<String>();
-    std::thread::spawn(move || {
+    ra::threads::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             match line {
@@ -569,7 +569,7 @@ fn child_stdout_thread(stdout: impl std::io::Read + Send + 'static) -> Receiver<
 }
 
 fn child_stderr_thread(stderr: impl std::io::Read + Send + 'static, mut writer: File) {
-    std::thread::spawn(move || {
+    ra::threads::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             match line {
@@ -610,7 +610,7 @@ impl MockOpenAiServer {
         });
 
         let thread_state = Arc::clone(&state);
-        let join = std::thread::spawn(move || {
+        let join = ra::threads::spawn(move || {
             loop {
                 if thread_state.stop.load(Ordering::SeqCst) {
                     break;

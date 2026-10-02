@@ -412,7 +412,7 @@ fn next_sequence(sequence: &AtomicU64) -> std::result::Result<u64, DapError> {
 }
 
 fn spawn_output_pump(mut reader: impl Read + Send + 'static, tail: OutputTail) {
-    std::thread::spawn(move || {
+    crate::threads::spawn(move || {
         let mut buf = [0_u8; 4096];
         while let Ok(count) = reader.read(&mut buf) {
             if count == 0 {
@@ -428,7 +428,7 @@ fn spawn_writer(
     writes: StdReceiver<Frame>,
     life: Arc<Lifetime>,
 ) {
-    std::thread::spawn(move || {
+    crate::threads::spawn(move || {
         while life.alive.load(Ordering::SeqCst) {
             let frame = match writes.recv_timeout(Duration::from_millis(100)) {
                 Ok(frame) => frame,
@@ -467,7 +467,7 @@ fn spawn_reader(
     frames: Arc<AtomicU64>,
     events: StdSyncSender<DapEvent>,
 ) {
-    std::thread::spawn(move || {
+    crate::threads::spawn(move || {
         let mut reader = std::io::BufReader::new(output);
         let mut scratch = Vec::new();
         let writer = Mutex::new(ReplyWriter(writer));

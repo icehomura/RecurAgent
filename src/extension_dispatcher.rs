@@ -3148,7 +3148,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
             let cancel_worker = Arc::clone(&cancel);
             let call_id_for_error = call_id.to_string();
 
-            thread::spawn(move || {
+            crate::threads::spawn(move || {
                 let result = (|| -> std::result::Result<(), String> {
                     let mut command = crate::tools::command_with_default_sigpipe_in_dir(&cmd, &cwd)
                         .map_err(|err| err.to_string())?;
@@ -3169,10 +3169,10 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
 
                     let stdout_tx = tx.clone();
                     let stderr_tx = tx.clone();
-                    let stdout_handle = thread::spawn(move || {
+                    let stdout_handle = crate::threads::spawn(move || {
                         pump_exec_stream_text(stdout, &stdout_tx, ExecPipeKind::Stdout);
                     });
-                    let stderr_handle = thread::spawn(move || {
+                    let stderr_handle = crate::threads::spawn(move || {
                         pump_exec_stream_text(stderr, &stderr_tx, ExecPipeKind::Stderr);
                     });
 
@@ -3315,7 +3315,7 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
         let cancel_worker = Arc::clone(&cancel);
         let call_id_for_error = call_id.to_string();
 
-        thread::spawn(move || {
+        crate::threads::spawn(move || {
             let result: std::result::Result<serde_json::Value, String> = (|| {
                 let mut command = crate::tools::command_with_default_sigpipe_in_dir(&cmd, &cwd)
                     .map_err(|err| err.to_string())?;
@@ -3336,10 +3336,10 @@ impl<C: SchedulerClock + 'static> ExtensionDispatcher<C> {
 
                 let (tx, rx) = std::sync::mpsc::sync_channel::<ExecCaptureFrame>(1024);
                 let tx_stdout = tx.clone();
-                let _stdout_handle = thread::spawn(move || {
+                let _stdout_handle = crate::threads::spawn(move || {
                     pump_exec_capture_bytes(stdout, &tx_stdout, ExecPipeKind::Stdout);
                 });
-                let _stderr_handle = thread::spawn(move || {
+                let _stderr_handle = crate::threads::spawn(move || {
                     pump_exec_capture_bytes(stderr, &tx, ExecPipeKind::Stderr);
                 });
 

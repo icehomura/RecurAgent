@@ -13645,13 +13645,15 @@ impl FindTool {
 
         let mut guard = ProcessGuard::new(child, ProcessCleanupMode::ChildOnly);
 
-        let stdout_handle = crate::threads::spawn(move || -> std::result::Result<Vec<u8>, String> {
-            read_to_end_capped_and_drain(stdout_pipe, READ_TOOL_MAX_BYTES)
-        });
+        let stdout_handle =
+            crate::threads::spawn(move || -> std::result::Result<Vec<u8>, String> {
+                read_to_end_capped_and_drain(stdout_pipe, READ_TOOL_MAX_BYTES)
+            });
 
-        let stderr_handle = crate::threads::spawn(move || -> std::result::Result<Vec<u8>, String> {
-            read_to_end_capped_and_drain(stderr_pipe, READ_TOOL_MAX_BYTES)
-        });
+        let stderr_handle =
+            crate::threads::spawn(move || -> std::result::Result<Vec<u8>, String> {
+                read_to_end_capped_and_drain(stderr_pipe, READ_TOOL_MAX_BYTES)
+            });
 
         let tick = Duration::from_millis(10);
         let start_time = std::time::Instant::now();

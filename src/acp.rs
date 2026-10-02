@@ -339,7 +339,7 @@ pub async fn run_stdio(options: AcpOptions) -> Result<()> {
     let (out_tx, out_rx) = std::sync::mpsc::sync_channel::<String>(1024);
 
     // Stdin reader thread.
-    std::thread::spawn(move || {
+    crate::threads::spawn(move || {
         let stdin = io::stdin();
         let mut reader = io::BufReader::new(stdin.lock());
         let mut line = String::new();
@@ -370,7 +370,7 @@ pub async fn run_stdio(options: AcpOptions) -> Result<()> {
     });
 
     // Stdout writer thread.
-    std::thread::spawn(move || {
+    crate::threads::spawn(move || {
         let stdout = io::stdout();
         let mut writer = io::BufWriter::new(stdout.lock());
         for line in out_rx {

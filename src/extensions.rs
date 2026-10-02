@@ -11744,7 +11744,7 @@ impl JsExtensionRuntimeHandle {
             interceptor,
         };
 
-        thread::spawn(move || {
+        crate::threads::spawn(move || {
             let runtime = RuntimeBuilder::current_thread()
                 .build()
                 .expect("extension runtime build");
@@ -18324,7 +18324,7 @@ async fn dispatch_hostcall_exec_ref_with_limit(
         let call_id_for_error = call_id.to_string();
 
         let worker_accounting = subprocess_accounting.take();
-        thread::spawn(move || {
+        crate::threads::spawn(move || {
             let _worker_accounting = worker_accounting;
             let result = (|| -> std::result::Result<(), String> {
                 let mut command = Command::new(&cmd);
@@ -18348,8 +18348,10 @@ async fn dispatch_hostcall_exec_ref_with_limit(
 
                 let stdout_tx = tx.clone();
                 let stderr_tx = tx.clone();
-                let stdout_handle = thread::spawn(move || pump_stream(stdout, &stdout_tx, true));
-                let stderr_handle = thread::spawn(move || pump_stream(stderr, &stderr_tx, false));
+                let stdout_handle =
+                    crate::threads::spawn(move || pump_stream(stdout, &stdout_tx, true));
+                let stderr_handle =
+                    crate::threads::spawn(move || pump_stream(stderr, &stderr_tx, false));
 
                 let start = Instant::now();
                 let mut killed = false;
@@ -18494,7 +18496,7 @@ async fn dispatch_hostcall_exec_ref_with_limit(
     let cancel_worker = Arc::clone(&cancel);
 
     let worker_accounting = subprocess_accounting.take();
-    thread::spawn(move || {
+    crate::threads::spawn(move || {
         let _worker_accounting = worker_accounting;
         let result: std::result::Result<Value, String> = (|| {
             let mut command = Command::new(&cmd);
@@ -18519,8 +18521,10 @@ async fn dispatch_hostcall_exec_ref_with_limit(
             let (tx_stream, rx_stream) = mpsc::sync_channel::<ExecStreamFrame>(1024);
             let stdout_tx = tx_stream.clone();
 
-            let _stdout_handle = thread::spawn(move || pump_stream(stdout, &stdout_tx, true));
-            let _stderr_handle = thread::spawn(move || pump_stream(stderr, &tx_stream, false));
+            let _stdout_handle =
+                crate::threads::spawn(move || pump_stream(stdout, &stdout_tx, true));
+            let _stderr_handle =
+                crate::threads::spawn(move || pump_stream(stderr, &tx_stream, false));
 
             let start = Instant::now();
             let mut killed = false;

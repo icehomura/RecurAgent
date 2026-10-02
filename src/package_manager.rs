@@ -285,7 +285,7 @@ impl PackageManager {
         let source = source.to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.install_sync(&source, scope);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -333,7 +333,7 @@ impl PackageManager {
         let source = source.to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.remove_sync(&source, scope);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -366,7 +366,7 @@ impl PackageManager {
         let source = source.to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.update_source_sync(&source, scope);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -417,7 +417,7 @@ impl PackageManager {
         let source = source.to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.installed_path_sync(&source, scope);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -453,7 +453,7 @@ impl PackageManager {
         let this = self.clone();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.list_packages_sync();
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -618,7 +618,7 @@ impl PackageManager {
         let this = self.clone();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let mut pruned = Vec::new();
             for scope in [PackageScope::User, PackageScope::Project] {
                 match this.reconcile_lockfile_sync(scope) {
@@ -689,7 +689,7 @@ impl PackageManager {
         let (tx, mut rx) = oneshot::channel();
 
         // Offload the heavy lifting (sync I/O) to a thread
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res: Result<(SettingsSnapshot, SettingsSnapshot, Vec<ScopedPackage>)> = (|| {
                 let global = read_settings_snapshot(&roots_for_setup.global_settings_path)?;
                 let project = read_project_settings_snapshot(&roots_for_setup)?;
@@ -740,7 +740,7 @@ impl PackageManager {
         let (tx, mut rx) = oneshot::channel();
         let accumulator = std::sync::Mutex::new(accumulator);
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let mut accumulator = accumulator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -840,7 +840,7 @@ impl PackageManager {
         let (tx, mut rx) = oneshot::channel();
         let accumulator = std::sync::Mutex::new(accumulator);
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let resolved = {
                 let accumulator = accumulator
                     .lock()
@@ -862,7 +862,7 @@ impl PackageManager {
         let source = source.to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.add_package_source_sync(&source, scope);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -896,7 +896,7 @@ impl PackageManager {
         let source = source.to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.remove_package_source_sync(&source, scope);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -1440,7 +1440,7 @@ impl PackageManager {
         let sources = sources.to_vec();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = this.pass_global_npm_root_blocking(&sources);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);

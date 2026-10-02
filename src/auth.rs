@@ -2379,11 +2379,11 @@ fn run_bounded_secret_command(
         .ok_or_else(|| "[MCP_SECRET_CMD_IO] secret helper stderr unavailable".to_string())?;
     let stdout_capture = Arc::new(CappedCapture::default());
     let stderr_capture = Arc::new(CappedCapture::default());
-    let stdout_handle = std::thread::spawn({
+    let stdout_handle = crate::threads::spawn({
         let capture = Arc::clone(&stdout_capture);
         move || capture.drain(stdout_pipe, SECRET_CMD_STDOUT_CAP)
     });
-    let stderr_handle = std::thread::spawn({
+    let stderr_handle = crate::threads::spawn({
         let capture = Arc::clone(&stderr_capture);
         move || capture.drain(stderr_pipe, SECRET_CMD_STDERR_CAP)
     });
