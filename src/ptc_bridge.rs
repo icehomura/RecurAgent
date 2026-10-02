@@ -265,15 +265,15 @@ impl RunCodeTool {
             "ls" => Some(Box::new(
                 LsTool::new(&self.cwd).with_workspace(self.workspace.clone()),
             )),
-            // Read-only extras: no approval needed, so they join the
-            // always-allowed set alongside read/grep/find/ls. Constructed the
+            // Read-only extras, kept buildable so a bare `RunCodeTool` (unit
+            // tests) can reach them without a bound registry. Constructed the
             // same way the registry builds them.
             "ast_grep" => Some(Box::new(crate::ast_tools::AstGrepTool::new(&self.cwd))),
             "json_query" => Some(Box::new(crate::json_query::JsonQueryTool::new())),
             "current_time" => Some(Box::new(crate::current_time::CurrentTimeTool::new())),
-            // Approval-gated tools. Constructed exactly the way the registry
-            // builds them, but reachable only when the operator granted them:
-            // `bridge_call` gates on `allowed` before it ever gets here.
+            // Write/process/network tools, constructed exactly the way the
+            // registry builds them. A bare bridge reaches them with no
+            // bridge-level authorization of its own.
             "bash" => Some(Box::new(BashTool::new(&self.cwd))),
             "write" => Some(Box::new(
                 WriteTool::new(&self.cwd).with_workspace(self.workspace.clone()),
@@ -701,8 +701,8 @@ fn install_globals<'js>(
     sdk.set("call", call)?;
 
     // Runtime introspection: the model can ask which tools this session can
-    // actually reach, including a grant applied after the run started. Returns
-    // a JSON array, as a Promise like every other helper.
+    // actually reach. Returns a JSON array, as a Promise like every other
+    // helper.
     let names: Vec<String> = reachable.to_vec();
     let tools_fn = Func::from(move |ctx: Ctx<'js>| -> rquickjs::Result<Promise<'js>> {
         let (promise, resolve, _reject) = Promise::new(&ctx)?;
@@ -1376,6 +1376,13 @@ impl Tool for RunCodeTool {
             && let Some(shared) = crate::tools::SharedToolRegistry::upgrade(weak)
         {
             for tool in shared.snapshot().tools() {
+                // `run_code` itself sits in that snapshot, and its `effects()`
+                // re-enters this method through the same bound registry, so
+                // unioning it recurses until the stack overflows. It is already
+                // the `process()` baseline above.
+                if tool.name() == "run_code" {
+                    continue;
+                }
                 effects = effects.union(tool.effects());
             }
         }
