@@ -30,6 +30,8 @@ x-common: &common
       GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
       GOLANG_MIRROR: ${GOLANG_MIRROR:-https://go.dev/dl}
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+      UV_DEFAULT_INDEX: ${UV_DEFAULT_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
+      UV_PYTHON_INSTALL_MIRROR: ${UV_PYTHON_INSTALL_MIRROR:-https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download}
       NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
       # Optional proxy for hosts where raw.githubusercontent.com is blocked
       HTTP_PROXY: ${HTTP_PROXY:-}
