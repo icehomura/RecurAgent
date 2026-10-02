@@ -51,6 +51,29 @@ docker compose --profile dev run --rm dev        # run gates on the mount
 docker compose --profile dev run --rm dev-shell  # shell on the mount
 ```
 
+## Build time
+
+Budget ~25-30 minutes for the first build on this network; almost all of it is
+the last `install-tools.sh` layer, which runs 18 installers serially over a
+throttled link. Measured breakdown of that layer (2026-10-02, 1625 s in the
+second build):
+
+| Cost | Why | Mitigation in the image |
+|------|-----|-------------------------|
+| ~430 s | UBS' installer ran `cargo install ast-grep` (222 crates) because no `ast-grep` binary existed | `ast-grep` is now installed from its release zip, so UBS skips the build |
+| ~590 s | `mcp_agent_mail`'s installer: uv downloaded a 35 MB CPython plus ~160 packages from pypi.org — **uv ignores `PIP_INDEX_URL`** | `UV_DEFAULT_INDEX` + `UV_PYTHON_INSTALL_MIRROR` point uv at the same mirrors |
+| ~200-550 s | Go/Rust tool binaries (bv, jfp) pulled through gh-proxy at 50 KB/s-1 MB/s | none; this is the link |
+| ~420 s | Exporting/unpacking the ~3 GB image layer | none |
+
+Rebuilds are separated by concern: only `scripts/install-tools.sh` (and anything
+above it in the Dockerfile) invalidates the tool-chain layer. `entrypoint.sh`
+and `run-quality.sh` are copied *after* it, so editing the gate itself costs a
+few seconds. To iterate on the gate without the tool chain at all:
+
+```bash
+docker compose build --build-arg TOOLS_STRATEGY=none
+```
+
 ## Network (mainland China / GFW)
 
 `raw.githubusercontent.com` and `registry-1.docker.io` are unreachable from
