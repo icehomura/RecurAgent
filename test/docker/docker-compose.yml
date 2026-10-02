@@ -1,0 +1,111 @@
+# RecurAgent quality-gate / Flywheel toolchain container.
+#
+#   cd test/docker
+#   docker compose build
+#   docker compose run --rm gate                       # clone fork + run all gates
+#   docker compose run --rm shell                      # interactive shell
+#   docker compose --profile dev run --rm dev          # mount the local checkout
+#
+# State is kept in named volumes: cargo registry/git cache, the workspace
+# (clone + target dir), and the DSR config/state directories.
+
+name: recur-agent-gates
+
+x-common: &common
+  build:
+    context: .
+    args:
+      TARGET_USER: ${TARGET_USER:-ubuntu}
+      RUST_TOOLCHAIN: ${RUST_TOOLCHAIN:-nightly-2026-08-31}
+      TOOLS_STRATEGY: ${TOOLS_STRATEGY:-direct}
+      ACFS_PROFILE: ${ACFS_PROFILE:-stack-only}
+      ACFS_REF: ${ACFS_REF:-main}
+      # Mirror selection (see Dockerfile / README "Network")
+      GH_RAW_MODE: ${GH_RAW_MODE:-jsdelivr}
+      GH_RELEASE_MODE: ${GH_RELEASE_MODE:-ghproxy}
+      CARGO_REGISTRY_MIRROR: ${CARGO_REGISTRY_MIRROR:-ustc}
+      APT_MIRROR: ${APT_MIRROR:-http://mirrors.tuna.tsinghua.edu.cn/ubuntu}
+      RUSTUP_DIST_SERVER: ${RUSTUP_DIST_SERVER:-https://mirrors.ustc.edu.cn/rust-static}
+      RUSTUP_UPDATE_ROOT: ${RUSTUP_UPDATE_ROOT:-https://mirrors.ustc.edu.cn/rust-static/rustup}
+      GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+      GOLANG_MIRROR: ${GOLANG_MIRROR:-https://go.dev/dl}
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+      NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+      # Optional proxy for hosts where raw.githubusercontent.com is blocked
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+  image: recur-agent-gates:${IMAGE_TAG:-local}
+  working_dir: /data/projects
+  environment:
+    RCH_DISABLED: "1"
+    CLONE: ${CLONE:-1}
+    FLYWHEEL_REPO: ${FLYWHEEL_REPO:-https://github.com/icehomura/RecurAgent.git}
+    FLYWHEEL_BRANCH: ${FLYWHEEL_BRANCH:-main}
+    CARGO_BUILD_JOBS: ${CARGO_BUILD_JOBS:-2}
+    TMPDIR: /tmp
+  volumes:
+    - cargo-registry:/home/${TARGET_USER:-ubuntu}/.cargo/registry
+    - cargo-git:/home/${TARGET_USER:-ubuntu}/.cargo/git
+    - workspace:/data/projects
+    - dsr-config:/home/${TARGET_USER:-ubuntu}/.config/dsr
+    - dsr-state:/home/${TARGET_USER:-ubuntu}/.local/state/dsr
+    - flywheel-bin:/home/${TARGET_USER:-ubuntu}/.local/bin
+
+services:
+  # Default: clone/refresh the fork into the workspace volume, then run the
+  # native equivalent of the DSR recipe. Override the command for anything else.
+  gate:
+    <<: *common
+    command: ["/usr/local/bin/run-quality.sh"]
+
+  # Interactive shell against the same persisted workspace.
+  shell:
+    <<: *common
+    profiles: ["shell"]
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
+    command: ["bash"]
+
+  # Local development: bind-mount this checkout instead of cloning, so changes
+  # on the host are visible immediately. CLONE=0 leaves the mount untouched.
+  dev:
+    <<: *common
+    profiles: ["dev"]
+    environment:
+      RCH_DISABLED: "1"
+      CLONE: "0"
+      CARGO_BUILD_JOBS: ${CARGO_BUILD_JOBS:-2}
+      TMPDIR: /tmp
+    volumes:
+      - cargo-registry:/home/${TARGET_USER:-ubuntu}/.cargo/registry
+      - cargo-git:/home/${TARGET_USER:-ubuntu}/.cargo/git
+      - ../..:/data/projects/RecurAgent
+      - dsr-config:/home/${TARGET_USER:-ubuntu}/.config/dsr
+      - dsr-state:/home/${TARGET_USER:-ubuntu}/.local/state/dsr
+      - flywheel-bin:/home/${TARGET_USER:-ubuntu}/.local/bin
+    command: ["/usr/local/bin/run-quality.sh"]
+
+  # Same as `dev` but drops into a shell.
+  dev-shell:
+    <<: *common
+    profiles: ["dev"]
+    environment:
+      RCH_DISABLED: "1"
+      CLONE: "0"
+    volumes:
+      - cargo-registry:/home/${TARGET_USER:-ubuntu}/.cargo/registry
+      - cargo-git:/home/${TARGET_USER:-ubuntu}/.cargo/git
+      - ../..:/data/projects/RecurAgent
+      - dsr-config:/home/${TARGET_USER:-ubuntu}/.config/dsr
+      - dsr-state:/home/${TARGET_USER:-ubuntu}/.local/state/dsr
+      - flywheel-bin:/home/${TARGET_USER:-ubuntu}/.local/bin
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
+    command: ["bash"]
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  workspace:
+  dsr-config:
+  dsr-state:
+  flywheel-bin:
