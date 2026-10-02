@@ -3395,16 +3395,9 @@ impl Session {
     ) -> Result<Self> {
         let is_interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
         let mut picker_input_override = picker_input_override;
-        // The interactive session picker is part of the TUI front-end. Without
-        // the `tui` feature there is no terminal picker, so library consumers
-        // fall through to the non-interactive resolution path below.
-        #[cfg(feature = "tui")]
-        if picker_input_override.is_none()
-            && is_interactive
-            && let Some(session) = Box::pin(crate::session_picker::pick_session(override_dir)).await
-        {
-            return Ok(session);
-        }
+        // The classic bubbletea session picker was removed with the classic
+        // TUI stack. Callers resolve the session non-interactively; the ftui
+        // stack drives its own session overlay.
 
         let base_dir = override_dir.map_or_else(Config::sessions_dir, PathBuf::from);
         let store_kind = SessionStoreKind::from_config(config);
@@ -3417,7 +3410,7 @@ impl Session {
         let cwd_display = cwd.display().to_string();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let indexed_meta = SessionIndex::for_sessions_root(&base_dir_clone)
                 .list_sessions(Some(&cwd_display))
                 .unwrap_or_default();
@@ -4156,7 +4149,7 @@ impl Session {
         let path_buf = path.to_path_buf();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = crate::session::open_from_v2_store_blocking(&path_buf);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -4171,7 +4164,7 @@ impl Session {
         let path_buf = path.to_path_buf();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let res = open_jsonl_blocking(&path_buf);
             let cx = AgentCx::for_request();
             let _ = tx.send(cx.cx(), res);
@@ -4272,7 +4265,7 @@ impl Session {
         let cwd_display_clone = cwd_display.clone();
         let (tx, mut rx) = oneshot::channel();
 
-        let handle = thread::spawn(move || {
+        let handle = crate::threads::spawn(move || {
             let index = SessionIndex::for_sessions_root(&base_dir_clone);
             let mut indexed_sessions = index
                 .list_sessions(Some(&cwd_display_clone))
