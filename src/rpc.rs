@@ -11976,6 +11976,29 @@ mod retry_tests {
         });
     }
 
+    /// A configured `shell_path` must be the shell that runs the command: a
+    /// path that cannot be spawned has to fail the run rather than silently
+    /// fall back to the default shell.
+    #[test]
+    fn run_bash_rpc_honors_configured_shell_path() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let (_abort_tx, abort_rx) = oneshot::channel();
+            let err = run_bash_rpc(
+                tmp.path(),
+                Some("/nonexistent/pi-rpc-shell"),
+                "echo unreachable",
+                abort_rx,
+            )
+            .await
+            .expect_err("a nonexistent configured shell must fail the run");
+            assert!(
+                err.to_string().contains("/nonexistent/pi-rpc-shell"),
+                "error should name the configured shell: {err}"
+            );
+        });
+    }
+
     #[test]
     fn run_bash_rpc_pump_stream_emits_io_error_frame_after_partial_output() {
         let reader = RpcFailingReader::new([
