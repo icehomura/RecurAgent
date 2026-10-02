@@ -1490,6 +1490,27 @@ impl AuthStorage {
         }
     }
 
+    /// Path of the credential store this handle was loaded from.
+    #[must_use]
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    /// Path of the persisted model catalog that sits beside this credential
+    /// store: `models.json`, and the generated `models.fetched.json` next to it.
+    ///
+    /// Long-lived surfaces (interactive, RPC, ACP) re-read the catalog from here
+    /// so a refresh that happened after they started is not invisible to them.
+    #[must_use]
+    pub fn models_catalog_path(&self) -> std::path::PathBuf {
+        let dir = self
+            .path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
+        crate::models::default_models_path(dir)
+    }
+
     /// Persist auth.json (atomic write + permissions).
     pub fn save(&self) -> Result<()> {
         let data = serde_json::to_string_pretty(&AuthFileRef {

@@ -2125,6 +2125,28 @@ impl ModelRegistry {
     }
 }
 
+/// Merge the runtime's extension providers and their declared models into a
+/// freshly loaded registry.
+///
+/// Extension rows exist only in the extension manager, never on disk, so any
+/// registry that replaces one a session booted with must re-merge them or
+/// `/model` silently loses every extension model. Shared by every surface that
+/// re-reads the persisted catalog after startup.
+///
+/// # Errors
+/// Propagates [`ModelRegistry::merge_extension_registry`] validation failures.
+pub fn merge_runtime_extension_models(
+    registry: &mut ModelRegistry,
+    manager: &crate::extensions::ExtensionManager,
+) -> crate::error::Result<()> {
+    let bindings = extension_provider_bindings(&manager.extension_providers())?;
+    let entries = manager.extension_model_entries();
+    if bindings.is_empty() && entries.is_empty() {
+        return Ok(());
+    }
+    registry.merge_extension_registry(&bindings, entries)
+}
+
 /// Returns `true` when `provider` is the canonical/primary source for a model
 /// identified by `model_id`. Used by `find_by_id` to prefer the authoritative
 /// provider when the same model ID appears under multiple resellers.

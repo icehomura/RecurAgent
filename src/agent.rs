@@ -12785,6 +12785,37 @@ impl AgentSession {
         self.auth_storage = Some(auth);
     }
 
+    /// Re-read `auth.json` and the persisted model catalogs into this session.
+    ///
+    /// The catalog a session starts with is a snapshot. A live refresh (or an
+    /// external `models.json` edit) writes `models.fetched.json` afterwards, and
+    /// any surface still resolving against the startup registry then offers or
+    /// rejects models that no longer match what is on disk — the interactive
+    /// picker offers a row the switch path rejects, RPC/ACP report "model not
+    /// found" for a row the catalog has. Runtime extension providers are
+    /// re-merged, since they exist only in the extension manager.
+    ///
+    /// The running model's credential is re-resolved against the fresh store,
+    /// as `/login` does.
+    ///
+    /// # Errors
+    /// Fails when `auth.json` cannot be read, or when the runtime's extension
+    /// providers cannot be merged.
+    pub fn reload_model_registry(
+        &mut self,
+        auth_path: &std::path::Path,
+        models_path: &std::path::Path,
+    ) -> Result<()> {
+        let auth = AuthStorage::load(auth_path.to_path_buf())?;
+        let mut registry = ModelRegistry::load(&auth, Some(models_path.to_path_buf()));
+        if let Some(manager) = self.extensions.as_ref().map(ExtensionRegion::manager) {
+            crate::models::merge_runtime_extension_models(&mut registry, manager)?;
+        }
+        self.set_model_registry(registry);
+        self.adopt_auth_storage(auth);
+        Ok(())
+    }
+
     /// Adopt credentials changed outside this session (`/login`, `/logout`)
     /// and re-resolve the running model's key with the usual precedence:
     /// CLI override, then stored credential, then the catalog entry's key.

@@ -6777,7 +6777,8 @@ fn model_catalog_refresh_message(
             // picker on the first refresh — while the switch registry keeps
             // them. The listing must carry the same membership.
             if let Some(manager) = extensions
-                && let Err(err) = merge_runtime_extension_models(&mut registry, manager)
+                && let Err(err) =
+                    crate::models::merge_runtime_extension_models(&mut registry, manager)
             {
                 tracing::warn!(
                     event = "ftui.catalog_refresh.extension_merge_failed",
@@ -8228,28 +8229,6 @@ fn adopt_stored_credentials(
     }
 }
 
-/// Merge the runtime's extension providers and their declared models into a
-/// freshly loaded registry.
-///
-/// Extension rows exist only in the extension manager, never on disk, so any
-/// registry that replaces one the session booted with must re-merge them or
-/// `/model` silently loses every extension model. Shared by the listing the
-/// picker/cycle adopt and the registry the switch path resolves against.
-fn merge_runtime_extension_models(
-    registry: &mut crate::models::ModelRegistry,
-    manager: &crate::extensions::ExtensionManager,
-) -> std::result::Result<(), String> {
-    let bindings = crate::models::extension_provider_bindings(&manager.extension_providers())
-        .map_err(|err| err.to_string())?;
-    let entries = manager.extension_model_entries();
-    if bindings.is_empty() && entries.is_empty() {
-        return Ok(());
-    }
-    registry
-        .merge_extension_registry(&bindings, entries)
-        .map_err(|err| err.to_string())
-}
-
 /// Re-read `auth.json` and the persisted model catalogs into the live session.
 ///
 /// The `/model` picker is rebuilt from a fresh `load_for_listing`, so a
@@ -8269,27 +8248,12 @@ fn reload_session_model_registry(
     auth_path: &std::path::Path,
     models_path: &std::path::Path,
 ) {
-    let auth = match crate::auth::AuthStorage::load(auth_path.to_path_buf()) {
-        Ok(auth) => auth,
-        Err(err) => {
-            let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
-            return;
-        }
-    };
-    let mut registry = crate::models::ModelRegistry::load(&auth, Some(models_path.to_path_buf()));
-    // Extension providers and their declared models live only in the runtime,
-    // never in the on-disk catalogs; reloading without them would make
-    // `/model` lose every extension row the session booted with.
-    if let Some(manager) = handle.extension_manager()
-        && let Err(err) = merge_runtime_extension_models(&mut registry, manager)
+    if let Err(err) = handle
+        .session_mut()
+        .reload_model_registry(auth_path, models_path)
     {
         let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
-        return;
     }
-    handle.session_mut().set_model_registry(registry);
-    // Re-resolve the running model's key against the fresh catalog, as
-    // `/login` does: the stored credential may be what unlocked it.
-    handle.session_mut().adopt_auth_storage(auth);
 }
 
 /// Adopt a catalog refresh the picker has already taken.
