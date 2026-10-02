@@ -111,12 +111,32 @@ gh-proxy answers `403` for the `/releases/latest` HTML page that installers
 follow to resolve a version, and rewriting that page made every tool conclude
 "no release version found" and compile itself from source.
 
-`api.github.com` is blocked here, so installers that resolve a version only
-through the REST API fail (`slb`); the ones with a redirect-based fallback
-(`br`, `cass`, `cm`, `brenner`, `apr`, `jfp`) resolve fine. Each installer entry
-file is fetched from the first mirror that answers (jsdelivr, then gh-proxy,
-then `raw.githubusercontent.com`), because jsdelivr intermittently 404s a file
-it has not cached.
+`api.github.com` allows only **60 anonymous requests per hour per IP**, and the
+whole machine shares one egress IP, so it is normally exhausted: requests come
+back `403` with `"API rate limit exceeded for <ip>"`. `slb`'s installer resolves
+its release with a bare `curl api.github.com/...` and has no fallback, so it
+cannot install without a token. Every installer entry file is instead fetched
+from the first mirror that answers (jsdelivr, then gh-proxy, then
+`raw.githubusercontent.com`), because jsdelivr intermittently 404s a file it has
+not cached.
+
+Pass a token to lift the limit to 5000 requests/hour. Outside the container:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) docker compose build      # and/or
+GITHUB_TOKEN=$(gh auth token) docker compose run --rm gate
+```
+
+The token reaches the container two ways and is never baked into the image
+(`GITHUB_TOKEN` is a build `ARG`, not an `ENV`): the `curl`/`wget` shims attach
+`Authorization: Bearer …` to `api.github.com` calls when the variable is set, and
+installers that read `GITHUB_TOKEN` themselves pick it up. A caller-supplied
+`Authorization` header always wins over the shim's.
+
+Note that `gh auth status` can report `The token in keyring is invalid` while
+`gh auth token` still returns a working token — the keyring login state and the
+token itself are separate. The container never needs the `gh` CLI authenticated;
+it only needs the value.
 
 The upstream installers themselves download release artifacts and may fetch
 more scripts from `raw.githubusercontent.com` internally; `GH_RAW_MODE` only
