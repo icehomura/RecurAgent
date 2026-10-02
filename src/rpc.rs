@@ -3151,11 +3151,18 @@ pub async fn run(
                 let runtime_handle = options.runtime_handle.clone();
                 let bash_cx = cx.clone();
                 let shell_path = options.config.shell_path.clone();
+                let command_prefix = options.config.shell_command_prefix.clone();
 
                 runtime_handle.spawn(async move {
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    let result =
-                        run_bash_rpc(&cwd, shell_path.as_deref(), &command, abort_rx).await;
+                    let result = run_bash_rpc(
+                        &cwd,
+                        shell_path.as_deref(),
+                        command_prefix.as_deref(),
+                        &command,
+                        abort_rx,
+                    )
+                    .await;
 
                     let response = match result {
                         Ok(result) => {
@@ -11903,6 +11910,7 @@ mod retry_tests {
             let result = run_bash_rpc(
                 tmp.path(),
                 None,
+                None,
                 "(sleep 3; echo leaked > leaked_child.txt) & sleep 10",
                 abort_rx,
             )
@@ -11957,7 +11965,7 @@ mod retry_tests {
         asupersync::test_utils::run_test(|| async {
             let tmp = tempfile::tempdir().expect("tempdir");
             let (_abort_tx, abort_rx) = oneshot::channel();
-            let run = run_bash_rpc(tmp.path(), None, "yes x | head -c 1200000", abort_rx);
+            let run = run_bash_rpc(tmp.path(), None, None, "yes x | head -c 1200000", abort_rx);
 
             let result = asupersync::time::timeout(
                 asupersync::time::wall_now(),
@@ -11987,6 +11995,7 @@ mod retry_tests {
             let err = run_bash_rpc(
                 tmp.path(),
                 Some("/nonexistent/pi-rpc-shell"),
+                None,
                 "echo unreachable",
                 abort_rx,
             )
@@ -13083,6 +13092,7 @@ fn bash_rpc_capture_error_message(
 async fn run_bash_rpc(
     cwd: &std::path::Path,
     shell_path: Option<&str>,
+    command_prefix: Option<&str>,
     command: &str,
     mut abort_rx: oneshot::Receiver<()>,
 ) -> Result<BashRpcResult> {
@@ -13091,6 +13101,10 @@ async fn run_bash_rpc(
             Ok(path.to_string())
         })?;
 
+    let command = command_prefix.filter(|p| !p.trim().is_empty()).map_or_else(
+        || command.to_string(),
+        |prefix| format!("{prefix}\n{command}"),
+    );
     let command = format!("trap 'code=$?; wait; exit $code' EXIT\n{command}");
 
     let mut child = std::process::Command::new(&shell);
