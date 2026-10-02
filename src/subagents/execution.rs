@@ -26,7 +26,7 @@ use std::process::{Command, Stdio};
 #[cfg(any(not(unix), test))]
 use std::sync::mpsc::{self, Receiver};
 #[cfg(any(not(unix), test))]
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::Duration;
 #[cfg(any(not(unix), test))]
 use std::time::Instant;
@@ -40,11 +40,36 @@ const DRAIN_BATCH: usize = 32;
 const PIPE_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 const CANCELLED: &str = "Parent cancellation propagated to child process.";
 
+/// Stack reserve every thread the child spawns should get.
+///
+/// `RUST_MIN_STACK` sizes each `std::thread::spawn` that does not call
+/// `.stack_size()`. The child is a fresh `ra` process and does **not** inherit
+/// cargo's `.cargo/config.toml` `[env]` entry — that reaches only processes
+/// cargo launches, and `.cargo/config.toml` says so explicitly — so without
+/// this it falls back to the PE default and deep asupersync poll chains
+/// overflow at the margin. On Windows a stack overflow is
+/// `STATUS_STACK_OVERFLOW` (`0xC00000FD`), which aborts the child with no
+/// unwinding; that is tolerable for a child but must not happen at scale.
+///
+/// The value matches `interactive_ftui::DRIVER_STACK_BYTES` (64 MiB), the
+/// largest deep-frame reservation in the tree, because the child polls the
+/// same agent/provider/tool future chain the TUI driver does. The reserve is
+/// virtual and committed lazily, so concurrent children cost address space,
+/// not resident memory.
+pub(super) const CHILD_RUST_MIN_STACK: &str = "67108864";
+
 pub(super) struct ChildRunner {
     cwd: PathBuf,
     global_dir: PathBuf,
     child_binary: PathBuf,
     role_model_spec: Option<String>,
+    /// The parent session's shared approval state. Children are launched
+    /// headless (`--print`), so they have no approval surface of their own:
+    /// without inheriting the mode they fall back to the `always-ask` default
+    /// and every gated tool call fails with `approval.surface_unavailable`,
+    /// even under a `yolo` parent. `None` preserves the previous behaviour for
+    /// embedders that gate tool calls outside an `ApprovalState`.
+    approval_state: Option<crate::approval::ApprovalState>,
     hub_kind: ChildKind,
     deadline: Deadline,
 }
@@ -57,12 +82,14 @@ impl ChildRunner {
         role_model_spec: Option<String>,
         hub_kind: ChildKind,
         deadline: Deadline,
+        approval_state: Option<crate::approval::ApprovalState>,
     ) -> Self {
         Self {
             cwd,
             global_dir,
             child_binary,
             role_model_spec,
+            approval_state,
             hub_kind,
             deadline,
         }
@@ -199,7 +226,15 @@ impl ChildRunner {
                 }
             },
         );
-        let args = child_args(agent, &task.task, self.role_model_spec.as_deref(), schema);
+        let args = child_args(
+            agent,
+            &task.task,
+            self.role_model_spec.as_deref(),
+            schema,
+            self.approval_state
+                .as_ref()
+                .map(crate::approval::ApprovalState::mode),
+        );
         let policy = isolation_policy(&task);
         let mut attempt = Attempt::new(
             SubagentResult::starting(agent, task, step, &self.child_binary, &cwd, &args),
@@ -274,6 +309,7 @@ impl ChildRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env("RECUR_AGENT_DIR", &self.global_dir)
+            .env("RUST_MIN_STACK", CHILD_RUST_MIN_STACK)
             .env(
                 "RECUR_AGENT_SUBAGENT_PARENT_PID",
                 std::process::id().to_string(),
@@ -412,10 +448,14 @@ impl ChildRunner {
         .await;
         if check_budget(owner, self.deadline, &mut attempt.result) {
             if attempt.result.exit_code != Some(0) {
-                attempt.result.fail(format!(
-                    "Child exited with code {}.",
-                    attempt.result.exit_code.unwrap_or(-1)
-                ));
+                let code = attempt.result.exit_code.unwrap_or(-1);
+                let reason = match describe_exit_code(code) {
+                    Some(reason) => format!(" ({reason})"),
+                    None => String::new(),
+                };
+                attempt
+                    .result
+                    .fail(format!("Child exited with code {code}{reason}."));
             } else if let Err(error) = protocol.finish() {
                 attempt.result.fail(error.to_string());
             } else {
@@ -446,6 +486,19 @@ fn isolation_policy(task: &SubagentTask) -> Result<(bool, IsoApplyMode), String>
     };
     let mode = IsoApplyMode::parse(task.iso_apply.as_deref()).map_err(|error| error.to_string())?;
     Ok((isolated, mode))
+}
+
+/// Human meaning for a child process exit code, so a failed delegation names
+/// the cause instead of a bare integer. Windows delivers an aborting process
+/// as an NTSTATUS through `ExitStatus::code()`; `0xC000_00FD` is the stack
+/// overflow a deeply nested headless future can hit.
+fn describe_exit_code(code: i32) -> Option<&'static str> {
+    match code as u32 {
+        0xC000_00FD => Some("stack overflow"),
+        0xC000_0005 => Some("access violation"),
+        0xC000_001D => Some("illegal instruction"),
+        _ => None,
+    }
 }
 
 fn cancel(result: &mut SubagentResult, message: &str) {
@@ -634,7 +687,7 @@ fn spawn_pipe_reader<R: Read + Send + 'static>(
     kind: PipeKind,
     sender: mpsc::SyncSender<PipeFrame>,
 ) -> JoinHandle<()> {
-    thread::spawn(move || {
+    crate::threads::spawn(move || {
         let mut reader = BufReader::new(pipe);
         loop {
             let bytes = match protocol::read_frame(&mut reader) {
@@ -804,15 +857,15 @@ mod settled_queue_tests {
                 .unwrap();
         }
         drop(sender);
-        let stdout = thread::spawn(|| {});
-        let stderr = thread::spawn(|| {});
+        let stdout = std::thread::spawn(|| {});
+        let stderr = std::thread::spawn(|| {});
         let wait_until = Instant::now() + Duration::from_secs(2);
         while !stdout.is_finished() || !stderr.is_finished() {
             assert!(
                 Instant::now() < wait_until,
                 "fixture readers did not settle"
             );
-            thread::yield_now();
+            std::thread::yield_now();
         }
         runtime.block_on(drain_until_reader_exit(
             receiver,

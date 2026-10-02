@@ -29,7 +29,6 @@ use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
-use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
@@ -50,6 +49,14 @@ impl ToolEffects {
     const APPEND: u8 = 1 << 2;
     const NETWORK: u8 = 1 << 3;
     const PROCESS: u8 = 1 << 4;
+    /// Spawns an *isolated* child process (its own task, its own working
+    /// state) rather than driving a command in the host's repo — e.g. a
+    /// `subagent` child. Deliberately NOT part of [`BARRIER`]: isolated
+    /// children do not share the host's mutation surface, so a whole layer of
+    /// them is safe to run concurrently. Use [`process`](Self::process)
+    /// instead for a command that mutates shared state (`bash` in cwd) and so
+    /// must serialize.
+    const SPAWN: u8 = 1 << 5;
     const BARRIER: u8 = Self::WRITE | Self::APPEND | Self::PROCESS;
 
     /// Tool reads local state without mutating it.
@@ -84,6 +91,15 @@ impl ToolEffects {
         Self {
             bits: Self::PROCESS,
         }
+    }
+
+    /// Tool spawns an isolated child process such as a `subagent` worker.
+    /// Unlike [`process`](Self::process) this is **not** a scheduling barrier:
+    /// isolated children can share a concurrent batch, so a whole DAG layer of
+    /// subagents runs in parallel instead of serializing one node per batch.
+    #[must_use]
+    pub const fn spawn() -> Self {
+        Self { bits: Self::SPAWN }
     }
 
     /// Combine multiple effect declarations for a single tool or batch.
@@ -124,10 +140,16 @@ impl ToolEffects {
         self.bits & Self::PROCESS != 0
     }
 
+    /// Whether this declaration spawns an isolated child process.
+    #[must_use]
+    pub const fn spawns(self) -> bool {
+        self.bits & Self::SPAWN != 0
+    }
+
     /// Stable labels for machine-readable scheduling evidence.
     #[must_use]
     pub fn labels(self) -> Vec<&'static str> {
-        let mut labels = Vec::with_capacity(5);
+        let mut labels = Vec::with_capacity(6);
         if self.reads() {
             labels.push("read");
         }
@@ -142,6 +164,9 @@ impl ToolEffects {
         }
         if self.processes() {
             labels.push("process");
+        }
+        if self.spawns() {
+            labels.push("spawn");
         }
         labels
     }
@@ -5397,10 +5422,6 @@ pub struct ToolRegistry {
     /// Session undo recorder shared with write/edit/hashline_edit
     /// (bd-cv653.3.13); the interactive host reads it back for /undo //redo.
     mutation_recorder: Option<Arc<crate::undo::FileMutationRecorder>>,
-    /// Session-scoped authorization for `run_code`'s approval-gated bridge
-    /// tools. The agent flips it once the outer `run_code` call is approved;
-    /// it is shared with the `RunCodeTool` instance so a program cannot set it.
-    ptc_bridge_grant: crate::ptc_bridge::BridgeGrant,
     /// Host-owned picker surface shared by permission-gated built-ins and the
     /// optional model-facing ask tool. This exists even when `ask` is not in
     /// the model schema: host authorization must not disappear merely because
@@ -5458,7 +5479,7 @@ pub fn unselectable_tool_names(requested: &[&str]) -> Vec<(String, &'static str)
 impl ToolRegistry {
     /// Create a new registry with the specified tools enabled.
     pub fn new(enabled: &[&str], cwd: &Path, config: Option<&Config>) -> Self {
-        Self::with_mutation_recorder(enabled, cwd, config, None, None)
+        Self::with_mutation_recorder(enabled, cwd, config, None, None, None)
     }
 
     /// The undo recorder attached at construction, if any.
@@ -5567,6 +5588,9 @@ impl ToolRegistry {
     /// Like [`ToolRegistry::new`] but attaches a session undo recorder to the
     /// mutating file tools (bd-cv653.3.13). `workspace` installs the shared
     /// multi-root handle on every path-confining tool (bd-cv653.3.12).
+    /// `approval_state` is the session's resolved mode, handed to the
+    /// `subagent` tool so children inherit it instead of defaulting to a
+    /// headless `always-ask` that can never be granted.
     #[allow(clippy::too_many_lines)]
     pub fn with_mutation_recorder(
         enabled: &[&str],
@@ -5574,6 +5598,7 @@ impl ToolRegistry {
         config: Option<&Config>,
         mutation_recorder: Option<Arc<crate::undo::FileMutationRecorder>>,
         workspace: Option<&WorkspaceHandle>,
+        approval_state: Option<crate::approval::ApprovalState>,
     ) -> Self {
         let legacy_workspace = WorkspaceHandle::default();
         let workspace = workspace.unwrap_or(&legacy_workspace);
@@ -5581,7 +5606,6 @@ impl ToolRegistry {
             config.and_then(|config| config.ask_policy.as_deref()),
         ));
         let mut tools: Vec<Box<dyn Tool>> = Vec::new();
-        let ptc_bridge_grant = crate::ptc_bridge::new_bridge_grant();
         let job_session_scope = crate::jobs::JobSessionScope::default();
         let shell_path = config.and_then(|c| c.shell_path.clone());
         let shell_command_prefix = config.and_then(|c| c.shell_command_prefix.clone());
@@ -5654,26 +5678,15 @@ impl ToolRegistry {
                 // so they must receive the same workspace + search backend as
                 // the direct-call tools above (otherwise their path/backend
                 // policy silently diverges from a direct `read`).
-                "run_code" => {
-                    let tool = crate::ptc_bridge::RunCodeTool::new(cwd)
+                "run_code" => tools.push(Box::new(
+                    crate::ptc_bridge::RunCodeTool::new(cwd)
                         .with_workspace(workspace.clone())
                         .with_read_config(
                             search_backend_from_config(config),
                             image_auto_resize,
                             block_images,
-                        )
-                        .with_bridge_grant(ptc_bridge_grant.clone());
-                    // Config capabilities override the `PTC_CAPABILITIES`
-                    // fallback baked into `new()`.
-                    let tool = match config
-                        .and_then(|c| c.ptc.as_ref())
-                        .and_then(|p| p.capabilities.clone())
-                    {
-                        Some(names) => tool.with_capability_names(names),
-                        None => tool,
-                    };
-                    tools.push(Box::new(tool));
-                }
+                        ),
+                )),
                 "github" => tools.push(Box::new(crate::github::GithubTool::new(
                     cwd,
                     config.and_then(|c| c.gh_path.as_deref()),
@@ -5758,7 +5771,8 @@ impl ToolRegistry {
                     tools.push(Box::new(
                         crate::subagents::SubagentTool::new(cwd)
                             .with_structured_results(structured_results)
-                            .with_role_model_spec(role_model_spec),
+                            .with_role_model_spec(role_model_spec)
+                            .with_approval_state(approval_state.clone()),
                     ));
                 }
                 // Nothing to build: either a host-coupled tool the session host
@@ -5921,7 +5935,6 @@ impl ToolRegistry {
             job_session_scope,
             discoverable: discoverable_names,
             mutation_recorder,
-            ptc_bridge_grant,
             host_ask,
             shared: None,
         }
@@ -5937,24 +5950,6 @@ impl ToolRegistry {
         self.host_ask.clone()
     }
 
-    /// Authorize `run_code`'s bridge for this session.
-    ///
-    /// Called once the outer `run_code` call has been approved (a human
-    /// approval, `write`-mode approval, or an auto-approving `yolo` mode), so
-    /// the program may use the approval-gated bridge tools without a second,
-    /// nested prompt. This is a property of the session, never of the program.
-    pub fn authorize_ptc_bridge(&self) {
-        self.ptc_bridge_grant
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    /// Whether `run_code`'s bridge has been authorized for this session.
-    #[must_use]
-    pub fn ptc_bridge_authorized(&self) -> bool {
-        self.ptc_bridge_grant
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-
     /// Construct a registry from a pre-built tool list.
     pub fn from_tools(mut tools: Vec<Box<dyn Tool>>) -> Self {
         let job_session_scope = crate::jobs::JobSessionScope::default();
@@ -5968,7 +5963,6 @@ impl ToolRegistry {
             job_session_scope,
             discoverable: std::collections::HashSet::new(),
             mutation_recorder: None,
-            ptc_bridge_grant: crate::ptc_bridge::new_bridge_grant(),
             host_ask,
             shared: None,
         }
@@ -5985,7 +5979,6 @@ impl ToolRegistry {
             job_session_scope: self.job_session_scope.clone(),
             discoverable: self.discoverable.clone(),
             mutation_recorder: self.mutation_recorder.clone(),
-            ptc_bridge_grant: self.ptc_bridge_grant.clone(),
             host_ask: self.host_ask.clone(),
             shared: self.shared.clone(),
         }
@@ -6177,12 +6170,6 @@ impl SharedToolRegistry {
     #[must_use]
     pub fn version(&self) -> u64 {
         self.inner.version.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Authorize the `run_code` bridge for this session (see
-    /// [`ToolRegistry::authorize_ptc_bridge`]); shared across snapshots.
-    pub fn authorize_ptc_bridge(&self) {
-        self.snapshot().authorize_ptc_bridge();
     }
 
     /// A non-owning handle for tools that need the live registry without
@@ -7458,8 +7445,8 @@ pub(crate) async fn run_bash_command(
     // or servers) could easily exhaust the pool's thread limit, starving the rest of the application
     // of threads needed for short-lived blocking I/O (e.g., SQLite transactions or filesystem metadata).
     // Dedicated threads cleanly isolate this unbounded blocking risk.
-    let stdout_thread = thread::spawn(move || pump_stream(stdout, "stdout", &tx_stdout));
-    let stderr_thread = thread::spawn(move || pump_stream(stderr, "stderr", &tx));
+    let stdout_thread = crate::threads::spawn(move || pump_stream(stdout, "stdout", &tx_stdout));
+    let stderr_thread = crate::threads::spawn(move || pump_stream(stderr, "stderr", &tx));
 
     let max_chunks_bytes = DEFAULT_MAX_BYTES.saturating_mul(2);
     let mut bash_output = BashOutputState::new(max_chunks_bytes);
@@ -7804,7 +7791,7 @@ pub(crate) async fn run_bash_command_pty(
         .map_err(|e| Error::tool("bash", format!("Failed to clone PTY reader: {e}")))?;
 
     let (tx, rx) = mpsc::sync_channel::<BashPipeFrame>(1024);
-    let pty_thread = thread::spawn(move || pump_stream(reader, "pty", &tx));
+    let pty_thread = crate::threads::spawn(move || pump_stream(reader, "pty", &tx));
 
     let max_chunks_bytes = DEFAULT_MAX_BYTES.saturating_mul(2);
     let mut bash_output = BashOutputState::new(max_chunks_bytes);
@@ -12763,7 +12750,7 @@ impl Tool for GrepTool {
             let (stderr_tx, stderr_rx) =
                 std::sync::mpsc::sync_channel::<std::result::Result<Vec<u8>, String>>(1024);
 
-            let stdout_thread = std::thread::spawn(move || {
+            let stdout_thread = crate::threads::spawn(move || {
                 let reader = std::io::BufReader::new(stdout);
                 for line in reader.lines() {
                     if stdout_tx.send(line).is_err() {
@@ -12772,7 +12759,7 @@ impl Tool for GrepTool {
                 }
             });
 
-            let stderr_thread = std::thread::spawn(move || {
+            let stderr_thread = crate::threads::spawn(move || {
                 let reader = std::io::BufReader::new(stderr);
                 let _ = stderr_tx.send(read_to_end_capped_and_drain(reader, READ_TOOL_MAX_BYTES));
             });
@@ -13658,11 +13645,11 @@ impl FindTool {
 
         let mut guard = ProcessGuard::new(child, ProcessCleanupMode::ChildOnly);
 
-        let stdout_handle = std::thread::spawn(move || -> std::result::Result<Vec<u8>, String> {
+        let stdout_handle = crate::threads::spawn(move || -> std::result::Result<Vec<u8>, String> {
             read_to_end_capped_and_drain(stdout_pipe, READ_TOOL_MAX_BYTES)
         });
 
-        let stderr_handle = std::thread::spawn(move || -> std::result::Result<Vec<u8>, String> {
+        let stderr_handle = crate::threads::spawn(move || -> std::result::Result<Vec<u8>, String> {
             read_to_end_capped_and_drain(stderr_pipe, READ_TOOL_MAX_BYTES)
         });
 
@@ -14270,7 +14257,7 @@ impl Tool for LsTool {
 /// accumulation of log files from long-running sessions.
 pub fn cleanup_temp_files() {
     // Run in a detached thread to avoid blocking startup/shutdown.
-    std::thread::spawn(|| {
+    crate::threads::spawn(|| {
         let temp_dir = std::env::temp_dir();
         let Ok(entries) = std::fs::read_dir(&temp_dir) else {
             return;
@@ -14751,7 +14738,7 @@ impl ProcessGuard {
         if let Some(mut child) = self.child.take() {
             cleanup_child(Some(child.id()), self.cleanup_mode);
             let _ = child.kill();
-            std::thread::spawn(move || {
+            crate::threads::spawn(move || {
                 let _ = child.wait();
             });
             // We cannot return the exit status synchronously without blocking,
@@ -14777,7 +14764,7 @@ impl Drop for ProcessGuard {
                 Ok(Some(_)) | Err(_) => return,
             }
             let cleanup_mode = self.cleanup_mode;
-            std::thread::spawn(move || {
+            crate::threads::spawn(move || {
                 cleanup_child(Some(child.id()), cleanup_mode);
                 let _ = child.kill();
                 let _ = child.wait();

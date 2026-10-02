@@ -39,15 +39,3 @@ pub(super) fn truncate(s: &str, max_len: usize) -> String {
     out.push_str("...");
     out
 }
-
-pub(super) fn queued_message_preview(text: &str, max_len: usize) -> String {
-    let first_line = text
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("")
-        .trim();
-    if first_line.is_empty() {
-        return "(empty)".to_string();
-    }
-    truncate(first_line, max_len)
-}

@@ -6327,8 +6327,15 @@ impl RaFtuiModel {
         // while the agent works, so the frame does not jump between states.
         let rule_style = ftui::Style::new().fg(self.palette.rule);
         let rule = "─".repeat(usize::from(regions.input_rule_top.width));
-        Paragraph::new(Text::raw(rule.clone())).render(regions.input_rule_top, frame);
-        Paragraph::new(Text::raw(rule)).render(regions.input_rule_bottom, frame);
+        Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+            rule.clone(),
+            rule_style,
+        )]))
+        .render(regions.input_rule_top, frame);
+        Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+            rule, rule_style,
+        )]))
+        .render(regions.input_rule_bottom, frame);
 
         // Input editor while idle or answering an ask card; processing note
         // while the agent works uninterruptibly.
@@ -7788,6 +7795,7 @@ async fn run_login_submit(
     input: &str,
     login: &mut Option<Box<DriverLogin>>,
     agent_tx: &Sender<RaMsg>,
+    registry_dirty: &Sender<()>,
     runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) {
     use crate::interactive::login_flow::{LoginFailure, complete_login};
@@ -7810,11 +7818,15 @@ async fn run_login_submit(
             // no static membership; refresh in the background so `/model`
             // picks it up without a restart.
             let refresh_tx = agent_tx.clone();
+            let refresh_dirty = registry_dirty.clone();
             runtime_handle.spawn(async move {
                 let outcomes =
                     crate::providers::refresh_credentialed_model_catalogs(None, false).await;
                 let (models, status) = model_catalog_refresh_message(&outcomes);
                 let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                if outcomes.iter().any(|outcome| outcome.persisted) {
+                    let _ = refresh_dirty.send(());
+                }
             });
         }
         Err(LoginFailure::StillPending(pending, message)) => {
@@ -7862,6 +7874,63 @@ fn adopt_stored_credentials(
             "credentials were saved but could not be reloaded into the live session"
         ),
     }
+}
+
+/// Re-read `auth.json` and the persisted model catalogs into the live session.
+///
+/// The `/model` picker is rebuilt from a fresh `load_for_listing`, so a
+/// catalog refresh that discovered a new `provider/model` row makes it
+/// *visible* at once — while `prepare_model_selection` still resolves against
+/// the registry the session started with and rejects the switch with
+/// "Unable to switch provider/model to …". Every refresh path (startup,
+/// post-login, `/model-update`) calls this so the offered list and the switch
+/// path agree without a restart.
+///
+/// Paths are parameters so the reload can be exercised against a temp catalog;
+/// production callers pass [`Config::auth_path`](crate::config::Config::auth_path)
+/// and [`default_models_path`](crate::models::default_models_path).
+fn reload_session_model_registry(
+    handle: &mut crate::sdk::AgentSessionHandle,
+    agent_tx: &Sender<RaMsg>,
+    auth_path: &std::path::Path,
+    models_path: &std::path::Path,
+) {
+    let auth = match crate::auth::AuthStorage::load(auth_path.to_path_buf()) {
+        Ok(auth) => auth,
+        Err(err) => {
+            let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
+            return;
+        }
+    };
+    let mut registry = crate::models::ModelRegistry::load(&auth, Some(models_path.to_path_buf()));
+    // Extension providers and their declared models live only in the runtime,
+    // never in the on-disk catalogs; reloading without them would make
+    // `/model` lose every extension row the session booted with.
+    let extension = handle.extension_manager().map(|manager| {
+        (
+            crate::models::extension_provider_bindings(&manager.extension_providers()),
+            manager.extension_model_entries(),
+        )
+    });
+    if let Some((bindings, entries)) = extension {
+        let (bindings, entries) = match bindings {
+            Ok(bindings) => (bindings, entries),
+            Err(err) => {
+                let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
+                return;
+            }
+        };
+        if (!bindings.is_empty() || !entries.is_empty())
+            && let Err(err) = registry.merge_extension_registry(&bindings, entries)
+        {
+            let _ = agent_tx.send(RaMsg::AgentError(format!("model catalog reload: {err}")));
+            return;
+        }
+    }
+    handle.session_mut().set_model_registry(registry);
+    // Re-resolve the running model's key against the fresh catalog, as
+    // `/login` does: the stored credential may be what unlocked it.
+    handle.session_mut().adopt_auth_storage(auth);
 }
 
 /// Handle a model switch in the driver, reporting the outcome to the UI.
@@ -9591,6 +9660,12 @@ pub fn run(
 
     let (submit_tx, submit_rx) = std::sync::mpsc::channel::<UiCommand>();
     let (agent_tx, agent_rx) = std::sync::mpsc::channel::<RaMsg>();
+    // Driver-internal lane: a background catalog-refresh task pings this once
+    // it has rewritten `models.fetched.json`, so the driver re-reads the
+    // session registry. `RaMsg::ModelCatalogRefreshed` already rebuilds the
+    // picker list, and without this the picker offered rows the switch path
+    // (resolved against the startup registry) rejected.
+    let (registry_dirty_tx, registry_dirty_rx) = std::sync::mpsc::channel::<()>();
     let (ask_reply_tx, ask_reply_rx) = std::sync::mpsc::channel::<AskUiReply>();
     let (ext_reply_tx, ext_reply_rx) = std::sync::mpsc::channel::<ExtensionUiResponse>();
     let bash_cwd = driver_bash_cwd(&session_options);
@@ -9650,11 +9725,15 @@ pub fn run(
                 // add to cold start. Successes persist to `models.fetched.json`
                 // and the resulting membership is replayed into the picker.
                 let refresh_tx = agent_tx.clone();
+                let refresh_dirty = registry_dirty_tx.clone();
                 runtime_handle.spawn(async move {
                     let outcomes =
                         crate::providers::refresh_credentialed_model_catalogs(None, false).await;
                     let (models, status) = model_catalog_refresh_message(&outcomes);
                     let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                    if outcomes.iter().any(|outcome| outcome.persisted) {
+                        let _ = refresh_dirty.send(());
+                    }
                 });
                 // Issue #208: extension-contributed slash commands become
                 // completable now that the extension runtime is up.
@@ -9681,6 +9760,22 @@ pub fn run(
                 let mut login: Option<Box<DriverLogin>> = None;
                 loop {
                     let received = submit_rx.try_recv();
+                    // A background refresh rewrote the persisted catalog: the
+                    // picker already has the new membership, so re-read the
+                    // registry the switch path resolves against.
+                    if registry_dirty_rx.try_recv().is_ok() {
+                        while registry_dirty_rx.try_recv().is_ok() {}
+                        let auth_path = crate::config::Config::auth_path();
+                        let models_path = crate::models::default_models_path(
+                            &crate::config::Config::global_dir(),
+                        );
+                        reload_session_model_registry(
+                            &mut handle,
+                            &agent_tx,
+                            &auth_path,
+                            &models_path,
+                        );
+                    }
                     // Every handled command may change what the status line
                     // shows (model, thinking, mode, session, usage).
                     let refresh_status = received.is_ok();
@@ -9868,6 +9963,18 @@ pub fn run(
                                 .await;
                             let (models, status) = model_catalog_refresh_message(&outcomes);
                             let _ = agent_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                            if outcomes.iter().any(|outcome| outcome.persisted) {
+                                let auth_path = crate::config::Config::auth_path();
+                                let models_path = crate::models::default_models_path(
+                                    &crate::config::Config::global_dir(),
+                                );
+                                reload_session_model_registry(
+                                    &mut handle,
+                                    &agent_tx,
+                                    &auth_path,
+                                    &models_path,
+                                );
+                            }
                         }
                         Ok(UiCommand::Workspace { command, args }) => {
                             let advisor = resume_template
@@ -10000,6 +10107,7 @@ pub fn run(
                                 &input,
                                 &mut login,
                                 &agent_tx,
+                                &registry_dirty_tx,
                                 &runtime_handle,
                             ))
                             .await;
@@ -10080,6 +10188,7 @@ pub fn run(
                                     &url,
                                     &mut login,
                                     &agent_tx,
+                                    &registry_dirty_tx,
                                     &runtime_handle,
                                 ))
                                 .await;
@@ -10952,7 +11061,7 @@ mod tests {
 
     #[test]
     fn body_rect_tracks_the_rendered_frame_not_the_stale_term() {
-        let (_tx, mut model) = new_model();
+        let (_tx, model) = new_model();
         // The first frame renders before any Resize, and construction defaults
         // to (80, 24). A taller terminal must still have its whole body
         // hit-testable, or only the top of the screen can start a selection.
@@ -11268,6 +11377,94 @@ mod tests {
         assert_ne!(snapshot.model, "openai/gpt-4o");
         assert_eq!(snapshot.context_pct, 50);
         assert_eq!(snapshot.mode, "act");
+    }
+
+    /// A catalog refresh discovers rows that did not exist when the session
+    /// booted. The `/model` picker reads the persisted catalog directly, so
+    /// before the reload the switch path — which resolves against the session's
+    /// startup registry — rejected the very row the picker offered with
+    /// "Unable to switch provider/model to …". The driver's registry-dirty lane
+    /// closes that gap; this pins the reload it performs.
+    #[test]
+    fn a_catalog_row_absent_at_boot_is_switchable_after_the_registry_reload() {
+        const REFRESH_FIXTURE_MODEL: &str = "ftui-refresh-fixture-model";
+        let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
+            .build()
+            .expect("runtime");
+        let dir = tempfile::tempdir().expect("tempdir");
+        let auth_path = dir.path().join("auth.json");
+        let models_path = dir.path().join("models.json");
+
+        // The session boots against a catalog that does not declare the model.
+        let boot_auth = crate::auth::AuthStorage::load(auth_path.clone()).expect("boot auth");
+        let stale = crate::models::ModelRegistry::load(&boot_auth, Some(models_path.clone()));
+        assert!(
+            stale.find("openai", REFRESH_FIXTURE_MODEL).is_none(),
+            "fixture row must be absent at boot"
+        );
+
+        let provider = Arc::new(
+            crate::providers::openai::OpenAIProvider::new("stale-boot")
+                .with_base_url("http://127.0.0.1:1/v1"),
+        );
+        let agent = crate::agent::Agent::new(
+            provider,
+            crate::tools::ToolRegistry::new(&[], std::path::Path::new("."), None),
+            crate::agent::AgentConfig::default(),
+        );
+        let mut session = crate::agent::AgentSession::new(
+            agent,
+            Arc::new(asupersync::sync::Mutex::new(
+                crate::session::Session::in_memory(),
+            )),
+            false,
+            crate::compaction::ResolvedCompactionSettings::default(),
+        );
+        session.set_model_registry(stale);
+        let mut handle = crate::sdk::AgentSessionHandle::from_session_with_listeners(
+            session,
+            crate::sdk::EventListeners::default(),
+        );
+        let rejected = runtime.block_on(handle.set_model("openai", REFRESH_FIXTURE_MODEL));
+        assert!(
+            rejected.is_err(),
+            "a registry loaded before the row existed must reject the switch"
+        );
+
+        // The refresh persists the row and the credential; the driver reloads.
+        let mut auth = crate::auth::AuthStorage::load(auth_path.clone()).expect("auth");
+        auth.set(
+            "openai",
+            crate::auth::AuthCredential::ApiKey {
+                key: "fixture-key".to_string(),
+            },
+        );
+        auth.save().expect("persist auth");
+        std::fs::write(
+            &models_path,
+            serde_json::to_string(&serde_json::json!({
+                "providers": {
+                    "openai": {
+                        "models": [{ "id": REFRESH_FIXTURE_MODEL, "api": "openai-completions" }]
+                    }
+                }
+            }))
+            .expect("serialize catalog"),
+        )
+        .expect("write models.json");
+
+        let (agent_tx, agent_rx) = mpsc::channel::<RaMsg>();
+        reload_session_model_registry(&mut handle, &agent_tx, &auth_path, &models_path);
+        assert!(
+            agent_rx.try_recv().is_err(),
+            "a clean reload must not report an error"
+        );
+
+        let accepted = runtime.block_on(handle.set_model("openai", REFRESH_FIXTURE_MODEL));
+        assert!(
+            accepted.is_ok(),
+            "the reloaded registry must accept the refreshed row: {accepted:?}"
+        );
     }
 
     /// Mid-turn input on the default stack: Enter steers the running turn,

@@ -8,47 +8,28 @@
 
 use asupersync::Cx;
 use asupersync::channel::mpsc;
-use asupersync::runtime::RuntimeHandle;
 use asupersync::sync::{Mutex, OwnedMutexGuard};
 use async_trait::async_trait;
 use chrono::Utc;
-use crossterm::{cursor, terminal};
-use futures::future::BoxFuture;
 use glob::Pattern;
 use serde_json::{Value, json};
 
-use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::agent::{
-    AbortHandle, Agent, AgentEvent, QueueMode, QueuedAgentMessage, SessionActionAdmissionGate,
-};
-use crate::autocomplete::{AutocompleteCatalog, AutocompleteItem, AutocompleteItemKind};
-use crate::config::{Config, ExtensionPolicyConfig, SettingsScope, parse_queue_mode_or_default};
-use crate::extension_events::{InputEventOutcome, apply_input_event_response};
+use crate::agent::{Agent, QueuedAgentMessage, SessionActionAdmissionGate};
+use crate::config::Config;
 use crate::extensions::{
-    EXTENSION_EVENT_TIMEOUT_MS, ExtensionDeliverAs, ExtensionEventName, ExtensionHostActions,
-    ExtensionManager, ExtensionSendMessage, ExtensionSendUserMessage, ExtensionSession,
-    ExtensionUiRequest, ExtensionUiResponse,
+    ExtensionDeliverAs, ExtensionHostActions, ExtensionManager, ExtensionSendMessage,
+    ExtensionSendUserMessage, ExtensionSession, ExtensionUiRequest, ExtensionUiResponse,
 };
-use crate::keybindings::{AppAction, KeyBinding, KeyBindings};
-use crate::model::{
-    AssistantMessageEvent, ContentBlock, CustomMessage, ImageContent, Message as ModelMessage,
-    StopReason, TextContent, ThinkingLevel, Usage, UserContent, UserMessage,
-};
-use crate::models::{ModelEntry, ModelRegistry, default_models_path};
-use crate::package_manager::PackageManager;
-use crate::platform::VERSION;
-use crate::providers;
-use crate::resources::{DiagnosticKind, ResourceCliOptions, ResourceDiagnostic, ResourceLoader};
-use crate::session::{Session, SessionEntry, SessionMessage, bash_execution_to_text};
-use crate::theme::Theme;
-use crate::tools::{process_file_arguments, resolve_read_path};
-use crate::workspace::WorkspaceHandle;
+use crate::model::{ContentBlock, CustomMessage, Message as ModelMessage, StopReason, Usage};
+use crate::models::ModelEntry;
+use crate::resources::{DiagnosticKind, ResourceDiagnostic, ResourceLoader};
+use crate::session::{Session, SessionEntry, SessionMessage};
 
 #[cfg(all(feature = "clipboard", feature = "image-resize"))]
 use arboard::Clipboard as ArboardClipboard;
@@ -79,10 +60,6 @@ pub(crate) use self::commands::{COPY_OK_MESSAGE, copy_text_to_clipboard};
 pub use self::commands::{
     SlashCommand, model_entry_matches, parse_scoped_model_patterns, resolve_scoped_model_entries,
     strip_thinking_level_suffix,
-};
-use self::commands::{
-    format_startup_oauth_hint, parse_bash_command, parse_extension_command,
-    should_show_startup_oauth_hint,
 };
 // Session→conversation snapshot; re-exported for the ftui migration stack
 // (bd-cv653.9.1) to rebuild its transcript after /resume.
@@ -120,24 +97,18 @@ pub(crate) fn resolve_output_path(cwd: &Path, raw: &str) -> PathBuf {
         cwd.join(path)
     }
 }
-use self::ext_session::{InteractiveExtensionHostActions, InteractiveExtensionSession};
 pub use self::ext_session::{format_extension_ui_prompt, parse_extension_ui_response};
+use self::file_refs::format_file_ref;
 pub(crate) use self::file_refs::{
     extract_file_references, looks_like_dropped_paths, normalize_pasted_file_refs,
 };
-use self::file_refs::{format_file_ref, path_for_display};
 pub use self::state::{AgentState, InputMode, PendingInput};
 // Shared with the ftui stack (issue #208): one dropdown state machine, one
 // command catalog, so slash-command completion cannot drift between surfaces.
 pub(crate) use self::state::AutocompleteState;
-use self::state::{
-    BranchPickerOverlay, CapabilityAction, CapabilityPromptOverlay, ExtensionCustomOverlay,
-    InjectedMessageQueue, InteractiveMessageQueue, PendingLoginKind, PendingOAuth,
-    QueuedMessageKind, SessionPickerOverlay, SettingsUiEntry, SettingsUiState,
-    TOOL_COLLAPSE_PREVIEW_LINES, ThemePickerItem, ThemePickerOverlay, ToolProgress, format_count,
-};
 pub use self::state::{ConversationMessage, MessageRole};
-use self::text_utils::{queued_message_preview, truncate};
+use self::state::{InjectedMessageQueue, InteractiveMessageQueue, QueuedMessageKind};
+use self::text_utils::truncate;
 pub(crate) async fn enqueue_pi_event(event_tx: &mpsc::Sender<RaMsg>, cx: &Cx, msg: RaMsg) -> bool {
     event_tx.send(cx, msg).await.is_ok()
 }

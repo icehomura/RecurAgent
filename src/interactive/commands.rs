@@ -1,12 +1,10 @@
 use super::*;
 
 use crate::models::{
-    ExtensionProviderBinding, ModelEntry, ModelRole, extension_provider_bindings,
-    model_requires_configured_credential, normalize_api_key_opt,
+    ExtensionProviderBinding, ModelEntry, extension_provider_bindings, normalize_api_key_opt,
 };
 use crate::provider_metadata::{
     ProviderMetadata, ProviderOnboardingMode, provider_ids_match, provider_metadata,
-    split_provider_model_spec,
 };
 
 #[cfg(feature = "clipboard")]
@@ -461,38 +459,6 @@ impl SlashCommand {
     }
 }
 
-pub(super) fn parse_extension_command(input: &str) -> Option<(String, &str)> {
-    let input = input.trim();
-    if !input.starts_with('/') {
-        return None;
-    }
-
-    // Built-in slash commands are handled elsewhere.
-    if SlashCommand::parse(input).is_some() {
-        return None;
-    }
-
-    let (cmd, rest) = input.split_once(char::is_whitespace).unwrap_or((input, ""));
-    let cmd = cmd.trim_start_matches('/').trim();
-    if cmd.is_empty() {
-        return None;
-    }
-    Some((cmd.to_string(), rest.trim()))
-}
-
-pub(super) fn parse_bash_command(input: &str) -> Option<(String, bool)> {
-    let trimmed = input.trim_start();
-    let (rest, force) = trimmed
-        .strip_prefix("!!")
-        .map(|r| (r, true))
-        .or_else(|| trimmed.strip_prefix('!').map(|r| (r, false)))?;
-    let command = rest.trim();
-    if command.is_empty() {
-        return None;
-    }
-    Some((command.to_string(), force))
-}
-
 pub(super) fn normalize_api_key_input(raw: &str) -> std::result::Result<String, String> {
     let key = raw.trim();
     if key.is_empty() {
@@ -851,41 +817,6 @@ pub(super) fn format_login_provider_listing(
 
     output.push_str("\nUsage: /login <provider>");
     output
-}
-
-pub(super) fn format_startup_oauth_hint(auth: &crate::auth::AuthStorage) -> String {
-    let mut output = String::new();
-    output.push_str("  No provider credentials were detected.\n");
-    output.push_str("  Connect one of these providers:\n");
-    for (provider, label) in STARTUP_PRIORITY_OAUTH_PROVIDERS {
-        let status = format_provider_status(auth, provider);
-        let _ = writeln!(output, "  - {provider} ({label}): {status}");
-    }
-    output.push_str("  Use /login <provider> to connect or refresh credentials.\n");
-    output.push_str("  Use /login to see all providers and auth methods.");
-    output
-}
-
-pub(super) fn should_show_startup_oauth_hint(auth: &crate::auth::AuthStorage) -> bool {
-    let has_any_credential = crate::provider_metadata::PROVIDER_METADATA
-        .iter()
-        .map(|meta| meta.canonical_id)
-        .any(|provider| {
-            auth.has_stored_credential(provider)
-                || auth.external_setup_source(provider).is_some()
-                || auth.resolve_api_key(provider, None).is_some()
-        });
-    if has_any_credential {
-        return false;
-    }
-
-    STARTUP_PRIORITY_OAUTH_PROVIDERS
-        .iter()
-        .all(|(provider, _)| {
-            auth.resolve_api_key(provider, None).is_none()
-                && !auth.has_stored_credential(provider)
-                && auth.external_setup_source(provider).is_none()
-        })
 }
 
 pub fn strip_thinking_level_suffix(pattern: &str) -> &str {

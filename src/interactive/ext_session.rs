@@ -766,7 +766,7 @@ pub fn parse_extension_ui_response(
 mod tests {
     use super::*;
 
-    use crate::agent::{Agent, AgentConfig};
+    use crate::agent::{Agent, AgentConfig, QueueMode};
     use crate::config::Config;
     use crate::extensions::{ExtensionManager, JsExtensionLoadSpec, JsExtensionRuntimeHandle};
     use crate::extensions_js::RaJsRuntimeConfig;

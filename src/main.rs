@@ -24,7 +24,6 @@ use anyhow::{Result, bail};
 use asupersync::runtime::reactor::create_reactor;
 use asupersync::runtime::{RuntimeBuilder, RuntimeHandle};
 use asupersync::sync::{Mutex, OwnedMutexGuard};
-use chrono::{DateTime, Utc};
 use clap::error::ErrorKind;
 use ra::agent::{
     AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession, PreWarmedExtensionRuntime,
@@ -81,6 +80,7 @@ use ra::validation_broker::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tracing_subscriber::EnvFilter;
@@ -2498,27 +2498,6 @@ async fn run(
                 approval_state.clone(),
             )));
     }
-
-    // The /btw side-question client (bd-cv653.3.16): bound to the smol
-    // role when it resolves AND credentials exist; interactive-only.
-    let btw_client =
-        ra::app::resolve_role_model(ra::models::ModelRole::Smol, &cli, &config, &model_registry)
-            .and_then(|resolution| {
-                ra::btw::BtwClient::for_model_entry(
-                    &resolution.model_entry,
-                    cli.api_key.as_deref(),
-                    &auth,
-                )
-            });
-    // Rebinding factory (bd-9jgrt): lets `/model smol <spec>` rebuild the
-    // /btw client mid-session against fresh on-disk credentials.
-    let btw_api_key = cli.api_key.clone();
-    let btw_factory: ra::btw::BtwClientFactory = std::sync::Arc::new(move |entry| {
-        let Ok(auth) = ra::auth::AuthStorage::load(ra::config::Config::auth_path()) else {
-            return None;
-        };
-        ra::btw::BtwClient::for_model_entry(entry, btw_api_key.as_deref(), &auth)
-    });
 
     // MCP client (bd-cv653.6.1): discover server configs (CLI > .ra >
     // .agents > global > foreign), eagerly connect already-acknowledged
@@ -6394,6 +6373,7 @@ enum ConfigResourceKind {
 }
 
 impl ConfigResourceKind {
+    #[cfg(test)]
     const ALL: [Self; 4] = [Self::Extensions, Self::Skills, Self::Prompts, Self::Themes];
 
     const fn field_name(self) -> &'static str {
@@ -6402,15 +6382,6 @@ impl ConfigResourceKind {
             Self::Skills => "skills",
             Self::Prompts => "prompts",
             Self::Themes => "themes",
-        }
-    }
-
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Extensions => "extension",
-            Self::Skills => "skill",
-            Self::Prompts => "prompt",
-            Self::Themes => "theme",
         }
     }
 
@@ -6475,6 +6446,7 @@ struct ConfigReport {
     packages: Vec<ConfigPackageReport>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Default)]
 struct PackageFilterState {
     extensions: Option<Vec<String>>,
@@ -6483,6 +6455,7 @@ struct PackageFilterState {
     themes: Option<Vec<String>>,
 }
 
+#[cfg(test)]
 impl PackageFilterState {
     fn set_kind(&mut self, kind: ConfigResourceKind, values: Vec<String>) {
         match kind {
@@ -6508,12 +6481,6 @@ impl PackageFilterState {
             || self.prompts.is_some()
             || self.themes.is_some()
     }
-}
-
-#[derive(Debug, Clone)]
-struct ConfigUiResult {
-    save_requested: bool,
-    packages: Vec<ConfigPackageState>,
 }
 
 const fn scope_key(scope: SettingsScope) -> &'static str {
@@ -6542,6 +6509,7 @@ fn normalize_path_for_display(path: &Path, base_dir: Option<&Path>) -> String {
     rel.to_string_lossy().replace('\\', "/")
 }
 
+#[cfg(test)]
 fn normalize_filter_entry(path: &str) -> String {
     path.replace('\\', "/")
 }
@@ -6813,8 +6781,7 @@ fn handle_config_json_fast(cwd: &Path) -> Result<()> {
     Ok(())
 }
 
-
-
+#[cfg(test)]
 fn load_settings_json_object(path: &Path) -> Result<Value> {
     if !path.exists() {
         return Ok(json!({}));
@@ -6833,6 +6800,7 @@ fn load_settings_json_object(path: &Path) -> Result<Value> {
     }
 }
 
+#[cfg(test)]
 fn extract_package_source(value: &Value) -> Option<String> {
     value.as_str().map(str::to_string).or_else(|| {
         value
@@ -6842,12 +6810,7 @@ fn extract_package_source(value: &Value) -> Option<String> {
     })
 }
 
-fn persist_package_toggles(cwd: &Path, packages: &[ConfigPackageState]) -> Result<()> {
-    let global_dir = Config::global_dir();
-    let config_override_path = Config::config_path_override_from_env(cwd);
-    persist_package_toggles_with_roots(cwd, &global_dir, config_override_path.as_deref(), packages)
-}
-
+#[cfg(test)]
 #[allow(clippy::too_many_lines)]
 fn persist_package_toggles_with_roots(
     cwd: &Path,
