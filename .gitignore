@@ -345,4 +345,8 @@ root@*
 # would also match vendored conformance fixtures such as
 # `tests/ext_conformance/artifacts/**/session-handoff/SKILL.md`.
 /*handoff*.md
+# The `handoffs/` directory is the same scratch one level down: agent session
+# handoffs are not repo content. Ignore the whole directory so a stray one can
+# never be committed again.
+/handoffs/
 
