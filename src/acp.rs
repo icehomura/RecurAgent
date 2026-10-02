@@ -2551,7 +2551,10 @@ fn user_content_text(content: &UserContent) -> String {
 /// drives client-side icons; "other" is the documented fallback.
 fn classify_tool_kind(tool_name: &str) -> &'static str {
     let lower = tool_name.to_ascii_lowercase();
-    if matches!(lower.as_str(), "read" | "read_text_file" | "view" | "cat") {
+    if matches!(
+        lower.as_str(),
+        "read" | "read_text_file" | "view" | "cat" | "ls" | "list" | "dir"
+    ) {
         "read"
     } else if matches!(
         lower.as_str(),
@@ -3197,6 +3200,9 @@ mod tests {
     fn classify_tool_kind_maps_common_names() {
         assert_eq!(classify_tool_kind("read"), "read");
         assert_eq!(classify_tool_kind("read_text_file"), "read");
+        // A directory listing is a read: clients key icons AND read-only
+        // auto-approval off this, so `ls` must not land in the `other` bucket.
+        assert_eq!(classify_tool_kind("ls"), "read");
         assert_eq!(classify_tool_kind("EDIT"), "edit");
         assert_eq!(classify_tool_kind("apply_patch"), "edit");
         assert_eq!(classify_tool_kind("rg"), "search");
