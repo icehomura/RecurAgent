@@ -106,7 +106,33 @@ fn dag_skips_downstream_nodes_when_a_dependency_fails() {
         "a skipped node must not run or report: {output:?}"
     );
     assert_eq!(results[0]["status"], "failed");
-    assert!(output.is_error, "a failed node marks the tool result an error");
+    assert!(
+        output.is_error,
+        "a failed node marks the tool result an error"
+    );
+}
+
+/// The child must be told to size every thread it spawns.
+///
+/// A child that falls back to the PE default reserve overflows deep
+/// asupersync poll chains on Windows (`STATUS_STACK_OVERFLOW`), which is the
+/// crash this env var exists to stop. Asserted from the child's side — the
+/// value it actually observes — so the test cannot pass just because the
+/// spawn site still contains a string.
+#[test]
+fn child_receives_a_rust_min_stack_for_its_own_spawned_threads() {
+    let script = format!(
+        "printf '%s' \"$RUST_MIN_STACK\" > rust_min_stack.txt\n{}",
+        emit(&[ended("done", "stop")]),
+    );
+    let (_dir, tool) = fixture(&script);
+    let output = run(&tool, request());
+    assert!(!output.is_error, "{output:?}");
+    assert_eq!(
+        std::fs::read_to_string(tool.cwd.join("rust_min_stack.txt")).unwrap(),
+        super::execution::CHILD_RUST_MIN_STACK,
+        "the child must see the stack floor its own std::thread::spawn calls use",
+    );
 }
 
 #[test]
