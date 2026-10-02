@@ -31,7 +31,7 @@ use crate::extensions::{
 use crate::model::{
     ContentBlock, ImageContent, Message, StopReason, TextContent, UserContent, UserMessage,
 };
-use crate::models::{ModelEntry, model_requires_configured_credential};
+use crate::models::{ModelEntry, ModelRegistry, model_requires_configured_credential};
 use crate::provider::InputType;
 use crate::provider_metadata::provider_ids_match;
 use crate::providers;
@@ -1644,6 +1644,19 @@ pub async fn run(
     let abort_handle: Arc<Mutex<Option<AbortHandle>>> = Arc::new(Mutex::new(None));
     let bash_state: Arc<Mutex<Option<RunningBash>>> = Arc::new(Mutex::new(None));
     let retry_abort = Arc::new(AtomicBool::new(false));
+    // Extension providers live in the Arc-shared manager, so a clone taken here
+    // still tracks later registrations. The lock-free model listing uses it to
+    // advertise extension rows without touching the session mutex.
+    let rpc_extension_manager = OwnedMutexGuard::lock(Arc::clone(&session), &cx)
+        .await
+        .ok()
+        .and_then(|guard| {
+            guard
+                .extensions
+                .as_ref()
+                .map(crate::extensions::ExtensionRegion::manager)
+                .cloned()
+        });
 
     {
         use futures::future::BoxFuture;
@@ -2629,11 +2642,26 @@ pub async fn run(
             }
 
             "get_available_models" => {
-                let models = options
-                    .available_models
-                    .iter()
-                    .map(rpc_model_from_entry)
-                    .collect::<Vec<_>>();
+                // Deliberately lock-free: a turn holds the session mutex for its
+                // entire duration, and a listing request must not queue behind a
+                // streaming response (it answered instantly from the startup
+                // snapshot before). The catalog is re-read from disk instead, and
+                // extension rows come from the Arc-shared manager, which tracks
+                // later registrations as well.
+                let registry = catalog_registry_from_disk(&options, rpc_extension_manager.as_ref());
+                let models = if options
+                    .cli_api_key
+                    .as_deref()
+                    .is_some_and(|key| !key.trim().is_empty())
+                {
+                    // Mirror `has_cli_api_key_override` in main.rs: a non-empty
+                    // CLI api-key makes every known model offerable; otherwise
+                    // only credentialed rows list.
+                    registry.models().to_vec()
+                } else {
+                    registry.get_available()
+                };
+                let models = models.iter().map(rpc_model_from_entry).collect::<Vec<_>>();
                 let _ = out_tx.send(response_ok(
                     id,
                     "get_available_models",
@@ -2659,37 +2687,38 @@ pub async fn run(
                     continue;
                 };
 
-                let Some(entry) = options
-                    .available_models
-                    .iter()
-                    .find(|m| {
-                        provider_ids_match(&m.model.provider, provider)
-                            && m.model.id.eq_ignore_ascii_case(model_id)
-                    })
-                    .cloned()
-                else {
-                    let _ = out_tx.send(response_error(
-                        id,
-                        "set_model",
-                        format!("Model not found: {provider}/{model_id}"),
-                    ));
-                    continue;
-                };
-
-                let key = resolve_model_key(options.cli_api_key.as_deref(), &options.auth, &entry);
-                if model_requires_configured_credential(&entry) && key.is_none() {
-                    let err = Error::auth(format!(
-                        "Missing credentials for {}/{}",
-                        entry.model.provider, entry.model.id
-                    ));
-                    let _ = out_tx.send(response_error_with_hints(id, "set_model", &err));
-                    continue;
-                }
-
-                let result: Result<()> = async {
+                let result: Result<Option<ModelEntry>> = async {
                     let mut guard = OwnedMutexGuard::lock(Arc::clone(&session), &cx)
                         .await
                         .map_err(|err| Error::session(format!("session lock failed: {err}")))?;
+                    // Resolve against the live registry, not the startup
+                    // snapshot: a catalog refresh that landed after RPC startup
+                    // must be switchable without a restart.
+                    if let Err(err) = guard.reload_model_registry(
+                        options.auth.path(),
+                        &options.auth.models_catalog_path(),
+                    ) {
+                        tracing::warn!(
+                            error = %err,
+                            "set_model: model catalog reload failed; using the session registry"
+                        );
+                    }
+                    let Some(entry) = guard
+                        .model_registry()
+                        .and_then(|registry| registry.find(provider, model_id))
+                    else {
+                        return Ok(None);
+                    };
+
+                    let key =
+                        resolve_model_key(options.cli_api_key.as_deref(), &options.auth, &entry);
+                    if model_requires_configured_credential(&entry) && key.is_none() {
+                        return Err(Error::auth(format!(
+                            "Missing credentials for {}/{}",
+                            entry.model.provider, entry.model.id
+                        )));
+                    }
+
                     let mut state = OwnedMutexGuard::lock(Arc::clone(&shared_state), &cx)
                         .await
                         .map_err(|err| Error::session(format!("state lock failed: {err}")))?;
@@ -2736,16 +2765,23 @@ pub async fn run(
                     }
                     state.clear_failover_lifecycle();
                     state.provider_admission.clear();
-                    Ok(())
+                    Ok(Some(entry))
                 }
                 .await;
 
                 match result {
-                    Ok(()) => {
+                    Ok(Some(entry)) => {
                         let _ = out_tx.send(response_ok(
                             id,
                             "set_model",
                             Some(rpc_model_from_entry(&entry)),
+                        ));
+                    }
+                    Ok(None) => {
+                        let _ = out_tx.send(response_error(
+                            id,
+                            "set_model",
+                            format!("Model not found: {provider}/{model_id}"),
                         ));
                     }
                     Err(err) => {
@@ -2763,6 +2799,18 @@ pub async fn run(
                                 .map_err(|err| {
                                     Error::session(format!("session lock failed: {err}"))
                                 })?;
+                            // Re-read the catalog under the session lock so a
+                            // refresh that landed after RPC startup is not
+                            // skipped by the cycle list.
+                            if let Err(err) = guard.reload_model_registry(
+                                options.auth.path(),
+                                &options.auth.models_catalog_path(),
+                            ) {
+                                tracing::warn!(
+                                    error = %err,
+                                    "cycle_model: model catalog reload failed; using the session registry"
+                                );
+                            }
                             let mut state = OwnedMutexGuard::lock(Arc::clone(&shared_state), &cx)
                                 .await
                                 .map_err(|err| {
@@ -12465,6 +12513,32 @@ async fn maybe_auto_compact(
     }
 }
 
+/// Build a model registry from the persisted catalog on disk, merging the
+/// runtime's extension providers when a manager is available.
+///
+/// Used by request paths that must not take the session mutex — a turn holds
+/// that lock for its entire duration, so queueing a listing behind it would
+/// hang the client until the turn ends. Falls back to the credentials already
+/// loaded in `options` when `auth.json` cannot be re-read, so a listing never
+/// fails outright.
+fn catalog_registry_from_disk(
+    options: &RpcOptions,
+    extension_manager: Option<&ExtensionManager>,
+) -> ModelRegistry {
+    let auth = crate::auth::AuthStorage::load(options.auth.path().to_path_buf())
+        .unwrap_or_else(|_| options.auth.clone());
+    let mut registry = ModelRegistry::load(&auth, Some(options.auth.models_catalog_path()));
+    if let Some(manager) = extension_manager
+        && let Err(err) = crate::models::merge_runtime_extension_models(&mut registry, manager)
+    {
+        tracing::warn!(
+            error = %err,
+            "model catalog listing keeps on-disk membership only"
+        );
+    }
+    registry
+}
+
 fn rpc_model_from_entry(entry: &ModelEntry) -> Value {
     let input = entry
         .model
@@ -13663,7 +13737,13 @@ async fn cycle_model_for_rpc(
     options: &RpcOptions,
 ) -> Result<Option<(ModelEntry, crate::model::ThinkingLevel, bool)>> {
     let (candidates, is_scoped) = if options.scoped_models.is_empty() {
-        (options.available_models.clone(), false)
+        // Prefer the session's live registry: the startup snapshot misses a row
+        // a catalog refresh discovered after RPC startup. A user-scoped list
+        // still wins (above) and is never replaced by the registry.
+        let live = guard
+            .model_registry()
+            .map(|registry| registry.get_available());
+        (live.unwrap_or_else(|| options.available_models.clone()), false)
     } else {
         (
             options
@@ -20647,15 +20727,33 @@ export default function init(pi) {
         let handle = runtime.handle();
 
         runtime.block_on(async move {
-            let mut next = dummy_entry("llama3.2", false);
-            next.model.provider = "ollama".to_string();
-            next.model.api = "openai-completions".to_string();
-            next.model.base_url = "http://127.0.0.1:11434/v1".to_string();
-
             let temp = tempfile::tempdir().expect("tempdir");
+            // `set_model` now resolves against the session's live registry, so
+            // the row must be in the persisted catalog, not the startup snapshot.
+            let models_json = serde_json::json!({
+                "providers": {
+                    "ollama": {
+                        "baseUrl": "http://127.0.0.1:11434/v1",
+                        "api": "openai-completions",
+                        "models": [
+                            {
+                                "id": "llama3.2",
+                                "reasoning": false,
+                                "contextWindow": 200000,
+                                "maxTokens": 8192
+                            }
+                        ]
+                    }
+                }
+            });
+            std::fs::write(
+                temp.path().join("models.json"),
+                serde_json::to_string_pretty(&models_json).expect("serialize models json"),
+            )
+            .expect("write models.json");
+
             let auth_path = temp.path().join("auth.json");
-            let mut options = build_test_rpc_options(&handle, auth_path);
-            options.available_models = vec![next.clone()];
+            let options = build_test_rpc_options(&handle, auth_path);
 
             let agent_session = build_test_agent_session(Session::in_memory());
             let session_handle = Arc::clone(&agent_session.session);
@@ -20696,6 +20794,105 @@ export default function init(pi) {
                 })
                 .count();
             assert_eq!(thinking_changes, 1);
+        });
+    }
+
+    #[test]
+    fn rpc_catalog_added_after_startup_is_listed_and_switchable() {
+        let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
+            .build()
+            .expect("runtime build");
+        let handle = runtime.handle();
+
+        runtime.block_on(async move {
+            let temp = tempfile::tempdir().expect("tempdir");
+            // Empty auth.json is enough: the provider below is keyless.
+            std::fs::write(temp.path().join("auth.json"), "{}").expect("write auth.json");
+            // A provider/model row that is NOT in the built-in catalog, so the
+            // startup `available_models` snapshot cannot resolve it.
+            let models_json = serde_json::json!({
+                "providers": {
+                    "rpc-live-catalog": {
+                        "baseUrl": "https://rpc-live-catalog.invalid/v1",
+                        "api": "openai-completions",
+                        "models": [
+                            {
+                                "id": "live-only",
+                                "name": "Live Only",
+                                "reasoning": false,
+                                "contextWindow": 64000,
+                                "maxTokens": 4096
+                            }
+                        ]
+                    }
+                }
+            });
+            std::fs::write(
+                temp.path().join("models.json"),
+                serde_json::to_string_pretty(&models_json).expect("serialize models json"),
+            )
+            .expect("write models.json");
+
+            let auth_path = temp.path().join("auth.json");
+            let mut options = build_test_rpc_options(&handle, auth_path);
+            // The startup snapshot deliberately lacks the row: only a live
+            // catalog reload can resolve it.
+            options.available_models = Vec::new();
+
+            let agent_session = build_test_agent_session(Session::in_memory());
+            let session_handle = Arc::clone(&agent_session.session);
+            let (in_tx, in_rx) = asupersync::channel::mpsc::channel::<String>(8);
+            let (out_tx, out_rx) = std::sync::mpsc::sync_channel::<String>(1024);
+            let out_rx = Arc::new(Mutex::new(out_rx));
+
+            let server =
+                // Boxed: clippy::large_futures.
+                handle.spawn(async move { Box::pin(run(agent_session, options, in_rx, out_tx)).await });
+
+            let listing = send_recv(
+                &in_tx,
+                &out_rx,
+                r#"{"id":"1","type":"get_available_models"}"#,
+                "get_available_models(live-catalog)",
+            )
+            .await;
+            assert_ok(&listing, "get_available_models");
+            let listed = listing["data"]["models"]
+                .as_array()
+                .expect("models array")
+                .iter()
+                .any(|model| {
+                    model["provider"] == "rpc-live-catalog" && model["id"] == "live-only"
+                });
+            assert!(
+                listed,
+                "row added after RPC startup missing from listing: {listing}"
+            );
+
+            let switched = send_recv(
+                &in_tx,
+                &out_rx,
+                r#"{"id":"2","type":"set_model","provider":"rpc-live-catalog","modelId":"live-only"}"#,
+                "set_model(live-catalog)",
+            )
+            .await;
+            assert_ok(&switched, "set_model");
+            assert_eq!(switched["data"]["provider"], "rpc-live-catalog");
+            assert_eq!(switched["data"]["id"], "live-only");
+
+            drop(in_tx);
+            let result = server.await;
+            assert!(result.is_ok(), "rpc server error: {result:?}");
+
+            // The header is the persisted live model: `apply_model_change`
+            // writes it from the same entry that installs the provider.
+            let verify_cx = AgentCx::for_request();
+            let session = session_handle
+                .lock(verify_cx.cx())
+                .await
+                .expect("session lock");
+            assert_eq!(session.header.provider.as_deref(), Some("rpc-live-catalog"));
+            assert_eq!(session.header.model_id.as_deref(), Some("live-only"));
         });
     }
 
