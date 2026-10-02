@@ -25,6 +25,9 @@ if [[ -z "${GITHUB_TOKEN:-}" && -z "${GH_TOKEN:-}" ]]; then
   # returns a usable token, so trust the token, not the status.
   if tok="$("$gh_bin" auth token 2>/dev/null)" && [[ -n "$tok" ]]; then
     export GITHUB_TOKEN="$tok"
+    # BuildKit excludes secret mounts from the cache key; this marker makes a
+    # token build a distinct cache entry so it actually re-runs.
+    export GH_TOKEN_PRESENT=1
     echo "==> GITHUB_TOKEN supplied by $gh_bin (not persisted)"
   else
     echo "==> no GitHub token available ($gh_bin auth token failed);" >&2
