@@ -58,17 +58,19 @@ Test **local uncommitted code** (bind-mounts the repo root, no clone):
 
 ## Build time
 
-Budget ~30 minutes for a full build on this network; nearly all of it is the
-last `install-tools.sh` layer, which runs 18 installers serially over a
-throttled link. Measured 2026-10-03 — tool layer 1612 s, whole build 2067 s
-with the base layers cached:
+Budget ~10-30 minutes. Everything is network-bound and it varies a lot: the same
+tools layer measured 3333 s, then 1612 s, then **465 s** across three runs on
+2026-10-02/03 as the mirror caches warmed and the token path came online. Whole
+build with the base layers cached: 2067 s → **624 s**.
 
-| Cost | Cause | State |
-|------|-------|-------|
-| 591 s | `jfp`'s prebuilt binary is **97 MB**, pulled through gh-proxy at ~165 KB/s | inherent; it is the last install step |
-| 301 s | `ubs`: uv venv (156 packages) plus its own post-install scan | partly inherent |
-| 241 s + 115 s | `bv` (Go binary) and `srps` | link speed |
-| ≤ 80 s each | the remaining thirteen tools | — |
+The tool layer dominates. Measured in the fastest run:
+
+| Cost | Cause |
+|------|-------|
+| 189 s | `ubs`: uv venv (156 packages) plus its own post-install scan |
+| 38 s + 27 s | `srps` and `pt` |
+| ≤ 40 s each | the remaining fifteen tools |
+| 111 s | exporting/unpacking the image layers (separate from the tool layer) |
 
 Four costs that used to dominate are gone; all four were source builds or
 unmirrored downloads, not link speed:
@@ -78,15 +80,20 @@ unmirrored downloads, not link speed:
 | 430 s | UBS' installer ran `cargo install ast-grep` (222 crates) because no `ast-grep` was on PATH | `ast-grep` now ships from its release zip |
 | 525 s | uv downloaded a 35 MB CPython plus ~160 packages from pypi.org — **uv ignores `PIP_INDEX_URL`** | `UV_DEFAULT_INDEX` + `UV_PYTHON_INSTALL_MIRROR` (CPython 49.5 s → 5.2 s) |
 | 314 s | `brenner --verify` failed its container-hostile `doctor --json` check after reinstalling ntm/cass/cm | dropped `--verify` |
-| fail | dcg's installer 404'd because jsdelivr had not cached it | installer entry files now try every mirror, and dcg installs in 10 s |
+| fail | dcg's installer 404'd because jsdelivr had not cached it | installer entry files now try every mirror |
 
-Rebuilds are separated by concern: only `scripts/install-tools.sh` — or
-anything above it in the Dockerfile — invalidates the tool-chain layer.
-`entrypoint.sh` and `run-quality.sh` are copied *after* it, so editing the gate
-itself costs a few seconds. To iterate on the gate with no tool chain at all:
+A GitHub token (`./compose.sh`) additionally fixes the two installers that
+resolve their release through `api.github.com` — `slb` and `cass` both fail
+anonymously with `403` — and authenticates the `gh` CLI inside the container,
+which `dsr`'s own diagnostics check.
+
+Rebuilds are separated by concern: only `scripts/install-tools.sh` (or anything
+above it in the Dockerfile) invalidates the tool-chain layer. `entrypoint.sh`
+and `run-quality.sh` are copied *after* it, so editing the gate itself costs
+seconds. To iterate on the gate with no tool chain at all:
 
 ```bash
-docker compose build --build-arg TOOLS_STRATEGY=none
+./compose.sh build --build-arg TOOLS_STRATEGY=none
 ```
 
 ## Network (mainland China / GFW)
