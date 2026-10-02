@@ -4452,7 +4452,7 @@ impl RaFtuiModel {
             self.push_entry(
                 EntryRole::System,
                 String::from(
-                    "RecurAgent commands: /model [provider/model], /resume, /new, \
+                    "RecurAgent commands: /model [provider/model], /model-update [provider], /resume, /new, \
                      /session, /name <name>, /plan, /compact, /tree, /undo [n], /redo [n], \
                      /export [path], /copy, /share, /tan <task>, /usage, /mcp, \
                      /add-dir <dir>, /remove-dir <dir>, /crash [list|show|delete], \
