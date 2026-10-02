@@ -95,7 +95,12 @@ const BUILTIN_VERIFY_PROMPT: &str = "You are an independent verification subagen
 /// verifier itself never gains a write path.
 const BUILTIN_FIXER_PROMPT: &str = "You are a fixer subagent. Another agent verified a change and reported specific defects. Apply the fixes in the current working directory: read the cited files and evidence first, make the smallest change that addresses each finding, and re-run the verification that exposed it. Change only what the findings call for; do not reformat, refactor, or \"improve\" adjacent code, and never edit or delete a test to make it pass. Keep the final response concise and lead with the concrete outcome, the files changed, and the commands you re-ran.";
 
-const BUILTIN_GENERAL_PROMPT: &str = "You are a general-purpose coding subagent. Complete the assigned slice of work autonomously in the current working directory: read before you edit, make the change, and verify it. Keep the final response concise and lead with the concrete outcome, changed files, and verification performed. Do not ask follow-up questions.";
+/// Implementer: owns the goal and builds it.
+///
+/// This is where a slice of a user intent lands, so it is goal-shaped (decide
+/// the change, make it, verify it) rather than task-shaped ("complete the
+/// assigned slice"). It holds the full writer toolset.
+const BUILTIN_IMPLEMENT_PROMPT: &str = "You own the assigned goal end to end, and you are expected to change code rather than only describe a change. Start by reading the relevant code, then decide the smallest set of edits that achieves the goal, make them, and verify them yourself before reporting. Do not stop at a plan when the goal is to change code, and never edit or delete a test to make it pass. Do not ask follow-up questions: when something is ambiguous, pick the reading that best serves the stated goal and say which reading you took. Keep the final response concise and lead with the concrete outcome, the files changed, and the verification performed.";
 
 /// The always-present built-in roster, ordered read-only -> writer so the
 /// prompt reads as a widening of capability.
@@ -144,8 +149,8 @@ const BUILTIN_AGENTS: &[BuiltinAgent] = &[
         system_prompt: BUILTIN_FIXER_PROMPT,
     },
     BuiltinAgent {
-        name: "general",
-        description: "general-purpose worker with the full writer toolset",
+        name: "implement",
+        description: "owns a goal end to end and builds it",
         tools: Some(&[
             "read",
             "bash",
@@ -161,7 +166,7 @@ const BUILTIN_AGENTS: &[BuiltinAgent] = &[
             "json_query",
             "sessions",
         ]),
-        system_prompt: BUILTIN_GENERAL_PROMPT,
+        system_prompt: BUILTIN_IMPLEMENT_PROMPT,
     },
 ];
 
@@ -1019,7 +1024,7 @@ fn builtin_agent_definition(agent: &BuiltinAgent) -> AgentDefinition {
 }
 
 /// Built-ins seeded before on-disk definitions, so `explore`/`verify`/`fixer`/
-/// `general` exist even when no `agents/*.md` do. Later loads of the same name
+/// `implement` exist even when no `agents/*.md` do. Later loads of the same name
 /// overwrite them, so a user or project definition still wins.
 fn builtin_agent_definitions() -> Vec<AgentDefinition> {
     BUILTIN_AGENTS
@@ -1749,7 +1754,7 @@ mod tests {
         let names = builtin_agent_names();
         let unique: std::collections::BTreeSet<&str> = names.iter().copied().collect();
         assert_eq!(unique.len(), names.len(), "duplicate built-in agent name");
-        for role in ["explore", "verify", "fixer", "general"] {
+        for role in ["explore", "verify", "fixer", "implement"] {
             assert!(
                 names.contains(&role),
                 "roster is missing {role:?}: {names:?}"
@@ -1838,25 +1843,25 @@ mod tests {
         }
     }
 
-    /// `general` is the "full child toolset" role, so it must cover everything
+    /// `implement` is the "full child toolset" role, so it must cover everything
     /// the default child list grants plus the newer read/analysis tools the
     /// orchestrators reach for. Without this, widening `DEFAULT_CHILD_TOOLS`
-    /// silently leaves `general` behind.
+    /// silently leaves `implement` behind.
     #[test]
-    fn builtin_general_covers_default_child_tools_and_newer_tooling() {
-        let general = BUILTIN_AGENTS
+    fn builtin_implement_covers_default_child_tools_and_newer_tooling() {
+        let implement = BUILTIN_AGENTS
             .iter()
-            .find(|agent| agent.name == "general")
-            .expect("general built-in");
-        let tools = general.tools.expect("general enumerates tools");
+            .find(|agent| agent.name == "implement")
+            .expect("implement built-in");
+        let tools = implement.tools.expect("implement enumerates tools");
         for name in DEFAULT_CHILD_TOOLS.split(',') {
             assert!(
                 tools.contains(&name),
-                "general is missing default child tool {name:?}"
+                "implement is missing default child tool {name:?}"
             );
         }
         for name in ["ast_grep", "ast_edit", "run_code", "json_query", "sessions"] {
-            assert!(tools.contains(&name), "general is missing {name:?}");
+            assert!(tools.contains(&name), "implement is missing {name:?}");
         }
 
         // `fixer` edits code, so it needs the writer tools too.
