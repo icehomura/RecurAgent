@@ -12008,6 +12008,31 @@ mod retry_tests {
         });
     }
 
+    /// The configured `shell_command_prefix` runs ahead of the request's
+    /// command, matching the TUI `!command` and background-job paths.
+    #[test]
+    fn run_bash_rpc_honors_configured_command_prefix() {
+        asupersync::test_utils::run_test(|| async {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let (_abort_tx, abort_rx) = oneshot::channel();
+            let result = run_bash_rpc(
+                tmp.path(),
+                None,
+                Some("RECUR_AGENT_RPC_PREFIX=prefixed"),
+                "echo $RECUR_AGENT_RPC_PREFIX",
+                abort_rx,
+            )
+            .await
+            .expect("rpc bash should succeed");
+            assert_eq!(result.exit_code, 0, "prefix run should exit cleanly");
+            assert!(
+                result.output.contains("prefixed"),
+                "command_prefix should be visible to the command: {}",
+                result.output
+            );
+        });
+    }
+
     #[test]
     fn run_bash_rpc_pump_stream_emits_io_error_frame_after_partial_output() {
         let reader = RpcFailingReader::new([
