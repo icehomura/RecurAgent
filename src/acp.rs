@@ -158,23 +158,65 @@ const ACP_PERMISSION_TIMEOUT_MS: u64 = 120_000;
 // Note: AcpServerCapabilities and AcpServerInfo are constructed inline
 // via json!() in handle_initialize for simplicity.
 
-/// ACP model descriptor.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AcpModel {
-    id: String,
-    name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    provider: Option<String>,
+/// The single mode RecurAgent's ACP server runs in.
+const ACP_AGENT_MODE_ID: &str = "agent";
+
+/// ACP `SessionModelState` — the spec's shape for `models` on a session reply:
+/// `currentModelId` plus `availableModels` of `{modelId, name, description}`.
+///
+/// The spec types this field, so the bare `[{id, name, provider}]` array this
+/// used to send was not a shape any client could decode: one that deserializes
+/// the reply into its schema dropped the WHOLE response over it. `configOptions`'
+/// `model` select remains the surface clients should drive; this is the same
+/// list in the spec's own shape.
+fn session_model_state(current: Option<(String, String)>, available: &[ModelEntry]) -> Value {
+    let current_id = current
+        .map(|(provider, model)| format!("{provider}/{model}"))
+        .or_else(|| {
+            available
+                .first()
+                .map(|entry| format!("{}/{}", entry.model.provider, entry.model.id))
+        })
+        .unwrap_or_default();
+    let available_models: Vec<Value> = available
+        .iter()
+        .map(|entry| {
+            json!({
+                "modelId": entry.model.id,
+                "name": entry.model.name,
+                "description": entry.model.provider,
+            })
+        })
+        .collect();
+    json!({
+        "currentModelId": current_id,
+        "availableModels": available_models,
+    })
 }
 
-/// ACP mode descriptor.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AcpMode {
-    slug: String,
-    name: String,
-    description: String,
+/// ACP `SessionModeState` — the spec's shape for `modes` on a session reply.
+///
+/// One mode: the autonomous coding agent. The "chat" entry this used to
+/// advertise described behaviour the server does not have — nothing gated tool
+/// execution on a mode, and `session/set_mode` did not exist — so now that
+/// clients can actually decode the field it would be a promise the server breaks.
+fn session_mode_state() -> Value {
+    json!({
+        "currentModeId": ACP_AGENT_MODE_ID,
+        "availableModes": [{
+            "id": ACP_AGENT_MODE_ID,
+            "name": "Agent",
+            "description": "Full autonomous coding agent with tool access",
+        }],
+    })
+}
+
+/// The live session's `(provider, model id)`, when its agent session is
+/// inspectable — it is taken out of the state while a prompt is in flight.
+fn current_model_of(state: &AcpSessionState) -> Option<(String, String)> {
+    let agent_session = state.agent_session.as_ref()?;
+    let provider = agent_session.agent.provider();
+    Some((provider.name().to_string(), provider.model_id().to_string()))
 }
 
 // ============================================================================
@@ -449,30 +491,9 @@ async fn run(
 
                 match handle_session_new(&request.params, &options, Some(&permission_client)) {
                     Ok((session_id, state)) => {
-                        let models: Vec<AcpModel> = options
-                            .available_models
-                            .iter()
-                            .map(|entry| AcpModel {
-                                id: entry.model.id.clone(),
-                                name: entry.model.name.clone(),
-                                provider: Some(entry.model.provider.clone()),
-                            })
-                            .collect();
-
-                        let modes = vec![
-                            AcpMode {
-                                slug: "agent".to_string(),
-                                name: "Agent".to_string(),
-                                description: "Full autonomous coding agent with tool access"
-                                    .to_string(),
-                            },
-                            AcpMode {
-                                slug: "chat".to_string(),
-                                name: "Chat".to_string(),
-                                description: "Conversational mode without tool execution"
-                                    .to_string(),
-                            },
-                        ];
+                        let models =
+                            session_model_state(current_model_of(&state), &options.available_models);
+                        let modes = session_mode_state();
 
                         let config_options = config_options_for(&state, &options.available_models);
                         let state_arc = Arc::new(Mutex::new(state));
@@ -481,8 +502,8 @@ async fn run(
                         }
 
                         // `configOptions` is the ACP-standard surface (model +
-                        // thought_level selects); `models`/`modes` stay for
-                        // clients built against the earlier shape.
+                        // thought_level selects); `models`/`modes` carry the same
+                        // information in the spec's own session-state shapes.
                         let _ = out_tx.send(json_rpc_ok(
                             id,
                             json!({
@@ -764,22 +785,19 @@ async fn run(
                         .await
                         .map_or_else(|_| None, |guard| guard.get(&session_id).cloned())
                 };
-                let config_options = match session_state.as_ref() {
+                let (config_options, models) = match session_state.as_ref() {
                     Some(state) => match state.lock(&cx).await {
-                        Ok(guard) => config_options_for(&guard, &options.available_models),
-                        Err(_) => None,
+                        Ok(guard) => (
+                            config_options_for(&guard, &options.available_models),
+                            session_model_state(
+                                current_model_of(&guard),
+                                &options.available_models,
+                            ),
+                        ),
+                        Err(_) => (None, session_model_state(None, &options.available_models)),
                     },
-                    None => None,
+                    None => (None, session_model_state(None, &options.available_models)),
                 };
-                let models: Vec<AcpModel> = options
-                    .available_models
-                    .iter()
-                    .map(|entry| AcpModel {
-                        id: entry.model.id.clone(),
-                        name: entry.model.name.clone(),
-                        provider: Some(entry.model.provider.clone()),
-                    })
-                    .collect();
 
                 let mut response = json!({
                     "sessionId": session_id,
