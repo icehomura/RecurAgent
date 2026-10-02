@@ -67,6 +67,15 @@ linker = "rust-lld"
 # before it can even answer `--version` (measured: StackReserve 1048576,
 # `thread 'main' has overflowed its stack`). `RUST_MIN_STACK` above only sizes
 # threads *spawned* by the process — it never applies to `main` — so the
-# reserve has to come from the linker. 8 MiB matches the project's other
-# deep-frame reservations (16 MiB for spawned threads, `SQLITE_THREAD_STACK_BYTES`).
-rustflags = ["-C", "link-arg=/STACK:8388608"]
+# reserve has to come from the linker.
+#
+# `/STACK:` also becomes the default reserve for `CreateThread(0)`, i.e. every
+# `std::thread::spawn` that does not call `.stack_size()`. The repository has
+# 120+ such bare spawns (only 5 sites set a size: main.rs, interactive_ftui.rs,
+# ptc_bridge.rs, session_sqlite.rs, tests/common), and a shipped `ra` binary
+# gets no `RUST_MIN_STACK` from this file, so this linker value is what covers
+# them. 32 MiB is raised from 8 MiB after repeated `STATUS_STACK_OVERFLOW`
+# (`0xC00000FD`) crashes in subagent children: the deep asupersync poll chain
+# needs far more than the old PE default. The reserve is virtual and committed
+# lazily, so the higher value costs address space, not resident memory.
+rustflags = ["-C", "link-arg=/STACK:33554432"]

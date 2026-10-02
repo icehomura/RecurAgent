@@ -15,6 +15,13 @@ use ra::auth::AuthStorage;
 use ra::config::Config;
 use ra::models::{ModelRegistry, default_models_path};
 
+/// Stack reserve for every worker thread the runtime spawns.
+///
+/// A stack overflow is a fail-fast abort on Windows (`STATUS_STACK_OVERFLOW`,
+/// `0xC00000FD`): no unwinding, no `Drop`, no session flush. 64 MiB matches the
+/// interactive driver and the `ra` binary's main-thread reservation.
+const HEADLESS_WORKER_STACK_BYTES: usize = 64 * 1024 * 1024;
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -25,6 +32,12 @@ fn main() -> Result<()> {
     let reactor = create_reactor()?;
     let runtime = RuntimeBuilder::multi_thread()
         .blocking_threads(1, 2)
+        // Worker threads poll the same deeply nested agent/provider futures the
+        // `ra` binary drives. Size them explicitly: unsized they inherit the PE
+        // default, and a deep future then aborts with `STATUS_STACK_OVERFLOW`
+        // (fail-fast, no unwinding, no session flush). 64 MiB matches
+        // `ra`'s `MAIN_STACK_BYTES`/`RUNTIME_WORKER_STACK_BYTES`.
+        .thread_stack_size(HEADLESS_WORKER_STACK_BYTES)
         .with_reactor(reactor)
         .build()
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;

@@ -3071,7 +3071,16 @@ pub(crate) async fn create_agent_session_deferred_mcp(
     // Gated on extensions actually being loaded, so a session that will never
     // dispatch an observation event allocates nothing.
     let event_runtime = if options.runtime_handle.is_none() && agent_session.extensions.is_some() {
-        match asupersync::runtime::RuntimeBuilder::new().build() {
+        // Extension observers and their event futures run on this runtime's
+        // worker threads. Size them explicitly: unsized they inherit the PE
+        // default and a deep future can abort the process with no unwinding
+        // (`STATUS_STACK_OVERFLOW`). Matches the `ra` binary's worker
+        // reservation.
+        const EVENT_RUNTIME_STACK_BYTES: usize = 64 * 1024 * 1024;
+        match asupersync::runtime::RuntimeBuilder::new()
+            .thread_stack_size(EVENT_RUNTIME_STACK_BYTES)
+            .build()
+        {
             Ok(runtime) => {
                 agent_session = agent_session.with_runtime_handle(runtime.handle());
                 tracing::debug!(

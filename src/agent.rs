@@ -14580,9 +14580,18 @@ impl AgentSession {
             return Ok(runtime_handle);
         }
 
-        let runtime = RuntimeBuilder::new().build().map_err(|e| {
-            Error::session(format!("Background compaction runtime init failed: {e}"))
-        })?;
+        // Background compaction polls the same deep provider/summarization
+        // future chain. Size the runtime's worker threads explicitly: unsized
+        // they inherit the PE default and a deep future aborts the whole
+        // process with no unwinding. See `RUNTIME_WORKER_STACK_BYTES` in
+        // `main.rs`.
+        const COMPACTION_STACK_BYTES: usize = 64 * 1024 * 1024;
+        let runtime = RuntimeBuilder::new()
+            .thread_stack_size(COMPACTION_STACK_BYTES)
+            .build()
+            .map_err(|e| {
+                Error::session(format!("Background compaction runtime init failed: {e}"))
+            })?;
         let runtime_handle = runtime.handle();
         self.compaction_runtime = Some(runtime);
         self.runtime_handle = Some(runtime_handle.clone());
