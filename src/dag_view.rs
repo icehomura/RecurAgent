@@ -1121,11 +1121,9 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize, boxed: bool) -> Prepar
             key: i,
         });
     }
-    // The virtual sink only turns green once every real node succeeded. While
-    // anything is still running/pending, or after a failure/skip, the flow
-    // never reached 结束, so it stays the same gray as the connectors.
-    let reached_end =
-        !src.is_empty() && src.iter().all(|node| node.state == DagViewState::Succeeded);
+    // The virtual sink is chrome, not a verdict: it always keeps the neutral
+    // gray of the connectors, in every node state. A green 结束 used to claim
+    // success on its own, which read as a status the graph had not earned.
     let end_idx = ln.len();
     ln.push(LNode {
         label: END_LABEL.to_string(),
@@ -1136,11 +1134,7 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize, boxed: bool) -> Prepar
         },
         layer: max_real + 1,
         x: 0,
-        state: if reached_end {
-            DagViewCellState::Root
-        } else {
-            DagViewCellState::Neutral
-        },
+        state: DagViewCellState::Neutral,
         is_dummy: false,
         key: usize::MAX,
     });
@@ -1346,11 +1340,11 @@ mod tests {
         );
     }
 
-    /// The virtual sink is green only after the whole graph succeeded. A
-    /// failure/skip (or a node still running) means the flow never reached
-    /// 结束, so it must keep the neutral gray instead of claiming success.
+    /// The virtual sink is chrome, not a verdict: it stays neutral in every
+    /// state, including full success. A green 结束 used to claim the run had
+    /// succeeded even while nodes were still running, or after a skip.
     #[test]
-    fn end_node_greens_only_after_full_success() {
+    fn end_node_stays_neutral_in_every_state() {
         let end_state = |states: [DagViewState; 2]| {
             let rows = render(&[n(1, "a", &[], states[0]), n(2, "b", &[1], states[1])]);
             rows.iter()
@@ -1360,26 +1354,19 @@ mod tests {
                 .expect("结束 box rendered")
         };
 
-        assert_eq!(
-            end_state([DagViewState::Succeeded, DagViewState::Running]),
-            DagViewCellState::Neutral,
-            "a running node means 结束 is not reached yet"
-        );
-        assert_eq!(
-            end_state([DagViewState::Succeeded, DagViewState::Failed]),
-            DagViewCellState::Neutral,
-            "a failed node means 结束 is not reached"
-        );
-        assert_eq!(
-            end_state([DagViewState::Succeeded, DagViewState::Skipped]),
-            DagViewCellState::Neutral,
-            "a skipped node means 结束 is not reached"
-        );
-        assert_eq!(
-            end_state([DagViewState::Succeeded, DagViewState::Succeeded]),
-            DagViewCellState::Root,
-            "full success turns 结束 green"
-        );
+        for states in [
+            [DagViewState::Succeeded, DagViewState::Running],
+            [DagViewState::Succeeded, DagViewState::Failed],
+            [DagViewState::Succeeded, DagViewState::Skipped],
+            [DagViewState::Succeeded, DagViewState::Succeeded],
+            [DagViewState::Pending, DagViewState::Pending],
+        ] {
+            assert_eq!(
+                end_state(states),
+                DagViewCellState::Neutral,
+                "结束 must stay gray for {states:?}"
+            );
+        }
     }
 
     /// No node label may carry an `N. ` ordinal: the box shows only the state
