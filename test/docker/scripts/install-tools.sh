@@ -27,13 +27,13 @@ ACFS_FALLBACK="${ACFS_FALLBACK:-1}"
 GH_RAW_MODE="${GH_RAW_MODE:-jsdelivr}"
 GH_RELEASE_MODE="${GH_RELEASE_MODE:-ghproxy}"
 
-# Put the curl/wget shims first on PATH so upstream installers' github.com
-# downloads go through gh-proxy (see scripts/bin/curl). Only affects this script.
-SHIM_DIR="/usr/local/share/recur-agent-gates/bin"
-if [[ "$GH_RELEASE_MODE" == "ghproxy" && -x "$SHIM_DIR/curl" ]]; then
-  export PATH="$SHIM_DIR:$PATH"
-  export GH_RELEASE_MODE
-  echo "==> GitHub release downloads via gh-proxy.com"
+# The gh-proxy shims are installed at /usr/local/bin (see the Dockerfile), which
+# precedes /usr/bin on PATH, so every github.com release download below — and
+# inside the installers — already goes through the proxy. Nothing is prepended
+# to PATH here: an installer that drops its binary into PATH's first entry must
+# find ~/.local/bin, not this script's own directory.
+if [[ "$GH_RELEASE_MODE" == "ghproxy" ]]; then
+  echo "==> GitHub release downloads via gh-proxy.com (shim at /usr/local/bin/curl)"
 fi
 
 LOG_DIR="/tmp/flywheel-install-logs"
@@ -56,21 +56,59 @@ raw_url() {
   esac
 }
 
+raw_urls() {
+  # Every mirror for <owner> <repo> <path> [ref], preferred one first. jsdelivr
+  # intermittently 404s a file it has not cached (dcg's install.sh, once) and
+  # raw.githubusercontent.com is unreachable on some networks, so the entry file
+  # is fetched from whichever mirror answers.
+  local owner="$1" repo="$2" path="$3" ref="${4:-main}"
+  local primary="" alt
+  primary="$(raw_url "$owner" "$repo" "$path" "$ref")" || return 2
+  printf '%s\n' "$primary"
+  for alt in \
+    "https://gh-proxy.com/https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}" \
+    "https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}" \
+    "https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}"; do
+    [[ "$alt" != "$primary" ]] && printf '%s\n' "$alt"
+  done
+}
+
+# fetch_installer <dest> <owner> <repo> <path> <ref>
+# Writes the first mirror that answers to <dest>. Returns 1 if none do.
+fetch_installer() {
+  local dest="$1" owner="$2" repo="$3" path="$4" ref="${5:-main}"
+  local url
+  while IFS= read -r url; do
+    if curl -fsSL --connect-timeout 20 --max-time 300 "$url" -o "$dest" && [[ -s "$dest" ]]; then
+      return 0
+    fi
+  done < <(raw_urls "$owner" "$repo" "$path" "$ref")
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # ACFS: the author's canonical full-toolchain bootstrap
 # ---------------------------------------------------------------------------
 install_via_acfs() {
   echo "==> Installing Flywheel tool chain via ACFS (profile=${PROFILE}, ref=${ACFS_REF}, raw=${GH_RAW_MODE})"
-  local url; url="$(raw_url Dicklesworthstone agentic_coding_flywheel_setup install.sh "$ACFS_REF")"
   local log="$LOG_DIR/acfs.log"
+  local src; src="$(mktemp)"
+  if ! fetch_installer "$src" Dicklesworthstone agentic_coding_flywheel_setup install.sh "$ACFS_REF"; then
+    record_fail "acfs:${PROFILE} (installer unreachable from every mirror)"
+    printf '        see %s\n' "$log"
+    rm -f "$src"
+    return 1
+  fi
   # --yes                 non-interactive
   # --profile             stack-only = tool chain only
   # --skip-ubuntu-upgrade do not attempt a distribution upgrade inside the image
   # --no-auto-fix         never block on an auto-fix prompt
   # timeout               bound the run so a hang falls back to direct installers
-  if curl -fsSL "$url" \
-      | timeout "${ACFS_TIMEOUT:-2400}" bash -s -- --yes --profile "$PROFILE" \
-          --skip-ubuntu-upgrade --no-auto-fix 2>&1 | tee "$log"; then
+  local rc=0
+  timeout "${ACFS_TIMEOUT:-2400}" bash -s -- --yes --profile "$PROFILE" \
+      --skip-ubuntu-upgrade --no-auto-fix < "$src" 2>&1 | tee "$log" || rc=$?
+  rm -f "$src"
+  if [[ "$rc" == 0 ]]; then
     record_ok "acfs:${PROFILE}"
     return 0
   fi
@@ -86,9 +124,18 @@ install_via_acfs() {
 install_tool() {
   local name="$1" owner="$2" repo="$3" path="$4" ref="$5"; shift 5
   [[ "${1:-}" == "--" ]] && shift
-  local url; url="$(raw_url "$owner" "$repo" "$path" "$ref")"
   local log="$LOG_DIR/${name}.log"
-  if curl -fsSL "$url" | timeout "${TOOL_TIMEOUT:-900}" bash -s -- "$@" 2>&1 | tee "$log"; then
+  local src; src="$(mktemp)"
+  if ! fetch_installer "$src" "$owner" "$repo" "$path" "$ref"; then
+    record_fail "$name (installer unreachable from every mirror)"
+    printf '        see %s\n' "$log"
+    rm -f "$src"
+    return 1
+  fi
+  local rc=0
+  timeout "${TOOL_TIMEOUT:-900}" bash -s -- "$@" < "$src" 2>&1 | tee "$log" || rc=$?
+  rm -f "$src"
+  if [[ "$rc" == 0 ]]; then
     record_ok "$name"
     return 0
   fi
@@ -134,11 +181,15 @@ install_direct() {
 
   # Python (needs uv, installed by the image)
   install_tool ubs  Dicklesworthstone ultimate_bug_scanner        install.sh main           -- || true
-  install_tool am   Dicklesworthstone mcp_agent_mail              scripts/install.sh main   -- --yes || true
+  # --no-start: without it the installer finishes by running the MCP server in
+  # the foreground and the tool timeout kills it (the install itself succeeded).
+  install_tool am   Dicklesworthstone mcp_agent_mail              scripts/install.sh main   -- --yes --no-start || true
   install_tool cm   Dicklesworthstone cass_memory_system          install.sh main           -- --easy-mode --verify || true
 
   # TypeScript / other
-  install_tool brenner Dicklesworthstone brenner_bot              install.sh main           -- --easy-mode --verify || true
+  # No --verify: brenner's post-install `brenner doctor --json` fails in a
+  # container (no operator config) and marks an otherwise good install failed.
+  install_tool brenner Dicklesworthstone brenner_bot              install.sh main           -- --easy-mode || true
   install_tool apr     Dicklesworthstone automated_plan_reviser_pro install.sh main         -- || true
   # jfp publishes no installer in its repository; the project site serves the
   # canonical one (verified HTTP 200, takes no flags).
