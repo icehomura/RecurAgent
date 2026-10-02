@@ -195,6 +195,21 @@ RUN set -eux; \
     "${GOBIN}/yq" --version; \
     "${GOBIN}/act" --version
 
+# minisign verifies release signatures: caam's installer resolves its release,
+# downloads the signature, and *refuses* to install without a verifier
+# (`ERROR: minisign is required to verify release signatures`) rather than
+# silently downgrade to an unsigned source build. Its own apt layer rather than
+# an entry in the package list above: that list precedes the Go SDK and rustup
+# layers, whose downloads dominate a cold build, and editing it would
+# invalidate both.
+USER root
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends minisign; \
+    rm -rf /var/lib/apt/lists/*; \
+    minisign -v
+USER ${TARGET_USER}
+
 # ast-grep (prebuilt release). UBS' installer falls back to
 # `cargo install ast-grep` when the binary is missing — 222 crates, measured at
 # ~430 s of the tool layer — so shipping the release binary lets it skip that.
