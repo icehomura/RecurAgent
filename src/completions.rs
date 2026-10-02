@@ -110,11 +110,21 @@ pub fn complete(flag: &str, prefix: &str, out: &mut dyn std::io::Write) -> Resul
 }
 
 fn model_candidates(prefix: &str) -> Vec<String> {
-    let auth_path = crate::config::Config::global_dir().join("auth.json");
-    let Ok(auth) = crate::auth::AuthStorage::load(auth_path) else {
+    let global_dir = crate::config::Config::global_dir();
+    let auth_path = crate::config::Config::auth_path();
+    let models_path = crate::models::default_models_path(&global_dir);
+    model_candidates_from(&auth_path, &models_path, prefix)
+}
+
+fn model_candidates_from(
+    auth_path: &std::path::Path,
+    models_path: &std::path::Path,
+    prefix: &str,
+) -> Vec<String> {
+    let Ok(auth) = crate::auth::AuthStorage::load(auth_path.to_path_buf()) else {
         return Vec::new();
     };
-    let registry = crate::models::ModelRegistry::load(&auth, None);
+    let registry = crate::models::ModelRegistry::load(&auth, Some(models_path.to_path_buf()));
     let lowered = prefix.to_ascii_lowercase();
     let mut out = Vec::new();
     for entry in registry.models() {
@@ -175,6 +185,33 @@ mod tests {
     fn unknown_complete_flag_is_named_error() {
         let err = complete("--bogus", "", &mut Vec::new()).unwrap_err();
         assert!(err.to_string().contains("Unknown __complete flag"));
+    }
+
+    #[test]
+    fn model_candidates_from_offers_persisted_catalog_models() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let auth_path = dir.path().join("auth.json");
+        let models_path = dir.path().join("models.json");
+        std::fs::write(
+            &models_path,
+            r#"{
+                "providers": {
+                    "acme": {
+                        "baseUrl": "http://127.0.0.1:1/v1",
+                        "api": "openai-completions",
+                        "models": [{"id": "acme-catalog-model"}]
+                    }
+                }
+            }"#,
+        )
+        .expect("write models.json");
+
+        let candidates = model_candidates_from(&auth_path, &models_path, "acme/acme-catalog");
+
+        assert!(
+            candidates.contains(&"acme/acme-catalog-model".to_string()),
+            "models.json entries must be offered by completion: {candidates:?}"
+        );
     }
 
     #[test]
