@@ -224,6 +224,41 @@ Install section of `docs/sdk.md`.
 
 ---
 
+## Running the Quality Gate in Docker (`test/docker`)
+
+When the host cannot run the gate — no `dsr`/`rch` worker fleet, a wedged WSL
+VM, or a Windows checkout — `test/docker/` runs the same checks in a Linux
+container:
+
+```bash
+cd test/docker
+docker compose build                        # Ubuntu 24.04 + pinned Rust + tool chain
+docker compose run --rm gate                # clone icehomura/RecurAgent, run every check
+docker compose --profile dev run --rm dev   # gate the working tree instead (bind mount)
+```
+
+`scripts/run-quality.sh` reads the check list straight out of `.dsr/repos.yaml`
+(the recipe key is `pi_agent_rust`, not the `recur_agent` used on the documented
+`dsr` command line) and runs each check verbatim with only the `rch exec --`
+transport prefix stripped, so cargo compiles in the container under
+`RCH_DISABLED=1`. Three consequences:
+
+- The check list cannot drift from the recipe. Do not hand-copy it into the
+  script: hand-copied `run-quality.sh` revisions silently dropped
+  `scripts/check_fixture_read_patience.py` (check 7 of 7).
+- A green container run is a **fork-local** result. It is not a DSR run and
+  cannot be cited as DSR-attributed evidence; see "Build, Quality, and Release
+  Authority" above.
+- `dsr` and `rch` are installed so their dependency checks pass, but `dsr
+  quality` itself is not invoked: every heavy check in the recipe carries
+  `RCH_REQUIRE_REMOTE=1` and fails closed with no worker fleet, which is the
+  reason this local path exists at all.
+
+Mirror configuration (mainland-China network defaults), the persisted-volume
+layout, and the tool inventory are in `test/docker/README.md`.
+
+---
+
 ## Testing
 
 The DSR quality recipe runs the project's required test lanes. Individual
