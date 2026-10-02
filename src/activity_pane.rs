@@ -16,9 +16,10 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 /// Maximum number of lines kept per activity item (overflow is evicted from the front
 /// and counted in `dropped`).
 pub const ACTIVITY_MAX_LINES: usize = 400;
-/// Panel height (rows) in the collapsed state.
+/// Panel body height (rows) in the collapsed state, excluding the box borders.
 pub const ACTIVITY_COLLAPSED_ROWS: u16 = 5;
-/// Maximum panel height (rows) in the expanded state.
+/// Maximum panel body height (rows) in the expanded state, excluding the box
+/// borders.
 pub const ACTIVITY_EXPANDED_MAX_ROWS: u16 = 24;
 /// Maximum number of side-by-side columns.
 pub const ACTIVITY_MAX_COLUMNS: usize = 4;
@@ -418,6 +419,44 @@ impl ActivityPane {
         out
     }
 
+    /// Rounded box around the pane: the header sits in the top border, the
+    /// body columns sit between `│` side borders, and a bottom border closes
+    /// the box. Exactly `rows` lines of exactly `width` cells; falls back to
+    /// [`ActivityPane::render`] when there is no room for a box.
+    #[must_use]
+    pub fn render_boxed(&self, width: usize, rows: usize, now_ms: u64) -> Vec<String> {
+        const MIN_BOX_ROWS: usize = 3;
+        if rows < MIN_BOX_ROWS || width < 4 {
+            return self.render(width, rows, now_ms);
+        }
+        let inner = width - 2;
+        let head = clip_cells(&self.header(self.expanded), inner.saturating_sub(4).max(1));
+        let head_width = UnicodeWidthStr::width(head.as_str());
+        let fill = inner.saturating_sub(head_width + 3);
+        let mut top = String::with_capacity(width);
+        top.push_str("╭─ ");
+        top.push_str(&head);
+        top.push(' ');
+        for _ in 0..fill {
+            top.push('─');
+        }
+        top.push('╮');
+
+        let mut out = Vec::with_capacity(rows);
+        out.push(fit_cells(&top, width));
+        for line in self.render(inner, rows - 2, now_ms) {
+            out.push(format!("│{line}│"));
+        }
+        let mut bottom = String::with_capacity(width);
+        bottom.push('╰');
+        for _ in 0..inner {
+            bottom.push('─');
+        }
+        bottom.push('╯');
+        out.push(bottom);
+        out
+    }
+
     /// Index of `key`.
     fn index_of(&self, key: &str) -> Option<usize> {
         self.items.iter().position(|item| item.key == key)
@@ -445,6 +484,15 @@ fn sanitize_lines(text: &str) -> Vec<String> {
         out.push(current);
     }
     out
+}
+
+/// Truncate to at most `max` cells, marking a cut with `…`, without padding.
+/// The returned value never exceeds `max` display cells.
+fn clip_cells(text: &str, max: usize) -> String {
+    if UnicodeWidthStr::width(text) <= max {
+        return text.to_string();
+    }
+    fit_cells(text, max)
 }
 
 /// Truncate to `width` cells (ending with `…`) or pad with spaces on the right; the
@@ -494,6 +542,39 @@ mod tests {
 
     fn width_of(line: &str) -> usize {
         UnicodeWidthStr::width(line)
+    }
+
+    #[test]
+    fn zz_scratch_measure_columns() {
+        for width in [7usize, 10, 20, 40, 120] {
+            for count in [1usize, 4, 8] {
+                let mut pane = ActivityPane::new();
+                for i in 0..count {
+                    let key = format!("k{i}");
+                    let item = pane.touch(&key, ActivityKind::Subagent, &format!("agent #{i}"), 0);
+                    item.push_text(&format!(
+                        "alpha{i} beta gamma delta epsilon zeta eta theta\nsecond line of output\n"
+                    ));
+                }
+                let shown = count.min(ACTIVITY_MAX_COLUMNS);
+                let geometry = ActivityPane::columns(width, shown);
+                let cols: Vec<usize> = geometry.iter().map(|&(_, w)| w).collect();
+                let body = pane.render(width, 5, 0);
+                let heads: Vec<String> = pane
+                    .display(0)
+                    .iter()
+                    .zip(geometry.iter())
+                    .map(|(item, &(_, w))| {
+                        ActivityPane::render_column(item, w, 5)[0].trim_end().to_string()
+                    })
+                    .collect();
+                eprintln!(
+                    "PANE width={width} items={count} cols={cols:?} row0={:?} heads={:?}",
+                    body[0].trim_end(),
+                    heads
+                );
+            }
+        }
     }
 
     #[test]
@@ -705,6 +786,44 @@ mod tests {
         assert!(lines[1].starts_with("  aa"), "{:?}", lines[1]);
         let (_, body_right) = lines[1].split_once(COLUMN_DIVIDER).unwrap();
         assert!(body_right.starts_with("  bb"), "{:?}", lines[1]);
+    }
+
+    #[test]
+    fn render_boxed_wraps_the_pane_in_a_rounded_box() {
+        let mut pane = ActivityPane::new();
+        pane.touch("b1", ActivityKind::Bash, "bash: cargo test", 0)
+            .push_text("compiling\nrunning 3 tests\n");
+
+        let lines = pane.render_boxed(60, 5, 0);
+        assert_eq!(lines.len(), 5);
+        for line in &lines {
+            assert_eq!(width_of(line), 60, "{line:?}");
+        }
+        assert!(lines[0].starts_with("╭─ activity"), "{:?}", lines[0]);
+        assert!(lines[0].ends_with('╮'), "{:?}", lines[0]);
+        assert!(lines[0].contains("ctrl+x expand"), "{:?}", lines[0]);
+        for line in &lines[1..4] {
+            assert!(line.starts_with('│') && line.ends_with('│'), "{line:?}");
+        }
+        assert!(lines[1].contains("bash: cargo test"), "{:?}", lines[1]);
+        assert!(lines[2].contains("compiling"), "{:?}", lines[2]);
+        assert!(
+            lines[4].starts_with('╰') && lines[4].ends_with('╯'),
+            "{:?}",
+            lines[4]
+        );
+
+        // A narrow box clips the header instead of overflowing the border.
+        let narrow = pane.render_boxed(30, 3, 0);
+        assert_eq!(narrow.len(), 3);
+        for line in &narrow {
+            assert_eq!(width_of(line), 30, "{line:?}");
+        }
+        assert!(narrow[0].starts_with("╭─ activity"), "{:?}", narrow[0]);
+
+        // Too few rows (or cells) for corners: the plain body comes back.
+        assert_eq!(pane.render_boxed(60, 2, 0), pane.render(60, 2, 0));
+        assert_eq!(pane.render_boxed(3, 5, 0), pane.render(3, 5, 0));
     }
 
     #[test]

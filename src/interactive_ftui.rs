@@ -148,6 +148,10 @@ const JOBS_POLL_INTERVAL: Duration = Duration::from_millis(500);
 /// column width anyway; this only bounds what a long command line can retain.
 const ACTIVITY_LABEL_MAX_CHARS: usize = 160;
 
+/// Rows the rounded box around the activity pane costs: one top border
+/// carrying the header, one bottom border.
+const ACTIVITY_BORDER_ROWS: u16 = 2;
+
 /// Spinner animation cadence while the agent works.
 const SPINNER_INTERVAL: Duration = Duration::from_millis(120);
 
@@ -2677,11 +2681,12 @@ impl RaFtuiModel {
     }
 
     /// Columns the editor renders into: the frame actually drawn when there
-    /// is one, else the last known terminal size.
+    /// is one, else the last known terminal size. Two of those cells belong
+    /// to the composer box's side borders, so wrapping measures the interior.
     fn input_width(&self) -> usize {
         let (width, _) = self.rendered_size.get();
         let width = if width == 0 { self.term.0 } else { width };
-        usize::from(width).max(1)
+        usize::from(width).saturating_sub(2).max(1)
     }
 
     /// Insert a pasted blob, collapsing it into a numbered placeholder when it
@@ -2798,21 +2803,28 @@ impl RaFtuiModel {
     /// Rows the live activity pane reserves above the status line.
     ///
     /// Zero while nothing is visible and the pane is collapsed, so an idle
-    /// session keeps every conversation row; the collapsed pane is a fixed
-    /// five rows (header + four tail lines) and the expanded one takes the
-    /// larger share up to [`ACTIVITY_EXPANDED_MAX_ROWS`].
+    /// session keeps every conversation row; otherwise the pane's body rows
+    /// ([`ACTIVITY_COLLAPSED_ROWS`] collapsed, a larger share expanded) plus
+    /// the rounded box's two border rows, clamped so a short terminal keeps a
+    /// usable conversation body and composer.
     fn activity_rows(&self) -> u16 {
         let visible = !self.activity.display(self.activity_now_ms()).is_empty();
         if !visible && !self.activity.expanded {
             return 0;
         }
-        if self.activity.expanded {
+        let body = if self.activity.expanded {
             (self.term.1.saturating_mul(2) / 5)
                 .max(ACTIVITY_COLLAPSED_ROWS)
                 .min(ACTIVITY_EXPANDED_MAX_ROWS)
         } else {
-            ACTIVITY_COLLAPSED_ROWS.min(self.term.1 / 3).max(1)
-        }
+            ACTIVITY_COLLAPSED_ROWS
+        };
+        let budget = self
+            .term
+            .1
+            .saturating_sub(FIXED_CHROME_ROWS + self.input_rows())
+            .max(3);
+        (body + ACTIVITY_BORDER_ROWS).min(budget)
     }
 
     /// Register a tool call in the activity pane when its family can block
@@ -3726,6 +3738,17 @@ impl RaFtuiModel {
         .input
     }
 
+    /// Region the editor's text occupies: the input region minus the composer
+    /// box's side borders. Mouse-to-caret mapping must use this, not the
+    /// outer rect, or every click lands one cell to the right.
+    fn input_inner_rect(&self) -> Rect {
+        let rect = self.input_rect();
+        if rect.width <= 2 {
+            return rect;
+        }
+        Rect::new(rect.x + 1, rect.y, rect.width - 2, rect.height)
+    }
+
     /// Move the caret to the cell clicked inside the input region, returning
     /// whether it moved.
     ///
@@ -3735,7 +3758,7 @@ impl RaFtuiModel {
     /// fits. Anywhere else this is a deliberate no-op rather than landing the
     /// caret in the wrong place.
     fn place_input_cursor(&mut self, x: u16, y: u16) -> bool {
-        let rect = self.input_rect();
+        let rect = self.input_inner_rect();
         if rect.is_empty() || x < rect.x || y < rect.y {
             return false;
         }
@@ -6261,35 +6284,113 @@ impl RaFtuiModel {
         self.watchdog.snapshot()
     }
 
-    /// Paint the live activity pane: a one-line header (what is running, and
-    /// the toggle chord) over the tail columns produced by
-    /// [`ActivityPane::render`].
+    /// Paint the composer as a rounded box: `╭───╮` over the editor,
+    /// `│ … │` beside it, `╰───╯` under it.
+    ///
+    /// The layout already reserves one row above and one below the editor for
+    /// the old pair of rules; those rows become the box's horizontal borders
+    /// and only the two side columns are new, so boxing the composer costs no
+    /// vertical space. A frame too narrow for corners falls back to the plain
+    /// rules rather than drawing a broken box.
+    fn render_composer(&self, regions: &Regions, frame: &mut Frame) {
+        let rule_style = ftui::Style::new().fg(self.palette.rule);
+        let top = regions.input_rule_top;
+        let bottom = regions.input_rule_bottom;
+        let body = regions.input;
+        let width = usize::from(top.width);
+        if width < 4 || body.height == 0 {
+            let rule = "─".repeat(width);
+            Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+                rule.clone(),
+                rule_style,
+            )]))
+            .render(top, frame);
+            Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+                rule, rule_style,
+            )]))
+            .render(bottom, frame);
+            self.render_composer_body(body, frame);
+            return;
+        }
+        let fill = "─".repeat(width - 2);
+        Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+            format!("╭{fill}╮"),
+            rule_style,
+        )]))
+        .render(top, frame);
+        Paragraph::new(Text::from_lines([ftui::text::Line::styled(
+            format!("╰{fill}╯"),
+            rule_style,
+        )]))
+        .render(bottom, frame);
+        // Input editor while idle or answering an ask card; processing note
+        // while the agent works uninterruptibly.
+        self.render_composer_body(
+            Rect::new(body.x + 1, body.y, body.width - 2, body.height),
+            frame,
+        );
+        // Side borders, one cell on each row.
+        let side_rows: Vec<ftui::text::Line<'static>> = (0..usize::from(body.height))
+            .map(|_| ftui::text::Line::styled("│", rule_style))
+            .collect();
+        Paragraph::new(Text::from_lines(side_rows.clone()))
+            .render(Rect::new(body.x, body.y, 1, body.height), frame);
+        Paragraph::new(Text::from_lines(side_rows)).render(
+            Rect::new(body.x + body.width - 1, body.y, 1, body.height),
+            frame,
+        );
+    }
+
+    /// The composer's interior: the editor while it owns input, otherwise the
+    /// note shown while the agent works.
+    fn render_composer_body(&self, area: Rect, frame: &mut Frame) {
+        if self.input_active() {
+            self.input.render(area, frame);
+        } else {
+            Paragraph::new(Text::raw(
+                "… processing (esc to abort, ctrl+c twice to quit)",
+            ))
+            .render(area, frame);
+        }
+    }
+
+    /// Paint the live activity pane as a rounded box: the header sits in the
+    /// top border, the tail columns sit between `│` side borders, and the
+    /// bottom border closes it. The border uses the same violet as the
+    /// composer box so both read as chrome.
     ///
     /// The pane stays plain text on purpose: `activity_pane` owns the column
     /// math so it can be unit-tested without a terminal, and this method only
     /// sanitizes and styles what it returns.
     fn render_activity(&self, area: Rect, frame: &mut Frame) {
-        let header = ftui::text::Line::styled(
-            sanitize(&self.activity.header(self.activity.expanded)).into_owned(),
-            ftui::Style::new().dim().fg(self.palette.muted),
-        );
-        Paragraph::new(Text::from_lines([header])).render(area, frame);
-        if area.height <= 1 {
+        let now = self.activity_now_ms();
+        let width = usize::from(area.width);
+        let height = usize::from(area.height);
+        let border_style = ftui::Style::new().fg(self.palette.rule);
+        let body_style = ftui::Style::new().fg(self.palette.muted);
+        if height < 3 || width < 4 {
+            // No room for corners: one header row beats a broken box.
+            let header = ftui::text::Line::styled(
+                sanitize(&self.activity.header(self.activity.expanded)).into_owned(),
+                body_style,
+            );
+            Paragraph::new(Text::from_lines([header])).render(area, frame);
             return;
         }
-        let body = Rect::new(area.x, area.y + 1, area.width, area.height - 1);
-        let lines = self.activity.render(
-            usize::from(body.width),
-            usize::from(body.height),
-            self.activity_now_ms(),
-        );
-        let style = ftui::Style::new().fg(self.palette.muted);
-        let text = Text::from_lines(
-            lines
-                .iter()
-                .map(|line| ftui::text::Line::styled(sanitize(line).into_owned(), style)),
-        );
-        Paragraph::new(text).render(body, frame);
+        let lines = self.activity.render_boxed(width, height, now);
+        let styled: Vec<ftui::text::Line<'static>> = lines
+            .iter()
+            .enumerate()
+            .map(|(row, line)| {
+                let style = if row == 0 || row + 1 == height {
+                    border_style
+                } else {
+                    body_style
+                };
+                ftui::text::Line::styled(sanitize(line).into_owned(), style)
+            })
+            .collect();
+        Paragraph::new(Text::from_lines(styled)).render(area, frame);
     }
 
     /// Suggestion rows plus a keyboard hint (issue #208). The highlighted
@@ -6660,31 +6761,12 @@ impl RaFtuiModel {
             self.render_completion(regions.completion, frame);
         }
 
-        // The composer is framed by a pair of rules so it reads as its own
-        // surface (violet, deliberately: never white, never gray). Drawn even
-        // while the agent works, so the frame does not jump between states.
-        let rule_style = ftui::Style::new().fg(self.palette.rule);
-        let rule = "─".repeat(usize::from(regions.input_rule_top.width));
-        Paragraph::new(Text::from_lines([ftui::text::Line::styled(
-            rule.clone(),
-            rule_style,
-        )]))
-        .render(regions.input_rule_top, frame);
-        Paragraph::new(Text::from_lines([ftui::text::Line::styled(
-            rule, rule_style,
-        )]))
-        .render(regions.input_rule_bottom, frame);
-
-        // Input editor while idle or answering an ask card; processing note
-        // while the agent works uninterruptibly.
-        if self.input_active() {
-            self.input.render(regions.input, frame);
-        } else {
-            Paragraph::new(Text::raw(
-                "… processing (esc to abort, ctrl+c twice to quit)",
-            ))
-            .render(regions.input, frame);
-        }
+        // The composer is a rounded box so it reads as its own surface
+        // (violet, deliberately: never white, never gray). The two rule rows
+        // the layout already reserves are its top and bottom borders, so the
+        // box costs no extra rows; it is drawn even while the agent works, so
+        // the frame does not jump between states.
+        self.render_composer(&regions, frame);
 
         // Footer: scroll indicator wins; otherwise last-turn usage stats.
         let footer = if from_tail > 0 {
@@ -11300,7 +11382,11 @@ mod tests {
             details: None,
         });
 
-        assert_eq!(model.activity_rows(), ACTIVITY_COLLAPSED_ROWS);
+        assert_eq!(
+            model.activity_rows(),
+            ACTIVITY_COLLAPSED_ROWS + ACTIVITY_BORDER_ROWS,
+            "the pane is the body rows plus the box borders"
+        );
         let item = model.activity.get("b1").expect("bash claims a pane row");
         assert_eq!(item.kind, ActivityKind::Bash);
         assert_eq!(item.state, ActivityState::Running);
@@ -11328,7 +11414,7 @@ mod tests {
         );
         assert_eq!(
             model.activity_rows(),
-            ACTIVITY_COLLAPSED_ROWS,
+            ACTIVITY_COLLAPSED_ROWS + ACTIVITY_BORDER_ROWS,
             "a finished row lingers before the pane collapses"
         );
     }
@@ -11415,7 +11501,7 @@ mod tests {
             tool_id: "b1".into(),
         }));
         let collapsed = sim.model().activity_rows();
-        assert_eq!(collapsed, ACTIVITY_COLLAPSED_ROWS);
+        assert_eq!(collapsed, ACTIVITY_COLLAPSED_ROWS + ACTIVITY_BORDER_ROWS);
 
         sim.inject_event(key(KeyCode::Char('x'), Modifiers::CTRL));
         assert!(sim.model().activity.expanded, "ctrl+x expands the pane");
@@ -11458,6 +11544,52 @@ mod tests {
         assert!(
             rendered.contains("distinctive-pane-line"),
             "pane tail missing from the frame: {rendered:?}"
+        );
+        // The pane is a rounded box: header in the top border, `│` sides.
+        assert!(
+            rendered.contains('╭') && rendered.contains('╮'),
+            "pane box top border missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains('╰') && rendered.contains('╯'),
+            "pane box bottom border missing: {rendered:?}"
+        );
+        let pane_line = rendered
+            .lines()
+            .find(|line| line.contains("distinctive-pane-line"))
+            .expect("pane tail line in frame");
+        assert!(
+            pane_line.starts_with('│') && pane_line.ends_with('│'),
+            "pane body must sit between box borders: {pane_line:?}"
+        );
+    }
+
+    #[test]
+    fn view_wraps_the_composer_in_a_rounded_box() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        sim.send(RaFtuiMsg::Agent(RaMsg::System(String::from("hello"))));
+
+        let width = 40;
+        let height = 12;
+        let rendered = buffer_text(sim.capture_frame(width, height), width, height);
+        assert!(
+            rendered.contains('╭') && rendered.contains('╮'),
+            "composer box top border missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains('╰') && rendered.contains('╯'),
+            "composer box bottom border missing: {rendered:?}"
+        );
+        // The placeholder sits inside the box, between its side borders.
+        let editor_line = rendered
+            .lines()
+            .find(|line| line.contains("Type a message"))
+            .expect("editor placeholder row in frame");
+        assert!(
+            editor_line.starts_with('│') && editor_line.ends_with('│'),
+            "editor must render inside the box: {editor_line:?}"
         );
     }
 
@@ -11671,7 +11803,8 @@ mod tests {
         let (_tx, mut model) = new_model();
         model.rendered_size.set((80, 24));
         model.input.set_text("hello world");
-        let rect = model.input_rect();
+        // The text starts one cell inside the composer box's side border.
+        let rect = model.input_inner_rect();
         let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
             MouseEventKind::Down(MouseButton::Left),
             rect.x + 1,
@@ -11688,7 +11821,7 @@ mod tests {
         model.rendered_size.set((80, 24));
         model.input.set_text(&"x".repeat(200));
         let before = model.input.cursor();
-        let rect = model.input_rect();
+        let rect = model.input_inner_rect();
         let _ = model.handle_term(&Event::Mouse(ftui::MouseEvent::new(
             MouseEventKind::Down(MouseButton::Left),
             rect.x + 1,
