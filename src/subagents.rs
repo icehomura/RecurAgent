@@ -80,9 +80,13 @@ struct BuiltinAgent {
 
 /// Read-only scout: answers a question from the codebase, never mutates.
 ///
-/// No `bash` and no write tools, so "read-only" is enforced by the tool list
-/// rather than by this prompt.
-const BUILTIN_EXPLORE_PROMPT: &str = "You are a read-only investigation subagent. Answer the assigned question with evidence from the codebase: cite file paths and line numbers, quote the relevant lines, and say plainly what you could not determine. Never edit files or run mutating commands. Keep the final response concise.";
+/// It carries `bash` and `run_code` so it can run read-only inspection
+/// (`git log`/`show`/`diff`, `rg`, `cargo metadata`, listing tests) rather than
+/// guessing. That means read-only is **prompt-enforced**, not tool-enforced:
+/// `bash_mediation` only blocks catastrophic commands, not ordinary mutation.
+/// The prohibition below is therefore the real guard, and
+/// `builtin_explore_prompt_forbids_mutation` fails if it is weakened.
+const BUILTIN_EXPLORE_PROMPT: &str = "You are a read-only investigation subagent. Answer the assigned question with evidence from the codebase: cite file paths and line numbers, quote the relevant lines, and say plainly what you could not determine. You have a shell, and it is for READ-ONLY inspection only: git log/show/diff/status/blame, rg, find, ls, cargo metadata/tree, and reading test lists are fine. Never edit, create, move, or delete a file; never redirect or append into one; never run git add/commit/stash/checkout/restore (nor any other state-changing git command); never install packages or change toolchain state; and never run a command whose purpose is to change anything. If answering would require a change, report what should change instead of making it. Keep the final response concise.";
 
 /// Independent verification: may run commands, may not write.
 ///
@@ -110,8 +114,17 @@ const BUILTIN_IMPLEMENT_PROMPT: &str = "You own the assigned goal end to end, an
 const BUILTIN_AGENTS: &[BuiltinAgent] = &[
     BuiltinAgent {
         name: "explore",
-        description: "read-only investigation without writes or shell",
-        tools: Some(&["read", "grep", "find", "ls", "ast_grep", "json_query"]),
+        description: "read-only investigation: searches, inspects, runs read-only commands",
+        tools: Some(&[
+            "read",
+            "grep",
+            "find",
+            "ls",
+            "ast_grep",
+            "json_query",
+            "run_code",
+            "bash",
+        ]),
         system_prompt: BUILTIN_EXPLORE_PROMPT,
     },
     BuiltinAgent {
@@ -1776,10 +1789,11 @@ mod tests {
         assert!(matches!(agents["explore"].source, AgentSource::BuiltIn));
     }
 
-    /// The read-only roles must not gain a write or a command-execution escape.
-    /// The tool list is the harness-enforced half of that guarantee (a
-    /// `bash`-bearing child cannot be barrier-gated), so it is asserted, not
-    /// trusted to the prompt.
+    /// The read-only roles must not gain a *write* tool. That is now the only
+    /// part left to enforce by tool list: `explore` carries a shell (see
+    /// `builtin_explore_prompt_forbids_mutation`), so its read-only property
+    /// rests on its prompt, while `verify` keeps `bash`/`run_code` because
+    /// running the gates is its job.
     #[test]
     fn builtin_read_only_roles_never_list_a_write_tool() {
         // Write tools are forbidden for every role that must not mutate.
@@ -1805,15 +1819,10 @@ mod tests {
             .find(|agent| agent.name == "explore")
             .expect("explore built-in");
         let explore_tools = explore.tools.expect("explore enumerates tools");
-        // `explore` is the total read-only role: it must not execute at all.
-        // `verify` is allowed `bash`/`run_code` (running the gates is its job),
-        // so only its lack of write tools is asserted above.
-        for tool in explore_tools {
-            assert!(
-                !["bash", "run_code"].contains(tool),
-                "explore must not execute anything, but lists {tool:?}"
-            );
-        }
+        assert!(
+            explore_tools.contains(&"bash") && explore_tools.contains(&"run_code"),
+            "explore needs read-only command execution to answer questions: {explore_tools:?}"
+        );
 
         // `verify` exists to run the gates, so it needs bash; the absence of a
         // write tool is what keeps its report honest.
@@ -1824,6 +1833,31 @@ mod tests {
         let verify_tools = verify.tools.expect("verify enumerates tools");
         assert!(verify_tools.contains(&"bash"));
         assert!(!verify_tools.contains(&"edit") && !verify_tools.contains(&"write"));
+    }
+
+    /// `explore` carries a shell, and `bash_mediation` only blocks catastrophic
+    /// commands rather than ordinary mutation, so this prompt is the guard that
+    /// keeps it read-only. Fails if that guard is weakened.
+    #[test]
+    fn builtin_explore_prompt_forbids_mutation() {
+        let explore = BUILTIN_AGENTS
+            .iter()
+            .find(|agent| agent.name == "explore")
+            .expect("explore built-in");
+        let prompt = explore.system_prompt.to_lowercase();
+        for phrase in [
+            "read-only inspection only",
+            "never edit, create, move, or delete a file",
+            "never redirect or append",
+            "git add/commit/stash/checkout/restore",
+            "never install packages",
+        ] {
+            assert!(
+                prompt.contains(phrase),
+                "explore's read-only guard lost {phrase:?}: {}",
+                explore.system_prompt
+            );
+        }
     }
 
     /// Every tool a built-in names must be one `--tools` actually provides, or
