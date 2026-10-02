@@ -24,7 +24,7 @@ use anyhow::{Result, bail};
 use asupersync::runtime::reactor::create_reactor;
 use asupersync::runtime::{RuntimeBuilder, RuntimeHandle};
 use asupersync::sync::{Mutex, OwnedMutexGuard};
-use bubbletea::{Cmd, KeyMsg, KeyType, Message as BubbleMessage, Program, quit};
+use chrono::{DateTime, Utc};
 use clap::error::ErrorKind;
 use ra::agent::{
     AbortHandle, Agent, AgentConfig, AgentEvent, AgentSession, PreWarmedExtensionRuntime,
@@ -209,6 +209,32 @@ fn write_resource_diagnostics_since(
     Ok(written)
 }
 
+/// Stack budget for the thread that drives the CLI.
+///
+/// The interactive driver already reserves `interactive_ftui::DRIVER_STACK_BYTES`
+/// (64 MiB) for its agent thread, but the headless surfaces — `--print`, RPC,
+/// and every `subagent` child — drive the same deeply nested asupersync future
+/// on the process's initial thread. Windows sizes that thread from the PE
+/// header (1 MiB default; 32 MiB after the `/STACK:` linker override), which
+/// aborts with `STATUS_STACK_OVERFLOW` (0xC00000FD) before the future can
+/// finish; that crash is why a `dag`/`subagent` call reported "child emitted an
+/// error event". Reserve the same budget as the interactive driver for every
+/// surface explicitly.
+///
+/// A stack overflow is a fail-fast abort: no unwinding, no `Drop`, no session
+/// flush. For a child that is one lost delegation; for `main` it is the whole
+/// conversation, so this thread gets the largest reservation in the tree.
+const MAIN_STACK_BYTES: usize = 64 * 1024 * 1024;
+
+/// Stack reserve for every worker thread the headless runtime spawns.
+///
+/// `RuntimeBuilder::multi_thread()` polls tasks the agent hands to the runtime
+/// on worker threads, not on the `ra-main` thread above. Without this they
+/// inherit the PE default and a deep provider/tool future overflows there
+/// instead — the same abort, on a thread `MAIN_STACK_BYTES` cannot reach.
+/// Matches `interactive_ftui::DRIVER_STACK_BYTES`.
+const RUNTIME_WORKER_STACK_BYTES: usize = 64 * 1024 * 1024;
+
 fn main() {
     // `/share` uses a gated copy of Pi on Windows so the real `gh` child cannot
     // spawn until its wrapper is covered by kill-on-close Job discipline.
@@ -224,7 +250,20 @@ fn main() {
     #[cfg(windows)]
     let _ = enable_ansi_support::enable_ansi_support();
 
-    let result = main_impl();
+    // `main_impl` builds the runtime and `block_on`s `run()`, so this thread is
+    // where the agent future is polled on the headless paths. Run it on an
+    // explicitly sized stack rather than the PE default.
+    let result = std::thread::Builder::new()
+        .name("ra-main".to_string())
+        .stack_size(MAIN_STACK_BYTES)
+        .spawn(main_impl)
+        .map_or_else(
+            |error| Err(anyhow::anyhow!("cannot start the agent thread: {error}")),
+            |handle| match handle.join() {
+                Ok(result) => result,
+                Err(payload) => std::panic::resume_unwind(payload),
+            },
+        );
 
     // Final profiler snapshot at normal shutdown: the periodic thread only
     // fires every 10s, so short runs would otherwise leave nothing on disk
@@ -1055,6 +1094,10 @@ fn main_impl() -> Result<()> {
     let reactor = create_reactor()?;
     let runtime = RuntimeBuilder::multi_thread()
         .blocking_threads(1, 2)
+        // Worker threads poll tasks the agent hands to the runtime; size them
+        // explicitly or a deep future overflows on the PE default instead of
+        // on `ra-main`. See `RUNTIME_WORKER_STACK_BYTES`.
+        .thread_stack_size(RUNTIME_WORKER_STACK_BYTES)
         .with_reactor(reactor)
         .build()
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -1689,13 +1732,11 @@ async fn run(
     // this function (provider/model flags, resources, workspace trust, approval
     // state, enabled tools) is threaded through `SessionOptions`, and the SDK
     // session cannot reach extension-provided providers or models anyway.
-    // `cli.ftui` is redundant with `!cli.classic` while the two are declared
-    // `conflicts_with` each other, and it is named here on purpose: it was the
-    // one Cli field nothing in the crate read, so `--ftui` was a documented
-    // flag that did nothing and three e2e suites passed it believing it chose
-    // the stack. Reading it keeps that honest if the conflict is ever relaxed.
+    // The classic charmed_rust/bubbletea stack was removed, so the FrankenTUI
+    // stack is the only interactive front-end. `--ftui` remains accepted for
+    // backwards compatibility with scripts that passed it.
     #[cfg(feature = "ftui")]
-    let ftui_requested = is_interactive && (cli.ftui || !cli.classic);
+    let ftui_requested = is_interactive;
     #[cfg(not(feature = "ftui"))]
     let ftui_requested = false;
 
@@ -1736,12 +1777,31 @@ async fn run(
     for (name, how) in ra::tools::unselectable_tool_names(&shared_enabled_tools) {
         eprintln!("Warning: --tools: \"{name}\" is not selected with --tools; {how}");
     }
+    // Approval mode (bd-cv653.3.19): CLI flags override config. Resolved here,
+    // before the registry builds the `subagent` tool, so delegated children
+    // inherit the session's mode instead of defaulting to a headless
+    // `always-ask` that can never be granted. The classic/ftui stacks below
+    // clone this same shared state.
+    let approval_mode = if cli.yolo {
+        ra::approval::ApprovalMode::Yolo
+    } else if let Some(ref m) = cli.approval_mode {
+        ra::approval::ApprovalMode::from_setting(Some(m))
+    } else {
+        config.approval_mode()
+    };
+    let dual_confirm_classes = config.approval_dual_confirm_classes();
+    let approval_state = ra::approval::ApprovalState::new(
+        approval_mode,
+        cli.plan_yolo || config.plan_auto_approve(),
+        dual_confirm_classes,
+    );
     let shared_tools = ra::tools::SharedToolRegistry::new(ToolRegistry::with_mutation_recorder(
         &shared_enabled_tools,
         &cwd,
         Some(&config),
         Some(Arc::clone(&session_mutation_recorder)),
         Some(&workspace),
+        Some(approval_state.clone()),
     ));
 
     // Pre-warm extension runtime in a background task so startup work can overlap
@@ -2075,20 +2135,8 @@ async fn run(
     } else {
         ra::agent::resolved_max_tool_iterations_default()
     };
-    // Approval mode (bd-cv653.3.19): CLI flags override config.
-    let approval_mode = if cli.yolo {
-        ra::approval::ApprovalMode::Yolo
-    } else if let Some(ref m) = cli.approval_mode {
-        ra::approval::ApprovalMode::from_setting(Some(m))
-    } else {
-        config.approval_mode()
-    };
-    let dual_confirm_classes = config.approval_dual_confirm_classes();
-    let approval_state = ra::approval::ApprovalState::new(
-        approval_mode,
-        cli.plan_yolo || config.plan_auto_approve(),
-        dual_confirm_classes,
-    );
+    // `approval_state` is resolved above, before the tool registry is built,
+    // so the `subagent` tool can let children inherit the session's mode.
 
     // The default FrankenTUI stack runs one SDK session that builds its own
     // provider, tools, system prompt and extension runtime (bd-2crrf). Launch
@@ -2802,47 +2850,6 @@ async fn run(
             auth.clone(),
             runtime_handle.clone(),
             ask_tool,
-        ))
-        .await
-    } else if is_interactive {
-        let model_scope = selection
-            .scoped_models
-            .iter()
-            .map(|sm| sm.model.clone())
-            .collect::<Vec<_>>();
-        let available_models = model_registry
-            .get_available()
-            .into_iter()
-            .filter(|entry| {
-                !ra::failover::provider_is_disabled(
-                    &disabled_providers,
-                    scope_override,
-                    &entry.model.provider,
-                )
-            })
-            .collect::<Vec<_>>();
-        let title_model_entry = ra::app::titling_model_entry(&cli, &config, &model_registry);
-
-        Box::pin(run_interactive_mode(
-            agent_session,
-            initial,
-            messages,
-            config.clone(),
-            selection.model_entry.clone(),
-            model_scope,
-            available_models,
-            title_model_entry,
-            !cli.no_session,
-            resources,
-            resource_cli,
-            package_manager,
-            cwd.clone(),
-            runtime_handle.clone(),
-            workspace.clone(),
-            ask_tool,
-            btw_client,
-            Some(btw_factory),
-            Some(mcp_manager),
         ))
         .await
     } else {
@@ -4972,7 +4979,7 @@ fn spawn_session_index_maintenance() {
 
     // Always spawn the background thread to handle cleanup, regardless of reindexing needs.
     // Cleanup can be slow if there are many temp files, so we don't want to block main.
-    std::thread::spawn(move || {
+    ra::threads::spawn(move || {
         // Clean up old bash tool logs in background
         ra::tools::cleanup_temp_files();
 
@@ -6509,166 +6516,6 @@ struct ConfigUiResult {
     packages: Vec<ConfigPackageState>,
 }
 
-#[derive(bubbletea::Model)]
-struct ConfigUiApp {
-    packages: Vec<ConfigPackageState>,
-    selected: usize,
-    settings_summary: String,
-    status: String,
-    result_slot: Arc<StdMutex<Option<ConfigUiResult>>>,
-}
-
-impl ConfigUiApp {
-    fn new(
-        packages: Vec<ConfigPackageState>,
-        settings_summary: String,
-        result_slot: Arc<StdMutex<Option<ConfigUiResult>>>,
-    ) -> Self {
-        let status = if packages.iter().any(|pkg| !pkg.resources.is_empty()) {
-            String::new()
-        } else {
-            "No package resources discovered. Press Enter to exit.".to_string()
-        };
-
-        Self {
-            packages,
-            selected: 0,
-            settings_summary,
-            status,
-            result_slot,
-        }
-    }
-
-    fn selectable_count(&self) -> usize {
-        self.packages.iter().map(|pkg| pkg.resources.len()).sum()
-    }
-
-    fn selected_coords(&self) -> Option<(usize, usize)> {
-        let mut cursor = 0usize;
-        for (pkg_idx, pkg) in self.packages.iter().enumerate() {
-            for (res_idx, _) in pkg.resources.iter().enumerate() {
-                if cursor.eq(&self.selected) {
-                    return Some((pkg_idx, res_idx));
-                }
-                cursor = cursor.saturating_add(1);
-            }
-        }
-        None
-    }
-
-    fn move_selection(&mut self, delta: isize) {
-        let total = self.selectable_count();
-        if total.eq(&0) {
-            self.selected = 0;
-            return;
-        }
-
-        let max_index = total.saturating_sub(1);
-        let step = delta.unsigned_abs();
-        if delta.is_negative() {
-            self.selected = self.selected.saturating_sub(step);
-        } else {
-            self.selected = self.selected.saturating_add(step).min(max_index);
-        }
-    }
-
-    fn toggle_selected(&mut self) {
-        if let Some((pkg_idx, res_idx)) = self.selected_coords()
-            && let Some(resource) = self
-                .packages
-                .get_mut(pkg_idx)
-                .and_then(|pkg| pkg.resources.get_mut(res_idx))
-        {
-            resource.enabled = !resource.enabled;
-        }
-    }
-
-    fn finish(&self, save_requested: bool) -> Cmd {
-        if let Ok(mut slot) = self.result_slot.lock() {
-            *slot = Some(ConfigUiResult {
-                save_requested,
-                packages: self.packages.clone(),
-            });
-        }
-        quit()
-    }
-
-    #[allow(clippy::missing_const_for_fn, clippy::unused_self)]
-    fn init(&self) -> Option<Cmd> {
-        None
-    }
-
-    #[allow(clippy::needless_pass_by_value)]
-    fn update(&mut self, msg: BubbleMessage) -> Option<Cmd> {
-        if let Some(key) = msg.downcast_ref::<KeyMsg>() {
-            match key.key_type {
-                KeyType::Up => self.move_selection(-1),
-                KeyType::Down => self.move_selection(1),
-                KeyType::Runes if key.runes.eq(&['k']) => self.move_selection(-1),
-                KeyType::Runes if key.runes.eq(&['j']) => self.move_selection(1),
-                KeyType::Space => self.toggle_selected(),
-                KeyType::Enter => return Some(self.finish(true)),
-                KeyType::Esc | KeyType::CtrlC => return Some(self.finish(false)),
-                KeyType::Runes if key.runes.eq(&['q']) => return Some(self.finish(false)),
-                _ => {}
-            }
-        }
-        None
-    }
-
-    fn view(&self) -> String {
-        let mut out = String::new();
-        out.push_str("Pi Config UI\n");
-        let _ = writeln!(out, "{}", self.settings_summary);
-        out.push_str("Keys: ↑/↓ (or j/k) move, Space toggle, Enter save, q cancel\n\n");
-
-        let mut cursor = 0usize;
-        for package in &self.packages {
-            let _ = writeln!(
-                out,
-                "{} package: {}",
-                scope_label(package.scope),
-                package.source
-            );
-
-            if package.resources.is_empty() {
-                out.push_str("    (no discovered resources)\n");
-                continue;
-            }
-
-            for resource in &package.resources {
-                let selected = cursor.eq(&self.selected);
-                let marker = if resource.enabled { "x" } else { " " };
-                let prefix = if selected { ">" } else { " " };
-                let _ = writeln!(
-                    out,
-                    "{} [{}] {:<10} {}",
-                    prefix,
-                    marker,
-                    resource.kind.label(),
-                    resource.path
-                );
-                cursor = cursor.saturating_add(1);
-            }
-
-            out.push('\n');
-        }
-
-        if !self.status.is_empty() {
-            let _ = writeln!(out, "{}", self.status);
-        }
-
-        out
-    }
-}
-
-const fn scope_label(scope: SettingsScope) -> &'static str {
-    match scope {
-        SettingsScope::Global => "Global",
-        SettingsScope::Project => "Project",
-    }
-}
-
 const fn scope_key(scope: SettingsScope) -> &'static str {
     match scope {
         SettingsScope::Global => "global",
@@ -6966,49 +6813,7 @@ fn handle_config_json_fast(cwd: &Path) -> Result<()> {
     Ok(())
 }
 
-fn format_settings_summary(config: &Config) -> String {
-    let provider = config.default_provider.as_deref().unwrap_or("(default)");
-    let model = config.default_model.as_deref().unwrap_or("(default)");
-    let thinking = config
-        .default_thinking_level
-        .as_deref()
-        .unwrap_or("(default)");
-    format!("provider={provider}  model={model}  thinking={thinking}")
-}
 
-fn interactive_config_settings_summary_with_roots(
-    cwd: &Path,
-    global_dir: &Path,
-    config_override_path: Option<&Path>,
-) -> Result<String> {
-    let config = Config::load_with_roots(config_override_path, global_dir, cwd)?;
-    Ok(format_settings_summary(&config))
-}
-
-fn interactive_config_settings_summary(cwd: &Path) -> Result<String> {
-    let global_dir = Config::global_dir();
-    let config_override_path = Config::config_path_override_from_env(cwd);
-    interactive_config_settings_summary_with_roots(
-        cwd,
-        &global_dir,
-        config_override_path.as_deref(),
-    )
-}
-
-fn run_config_tui(
-    packages: Vec<ConfigPackageState>,
-    settings_summary: String,
-) -> Result<Option<Vec<ConfigPackageState>>> {
-    let result_slot = Arc::new(StdMutex::new(None));
-    let app = ConfigUiApp::new(packages, settings_summary, Arc::clone(&result_slot));
-    Program::new(app).with_alt_screen().run()?;
-
-    let result = result_slot.lock().ok().and_then(|guard| guard.clone());
-    match result {
-        Some(result) if result.save_requested => Ok(Some(result.packages)),
-        _ => Ok(None),
-    }
-}
 
 fn load_settings_json_object(path: &Path) -> Result<Value> {
     if !path.exists() {
@@ -7211,19 +7016,6 @@ async fn handle_config(
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&report)?);
-        return Ok(());
-    }
-
-    let has_tty = io::stdin().is_terminal() && io::stdout().is_terminal();
-
-    if interactive_requested && has_tty {
-        let settings_summary = interactive_config_settings_summary(cwd)?;
-        if let Some(updated) = run_config_tui(packages, settings_summary)? {
-            persist_package_toggles(cwd, &updated)?;
-            println!("Saved package resource toggles.");
-        } else {
-            println!("No changes saved.");
-        }
         return Ok(());
     }
 
@@ -8323,7 +8115,7 @@ result in account suspension/ban. Prefer using an Anthropic API key (ANTHROPIC_A
                 // Use a background thread to wait for the callback so we can
                 // also accept manual paste from stdin.
                 let (manual_tx, manual_rx) = std::sync::mpsc::channel::<String>();
-                let prompt_thread = std::thread::spawn(move || {
+                let prompt_thread = ra::threads::spawn(move || {
                     if let Ok(Some(line)) =
                         prompt_line("Paste callback URL or code (or wait for browser): ")
                     {
@@ -9961,87 +9753,6 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn run_interactive_mode(
-    session: AgentSession,
-    initial: Option<InitialMessage>,
-    messages: Vec<String>,
-    config: Config,
-    model_entry: ModelEntry,
-    model_scope: Vec<ModelEntry>,
-    available_models: Vec<ModelEntry>,
-    title_model_entry: Option<ModelEntry>,
-    save_enabled: bool,
-    resources: ResourceLoader,
-    resource_cli: ResourceCliOptions,
-    package_manager: PackageManager,
-    cwd: PathBuf,
-    runtime_handle: RuntimeHandle,
-    workspace: ra::workspace::WorkspaceHandle,
-    ask_tool: Option<ra::ask::AskTool>,
-    btw_client: Option<Arc<ra::btw::BtwClient>>,
-    btw_factory: Option<ra::btw::BtwClientFactory>,
-    mcp_manager: Option<std::sync::Arc<ra::mcp::McpManager>>,
-) -> Result<()> {
-    let mut pending = Vec::new();
-    if let Some(mut initial) = initial {
-        let generated_prefix = initial
-            .text
-            .strip_suffix(&initial.keyword_scan_source)
-            .unwrap_or(&initial.text)
-            .to_string();
-        let expanded_source = resources.expand_input(&initial.keyword_scan_source);
-        initial.text = generated_prefix + &expanded_source;
-        pending.push(ra::interactive::PendingInput::ContentWithKeywordSource {
-            content: ra::app::build_initial_content(&initial),
-            keyword_scan_source: initial.keyword_scan_source,
-        });
-    }
-    for message in messages {
-        pending.push(ra::interactive::PendingInput::Text(message));
-    }
-
-    let AgentSession {
-        agent,
-        session,
-        extensions: region,
-        ..
-    } = session;
-    // Extract manager for the interactive loop; the region stays alive to
-    let extensions = region.as_ref().map(|r| r.manager().clone());
-    let interactive_result = ra::interactive::run_interactive(
-        agent,
-        session,
-        config,
-        model_entry,
-        model_scope,
-        available_models,
-        title_model_entry,
-        pending,
-        save_enabled,
-        resources,
-        resource_cli,
-        package_manager,
-        extensions,
-        cwd,
-        runtime_handle,
-        workspace,
-        ask_tool,
-        btw_client,
-        btw_factory,
-        mcp_manager,
-    )
-    .await;
-    // Explicitly shut down extension runtimes so the QuickJS GC can
-    // collect all objects before JS_FreeRuntime asserts an empty gc_obj_list.
-    // Must run even on error — otherwise ExtensionRegion::drop() runs
-    // synchronously and the GC assertion fires.
-    if let Some(ref region) = region {
-        region.shutdown().await;
-    }
-    interactive_result?;
-    Ok(())
-}
-
 type InitialMessage = ra::app::InitialMessage;
 
 fn read_piped_stdin() -> Result<Option<String>> {
@@ -11532,100 +11243,7 @@ mod tests {
         assert!(provider_choice_from_token("").is_none());
     }
 
-    #[test]
-    fn config_ui_app_empty_packages_shows_empty_message() {
-        let result_slot = Arc::new(StdMutex::new(None));
-        let app = ConfigUiApp::new(
-            Vec::new(),
-            "provider=(default)  model=(default)  thinking=(default)".to_string(),
-            result_slot,
-        );
 
-        let view = app.view();
-        assert!(
-            view.contains("Pi Config UI"),
-            "missing config ui header:\n{view}"
-        );
-        assert!(
-            view.contains("No package resources discovered. Press Enter to exit."),
-            "missing empty packages hint:\n{view}"
-        );
-    }
-
-    #[test]
-    fn config_ui_app_toggle_selected_updates_resource_state() {
-        let result_slot = Arc::new(StdMutex::new(None));
-        let mut app = ConfigUiApp::new(
-            vec![ConfigPackageState {
-                scope: SettingsScope::Project,
-                source: "local:demo".to_string(),
-                resources: vec![
-                    ConfigResourceState {
-                        kind: ConfigResourceKind::Extensions,
-                        path: "extensions/a.js".to_string(),
-                        enabled: true,
-                    },
-                    ConfigResourceState {
-                        kind: ConfigResourceKind::Skills,
-                        path: "skills/demo/SKILL.md".to_string(),
-                        enabled: false,
-                    },
-                ],
-            }],
-            "provider=(default)  model=(default)  thinking=(default)".to_string(),
-            result_slot,
-        );
-
-        assert!(
-            app.packages[0].resources[0].enabled,
-            "first resource should start enabled"
-        );
-        app.toggle_selected();
-        assert!(
-            !app.packages[0].resources[0].enabled,
-            "toggling selected resource should flip enabled flag"
-        );
-
-        app.move_selection(1);
-        app.toggle_selected();
-        assert!(
-            app.packages[0].resources[1].enabled,
-            "second resource should toggle on after moving selection"
-        );
-    }
-
-    #[test]
-    fn format_settings_summary_uses_effective_config_values() {
-        let config = Config {
-            default_provider: Some("openai".to_string()),
-            default_model: Some("gpt-4.1".to_string()),
-            default_thinking_level: Some("high".to_string()),
-            ..Config::default()
-        };
-
-        assert_eq!(
-            format_settings_summary(&config),
-            "provider=openai  model=gpt-4.1  thinking=high"
-        );
-    }
-
-    #[test]
-    fn interactive_config_settings_summary_with_roots_errors_on_invalid_settings() {
-        let temp = TempDir::new().expect("tempdir");
-        let cwd = temp.path().join("repo");
-        let global_dir = temp.path().join("global");
-        std::fs::create_dir_all(&cwd).expect("create cwd");
-        std::fs::create_dir_all(&global_dir).expect("create global dir");
-        std::fs::write(global_dir.join("settings.json"), "{not-json").expect("write settings");
-
-        let err = interactive_config_settings_summary_with_roots(&cwd, &global_dir, None)
-            .expect_err("invalid settings should be reported");
-
-        assert!(
-            err.to_string().contains("Failed to parse settings file"),
-            "unexpected error: {err}"
-        );
-    }
 
     #[test]
     #[allow(clippy::too_many_lines)]

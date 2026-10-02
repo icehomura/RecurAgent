@@ -1,12 +1,10 @@
 //! FrankenTUI interactive stack (bd-cv653.9.1) — the default TUI since the
 //! 2026-08-25 cutover (bd-ti0tq).
 //!
-//! This module hosts the ftui-runtime port of the interactive front-end. The
-//! `ftui` feature is on by default, so plain `ra` launches this stack; the
-//! charmed_rust/bubbletea stack in [`crate::interactive`] remains selectable
-//! with `ra --classic` (aliases `--classic-tui`, `--charmed`, `--bubbletea`)
-//! until it is deleted. Add `--inline` to keep shell scrollback instead of
-//! the alternate screen, or try the fake-agent demo:
+//! This module hosts the ftui-runtime interactive front-end. The `ftui`
+//! feature is on by default, so plain `ra` launches this stack; the classic
+//! charmed_rust/bubbletea stack was removed. Add `--inline` to keep shell
+//! scrollback instead of the alternate screen, or try the fake-agent demo:
 //! `cargo run --example ftui_preview --features ftui`.
 //!
 //! What is real today:
@@ -565,6 +563,10 @@ pub struct FtuiPalette {
     /// Drag-selection background (`ui.selection`), used to mark the cells
     /// the mouse has selected in the conversation body.
     selection: ftui::PackedRgba,
+    /// The pair of horizontal rules framing the input editor. A deliberate
+    /// violet, so the composer reads as its own surface instead of more
+    /// chrome (never white and never gray, which blur into the frame).
+    rule: ftui::PackedRgba,
 }
 
 impl Default for FtuiPalette {
@@ -577,6 +579,7 @@ impl Default for FtuiPalette {
             warning: ftui::PackedRgba::rgb(229, 192, 123),
             success: ftui::PackedRgba::rgb(78, 201, 176),
             selection: ftui::PackedRgba::rgb(38, 79, 120),
+            rule: ftui::PackedRgba::rgb(139, 92, 246),
         }
     }
 }
@@ -597,6 +600,9 @@ impl FtuiPalette {
             warning: parse(&theme.colors.warning, fallback.warning),
             success: parse(&theme.colors.success, fallback.success),
             selection: parse(&theme.ui.selection, fallback.selection),
+            // The composer rules keep their own identity across themes; they
+            // are the one color the user does not override here.
+            rule: fallback.rule,
         }
     }
 
@@ -1354,10 +1360,10 @@ const DAG_NODE_OUTPUT_MAX_LINES: usize = 4;
 const DAG_NODE_OUTPUT_MAX_CHARS: usize = 400;
 
 /// Live progress for one `dag` tool call. The card detail renders the graph
-/// as a vertical ASCII tree ([`dag_view`]): a virtual “开始” root on the
-/// first layer, every node in a box on the layers below, joined by right-angle
-/// box-drawing connectors. Box width is computed from display columns, so CJK
-/// and ASCII content never push the border out of alignment.
+/// with [`dag_view::render_compact`]: a flat, boxless layout — a virtual “开始”
+/// root, the nodes in dependency order joined by connector lines, and the
+/// virtual “结束” sink, plus a full-name legend below. Node names are capped at
+/// [`dag_view::COMPACT_NAME_CAP`] columns.
 #[derive(Debug, Default)]
 struct DagProgress {
     /// Nodes in topology order (`nodes` of `ra.dag.topology.v1`).
@@ -1454,23 +1460,6 @@ fn dag_view_input(progress: &DagProgress) -> Vec<dag_view::DagViewNode> {
             output: node.output.clone(),
         })
         .collect()
-}
-
-/// Structural fingerprint of a dag render input: everything that can change a
-/// box's display width. Node **state** is deliberately excluded — every state
-/// marker (`[ ]`, `[✓]`, `[⠋]`, `[x]`, `[-]`) is exactly three columns, so a
-/// state flip can never change the layout decision.
-fn dag_input_fingerprint(nodes: &[dag_view::DagViewNode]) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    nodes.len().hash(&mut hasher);
-    for node in nodes {
-        node.id.hash(&mut hasher);
-        node.name.hash(&mut hasher);
-        node.tool_name.hash(&mut hasher);
-        node.depends_on.hash(&mut hasher);
-    }
-    hasher.finish()
 }
 
 /// Plain-text rendering (sanitized downstream, width-correct). Kept as the
@@ -2020,8 +2009,15 @@ pub struct RaFtuiModel {
     /// instead of stored so update() never needs the rendered line count.
     scroll_from_tail: usize,
     /// Animation phase for the "scroll to bottom" badge. Advanced once per
-    /// tick while the badge is visible, so an idle session still pulses it.
+    /// tick while the badge is visible AND there is something new to report,
+    /// so a parked badge stays perfectly still instead of pulsing forever.
     scroll_hint_phase: u8,
+    /// Transcript entries pushed since the reader scrolled away from the tail.
+    /// The badge counts these (`2 new messages`) and only then animates; it
+    /// resets when the view returns to the tail. Entries appended while
+    /// `scroll_from_tail == 0` never count, so the reader's own submitted
+    /// prompt and the turn it triggers do not inflate the number.
+    unseen_entries: usize,
     /// Terminal size of the last frame actually drawn, recorded in
     /// `render_frame`. Mouse hit-testing reads it through `frame_area`, not
     /// `self.term`: the frame is authoritative (the first frame renders before
@@ -2059,6 +2055,14 @@ pub struct RaFtuiModel {
     copy_notice: Option<(String, Instant)>,
     /// The input editor (ftui-widgets TextArea replaces bubbles TextArea).
     input: TextArea,
+    /// Collapsed pastes awaiting expansion at submit time, in paste order.
+    /// Kept for the whole session: a draft parked by an ask/extension card is
+    /// restored later, so its placeholders must still resolve.
+    paste_blobs: Vec<PasteBlob>,
+    /// Monotonic per-session counter behind the `#N` in a paste placeholder.
+    /// It never resets, so two placeholders in one session never collide even
+    /// after one is deleted from the draft.
+    paste_seq: usize,
     /// Printable keystrokes accumulated since the last editor mutation.
     /// Drained by [`RaFtuiModel::flush_pending_input`]; exists because voice
     /// input is a burst of individual key events and every `insert_text` into
@@ -2155,14 +2159,6 @@ pub struct RaFtuiModel {
     /// (plan §4.1) and folded into the dag card; dropped when the call ends
     /// (plan §4.5 keeps the TUI list-shaped, not graphical).
     dag_progress: std::collections::HashMap<String, DagProgress>,
-    /// Cached orientation decision for the live dag card, keyed by
-    /// `(structural fingerprint, body_width)`. The decision is
-    /// frame-independent (braille glyphs are one column wide), so a live card
-    /// re-renders every frame with the cached choice instead of re-running the
-    /// whole fit search (`dag_view::choose_orientation`) on each spinner tick.
-    /// The fingerprint covers ids / names / edges, so a `resume` patch that
-    /// changes the graph but not the node count still invalidates it.
-    dag_orientation: std::cell::Cell<Option<(u64, u16, dag_view::Orientation)>>,
 }
 
 /// One cached transcript block (issue #201): the styled lines produced for
@@ -2171,6 +2167,18 @@ pub struct RaFtuiModel {
 struct CachedBlock {
     revision: u64,
     lines: Vec<ftui::text::Line<'static>>,
+}
+
+/// One collapsed paste: the placeholder token sitting in the editor and the
+/// text it stands for, substituted back in at submit time.
+#[derive(Debug)]
+struct PasteBlob {
+    /// Exact `[paste #N +L lines]` token inserted into the editor. Stored
+    /// rather than re-derived because the row count is part of the token.
+    token: String,
+    /// The pasted text the token replaces. Never edited, so deletion of the
+    /// token simply drops it at submit time.
+    body: String,
 }
 
 /// A drag-selection in the conversation body, in screen cells. `anchor` is
@@ -2214,7 +2222,11 @@ struct Regions {
     /// Slash-command completion popup, directly above the editor (issue
     /// #208); zero rows while no suggestions are showing.
     completion: Rect,
+    /// Horizontal rule directly above the editor.
+    input_rule_top: Rect,
     input: Rect,
+    /// Horizontal rule directly below the editor.
+    input_rule_bottom: Rect,
     footer: Rect,
 }
 
@@ -2285,12 +2297,19 @@ const DEFAULT_COMPLETION_ROWS: usize = 5;
 const COMPLETION_HINT: &str = "↑↓ move · Tab/Enter accept · Esc dismiss";
 
 /// Rows of single-line chrome around the conversation body: header, status,
-/// footer. The input region's height is dynamic (see
-/// [`RaFtuiModel::input_rows`]), so total chrome = this + input rows.
-const FIXED_CHROME_ROWS: u16 = 3;
+/// the two input rules, and the footer. The input region's height is dynamic
+/// (see [`RaFtuiModel::input_rows`]), so total chrome = this + input rows.
+const FIXED_CHROME_ROWS: u16 = 5;
 
 /// The input editor grows with its content up to this many rows.
 const MAX_INPUT_ROWS: u16 = 5;
+
+/// A paste with at least this many lines collapses to a numbered placeholder.
+const PASTE_COLLAPSE_MIN_LINES: usize = 4;
+
+/// A single-line paste longer than this many characters collapses too, since
+/// soft wrap would otherwise fill the composer with one long line.
+const PASTE_COLLAPSE_MIN_CHARS: usize = 1_000;
 
 /// The `[start, end)` slice of a `len`-item picker list that fits in
 /// `visible` rows while keeping `selected` on screen.
@@ -2310,6 +2329,24 @@ fn picker_window(selected: usize, len: usize, visible: usize) -> std::ops::Range
     start..(start + visible).min(len)
 }
 
+/// Rows the editor's soft-wrapped draft needs at `width` columns.
+///
+/// `wrap_text` is the same word-then-character wrapping the render path uses,
+/// so the region we reserve matches what the widget will draw.
+fn wrapped_input_rows(text: &str, width: usize) -> usize {
+    ftui::text::wrap_text(text, width, WrapMode::WordChar)
+        .len()
+        .max(1)
+}
+
+/// A paste collapses to a placeholder when it would otherwise dominate the
+/// composer: [`PASTE_COLLAPSE_MIN_LINES`] or more lines, or a single line over
+/// [`PASTE_COLLAPSE_MIN_CHARS`] characters.
+fn paste_should_collapse(text: &str) -> bool {
+    text.lines().count() >= PASTE_COLLAPSE_MIN_LINES
+        || text.chars().count() > PASTE_COLLAPSE_MIN_CHARS
+}
+
 fn layout_regions(area: Rect, input_rows: u16, banner_rows: u16, completion_rows: u16) -> Regions {
     use ftui::layout::{Constraint, Flex};
     let rects = Flex::vertical()
@@ -2319,7 +2356,9 @@ fn layout_regions(area: Rect, input_rows: u16, banner_rows: u16, completion_rows
             Constraint::Fixed(banner_rows),     // pinned error banner (0 = none)
             Constraint::Fixed(1),               // status line (tool/todo/messages)
             Constraint::Fixed(completion_rows), // completion popup (0 = closed)
+            Constraint::Fixed(1),               // rule above the editor
             Constraint::Fixed(input_rows),      // input editor
+            Constraint::Fixed(1),               // rule below the editor
             Constraint::Fixed(1),               // footer (usage)
         ])
         .split(area);
@@ -2329,8 +2368,10 @@ fn layout_regions(area: Rect, input_rows: u16, banner_rows: u16, completion_rows
         banner: rects[2],
         status: rects[3],
         completion: rects[4],
-        input: rects[5],
-        footer: rects[6],
+        input_rule_top: rects[5],
+        input: rects[6],
+        input_rule_bottom: rects[7],
+        footer: rects[8],
     }
 }
 
@@ -2369,6 +2410,7 @@ impl RaFtuiModel {
             term: (80, 24),
             scroll_from_tail: 0,
             scroll_hint_phase: 0,
+            unseen_entries: 0,
             rendered_size: std::cell::Cell::new((0, 0)),
             rendered_body: std::cell::Cell::new(Rect::new(0, 0, 0, 0)),
             rendered_total_lines: std::cell::Cell::new(0),
@@ -2388,7 +2430,6 @@ impl RaFtuiModel {
             busy: None,
             markdown_spacing: crate::config::MarkdownSpacing::Comfortable,
             dag_progress: std::collections::HashMap::new(),
-            dag_orientation: std::cell::Cell::new(None),
             #[cfg(test)]
             suspend_task_override: None,
             pending_task: None,
@@ -2404,6 +2445,8 @@ impl RaFtuiModel {
                 )
                 .with_focus(true)
                 .with_soft_wrap(true),
+            paste_blobs: Vec::new(),
+            paste_seq: 0,
             pending_input: String::new(),
             flush_scheduled: false,
             cwd: std::path::PathBuf::from("."),
@@ -2555,18 +2598,69 @@ impl RaFtuiModel {
         self
     }
 
-    /// Rows the input editor currently needs (content-driven, clamped).
+    /// Rows the input editor currently needs (content-driven, clamped),
+    /// counting *rendered* rows rather than rope lines. A long single line
+    /// soft-wraps into several rows, and the region has to grow with them or
+    /// the viewport stays one row tall and the draft appears to scroll
+    /// sideways (the "one line looping" bug).
     fn input_rows(&self) -> u16 {
-        let lines = if self.input.is_empty() {
-            1
-        } else {
-            // `line_count` reads the rope's line index; `text().lines().count()`
-            // cloned the whole draft and scanned it.
-            self.input.line_count().max(1)
-        };
-        u16::try_from(lines)
+        if self.input.is_empty() {
+            return 1;
+        }
+        let rows = wrapped_input_rows(&self.input.text(), self.input_width());
+        u16::try_from(rows)
             .unwrap_or(MAX_INPUT_ROWS)
             .min(MAX_INPUT_ROWS)
+    }
+
+    /// Columns the editor renders into: the frame actually drawn when there
+    /// is one, else the last known terminal size.
+    fn input_width(&self) -> usize {
+        let (width, _) = self.rendered_size.get();
+        let width = if width == 0 { self.term.0 } else { width };
+        usize::from(width).max(1)
+    }
+
+    /// Insert a pasted blob, collapsing it into a numbered placeholder when it
+    /// is large enough to drown the draft. Small pastes go in verbatim.
+    fn insert_paste(&mut self, text: &str) {
+        if !paste_should_collapse(text) {
+            self.input.insert_text(text);
+            self.maybe_trigger_autocomplete();
+            return;
+        }
+        self.paste_seq += 1;
+        let lines = text.lines().count().max(1);
+        let unit = if lines == 1 { "line" } else { "lines" };
+        let token = format!("[paste #{} +{} {}]", self.paste_seq, lines, unit);
+        self.paste_blobs.push(PasteBlob {
+            token: token.clone(),
+            body: text.to_string(),
+        });
+        self.input.insert_text(&token);
+        self.maybe_trigger_autocomplete();
+    }
+
+    /// Substitute every paste placeholder in `draft` back to the blob it
+    /// stands for. A placeholder the user edited away is simply not present,
+    /// and its blob is dropped along with the rest once the editor clears.
+    fn expand_pastes(&self, draft: &str) -> String {
+        if self.paste_blobs.is_empty() {
+            return draft.to_string();
+        }
+        let mut out = draft.to_string();
+        for blob in &self.paste_blobs {
+            if out.contains(&blob.token) {
+                out = out.replace(&blob.token, &blob.body);
+            }
+        }
+        out
+    }
+
+    /// Drop every paste blob. Called once the editor is cleared on submit, so
+    /// the session's pasted bytes do not accumulate frame after frame.
+    fn forget_pastes(&mut self) {
+        self.paste_blobs.clear();
     }
 
     /// Whether the draft's first non-whitespace character is `/` — the only
@@ -2783,6 +2877,11 @@ impl RaFtuiModel {
     }
 
     fn push_entry(&mut self, role: EntryRole, text: String) {
+        // A new transcript line while the reader is scrolled away is exactly
+        // what the badge's count is for; at the tail it is already visible.
+        if self.scroll_from_tail > 0 {
+            self.unseen_entries = self.unseen_entries.saturating_add(1);
+        }
         let revision = self.next_revision();
         self.transcript.push(TranscriptEntry {
             role,
@@ -2910,6 +3009,9 @@ impl RaFtuiModel {
     /// (stable across head-text replacement by invocation summaries);
     /// `display` is the sanitized initial head (the tool name).
     fn push_tool_card(&mut self, pair_id: &str, display: &str, sanitized_name: &str) {
+        if self.scroll_from_tail > 0 {
+            self.unseen_entries = self.unseen_entries.saturating_add(1);
+        }
         let revision = self.next_revision();
         self.transcript.push(TranscriptEntry {
             role: EntryRole::System,
@@ -3116,28 +3218,8 @@ impl RaFtuiModel {
         self.refresh_dag_card(&key, name);
     }
 
-    /// Orientation for the live dag card at `width`, memoized on
-    /// `(structural fingerprint, width)`. A live card calls this every spinner
-    /// tick; the fingerprint makes reuse safe across a `resume` patch that
-    /// changes the graph without changing the node count.
-    fn dag_orientation_for(&self, progress: &DagProgress, width: usize) -> dag_view::Orientation {
-        let input = dag_view_input(progress);
-        let fingerprint = dag_input_fingerprint(&input);
-        let width = u16::try_from(width).unwrap_or(u16::MAX);
-        if let Some((cached_fp, cached_width, decision)) = self.dag_orientation.get()
-            && cached_fp == fingerprint
-            && cached_width == width
-        {
-            return decision;
-        }
-        let decision = dag_view::choose_orientation(&input, usize::from(width));
-        self.dag_orientation
-            .set(Some((fingerprint, width, decision)));
-        decision
-    }
-
     /// Render the live DAG progress into the dag tool's card: head = one-line
-    /// summary, detail = the layered node list. Falls back to pushing a card
+    /// summary, detail = the compact node list. Falls back to pushing a card
     /// when the `ToolStart` card is missing, so progress is never lost.
     fn refresh_dag_card(&mut self, key: &str, name: &str) {
         // Render head / plain tree / styled tree inside the borrow so the
@@ -3146,11 +3228,11 @@ impl RaFtuiModel {
             let Some(progress) = self.dag_progress.get(key) else {
                 return;
             };
-            // Same orientation for the copyable `detail` and the rendered
-            // lines: width from the last frame's conversation body.
-            let width = usize::from(self.render_cache_width.get());
-            let orientation = self.dag_orientation_for(progress, width);
-            let rows = dag_view::render_with(&dag_view_input(progress), 0, orientation);
+            // One compact, boxless rendering for both the copyable `detail`
+            // and the visible card. There is no orientation search any more:
+            // the flat layout reads the same at every width, and the frame
+            // clips what does not fit.
+            let rows = dag_view::render_compact(&dag_view_input(progress), 0);
             (
                 sanitize(&dag_card_head(progress)).into_owned(),
                 sanitize(&dag_view_text(&rows)).into_owned(),
@@ -3179,6 +3261,45 @@ impl RaFtuiModel {
         // its own so the render cache cannot reuse a stale block.
         let revision = self.next_revision();
         self.transcript[idx].revision = revision;
+    }
+
+    /// Freeze a finished dag card: re-render the graph in its terminal node
+    /// states and keep it as the card detail, appending the aggregate `report`
+    /// below. Mirrors [`refresh_dag_card`](Self::refresh_dag_card) but is the
+    /// last write for the card, so the graph survives after the run instead of
+    /// being shadowed by the report. Caller removes the progress entry after.
+    fn finalize_dag_card(&mut self, key: &str, report: Option<String>) {
+        let (tree_text, mut styled) = {
+            let Some(progress) = self.dag_progress.get(key) else {
+                return;
+            };
+            let rows = dag_view::render_compact(&dag_view_input(progress), 0);
+            (dag_view_text(&rows), dag_view_styled(&rows, &self.palette))
+        };
+        let detail = match report {
+            Some(text) if !text.is_empty() => {
+                styled.push(ftui::text::Line::from_spans(Vec::new()));
+                for line in text.split('\n') {
+                    styled.push(ftui::text::Line::from_spans(vec![ftui::text::Span::styled(
+                        line.to_string(),
+                        ftui::Style::new(),
+                    )]));
+                }
+                format!("{tree_text}\n\n{text}")
+            }
+            _ => tree_text,
+        };
+        let revision = self.next_revision();
+        if let Some(entry) = self
+            .transcript
+            .iter_mut()
+            .rev()
+            .find(|e| e.pair_key.as_deref() == Some(key))
+        {
+            entry.detail = Some(detail);
+            entry.styled_detail = Some(styled);
+            entry.revision = revision;
+        }
     }
 
     /// Fold a bash result preview into the still-pending bash card
@@ -3225,6 +3346,11 @@ impl RaFtuiModel {
     }
 
     fn scroll_up(&mut self, lines: usize) {
+        // Leaving the tail starts a fresh count: anything already on screen is
+        // read, so only entries that arrive from here on are "new".
+        if self.scroll_from_tail == 0 {
+            self.unseen_entries = 0;
+        }
         self.scroll_from_tail = self
             .scroll_from_tail
             .saturating_add(lines)
@@ -3235,14 +3361,39 @@ impl RaFtuiModel {
         self.scroll_from_tail = self.scroll_from_tail.saturating_sub(lines);
     }
 
-    /// The badge's heartbeat: restart the tick chain after a scroll so its
-    /// pulse animates even though nothing else is running. `none` once the
-    /// conversation is back at the tail.
+    /// The badge's heartbeat: keep the tick chain alive while the reader is
+    /// scrolled up so the pulse can start the instant a new entry arrives,
+    /// even though nothing else is running. The phase itself only advances
+    /// when `unseen_entries > 0`, so a parked badge does not animate.
     fn scroll_hint_tick(&self) -> Cmd<RaFtuiMsg> {
         if self.scroll_from_tail > 0 {
             Cmd::tick(SPINNER_INTERVAL)
         } else {
             Cmd::none()
+        }
+    }
+
+    /// The badge's label. With nothing new below it is the plain
+    /// "scroll to bottom" hint plus its `End` shortcut; when entries arrived
+    /// while the reader was scrolled away it counts them, and that count is
+    /// what drives the pulse. Localized through the catalogue, including the
+    /// singular/plural split (`1 new message` vs `2 new messages`).
+    fn scroll_hint_label(&self) -> String {
+        if self.unseen_entries == 0 {
+            format!("{} (End)", rust_i18n::t!("interactive_scroll_to_bottom"))
+        } else if self.unseen_entries == 1 {
+            format!(
+                "↓ {} (End)",
+                rust_i18n::t!("interactive_scroll_new_message")
+            )
+        } else {
+            format!(
+                "↓ {} (End)",
+                rust_i18n::t!(
+                    "interactive_scroll_new_messages",
+                    count = self.unseen_entries
+                )
+            )
         }
     }
 
@@ -3258,7 +3409,7 @@ impl RaFtuiModel {
         if body.height == 0 || body.width == 0 {
             return None;
         }
-        let width = u16::try_from(display_width(&scroll_hint_label()) + 2)
+        let width = u16::try_from(display_width(&self.scroll_hint_label()) + 2)
             .unwrap_or(u16::MAX)
             .min(body.width);
         let x = body.x + body.width.saturating_sub(width) / 2;
@@ -3539,12 +3690,20 @@ impl RaFtuiModel {
                 let pair = sanitize(&tool_id).into_owned();
                 let output = output.map(|o| sanitize(&o).into_owned());
                 let diff_styled = matches!(name.as_str(), "edit" | "hashline_edit");
-                self.finish_tool_card(&pair, &name, !is_error, output, diff_styled);
-                self.current_tool = None;
-                // A finished dag call drops its live list; its card keeps the
-                // head summary and takes the aggregate report as its detail.
-                if name == "dag" {
+                // A card that rendered a dag graph keeps it: the terminal
+                // aggregate report is appended *below* the final tree instead of
+                // replacing it (`finish_tool_card`'s default). The detector is
+                // the presence of a `ra.dag.*`-fed progress entry, so this holds
+                // for BOTH dag surfaces — the `dag` tool and the `subagent`
+                // tool's dag mode — without keying on the tool name.
+                if self.dag_progress.contains_key(&pair) {
+                    self.finish_tool_card(&pair, &name, !is_error, None, false);
+                    self.current_tool = None;
+                    self.finalize_dag_card(&pair, output);
                     self.dag_progress.remove(&pair);
+                } else {
+                    self.finish_tool_card(&pair, &name, !is_error, output, diff_styled);
+                    self.current_tool = None;
                 }
             }
             RaMsg::TodoSummary { summary } => {
@@ -3753,8 +3912,9 @@ impl RaFtuiModel {
         let Some(mut ask) = self.active_ask.take() else {
             return;
         };
-        let raw = self.input.text();
+        let raw = self.expand_pastes(&self.input.text());
         self.input.set_text("");
+        self.forget_pastes();
         let index = ask.question_index;
         let question = &ask.request.request.questions[index];
         match crate::ask::parse_question_reply(question, &raw) {
@@ -3809,7 +3969,7 @@ impl RaFtuiModel {
     /// Commands wait for the turn to end; text the lane cannot take yet (the
     /// turn is starting or ending) becomes the next prompt instead.
     fn submit_mid_turn(&mut self, follow_up: bool) {
-        let text = self.input.text();
+        let text = self.expand_pastes(&self.input.text());
         let trimmed = text.trim();
         if trimmed.is_empty() {
             return;
@@ -3831,6 +3991,7 @@ impl RaFtuiModel {
         }
         self.record_history(&clean);
         self.input.set_text("");
+        self.forget_pastes();
         self.autocomplete.close();
         self.scroll_from_tail = 0;
         let Some(control) = self.live_turn_control() else {
@@ -3928,7 +4089,7 @@ impl RaFtuiModel {
     /// Submit the editor content: echo into the transcript, hand it to the
     /// agent loop (when wired), clear the editor, resume tail follow.
     fn submit_input(&mut self) {
-        let text = self.input.text();
+        let text = self.expand_pastes(&self.input.text());
         let trimmed = text.trim();
         if let Some((provider, accepts_empty_input)) = self.login_pending.clone() {
             if trimmed.starts_with('/') {
@@ -3942,6 +4103,7 @@ impl RaFtuiModel {
                 // Never echoed: the line may be an API key or an OAuth code.
                 let secret = trimmed.to_string();
                 self.input.set_text("");
+                self.forget_pastes();
                 self.autocomplete.close();
                 self.error_banner = None;
                 self.scroll_from_tail = 0;
@@ -3969,6 +4131,7 @@ impl RaFtuiModel {
         let clean = sanitize(trimmed).into_owned();
         self.record_history(&clean);
         self.input.set_text("");
+        self.forget_pastes();
         self.autocomplete.close();
         self.scroll_from_tail = 0;
         self.push_entry(EntryRole::User, clean.clone());
@@ -4934,10 +5097,11 @@ impl RaFtuiModel {
                 if !notice_live {
                     self.copy_notice = None;
                 }
-                // The "scroll to bottom" badge pulses while it is up; it
-                // reuses the same heartbeat, advancing one phase per tick.
+                // The "scroll to bottom" badge pulses only while there are
+                // unseen entries; a parked badge stays still and the phase is
+                // left untouched so the frame is byte-identical.
                 let hint_live = self.scroll_from_tail > 0;
-                if hint_live {
+                if hint_live && self.unseen_entries > 0 {
                     self.scroll_hint_phase = self.scroll_hint_phase.wrapping_add(1);
                 }
                 // Spinner heartbeat: advance and reschedule only while
@@ -5323,9 +5487,10 @@ impl RaFtuiModel {
             // Drag/drop and terminal paste of existing file paths become
             // `@file` references, exactly as the classic stack does (GH #242
             // parity); the prompt layer expands `@image.png` into an image
-            // attachment. Pasted prose — the common case — still reaches the
-            // editor unchanged, because `normalize_pasted_file_refs` returns
-            // `None` on the first line that is not a path.
+            // attachment. Pasted prose — the common case — goes through
+            // `insert_paste`, which collapses a large blob into a numbered
+            // `[paste #N +L lines]` placeholder and keeps the text aside until
+            // submit.
             Event::Paste(paste) if self.input_active() => {
                 if let Some((insert, count)) =
                     crate::interactive::normalize_pasted_file_refs(&paste.text, &self.cwd)
@@ -5335,8 +5500,8 @@ impl RaFtuiModel {
                         format!("Attached {count} file{}", if count == 1 { "" } else { "s" }),
                         Instant::now(),
                     ));
-                } else if self.input.handle_event(event) {
-                    self.maybe_trigger_autocomplete();
+                } else {
+                    self.insert_paste(&paste.text);
                 }
             }
             _ => {
@@ -5492,8 +5657,9 @@ impl RaFtuiModel {
         let Some(request) = self.active_ext.take() else {
             return;
         };
-        let raw = self.input.text();
+        let raw = self.expand_pastes(&self.input.text());
         self.input.set_text("");
+        self.forget_pastes();
         match parse_extension_ui_response(&request, &raw) {
             Err(err) => {
                 let text = format!("  ! {}", sanitize(&err));
@@ -5618,11 +5784,9 @@ impl RaFtuiModel {
                     .as_deref()
                     .and_then(|key| self.dag_progress.get(key))
                     .map(|progress| {
-                        let orientation = self.dag_orientation_for(progress, wrap_width);
-                        let rows = dag_view::render_with(
+                        let rows = dag_view::render_compact(
                             &dag_view_input(progress),
                             self.spinner.current_frame,
-                            orientation,
                         );
                         dag_view_styled(&rows, &palette)
                     });
@@ -5636,7 +5800,9 @@ impl RaFtuiModel {
                     entry.group_count,
                     &palette,
                     self.spinner.current_frame,
-                    self.tools_expanded,
+                    // The dag card is always shown in full — there is no
+                    // expand/collapse step for it.
+                    self.tools_expanded || entry.tool_name.as_deref() == Some("dag"),
                 );
                 wrap_body_block(&mut block_lines, wrap_width, &theme);
                 lines.extend(block_lines);
@@ -5662,7 +5828,7 @@ impl RaFtuiModel {
                     entry.group_count,
                     &palette,
                     self.spinner.current_frame,
-                    self.tools_expanded,
+                    self.tools_expanded || entry.tool_name.as_deref() == Some("dag"),
                 );
             } else if entry.role == EntryRole::Thinking && !self.show_thinking {
                 let summary = collapsed_thinking(&entry.text);
@@ -6012,12 +6178,17 @@ impl RaFtuiModel {
         // the body layout never changes; a click on it (routed in
         // `handle_mouse`) returns to the tail.
         if let Some(rect) = self.scroll_hint_rect() {
-            let label = format!(" {} ", scroll_hint_label());
+            let label = format!(" {} ", self.scroll_hint_label());
+            // A parked badge is a flat block; only a count of unseen entries
+            // pulses, so the chrome stops drawing attention to itself the
+            // moment the reader is caught up.
+            let background = if self.unseen_entries == 0 {
+                self.palette.accent
+            } else {
+                scroll_hint_background(self.palette.accent, self.scroll_hint_phase)
+            };
             let style = ftui::Style::new()
-                .bg(scroll_hint_background(
-                    self.palette.accent,
-                    self.scroll_hint_phase,
-                ))
+                .bg(background)
                 .fg(ftui::PackedRgba::BLACK)
                 .bold();
             Paragraph::new(Text::from_lines([ftui::text::Line::styled(label, style)]))
@@ -6131,6 +6302,14 @@ impl RaFtuiModel {
         if regions.completion.height > 0 {
             self.render_completion(regions.completion, frame);
         }
+
+        // The composer is framed by a pair of rules so it reads as its own
+        // surface (violet, deliberately: never white, never gray). Drawn even
+        // while the agent works, so the frame does not jump between states.
+        let rule_style = ftui::Style::new().fg(self.palette.rule);
+        let rule = "─".repeat(usize::from(regions.input_rule_top.width));
+        Paragraph::new(Text::raw(rule.clone())).render(regions.input_rule_top, frame);
+        Paragraph::new(Text::raw(rule)).render(regions.input_rule_bottom, frame);
 
         // Input editor while idle or answering an ask card; processing note
         // while the agent works uninterruptibly.
@@ -6679,12 +6858,6 @@ const CLIPBOARD_COPIED: &str = crate::interactive::COPY_OK_MESSAGE;
 /// `interactive_copied_chars` so the notice is translatable.
 fn copy_notice_text(count: usize) -> String {
     rust_i18n::t!("interactive_copied_chars", count = count).to_string()
-}
-
-/// The "scroll to bottom" badge's label, localized. Kept a constant width so
-/// the badge's hit-test rect does not move as it animates.
-fn scroll_hint_label() -> String {
-    rust_i18n::t!("interactive_scroll_to_bottom").to_string()
 }
 
 /// A gentle pulse for the badge background: blend toward white and back over a
@@ -7268,7 +7441,7 @@ const EXT_COMMAND_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
 fn unrouted_command_message(name: &str, extensions_enabled: bool) -> String {
     if crate::interactive::SlashCommand::parse(&format!("/{name}")).is_some() {
         return format!(
-            "/{name} is a RecurAgent command that this stack does not implement yet; run `ra --classic` for it"
+            "/{name} is a RecurAgent command that this stack does not implement yet"
         );
     }
     if extensions_enabled {
@@ -7910,6 +8083,34 @@ async fn run_set_thinking_command(
     let _ = agent_tx.send(msg);
 }
 
+/// The status line's mode label. Plan mode wins when planning (it gates
+/// mutations harder); the approval mode is appended when it is stricter than
+/// the `always-ask` default, so a `--yolo` run actually says `YOLO` instead of
+/// silently looking identical to the default. The two surface together
+/// (`plan/yolo`) because they gate different things. `act` is the neutral
+/// label when neither is set.
+fn status_mode_label(
+    plan: crate::plan::PlanMode,
+    approval: Option<crate::approval::ApprovalMode>,
+) -> String {
+    use crate::approval::ApprovalMode;
+    use crate::plan::PlanMode;
+    let mut parts: Vec<&str> = Vec::new();
+    if plan != PlanMode::Off {
+        parts.push(plan.as_str());
+    }
+    match approval {
+        Some(ApprovalMode::Yolo) => parts.push("yolo"),
+        Some(ApprovalMode::Write) => parts.push("write"),
+        _ => {}
+    }
+    if parts.is_empty() {
+        String::from("act")
+    } else {
+        parts.join("/")
+    }
+}
+
 /// Capture what the status line shows from the live session and send it to
 /// the UI. The model is labelled the OMP way (display name, else id); the
 /// context figure is the last prompt's size against the model's window.
@@ -7924,10 +8125,14 @@ async fn send_status_snapshot(
         .as_ref()
         .map_or(model_id, |entry| entry.model.status_label());
     let context_window = entry.as_ref().map(|entry| entry.model.context_window);
-    let mode = match handle.session().agent.plan_state().mode() {
-        crate::plan::PlanMode::Off => String::from("act"),
-        other => other.as_str().to_string(),
-    };
+    let mode = status_mode_label(
+        handle.session().agent.plan_state().mode(),
+        handle
+            .session()
+            .agent
+            .approval_state()
+            .map(|state| state.mode()),
+    );
     let totals = handle
         .with_session(|session| {
             let (_, usage) = crate::interactive::conversation_from_session(session);
@@ -9278,7 +9483,23 @@ pub fn run(
     settings: FtuiSettings,
     autocomplete: AutocompleteLaunch,
 ) -> std::io::Result<()> {
-    const DRIVER_STACK_BYTES: usize = 16 * 1024 * 1024;
+    // DIAGNOSTIC BUMP (16 -> 64 MiB), not the settled value.
+    //
+    // The FTUI driver poll is not delegated: `RuntimeBuilder::new()` is the
+    // multi-thread preset (`multi_thread()` is documented as equivalent), so
+    // `block_on` drives the root future on *this* thread via
+    // `run_future_with_budget` rather than through a worker. That makes this
+    // budget the one that actually governs the agent turn's poll depth — and
+    // 16 MiB no longer holds: single-task runs abort with
+    // `STATUS_STACK_OVERFLOW` (the parallel path amplifies the same chain).
+    //
+    // 64 MiB is a probe to separate the two causes 16 MiB cannot:
+    //   * still aborts -> unbounded recursion somewhere in the turn;
+    //   * survives     -> merely a deeply nested poll stack, and the real fix
+    //                     is to break the chain, not to keep buying MiB.
+    // The reservation is virtual and committed lazily, so idle sessions pay
+    // nothing; revisit this number once the offender is identified.
+    const DRIVER_STACK_BYTES: usize = 64 * 1024 * 1024;
     let FtuiSettings {
         markdown_spacing,
         status_chrome,
@@ -9329,7 +9550,10 @@ pub fn run(
         .name("pi-ftui-agent-driver".into())
         .stack_size(DRIVER_STACK_BYTES)
         .spawn(move || -> std::io::Result<()> {
-            let runtime = match asupersync::runtime::RuntimeBuilder::new().build() {
+            let runtime = match asupersync::runtime::RuntimeBuilder::new()
+                .thread_stack_size(DRIVER_STACK_BYTES)
+                .build()
+            {
                 Ok(runtime) => runtime,
                 Err(err) => {
                     let _ = agent_tx.send(RaMsg::AgentError(format!("runtime build: {err}")));
@@ -10553,6 +10777,79 @@ mod tests {
         );
     }
 
+    /// Entries that arrive while the reader is scrolled away are counted, the
+    /// label switches from the plain hint to the count, and returning to the
+    /// tail resets the count for the next scroll-away.
+    #[test]
+    fn scroll_hint_counts_entries_that_arrive_while_scrolled_up() {
+        let (_tx, mut model) = new_model();
+        model.scroll_from_tail = 5;
+        assert_eq!(model.unseen_entries, 0);
+        assert!(
+            model.scroll_hint_label().contains("scroll to bottom"),
+            "parked label: {}",
+            model.scroll_hint_label()
+        );
+        // The `End` shortcut lives in the label, not only in the footer.
+        assert!(model.scroll_hint_label().contains("(End)"));
+
+        model.push_entry(EntryRole::System, String::from("one"));
+        assert_eq!(model.unseen_entries, 1);
+        assert!(
+            model.scroll_hint_label().contains("1 new message"),
+            "singular: {}",
+            model.scroll_hint_label()
+        );
+
+        model.push_entry(EntryRole::System, String::from("two"));
+        assert_eq!(model.unseen_entries, 2);
+        assert!(
+            model.scroll_hint_label().contains("2 new messages"),
+            "plural: {}",
+            model.scroll_hint_label()
+        );
+
+        // At the tail a new line is already visible and must not be counted.
+        model.scroll_from_tail = 0;
+        model.push_entry(EntryRole::User, String::from("mine"));
+        assert_eq!(model.unseen_entries, 2, "tail pushes are not unseen");
+
+        // Leaving the tail restarts the count.
+        model.scroll_up(1);
+        assert_eq!(
+            model.unseen_entries, 0,
+            "a fresh scroll-away resets the count"
+        );
+    }
+
+    /// Plan and approval modes are independent gates; the label must surface
+    /// both, and must not hide a non-default approval mode behind `act`.
+    #[test]
+    fn status_mode_label_surfaces_plan_and_approval_modes() {
+        use crate::approval::ApprovalMode;
+        use crate::plan::PlanMode;
+        assert_eq!(status_mode_label(PlanMode::Off, None), "act");
+        assert_eq!(
+            status_mode_label(PlanMode::Off, Some(ApprovalMode::AlwaysAsk)),
+            "act",
+            "the default approval mode stays quiet"
+        );
+        assert_eq!(
+            status_mode_label(PlanMode::Off, Some(ApprovalMode::Yolo)),
+            "yolo"
+        );
+        assert_eq!(
+            status_mode_label(PlanMode::Off, Some(ApprovalMode::Write)),
+            "write"
+        );
+        assert_eq!(
+            status_mode_label(PlanMode::Planning, Some(ApprovalMode::Yolo)),
+            "planning/yolo",
+            "plan and approval both apply"
+        );
+        assert_eq!(status_mode_label(PlanMode::Planning, None), "planning");
+    }
+
     #[test]
     fn scroll_hint_pulse_stays_in_a_six_frame_cycle() {
         let base = ftui::PackedRgba::rgb(10, 20, 30);
@@ -11123,7 +11420,7 @@ mod tests {
         for name in &unrouted {
             let message = unrouted_command_message(name, true);
             assert!(
-                message.contains("does not implement yet") && message.contains("--classic"),
+                message.contains("does not implement yet"),
                 "/{name} is a real RecurAgent command; this stack must say so: {message}"
             );
             assert!(
@@ -12959,7 +13256,7 @@ mod tests {
         );
 
         // Topology builds the card: head carries the node count, the detail
-        // carries the vertical ASCII tree (virtual “开始” root + boxed nodes).
+        // carries the compact connector list (virtual “开始”/“结束” + nodes).
         model.apply_tool_update(
             "dag",
             "t1",
@@ -12986,9 +13283,11 @@ mod tests {
         assert!(detail.contains("结束"), "missing 结束: {detail:?}");
         assert!(detail.contains("[ ] 查询"), "missing node 1: {detail:?}");
         assert!(detail.contains("[ ] 计算"), "missing node 2: {detail:?}");
+        // Unified compact form: connector lines, no box surround.
+        assert!(detail.contains('─'), "missing connectors: {detail:?}");
         assert!(
-            detail.contains("┌") && detail.contains("┴") && detail.contains("│"),
-            "missing box / connector glyphs: {detail:?}"
+            !detail.contains("┌") && !detail.contains("┴") && !detail.contains("│"),
+            "compact form must not draw box chrome: {detail:?}"
         );
         // Full-name legend below the diagram carries the tool name.
         assert!(
@@ -13088,13 +13387,52 @@ mod tests {
         );
     }
 
-    /// Regression: a finished `dag` card must surface its aggregate report.
-    /// `finish_tool_card` writes `detail`, but `push_card_block` renders
-    /// `styled_detail` *instead* of `detail` whenever the former is set — so a
-    /// stale live tree silently shadows the report (including the failure
-    /// summary) for the rest of the card's life.
+    /// The dag card is exempt from the tool-output fold: a graph with more
+    /// than `COLLAPSED_DETAIL_LINES` nodes still shows its whole legend with
+    /// no `ctrl+o` elision line.
     #[test]
-    fn dag_tool_end_replaces_tree_with_aggregate_report() {
+    fn dag_card_shows_the_whole_legend_without_ctrl_o() {
+        let (_tx, mut model) = new_model();
+        let nodes: Vec<serde_json::Value> = (1..=10)
+            .map(|i| {
+                serde_json::json!({
+                    "id": i,
+                    "toolName": format!("t{i}"),
+                    "name": format!("node{i}"),
+                    "dependsOn": if i == 1 { Vec::<u32>::new() } else { vec![i - 1] },
+                    "layer": i - 1,
+                })
+            })
+            .collect();
+        model.apply_tool_update(
+            "dag",
+            "t1",
+            Some(&serde_json::json!({
+                "schema": "ra.dag.topology.v1",
+                "graphId": "t1",
+                "nodes": nodes,
+                "layers": (1..=10).map(|i| vec![i]).collect::<Vec<_>>(),
+            })),
+        );
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        let text = buffer_text(sim.capture_frame(160, 40), 160, 40);
+        assert!(
+            text.contains("node10"),
+            "the full legend must reach the frame: {text:?}"
+        );
+        assert!(
+            !text.contains("more lines (ctrl+o"),
+            "the dag card must never fold behind ctrl+o: {text:?}"
+        );
+    }
+
+    /// A finished `dag` card keeps its terminal tree and appends the
+    /// aggregate report below it. `finish_tool_card` alone would drop the tree,
+    /// and `push_card_block` renders `styled_detail` instead of `detail`, so the
+    /// tree has to survive in both the plain and the styled detail.
+    #[test]
+    fn dag_tool_end_keeps_the_tree_and_appends_the_report() {
         let (_tx, mut model) = new_model();
         model.apply_tool_update(
             "dag",
@@ -13113,24 +13451,41 @@ mod tests {
             "live tree must be staged while the call is running"
         );
 
-        model.finish_tool_card(
-            "t1",
-            "dag",
-            false,
-            Some("1 node failed: search".to_string()),
-            false,
-        );
+        // `finalize_dag_card` is the last write for the card; it re-renders the
+        // tree in its terminal states and appends the report below.
+        model.finalize_dag_card("t1", Some("1 node failed: search".to_string()));
 
         let card = &model.transcript[0];
-        assert_eq!(card.card, Some(CardState::Err));
-        assert_eq!(
-            card.detail.as_deref(),
-            Some("1 node failed: search"),
-            "aggregate report must land as the card detail"
+        let detail = card.detail.as_deref().unwrap_or_default();
+        assert!(
+            detail.contains("[ ] search"),
+            "terminal tree must survive: {detail:?}"
         );
         assert!(
-            card.styled_detail.is_none(),
-            "terminal report must not be shadowed by the stale tree"
+            detail.contains("1 node failed: search"),
+            "aggregate report must be appended: {detail:?}"
+        );
+        assert!(
+            detail.find("search").unwrap() < detail.find("1 node failed").unwrap(),
+            "the tree must come before the report: {detail:?}"
+        );
+        let styled = card
+            .styled_detail
+            .as_ref()
+            .expect("styled tree must survive the report");
+        let styled_text: String = styled
+            .iter()
+            .map(|line| {
+                line.spans()
+                    .iter()
+                    .map(ftui::text::Span::as_str)
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            styled_text.contains("search") && styled_text.contains("1 node failed: search"),
+            "styled detail must carry tree + report: {styled_text:?}"
         );
     }
 
@@ -15371,12 +15726,89 @@ mod tests {
         assert_eq!(regions.completion.height, 4);
         assert_eq!(
             regions.completion.y + regions.completion.height,
-            regions.input.y
+            regions.input_rule_top.y
         );
+        // The editor sits between its two rules, which in turn sit between the
+        // completion popup and the footer.
+        assert_eq!(regions.input_rule_top.height, 1);
+        assert_eq!(regions.input_rule_top.y + 1, regions.input.y);
+        assert_eq!(
+            regions.input.y + regions.input.height,
+            regions.input_rule_bottom.y
+        );
+        assert_eq!(regions.input_rule_bottom.height, 1);
+        assert_eq!(regions.input_rule_bottom.y + 1, regions.footer.y);
         assert_eq!(regions.status.y + 1, regions.completion.y);
         let closed = layout_regions(area, 1, 0, 0);
         assert_eq!(closed.completion.height, 0);
         assert_eq!(closed.body.height, regions.body.height + 4);
+    }
+
+    /// A large paste hides behind a numbered placeholder and is spliced back
+    /// in, whole, when the draft is submitted.
+    #[test]
+    fn large_paste_collapses_to_a_numbered_placeholder() {
+        let (_agent_tx, rx) = mpsc::channel();
+        let (submit_tx, submit_rx) = mpsc::channel::<UiCommand>();
+        let model = RaFtuiModel::new(rx).with_submit_channel(submit_tx);
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        let body = (1..=5)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        sim.inject_event(Event::Paste(ftui::PasteEvent::new(body.clone(), true)));
+        assert_eq!(sim.model().input.text(), "[paste #1 +5 lines]");
+        sim.inject_event(key(KeyCode::Enter, Modifiers::empty()));
+        assert_eq!(
+            submit_rx.try_recv().expect("submitted"),
+            UiCommand::Prompt(body)
+        );
+        assert!(sim.model().input.is_empty(), "editor not cleared");
+    }
+
+    /// Placeholders number up through one session and never reuse a number.
+    #[test]
+    fn paste_placeholders_number_up_within_the_session() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        sim.inject_event(Event::Paste(ftui::PasteEvent::new("a\nb\nc\nd\n", true)));
+        sim.inject_event(Event::Paste(ftui::PasteEvent::new("e\nf\ng\nh\n", true)));
+        assert_eq!(
+            sim.model().input.text(),
+            "[paste #1 +4 lines][paste #2 +4 lines]"
+        );
+    }
+
+    /// A long single line grows the editor by its *rendered* rows, so the
+    /// viewport no longer stays one row tall and scrolls the draft sideways.
+    #[test]
+    fn wrapped_single_line_grows_the_input_region() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        assert_eq!(sim.model().input_rows(), 1);
+        for _ in 0..200 {
+            sim.inject_event(key(KeyCode::Char('a'), Modifiers::empty()));
+        }
+        assert!(
+            sim.model().input_rows() > 1,
+            "a soft-wrapped line must claim more than one row"
+        );
+    }
+
+    /// The composer is framed by two rules, not blank rows.
+    #[test]
+    fn input_is_framed_by_two_rules() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        let rendered = buffer_text(sim.capture_frame(40, 12), 40, 12);
+        assert!(
+            rendered.contains(&"─".repeat(40)),
+            "composer rules missing: {rendered:?}"
+        );
     }
 
     #[test]
