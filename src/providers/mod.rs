@@ -27,6 +27,7 @@ use std::sync::Arc;
 use url::Url;
 
 pub mod anthropic;
+pub mod attribution;
 pub mod azure;
 pub mod bedrock;
 pub mod cohere;
@@ -40,10 +41,11 @@ pub mod openai_responses;
 pub mod vertex;
 
 pub use model_fetch::{
-    DISABLE_CACHE_ENV, MODEL_CACHE_TTL, ModelCatalogSource, ProviderModelCatalog,
+    CatalogRefreshOutcome, DISABLE_CACHE_ENV, MODEL_CACHE_TTL, ModelCatalogSource, ProviderModelCatalog,
     ProviderModelCatalogFetchPlan, fetch_provider_model_catalog, fetch_provider_models,
     persist_provider_model_catalog, prepare_provider_model_catalog_fetch,
-    refresh_provider_model_catalog, refresh_provider_models, static_registry_models,
+    refresh_credentialed_model_catalogs, refresh_provider_model_catalog, refresh_provider_models,
+    static_registry_models,
 };
 
 /// Offer a fully built request body to the `before_provider_request`

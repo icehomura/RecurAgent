@@ -712,6 +712,139 @@ pub fn persist_provider_model_catalog(
     )
 }
 
+/// One provider's outcome from a background catalog refresh.
+#[derive(Debug, Clone)]
+pub struct CatalogRefreshOutcome {
+    /// Canonical provider id this outcome describes.
+    pub provider: String,
+    /// Where the membership came from: a live call, the process cache, or the
+    /// static fallback.
+    pub source: ModelCatalogSource,
+    /// Number of model ids the provider reported.
+    pub model_count: usize,
+    /// Whether a successful live/cached catalog was written to disk.
+    pub persisted: bool,
+    /// Per-provider failure, when discovery could not run or persist.
+    pub error: Option<String>,
+}
+
+/// Refresh the live model catalog for every provider that has both a
+/// discoverable route and a usable credential, persisting successful live
+/// results beside `models.json`.
+///
+/// This is the shared engine behind the startup background refresh and the
+/// interactive `/model-update` command. One provider's failure never aborts the
+/// others: each is reported in its own [`CatalogRefreshOutcome`].
+pub async fn refresh_credentialed_model_catalogs(
+    only: Option<&str>,
+    force: bool,
+) -> Vec<CatalogRefreshOutcome> {
+    let auth = crate::auth::AuthStorage::load(Config::auth_path()).ok();
+    let models_path = default_models_path(&Config::global_dir());
+    let mut outcomes = Vec::new();
+
+    let only = only.map(|value| canonical_provider_key(value));
+    let mut providers: Vec<&'static str> = crate::provider_metadata::PROVIDER_METADATA
+        .iter()
+        .map(|meta| meta.canonical_id)
+        .collect();
+    providers.sort_unstable();
+    providers.dedup();
+
+    for provider in providers {
+        if only
+            .as_deref()
+            .is_some_and(|only| only != canonical_provider_key(provider))
+        {
+            continue;
+        }
+        let route_configured = match provider_model_catalog_route_is_configured(provider) {
+            Ok(configured) => configured,
+            Err(error) => {
+                outcomes.push(CatalogRefreshOutcome {
+                    provider: provider.to_string(),
+                    source: ModelCatalogSource::StaticFallback,
+                    model_count: 0,
+                    persisted: false,
+                    error: Some(error.to_string()),
+                });
+                continue;
+            }
+        };
+        if !route_configured {
+            continue;
+        }
+
+        let plan = match prepare_provider_model_catalog_fetch(provider) {
+            Ok(plan) => plan,
+            Err(error) => {
+                outcomes.push(CatalogRefreshOutcome {
+                    provider: provider.to_string(),
+                    source: ModelCatalogSource::StaticFallback,
+                    model_count: 0,
+                    persisted: false,
+                    error: Some(error.to_string()),
+                });
+                continue;
+            }
+        };
+        let api_key = resolve_catalog_api_key(auth.as_ref(), provider);
+        if plan.requires_runtime_api_key() && api_key.trim().is_empty() {
+            continue;
+        }
+
+        match plan.fetch(&api_key, force).await {
+            Ok(catalog) => {
+                let source = catalog.source();
+                let model_count = catalog.models().len();
+                let mut persisted = false;
+                let mut error = None;
+                if !matches!(source, ModelCatalogSource::StaticFallback) {
+                    match persist_provider_model_catalog(&models_path, &catalog) {
+                        Ok(_) => persisted = true,
+                        Err(err) => error = Some(err.to_string()),
+                    }
+                }
+                outcomes.push(CatalogRefreshOutcome {
+                    provider: provider.to_string(),
+                    source,
+                    model_count,
+                    persisted,
+                    error,
+                });
+            }
+            Err(error) => outcomes.push(CatalogRefreshOutcome {
+                provider: provider.to_string(),
+                source: ModelCatalogSource::StaticFallback,
+                model_count: 0,
+                persisted: false,
+                error: Some(error.to_string()),
+            }),
+        }
+    }
+
+    outcomes
+}
+
+/// Resolve the credential a catalog fetch would send, without issuing a
+/// request: stored auth wins, then the provider's documented env keys.
+fn resolve_catalog_api_key(auth: Option<&crate::auth::AuthStorage>, provider: &str) -> String {
+    if let Some(auth) = auth
+        && let Some(key) = auth.resolve_api_key(provider, None)
+        && !key.trim().is_empty()
+    {
+        return key;
+    }
+    for env in crate::provider_metadata::provider_auth_env_keys(provider) {
+        if let Ok(value) = std::env::var(env)
+            && !value.trim().is_empty()
+        {
+            return value;
+        }
+    }
+    String::new()
+}
+
 fn persist_provider_model_catalog_rows(
     models_path: &Path,
     provider: &str,

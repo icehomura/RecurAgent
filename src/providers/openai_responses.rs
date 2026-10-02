@@ -348,6 +348,13 @@ impl OpenAIResponsesProvider {
                 request = request.header("session_id", session_id);
             }
         }
+        if let Some((name, value)) = super::attribution::opencode_session_header(
+            &self.provider,
+            &self.base_url,
+            options.session_id.as_deref(),
+        ) {
+            request = request.header(name, value);
+        }
         if let Some(compat) = &self.compat
             && let Some(custom_headers) = &compat.custom_headers
         {

@@ -651,6 +651,16 @@ impl Provider for OpenAIProvider {
             }
         }
 
+        // OpenCode (Zen and Go tiers) requires a per-conversation session
+        // header before it will route the request.
+        if let Some((name, value)) = super::attribution::opencode_session_header(
+            &self.provider,
+            &self.base_url,
+            options.session_id.as_deref(),
+        ) {
+            request = request.header(name, value);
+        }
+
         // Apply provider-specific custom headers from compat config.
         if let Some(compat) = &self.compat
             && let Some(custom_headers) = &compat.custom_headers
