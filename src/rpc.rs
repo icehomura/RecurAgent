@@ -3150,10 +3150,12 @@ pub async fn run(
                 let id_clone = id.clone();
                 let runtime_handle = options.runtime_handle.clone();
                 let bash_cx = cx.clone();
+                let shell_path = options.config.shell_path.clone();
 
                 runtime_handle.spawn(async move {
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    let result = run_bash_rpc(&cwd, &command, abort_rx).await;
+                    let result =
+                        run_bash_rpc(&cwd, shell_path.as_deref(), &command, abort_rx).await;
 
                     let response = match result {
                         Ok(result) => {
@@ -11900,6 +11902,7 @@ mod retry_tests {
             let (_abort_tx, abort_rx) = oneshot::channel();
             let result = run_bash_rpc(
                 tmp.path(),
+                None,
                 "(sleep 3; echo leaked > leaked_child.txt) & sleep 10",
                 abort_rx,
             )
@@ -11954,7 +11957,7 @@ mod retry_tests {
         asupersync::test_utils::run_test(|| async {
             let tmp = tempfile::tempdir().expect("tempdir");
             let (_abort_tx, abort_rx) = oneshot::channel();
-            let run = run_bash_rpc(tmp.path(), "yes x | head -c 1200000", abort_rx);
+            let run = run_bash_rpc(tmp.path(), None, "yes x | head -c 1200000", abort_rx);
 
             let result = asupersync::time::timeout(
                 asupersync::time::wall_now(),
@@ -13056,10 +13059,14 @@ fn bash_rpc_capture_error_message(
 
 async fn run_bash_rpc(
     cwd: &std::path::Path,
+    shell_path: Option<&str>,
     command: &str,
     mut abort_rx: oneshot::Receiver<()>,
 ) -> Result<BashRpcResult> {
-    let shell = crate::tools::default_bash_shell()?;
+    let shell = shell_path
+        .map_or_else(crate::tools::default_bash_shell, |path| {
+            Ok(path.to_string())
+        })?;
 
     let command = format!("trap 'code=$?; wait; exit $code' EXIT\n{command}");
 
