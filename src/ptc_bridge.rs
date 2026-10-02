@@ -2215,14 +2215,18 @@ mod tests {
             ))
             .expect("run");
         let text = output_text(&out);
+        // The bound registry is the reachable set, so `bash` is listed and
+        // `run_code` itself is filtered out (it cannot call itself); a tool the
+        // registry does not carry (`ast_grep` here) is absent.
         assert!(text.contains("bash"), "{text}");
-        assert!(text.contains("ast_grep"), "{text}");
+        assert!(!text.contains("run_code"), "{text}");
+        assert!(!text.contains("ast_grep"), "{text}");
     }
 
     #[test]
     fn live_registry_reaches_tools_the_bridge_cannot_rebuild() {
-        // With the grant set, a call dispatches through the live registry, so a
-        // tool the bridge does NOT rebuild standalone (`hashline_edit`) is
+        // With the registry bound, a call dispatches through the live registry,
+        // so a tool the bridge does NOT rebuild standalone (`hashline_edit`) is
         // reachable: the failure must be that tool's own validation error, never
         // `PTC_BRIDGE_DENIED`.
         let registry = crate::tools::ToolRegistry::new(
