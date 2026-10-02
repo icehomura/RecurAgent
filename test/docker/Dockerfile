@@ -202,24 +202,27 @@ RUN set -eux; \
 # ---------------------------------------------------------------------------
 COPY --chown=${TARGET_USER}:${TARGET_USER} scripts/ /usr/local/share/recur-agent-gates/
 
+# Install the gh-proxy curl/wget shims over the system ones. `/usr/local/bin`
+# precedes `/usr/bin` on PATH, so `curl`/`wget` resolve to the shims with no
+# PATH manipulation — which also leaves `~/.local/bin` as PATH's first entry,
+# the directory installers pick when they decide where to drop a binary.
+USER root
 RUN set -eux; \
-    chmod +x /usr/local/share/recur-agent-gates/bin/curl \
-             /usr/local/share/recur-agent-gates/bin/wget
+    chmod 0755 /usr/local/share/recur-agent-gates/bin/curl \
+               /usr/local/share/recur-agent-gates/bin/wget; \
+    install -m 0755 /usr/local/share/recur-agent-gates/bin/curl /usr/local/bin/curl; \
+    install -m 0755 /usr/local/share/recur-agent-gates/bin/wget /usr/local/bin/wget; \
+    command -v curl; command -v wget; \
+    curl --version | head -n1; \
+    wget --version | head -n1
+USER ${TARGET_USER}
 
 # Bun (used by some Flywheel tools / ACFS)
-RUN set -eux; \
-    if [ "${GH_RELEASE_MODE}" = "ghproxy" ]; then \
-      PATH="/usr/local/share/recur-agent-gates/bin:${PATH}"; export PATH; \
-    fi; \
-    curl -fsSL https://bun.sh/install | bash || true
+RUN curl -fsSL https://bun.sh/install | bash || true
 
 # uv (Python runner; UBS / MCP Agent Mail / CASS Memory need it). Installed
 # directly rather than through ACFS, whose pinned uv-installer checksum is stale.
-RUN set -eux; \
-    if [ "${GH_RELEASE_MODE}" = "ghproxy" ]; then \
-      PATH="/usr/local/share/recur-agent-gates/bin:${PATH}"; export PATH; \
-    fi; \
-    curl -LsSf https://astral.sh/uv/install.sh | sh || true
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh || true
 
 # ---------------------------------------------------------------------------
 # Flywheel tool chain
