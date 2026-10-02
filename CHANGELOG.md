@@ -16,7 +16,11 @@ Repository: <https://github.com/Dicklesworthstone/pi_agent_rust>
 
 ### Added
 
-- **Live activity pane.** Output of long-running bash commands, background jobs, and parallel subagents scrolls in a pane above the prompt; `ctrl+x` collapses or expands it, and parallel subagent children split into side-by-side columns.
+- **Live activity pane.** Output of long-running bash commands, background jobs, and parallel subagents scrolls in a pane above the prompt; `ctrl+x` collapses or expands it, and parallel subagent children split into side-by-side columns. The pane and the composer are both drawn as rounded boxes.
+
+### Changed
+
+- **The outbound `User-Agent` is `RecurAgent`.** HTTP requests no longer advertise `recur_agent/<version>`; providers that need a qualified agent string send `RecurAgent (<qualifier>)` instead. GitHub release lookups, the Copilot Chat client, and the Antigravity/Kimi protocol headers are unchanged.
 
 ## [v0.6.1] — 2026-09-24 — Release
 

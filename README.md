@@ -51,8 +51,9 @@ legacy TypeScript Pi. That target became both impractical and undesirable as
 the legacy implementation evolved. Legacy Pi remains useful historical context,
 but it is not our compatibility authority or definition of completeness.
 
-OMP is the closer reference for where the product is going: feature surface,
-agent workflows, look and feel, and overall UI/UX. Pi Rust still chooses
+[omp / oh-my-pi](https://github.com/can1357/oh-my-pi) (MIT) is the closer
+reference for where the product is going: feature surface, agent workflows,
+look and feel, and overall UI/UX. Pi Rust still chooses
 Rust-native architecture and may intentionally differ from both projects when
 that produces a simpler, safer, or better coding agent. Historical drop-in and
 parity artifacts remain in the repository as records; they do not gate product
@@ -3205,6 +3206,27 @@ broader inventory.
 ## About Contributions
 
 Please don't take this the wrong way, but I do not accept outside contributions for any of my projects. I simply don't have the mental bandwidth to review anything, and it's my name on the thing, so I'm responsible for any problems it causes; thus, the risk-reward is highly asymmetric from my perspective. I'd also have to worry about other "stakeholders," which seems unwise for tools I mostly make for myself for free. Feel free to submit issues, and even PRs if you want to illustrate a proposed fix, but know I won't merge them directly. Instead, I'll have Claude or Codex review submissions via `gh` and independently decide whether and how to address them. Bug reports in particular are welcome. Sorry if this offends, but I want to avoid wasted time and hurt feelings. I understand this isn't in sync with the prevailing open-source ethos that seeks community contributions, but it's the only way I can move at this velocity and keep my sanity.
+
+---
+
+## Prior Art and Credits
+
+`recur_agent` is a from-scratch Rust implementation, but it does not exist in a
+vacuum. The projects below are the ones it draws on; every one is permissively
+licensed and compatible with this repository's MIT license.
+
+| Project | What this port draws on it for | License |
+|---|---|---|
+| [pi-mono / Recur Agent](https://github.com/badlogic/pi) — Mario Zechner | The original TypeScript coding agent this port started from: tool surface, session model, extension protocol. A read-only snapshot lives in `legacy_pi_mono_code/pi-mono/`, which keeps its own `LICENSE`. | MIT |
+| [omp / oh-my-pi](https://github.com/can1357/oh-my-pi) — Can Bölük | The closer product reference for feature selection, agent workflows, and terminal look and feel (the `OMP-ADOPT` program). Referenced for behavior only; no oh-my-pi source is copied into this repository. | MIT |
+| [asupersync](https://github.com/Dicklesworthstone/asupersync) | Structured-concurrency runtime, HTTP/TLS, and SQLite. | MIT (with OpenAI/Anthropic Rider) |
+| [rich_rust](https://github.com/Dicklesworthstone/rich_rust) | Rust port of [Rich](https://github.com/Textualize/rich) by Will McGugan: markup console rendering. | MIT |
+| [FrankenTUI (ftui)](https://crates.io/crates/ftui) | The terminal UI runtime, layout engine, and widgets behind the default interactive stack. | MIT (with OpenAI/Anthropic Rider) |
+
+If any file, snippet, or asset from one of these projects is ever copied into
+this repository, its copyright and permission notice must be added here in the
+same change — the MIT license requires the notice to travel with the copy, not
+just the credit.
 
 ---
 
