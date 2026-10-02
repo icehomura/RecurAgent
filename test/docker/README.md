@@ -68,12 +68,22 @@ some networks. This image works around that by default:
 | npm / bun | `registry.npmmirror.com` | `NPM_CONFIG_REGISTRY` |
 | base image | local `ubuntu:24.04` / Docker Hub | configure a Docker registry mirror |
 
-The `curl`/`wget` shims rewrite **only**
+The `curl`/`wget` shims are installed at `/usr/local/bin`, which precedes
+`/usr/bin` on `PATH`, so they shadow the system tools without any PATH
+manipulation — and `~/.local/bin` stays `PATH`'s first entry, which is where
+installers put their binary. They rewrite **only**
 `github.com/<owner>/<repo>/releases/download/...` URLs — that is where the
 throttling is. Everything else under `github.com` passes through untouched:
 gh-proxy answers `403` for the `/releases/latest` HTML page that installers
 follow to resolve a version, and rewriting that page made every tool conclude
 "no release version found" and compile itself from source.
+
+`api.github.com` is blocked here, so installers that resolve a version only
+through the REST API fail (`slb`); the ones with a redirect-based fallback
+(`br`, `cass`, `cm`, `brenner`, `apr`, `jfp`) resolve fine. Each installer entry
+file is fetched from the first mirror that answers (jsdelivr, then gh-proxy,
+then `raw.githubusercontent.com`), because jsdelivr intermittently 404s a file
+it has not cached.
 
 The upstream installers themselves download release artifacts and may fetch
 more scripts from `raw.githubusercontent.com` internally; `GH_RAW_MODE` only
