@@ -14,6 +14,10 @@ Repository: <https://github.com/Dicklesworthstone/pi_agent_rust>
 
 ## [Unreleased]
 
+### Added
+
+- **Live activity pane.** Output of long-running bash commands, background jobs, and parallel subagents scrolls in a pane above the prompt; `ctrl+x` collapses or expands it, and parallel subagent children split into side-by-side columns.
+
 ## [v0.6.1] — 2026-09-24 — Release
 
 ### Fixed

@@ -120,6 +120,7 @@ Keys are specified as `modifier+key`.
 |-----------|--------------|-------------|
 | `expandTools` | `ctrl+o` | Collapse/expand tool output |
 | `toggleThinking` | `ctrl+t` | Collapse/expand thinking blocks |
+| `toggleActivity` | `ctrl+x` | Collapse/expand the live activity pane |
 
 ### Session
 
