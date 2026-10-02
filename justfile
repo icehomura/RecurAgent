@@ -1,4 +1,15 @@
-set shell := ["bash", "-euo", "pipefail", "-c"]
+# Windows 上 recipe 用哪个 shell。
+#
+# 这里必须用 `set windows-shell` 而不是 `set shell`，也别写成
+# `set shell := ["bash", ...]`：原生 just.exe 按 Windows 的 PATH 规则解析
+# `bash`，System32 里的 WSL 启动器（C:\Windows\System32\bash.exe）排在
+# Git Bash 之前被命中，于是整条 recipe 被丢进 WSL 执行 —— 用的是 WSL 里的
+# cargo（host x86_64-unknown-linux-gnu），`just build-tui` 产出的是 Linux
+# ELF 而非 .exe。绝对路径绕开 `bash` 的名字歧义。
+#
+# `set windows-shell` 只在 Windows 生效；`set shell` 会在所有平台覆盖，
+# 把 Linux/macOS 也钉到这个不存在的 C:/ 路径上，所以不用它。
+set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-euo", "pipefail", "-c"]
 
 # Complete interactive build. Default features include the TUI stack.
 build-tui:
