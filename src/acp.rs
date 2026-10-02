@@ -15,6 +15,7 @@
 //! - `session/list`, `session/load`, `session/resume` — session management
 //! - `session/set_model` — switch the live session's provider/model at runtime
 //! - `session/set_config_option` — set a runtime option (e.g. thinking/effort)
+//! - `session/set_mode` — accept the session's single agent mode
 //!
 //! ## Streaming
 //!
@@ -948,6 +949,59 @@ async fn run(
                         let _ = out_tx.send(json_rpc_error(id, INVALID_PARAMS, msg));
                     }
                 }
+            }
+
+            // ACP `session/set_mode`. RecurAgent runs one mode, so this accepts
+            // exactly that id and changes nothing: a client selecting the mode it
+            // already has must not get an error, and an id the server never
+            // advertised must not be silently accepted.
+            "session/set_mode" => {
+                let session_id = request
+                    .params
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .map(String::from);
+                let Some(session_id) = session_id else {
+                    let _ = out_tx.send(json_rpc_error(
+                        id,
+                        INVALID_PARAMS,
+                        "Missing required parameter: sessionId",
+                    ));
+                    continue;
+                };
+                let Some(mode_id) = request.params.get("modeId").and_then(Value::as_str) else {
+                    let _ = out_tx.send(json_rpc_error(
+                        id,
+                        INVALID_PARAMS,
+                        "Missing required parameter: modeId",
+                    ));
+                    continue;
+                };
+
+                let known = sessions
+                    .lock(&cx)
+                    .await
+                    .is_ok_and(|guard| guard.contains_key(&session_id));
+                if !known {
+                    let _ = out_tx.send(json_rpc_error(
+                        id,
+                        SESSION_NOT_FOUND,
+                        format!("Session not found: {session_id}"),
+                    ));
+                    continue;
+                }
+                if mode_id != ACP_AGENT_MODE_ID {
+                    let _ = out_tx.send(json_rpc_error(
+                        id,
+                        INVALID_PARAMS,
+                        format!(
+                            "Unknown mode '{mode_id}': this server offers only '{ACP_AGENT_MODE_ID}'"
+                        ),
+                    ));
+                    continue;
+                }
+
+                let _ = out_tx.send(json_rpc_ok(id, json!({})));
             }
 
             // Dynamic, per-session config option (#105). Currently applies the
