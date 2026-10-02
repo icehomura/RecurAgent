@@ -32,6 +32,12 @@ fn box_width(label: &str) -> usize {
 }
 const MAX_VIEW_NODES: usize = 1024;
 
+/// Longest node name the compact (boxless) card shows before eliding. The
+/// boxed tree searched 4..=10 to fit a width budget, which cut ordinary tool
+/// names in half; the compact form is one line that the frame clips, so names
+/// stay whole up to this many columns.
+pub const COMPACT_NAME_CAP: usize = 30;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DagViewState {
     Pending,
@@ -242,7 +248,7 @@ fn render_layout(
         layers,
         edges,
         preds,
-    } = prepare(src, frame, cap);
+    } = prepare(src, frame, cap, true);
     let max_layer = ln.iter().map(|x| x.layer).max().unwrap_or(0);
 
     // --- x positions: align each node under its parents so single-parent
@@ -548,6 +554,21 @@ fn place_box(
     }
 }
 
+/// Draw a node label with no box chrome: the compact/boxless form keeps the
+/// connector lines and the label text but drops the `┌┐└┘` surround, so a
+/// linear chain reads as one `开始──read──结束` line instead of three.
+fn place_label(grid: &mut [Vec<Cell>], x: usize, y: usize, label: &str, state: DagViewCellState) {
+    let mut col = 0usize;
+    for ch in label.chars() {
+        let cw = UnicodeWidthChar::width(ch).unwrap_or(0).max(1);
+        set_lit(grid, x + col, y, ch, state);
+        if cw >= 2 {
+            mark_skip(grid, x + col + 1, y, state);
+        }
+        col += cw;
+    }
+}
+
 fn connect(grid: &mut [Vec<Cell>], ln: &[LNode], a: usize, b: usize, xt: usize) {
     let na = &ln[a];
     let nb = &ln[b];
@@ -668,7 +689,23 @@ const V_GAP: usize = 1; // 横排：同层节点上下间距
 /// 横排（左→右）：层变列，同层节点竖着堆、垂直居中，开始/结束左右居中。
 #[must_use]
 pub fn render_horizontal(nodes: &[DagViewNode], frame: usize, cap: usize) -> Vec<Vec<DagViewCell>> {
-    render_horizontal_cfg(nodes, frame, cap, COL_GAP)
+    render_horizontal_cfg(nodes, frame, cap, COL_GAP, true)
+}
+
+/// Compact, boxless rendering for the DAG card: connector lines and node
+/// labels only, no `┌┐└┘` surround. It reuses the horizontal layer layout with
+/// one-row nodes, drops straight into each target's centre so a branch turns
+/// exactly once instead of wrapping, then trims the empty leading/trailing
+/// rows, so a linear chain reads as a single `开始──read──结束` line.
+#[must_use]
+pub fn render_compact(nodes: &[DagViewNode], frame: usize) -> Vec<Vec<DagViewCell>> {
+    let rows = render_horizontal_cfg(nodes, frame, COMPACT_NAME_CAP, COL_GAP, false);
+    let first = rows.iter().position(|row| !row.is_empty());
+    let last = rows.iter().rposition(|row| !row.is_empty());
+    match (first, last) {
+        (Some(first), Some(last)) => rows[first..=last].to_vec(),
+        _ => Vec::new(),
+    }
 }
 
 fn render_horizontal_cfg(
@@ -676,6 +713,7 @@ fn render_horizontal_cfg(
     frame: usize,
     cap: usize,
     col_gap: usize,
+    boxed: bool,
 ) -> Vec<Vec<DagViewCell>> {
     let truncated = nodes.len() > MAX_VIEW_NODES;
     let src = &nodes[..nodes.len().min(MAX_VIEW_NODES)];
@@ -684,27 +722,77 @@ fn render_horizontal_cfg(
         layers,
         edges,
         preds,
-    } = prepare(src, frame, cap);
+    } = prepare(src, frame, cap, boxed);
     let nlayers = layers.len();
 
-    // cross-axis (row) anchors: every box is 3 rows tall.
-    let sizes = vec![3i64; ln.len()];
+    // Compact form gives every node one cell of breathing room on each side so
+    // the connector lines do not butt straight into the labels. Boxed nodes
+    // already carry the border padding, so this only applies to the flat view.
+    // `开始` is the line's first node and `结束` its last, so they only need
+    // the inner-side space.
+    if !boxed {
+        for node in &mut ln {
+            if node.is_dummy {
+                continue;
+            }
+            let is_start = node.key == usize::MAX && node.layer == 0;
+            let is_end = node.key == usize::MAX && node.layer > 0;
+            let (leading, trailing) = match (is_start, is_end) {
+                (true, _) => ("", " "),
+                (_, true) => (" ", ""),
+                _ => (" ", " "),
+            };
+            node.width += leading.len() + trailing.len();
+            node.label = format!("{leading}{}{trailing}", node.label);
+        }
+    }
+
+    // Cross-axis (row) anchors. A boxed node is 3 rows tall (border, label,
+    // border); the compact/boxless form draws only the label, one row tall.
+    let sizes = vec![if boxed { 3i64 } else { 1i64 }; ln.len()];
     let anchors = place_anchors(&layers, &preds, &sizes, V_GAP);
     let min_a = anchors.iter().copied().min().unwrap_or(0);
     let row_of = |i: usize| (anchors[i] - min_a + 1) as usize;
 
-    // column widths / x offsets
+    // Column widths, then x offsets.
     let mut col_w = vec![0usize; nlayers];
     for (l, ids) in layers.iter().enumerate() {
         col_w[l] = ids.iter().map(|&i| ln[i].width).max().unwrap_or(1);
+    }
+    // One vertical lane per *distinct source* node that has an outgoing edge
+    // across a boundary. The old shape used a single shared bus column per
+    // boundary, which merged every edge into one line and made the graph unable
+    // to answer "which node feeds which" — a whole ready layer looked like it
+    // all fed the same downstream node.
+    let mut lane_of: HashMap<usize, usize> = HashMap::new();
+    let mut lanes_after = vec![0usize; nlayers];
+    for l in 0..nlayers.saturating_sub(1) {
+        let mut next_lane = 0usize;
+        for &(a, _b) in &edges {
+            if ln[a].layer != l {
+                continue;
+            }
+            lane_of.entry(a).or_insert_with(|| {
+                let lane = next_lane;
+                next_lane += 1;
+                lane
+            });
+        }
+        lanes_after[l] = next_lane;
     }
     let mut x_left = vec![0usize; nlayers];
     let mut cursor = 0usize;
     for l in 0..nlayers {
         x_left[l] = cursor;
-        cursor += col_w[l] + col_gap;
+        // The gap after this layer must hold its lanes, so it widens to fit.
+        let gap = if l + 1 < nlayers {
+            col_gap.max(lanes_after[l] + 1)
+        } else {
+            col_gap
+        };
+        cursor += col_w[l] + gap;
     }
-    let canvas_w = cursor.saturating_sub(col_gap).max(1);
+    let canvas_w = (x_left[nlayers - 1] + col_w[nlayers - 1]).max(1);
     let max_row = (0..ln.len()).map(&row_of).max().unwrap_or(0);
     let height = max_row + 2;
     let mut grid: Vec<Vec<Cell>> = vec![vec![Cell::empty(); canvas_w]; height];
@@ -712,12 +800,20 @@ fn render_horizontal_cfg(
     for node in &mut ln {
         node.x = if node.is_dummy {
             x_left[node.layer] + col_w[node.layer] / 2
-        } else {
+        } else if boxed {
+            // Boxed nodes center inside their column.
             x_left[node.layer] + (col_w[node.layer] - node.width) / 2
+        } else {
+            // Compact nodes are LEFT-aligned to the column so their leading
+            // `[` lines up; centering indented every short name differently.
+            x_left[node.layer]
         };
     }
     for (i, node) in ln.iter().enumerate() {
-        if !node.is_dummy {
+        if node.is_dummy {
+            continue;
+        }
+        if boxed {
             place_box(
                 &mut grid,
                 node.x,
@@ -726,23 +822,42 @@ fn render_horizontal_cfg(
                 &node.label,
                 node.state,
             );
+        } else {
+            place_label(&mut grid, node.x, row_of(i), &node.label, node.state);
         }
     }
 
-    // connectors per boundary: one vertical bus column between the layers.
-    // The bus only spans the rows an edge actually needs, so a straight edge
-    // stays a single horizontal line (no stray `┼`).
+    // Connectors. Boxed: each source keeps its own vertical lane in the gap so
+    // a fan-out never merges into one bus. Boxless: route outward to the
+    // target and drop straight in from above/below at its leading `[`, so the
+    // source row turns exactly once instead of the wrap-around `┐ … └` pair
+    // that a near-side lane produced.
     let row_to_y = |v: i64| (v - min_a + 1) as usize;
     for l in 0..nlayers.saturating_sub(1) {
-        let x_band = x_left[l] + col_w[l];
         for &(a, b) in &edges {
             if ln[a].layer != l {
                 continue;
             }
+            let (x_band, xb) = if boxed {
+                (
+                    x_left[l] + col_w[l] + lane_of.get(&a).copied().unwrap_or(0),
+                    ln[b].x,
+                )
+            } else {
+                // Attach at the target's leading `[`: the padding space sits
+                // at the column's left edge, so the bracket is one cell in.
+                // (A dummy chain node has no label, so it attaches at its own
+                // single column.)
+                let bracket = if ln[b].is_dummy {
+                    ln[b].x
+                } else {
+                    ln[b].x + 1
+                };
+                (bracket, bracket)
+            };
             let ya = row_to_y(anchors[a]);
             let yb = row_to_y(anchors[b]);
             let xa = ln[a].x + ln[a].width - 1;
-            let xb = ln[b].x;
             add_conn(&mut grid, xa, ya, R, ln[a].state);
             hline(&mut grid, xa, x_band, ya);
             if ya < yb {
@@ -758,8 +873,10 @@ fn render_horizontal_cfg(
                 }
                 add_conn(&mut grid, x_band, yb, D, DagViewCellState::Neutral);
             }
-            hline(&mut grid, x_band, xb, yb);
-            add_conn(&mut grid, xb, yb, L, ln[b].state);
+            if boxed {
+                hline(&mut grid, x_band, xb, yb);
+                add_conn(&mut grid, xb, yb, L, ln[b].state);
+            }
         }
     }
 
@@ -818,7 +935,7 @@ pub fn choose_orientation(nodes: &[DagViewNode], max_width: usize) -> Orientatio
     }
     for col_gap in [COL_GAP, 1] {
         for cap in (4..=10usize).rev() {
-            if width_of_rows(&render_horizontal_cfg(nodes, 0, cap, col_gap)) <= max_width {
+            if width_of_rows(&render_horizontal_cfg(nodes, 0, cap, col_gap, true)) <= max_width {
                 return Orientation::Horizontal { cap, col_gap };
             }
         }
@@ -843,7 +960,7 @@ pub fn render_with(
     match orientation {
         Orientation::Vertical { cap, gap } => render_layout(nodes, frame, cap, gap),
         Orientation::Horizontal { cap, col_gap } => {
-            render_horizontal_cfg(nodes, frame, cap, col_gap)
+            render_horizontal_cfg(nodes, frame, cap, col_gap, true)
         }
     }
 }
@@ -861,7 +978,7 @@ pub fn render_auto(nodes: &[DagViewNode], frame: usize, max_width: usize) -> Vec
 }
 
 /// Shared graph preparation for both orientations: layout nodes, layers, edges.
-fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
+fn prepare(src: &[DagViewNode], frame: usize, cap: usize, boxed: bool) -> Prepared {
     let n = src.len();
     let mut by_id: HashMap<u32, usize> = HashMap::with_capacity(n);
     for (i, node) in src.iter().enumerate() {
@@ -888,7 +1005,11 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
     let start_idx = 0usize;
     ln.push(LNode {
         label: START_LABEL.to_string(),
-        width: box_width(START_LABEL),
+        width: if boxed {
+            box_width(START_LABEL)
+        } else {
+            display_width(START_LABEL)
+        },
         layer: 0,
         x: 0,
         state: DagViewCellState::Root,
@@ -902,7 +1023,11 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
             node.name.as_str()
         };
         let label = format!("{} {}", node.state.marker(frame), short_name(display, cap));
-        let width = box_width(&label);
+        let width = if boxed {
+            box_width(&label)
+        } else {
+            display_width(&label)
+        };
         ln.push(LNode {
             label,
             width,
@@ -921,7 +1046,11 @@ fn prepare(src: &[DagViewNode], frame: usize, cap: usize) -> Prepared {
     let end_idx = ln.len();
     ln.push(LNode {
         label: END_LABEL.to_string(),
-        width: box_width(END_LABEL),
+        width: if boxed {
+            box_width(END_LABEL)
+        } else {
+            display_width(END_LABEL)
+        },
         layer: max_real + 1,
         x: 0,
         state: if reached_end {
@@ -1339,5 +1468,58 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert!(auto.contains("开始") && auto.contains("结束"), "{auto}");
+    }
+
+    /// Preview + invariants for the collapsed (boxless) DAG card: connectors
+    /// and labels only, no `┌┐└┘` surround. Run with `--nocapture` to eyeball
+    /// the two shapes.
+    #[test]
+    fn render_compact_drops_boxes_but_keeps_connectors() {
+        let chain = vec![
+            n(1, "read", &[], DagViewState::Succeeded),
+            n(2, "parse", &[1], DagViewState::Succeeded),
+            n(3, "write", &[2], DagViewState::Running),
+        ];
+        let compact = rows_to_string(&render_compact(&chain, 0)).join("\n");
+        println!("compact chain:\n{compact}");
+        for box_glyph in ["┌", "┐", "└", "┘", "├", "┤", "┬", "┴", "┼"] {
+            assert!(
+                !compact.contains(box_glyph),
+                "compact form leaked box chrome {box_glyph:?}:\n{compact}"
+            );
+        }
+        assert!(
+            !compact.contains('│'),
+            "a linear chain needs no vertical connector:\n{compact}"
+        );
+        assert!(
+            compact.contains("开始") && compact.contains("结束"),
+            "{compact}"
+        );
+        assert!(compact.contains('─'), "connector line dropped:\n{compact}");
+
+        let branchy = vec![
+            n(1, "read", &[], DagViewState::Succeeded),
+            n(2, "parse", &[1], DagViewState::Running),
+            n(3, "fetch", &[1], DagViewState::Pending),
+            n(4, "write", &[2, 3], DagViewState::Pending),
+        ];
+        let compact = rows_to_string(&render_compact(&branchy, 0)).join("\n");
+        println!("compact branchy:\n{compact}");
+        // The old near-side lane produced a wrap whose merge junctions were
+        // `┬`/`┴` next to the target. The one-corner route has none.
+        for gone in ["┬", "┴"] {
+            assert!(
+                !compact.contains(gone),
+                "merge junction {gone:?} still present:\n{compact}"
+            );
+        }
+        for name in ["read", "parse", "fetch", "write"] {
+            assert!(compact.contains(name), "node {name} missing:\n{compact}");
+        }
+        assert!(
+            compact.contains("开始") && compact.contains("结束"),
+            "{compact}"
+        );
     }
 }
