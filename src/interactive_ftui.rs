@@ -53,6 +53,9 @@ use ftui::widgets::spinner::{DOTS, SpinnerState};
 use ftui::widgets::textarea::TextArea;
 use ftui::{Cmd, Event, Frame, KeyCode, Model, Modifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::activity_pane::{
+    ACTIVITY_COLLAPSED_ROWS, ACTIVITY_EXPANDED_MAX_ROWS, ActivityKind, ActivityPane, ActivityState,
+};
 use crate::ask::{AskAnswer, AskResponse, AskUiRequest, QuestionReply};
 use crate::autocomplete::{AutocompleteCatalog, AutocompleteItem, AutocompleteItemKind};
 use crate::dag_view;
@@ -135,6 +138,15 @@ impl AgentEventSubscription {
 }
 
 const AGENT_EVENT_POLL: Duration = Duration::from_millis(50);
+
+/// How often the activity pane re-reads the process-wide background-job
+/// registry while the tick chain runs. The spinner ticks 8×/s; the registry
+/// lock does not need to be taken at that rate.
+const JOBS_POLL_INTERVAL: Duration = Duration::from_millis(500);
+
+/// Longest activity-pane label kept in memory. The renderer truncates to the
+/// column width anyway; this only bounds what a long command line can retain.
+const ACTIVITY_LABEL_MAX_CHARS: usize = 160;
 
 /// Spinner animation cadence while the agent works.
 const SPINNER_INTERVAL: Duration = Duration::from_millis(120);
@@ -1355,6 +1367,12 @@ struct TranscriptEntry {
 /// handling — silence — so unrelated namespaces never leak into the frame.
 const DAG_SCHEMA_PREFIX: &str = "ra.dag.";
 
+/// Schema the `subagent` tool stamps on its per-child progress updates
+/// (`subagents.rs` `emit_progress`). Each update carries one child's
+/// accumulated output, keyed by `step` (parallel index, chain index, or dag
+/// node id), which is what gives a parallel delegation its columns.
+const SUBAGENT_PROGRESS_SCHEMA: &str = "ra.subagent.progress.v1";
+
 /// Tail of a node's streaming output kept at all (lines, then characters).
 const DAG_NODE_OUTPUT_MAX_LINES: usize = 4;
 const DAG_NODE_OUTPUT_MAX_CHARS: usize = 400;
@@ -2163,6 +2181,17 @@ pub struct RaFtuiModel {
     /// (plan §4.1) and folded into the dag card; dropped when the call ends
     /// (plan §4.5 keeps the TUI list-shaped, not graphical).
     dag_progress: std::collections::HashMap<String, DagProgress>,
+    /// Live output of long-running work (foreground `bash`, background jobs,
+    /// parallel `subagent` children), rendered in the pane docked above the
+    /// status line. Fed by `ToolUpdate` content/schemas and by polling the
+    /// background-job registry; `ctrl+x` collapses or expands the pane.
+    activity: ActivityPane,
+    /// Monotonic epoch for the pane's `updated_at_ms` bookkeeping, so message
+    /// timestamps never depend on the wall clock (and are test-friendly).
+    activity_epoch: Instant,
+    /// Last time the background-job registry was polled; throttles the
+    /// registry lock to one probe per [`JOBS_POLL_INTERVAL`] of tick time.
+    last_jobs_poll: Option<Instant>,
 }
 
 /// One cached transcript block (issue #201): the styled lines produced for
@@ -2222,6 +2251,10 @@ struct Regions {
     body: Rect,
     /// Pinned error banner row (present only while an error is undissmissed).
     banner: Rect,
+    /// Live activity pane (long-running bash/jobs/subagents), docked directly
+    /// above the status line. Zero rows while nothing is running and the pane
+    /// is collapsed, so an idle session keeps its full conversation body.
+    activity: Rect,
     status: Rect,
     /// Slash-command completion popup, directly above the editor (issue
     /// #208); zero rows while no suggestions are showing.
@@ -2351,13 +2384,35 @@ fn paste_should_collapse(text: &str) -> bool {
         || text.chars().count() > PASTE_COLLAPSE_MIN_CHARS
 }
 
-fn layout_regions(area: Rect, input_rows: u16, banner_rows: u16, completion_rows: u16) -> Regions {
+/// Bound an activity-pane label to [`ACTIVITY_LABEL_MAX_CHARS`] characters,
+/// char-boundary safe, with an ellipsis marking the cut.
+fn truncate_activity_label(text: &str) -> String {
+    let text = sanitize(text);
+    let mut label = String::with_capacity(text.len().min(ACTIVITY_LABEL_MAX_CHARS * 4));
+    for (index, ch) in text.chars().enumerate() {
+        if index >= ACTIVITY_LABEL_MAX_CHARS {
+            label.push('…');
+            break;
+        }
+        label.push(ch);
+    }
+    label
+}
+
+fn layout_regions(
+    area: Rect,
+    input_rows: u16,
+    banner_rows: u16,
+    completion_rows: u16,
+    activity_rows: u16,
+) -> Regions {
     use ftui::layout::{Constraint, Flex};
     let rects = Flex::vertical()
         .constraints([
             Constraint::Fixed(1),               // header
             Constraint::Fill,                   // conversation body
             Constraint::Fixed(banner_rows),     // pinned error banner (0 = none)
+            Constraint::Fixed(activity_rows),   // live activity pane (0 = hidden)
             Constraint::Fixed(1),               // status line (tool/todo/messages)
             Constraint::Fixed(completion_rows), // completion popup (0 = closed)
             Constraint::Fixed(1),               // rule above the editor
@@ -2370,12 +2425,13 @@ fn layout_regions(area: Rect, input_rows: u16, banner_rows: u16, completion_rows
         header: rects[0],
         body: rects[1],
         banner: rects[2],
-        status: rects[3],
-        completion: rects[4],
-        input_rule_top: rects[5],
-        input: rects[6],
-        input_rule_bottom: rects[7],
-        footer: rects[8],
+        activity: rects[3],
+        status: rects[4],
+        completion: rects[5],
+        input_rule_top: rects[6],
+        input: rects[7],
+        input_rule_bottom: rects[8],
+        footer: rects[9],
     }
 }
 
@@ -2434,6 +2490,9 @@ impl RaFtuiModel {
             busy: None,
             markdown_spacing: crate::config::MarkdownSpacing::Comfortable,
             dag_progress: std::collections::HashMap::new(),
+            activity: ActivityPane::new(),
+            activity_epoch: Instant::now(),
+            last_jobs_poll: None,
             #[cfg(test)]
             suspend_task_override: None,
             pending_task: None,
@@ -2721,9 +2780,165 @@ impl RaFtuiModel {
     fn body_height(&self) -> usize {
         let banner = u16::from(self.error_banner.is_some());
         usize::from(self.term.1.saturating_sub(
-            FIXED_CHROME_ROWS + banner + self.input_rows() + self.completion_rows(),
+            FIXED_CHROME_ROWS
+                + banner
+                + self.input_rows()
+                + self.completion_rows()
+                + self.activity_rows(),
         ))
         .max(1)
+    }
+
+    /// Monotonic milliseconds since this model was created: the clock every
+    /// activity item is stamped with, independent of the wall clock.
+    fn activity_now_ms(&self) -> u64 {
+        u64::try_from(self.activity_epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
+    }
+
+    /// Rows the live activity pane reserves above the status line.
+    ///
+    /// Zero while nothing is visible and the pane is collapsed, so an idle
+    /// session keeps every conversation row; the collapsed pane is a fixed
+    /// five rows (header + four tail lines) and the expanded one takes the
+    /// larger share up to [`ACTIVITY_EXPANDED_MAX_ROWS`].
+    fn activity_rows(&self) -> u16 {
+        let visible = !self.activity.display(self.activity_now_ms()).is_empty();
+        if !visible && !self.activity.expanded {
+            return 0;
+        }
+        if self.activity.expanded {
+            (self.term.1.saturating_mul(2) / 5)
+                .max(ACTIVITY_COLLAPSED_ROWS)
+                .min(ACTIVITY_EXPANDED_MAX_ROWS)
+        } else {
+            ACTIVITY_COLLAPSED_ROWS.min(self.term.1 / 3).max(1)
+        }
+    }
+
+    /// Register a tool call in the activity pane when its family can block
+    /// for a long time. Short tools (`read`, `grep`, …) never grow a row, and
+    /// `subagent` is excluded on purpose: its children register their own rows
+    /// from their progress updates, so a parent row would claim a column that
+    /// belongs to a child.
+    fn note_activity_tool(&mut self, tool_id: &str, name: &str) {
+        let kind = match name {
+            "bash" => ActivityKind::Bash,
+            "jobs" => ActivityKind::Job,
+            "eval" | "run_code" => ActivityKind::Tool,
+            _ => return,
+        };
+        let now = self.activity_now_ms();
+        self.activity.touch(tool_id, kind, name, now);
+    }
+
+    /// Replace a tool call's pane label with its human-readable invocation,
+    /// keeping the item's category as a prefix so a row always says what kind
+    /// of work it is ("agent 3 parallel tasks", "bash cargo test").
+    fn label_activity_tool(&mut self, tool_id: &str, summary: &str) {
+        let Some(kind) = self.activity.get(tool_id).map(|item| item.kind) else {
+            return;
+        };
+        let label = truncate_activity_label(&format!("{} {summary}", kind.label()));
+        self.activity.set_label(tool_id, &label);
+    }
+
+    /// Mark a finished tool call's pane rows terminal — the call itself and
+    /// every `{tool_id}#…` child row (`subagent` columns).
+    fn settle_activity(&mut self, tool_id: &str, failed: bool) {
+        let state = if failed {
+            ActivityState::Failed
+        } else {
+            ActivityState::Done
+        };
+        let now = self.activity_now_ms();
+        let prefix = format!("{tool_id}#");
+        let keys: Vec<String> = self
+            .activity
+            .items()
+            .iter()
+            .filter(|item| item.key == tool_id || item.key.starts_with(&prefix))
+            .map(|item| item.key.clone())
+            .collect();
+        for key in keys {
+            self.activity.set_state(&key, state, now);
+        }
+    }
+
+    /// Fold a streaming tool output payload into the pane row of an already
+    /// registered call. `bash` reports its whole truncated tail every update,
+    /// so the row is replaced rather than appended.
+    fn apply_streaming_output(&mut self, tool_id: &str, content: &[crate::model::ContentBlock]) {
+        if content.is_empty() || self.activity.get(tool_id).is_none() {
+            return;
+        }
+        let text: String = content
+            .iter()
+            .filter_map(|block| match block {
+                crate::model::ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if text.is_empty() {
+            return;
+        }
+        let now = self.activity_now_ms();
+        if let Some(item) = self.activity.get_mut(tool_id) {
+            item.replace_text(&text);
+            item.updated_at_ms = now;
+        }
+    }
+
+    /// Mirror this session's background `bash` jobs into the pane, throttled
+    /// so the 120 ms spinner tick cannot hammer the process-wide registry.
+    /// Finished jobs are mirrored ONCE, then left to the linger window.
+    fn poll_background_jobs(&mut self, force: bool) {
+        let now_instant = Instant::now();
+        if !force
+            && let Some(last) = self.last_jobs_poll
+            && now_instant.duration_since(last) < JOBS_POLL_INTERVAL
+        {
+            return;
+        }
+        self.last_jobs_poll = Some(now_instant);
+        let Some(session_id) = self.displayed_session_id.clone() else {
+            return;
+        };
+        let Ok(jobs) = crate::jobs::list(&session_id) else {
+            return;
+        };
+        let now = self.activity_now_ms();
+        for job in jobs {
+            if job.status == "running" {
+                let label = truncate_activity_label(&format!("job {} · {}", job.id, job.command));
+                let item = self.activity.touch(&job.id, ActivityKind::Job, &label, now);
+                item.replace_text(&job.output_tail);
+                continue;
+            }
+            // A settled job: fold the final tail in and settle the row once.
+            if !self
+                .activity
+                .get(&job.id)
+                .is_some_and(crate::activity_pane::ActivityItem::is_running)
+            {
+                continue;
+            }
+            if let Some(item) = self.activity.get_mut(&job.id) {
+                item.replace_text(&job.output_tail);
+            }
+            let state = if job.status == "exited" && job.exit_code == Some(0) {
+                ActivityState::Done
+            } else {
+                ActivityState::Failed
+            };
+            self.activity.set_state(&job.id, state, now);
+        }
+    }
+
+    /// Whether the pane still has something to show, i.e. the tick chain must
+    /// keep running so job tails keep refreshing and finished rows can expire.
+    fn activity_needs_ticks(&self) -> bool {
+        self.activity.has_running() || !self.activity.items().is_empty()
     }
 
     /// Whether the editor is in plain prompt-composition mode: idle agent,
@@ -3098,8 +3313,9 @@ impl RaFtuiModel {
         }
     }
 
-    /// Fold one streaming tool update into the transcript. Only the `dag`
-    /// tool's `ra.dag.*` progress schemas mutate the view (plan §4.1); every
+    /// Fold one streaming tool update into the transcript. The `dag` tool's
+    /// `ra.dag.*` schemas mutate the dag card (plan §4.1) and the `subagent`
+    /// tool's `ra.subagent.progress.v1` mutates the activity pane; every
     /// other update keeps the pre-existing behaviour — dropped — so unrelated
     /// `details` namespaces never reach a frame.
     #[allow(clippy::too_many_lines)]
@@ -3113,6 +3329,10 @@ impl RaFtuiModel {
         let Some(schema) = details.get("schema").and_then(serde_json::Value::as_str) else {
             return;
         };
+        if schema == SUBAGENT_PROGRESS_SCHEMA {
+            self.apply_subagent_progress(tool_id, details);
+            return;
+        }
         if !schema.starts_with(DAG_SCHEMA_PREFIX) {
             return;
         }
@@ -3220,6 +3440,49 @@ impl RaFtuiModel {
             _ => return,
         }
         self.refresh_dag_card(&key, name);
+    }
+
+    /// Fold one `subagent` child progress update into the activity pane.
+    ///
+    /// Every child of one `subagent` call reports through the same tool-call
+    /// callback (`subagents.rs` `emit_progress`), so the pane keys each child
+    /// by its `step` — the parallel index, the chain index, or the dag node
+    /// id — which is what turns a parallel delegation into side-by-side
+    /// columns. The payload carries that child's accumulated output, so the
+    /// row is replaced rather than appended.
+    fn apply_subagent_progress(&mut self, tool_id: &str, details: &serde_json::Value) {
+        let Some(result) = details.get("result") else {
+            return;
+        };
+        let agent = result
+            .get("agent")
+            .and_then(serde_json::Value::as_str)
+            .map_or_else(|| String::from("subagent"), |a| sanitize(a).into_owned());
+        let step = result.get("step").and_then(serde_json::Value::as_u64);
+        let status = result
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("running");
+        let output = result
+            .get("output")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        let key = step.map_or_else(
+            || format!("{tool_id}#single"),
+            |step| format!("{tool_id}#{step}"),
+        );
+        let label = step.map_or_else(|| agent.clone(), |step| format!("{agent} #{step}"));
+        let state = match status {
+            "completed" => ActivityState::Done,
+            "failed" | "cancelled" => ActivityState::Failed,
+            _ => ActivityState::Running,
+        };
+        let now = self.activity_now_ms();
+        let item = self
+            .activity
+            .touch(&key, ActivityKind::Subagent, &label, now);
+        item.replace_text(output);
+        self.activity.set_state(&key, state, now);
     }
 
     /// Render the live DAG progress into the dag tool's card: head = one-line
@@ -3446,6 +3709,7 @@ impl RaFtuiModel {
             self.input_rows(),
             u16::from(self.error_banner.is_some()),
             self.completion_rows(),
+            self.activity_rows(),
         )
         .body
     }
@@ -3458,6 +3722,7 @@ impl RaFtuiModel {
             self.input_rows(),
             u16::from(self.error_banner.is_some()),
             self.completion_rows(),
+            self.activity_rows(),
         )
         .input
     }
@@ -3654,6 +3919,10 @@ impl RaFtuiModel {
                 let pair = sanitize(&tool_id).into_owned();
                 self.current_tool = Some(name.clone());
                 self.push_tool_card(&pair, &name, &name);
+                // Long-blocking families also claim a pane row, so a
+                // `bash`/`subagent` call is visible while it runs even before
+                // it produces its first line of output.
+                self.note_activity_tool(&pair, &name);
             }
             RaMsg::ToolInvocation { tool_id, summary } => {
                 // The invocation summary REPLACES the card head (omp
@@ -3661,6 +3930,7 @@ impl RaFtuiModel {
                 // the text change.
                 let pair = sanitize(&tool_id).into_owned();
                 let summary = sanitize(&summary).into_owned();
+                self.label_activity_tool(&pair, &summary);
                 let revision = self.next_revision();
                 if let Some(entry) = self.transcript.iter_mut().rev().find(|e| {
                     e.card == Some(CardState::Pending)
@@ -3673,12 +3943,14 @@ impl RaFtuiModel {
             RaMsg::ToolUpdate {
                 name,
                 tool_id,
+                content,
                 details,
-                ..
             } => {
-                // Streaming progress: only the dag schemas mutate the view
-                // (see `apply_tool_update`); every other update is a no-op.
+                // Streaming progress: the dag/subagent schemas mutate the
+                // activity view (see `apply_tool_update`), and a call already
+                // registered in the pane (bash) folds in its output tail.
                 self.apply_tool_update(&name, &tool_id, details.as_ref());
+                self.apply_streaming_output(&tool_id, &content);
             }
             RaMsg::ToolEnd {
                 name,
@@ -3693,6 +3965,11 @@ impl RaFtuiModel {
                 let name = sanitize(&name).into_owned();
                 let pair = sanitize(&tool_id).into_owned();
                 let output = output.map(|o| sanitize(&o).into_owned());
+                // The pane row (and any `subagent` child columns) settle with
+                // the call itself, then the job registry is probed once so a
+                // freshly started background job appears immediately.
+                self.settle_activity(&pair, is_error);
+                self.poll_background_jobs(true);
                 let diff_styled = matches!(name.as_str(), "edit" | "hashline_edit");
                 // A card that rendered a dag graph keeps it: the terminal
                 // aggregate report is appended *below* the final tree instead of
@@ -5123,13 +5400,21 @@ impl RaFtuiModel {
                 if hint_live && self.unseen_entries > 0 {
                     self.scroll_hint_phase = self.scroll_hint_phase.wrapping_add(1);
                 }
+                // Background jobs, like the rest of the pane, are refreshed
+                // here: mirror the registry, drop rows past their linger
+                // window, and keep the chain alive while anything remains so
+                // a finished row actually reaches its expiry.
+                self.poll_background_jobs(false);
+                self.activity.retain_visible(self.activity_now_ms());
                 // Spinner heartbeat: advance and reschedule only while
                 // something animated needs it — a working turn, an
-                // out-of-turn busy operation (issue #203), or a pending
-                // tool card — so idle sessions stay fully parked.
+                // out-of-turn busy operation (issue #203), a pending tool
+                // card, or a live activity row — so idle sessions stay fully
+                // parked.
                 if self.state == AgentUiState::Working
                     || self.busy.is_some()
                     || self.has_pending_cards()
+                    || self.activity_needs_ticks()
                 {
                     self.spinner.tick();
                     return Cmd::tick(SPINNER_INTERVAL);
@@ -5275,8 +5560,9 @@ impl RaFtuiModel {
                     .or_else(|| pick(AppAction::DeleteCharForward))
                     .or_else(|| pick(AppAction::Undo))
                     // Display and editor-launch keys last: when a user binds
-                    // one of these chords (ctrl+o/t/g) to an editing action,
+                    // one of these chords (ctrl+x/o/t/g) to an editing action,
                     // their binding wins over our default.
+                    .or_else(|| pick(AppAction::ToggleActivity))
                     .or_else(|| pick(AppAction::ExpandTools))
                     .or_else(|| pick(AppAction::ToggleThinking))
                     .or_else(|| pick(AppAction::ExternalEditor))
@@ -5435,6 +5721,13 @@ impl RaFtuiModel {
                                     Some(String::from("No image on the clipboard to paste."));
                             }
                         }
+                        return Cmd::none();
+                    }
+                    Some(AppAction::ToggleActivity) => {
+                        // Purely a view preference: the pane's contents keep
+                        // updating while collapsed, so re-expanding shows the
+                        // current tail rather than a frozen one.
+                        self.activity.expanded = !self.activity.expanded;
                         return Cmd::none();
                     }
                     Some(AppAction::ExpandTools) => {
@@ -5962,6 +6255,37 @@ impl RaFtuiModel {
         self.watchdog.snapshot()
     }
 
+    /// Paint the live activity pane: a one-line header (what is running, and
+    /// the toggle chord) over the tail columns produced by
+    /// [`ActivityPane::render`].
+    ///
+    /// The pane stays plain text on purpose: `activity_pane` owns the column
+    /// math so it can be unit-tested without a terminal, and this method only
+    /// sanitizes and styles what it returns.
+    fn render_activity(&self, area: Rect, frame: &mut Frame) {
+        let header = ftui::text::Line::styled(
+            sanitize(&self.activity.header(self.activity.expanded)).into_owned(),
+            ftui::Style::new().dim().fg(self.palette.muted),
+        );
+        Paragraph::new(Text::from_lines([header])).render(area, frame);
+        if area.height <= 1 {
+            return;
+        }
+        let body = Rect::new(area.x, area.y + 1, area.width, area.height - 1);
+        let lines = self.activity.render(
+            usize::from(body.width),
+            usize::from(body.height),
+            self.activity_now_ms(),
+        );
+        let style = ftui::Style::new().fg(self.palette.muted);
+        let text = Text::from_lines(
+            lines
+                .iter()
+                .map(|line| ftui::text::Line::styled(sanitize(line).into_owned(), style)),
+        );
+        Paragraph::new(text).render(body, frame);
+    }
+
     /// Suggestion rows plus a keyboard hint (issue #208). The highlighted
     /// row is kept inside the window via the shared `scroll_offset`, so a
     /// short terminal that clamps the region below `max_visible` still
@@ -6109,6 +6433,7 @@ impl RaFtuiModel {
             self.input_rows(),
             u16::from(self.error_banner.is_some()),
             self.completion_rows(),
+            self.activity_rows(),
         );
         self.rendered_body.set(regions.body);
 
@@ -6224,6 +6549,13 @@ impl RaFtuiModel {
             )]))
             .render(regions.banner, frame);
         }
+        // Live activity pane: the scrolling tail of long-running work
+        // (foreground bash, background jobs, parallel subagents). Zero rows
+        // unless something is running or the user expanded it with ctrl+x.
+        if regions.activity.height > 0 {
+            self.render_activity(regions.activity, frame);
+        }
+
         // Status region. While working: spinner + activity (tool > thinking >
         // responding). While a long out-of-turn driver operation runs
         // (issue #203): spinner + its label. While idle: the todo summary.
@@ -10882,6 +11214,194 @@ mod tests {
         assert!(
             rendered.contains("Type a message"),
             "frame missing input placeholder: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn activity_pane_appears_for_a_streaming_bash_call() {
+        let (_tx, mut model) = new_model();
+        assert_eq!(
+            model.activity_rows(),
+            0,
+            "an idle session must not lose body rows to the pane"
+        );
+
+        model.handle_agent(RaMsg::ToolStart {
+            name: "bash".into(),
+            tool_id: "b1".into(),
+        });
+        model.handle_agent(RaMsg::ToolInvocation {
+            tool_id: "b1".into(),
+            summary: "cargo test --all".into(),
+        });
+        // bash reports its whole truncated tail on every update.
+        model.handle_agent(RaMsg::ToolUpdate {
+            name: "bash".into(),
+            tool_id: "b1".into(),
+            content: vec![crate::model::ContentBlock::Text(
+                crate::model::TextContent::new("compiling ra\nrunning 3 tests"),
+            )],
+            details: None,
+        });
+
+        assert_eq!(model.activity_rows(), ACTIVITY_COLLAPSED_ROWS);
+        let item = model.activity.get("b1").expect("bash claims a pane row");
+        assert_eq!(item.kind, ActivityKind::Bash);
+        assert_eq!(item.state, ActivityState::Running);
+        assert!(
+            item.label.contains("cargo test --all"),
+            "invocation summary should become the pane label: {:?}",
+            item.label
+        );
+        assert_eq!(
+            item.tail(4),
+            vec!["compiling ra".to_string(), "running 3 tests".to_string()],
+            "the tail is replaced, not appended, because bash resends it whole"
+        );
+
+        // The pane keeps the finished output during its linger window.
+        model.handle_agent(RaMsg::ToolEnd {
+            name: "bash".into(),
+            tool_id: "b1".into(),
+            is_error: false,
+            output: None,
+        });
+        assert_eq!(
+            model.activity.get("b1").map(|item| item.state),
+            Some(ActivityState::Done)
+        );
+        assert_eq!(
+            model.activity_rows(),
+            ACTIVITY_COLLAPSED_ROWS,
+            "a finished row lingers before the pane collapses"
+        );
+    }
+
+    #[test]
+    fn parallel_subagent_children_render_as_side_by_side_columns() {
+        let (_tx, mut model) = new_model();
+        model.handle_agent(RaMsg::ToolStart {
+            name: "subagent".into(),
+            tool_id: "s1".into(),
+        });
+        for (step, output) in [(1_u64, "alpha findings"), (2, "beta findings")] {
+            model.handle_agent(RaMsg::ToolUpdate {
+                name: "subagent".into(),
+                tool_id: "s1".into(),
+                content: Vec::new(),
+                details: Some(serde_json::json!({
+                    "schema": SUBAGENT_PROGRESS_SCHEMA,
+                    "result": {
+                        "agent": "scout",
+                        "step": step,
+                        "status": "running",
+                        "output": output,
+                    },
+                })),
+            });
+        }
+
+        let now = model.activity_now_ms();
+        assert_eq!(
+            model.activity.display(now).len(),
+            2,
+            "each child is its own pane item"
+        );
+        let second = model.activity.get("s1#2").expect("child column");
+        assert_eq!(second.kind, ActivityKind::Subagent);
+        assert_eq!(second.label, "scout #2");
+        assert_eq!(
+            second.tail(1),
+            vec!["beta findings".to_string()],
+            "each column keeps its own child's output"
+        );
+
+        let rendered = model.activity.render(80, 4, now).join("\n");
+        assert!(
+            rendered.contains("alpha findings") && rendered.contains("beta findings"),
+            "both children must be on screen at once: {rendered:?}"
+        );
+        assert!(
+            rendered.contains('\u{2502}'),
+            "columns are separated by a divider: {rendered:?}"
+        );
+
+        // The tool call ending settles every child column with it.
+        model.handle_agent(RaMsg::ToolEnd {
+            name: "subagent".into(),
+            tool_id: "s1".into(),
+            is_error: false,
+            output: None,
+        });
+        assert!(
+            !model
+                .activity
+                .get("s1#1")
+                .expect("child column")
+                .is_running()
+        );
+        assert!(
+            !model
+                .activity
+                .get("s1#2")
+                .expect("child column")
+                .is_running()
+        );
+    }
+
+    #[test]
+    fn ctrl_x_toggles_the_activity_pane() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
+            name: "bash".into(),
+            tool_id: "b1".into(),
+        }));
+        let collapsed = sim.model().activity_rows();
+        assert_eq!(collapsed, ACTIVITY_COLLAPSED_ROWS);
+
+        sim.inject_event(key(KeyCode::Char('x'), Modifiers::CTRL));
+        assert!(sim.model().activity.expanded, "ctrl+x expands the pane");
+        let expanded = sim.model().activity_rows();
+        assert!(
+            expanded > collapsed,
+            "expanded pane must be taller: {expanded} vs {collapsed}"
+        );
+
+        sim.inject_event(key(KeyCode::Char('x'), Modifiers::CTRL));
+        assert!(!sim.model().activity.expanded, "ctrl+x collapses it again");
+        assert_eq!(sim.model().activity_rows(), collapsed);
+    }
+
+    #[test]
+    fn view_renders_the_activity_pane_above_the_status_line() {
+        let (_tx, model) = new_model();
+        let mut sim = ProgramSimulator::new(model);
+        sim.init();
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolStart {
+            name: "bash".into(),
+            tool_id: "b1".into(),
+        }));
+        sim.send(RaFtuiMsg::Agent(RaMsg::ToolUpdate {
+            name: "bash".into(),
+            tool_id: "b1".into(),
+            content: vec![crate::model::ContentBlock::Text(
+                crate::model::TextContent::new("distinctive-pane-line"),
+            )],
+            details: None,
+        }));
+
+        let width = 60;
+        let height = 20;
+        let rendered = buffer_text(sim.capture_frame(width, height), width, height);
+        assert!(
+            rendered.contains("activity"),
+            "pane header missing from the frame: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("distinctive-pane-line"),
+            "pane tail missing from the frame: {rendered:?}"
         );
     }
 
@@ -16009,8 +16529,9 @@ mod tests {
     #[test]
     fn layout_reserves_the_completion_rows_above_the_editor() {
         let area = Rect::new(0, 0, 80, 20);
-        let regions = layout_regions(area, 1, 0, 4);
+        let regions = layout_regions(area, 1, 0, 4, 0);
         assert_eq!(regions.completion.height, 4);
+        assert_eq!(regions.activity.height, 0);
         assert_eq!(
             regions.completion.y + regions.completion.height,
             regions.input_rule_top.y
@@ -16026,7 +16547,17 @@ mod tests {
         assert_eq!(regions.input_rule_bottom.height, 1);
         assert_eq!(regions.input_rule_bottom.y + 1, regions.footer.y);
         assert_eq!(regions.status.y + 1, regions.completion.y);
-        let closed = layout_regions(area, 1, 0, 0);
+        // The activity pane is docked between the conversation body and the
+        // status line, taking its rows out of the body.
+        let with_activity = layout_regions(area, 1, 0, 0, 5);
+        assert_eq!(with_activity.activity.height, 5);
+        assert_eq!(with_activity.activity.y, with_activity.banner.y);
+        assert_eq!(with_activity.activity.y + 5, with_activity.status.y);
+        assert_eq!(
+            with_activity.body.height + 5,
+            layout_regions(area, 1, 0, 0, 0).body.height
+        );
+        let closed = layout_regions(area, 1, 0, 0, 0);
         assert_eq!(closed.completion.height, 0);
         assert_eq!(closed.body.height, regions.body.height + 4);
     }
