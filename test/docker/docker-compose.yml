@@ -33,14 +33,20 @@ x-common: &common
       UV_DEFAULT_INDEX: ${UV_DEFAULT_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
       UV_PYTHON_INSTALL_MIRROR: ${UV_PYTHON_INSTALL_MIRROR:-https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download}
       NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
-      # Lifts the anonymous GitHub REST API limit for installers that resolve a
-      # release through api.github.com (slb has no fallback). Outside the
-      # container: `GITHUB_TOKEN=$(gh auth token) docker compose build`.
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # Optional proxy for hosts where raw.githubusercontent.com is blocked
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       NO_PROXY: ${NO_PROXY:-}
+      # Cache marker, not a secret: 1 when a token is supplied. BuildKit excludes
+      # secret mounts from the cache key, so without this a token-less build
+      # would be cached over a token build and slb/cass would stay missing.
+      GH_TOKEN_PRESENT: ${GH_TOKEN_PRESENT:-0}
+    # A GitHub token lifts the anonymous GitHub REST API limit for installers
+    # that resolve a release through api.github.com (slb and cass have no
+    # fallback). compose.sh supplies it from the host's gh CLI; mounted as a
+    # build secret, so it never enters the image or the build cache.
+    secrets:
+      - github_token
   image: recur-agent-gates:${IMAGE_TAG:-local}
   working_dir: /data/projects
   environment:
@@ -118,3 +124,7 @@ volumes:
   dsr-config:
   dsr-state:
   flywheel-bin:
+
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN
