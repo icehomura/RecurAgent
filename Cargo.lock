@@ -1000,83 +1000,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "charmed-bubbles"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe3c4fe0fa799b849e70232a1fba936f3f969558b709e50f36650d9db73595b"
-dependencies = [
- "charmed-bubbletea",
- "charmed-harmonica",
- "charmed-lipgloss",
- "parking_lot",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
-name = "charmed-bubbletea"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fbf47d60bc19491251ad01bf2e63a41432630eaa90f81c05eba3ac4cc97c1b"
-dependencies = [
- "charmed-bubbletea-macros",
- "crossterm",
- "parking_lot",
- "thiserror 2.0.20",
- "tracing",
-]
-
-[[package]]
-name = "charmed-bubbletea-macros"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66ca6d26d4424b06f7b6e393de5cbbb155cb6dc633510d4a696747406f5cfb25"
-dependencies = [
- "darling",
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "charmed-glamour"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25f68ce2a29b120a8a953c9027a71dfa479eaa24bc63ec8198c15f691cafe4fc"
-dependencies = [
- "charmed-lipgloss",
- "lru 0.18.2",
- "pulldown-cmark",
- "tracing",
- "unicode-width",
-]
-
-[[package]]
-name = "charmed-harmonica"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52ec4913f175e36c6ab1cf7ff3d3d1153fed1f7c985027ae5800dd20204224f6"
-
-[[package]]
-name = "charmed-lipgloss"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26a44bb12c9e26b484817605b0494457800aa1abe4e2d6f02dee8b5e5c1ad8bf"
-dependencies = [
- "bitflags 2.13.1",
- "colored",
- "crossterm",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "toml 1.1.4+spec-1.1.0",
- "tracing",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1242,15 +1165,6 @@ name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
-
-[[package]]
-name = "colored"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
-dependencies = [
- "windows-sys 0.61.2",
-]
 
 [[package]]
 name = "compact_str"
@@ -5928,28 +5842,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error-attr2"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "proc-macro-error2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
-dependencies = [
- "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6357,10 +6249,6 @@ dependencies = [
  "asupersync 0.5.0",
  "async-trait",
  "base64 0.23.1",
- "charmed-bubbles",
- "charmed-bubbletea",
- "charmed-glamour",
- "charmed-lipgloss",
  "chrono",
  "clap",
  "clap_complete",

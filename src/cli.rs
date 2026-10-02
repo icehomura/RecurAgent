@@ -99,10 +99,6 @@ fn known_long_option(name: &str) -> Option<LongOptionSpec> {
         // non-ftui builds clap still rejects them with a proper error instead
         // of the pre-parser silently diverting them to extension flags.
         | "ftui"
-        | "classic"
-        | "classic-tui"
-        | "charmed"
-        | "bubbletea"
         | "inline"
         | "hide-cwd-in-prompt"
         | "disable-reflection" => (false, false),
@@ -442,19 +438,13 @@ pub struct Cli {
     #[arg(long)]
     pub no_session: bool,
 
-    /// Launch the FrankenTUI interactive stack (default when built with `ftui`).
+    /// Launch the FrankenTUI interactive stack (the only interactive front-end).
     ///
-    /// Conflicts with `--classic`: the two select opposite stacks, and until
-    /// this conflict was declared, nothing read this flag at all — `--ftui`
-    /// appeared to work only because it names the default, and
-    /// `ra --classic --ftui` silently gave you classic.
+    /// Retained for backwards compatibility with scripts that passed it; the
+    /// classic charmed_rust stack it used to select was removed.
     #[cfg(feature = "ftui")]
-    #[arg(long, conflicts_with = "classic")]
+    #[arg(long)]
     pub ftui: bool,
-
-    /// Force the classic charmed_rust TUI stack instead of the default ftui stack.
-    #[arg(long, aliases = ["classic-tui", "charmed", "bubbletea"])]
-    pub classic: bool,
 
     /// With ftui: run inline (UI at the bottom, shell scrollback
     /// preserved) instead of the alternate screen.
@@ -828,32 +818,6 @@ mod tests {
     /// is a message — including things that look like flags. This pins that
     /// `--session` placed BEFORE the message still binds, and that the message
     /// does not end up in `session`.
-    /// `--ftui` and `--classic` pick opposite stacks, so asking for both is a
-    /// mistake worth reporting rather than resolving silently. Before this,
-    /// `ra --classic --ftui` ran classic and said nothing.
-    #[cfg(feature = "ftui")]
-    #[test]
-    fn ftui_and_classic_cannot_both_be_requested() {
-        let cli = Cli::parse_from(["ra", "--ftui"]);
-        assert!(cli.ftui);
-        assert!(!cli.classic);
-
-        let cli = Cli::parse_from(["ra", "--classic"]);
-        assert!(!cli.ftui);
-        assert!(cli.classic);
-
-        assert!(
-            Cli::try_parse_from(["ra", "--classic", "--ftui"]).is_err(),
-            "two stack selectors at once must be refused, not silently ordered"
-        );
-        assert!(
-            Cli::try_parse_from(["ra", "--ftui", "--classic"]).is_err(),
-            "and in the other order too"
-        );
-        // The documented aliases for --classic conflict as well.
-        assert!(Cli::try_parse_from(["ra", "--ftui", "--classic-tui"]).is_err());
-    }
-
     #[test]
     fn parse_session_path_in_a_full_print_mode_argv() {
         let cli = Cli::parse_from([
