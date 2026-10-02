@@ -260,4 +260,32 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn scroll_to_bottom_new_message_labels_count_their_entries() {
+        // The badge picks the key from the count (there is no plural engine),
+        // so each locale must interpolate the number and the singular must not
+        // be the plural with a swapped digit.
+        for locale in SUPPORTED {
+            let one = rust_i18n::t!("interactive_scroll_new_message", locale = locale);
+            let many = rust_i18n::t!(
+                "interactive_scroll_new_messages",
+                locale = locale,
+                count = 3
+            );
+            assert!(
+                one.contains('1'),
+                "{locale}: singular dropped its count: {one}"
+            );
+            assert!(
+                many.contains('3'),
+                "{locale}: plural dropped its count: {many}"
+            );
+            assert_ne!(
+                one.to_string(),
+                many.to_string(),
+                "{locale}: singular and plural render identically"
+            );
+        }
+    }
 }

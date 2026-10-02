@@ -283,6 +283,18 @@ interactive_scroll_to_bottom:
   en: "↓ scroll to bottom"
   zh-CN: "↓ 回到底部"
 
+# The badge label when entries arrived while the reader was scrolled away. The
+# count is interpolated, and the singular/plural split is real: this catalogue
+# has no plural engine, so the call site selects the key (1 vs N). Chinese has
+# no plural form, so both locales read naturally with the same `条`.
+interactive_scroll_new_message:
+  en: "1 new message"
+  zh-CN: "1 条新消息"
+
+interactive_scroll_new_messages:
+  en: "%{count} new messages"
+  zh-CN: "%{count} 条新消息"
+
 # ── workspace slash-command reports (/rules, /omfg, /commit, /review,
 #    /handoff, /memory, /security, /plugins, /hub, /advisor, /approval) ──
 #
