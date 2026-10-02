@@ -11574,14 +11574,6 @@ mod tests {
         let width = 40;
         let height = 12;
         let rendered = buffer_text(sim.capture_frame(width, height), width, height);
-        assert!(
-            rendered.contains('╭') && rendered.contains('╮'),
-            "composer box top border missing: {rendered:?}"
-        );
-        assert!(
-            rendered.contains('╰') && rendered.contains('╯'),
-            "composer box bottom border missing: {rendered:?}"
-        );
         // The placeholder sits inside the box, between its side borders.
         let editor_line = rendered
             .lines()
@@ -16844,16 +16836,21 @@ mod tests {
         );
     }
 
-    /// The composer is framed by two rules, not blank rows.
+    /// The composer is framed by a rounded box, not blank rows.
     #[test]
-    fn input_is_framed_by_two_rules() {
+    fn input_is_framed_by_a_rounded_box() {
         let (_tx, model) = new_model();
         let mut sim = ProgramSimulator::new(model);
         sim.init();
-        let rendered = buffer_text(sim.capture_frame(40, 12), 40, 12);
+        let width = 40;
+        let rendered = buffer_text(sim.capture_frame(width, 12), width, 12);
         assert!(
-            rendered.contains(&"─".repeat(40)),
-            "composer rules missing: {rendered:?}"
+            rendered.contains(&format!("╭{}╮", "─".repeat(usize::from(width) - 2))),
+            "composer box top border missing: {rendered:?}"
+        );
+        assert!(
+            rendered.contains(&format!("╰{}╯", "─".repeat(usize::from(width) - 2))),
+            "composer box bottom border missing: {rendered:?}"
         );
     }
 
