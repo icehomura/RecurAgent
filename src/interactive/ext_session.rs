@@ -602,11 +602,11 @@ pub fn format_extension_ui_prompt(request: &ExtensionUiRequest) -> String {
     // This prompt is written directly to a terminal in the line-oriented
     // surface. Sanitize every extension-controlled display string before
     // formatting so OSC/DCS/CSI sequences cannot escape the prompt.
-    let title = super::tool_render::sanitize_terminal_line(title);
-    let message = super::tool_render::sanitize_terminal_text(message);
-    let provenance = super::tool_render::sanitize_terminal_line(provenance);
+    let title = super::terminal_text::sanitize_terminal_line(title);
+    let message = super::terminal_text::sanitize_terminal_text(message);
+    let provenance = super::terminal_text::sanitize_terminal_line(provenance);
     let capability = capability_identity
-        .map(|(_, capability)| super::tool_render::sanitize_terminal_line(capability));
+        .map(|(_, capability)| super::terminal_text::sanitize_terminal_line(capability));
 
     match request.method.as_str() {
         "confirm" => {
@@ -639,7 +639,7 @@ pub fn format_extension_ui_prompt(request: &ExtensionUiRequest) -> String {
                     .or_else(|| opt.get("value").and_then(Value::as_str))
                     .or_else(|| opt.as_str())
                     .unwrap_or("");
-                let label = super::tool_render::sanitize_terminal_line(label);
+                let label = super::terminal_text::sanitize_terminal_line(label);
                 let _ = writeln!(&mut out, "  {}) {label}", idx + 1);
             }
             out.push_str("\nEnter a number, label, or 'cancel'.");
@@ -1884,43 +1884,6 @@ mod tests {
         });
     }
 
-    #[test]
-    fn try_install_session_advances_generation_for_new_resume_and_fork() {
-        let runtime = RuntimeBuilder::current_thread()
-            .build()
-            .expect("runtime build");
-
-        runtime.block_on(async {
-            let (actions, _, session, agent) = build_host_actions();
-            let gate = actions.session_action_admission.clone();
-            let mut previous = gate.generation();
-            for _ in 0..3 {
-                let stale = gate.capture_origin();
-                crate::interactive::RaApp::try_install_session(
-                    &session,
-                    &agent,
-                    &gate,
-                    Session::in_memory(),
-                    Vec::new(),
-                    None,
-                )
-                .await
-                .expect("install replacement session");
-                assert_eq!(gate.generation(), previous + 1);
-                previous = gate.generation();
-                let err = actions
-                    .send_message(note_message("crossed-transition"), Some(stale))
-                    .await
-                    .expect_err("pre-transition origin");
-                assert!(err.to_string().contains("active Session changed"), "{err}");
-            }
-
-            actions
-                .send_message(note_message("post-transition"), Some(gate.capture_origin()))
-                .await
-                .expect("current generation host action");
-        });
-    }
 
     #[test]
     #[allow(clippy::too_many_lines)]

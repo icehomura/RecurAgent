@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
-use bubbles::list::{DefaultDelegate, Item as ListItem, List};
 
 use crate::agent::{QueueMode, QueuedAgentMessage};
 use crate::autocomplete::{
@@ -16,7 +15,7 @@ use crate::session_picker::delete_session_file;
 use crate::theme::Theme;
 use serde_json::Value;
 
-use super::tool_render::{sanitize_terminal_line, sanitize_terminal_text};
+use super::terminal_text::{sanitize_terminal_line, sanitize_terminal_text};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PendingLoginKind {
@@ -1036,92 +1035,6 @@ impl InjectedMessageQueue {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct HistoryItem {
-    pub(super) value: String,
-}
-
-impl ListItem for HistoryItem {
-    fn filter_value(&self) -> &str {
-        &self.value
-    }
-}
-
-#[derive(Clone)]
-pub(super) struct HistoryList {
-    // We never render the list UI; we use it as a battle-tested cursor+navigation model.
-    // The final item is always a sentinel representing "empty input".
-    list: List<HistoryItem, DefaultDelegate>,
-}
-
-impl HistoryList {
-    pub(super) fn new() -> Self {
-        let mut list = List::new(
-            vec![HistoryItem {
-                value: String::new(),
-            }],
-            DefaultDelegate::new(),
-            0,
-            0,
-        );
-
-        // Keep behavior minimal/predictable for now; this is used as an index model.
-        list.filtering_enabled = false;
-        list.infinite_scrolling = false;
-
-        // Start at the "empty input" sentinel.
-        list.select(0);
-
-        Self { list }
-    }
-
-    pub(super) fn entries(&self) -> &[HistoryItem] {
-        let items = self.list.items();
-        if items.len() <= 1 {
-            return &[];
-        }
-        &items[..items.len().saturating_sub(1)]
-    }
-
-    pub(super) fn has_entries(&self) -> bool {
-        !self.entries().is_empty()
-    }
-
-    pub(super) fn cursor_is_empty(&self) -> bool {
-        // Sentinel is always the final item.
-        self.list.index() + 1 == self.list.items().len()
-    }
-
-    pub(super) fn reset_cursor(&mut self) {
-        let last = self.list.items().len().saturating_sub(1);
-        self.list.select(last);
-    }
-
-    pub(super) fn push(&mut self, value: String) {
-        let mut items = self.entries().to_vec();
-        items.push(HistoryItem { value });
-        items.push(HistoryItem {
-            value: String::new(),
-        });
-
-        self.list.set_items(items);
-        self.reset_cursor();
-    }
-
-    pub(super) fn cursor_up(&mut self) {
-        self.list.cursor_up();
-    }
-
-    pub(super) fn cursor_down(&mut self) {
-        self.list.cursor_down();
-    }
-
-    pub(super) fn selected_value(&self) -> &str {
-        self.list
-            .selected_item()
-            .map_or("", |item| item.value.as_str())
-    }
-}
 
 /// Progress metrics emitted by long-running tools (e.g. bash).
 #[derive(Debug, Clone)]

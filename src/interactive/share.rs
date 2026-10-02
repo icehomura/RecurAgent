@@ -11,7 +11,6 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use url::Url;
 
-use super::{AgentState, Cmd, RaApp, RaMsg};
 use crate::session::Session;
 
 #[cfg(feature = "clipboard")]
@@ -1062,55 +1061,4 @@ pub async fn run_share(
         "Created secret gist (not private; anyone with the URL can view it). Recognized secrets and the exact workspace cwd were redacted, but the transcript may still contain sensitive local context.\n\n\
          Share URL: {share_url}\n\nGist: {gist_url}"
     ))
-}
-
-impl RaApp {
-    pub(super) fn handle_slash_share(&mut self, args: &str) -> Option<Cmd> {
-        if self.agent_state != AgentState::Idle {
-            self.status_message = Some("Cannot share while processing".to_string());
-            return None;
-        }
-
-        if !args.trim().is_empty() {
-            self.status_message = Some(
-                "Usage: /share (uploads a secret, unlisted gist; anyone with its URL can view it; public sharing is disabled)"
-                    .to_string(),
-            );
-            return None;
-        }
-
-        self.agent_state = AgentState::Processing;
-        self.status_message = Some(
-            "Sharing session... (secret gist, not private; transcript may still contain sensitive local context; Esc to cancel)"
-                .to_string(),
-        );
-
-        let (abort_handle, abort_signal) = crate::agent::AbortHandle::new();
-        self.abort_handle = Some(abort_handle);
-
-        let event_tx = self.event_tx.clone();
-        let runtime_handle = self.runtime_handle.clone();
-        let session = Arc::clone(&self.session);
-        let cwd = self.cwd.clone();
-        let gh_path_override = self.config.gh_path.clone();
-
-        runtime_handle.spawn(async move {
-            // The `gh` driver itself is `run_share`, shared with the ftui stack
-            // (bd-ydz1t.1). What stays here is what is genuinely this stack's:
-            // mapping the outcome onto its RaMsg channel. A cancellation is a
-            // note, not an error, on every surface.
-            let message = match run_share(gh_path_override, &session, &cwd, &abort_signal).await {
-                ShareOutcome::Created(report) => RaMsg::System(report),
-                ShareOutcome::Cancelled => RaMsg::System("Share cancelled".to_string()),
-                ShareOutcome::Failed(reason) => RaMsg::AgentError(reason),
-            };
-            let _ = crate::interactive::enqueue_pi_event(
-                &event_tx,
-                &asupersync::Cx::current().unwrap_or_else(asupersync::Cx::for_request),
-                message,
-            )
-            .await;
-        });
-        None
-    }
 }
