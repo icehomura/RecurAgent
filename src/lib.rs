@@ -360,6 +360,9 @@ pub mod task_dag;
 pub mod terminal_images;
 #[doc(hidden)]
 pub mod theme;
+/// Explicit-stack thread spawning; see the module docs for why.
+#[doc(hidden)]
+pub mod threads;
 #[doc(hidden)]
 pub mod todo;
 #[doc(hidden)]
