@@ -923,11 +923,7 @@ fn render_horizontal_cfg(
                 add_conn(&mut grid, xb, yb, L, ln[b].state);
                 continue;
             }
-            let xb = if ln[b].is_dummy {
-                ln[b].x
-            } else {
-                ln[b].x + 1
-            };
+            let xb = if ln[b].is_dummy { ln[b].x } else { ln[b].x + 1 };
             // A target's fan-in shaft always wins, so every parent lands on
             // the same merge; otherwise a source's fan-out shaft carries it.
             let x_band = fanin_of[l]
