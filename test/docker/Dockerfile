@@ -195,12 +195,48 @@ RUN set -eux; \
     "${GOBIN}/yq" --version; \
     "${GOBIN}/act" --version
 
+# ast-grep (prebuilt release). UBS' installer falls back to
+# `cargo install ast-grep` when the binary is missing — 222 crates, measured at
+# ~430 s of the tool layer — so shipping the release binary lets it skip that.
+# This is also the binary the repo's ast-grep workflow expects.
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) sg_arch=x86_64 ;; \
+      arm64) sg_arch=aarch64 ;; \
+      *)     sg_arch=x86_64 ;; \
+    esac; \
+    if [ "${GH_RELEASE_MODE}" = "ghproxy" ]; then GP="https://gh-proxy.com/"; else GP=""; fi; \
+    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 600 \
+      "${GP}https://github.com/ast-grep/ast-grep/releases/latest/download/app-${sg_arch}-unknown-linux-gnu.zip" \
+      -o /tmp/ast-grep.zip; \
+    unzip -q -o /tmp/ast-grep.zip -d /tmp/ast-grep; \
+    install -m 0755 /tmp/ast-grep/ast-grep "${GOBIN}/ast-grep"; \
+    install -m 0755 /tmp/ast-grep/sg "${GOBIN}/sg"; \
+    rm -rf /tmp/ast-grep.zip /tmp/ast-grep; \
+    "${GOBIN}/ast-grep" --version; \
+    "${GOBIN}/sg" --version
+
 # ---------------------------------------------------------------------------
 # Gate scripts. Copied before bun/uv because those two installers fetch their
 # binaries from github.com release assets, which is the traffic the curl/wget
 # shims in scripts/bin exist to mirror (GH_RELEASE_MODE=ghproxy).
+#
+# Only what the tool-chain layer needs is copied here. The gate scripts
+# (entrypoint.sh, run-quality.sh) are copied *after* install-tools.sh runs, so
+# editing them does not re-run the ~15-25 minute tool-chain layer.
 # ---------------------------------------------------------------------------
-COPY --chown=${TARGET_USER}:${TARGET_USER} scripts/ /usr/local/share/recur-agent-gates/
+COPY --chown=${TARGET_USER}:${TARGET_USER} scripts/install-tools.sh /usr/local/share/recur-agent-gates/install-tools.sh
+COPY --chown=${TARGET_USER}:${TARGET_USER} scripts/bin/ /usr/local/share/recur-agent-gates/bin/
+
+# uv fetches both its packages and its Python interpreters from the network,
+# and it ignores PIP_INDEX_URL: without these it pulls ~160 packages from
+# pypi.org and a 35 MB CPython tarball straight from GitHub (measured: 592 s
+# for mcp_agent_mail alone). Both are overridable build args.
+ARG UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG UV_PYTHON_INSTALL_MIRROR=https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download
+ENV UV_DEFAULT_INDEX=${UV_DEFAULT_INDEX} \
+    UV_INDEX_URL=${UV_DEFAULT_INDEX} \
+    UV_PYTHON_INSTALL_MIRROR=${UV_PYTHON_INSTALL_MIRROR}
 
 # Install the gh-proxy curl/wget shims over the system ones. `/usr/local/bin`
 # precedes `/usr/bin` on PATH, so `curl`/`wget` resolve to the shims with no
@@ -234,6 +270,10 @@ ENV TOOLS_STRATEGY=${TOOLS_STRATEGY} \
     GH_RELEASE_MODE=${GH_RELEASE_MODE}
 
 RUN bash /usr/local/share/recur-agent-gates/install-tools.sh
+
+# Gate scripts last: they are what gets edited most often, and this position
+# keeps an edit to them from invalidating the tool-chain layer above.
+COPY --chown=${TARGET_USER}:${TARGET_USER} scripts/entrypoint.sh scripts/run-quality.sh /usr/local/share/recur-agent-gates/
 
 USER root
 RUN install -m 0755 /usr/local/share/recur-agent-gates/entrypoint.sh /usr/local/bin/entrypoint.sh \
