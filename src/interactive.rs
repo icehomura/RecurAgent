@@ -203,6 +203,13 @@ pub enum RaMsg {
     /// built-in list; the charmed stack builds its catalog inline and
     /// ignores this.
     AutocompleteCatalog(crate::autocomplete::AutocompleteCatalog),
+    /// A model catalog refresh finished (`/model-update` or the startup
+    /// background refresh). `models` is the new `provider/id` list; `status`
+    /// is the human-readable summary.
+    ModelCatalogRefreshed {
+        models: Vec<String>,
+        status: String,
+    },
     /// Text delta from assistant.
     TextDelta(String),
     /// Thinking delta from assistant.

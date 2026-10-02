@@ -8577,6 +8577,20 @@ fn rpc_available_models(registry: &ModelRegistry, cli_api_key: Option<&str>) -> 
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Kick off a model-catalog refresh on a detached thread so a headless agent
+/// run is never delayed by provider model discovery. Successes persist to
+/// `models.fetched.json` and are visible on the next registry load.
+fn spawn_background_model_catalog_refresh() {
+    std::thread::spawn(|| {
+        let Ok(runtime) = asupersync::runtime::RuntimeBuilder::new().build() else {
+            return;
+        };
+        runtime.block_on(async {
+            let _ = ra::providers::refresh_credentialed_model_catalogs(None, false).await;
+        });
+    });
+}
+
 async fn run_rpc_mode(
     session: AgentSession,
     resources: ResourceLoader,
@@ -8590,6 +8604,7 @@ async fn run_rpc_mode(
 ) -> Result<()> {
     use futures::FutureExt;
 
+    spawn_background_model_catalog_refresh();
     let (abort_handle, abort_signal) = AbortHandle::new();
     let abort_listener = abort_handle.clone();
     if let Err(err) = ctrlc::set_handler(move || {
@@ -8681,6 +8696,8 @@ async fn run_print_mode(
     if mode.ne("text") && mode.ne("json") {
         bail!("Unknown mode: {mode}");
     }
+
+    spawn_background_model_catalog_refresh();
 
     if mode.eq("json") {
         let cx = ra::agent_cx::AgentCx::for_request();

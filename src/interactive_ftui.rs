@@ -1706,6 +1706,10 @@ pub enum UiCommand {
     },
     /// Show provider usage/quota state (`/usage`, bd-cv653.7.4).
     Usage { refresh: bool },
+    /// Refresh live model catalogs for configured providers
+    /// (`/model-update [provider]`); the driver persists successful results
+    /// and replays the new membership into the UI.
+    ModelUpdate { provider: Option<String> },
     /// Inspect or change this session's MCP server state.
     Mcp {
         subcommand: String,
@@ -3854,6 +3858,11 @@ impl RaFtuiModel {
                 self.autocomplete.provider.set_catalog(catalog);
                 self.autocomplete.close();
             }
+            RaMsg::ModelCatalogRefreshed { models, status } => {
+                self.available_models = models;
+                self.push_entry(EntryRole::System, status);
+                self.scroll_from_tail = 0;
+            }
             RaMsg::TerminalTitle(title) => {
                 // Issue #200: the cell-grid renderer can't carry OSC escapes
                 // in frame content, so write the title directly.
@@ -4328,6 +4337,16 @@ impl RaFtuiModel {
                 ),
             }
             self.scroll_from_tail = 0;
+            return true;
+        }
+        if canon == "/model-update" || canon == "/update-models"
+            || canon.starts_with("/model-update ") || canon.starts_with("/update-models ")
+        {
+            let rest = clean.split_once(char::is_whitespace).map_or("", |(_, rest)| rest).trim();
+            self.push_entry(EntryRole::System, String::from("Refreshing model catalogs ..."));
+            self.send_command(UiCommand::ModelUpdate {
+                provider: (!rest.is_empty()).then(|| rest.to_string()),
+            });
             return true;
         }
         if let Some(rest) = strip_command(clean, "/export") {
@@ -6399,6 +6418,38 @@ fn tool_output_preview(result: &crate::tools::ToolOutput) -> Option<String> {
     Some(preview)
 }
 
+/// Summarize a catalog refresh and reload the resulting `provider/id` list.
+///
+/// Shared by the `/model-update` driver handler and the startup background
+/// refresh so both report the same status format.
+fn model_catalog_refresh_message(
+    outcomes: &[crate::providers::CatalogRefreshOutcome],
+) -> (Vec<String>, String) {
+    let models = crate::auth::AuthStorage::load(crate::config::Config::auth_path())
+        .ok()
+        .map(|auth| {
+            let models_path = Some(crate::models::default_models_path(
+                &crate::config::Config::global_dir(),
+            ));
+            crate::models::ModelRegistry::load_for_listing(&auth, models_path)
+                .get_available()
+                .into_iter()
+                .map(|entry| format!("{}/{}", entry.model.provider, entry.model.id))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let updated = outcomes.iter().filter(|outcome| outcome.persisted).count();
+    let failed = outcomes
+        .iter()
+        .filter(|outcome| outcome.error.is_some())
+        .count();
+    let status = format!(
+        "Model catalog refresh: {updated} provider(s) updated, {failed} failed, {} models available",
+        models.len()
+    );
+    (models, status)
+}
+
 /// Translate one [`AgentEvent`](crate::agent::AgentEvent) into the `RaMsg`
 /// vocabulary the model consumes. Pure so tests can pin the mapping.
 ///
@@ -7737,6 +7788,7 @@ async fn run_login_submit(
     input: &str,
     login: &mut Option<Box<DriverLogin>>,
     agent_tx: &Sender<RaMsg>,
+    runtime_handle: &asupersync::runtime::RuntimeHandle,
 ) {
     use crate::interactive::login_flow::{LoginFailure, complete_login};
 
@@ -7754,6 +7806,16 @@ async fn run_login_submit(
             adopt_stored_credentials(handle, &auth_path);
             let _ = agent_tx.send(RaMsg::System(status));
             send_login_pending(agent_tx, None);
+            // A newly stored credential can unlock a provider whose catalog had
+            // no static membership; refresh in the background so `/model`
+            // picks it up without a restart.
+            let refresh_tx = agent_tx.clone();
+            runtime_handle.spawn(async move {
+                let outcomes =
+                    crate::providers::refresh_credentialed_model_catalogs(None, false).await;
+                let (models, status) = model_catalog_refresh_message(&outcomes);
+                let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+            });
         }
         Err(LoginFailure::StillPending(pending, message)) => {
             // Device flow not approved yet: the same prompt stays armed.
@@ -9583,6 +9645,17 @@ pub fn run(
                     install_ask_bridges(&handle, &agent_tx, ask_reply_rx, &runtime_handle);
                 send_conversation_reset(&handle, &agent_tx, "RecurAgent interactive stack").await;
                 Box::pin(send_status_snapshot(&handle, &bash_cwd, &agent_tx)).await;
+                // Non-blocking model-catalog refresh: the UI is already alive
+                // by the time this task is spawned, so a slow provider cannot
+                // add to cold start. Successes persist to `models.fetched.json`
+                // and the resulting membership is replayed into the picker.
+                let refresh_tx = agent_tx.clone();
+                runtime_handle.spawn(async move {
+                    let outcomes =
+                        crate::providers::refresh_credentialed_model_catalogs(None, false).await;
+                    let (models, status) = model_catalog_refresh_message(&outcomes);
+                    let _ = refresh_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                });
                 // Issue #208: extension-contributed slash commands become
                 // completable now that the extension runtime is up.
                 // Resource catalog for the info commands (/skills).
@@ -9786,6 +9859,16 @@ pub fn run(
                                 Err(err) => RaMsg::AgentError(format!("fresh: {err}")),
                             });
                         }
+                        Ok(UiCommand::ModelUpdate { provider }) => {
+                            let outcomes =
+                                crate::providers::refresh_credentialed_model_catalogs(
+                                    provider.as_deref(),
+                                    true,
+                                )
+                                .await;
+                            let (models, status) = model_catalog_refresh_message(&outcomes);
+                            let _ = agent_tx.send(RaMsg::ModelCatalogRefreshed { models, status });
+                        }
                         Ok(UiCommand::Workspace { command, args }) => {
                             let advisor = resume_template
                                 .advisor
@@ -9912,8 +9995,14 @@ pub fn run(
                                 .await;
                         }
                         Ok(UiCommand::LoginSubmit(LoginInput(input))) => {
-                            Box::pin(run_login_submit(&mut handle, &input, &mut login, &agent_tx))
-                                .await;
+                            Box::pin(run_login_submit(
+                                &mut handle,
+                                &input,
+                                &mut login,
+                                &agent_tx,
+                                &runtime_handle,
+                            ))
+                            .await;
                         }
                         Ok(UiCommand::Logout { args }) => {
                             run_logout_command(&mut handle, &args, &agent_tx);
@@ -9991,6 +10080,7 @@ pub fn run(
                                     &url,
                                     &mut login,
                                     &agent_tx,
+                                    &runtime_handle,
                                 ))
                                 .await;
                                 continue;

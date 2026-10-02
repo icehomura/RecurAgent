@@ -203,6 +203,7 @@ pub enum SlashCommand {
     Handoff,
     Rules,
     Omfg,
+    ModelUpdate,
     Commit,
     Review,
     AddDir,
@@ -272,6 +273,7 @@ impl SlashCommand {
             Self::Tan => "/tan",
             Self::Crash => "/crash",
             Self::Omfg => "/omfg",
+            Self::ModelUpdate => "/model-update",
             Self::Commit => "/commit",
         }
     }
@@ -330,6 +332,7 @@ impl SlashCommand {
         Self::Tan,
         Self::Crash,
         Self::Omfg,
+        Self::ModelUpdate,
         Self::Commit,
     ];
 
@@ -388,6 +391,7 @@ impl SlashCommand {
             "/tan" => Self::Tan,
             "/crash" => Self::Crash,
             "/omfg" => Self::Omfg,
+            "/model-update" | "/update-models" => Self::ModelUpdate,
             "/commit" => Self::Commit,
             _ => return None,
         };
@@ -433,6 +437,7 @@ impl SlashCommand {
   /btw <question>    - Ephemeral side question on the smol role (never persisted)
   /tan <work>        - Run tangential work in a background task-role child
   /omfg <complaint>  - Record user grievance and draft a candidate stream rule
+  /model-update [provider] - Refresh live model catalogs for configured providers
   /commit [dry-run|all|bead] - Create dependency-ordered atomic commits from changes
   /review [target]   - Run prioritized code review on changes with ship verdict card
   /advisor [status|pause|resume] - Manage the turn-review advisor model
