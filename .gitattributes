@@ -8,3 +8,7 @@ legacy_pi_mono_code/pi-mono/** -whitespace
 # template in install.sh by scripts/skill-smoke.sh; CRLF there fails the
 # "frontmatter delimiter" and "marker comment" checks.
 .claude/skills/** text eol=lf
+
+# test/docker ships extensionless bash helpers (scripts/bin/curl, scripts/bin/wget);
+# a CRLF checkout makes exec fail with "bad interpreter".
+test/docker/scripts/bin/* text eol=lf
