@@ -2125,6 +2125,26 @@ impl ModelRegistry {
     }
 }
 
+/// Find the entry for `provider`/`model_id` in a candidate pool, matching
+/// provider aliases and model ids case-insensitively.
+///
+/// Shared by every caller that resolves a `provider/model` spec against more
+/// than one pool (the caller's explicit list, then the live session catalog).
+#[must_use]
+pub fn find_model_entry(
+    entries: &[ModelEntry],
+    provider: &str,
+    model_id: &str,
+) -> Option<ModelEntry> {
+    entries
+        .iter()
+        .find(|entry| {
+            crate::provider_metadata::provider_ids_match(&entry.model.provider, provider)
+                && entry.model.id.eq_ignore_ascii_case(model_id)
+        })
+        .cloned()
+}
+
 /// Merge the runtime's extension providers and their declared models into a
 /// freshly loaded registry.
 ///

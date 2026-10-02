@@ -866,13 +866,28 @@ pub fn resolve_chain_spec(
     available_models: &[crate::models::ModelEntry],
 ) -> Option<crate::models::ModelEntry> {
     let (provider, model_id) = crate::provider_metadata::split_provider_model_spec(spec)?;
-    available_models
-        .iter()
-        .find(|entry| {
-            crate::provider_metadata::provider_ids_match(&entry.model.provider, provider)
-                && entry.model.id.eq_ignore_ascii_case(model_id)
-        })
-        .cloned()
+    crate::models::find_model_entry(available_models, provider, model_id)
+        .or_else(|| crate::models::ad_hoc_model_entry(provider, model_id))
+}
+
+/// [`resolve_chain_spec`] with the live session catalog as a second pool.
+///
+/// `preferred` is the caller's explicit list (a configured pool, test fixture,
+/// or embedder-supplied set) and keeps precedence: an id it already names must
+/// resolve to the same entry it always did. `catalog` is the session's live
+/// registry, checked next so a fallback that names a model discovered by a
+/// catalog refresh after the options were built resolves to the real entry —
+/// with its context window, token budget and credential metadata — instead of
+/// only an ad-hoc one. The ad-hoc entry stays the last resort.
+#[must_use]
+pub fn resolve_chain_spec_preferring(
+    spec: &str,
+    preferred: &[crate::models::ModelEntry],
+    catalog: &[crate::models::ModelEntry],
+) -> Option<crate::models::ModelEntry> {
+    let (provider, model_id) = crate::provider_metadata::split_provider_model_spec(spec)?;
+    crate::models::find_model_entry(preferred, provider, model_id)
+        .or_else(|| crate::models::find_model_entry(catalog, provider, model_id))
         .or_else(|| crate::models::ad_hoc_model_entry(provider, model_id))
 }
 
@@ -1956,6 +1971,45 @@ mod tests {
             "openai"
         ));
         assert!(entry.model.id.eq_ignore_ascii_case("gpt-y"));
+    }
+
+    #[test]
+    fn a_chain_spec_prefers_the_caller_pool_then_the_live_catalog() {
+        fn fixture_entry(provider: &str, id: &str, base_url: &str) -> crate::models::ModelEntry {
+            let mut entry =
+                crate::models::ad_hoc_model_entry("openai", id).expect("openai resolves ad hoc");
+            entry.model.provider = provider.to_string();
+            entry.model.base_url = base_url.to_string();
+            entry
+        }
+
+        let preferred = vec![fixture_entry("openai", "gpt-y", "http://preferred.invalid/v1")];
+        let catalog = vec![
+            fixture_entry("openai", "gpt-y", "http://catalog.invalid/v1"),
+            fixture_entry("acme-live", "live-only", "http://catalog.invalid/v1"),
+        ];
+
+        // The caller's explicit pool keeps precedence, so a fixture or embedder
+        // entry for the same id still wins.
+        let preferred_hit = resolve_chain_spec_preferring("openai/gpt-y", &preferred, &catalog)
+            .expect("the preferred pool resolves");
+        assert_eq!(preferred_hit.model.base_url, "http://preferred.invalid/v1");
+
+        // A row only the live catalog carries resolves from it. `acme-live` has
+        // no ad-hoc defaults, so the premise that the catalog is the only
+        // possible source is asserted rather than assumed.
+        assert!(crate::models::ad_hoc_model_entry("acme-live", "live-only").is_none());
+        let catalog_hit =
+            resolve_chain_spec_preferring("acme-live/live-only", &preferred, &catalog)
+                .expect("the live catalog resolves it");
+        assert_eq!(catalog_hit.model.base_url, "http://catalog.invalid/v1");
+        assert_eq!(catalog_hit.model.provider, "acme-live");
+
+        // Neither pool naming an id that a provider can synthesize still falls
+        // back ad hoc, exactly as before.
+        let ad_hoc = resolve_chain_spec_preferring("openai/unlisted", &[], &[])
+            .expect("ad-hoc fallback");
+        assert!(ad_hoc.model.id.eq_ignore_ascii_case("unlisted"));
     }
 
     // -- shared retry policy (bd-u2qv4) ------------------------------------

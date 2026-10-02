@@ -13596,7 +13596,8 @@ impl AgentSession {
             return Ok(None);
         }
 
-        let Some((entry, key)) = Self::resolve_restore_target(request)? else {
+        let live_models = self.failover_candidate_models(request.available_models);
+        let Some((entry, key)) = Self::resolve_restore_target(request, &live_models)? else {
             return Ok(None);
         };
         let provider_impl = match crate::providers::create_provider(
@@ -13659,6 +13660,24 @@ impl AgentSession {
         }))
     }
 
+    /// Candidate pool a failover or restore spec resolves against.
+    ///
+    /// The session's own registry is authoritative: a catalog refresh that
+    /// landed after the caller built its failover options carries models the
+    /// startup snapshot does not, and a configured fallback naming one of them
+    /// must still resolve to the real entry (with its context window, token
+    /// budget and credential metadata) rather than only ad hoc. The caller's
+    /// snapshot stays as the fallback for sessions built without a registry.
+    fn failover_candidate_models(
+        &self,
+        snapshot: &[crate::models::ModelEntry],
+    ) -> Vec<crate::models::ModelEntry> {
+        self.model_registry()
+            .map(crate::models::ModelRegistry::get_available)
+            .filter(|models| !models.is_empty())
+            .unwrap_or_else(|| snapshot.to_vec())
+    }
+
     /// Resolve the primary to a model entry and a credential, or decline.
     ///
     /// `Ok(None)` is the lenient decline; the same conditions are hard errors
@@ -13666,17 +13685,22 @@ impl AgentSession {
     /// for them.
     fn resolve_restore_target(
         request: &PrimaryRestoreRequest<'_>,
+        catalog: &[crate::models::ModelEntry],
     ) -> Result<Option<(crate::models::ModelEntry, Option<String>)>> {
         let primary = request.primary;
-        let Some(entry) = request
-            .available_models
-            .iter()
-            .find(|m| {
-                crate::provider_metadata::provider_ids_match(&m.model.provider, &primary.provider)
-                    && m.model.id.eq_ignore_ascii_case(&primary.model_id)
-            })
-            .cloned()
-            .or_else(|| crate::models::ad_hoc_model_entry(&primary.provider, &primary.model_id))
+        // The caller's explicit pool keeps precedence (test fixtures and
+        // embedders name exact entries there); the session's live catalog is
+        // the second chance, so a primary discovered by a catalog refresh after
+        // the request was built still resolves to the real entry.
+        let Some(entry) = crate::models::find_model_entry(
+            request.available_models,
+            &primary.provider,
+            &primary.model_id,
+        )
+        .or_else(|| {
+            crate::models::find_model_entry(catalog, &primary.provider, &primary.model_id)
+        })
+        .or_else(|| crate::models::ad_hoc_model_entry(&primary.provider, &primary.model_id))
         else {
             if request.strict_invariants {
                 return Err(Error::validation(format!(
@@ -13807,10 +13831,18 @@ impl AgentSession {
             &from_provider,
             &from_model,
         );
+        // The live catalog, not just the caller's startup snapshot: a fallback
+        // that names a row discovered by a refresh between then and now must
+        // resolve to the real entry, not to an ad-hoc one. The caller's list
+        // keeps precedence when it names the id.
+        let live_models = self.failover_candidate_models(attempt.available_models);
         while let Some((entry_index, spec)) = walk.next_spec() {
             let next_position = walk.position();
-            let Some(entry) = crate::failover::resolve_chain_spec(spec, attempt.available_models)
-            else {
+            let Some(entry) = crate::failover::resolve_chain_spec_preferring(
+                spec,
+                attempt.available_models,
+                &live_models,
+            ) else {
                 continue;
             };
             let api_key =
