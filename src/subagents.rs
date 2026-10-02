@@ -248,6 +248,8 @@ pub struct SubagentTool {
     /// Model spec children run with when their agent definition does not pin
     /// `model:` — the `task` role spec, else `smol` (bd-cv653.3.1).
     role_model_spec: Option<String>,
+    /// The parent session's shared approval state ([`Self::with_approval_state`]).
+    approval_state: Option<crate::approval::ApprovalState>,
     /// Host ceiling for the entire request, not a fresh allowance per child.
     timeout: Option<Duration>,
 }
@@ -266,6 +268,7 @@ impl SubagentTool {
             child_binary,
             structured_results: false,
             role_model_spec: None,
+            approval_state: None,
             timeout: None,
         }
     }
@@ -275,6 +278,26 @@ impl SubagentTool {
     #[must_use]
     pub fn with_role_model_spec(mut self, spec: Option<String>) -> Self {
         self.role_model_spec = spec.filter(|s| !s.trim().is_empty());
+        self
+    }
+
+    /// Inherit the parent session's approval mode for every child process.
+    ///
+    /// Children run headless (`--print`) and cannot prompt, so without this
+    /// they fall back to the `always-ask` default and fail closed on every
+    /// gated tool (`bash`, `write`, `edit`, ...) with
+    /// `approval.surface_unavailable` — even when the parent is `yolo`.
+    /// Passing the session's shared state makes delegation no more restricted
+    /// than the session that asked for it, and keeps tracking later
+    /// `/approval` mode changes because the state is shared, not snapshotted.
+    /// `None` preserves the previous behaviour for embedders that gate calls
+    /// outside an [`crate::approval::ApprovalState`].
+    #[must_use]
+    pub fn with_approval_state(
+        mut self,
+        approval_state: Option<crate::approval::ApprovalState>,
+    ) -> Self {
+        self.approval_state = approval_state;
         self
     }
 
@@ -338,6 +361,7 @@ impl SubagentTool {
             self.role_model_spec.clone(),
             crate::agent_hub::ChildKind::Tan,
             deadline,
+            self.approval_state.clone(),
         )
         .run_one(&agents, request, None, None)
         .await;
@@ -358,6 +382,7 @@ impl SubagentTool {
             child_binary,
             structured_results: false,
             role_model_spec: None,
+            approval_state: None,
             timeout: None,
         }
     }
@@ -389,6 +414,7 @@ impl SubagentTool {
                 let global_dir = self.global_dir.clone();
                 let binary = self.child_binary.clone();
                 let role_spec = self.role_model_spec.clone();
+                let approval_state = self.approval_state.clone();
                 let update = on_update.clone();
                 let results = stream::iter(tasks.into_iter().enumerate())
                     .map(move |(index, task)| {
@@ -397,6 +423,7 @@ impl SubagentTool {
                         let global_dir = global_dir.clone();
                         let binary = binary.clone();
                         let role_spec = role_spec.clone();
+                        let approval_state = approval_state.clone();
                         let update = update.clone();
                         async move {
                             let runner = ChildRunner::new(
@@ -406,6 +433,7 @@ impl SubagentTool {
                                 role_spec,
                                 crate::agent_hub::ChildKind::Subagent,
                                 deadline,
+                                approval_state,
                             );
                             (index, runner.run_one(&agents, task, None, update).await)
                         }
@@ -466,6 +494,7 @@ impl SubagentTool {
                     global_dir: self.global_dir.clone(),
                     child_binary: self.child_binary.clone(),
                     role_model_spec: self.role_model_spec.clone(),
+                    approval_state: self.approval_state.clone(),
                     agents: agents.clone(),
                     deadline,
                     on_update: on_update.clone(),
@@ -506,6 +535,7 @@ impl SubagentTool {
             self.role_model_spec.clone(),
             crate::agent_hub::ChildKind::Subagent,
             deadline,
+            self.approval_state.clone(),
         )
         .run_one(agents, task, step, on_update)
         .await
@@ -762,6 +792,7 @@ struct SubagentDagExecutor {
     global_dir: PathBuf,
     child_binary: PathBuf,
     role_model_spec: Option<String>,
+    approval_state: Option<crate::approval::ApprovalState>,
     agents: BTreeMap<String, AgentDefinition>,
     deadline: Deadline,
     on_update: Option<UpdateCallback>,
@@ -774,24 +805,21 @@ impl NodeExecutor for SubagentDagExecutor {
         node: TaskNode,
         resolved_args: Value,
     ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = std::result::Result<ToolOutput, String>> + Send,
-        >,
+        Box<dyn std::future::Future<Output = std::result::Result<ToolOutput, String>> + Send>,
     > {
         let cwd = self.cwd.clone();
         let global_dir = self.global_dir.clone();
         let child_binary = self.child_binary.clone();
         let role_model_spec = self.role_model_spec.clone();
+        let approval_state = self.approval_state.clone();
         let agents = self.agents.clone();
         let deadline = self.deadline.clone();
         let on_update = self.on_update.clone();
         let results = Arc::clone(&self.results);
         let node_id = node.id.value();
         Box::pin(async move {
-            let dag_node: SubagentDagNode =
-                serde_json::from_value(resolved_args).map_err(|error| {
-                    format!("subagent dag node {node_id} is malformed: {error}")
-                })?;
+            let dag_node: SubagentDagNode = serde_json::from_value(resolved_args)
+                .map_err(|error| format!("subagent dag node {node_id} is malformed: {error}"))?;
             let task = SubagentTask {
                 agent: dag_node.agent,
                 task: dag_node.task,
@@ -808,6 +836,7 @@ impl NodeExecutor for SubagentDagExecutor {
                 role_model_spec,
                 crate::agent_hub::ChildKind::Subagent,
                 deadline,
+                approval_state,
             )
             .run_one(&agents, task, Some(node_id as usize), on_update)
             .await;
@@ -1224,6 +1253,7 @@ fn child_args(
     task: &str,
     role_model_spec: Option<&str>,
     output_schema: Option<&Value>,
+    approval_mode: Option<crate::approval::ApprovalMode>,
 ) -> Vec<OsString> {
     let mut args = vec![
         "--mode".into(),
@@ -1237,6 +1267,13 @@ fn child_args(
             .map_or_else(|| DEFAULT_CHILD_TOOLS.to_string(), |tools| tools.join(","))
             .into(),
     ];
+    // A `--print` child has no approval surface, so a mode that gates a call
+    // can only fail closed. Pass the parent's resolved mode explicitly;
+    // without it every child defaults to `always-ask`, and a `yolo` parent's
+    // delegated `bash`/`write` calls die with `approval.surface_unavailable`.
+    if let Some(mode) = approval_mode {
+        args.extend(["--approval-mode".into(), mode.as_str().into()]);
+    }
     // Model precedence (bd-cv653.3.1): agent-def `model:` pin > task/smol role
     // spec from settings > nothing (child inherits the parent's ambient model).
     if let Some(model) = &agent.model {
@@ -1905,7 +1942,7 @@ mod tests {
             file_path: PathBuf::from("/tmp/scout.md"),
         };
         let args_of = |agent: &AgentDefinition, spec: Option<&str>| {
-            child_args(agent, "inspect provider", spec, None)
+            child_args(agent, "inspect provider", spec, None, None)
                 .iter()
                 .map(|arg| arg.to_string_lossy().to_string())
                 .collect::<Vec<_>>()
@@ -1959,7 +1996,7 @@ mod tests {
             source: AgentSource::User,
             file_path: PathBuf::from("/tmp/scout.md"),
         };
-        let args = child_args(&agent, "inspect provider", None, None)
+        let args = child_args(&agent, "inspect provider", None, None, None)
             .iter()
             .map(|arg| arg.to_string_lossy().to_string())
             .collect::<Vec<_>>();
@@ -1984,11 +2021,58 @@ mod tests {
     }
 
     #[test]
+    fn child_args_carry_the_parent_approval_mode_only_when_known() {
+        let agent = AgentDefinition {
+            name: "scout".to_string(),
+            description: "inspect".to_string(),
+            model: None,
+            reasoning: None,
+            tools: Some(vec!["read".to_string()]),
+            skills: Vec::new(),
+            system_prompt: String::new(),
+            output_schema: None,
+            source: AgentSource::User,
+            file_path: PathBuf::from("/tmp/scout.md"),
+        };
+
+        // A known parent mode must reach the child argv, or a `yolo` parent's
+        // delegated `bash`/`write` calls die with `approval.surface_unavailable`
+        // in the headless child.
+        let with_mode = child_args(
+            &agent,
+            "inspect provider",
+            None,
+            None,
+            Some(crate::approval::ApprovalMode::Yolo),
+        )
+        .iter()
+        .map(|arg| arg.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+        assert!(
+            with_mode
+                .windows(2)
+                .any(|pair| pair == ["--approval-mode", "yolo"]),
+            "parent approval mode must be passed to the child: {with_mode:?}"
+        );
+
+        // No parent mode (embedder without an ApprovalState) must not invent one.
+        let without_mode = child_args(&agent, "inspect provider", None, None, None)
+            .iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert!(
+            !without_mode.iter().any(|arg| arg == "--approval-mode"),
+            "absent parent mode must not inject --approval-mode: {without_mode:?}"
+        );
+    }
+
+    #[test]
     fn tan_definition_uses_task_role_and_default_non_recursive_tools() {
         let args = child_args(
             &tan_agent_definition(),
             "update the changelog",
             Some("ai-router/gpt-5.6-terra"),
+            None,
             None,
         )
         .iter()
@@ -2417,6 +2501,62 @@ printf '{"type":"agent_end","messages":[{"role":"assistant","stopReason":"stop",
                     && details["sessionIsolation"] == "ephemeral_no_session"
             }),
             "missing child-process evidence: {output:?}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn child_process_inherits_the_parent_approval_mode() {
+        let temp = TempDir::new().expect("tempdir");
+        let global_dir = temp.path().join("global");
+        write_agent(
+            &global_dir.join("agents"),
+            "scout",
+            "---\nname: scout\ndescription: approval fixture\n---\nReturn ok.",
+        );
+
+        // The child records its own argv, so the assertion covers the whole
+        // chain (registry -> SubagentTool -> ChildRunner -> spawn), not just
+        // the argv-building helper.
+        let child = temp.path().join("child-approval-fixture.sh");
+        std::fs::write(
+            &child,
+            r#"#!/bin/sh
+printf '%s\n' "$@" > "$0.args"
+printf '{"type":"agent_end","messages":[{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"ok"}]}]}\n'
+"#,
+        )
+        .expect("write child fixture");
+        let mut permissions = std::fs::metadata(&child)
+            .expect("child metadata")
+            .permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&child, permissions).expect("make child executable");
+
+        let tool = SubagentTool::with_paths(temp.path().to_path_buf(), global_dir, child.clone())
+            .with_approval_state(Some(crate::approval::ApprovalState::new(
+                crate::approval::ApprovalMode::Yolo,
+                false,
+                Vec::new(),
+            )));
+        let runtime = asupersync::runtime::RuntimeBuilder::current_thread()
+            .build()
+            .expect("runtime build");
+        runtime
+            .block_on(tool.execute(
+                "subagent-approval-fixture",
+                json!({"agent": "scout", "task": "record argv"}),
+                None,
+            ))
+            .expect("child execution succeeds");
+
+        let recorded = PathBuf::from(format!("{}.args", child.display()));
+        let raw = std::fs::read_to_string(&recorded).expect("child recorded argv");
+        let args: Vec<&str> = raw.lines().collect();
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == ["--approval-mode", "yolo"]),
+            "child argv must carry the parent approval mode: {args:?}"
         );
     }
 

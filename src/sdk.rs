@@ -2934,6 +2934,7 @@ pub(crate) async fn create_agent_session_deferred_mcp(
                     crate::undo::FileMutationRecorder::default(),
                 )),
                 options.workspace.as_ref(),
+                options.approval_state.clone(),
             )
         },
         |factory| factory.create_tool_registry(&enabled_tools, &cwd, &config),

@@ -312,6 +312,7 @@ mod tests {
                 None,
                 ChildKind::Subagent,
                 deadline,
+                None,
             );
             (dir, runner)
         }
