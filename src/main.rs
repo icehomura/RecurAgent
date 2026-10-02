@@ -8545,7 +8545,10 @@ fn rpc_available_models(registry: &ModelRegistry, cli_api_key: Option<&str>) -> 
 /// `models.fetched.json` and are visible on the next registry load.
 fn spawn_background_model_catalog_refresh() {
     ra::threads::spawn(|| {
-        let Ok(runtime) = asupersync::runtime::RuntimeBuilder::new().build() else {
+        let Ok(runtime) = asupersync::runtime::RuntimeBuilder::new()
+            .thread_stack_size(RUNTIME_WORKER_STACK_BYTES)
+            .build()
+        else {
             return;
         };
         runtime.block_on(async {
