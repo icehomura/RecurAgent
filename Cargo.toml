@@ -607,6 +607,28 @@ codegen-units = 1
 panic = "abort"
 strip = true
 
+# Local release build on a memory-constrained host.
+#
+# `release` is fat LTO with a single codegen unit, so rustc merges the whole
+# 714-crate graph into one LLVM module and optimizes it in one thread. On a
+# shared workstation — this Windows box runs a dozen agents' cargo builds at
+# once — that peak exceeds what is left of the commit budget and rustc dies
+# before it ever links:
+#
+#     rustc-LLVM ERROR: out of memory
+#     Allocation failed
+#     (exit code: 0xc0000409, STATUS_STACK_BUFFER_OVERRUN)
+#
+# This profile keeps the shipping shape (opt-level="z", panic="abort", strip)
+# and trades only LTO aggressiveness, which is where the peak lives: the thin
+# pipeline never materializes the single merged module. It is a local
+# convenience, not a release — CI and `just build-tui` build `[profile.release]`,
+# so the artifact this produces is not the one the size budget is measured on.
+[profile.release-local]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+
 [profile.dev]
 opt-level = 0
 debug = true
