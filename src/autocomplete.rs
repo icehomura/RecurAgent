@@ -846,6 +846,10 @@ const fn builtin_slash_commands() -> &'static [BuiltinSlashCommand] {
             description: "Show or change the current model",
         },
         BuiltinSlashCommand {
+            name: "model-update",
+            description: "Refresh live model catalogs for configured providers",
+        },
+        BuiltinSlashCommand {
             name: "thinking",
             description: "Set thinking level (off/minimal/low/medium/high/xhigh/max)",
         },
