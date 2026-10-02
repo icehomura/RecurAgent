@@ -31,28 +31,18 @@
 //! | `sdk.astGrep(pattern, path?)` | `ast_grep` (structural search) |
 //! | `sdk.jsonQuery(filter, path?)` / `sdk.jsonQuery({ json, filter })` | `json_query` |
 //! | `sdk.currentTime()` | `current_time` |
-//! | `sdk.call(tool, args)` | any **reachable** tool (escape hatch, still gated) |
+//! | `sdk.call(tool, args)` | any tool the session has (the live registry) |
 //!
-//! The always-available set is [`BRIDGE_WHITELIST`] — the read-only tools
-//! `read`, `grep`, `find`, `ls`, `ast_grep`, `json_query`, and `current_time`.
-//! Every member declares strictly read-only effects, so reaching it cannot
-//! bypass the approval pipeline.
+//! # Authorization model
 //!
-//! Every other internal tool — `bash`, `write`, `edit`, `ast_edit`, `lsp`,
-//! `debug`, `sessions`, `web_search`, memory, `jobs`, `hub`, `browser`, … — is
-//! reachable through `sdk.call(name, args)` once the run is authorized: either
-//! by the OPERATOR naming it in `PTC_CAPABILITIES` (`bash,write,lsp,...`), or
-//! by approving the outer `run_code` call (a human approval, or an
-//! auto-approving `yolo` mode). The bridge dispatches through the LIVE tool
-//! registry, so it reaches the exact instances the session has; a program can
-//! never grant itself anything. `await sdk.tools()` lists what is reachable.
-//!
-//! **Authorization model (no nested approval).** A run that the operator has
-//! authorized at the outer `run_code` gate (or that runs under `yolo`) is not
-//! re-prompted per inner tool; the grant is decided once, outside model code.
-//! Read-only tools never need authorization at all. Delegated subagent children
-//! inherit only the static `PTC_CAPABILITIES` grant, never a parent session's
-//! run-time approval, so a read-only agent cannot widen through the bridge.
+//! The bridge does **no** authorization of its own. The single gate is whether
+//! `run_code` itself was allowed to run — the agent-level approval / `yolo`
+//! decision. Once it runs, **every** tool the session has is reachable through
+//! `sdk.call(name, args)`, read *and* write, with no nested per-tool prompt,
+//! whether the session is the main agent or a delegated subagent. The bridge
+//! dispatches through the LIVE tool registry, so it reaches the exact tool
+//! instances the session has (`lsp`, `debug`, `sessions`, memory, `jobs`,
+//! `hub`, `browser`, …). `await sdk.tools()` lists what is reachable.
 //!
 //! # Error locations
 //!
@@ -105,15 +95,14 @@ pub const DEFAULT_RUN_CODE_TIMEOUT_SECS: u64 = 120;
 /// Schema tag for run_code outputs.
 pub const PTC_RUN_CODE_SCHEMA: &str = "ra.ptc.run_code.v1";
 
-/// Bridge whitelist: tools the bridge may *always* reach.
+/// Tools a bare `RunCodeTool` (no live registry bound — unit tests) can build
+/// locally, used only as the `sdk.tools()` fallback list.
 ///
-/// Every member must declare strictly read-only effects (no write, append,
-/// process, or network), so reaching it cannot bypass pi's permission
-/// pipeline. The invariant is enforced by
-/// `whitelist_tools_are_effectively_read_only`; adding a tool whose effects
-/// are not read-only fails that test rather than silently widening the
-/// surface.
-const BRIDGE_WHITELIST: [&str; 7] = [
+/// With a registry bound, the reachable set is the whole registry: `run_code`
+/// does **no** nested authorization. The only gate is whether `run_code`
+/// itself was allowed to run (agent-level approval / `yolo`); once it runs, any
+/// tool the session has is callable and may read *and* write.
+const BRIDGE_FALLBACK_TOOLS: [&str; 13] = [
     "read",
     "grep",
     "find",
@@ -121,17 +110,6 @@ const BRIDGE_WHITELIST: [&str; 7] = [
     "ast_grep",
     "json_query",
     "current_time",
-];
-
-/// Curated approval-gated tools, used only as the `sdk.tools()` fallback when
-/// no live registry is bound (bare `RunCodeTool`, i.e. unit tests).
-///
-/// With a live registry bound, *any* registered tool is reachable once the run
-/// is authorized (see [`RunCodeTool::with_capabilities`]); this list is a
-/// representative fallback, not the reachable set. Their write/process/network
-/// nature is why they must never sit in [`BRIDGE_WHITELIST`]: `ast_edit` writes,
-/// `sessions` can delete/restore, and `web_search` is a network operation.
-const GRANTABLE_TOOLS: [&str; 6] = [
     "bash",
     "write",
     "edit",
@@ -139,38 +117,6 @@ const GRANTABLE_TOOLS: [&str; 6] = [
     "sessions",
     "web_search",
 ];
-
-/// Session-scoped authorization for the approval-gated bridge tools.
-///
-/// The OPERATOR flips this to `true` when the outer `run_code` call is
-/// authorized — a human approval, or an auto-approving mode such as `yolo` —
-/// so the bridge's write/process/network tools become reachable without a
-/// second, nested prompt. It is shared through
-/// [`crate::tools::ToolRegistry`] and never derived from anything the program
-/// can set.
-pub type BridgeGrant = std::sync::Arc<std::sync::atomic::AtomicBool>;
-
-/// A fresh, unauthorized bridge grant.
-#[must_use]
-pub fn new_bridge_grant() -> BridgeGrant {
-    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
-}
-
-/// Whether a run-time bridge grant may be applied in this process.
-///
-/// Delegated subagent children inherit only the operator's static
-/// `PTC_CAPABILITIES` grant; the run-time approval grant is deliberately
-/// confined to the top-level session, so a child can never widen a read-only
-/// agent (e.g. `explore`) into a writer through `run_code`. The child marker
-/// (`RECUR_AGENT_SUBAGENT_DEPTH`, set by `subagents::execution`) is a positive
-/// depth for every child.
-#[must_use]
-pub fn bridge_runtime_grant_allowed() -> bool {
-    std::env::var("RECUR_AGENT_SUBAGENT_DEPTH")
-        .ok()
-        .and_then(|depth| depth.parse::<u32>().ok())
-        .is_none_or(|depth| depth == 0)
-}
 
 /// Script file name QuickJS reports in stack frames, so an error points at the
 /// model's own `code` rather than at an anonymous eval.
@@ -236,20 +182,11 @@ pub struct RunCodeTool {
     image_auto_resize: bool,
     /// `read` image-blocking flag, matching the live registry.
     block_images: bool,
-    /// Operator-granted tools the bridge may reach beyond the read-only
-    /// default (empty = read-only). Names are not validated here; an unknown
-    /// name simply fails at dispatch. `PTC_CAPABILITIES` is the interim source.
-    capabilities: Vec<String>,
-    /// Session-scoped authorization flipped by the agent once the outer
-    /// `run_code` call is approved. When set, every tool the session has is
-    /// reachable without a nested prompt; the program cannot set it.
-    bridge_grant: BridgeGrant,
     /// Live registry, bound when this tool's registry is wrapped in a
     /// `SharedToolRegistry`. When present the bridge dispatches to the real
     /// tool instances (including `lsp`, `debug`, memory, `jobs`, `hub`, …)
     /// instead of rebuilding a subset.
-    shared_registry:
-        std::sync::OnceLock<std::sync::Weak<crate::tools::SharedToolRegistryInner>>,
+    shared_registry: std::sync::OnceLock<std::sync::Weak<crate::tools::SharedToolRegistryInner>>,
 }
 
 impl RunCodeTool {
@@ -267,22 +204,8 @@ impl RunCodeTool {
             search_backend: search_backend_from_config(None),
             image_auto_resize: true,
             block_images: false,
-            capabilities: capabilities_from_env(),
-            bridge_grant: new_bridge_grant(),
             shared_registry: std::sync::OnceLock::new(),
         }
-    }
-
-    /// Share the session's bridge grant.
-    ///
-    /// The agent flips the grant once the outer `run_code` call is authorized,
-    /// which is what makes "authorize `run_code` once" (or `yolo`) enough to
-    /// use the approval-gated tools — with no nested per-tool approval. The
-    /// grant is owned by [`crate::tools::ToolRegistry`], never by the program.
-    #[must_use]
-    pub fn with_bridge_grant(mut self, grant: BridgeGrant) -> Self {
-        self.bridge_grant = grant;
-        self
     }
 
     /// Override the default budget (used by config wiring).
@@ -315,29 +238,6 @@ impl RunCodeTool {
         self.search_backend = search_backend;
         self.image_auto_resize = image_auto_resize;
         self.block_images = block_images;
-        self
-    }
-
-    /// Grant tools to this bridge instance beyond the read-only default.
-    ///
-    /// An operator decision, never a model one. Any non-empty name is kept and
-    /// resolved against the live registry at dispatch time, so every internal
-    /// tool (`bash`, `lsp`, `debug`, `sessions`, memory, `jobs`, `hub`, …) can
-    /// be granted. `PTC_CAPABILITIES` is the interim source.
-    #[must_use]
-    pub(crate) fn with_capabilities(self, capabilities: Vec<&'static str>) -> Self {
-        self.with_capability_names(capabilities.into_iter().map(String::from).collect())
-    }
-
-    /// Same as [`Self::with_capabilities`] but for owned names, which config
-    /// values provide (they are not `'static`).
-    #[must_use]
-    pub(crate) fn with_capability_names(mut self, capabilities: Vec<String>) -> Self {
-        self.capabilities = capabilities
-            .into_iter()
-            .map(|name| name.trim().to_string())
-            .filter(|name| !name.is_empty())
-            .collect();
         self
     }
 
@@ -388,49 +288,31 @@ impl RunCodeTool {
         }
     }
 
-    /// The tool names this run can reach, for `sdk.tools()`: the read-only set,
-    /// the operator's static grant, and — once the outer call is authorized —
-    /// every tool the live registry exposes.
+    /// The tool names this run can reach, for `sdk.tools()`: every tool the live
+    /// registry exposes (the whole session toolset), or the locally buildable
+    /// fallback set when no registry is bound. There is no bridge-level
+    /// authorization to filter by — reaching run_code's execution was the gate.
     fn reachable_tools(&self) -> Vec<String> {
-        let mut reachable: Vec<String> = BRIDGE_WHITELIST
-            .iter()
-            .map(|name| (*name).to_string())
-            .collect();
-        for name in &self.capabilities {
-            if !reachable.iter().any(|existing| existing == name) {
-                reachable.push(name.clone());
-            }
-        }
-        if self.bridge_grant.load(Ordering::SeqCst) {
-            let live: Option<Vec<String>> = self
-                .shared_registry
-                .get()
-                .and_then(crate::tools::SharedToolRegistry::upgrade)
-                .map(|shared| {
-                    shared
-                        .snapshot()
-                        .tools()
-                        .iter()
-                        .map(|tool| tool.name().to_string())
-                        .collect()
-                });
-            let names = live
-                .unwrap_or_else(|| GRANTABLE_TOOLS.iter().map(|n| (*n).to_string()).collect());
-            for name in names {
-                if name != "run_code" && !reachable.iter().any(|existing| existing == &name) {
-                    reachable.push(name);
-                }
-            }
-        }
+        let live: Option<Vec<String>> = self
+            .shared_registry
+            .get()
+            .and_then(crate::tools::SharedToolRegistry::upgrade)
+            .map(|shared| {
+                shared
+                    .snapshot()
+                    .tools()
+                    .iter()
+                    .map(|tool| tool.name().to_string())
+                    .collect()
+            });
+        let mut reachable: Vec<String> = live.unwrap_or_else(|| {
+            BRIDGE_FALLBACK_TOOLS
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect()
+        });
+        reachable.retain(|name| name != "run_code");
         reachable
-    }
-
-    /// Whether the bridge may reach `tool_name`: the read-only default, the
-    /// operator's static grant, or the session's run-time grant.
-    fn allowed(&self, tool_name: &str) -> bool {
-        BRIDGE_WHITELIST.contains(&tool_name)
-            || self.capabilities.iter().any(|name| name == tool_name)
-            || self.bridge_grant.load(Ordering::SeqCst)
     }
 
     /// Run one tool and keep its text. Non-text blocks are not silently
@@ -477,14 +359,6 @@ impl RunCodeTool {
         tool_name: &str,
         input: Value,
     ) -> std::result::Result<String, String> {
-        if !self.allowed(tool_name) {
-            return Err(format!(
-                "PTC_BRIDGE_DENIED: tool `{tool_name}` is not reachable in this run \
-                 (read-only default: {}; approve run_code or set PTC_CAPABILITIES to \
-                 widen; `await sdk.tools()` lists what is reachable)",
-                BRIDGE_WHITELIST.join("|"),
-            ));
-        }
         if tool_name == "run_code" {
             return Err("PTC_BRIDGE_DENIED: `run_code` cannot call itself".to_string());
         }
@@ -651,7 +525,9 @@ fn realm_thread(
                     let flags = flags.clone();
                     runtime.set_interrupt_handler(Some(Box::new(move || flags.tripped())));
                 }
-                match context.with(|ctx| install_globals(&ctx, &console, tx, flags, budget, reachable)) {
+                match context
+                    .with(|ctx| install_globals(&ctx, &console, tx, flags, budget, reachable))
+                {
                     Ok(()) => run_program(&context, &runtime, code, flags),
                     Err(err) => ProgramOutcome::Failed(protocol_error(&err.to_string())),
                 }
@@ -663,23 +539,6 @@ fn realm_thread(
     let console_text = std::mem::take(&mut *console.borrow_mut());
     let terminal = terminal_message(outcome, &console_text);
     let _ = tx.send(RealmMessage::Done(terminal));
-}
-
-/// Operator grant for bridge tools, from `PTC_CAPABILITIES`.
-///
-/// Interim wiring until the config/CLI carries it: the value is read once at
-/// construction, from the environment of whatever launched the agent — a human
-/// decision, not something model-authored code can set. Any non-empty name is
-/// kept; an unknown one fails at dispatch against the live registry.
-fn capabilities_from_env() -> Vec<String> {
-    let Ok(raw) = std::env::var("PTC_CAPABILITIES") else {
-        return Vec::new();
-    };
-    raw.split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(str::to_string)
-        .collect()
 }
 
 /// Wrap the model's body in an async IIFE.
@@ -845,14 +704,12 @@ fn install_globals<'js>(
     // actually reach, including a grant applied after the run started. Returns
     // a JSON array, as a Promise like every other helper.
     let names: Vec<String> = reachable.to_vec();
-    let tools_fn = Func::from(
-        move |ctx: Ctx<'js>| -> rquickjs::Result<Promise<'js>> {
-            let (promise, resolve, _reject) = Promise::new(&ctx)?;
-            let json = serde_json::to_string(&names).unwrap_or_else(|_| "[]".to_string());
-            resolve.call::<_, ()>((json,))?;
-            Ok(promise)
-        },
-    );
+    let tools_fn = Func::from(move |ctx: Ctx<'js>| -> rquickjs::Result<Promise<'js>> {
+        let (promise, resolve, _reject) = Promise::new(&ctx)?;
+        let json = serde_json::to_string(&names).unwrap_or_else(|_| "[]".to_string());
+        resolve.call::<_, ()>((json,))?;
+        Ok(promise)
+    });
     sdk.set("tools", tools_fn)?;
 
     globals.set("sdk", sdk)?;
@@ -1470,10 +1327,11 @@ impl Tool for RunCodeTool {
          program output — curate it. One run_code \
          replaces many model round-trips. Every other internal tool (`bash`, \
          `edit`, `lsp`, `debug`, `sessions`, `web_search`, memory, `jobs`, …) is \
-         reachable via `await sdk.call(name, args)` once the run is authorized — \
-         approve run_code, run under yolo, or name tools in PTC_CAPABILITIES; \
-         `await sdk.tools()` lists what is reachable. Unauthorized calls are \
-         refused with PTC_BRIDGE_DENIED."
+         reachable via `await sdk.call(name, args)`; there is no nested \
+         authorization — the only gate is whether run_code was allowed to run. \
+         `await sdk.tools()` lists what is reachable. This holds for the main \
+         agent and for delegated subagents alike. A missing tool is refused \
+         with PTC_BRIDGE_DENIED."
     }
 
     fn parameters(&self) -> Value {
@@ -1509,26 +1367,12 @@ impl Tool for RunCodeTool {
     }
 
     fn effects(&self) -> ToolEffects {
-        // Arbitrary code execution: serialized fail-closed, same policy as
-        // bash/eval. A run whose bridge can reach approval-gated tools declares
-        // their effects too, so outer barriers and plan gates see the real
-        // reach of the call instead of the read-only default.
+        // Arbitrary code execution, serialized fail-closed like bash/eval. The
+        // bridge adds no authorization of its own: it can reach every tool the
+        // session has, so declare the registry's union when one is bound. A
+        // bare `RunCodeTool` (unit tests) stays at `process()`.
         let mut effects = ToolEffects::process();
-        for name in &self.capabilities {
-            if let Some(tool) = self.bridge_tool(name) {
-                effects = effects.union(tool.effects());
-            }
-        }
-        if self.capabilities.iter().any(|name| !name.is_empty()) {
-            // Conservative belt-and-braces: any operator grant also marks the
-            // run write-class, so a barrier/plan gate never treats a granted
-            // run as read-only.
-            effects = effects.union(ToolEffects::write());
-        }
-        // Once the session grant is set, the reach is the whole live registry
-        // (network, UI, process, …), so declare the union of what it exposes.
-        if self.bridge_grant.load(Ordering::SeqCst)
-            && let Some(weak) = self.shared_registry.get()
+        if let Some(weak) = self.shared_registry.get()
             && let Some(shared) = crate::tools::SharedToolRegistry::upgrade(weak)
         {
             for tool in shared.snapshot().tools() {
@@ -1721,34 +1565,28 @@ mod tests {
     }
 
     #[test]
-    fn whitelist_is_read_only() {
-        // Safety invariant: every always-allowed bridge tool must declare
-        // strictly read-only effects, so the bridge cannot bypass the approval
-        // pipeline. Adding a write/process/network tool to BRIDGE_WHITELIST
-        // fails here instead of silently widening the surface.
-        let tool = RunCodeTool::new(".");
-        for name in BRIDGE_WHITELIST {
-            assert!(tool.allowed(name), "{name} is read-only and always allowed");
-            let inner = tool
-                .bridge_tool(name)
-                .unwrap_or_else(|| panic!("{name} should be buildable"));
-            let effects = inner.effects();
-            assert!(
-                !effects.writes() && !effects.appends() && !effects.processes() && !effects.networks(),
-                "{name} must declare only read effects"
-            );
-        }
-        // Approval-gated tools are constructible for a granted run, but a
-        // default run cannot reach them — and the program cannot ask for them.
-        for name in GRANTABLE_TOOLS {
-            assert!(!tool.allowed(name), "{name} must not be granted by default");
-            assert!(
-                tool.bridge_tool(name).is_some(),
-                "{name} must be constructible when granted"
-            );
-        }
-        assert!(!tool.allowed("lsp"));
-        assert!(!tool.allowed("debug"));
+    fn bridge_reaches_any_registry_tool() {
+        // No nested authorization: once run_code runs, any tool the session has
+        // is reachable — `bash` included, read *and* write.
+        let registry =
+            crate::tools::ToolRegistry::new(&["run_code", "bash"], std::path::Path::new("."), None);
+        let shared = crate::tools::SharedToolRegistry::new(registry);
+        let snapshot = shared.snapshot();
+        let tool = snapshot.get("run_code").expect("run_code registered");
+        let runtime = asupersync::runtime::RuntimeBuilder::new()
+            .build()
+            .expect("runtime build");
+        let out = runtime
+            .block_on(tool.execute(
+                "t1",
+                json!({
+                    "code": "return String(await sdk.call('bash', { command: 'echo hi' })).includes('hi');",
+                    "timeoutMs": 30_000,
+                }),
+                None,
+            ))
+            .expect("run");
+        assert_eq!(output_text(&out), "true");
     }
 
     #[test]
@@ -1776,18 +1614,16 @@ mod tests {
     }
 
     #[test]
-    fn bridge_denies_non_whitelisted_tool() {
-        // Host-side rejection path: `sdk.bash("...")` must fail with the
-        // whitelist message and never reach a real bash tool.
+    fn bridge_reaches_non_whitelisted_tool() {
+        // No nested authorization: the bridge reaches a real `bash` tool.
         let tool = RunCodeTool::new(".");
         let runtime = asupersync::runtime::RuntimeBuilder::new()
             .build()
             .expect("runtime build");
-        let err = runtime
+        let out = runtime
             .block_on(tool.bridge_call("bash", json!({ "command": "echo hi" })))
-            .expect_err("bash must be denied by the bridge");
-        assert!(err.contains("PTC_BRIDGE_DENIED"), "{err}");
-        assert!(err.contains("bash"), "{err}");
+            .expect("bash must be reachable");
+        assert!(out.contains("hi"), "{out}");
     }
 
     #[test]
@@ -2028,23 +1864,21 @@ mod tests {
     }
 
     #[test]
-    fn bridge_denial_surfaces_to_program_code() {
-        // The whitelist is enforced host-side, but the program must observe the
-        // refusal as an ordinary catchable error — not a hang, not a silent
-        // no-op, and not an escape.
+    fn bridge_reaches_bash_and_write_from_program() {
+        // No nested authorization: a program may read *and* write.
+        let dir = scratch_dir("bridge-write", &[]);
         let code = r"
-            const outcomes = {};
-            try { await sdk.call('bash', { command: 'echo hi' }); outcomes.bash = 'allowed'; }
-            catch (err) { outcomes.bash = String(err && err.message); }
-            try { await sdk.call('write', { path: 'x', content: 'y' }); outcomes.write = 'allowed'; }
-            catch (err) { outcomes.write = String(err && err.message); }
-            return outcomes;
+            await sdk.call('bash', { command: 'echo hi' });
+            await sdk.call('write', { path: 'x.txt', content: 'y' });
+            return 'ok';
         ";
-        let text = run_text(&RunCodeTool::new("."), code);
-        assert!(!text.contains("allowed"), "{text}");
-        assert!(text.contains("PTC_BRIDGE_DENIED"), "{text}");
-        assert!(text.contains("bash"), "{text}");
-        assert!(text.contains("write"), "{text}");
+        let text = run_text(&RunCodeTool::new(&dir), code);
+        assert_eq!(text, "ok");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("x.txt")).expect("written"),
+            "y"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -2121,44 +1955,21 @@ mod tests {
     }
 
     #[test]
-    fn bash_grant_is_off_by_default() {
-        // There is no model-supplied grant: the read-only set is always there,
-        // and the approval-gated tools are not.
-        let tool = RunCodeTool::new(".");
-        assert!(tool.allowed("read"));
-        assert!(tool.allowed("grep"));
-        assert!(!tool.allowed("bash"));
-        assert!(!tool.allowed("write"));
-        assert!(!tool.allowed("edit"));
-        assert!(tool.capabilities.is_empty());
-    }
-
-    #[test]
-    fn capabilities_keep_names_and_drop_empties() {
-        // Every internal tool can be granted; only empty entries are dropped.
-        // An unknown name stays "allowed" here and fails at dispatch against
-        // the live registry, so a typo surfaces as a clear tool error.
-        let tool = RunCodeTool::new(".").with_capabilities(vec!["bash", "lsp", "", "  "]);
-        assert!(tool.allowed("bash"));
-        assert!(tool.allowed("lsp"));
-        assert_eq!(tool.capabilities, vec!["bash".to_string(), "lsp".to_string()]);
-    }
-
-    #[test]
-    fn granting_bash_escalates_declared_effects() {
-        // Outer barriers and plan gates must see the real reach of the call.
+    fn effects_union_with_registry() {
+        // A bare tool stays at `process()`; with a registry bound, the effects
+        // are the union of the tools the session has.
         assert_eq!(RunCodeTool::new(".").effects(), ToolEffects::process());
-        let granted = RunCodeTool::new(".")
-            .with_capabilities(vec!["bash"])
-            .effects();
-        assert!(granted.processes() && granted.writes(), "{granted:?}");
+        let registry =
+            crate::tools::ToolRegistry::new(&["run_code", "bash"], std::path::Path::new("."), None);
+        let shared = crate::tools::SharedToolRegistry::new(registry);
+        let snapshot = shared.snapshot();
+        let effects = snapshot.get("run_code").expect("run_code").effects();
+        assert!(effects.processes(), "run_code stays a process barrier");
     }
 
     #[test]
-    fn granted_bash_runs_multiple_commands_and_combines_output() {
-        // The point of the grant: several commands in ONE round trip, combined
-        // with program logic instead of a shell pipeline.
-        let tool = RunCodeTool::new(".").with_capabilities(vec!["bash"]);
+    fn bridge_runs_multiple_bash_commands_in_one_round_trip() {
+        let tool = RunCodeTool::new(".");
         let code = r"
             const a = String(await sdk.call('bash', { command: 'echo alpha' }));
             const b = String(await sdk.call('bash', { command: 'echo beta' }));
@@ -2173,9 +1984,9 @@ mod tests {
     }
 
     #[test]
-    fn granted_write_reaches_the_real_write_tool() {
+    fn bridge_reaches_the_real_write_tool() {
         let dir = scratch_dir("grant-write", &[]);
-        let tool = RunCodeTool::new(&dir).with_capabilities(vec!["write"]);
+        let tool = RunCodeTool::new(&dir);
         let code = "await sdk.call('write', { path: 'out.txt', content: 'written' }); return 'ok';";
         let out = run(&tool, json!({ "code": code, "timeoutMs": 30_000 })).expect("run");
         assert!(!out.is_error, "{}", output_text(&out));
@@ -2378,50 +2189,27 @@ mod tests {
     }
 
     #[test]
-    fn operator_grant_widens_the_bridge() {
-        // A fresh run is read-only; the session grant is what opens the
-        // approval-gated tools, and the program cannot set it.
-        let tool = RunCodeTool::new(".");
-        assert!(!tool.allowed("bash"));
-        assert!(!tool.allowed("web_search"));
-        assert!(tool.allowed("ast_grep"), "read-only extras stay allowed");
-
-        let grant = new_bridge_grant();
-        let tool = tool.with_bridge_grant(Arc::clone(&grant));
-        assert!(!tool.allowed("bash"), "grant starts unauthorized");
-        grant.store(true, Ordering::SeqCst);
-        assert!(tool.allowed("bash"));
-        assert!(tool.allowed("write"));
-        assert!(tool.allowed("ast_edit"));
-        assert!(tool.allowed("sessions"));
-        assert!(tool.allowed("web_search"));
-    }
-
-    #[test]
-    fn sdk_tools_lists_reachable_set() {
-        // Default: read-only extras present, approval-gated tools absent.
-        let text = run_text(&RunCodeTool::new("."), "return String(await sdk.tools());");
+    fn sdk_tools_lists_the_session_tools() {
+        // With a registry bound there is no bridge-level filter: every session
+        // tool (bash included) is listed, so the model can see its reach.
+        let registry =
+            crate::tools::ToolRegistry::new(&["run_code", "bash"], std::path::Path::new("."), None);
+        let shared = crate::tools::SharedToolRegistry::new(registry);
+        let snapshot = shared.snapshot();
+        let tool = snapshot.get("run_code").expect("run_code registered");
+        let runtime = asupersync::runtime::RuntimeBuilder::new()
+            .build()
+            .expect("runtime build");
+        let out = runtime
+            .block_on(tool.execute(
+                "t1",
+                json!({ "code": "return String(await sdk.tools());", "timeoutMs": 30_000 }),
+                None,
+            ))
+            .expect("run");
+        let text = output_text(&out);
+        assert!(text.contains("bash"), "{text}");
         assert!(text.contains("ast_grep"), "{text}");
-        assert!(text.contains("json_query"), "{text}");
-        assert!(!text.contains("bash"), "{text}");
-    }
-
-    #[test]
-    fn sdk_tools_reflects_static_and_runtime_grants() {
-        let granted_static = run_text(
-            &RunCodeTool::new(".").with_capabilities(vec!["bash"]),
-            "return String(await sdk.tools());",
-        );
-        assert!(granted_static.contains("bash"), "{granted_static}");
-
-        let grant = new_bridge_grant();
-        let tool = RunCodeTool::new(".").with_bridge_grant(Arc::clone(&grant));
-        grant.store(true, Ordering::SeqCst);
-        let granted_runtime = run_text(&tool, "return String(await sdk.tools());");
-        assert!(granted_runtime.contains("bash"), "{granted_runtime}");
-        assert!(granted_runtime.contains("ast_edit"), "{granted_runtime}");
-        assert!(granted_runtime.contains("sessions"), "{granted_runtime}");
-        assert!(granted_runtime.contains("web_search"), "{granted_runtime}");
     }
 
     #[test]
@@ -2436,7 +2224,6 @@ mod tests {
             None,
         );
         let shared = crate::tools::SharedToolRegistry::new(registry);
-        shared.authorize_ptc_bridge();
         let snapshot = shared.snapshot();
         let tool = snapshot.get("run_code").expect("run_code registered");
         let runtime = asupersync::runtime::RuntimeBuilder::new()
@@ -2501,14 +2288,11 @@ mod tests {
 
     #[test]
     fn image_blocks_are_marked_not_dropped() {
-        let grant = new_bridge_grant();
-        let run_code = RunCodeTool::new(".").with_bridge_grant(Arc::clone(&grant));
         let registry = crate::tools::ToolRegistry::from_tools(vec![
             Box::new(ImageProbeTool),
-            Box::new(run_code),
+            Box::new(RunCodeTool::new(".")),
         ]);
         let shared = crate::tools::SharedToolRegistry::new(registry);
-        grant.store(true, Ordering::SeqCst);
         let snapshot = shared.snapshot();
         let tool = snapshot.get("run_code").expect("run_code registered");
         let runtime = asupersync::runtime::RuntimeBuilder::new()
@@ -2530,5 +2314,34 @@ mod tests {
             text.contains("[image omitted: image/png"),
             "image block was not surfaced: {text}"
         );
+    }
+
+    #[test]
+    fn child_bridge_reaches_its_registry_tools() {
+        // A delegated child is an ordinary session as far as the bridge is
+        // concerned: no nested authorization, so every tool its registry
+        // carries is reachable.
+        let registry = crate::tools::ToolRegistry::from_tools(vec![
+            Box::new(RunCodeTool::new(".")),
+            Box::new(BashTool::new(std::path::Path::new("."))),
+            Box::new(WriteTool::new(std::path::Path::new("."))),
+        ]);
+        let shared = crate::tools::SharedToolRegistry::new(registry);
+        let snapshot = shared.snapshot();
+        let tool = snapshot.get("run_code").expect("run_code registered");
+        let runtime = asupersync::runtime::RuntimeBuilder::new()
+            .build()
+            .expect("runtime build");
+        let out = runtime
+            .block_on(tool.execute(
+                "t1",
+                json!({
+                    "code": "return String(await sdk.call('bash', { command: 'echo hi' })).includes('hi');",
+                    "timeoutMs": 30_000,
+                }),
+                None,
+            ))
+            .expect("run");
+        assert_eq!(output_text(&out), "true");
     }
 }
