@@ -264,6 +264,7 @@ pub enum AppAction {
     // Display
     ExpandTools,
     ToggleThinking,
+    ToggleActivity,
 
     // Message Queue
     FollowUp,
@@ -353,6 +354,7 @@ impl AppAction {
             // Display
             Self::ExpandTools => "Collapse/expand tool output",
             Self::ToggleThinking => "Collapse/expand thinking blocks",
+            Self::ToggleActivity => "Collapse/expand activity pane",
 
             // Message Queue
             Self::FollowUp => "Queue follow-up message",
@@ -426,7 +428,9 @@ impl AppAction {
             | Self::CycleModelBackward
             | Self::CycleThinkingLevel => ActionCategory::ModelsThinking,
 
-            Self::ExpandTools | Self::ToggleThinking => ActionCategory::Display,
+            Self::ExpandTools | Self::ToggleThinking | Self::ToggleActivity => {
+                ActionCategory::Display
+            }
 
             Self::FollowUp | Self::Dequeue => ActionCategory::MessageQueue,
 
@@ -514,6 +518,7 @@ impl AppAction {
             // Display
             Self::ExpandTools,
             Self::ToggleThinking,
+            Self::ToggleActivity,
             // Message Queue
             Self::FollowUp,
             Self::Dequeue,
@@ -667,7 +672,6 @@ impl KeyBinding {
     pub fn ctrl_alt(key: impl Into<String>) -> Self {
         Self::new(key, KeyModifiers::CTRL_ALT)
     }
-
 
     /// Convert an ftui key event to a `KeyBinding` (FrankenTUI migration,
     /// bd-cv653.9.1). Mirrors the removed bubbletea converter's catalog naming
@@ -1485,6 +1489,7 @@ impl KeyBindings {
         // Display
         m.insert(AppAction::ExpandTools, vec![KeyBinding::ctrl("o")]);
         m.insert(AppAction::ToggleThinking, vec![KeyBinding::ctrl("t")]);
+        m.insert(AppAction::ToggleActivity, vec![KeyBinding::ctrl("x")]);
 
         // Message Queue
         m.insert(AppAction::FollowUp, vec![KeyBinding::alt("enter")]);
