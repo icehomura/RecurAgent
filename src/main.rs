@@ -211,29 +211,39 @@ fn write_resource_diagnostics_since(
 
 /// Stack budget for the thread that drives the CLI.
 ///
-/// The interactive driver already reserves `interactive_ftui::DRIVER_STACK_BYTES`
-/// (64 MiB) for its agent thread, but the headless surfaces — `--print`, RPC,
-/// and every `subagent` child — drive the same deeply nested asupersync future
-/// on the process's initial thread. Windows sizes that thread from the PE
-/// header (1 MiB default; 32 MiB after the `/STACK:` linker override), which
-/// aborts with `STATUS_STACK_OVERFLOW` (0xC00000FD) before the future can
-/// finish; that crash is why a `dag`/`subagent` call reported "child emitted an
-/// error event". Reserve the same budget as the interactive driver for every
-/// surface explicitly.
+/// The headless surfaces — `--print`, RPC, and every `subagent` child — drive
+/// the same deeply nested asupersync future on the process's initial thread.
+/// Windows sizes that thread from the PE header (1 MiB default; 32 MiB after
+/// the `/STACK:` linker override), which aborts with `STATUS_STACK_OVERFLOW`
+/// (0xC00000FD) before the future can finish; that crash is why a `dag`/
+/// `subagent` call reported "child emitted an error event". Reserve the budget
+/// explicitly rather than inherit the PE default.
 ///
 /// A stack overflow is a fail-fast abort: no unwinding, no `Drop`, no session
 /// flush. For a child that is one lost delegation; for `main` it is the whole
-/// conversation, so this thread gets the largest reservation in the tree.
-const MAIN_STACK_BYTES: usize = 64 * 1024 * 1024;
+/// conversation.
+///
+/// 16 MiB, on the same measured basis as the other deep-stack reserves: a
+/// complete offline agent turn — session -> agent loop -> provider stream ->
+/// tool call -> result -> follow-up, including a `dag` whose node runs
+/// `run_code` (dag_tool + ptc_bridge + QuickJS) — holds at 724992 B (708 KiB)
+/// and aborts at 720896 B (704 KiB), flat to DAG N=256 (probe
+/// `agent::tests::probe_full_turn_stack_scaling`, commit `905433d68`). That
+/// probe uses a mock provider, so real transport (TLS/HTTP) and session
+/// persistence (sqlite/JSONL) are unexercised (`-Zprint-type-sizes` puts those
+/// frames at <= ~30 KiB each); 16 MiB keeps ~23x headroom over the floor.
+/// Bead `bd-qtffv` tracks verifying the transport-heavy chains and going lower.
+const MAIN_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 /// Stack reserve for every worker thread the headless runtime spawns.
 ///
 /// `RuntimeBuilder::multi_thread()` polls tasks the agent hands to the runtime
 /// on worker threads, not on the `ra-main` thread above. Without this they
 /// inherit the PE default and a deep provider/tool future overflows there
-/// instead — the same abort, on a thread `MAIN_STACK_BYTES` cannot reach.
-/// Matches `interactive_ftui::DRIVER_STACK_BYTES`.
-const RUNTIME_WORKER_STACK_BYTES: usize = 64 * 1024 * 1024;
+/// instead — the same abort, on a thread `MAIN_STACK_BYTES` cannot reach. Sized
+/// from the same measurement as `MAIN_STACK_BYTES`; see that comment, and bead
+/// `bd-qtffv` for the transport-heavy chains.
+const RUNTIME_WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn main() {
     // `/share` uses a gated copy of Pi on Windows so the real `gh` child cannot
