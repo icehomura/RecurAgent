@@ -7,6 +7,7 @@ name = "account-manager"
 version = "1.0.0"
 dependencies = [
  "chrono",
+ "ra-core",
  "serde",
  "serde_json",
 ]
@@ -1613,6 +1614,7 @@ dependencies = [
  "chrono",
  "ego-tree 0.10.0",
  "futures",
+ "ra-core",
  "ra-research",
  "regex",
  "reqwest 0.12.28",
@@ -5892,6 +5894,7 @@ dependencies = [
  "async-trait",
  "eyre",
  "llama-cpp-2",
+ "ra-core",
  "ra-llm",
  "ra-memory",
  "self_cell",
@@ -6045,6 +6048,7 @@ name = "ra-pyo3"
 version = "2.0.3-rc.13"
 dependencies = [
  "pyo3",
+ "ra-core",
  "ra-ffi",
 ]
 
@@ -6060,6 +6064,7 @@ dependencies = [
  "makepad-script",
  "octoscript-core",
  "quick-xml",
+ "ra-core",
  "regex",
  "reqwest 0.12.28",
  "scraper 0.22.0",
@@ -6082,6 +6087,7 @@ dependencies = [
  "landlock",
  "lddtree",
  "libc",
+ "ra-core",
  "rappct",
  "seccompiler",
  "serde_json",
@@ -6194,6 +6200,7 @@ dependencies = [
 name = "ra-uniffi"
 version = "2.0.3-rc.13"
 dependencies = [
+ "ra-core",
  "ra-ffi",
  "serde_json",
  "uniffi",
@@ -7471,6 +7478,7 @@ name = "skill-evolve"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "ra-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -7498,6 +7506,7 @@ source = "git+https://github.com/OctoSense-org/makepad.git?rev=6e5898fecbe5931c1
 name = "smart-home"
 version = "1.1.0"
 dependencies = [
+ "ra-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -8867,6 +8876,7 @@ name = "voice"
 version = "1.2.0"
 dependencies = [
  "base64",
+ "ra-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
