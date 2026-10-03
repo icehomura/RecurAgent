@@ -419,15 +419,22 @@ impl ActivityPane {
         out
     }
 
-    /// Rounded box around the pane: the header sits in the top border, the
-    /// body columns sit between `│` side borders, and a bottom border closes
-    /// the box. Exactly `rows` lines of exactly `width` cells; falls back to
-    /// [`ActivityPane::render`] when there is no room for a box.
+    /// Rounded box around the pane: the header caption sits in the top border,
+    /// the body columns sit between `│` side borders, and a bottom border
+    /// closes the box. Exactly `rows` lines of exactly `width` cells; falls
+    /// back to [`ActivityPane::render`] when there is no room for a box.
+    ///
+    /// The returned [`BoxedPane::header`] range tells the caller which bytes
+    /// of the first line are the caption, so it can be dimmed while the frame
+    /// stays in the border colour.
     #[must_use]
-    pub fn render_boxed(&self, width: usize, rows: usize, now_ms: u64) -> Vec<String> {
+    pub fn render_boxed(&self, width: usize, rows: usize, now_ms: u64) -> BoxedPane {
         const MIN_BOX_ROWS: usize = 3;
         if rows < MIN_BOX_ROWS || width < 4 {
-            return self.render(width, rows, now_ms);
+            return BoxedPane {
+                lines: self.render(width, rows, now_ms),
+                header: 0..0,
+            };
         }
         let inner = width - 2;
         let head = clip_cells(&self.header(self.expanded), inner.saturating_sub(4).max(1));
@@ -435,17 +442,19 @@ impl ActivityPane {
         let fill = inner.saturating_sub(head_width + 3);
         let mut top = String::with_capacity(width);
         top.push_str("╭─ ");
+        let header_start = top.len();
         top.push_str(&head);
+        let header_end = top.len();
         top.push(' ');
         for _ in 0..fill {
             top.push('─');
         }
         top.push('╮');
 
-        let mut out = Vec::with_capacity(rows);
-        out.push(fit_cells(&top, width));
+        let mut lines = Vec::with_capacity(rows);
+        lines.push(fit_cells(&top, width));
         for line in self.render(inner, rows - 2, now_ms) {
-            out.push(format!("│{line}│"));
+            lines.push(format!("│{line}│"));
         }
         let mut bottom = String::with_capacity(width);
         bottom.push('╰');
@@ -453,14 +462,29 @@ impl ActivityPane {
             bottom.push('─');
         }
         bottom.push('╯');
-        out.push(bottom);
-        out
+        lines.push(bottom);
+        BoxedPane {
+            lines,
+            header: header_start..header_end,
+        }
     }
 
     /// Index of `key`.
     fn index_of(&self, key: &str) -> Option<usize> {
         self.items.iter().position(|item| item.key == key)
     }
+}
+
+/// A rendered box: the lines, plus where the header caption sits inside the
+/// first one so the caller can style it separately from the frame (a dim gray
+/// hint reads differently from a violet border).
+#[derive(Debug, Clone)]
+pub struct BoxedPane {
+    /// Exactly `rows` lines of exactly `width` cells.
+    pub lines: Vec<String>,
+    /// Byte range of the header caption inside `lines[0]`; empty when the
+    /// unboxed fallback body was returned instead.
+    pub header: std::ops::Range<usize>,
 }
 
 /// Sanitize a chunk of text into lines: expand `\t` to 4 spaces, drop `\r` and the
@@ -794,14 +818,23 @@ mod tests {
         pane.touch("b1", ActivityKind::Bash, "bash: cargo test", 0)
             .push_text("compiling\nrunning 3 tests\n");
 
-        let lines = pane.render_boxed(60, 5, 0);
+        let boxed = pane.render_boxed(60, 5, 0);
+        let lines = &boxed.lines;
         assert_eq!(lines.len(), 5);
-        for line in &lines {
+        for line in lines {
             assert_eq!(width_of(line), 60, "{line:?}");
         }
         assert!(lines[0].starts_with("╭─ activity"), "{:?}", lines[0]);
         assert!(lines[0].ends_with('╮'), "{:?}", lines[0]);
         assert!(lines[0].contains("ctrl+x expand"), "{:?}", lines[0]);
+        // The reported range is exactly the caption, so the caller can dim it
+        // without recolouring the border around it.
+        assert_eq!(
+            &lines[0][boxed.header.clone()],
+            "activity · 1 running · ctrl+x expand",
+            "{:?}",
+            lines[0]
+        );
         for line in &lines[1..4] {
             assert!(line.starts_with('│') && line.ends_with('│'), "{line:?}");
         }
@@ -815,15 +848,25 @@ mod tests {
 
         // A narrow box clips the header instead of overflowing the border.
         let narrow = pane.render_boxed(30, 3, 0);
-        assert_eq!(narrow.len(), 3);
-        for line in &narrow {
+        assert_eq!(narrow.lines.len(), 3);
+        for line in &narrow.lines {
             assert_eq!(width_of(line), 30, "{line:?}");
         }
-        assert!(narrow[0].starts_with("╭─ activity"), "{:?}", narrow[0]);
+        assert!(narrow.lines[0].starts_with("╭─ activity"), "{:?}", narrow.lines[0]);
+        assert!(
+            narrow.lines[0][narrow.header.clone()].ends_with('…'),
+            "a clipped caption ends in an ellipsis: {:?}",
+            narrow.lines[0]
+        );
 
-        // Too few rows (or cells) for corners: the plain body comes back.
-        assert_eq!(pane.render_boxed(60, 2, 0), pane.render(60, 2, 0));
-        assert_eq!(pane.render_boxed(3, 5, 0), pane.render(3, 5, 0));
+        // Too few rows (or cells) for corners: the plain body comes back, with
+        // no caption to style.
+        let fallback = pane.render_boxed(60, 2, 0);
+        assert_eq!(fallback.lines, pane.render(60, 2, 0));
+        assert!(fallback.header.is_empty());
+        let too_narrow = pane.render_boxed(3, 5, 0);
+        assert_eq!(too_narrow.lines, pane.render(3, 5, 0));
+        assert!(too_narrow.header.is_empty());
     }
 
     #[test]

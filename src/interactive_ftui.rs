@@ -6497,10 +6497,11 @@ impl RaFtuiModel {
         }
     }
 
-    /// Paint the live activity pane as a rounded box: the header sits in the
-    /// top border, the tail columns sit between `│` side borders, and the
-    /// bottom border closes it. The border uses the same violet as the
-    /// composer box so both read as chrome.
+    /// Paint the live activity pane as a rounded box: the header caption sits
+    /// in the top border, the tail columns sit between `│` side borders, and
+    /// the bottom border closes it. The frame uses the same violet as the
+    /// composer box; the caption (running count + the `ctrl+x` chord hint) is
+    /// drawn dim gray so the hint reads as chrome, not as part of the border.
     ///
     /// The pane stays plain text on purpose: `activity_pane` owns the column
     /// math so it can be unit-tested without a terminal, and this method only
@@ -6511,26 +6512,38 @@ impl RaFtuiModel {
         let height = usize::from(area.height);
         let border_style = ftui::Style::new().fg(self.palette.rule);
         let body_style = ftui::Style::new().fg(self.palette.muted);
+        let hint_style = ftui::Style::new().dim().fg(self.palette.muted);
         if height < 3 || width < 4 {
             // No room for corners: one header row beats a broken box.
             let header = ftui::text::Line::styled(
                 sanitize(&self.activity.header(self.activity.expanded)).into_owned(),
-                body_style,
+                hint_style,
             );
             Paragraph::new(Text::from_lines([header])).render(area, frame);
             return;
         }
-        let lines = self.activity.render_boxed(width, height, now);
-        let styled: Vec<ftui::text::Line<'static>> = lines
+        let boxed = self.activity.render_boxed(width, height, now);
+        let last_row = boxed.lines.len() - 1;
+        let styled: Vec<ftui::text::Line<'static>> = boxed
+            .lines
             .iter()
             .enumerate()
-            .map(|(row, line)| {
-                let style = if row == 0 || row + 1 == height {
+            .map(|(row, text)| {
+                if row == 0 && !boxed.header.is_empty() {
+                    let (lead, rest) = text.split_at(boxed.header.start);
+                    let (hint, tail) = rest.split_at(boxed.header.len());
+                    return ftui::text::Line::from_spans(vec![
+                        ftui::text::Span::styled(sanitize(lead).into_owned(), border_style),
+                        ftui::text::Span::styled(sanitize(hint).into_owned(), hint_style),
+                        ftui::text::Span::styled(sanitize(tail).into_owned(), border_style),
+                    ]);
+                }
+                let style = if row == 0 || row == last_row {
                     border_style
                 } else {
                     body_style
                 };
-                ftui::text::Line::styled(sanitize(line).into_owned(), style)
+                ftui::text::Line::styled(sanitize(text).into_owned(), style)
             })
             .collect();
         Paragraph::new(Text::from_lines(styled)).render(area, frame);
@@ -11719,6 +11732,28 @@ mod tests {
             pane_line.starts_with('│') && pane_line.ends_with('│'),
             "pane body must sit between box borders: {pane_line:?}"
         );
+        // The `ctrl+x` hint is dim gray chrome; the frame around it stays
+        // violet, so the hint is never mistaken for the border.
+        let hint_row = rendered
+            .lines()
+            .position(|line| line.contains("ctrl+x"))
+            .expect("chord hint row in frame");
+        let hint_col = rendered
+            .lines()
+            .nth(hint_row)
+            .and_then(|line| line.find("ctrl+x"))
+            .expect("chord hint column");
+        let hint_cell = frame
+            .get(
+                u16::try_from(hint_col).unwrap_or(u16::MAX),
+                u16::try_from(hint_row).unwrap_or(u16::MAX),
+            )
+            .expect("hint cell");
+        assert_eq!(hint_cell.fg, muted, "the ctrl+x hint must be gray");
+        let corner = frame
+            .get(0, u16::try_from(hint_row).unwrap_or(u16::MAX))
+            .expect("corner cell");
+        assert_eq!(corner.fg, rule, "the box frame must stay violet");
     }
 
     #[test]
