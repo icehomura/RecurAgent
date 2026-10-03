@@ -13,6 +13,7 @@ pub mod cli;
 pub mod client_event;
 pub mod clipboard;
 pub mod cmd;
+pub mod env;
 pub mod event_loop;
 pub mod file_picker;
 pub mod highlight;

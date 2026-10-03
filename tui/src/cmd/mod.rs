@@ -1,4 +1,4 @@
-//! `octoscode` subcommands: `update` and `doctor` (design doc).
+//! `ra-tui` subcommands: `update` and `doctor` (design doc).
 //!
 //! The TUI's CLI is a hand-rolled `Cli::parse()` with no clap subcommands, and
 //! the default no-subcommand invocation launches the TUI. To add `update` and
@@ -10,8 +10,6 @@
 
 pub mod config;
 pub mod doctor;
-pub mod github;
-pub mod install_method;
 pub mod olp_mcp;
 #[cfg(target_os = "linux")]
 pub mod outer_duty;
@@ -31,7 +29,7 @@ const SUBCOMMANDS: &[&str] = &["update", "doctor", "config", "olp-mcp-serve", "o
 /// first non-flag positional is `update`/`doctor`, run it and return its exit
 /// code; otherwise return `None` so the caller launches the TUI as before.
 ///
-/// Only a *leading* positional is treated as a subcommand: `octoscode --lang zh`
+/// Only a *leading* positional is treated as a subcommand: `ra-tui --lang zh`
 /// still launches the TUI, and a config value that happens to be "doctor" is
 /// never misread as a subcommand because we only look at the first bare token.
 pub fn dispatch<I, S>(args: I) -> Result<Option<i32>>
@@ -59,10 +57,10 @@ where
 enum Route {
     Update(UpdateArgs),
     Doctor(DoctorArgs),
-    /// `octoscode olp-mcp-serve` — OUTER_LOOP_REVIEW #31: the Rust OLP-MCP
+    /// `ra-tui olp-mcp-serve` — OUTER_LOOP_REVIEW #31: the Rust OLP-MCP
     /// outer-loop server (newline-delimited JSON-RPC over stdio).
     OlpMcpServe,
-    /// `octoscode outer-duty` — OUTER_LOOP_REVIEW #38: the per-project
+    /// `ra-tui outer-duty` — OUTER_LOOP_REVIEW #38: the per-project
     /// session-lifetime OS-exclusive duty lock (hold/check). Linux-only
     /// (PDEATHSIG + /proc); see OUTER_LOOP_PROTOCOL R7.
     #[cfg(target_os = "linux")]
@@ -74,9 +72,9 @@ enum Route {
 
 /// Parse `argv` into a [`Route`] if it leads with a known subcommand; otherwise
 /// `None` (the caller launches the TUI). The synthetic program name keeps
-/// clap's usage strings accurate (e.g. `octoscode doctor`); the subcommand
+/// clap's usage strings accurate (e.g. `ra-tui doctor`); the subcommand
 /// token is dropped (`skip(2)`) so clap does not see it as a stray positional.
-/// `octoscode outer-duty` args (manual parse; `--` splits the child command).
+/// `ra-tui outer-duty` args (manual parse; `--` splits the child command).
 /// Strict: unknown flags / missing values / unknown actions are rejected
 /// with exit 2 (route negative golden).
 #[derive(Debug)]
@@ -148,7 +146,7 @@ fn route(argv: &[String]) -> Option<Route> {
     if !SUBCOMMANDS.contains(&first.as_str()) {
         return None;
     }
-    let prog = format!("octoscode {first}");
+    let prog = format!("ra-tui {first}");
     let sub_argv: Vec<String> = std::iter::once(prog)
         .chain(argv.iter().skip(2).cloned())
         .collect();
@@ -177,31 +175,16 @@ fn route(argv: &[String]) -> Option<Route> {
     }
 }
 
-/// `octoscode update` flags.
+/// `ra-tui update` flags.
 #[derive(Debug, Parser)]
 #[command(
-    name = "octoscode update",
-    about = "Update octoscode in place (cargo-dist installs) or print the right upgrade command"
+    name = "ra-tui update",
+    about = "Show how to update ra-tui (rebuild from the ra source tree)"
 )]
 struct UpdateCli {
-    /// Only report whether an update is available (exit 10 if newer).
+    /// Only report the update channel (exit 0); never mutate.
     #[arg(long)]
     check: bool,
-    /// Update to a specific version (e.g. 0.1.2).
-    #[arg(long, value_name = "X.Y.Z", conflicts_with = "tag")]
-    version: Option<String>,
-    /// Update to a specific release tag (e.g. v0.1.2).
-    #[arg(long, value_name = "TAG", conflicts_with = "version")]
-    tag: Option<String>,
-    /// Allow prerelease targets.
-    #[arg(long)]
-    prerelease: bool,
-    /// Re-install even if already current.
-    #[arg(long)]
-    force: bool,
-    /// Skip the interactive confirmation.
-    #[arg(long, short = 'y')]
-    yes: bool,
     /// Emit machine-readable JSON.
     #[arg(long)]
     json: bool,
@@ -211,21 +194,16 @@ impl UpdateCli {
     fn into_args(self) -> UpdateArgs {
         UpdateArgs {
             check: self.check,
-            version: self.version,
-            tag: self.tag,
-            prerelease: self.prerelease,
-            force: self.force,
-            yes: self.yes,
             json: self.json,
         }
     }
 }
 
-/// `octoscode doctor` flags.
+/// `ra-tui doctor` flags.
 #[derive(Debug, Parser)]
 #[command(
-    name = "octoscode doctor",
-    about = "Diagnose octoscode's environment, install, and protocol compatibility"
+    name = "ra-tui doctor",
+    about = "Diagnose ra-tui's environment, install, and protocol compatibility"
 )]
 struct DoctorCli {
     /// Emit machine-readable JSON (support bundle).
@@ -243,10 +221,12 @@ struct DoctorCli {
     /// WS endpoint to record for the connectivity check.
     #[arg(long = "endpoint", value_name = "WS_URL")]
     endpoint: Option<String>,
-    /// Bearer token for UI Protocol authentication. Falls back to OCTOS_AUTH_TOKEN.
+    /// Bearer token for UI Protocol authentication. Falls back to RA_AUTH_TOKEN
+    /// (legacy OCTOS_AUTH_TOKEN).
     #[arg(long = "auth-token", value_name = "TOKEN")]
     auth_token: Option<String>,
-    /// Data dir to check (defaults to ~/.ra).
+    /// Data dir to check (defaults to ~/.ra, or a legacy ~/.ra when only
+    /// that exists).
     #[arg(long = "data-dir", value_name = "DIR")]
     data_dir: Option<std::path::PathBuf>,
 }
@@ -279,7 +259,7 @@ mod tests {
     #[test]
     fn route_outer_duty_golden() {
         let argv = |a: &[&str]| -> Vec<String> {
-            std::iter::once("octoscode".to_string())
+            std::iter::once("ra-tui".to_string())
                 .chain(a.iter().map(|s| s.to_string()))
                 .collect()
         };
@@ -354,17 +334,17 @@ mod tests {
     #[test]
     fn route_returns_none_for_no_subcommand() {
         // Plain launch — no subcommand → TUI path.
-        assert!(route(&argv(&["octoscode"])).is_none());
+        assert!(route(&argv(&["ra-tui"])).is_none());
         // A flag-only invocation is not a subcommand.
-        assert!(route(&argv(&["octoscode", "--lang", "zh"])).is_none());
+        assert!(route(&argv(&["ra-tui", "--lang", "zh"])).is_none());
         // A non-subcommand positional also falls through.
-        assert!(route(&argv(&["octoscode", "chat"])).is_none());
+        assert!(route(&argv(&["ra-tui", "chat"])).is_none());
     }
 
     #[test]
     fn route_recognizes_update_with_flags() {
         // Routing + arg-parsing happens here; no network is performed.
-        let routed = route(&argv(&["octoscode", "update", "--check", "--json"]));
+        let routed = route(&argv(&["ra-tui", "update", "--check", "--json"]));
         match routed {
             Some(Route::Update(args)) => {
                 assert!(args.check);
@@ -376,7 +356,7 @@ mod tests {
 
     #[test]
     fn route_recognizes_doctor_with_flags() {
-        let routed = route(&argv(&["octoscode", "doctor", "--strict", "--verbose"]));
+        let routed = route(&argv(&["ra-tui", "doctor", "--strict", "--verbose"]));
         match routed {
             Some(Route::Doctor(args)) => {
                 assert!(args.strict);
@@ -391,7 +371,7 @@ mod tests {
         // The dedicated parser receives flags *without* the subcommand token
         // (dispatch strips it). Exercises a couple of flags route() doesn't.
         let args = DoctorCli::parse_from([
-            "octoscode doctor",
+            "ra-tui doctor",
             "--stdio-command",
             "ra serve --stdio",
             "--data-dir",
@@ -408,19 +388,19 @@ mod tests {
     #[test]
     fn route_recognizes_config_and_defaults_to_show() {
         // Bare `config` → show action (the interactive wizard was removed).
-        match route(&argv(&["octoscode", "config"])) {
+        match route(&argv(&["ra-tui", "config"])) {
             Some(Route::Config(args)) => {
                 assert!(matches!(args.action, config::ConfigAction::Show));
             }
             other => panic!("expected Route::Config, got {other:?}"),
         }
         // Explicit actions parse.
-        match route(&argv(&["octoscode", "config", "path"])) {
+        match route(&argv(&["ra-tui", "config", "path"])) {
             Some(Route::Config(args)) => assert!(matches!(args.action, config::ConfigAction::Path)),
             other => panic!("expected Route::Config(Path), got {other:?}"),
         }
         match route(&argv(&[
-            "octoscode",
+            "ra-tui",
             "config",
             "show",
             "--config",
@@ -437,16 +417,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn update_version_and_tag_conflict() {
-        // Note: no subcommand token — dispatch strips it before this parser.
-        let err = UpdateCli::try_parse_from([
-            "octoscode update",
-            "--version",
-            "0.1.2",
-            "--tag",
-            "v0.1.2",
-        ]);
-        assert!(err.is_err(), "version and tag must conflict");
-    }
 }

@@ -1,4 +1,4 @@
-//! `octoscode doctor` — flutter-doctor-style diagnostics (design §B).
+//! `ra-tui doctor` — flutter-doctor-style diagnostics (design §B).
 //!
 //! One line per check (`[✓]` pass / `[!]` warn / `[✗]` fail), grouped by
 //! category, each non-pass line followed by an indented `→ fix:` action,
@@ -9,8 +9,9 @@
 //! `[✗]`. `--strict` promotes warnings to failures.
 //!
 //! Checks implemented here:
-//! - **Binary & version**: octoscode on PATH, install method, newer release,
-//!   shadowing installs.
+//! - **Binary & version**: ra-tui on PATH, duplicate installs, and the update
+//!   channel (this build ships from the ra repository — updates are source
+//!   rebuilds; no upstream release query).
 //! - **Terminal**: TERM/terminfo, UTF-8 locale, CJK width, color support.
 //! - **Config & data**: config dir + data dir writability.
 //! - **Profiles & sessions**: on-disk profiles, the default (`*`), the LLM each
@@ -19,7 +20,6 @@
 //! - **Backend**: stdio-command resolves (+ `ra --version`); configured WS
 //!   endpoints are probed with `config/capabilities/list`, falling back to a
 //!   structural protocol-skew check against the compiled-in `ra-core`.
-//! - **Network**: GitHub reachability.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -41,8 +41,6 @@ use tokio_tungstenite::{
     tungstenite::{Message as WsMessage, client::IntoClientRequest},
 };
 
-use super::github::{self, Reachability};
-use super::install_method::{self, InstallMethod};
 use crate::model::{APPUI_METHOD_CONFIG_CAPABILITIES_LIST, ConfigCapabilitiesListResult};
 
 /// Features the TUI *requires* of any server it connects to (the set it sends
@@ -281,9 +279,9 @@ impl Report {
                 "failures": fail,
             },
             "exit_code": self.exit_code(strict),
-            "octoscode_version": env!("CARGO_PKG_VERSION"),
-            "octos_core_schema_version": UI_PROTOCOL_SCHEMA_VERSION,
-            "octos_protocol": UI_PROTOCOL_V1,
+            "ra_tui_version": env!("CARGO_PKG_VERSION"),
+            "ra_core_schema_version": UI_PROTOCOL_SCHEMA_VERSION,
+            "ui_protocol": UI_PROTOCOL_V1,
             "platform": format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
         })
     }
@@ -298,7 +296,6 @@ pub fn run(args: DoctorArgs) -> Result<i32> {
     checks.extend(config_checks(&args));
     checks.extend(profiles_checks(&args));
     checks.extend(backend_checks(&args));
-    checks.extend(network_checks());
 
     let report = Report::new(checks);
     if args.json {
@@ -327,37 +324,46 @@ fn binary_checks(_args: &DoctorArgs) -> Vec<Check> {
         Some(exe) => checks.push(
             Check::pass(
                 CAT_BINARY,
-                "octoscode binary",
+                "ra-tui binary",
                 format!("v{}", env!("CARGO_PKG_VERSION")),
             )
             .with_value(exe.display().to_string()),
         ),
         None => checks.push(Check::warn(
             CAT_BINARY,
-            "octoscode binary",
+            "ra-tui binary",
             "could not resolve current executable",
-            "ensure octoscode is on a real filesystem path",
+            "ensure ra-tui is on a real filesystem path",
         )),
     }
-
-    // Install method.
-    let method = install_method::detect();
-    checks.push(Check::pass(CAT_BINARY, "install method", method.label()).with_value(method.id()));
 
     // PATH resolvability + shadowing installs. We track `$PATH` resolutions
     // separately from extra known-install prefixes so "on PATH" reflects what
     // can actually be run *by name*, not merely what exists on disk.
-    let located = locate_octoscode();
-    checks.push(on_path_check(&located, current_exe.as_deref(), &method));
-    checks.push(shadow_check(&located, &method));
+    let located = locate_ra_tui();
+    checks.push(on_path_check(&located, current_exe.as_deref()));
+    checks.push(shadow_check(&located));
 
-    // Newer release (best-effort; network failure → warn, not fail).
-    checks.push(release_check(&method));
+    // Update channel: informational, local-only. This fork ships from the ra
+    // repository, so there is no upstream release to query and the fix for
+    // "out of date" is always a source rebuild.
+    checks.push(build_source_check());
 
     checks
 }
 
-/// `octoscode` binaries discovered on the host, with `$PATH` hits tracked
+/// The build-source check: where updates come from for this build. Never
+/// touches the network and never mutates anything.
+fn build_source_check() -> Check {
+    Check::pass(
+        CAT_BINARY,
+        "update channel",
+        "ships from the ra repository — update by rebuilding from source \
+         (`cargo build --release --bin ra-tui`)",
+    )
+}
+
+/// `ra-tui` binaries discovered on the host, with `$PATH` hits tracked
 /// separately from extra known-install prefixes (cargo bin, brew, …) that may
 /// not be on `$PATH`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -377,49 +383,28 @@ impl LocatedBinaries {
     }
 }
 
-/// Whether `octoscode` is runnable by bare name (`$PATH`-resolvable). When the
+/// Whether `ra-tui` is runnable by bare name (`$PATH`-resolvable). When the
 /// running executable's directory is not on `$PATH`, warn that it was launched
 /// by path and won't be found by name — folding the cargo-bin/brew prefixes in
 /// would mask exactly this case.
-fn on_path_check(
-    located: &LocatedBinaries,
-    current_exe: Option<&Path>,
-    method: &InstallMethod,
-) -> Check {
+fn on_path_check(located: &LocatedBinaries, current_exe: Option<&Path>) -> Check {
     if let Some(first) = located.on_path.first() {
-        return Check::pass(CAT_BINARY, "octoscode on PATH", "resolvable by name")
+        return Check::pass(CAT_BINARY, "ra-tui on PATH", "resolvable by name")
             .with_value(first.display().to_string());
-    }
-    // npm global (esp. Windows): the launcher shim (octoscode.ps1/.cmd) IS on
-    // PATH and runnable by name, but `current_exe()` resolves to the real binary
-    // deep under `node_modules/.bin_real`, whose dir is NOT on PATH and whose
-    // basename isn't `octoscode[.exe]` — so the PATH scan finds nothing. Don't
-    // false-warn, and never suggest adding an internal node_modules dir. (#189)
-    if matches!(method, InstallMethod::Npm) {
-        return Check::pass(
-            CAT_BINARY,
-            "octoscode on PATH",
-            "runnable by name via the npm global shim",
-        )
-        .with_value(
-            current_exe
-                .map(|e| e.display().to_string())
-                .unwrap_or_default(),
-        );
     }
     // Not on $PATH at all. If we know where this exe lives, point at its dir.
     match current_exe.and_then(|e| e.parent()) {
         Some(dir) => Check::warn(
             CAT_BINARY,
-            "octoscode on PATH",
-            "octoscode isn't on $PATH — you ran it by path",
+            "ra-tui on PATH",
+            "ra-tui isn't on $PATH — you ran it by path",
             format!("add {} to PATH to run by name", dir.display()),
         )
         .with_value(dir.display().to_string()),
         None => Check::warn(
             CAT_BINARY,
-            "octoscode on PATH",
-            "octoscode not found on $PATH",
+            "ra-tui on PATH",
+            "ra-tui not found on $PATH",
             "add the install dir to your PATH",
         ),
     }
@@ -428,22 +413,14 @@ fn on_path_check(
 /// Build the shadowing-install check from the located binaries. Shadowing
 /// considers both `$PATH` hits and off-PATH known-install locations (>1 total
 /// is the Claude Code #22415 failure mode), labelling which is which.
-fn shadow_check(located: &LocatedBinaries, method: &InstallMethod) -> Check {
+fn shadow_check(located: &LocatedBinaries) -> Check {
     let all = located.all();
     match all.len() {
-        // npm puts the real binary under node_modules/.bin_real (off PATH, and
-        // not in the unix known-dir list), so the locator finds nothing — but
-        // that's exactly one healthy install, not a missing one. (#189)
-        0 if matches!(method, InstallMethod::Npm) => Check::pass(
-            CAT_BINARY,
-            "no shadowing installs",
-            "exactly one (npm global)",
-        ),
         0 => Check::warn(
             CAT_BINARY,
             "no shadowing installs",
-            "octoscode not found on $PATH or known install dirs",
-            "install octoscode or add its dir to your PATH",
+            "ra-tui not found on $PATH or known install dirs",
+            "build ra-tui or add its dir to your PATH",
         ),
         1 => {
             let only = &all[0];
@@ -472,7 +449,7 @@ fn shadow_check(located: &LocatedBinaries, method: &InstallMethod) -> Check {
             Check::warn(
                 CAT_BINARY,
                 "no shadowing installs",
-                format!("{n} octoscode binaries found; first wins: {}", labelled[0]),
+                format!("{n} ra-tui binaries found; first wins: {}", labelled[0]),
                 format!("remove the extras: {}", labelled[1..].join(", ")),
             )
             .with_value(labelled.join(" | "))
@@ -480,73 +457,32 @@ fn shadow_check(located: &LocatedBinaries, method: &InstallMethod) -> Check {
     }
 }
 
-fn release_check(method: &InstallMethod) -> Check {
-    match github::latest_release(false) {
-        Ok(None) => Check::pass(
-            CAT_BINARY,
-            "up to date",
-            format!("v{} (no published releases yet)", env!("CARGO_PKG_VERSION")),
-        ),
-        Ok(Some(latest)) => {
-            let current = env!("CARGO_PKG_VERSION");
-            let current_v = super::update::parse_version(current);
-            let latest_v = super::update::parse_version(&latest.tag);
-            match (current_v, latest_v) {
-                (Some(c), Some(l)) if super::update::is_newer(&c, &l) => {
-                    let fix = method
-                        .upgrade_command()
-                        .map(|cmd| cmd.to_string())
-                        .unwrap_or_else(|| "run `octoscode update`".to_string());
-                    Check::warn(
-                        CAT_BINARY,
-                        "up to date",
-                        format!("newer release available: {c} -> {l}"),
-                        fix,
-                    )
-                }
-                (Some(c), Some(l)) => {
-                    Check::pass(CAT_BINARY, "up to date", format!("v{c} is current"))
-                        .with_value(l.to_string())
-                }
-                _ => Check::warn(
-                    CAT_BINARY,
-                    "up to date",
-                    format!("could not parse versions (latest tag {})", latest.tag),
-                    "run `octoscode update --check`",
-                ),
-            }
-        }
-        Err(err) => Check::warn(
-            CAT_BINARY,
-            "up to date",
-            format!("could not check GitHub for a newer release: {err}"),
-            "run `octoscode update --check` when online",
-        ),
-    }
-}
-
-/// Enumerate every `octoscode` on `$PATH` plus known install prefixes,
+/// Enumerate every `ra-tui` on `$PATH` plus known install prefixes,
 /// de-duplicated by canonical path, preserving PATH precedence (first wins).
 /// `$PATH` resolutions are tracked separately from extra known-install
 /// prefixes so the "on PATH" check reflects bare-name runnability, not mere
 /// on-disk presence (a cargo-bin install whose dir isn't on `$PATH` would
 /// otherwise be mis-reported as runnable by name).
-pub fn locate_octoscode() -> LocatedBinaries {
+pub fn locate_ra_tui() -> LocatedBinaries {
     let exe_name = if cfg!(windows) {
-        "octoscode.exe"
+        "ra-tui.exe"
     } else {
-        "octoscode"
+        "ra-tui"
     };
     locate_binary(exe_name, &default_install_dirs())
 }
 
 /// `ra` (the backend) discovered across `$PATH` + the known install prefixes,
-/// plus `~/.ra/bin` where octoscode's auto-provisioner drops it. Same
-/// PATH-vs-off-PATH bookkeeping as [`locate_octoscode`].
-fn locate_octos() -> LocatedBinaries {
+/// plus `$RA_PREFIX`/`~/.ra/bin` and a legacy `$OCTOS_PREFIX`/`~/.ra/bin`.
+/// Same PATH-vs-off-PATH bookkeeping as [`locate_ra_tui`].
+fn locate_backend() -> LocatedBinaries {
     let exe_name = if cfg!(windows) { "ra.exe" } else { "ra" };
     let mut dirs = default_install_dirs();
+    if let Some(prefix) = crate::env::env_compat("RA_PREFIX", "OCTOS_PREFIX") {
+        dirs.push(PathBuf::from(prefix));
+    }
     if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(PathBuf::from(&home).join(".ra").join("bin"));
         dirs.push(PathBuf::from(&home).join(".ra").join("bin"));
     }
     locate_binary(exe_name, &dirs)
@@ -603,14 +539,15 @@ fn locate_binary(exe_name: &str, extra_dirs: &[PathBuf]) -> LocatedBinaries {
 }
 
 // ---------------------------------------------------------------------------
-// Installations (every octoscode + octos on the machine, with versions)
+// Installations (every ra-tui + ra on the machine, with versions)
 // ---------------------------------------------------------------------------
 
 const CAT_INSTALLS: &str = "Installations";
 
-/// Best-effort install-method guess from a binary's on-disk path, so the user
-/// knows which package manager put each copy there when cleaning up duplicates.
-fn install_method_label(path: &Path) -> &'static str {
+/// Best-effort install-location guess from a binary's on-disk path, so the
+/// user knows which package manager (if any) put each copy there when cleaning
+/// up duplicates.
+fn install_location_label(path: &Path) -> &'static str {
     let p = path.to_string_lossy();
     if p.contains("/.cargo/bin/") {
         "cargo"
@@ -619,7 +556,9 @@ fn install_method_label(path: &Path) -> &'static str {
     } else if p.contains("/homebrew/") || p.contains("/Cellar/") || p.starts_with("/usr/local/") {
         "brew"
     } else if p.contains("/.ra/bin/") {
-        "octoscode auto-install"
+        "ra install dir"
+    } else if p.contains("/.ra/bin/") {
+        "legacy ra install"
     } else if p.contains("/.local/bin/") {
         "shell installer"
     } else if p.starts_with("/usr/bin/") || p.starts_with("/bin/") {
@@ -650,7 +589,7 @@ fn install_rows(located: &LocatedBinaries) -> Vec<String> {
         .all()
         .iter()
         .map(|p| {
-            let method = install_method_label(p);
+            let method = install_location_label(p);
             let on = if located.on_path.contains(p) {
                 "on PATH"
             } else {
@@ -692,25 +631,25 @@ fn installs_check(display_name: &str, located: &LocatedBinaries) -> Check {
     }
 }
 
-/// #5: enumerate every octoscode AND octos on the machine (across `$PATH`,
-/// Homebrew, cargo, the shell installer's `~/.local/bin`, and octoscode's
-/// `~/.ra/bin`), showing each copy's version + install method, plus the
-/// ra version this client needs — so duplicate/mismatched installs are
+/// #5: enumerate every ra-tui AND ra server on the machine (across `$PATH`,
+/// Homebrew, cargo, the shell installer's `~/.local/bin`, and the ra /
+/// legacy-ra install dirs), showing each copy's version + location, plus
+/// the server version this client needs — so duplicate/mismatched installs are
 /// visible at a glance.
 fn installations_checks() -> Vec<Check> {
     vec![
         Check::pass(
             CAT_INSTALLS,
-            "octoscode needs octos",
+            "ra-tui needs ra",
             format!(
-                ">= {} (this is octoscode v{}; auto-install bundle {})",
+                ">= {} (this is ra-tui v{}; target server release {})",
                 crate::backend_ensure::MIN_OCTOS_VERSION,
                 env!("CARGO_PKG_VERSION"),
                 crate::backend_ensure::REQUIRED_OCTOS_RELEASE,
             ),
         ),
-        installs_check("octoscode", &locate_octoscode()),
-        installs_check("ra", &locate_octos()),
+        installs_check("ra-tui", &locate_ra_tui()),
+        installs_check("ra", &locate_backend()),
     ]
 }
 
@@ -976,7 +915,7 @@ fn profiles_checks_in(data_dir: &Path) -> Vec<Check> {
             "profiles",
             "no profiles found",
             format!(
-                "run onboarding (launch octoscode in a folder) — expected under {}",
+                "run onboarding (launch ra-tui in a folder) — expected under {}",
                 profiles_dir.display()
             ),
         ));
@@ -1540,31 +1479,6 @@ pub fn compare_against_server(server: &UiProtocolCapabilities) -> Check {
 }
 
 // ---------------------------------------------------------------------------
-// Network
-// ---------------------------------------------------------------------------
-
-const CAT_NETWORK: &str = "Network";
-
-fn network_checks() -> Vec<Check> {
-    let check = match github::reachability() {
-        Reachability::Ok => Check::pass(CAT_NETWORK, "GitHub reachable", "api.github.com OK"),
-        Reachability::RateLimited => Check::warn(
-            CAT_NETWORK,
-            "GitHub reachable",
-            "api.github.com rate-limited (HTTP 403)",
-            "set OCTOSCODE_GITHUB_TOKEN to raise the rate limit",
-        ),
-        Reachability::Unreachable(err) => Check::warn(
-            CAT_NETWORK,
-            "GitHub reachable",
-            format!("api.github.com unreachable: {err}"),
-            "check your network/proxy; update checks will be unavailable",
-        ),
-    };
-    vec![check]
-}
-
-// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
@@ -1870,35 +1784,36 @@ mod tests {
         let report = Report::new(vec![Check::pass("c", "n", "d")]);
         let json = report.to_json(false);
         assert_eq!(json["summary"]["passed"], 1);
-        assert_eq!(json["octoscode_version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(
-            json["octos_core_schema_version"],
-            UI_PROTOCOL_SCHEMA_VERSION
-        );
+        assert_eq!(json["ra_tui_version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(json["ra_core_schema_version"], UI_PROTOCOL_SCHEMA_VERSION);
         assert!(json["checks"].is_array());
     }
 
     #[test]
-    fn install_method_label_infers_from_path() {
+    fn install_location_label_infers_from_path() {
         assert_eq!(
-            install_method_label(Path::new("/home/u/.cargo/bin/ra")),
+            install_location_label(Path::new("/home/u/.cargo/bin/ra-tui")),
             "cargo"
         );
         assert_eq!(
-            install_method_label(Path::new("/opt/homebrew/bin/octoscode")),
+            install_location_label(Path::new("/opt/homebrew/bin/ra-tui")),
             "brew"
         );
         assert_eq!(
-            install_method_label(Path::new("/home/u/.local/bin/octoscode")),
+            install_location_label(Path::new("/home/u/.local/bin/ra-tui")),
             "shell installer"
         );
         assert_eq!(
-            install_method_label(Path::new("/home/u/.ra/bin/ra")),
-            "octoscode auto-install"
+            install_location_label(Path::new("/home/u/.ra/bin/ra")),
+            "ra install dir"
         );
-        assert_eq!(install_method_label(Path::new("/usr/bin/ra")), "system");
         assert_eq!(
-            install_method_label(Path::new(
+            install_location_label(Path::new("/home/u/.ra/bin/ra")),
+            "legacy ra install"
+        );
+        assert_eq!(install_location_label(Path::new("/usr/bin/ra")), "system");
+        assert_eq!(
+            install_location_label(Path::new(
                 "/x/node_modules/@octos-org/octoscode/.bin_real/octoscode"
             )),
             "npm"
@@ -1940,97 +1855,66 @@ mod tests {
         let checks = installations_checks();
         let needs = checks
             .iter()
-            .find(|c| c.name == "octoscode needs octos")
-            .expect("required-ra row present");
+            .find(|c| c.name == "ra-tui needs ra")
+            .expect("required-server row present");
         assert!(
             needs
                 .detail
                 .contains(crate::backend_ensure::MIN_OCTOS_VERSION)
         );
         // Both binaries get an install-summary row.
-        assert!(checks.iter().any(|c| c.name == "octoscode installs"));
+        assert!(checks.iter().any(|c| c.name == "ra-tui installs"));
         assert!(checks.iter().any(|c| c.name == "ra installs"));
     }
 
     #[test]
     fn shadow_check_passes_for_single_and_warns_for_multiple() {
-        let one = shadow_check(
-            &LocatedBinaries {
-                on_path: vec![PathBuf::from("/usr/local/bin/octoscode")],
-                off_path: vec![],
-            },
-            &InstallMethod::Homebrew,
-        );
+        let one = shadow_check(&LocatedBinaries {
+            on_path: vec![PathBuf::from("/usr/local/bin/ra-tui")],
+            off_path: vec![],
+        });
         assert_eq!(one.status, CheckStatus::Pass);
         assert!(one.detail.contains("on PATH"));
 
-        let two = shadow_check(
-            &LocatedBinaries {
-                on_path: vec![PathBuf::from("/opt/homebrew/bin/octoscode")],
-                off_path: vec![PathBuf::from("/home/u/.cargo/bin/octoscode")],
-            },
-            &InstallMethod::Homebrew,
-        );
+        let two = shadow_check(&LocatedBinaries {
+            on_path: vec![PathBuf::from("/opt/homebrew/bin/ra-tui")],
+            off_path: vec![PathBuf::from("/home/u/.cargo/bin/ra-tui")],
+        });
         assert_eq!(two.status, CheckStatus::Warn);
-        assert!(two.detail.contains("2 octoscode binaries"));
+        assert!(two.detail.contains("2 ra-tui binaries"));
         let fix = two.fix.unwrap();
-        assert!(fix.contains(".cargo/bin/octoscode"));
+        assert!(fix.contains(".cargo/bin/ra-tui"));
         // The two locations are labelled by where they were found.
         assert!(fix.contains("[known-dir]") || two.detail.contains("[PATH]"));
     }
 
     #[test]
     fn shadow_check_warns_when_nothing_found() {
-        let none = shadow_check(&LocatedBinaries::default(), &InstallMethod::Homebrew);
+        let none = shadow_check(&LocatedBinaries::default());
         assert_eq!(none.status, CheckStatus::Warn);
-    }
-
-    #[test]
-    fn npm_install_does_not_false_warn_on_path_or_shadow() {
-        // #189: npm-global (esp. Windows) — the locator finds no `octoscode`
-        // on PATH (the shim is .ps1/.cmd; the real .exe is under
-        // node_modules/.bin_real). Both checks must PASS, not warn.
-        let located = LocatedBinaries::default();
-        let exe = PathBuf::from(
-            "C:/Users/u/AppData/Roaming/npm/node_modules/@octos-org/octoscode/node_modules/.bin_real/octoscode.exe",
-        );
-        let on_path = on_path_check(&located, Some(exe.as_path()), &InstallMethod::Npm);
-        assert_eq!(on_path.status, CheckStatus::Pass);
-        assert!(
-            on_path.fix.is_none(),
-            "npm on-PATH check must not suggest a fix"
-        );
-
-        let shadow = shadow_check(&located, &InstallMethod::Npm);
-        assert_eq!(shadow.status, CheckStatus::Pass);
-        assert!(shadow.detail.contains("npm"));
     }
 
     #[test]
     fn on_path_check_passes_when_resolvable_by_name() {
         let located = LocatedBinaries {
-            on_path: vec![PathBuf::from("/usr/local/bin/octoscode")],
+            on_path: vec![PathBuf::from("/usr/local/bin/ra-tui")],
             off_path: vec![],
         };
-        let check = on_path_check(
-            &located,
-            Some(Path::new("/usr/local/bin/octoscode")),
-            &InstallMethod::Homebrew,
-        );
+        let check = on_path_check(&located, Some(Path::new("/usr/local/bin/ra-tui")));
         assert_eq!(check.status, CheckStatus::Pass);
     }
 
     #[test]
     fn on_path_check_warns_when_ran_by_abs_path_and_dir_not_on_path() {
-        // Finding #1: running `~/.cargo/bin/octoscode doctor` while
+        // Finding #1: running `~/.cargo/bin/ra-tui doctor` while
         // `~/.cargo/bin` is NOT on $PATH must WARN that it isn't runnable by
         // name — not pass because the binary merely exists in a known dir.
         let located = LocatedBinaries {
             on_path: vec![],
-            off_path: vec![PathBuf::from("/home/u/.cargo/bin/octoscode")],
+            off_path: vec![PathBuf::from("/home/u/.cargo/bin/ra-tui")],
         };
-        let exe = PathBuf::from("/home/u/.cargo/bin/octoscode");
-        let check = on_path_check(&located, Some(&exe), &InstallMethod::CargoGit);
+        let exe = PathBuf::from("/home/u/.cargo/bin/ra-tui");
+        let check = on_path_check(&located, Some(&exe));
         assert_eq!(check.status, CheckStatus::Warn);
         assert!(check.detail.contains("isn't on $PATH"));
         // The fix points at the running exe's directory.
