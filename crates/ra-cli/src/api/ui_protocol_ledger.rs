@@ -6047,14 +6047,14 @@ mod tests {
         assert!(m.bytes_in_memory > 0);
     }
 
-    /// Manual soak harness — gated behind `OCTOS_LEDGER_SOAK=1` and
+    /// Manual soak harness — gated behind `RA_LEDGER_SOAK=1` and
     /// `--ignored` so it doesn't run in CI by default. Spam 10K events
     /// across 10 sessions, restart from disk, verify recovery within
     /// bounds. Reports peak memory + disk usage to stdout.
     #[test]
-    #[ignore = "manual soak; enable with OCTOS_LEDGER_SOAK=1 and --nocapture"]
+    #[ignore = "manual soak; enable with RA_LEDGER_SOAK=1 and --nocapture"]
     fn ledger_soak_10k_events_10_sessions() {
-        if std::env::var("OCTOS_LEDGER_SOAK").as_deref() != Ok("1") {
+        if ra_core::brand::env_compat_str("LEDGER_SOAK").as_deref() != Some("1") {
             return;
         }
         let temp = tempfile::tempdir().expect("tempdir");

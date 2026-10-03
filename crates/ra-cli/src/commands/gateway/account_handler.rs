@@ -30,7 +30,7 @@ pub async fn handle_account_command(
     let store = match profile_store {
         Some(s) => s,
         None => {
-            return "Account management is not available (no ra-home configured).".to_string();
+            return "Account management is not available (no ra home configured).".to_string();
         }
     };
 

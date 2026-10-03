@@ -23,6 +23,26 @@ fn should_enable_console_logs(has_rolling_file_logs: bool, interactive: bool) ->
     !has_rolling_file_logs || interactive
 }
 
+/// Shell-completion request variable (new name) — see [`complete_env_var`].
+const COMPLETE_VAR: &str = "RA_COMPLETE";
+/// Pre-rename shell-completion request variable. Kept as a literal because
+/// `clap_complete` is handed the *name*, not a value;
+/// [`complete_var_names_follow_the_brand_prefixes`] pins both spellings to the
+/// brand prefixes.
+const LEGACY_COMPLETE_VAR: &str = "OCTOS_COMPLETE";
+
+/// Name of the shell-completion request variable: `RA_COMPLETE`, falling back to
+/// the legacy `OCTOS_COMPLETE` when only that one is set (the new name wins when
+/// both are). `clap_complete` reads the variable itself and wants a
+/// `&'static str`, so the two candidate names are consts.
+fn complete_env_var() -> &'static str {
+    if std::env::var_os(COMPLETE_VAR).is_some_and(|value| !value.is_empty()) {
+        COMPLETE_VAR
+    } else {
+        LEGACY_COMPLETE_VAR
+    }
+}
+
 /// Write a panic report to any `io::Write` without panicking on BrokenPipe.
 ///
 /// Extracted as a standalone function so unit tests can inject writers that
@@ -83,18 +103,19 @@ fn run_cli() -> Result<()> {
     // hooks are installed. Integration tests use this to drive the REAL
     // production panic-hook path under a broken-pipe stderr and assert no
     // second panic / no SIGABRT. Never set in normal operation.
-    if std::env::var("OCTOS_TEST_PANIC_AFTER_BOOT").as_deref() == Ok("1") {
+    if ra_core::brand::env_compat_str("TEST_PANIC_AFTER_BOOT").as_deref() == Some("1") {
         panic!("__test_panic__: intentional panic for production hook verification");
     }
 
     // Answer shell completion requests before argument parsing (#2413): with
-    // `OCTOS_COMPLETE=<shell>` set the shell sources the registration script
-    // and calls back into this binary on every tab; without it this is a
-    // no-op. The var is namespaced — a generic `COMPLETE` exported for some
-    // other tool must not brick every ra invocation. Must precede parsing —
-    // mid-edit arguments don't parse cleanly.
+    // `RA_COMPLETE=<shell>` set the shell sources the registration script and
+    // calls back into this binary on every tab; without it this is a no-op. The
+    // legacy `OCTOS_COMPLETE` keeps shells registered before the rename working
+    // (new name wins when both are set). The var is namespaced — a generic
+    // `COMPLETE` exported for some other tool must not brick every ra
+    // invocation. Must precede parsing — mid-edit arguments don't parse cleanly.
     clap_complete::CompleteEnv::with_factory(<Args as clap::CommandFactory>::command)
-        .var("OCTOS_COMPLETE")
+        .var(complete_env_var())
         .complete();
 
     // Parse into ArgMatches first (this preserves clap's --help/--version/error
@@ -152,7 +173,7 @@ fn init_tracing(
         .add_directive("html5ever=error".parse().unwrap());
 
     // Check if JSON format is requested via environment
-    let json_logs = std::env::var("OCTOS_LOG_JSON").is_ok();
+    let json_logs = ra_core::brand::env_compat_str("LOG_JSON").is_some();
     let has_rolling_file_logs = log_dir.is_some();
     let console_enabled =
         should_enable_console_logs(has_rolling_file_logs, is_interactive_terminal());
@@ -296,5 +317,19 @@ mod tests {
     #[test]
     fn interactive_without_file_logs_gets_console() {
         assert!(should_enable_console_logs(false, true));
+    }
+
+    /// The completion variable names must stay tied to the brand prefixes
+    /// (they are literals only because `clap_complete` wants `&'static str`).
+    #[test]
+    fn complete_var_names_follow_the_brand_prefixes() {
+        assert_eq!(
+            COMPLETE_VAR,
+            format!("{}COMPLETE", ra_core::brand::ENV_PREFIX)
+        );
+        assert_eq!(
+            LEGACY_COMPLETE_VAR,
+            format!("{}COMPLETE", ra_core::brand::LEGACY_ENV_PREFIX)
+        );
     }
 }

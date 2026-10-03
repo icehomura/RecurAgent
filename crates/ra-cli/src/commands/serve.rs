@@ -54,13 +54,13 @@ const SESSION_CACHE_IDLE_TTL: std::time::Duration = std::time::Duration::from_se
 
 /// Idle lifetime of a cached per-session runtime.
 ///
-/// `OCTOS_SESSION_CACHE_IDLE_TTL_SECS` overrides it (minimum 1 s; a malformed
+/// `RA_SESSION_CACHE_IDLE_TTL_SECS` (legacy `OCTOS_SESSION_CACHE_IDLE_TTL_SECS`)
+/// overrides it (minimum 1 s; a malformed
 /// or zero value keeps the default). Rebuilding an evicted runtime is correct
 /// but slow for a long session, so an operator on a big box may want it
 /// longer; tests want it short.
 fn session_cache_idle_ttl() -> std::time::Duration {
-    std::env::var("OCTOS_SESSION_CACHE_IDLE_TTL_SECS")
-        .ok()
+    ra_core::brand::env_compat_str("SESSION_CACHE_IDLE_TTL_SECS")
         .and_then(|raw| raw.trim().parse::<u64>().ok())
         .filter(|secs| *secs > 0)
         .map_or(SESSION_CACHE_IDLE_TTL, std::time::Duration::from_secs)
@@ -375,14 +375,14 @@ pub struct ServeCommand {
     #[arg(short, long)]
     pub cwd: Option<PathBuf>,
 
-    /// Data directory for episodes, memory, sessions (defaults to $OCTOS_HOME or ~/.ra).
+    /// Data directory for episodes, memory, sessions (defaults to $RA_HOME or ~/.ra).
     #[arg(long)]
     pub data_dir: Option<PathBuf>,
 
     /// Per-instance runtime data dir (redb stores, sessions, goals, serve lock,
     /// per-profile data). When set, the profile REGISTRY + model catalog still
     /// resolve from the shared state home (the normal
-    /// `--data-dir`/`OCTOS_HOME`/`~/.ra`), so many stdio instances share one
+    /// `--data-dir`/`RA_HOME`/`~/.ra`), so many stdio instances share one
     /// config/profile while each owns private runtime state. Unset ⇒ identical
     /// to today (runtime == state home).
     ///
@@ -405,7 +405,8 @@ pub struct ServeCommand {
     pub model: Option<String>,
 
     /// Auth token for API access (overrides config). Visible in the process
-    /// list (`ps`) — prefer the OCTOS_AUTH_TOKEN env var or the config file.
+    /// list (`ps`) — prefer the RA_AUTH_TOKEN env var (legacy
+    /// OCTOS_AUTH_TOKEN) or the config file.
     #[arg(long)]
     pub auth_token: Option<String>,
 
@@ -423,7 +424,8 @@ pub struct ServeCommand {
     /// local single-user install. OFF by default. Only honoured for direct
     /// loopback requests on a Local-mode host with profile/user stores, and
     /// never when the request carries reverse-proxy headers. Also settable
-    /// via `OCTOS_SOLO_LOGIN=1`. In Local mode profiles run in this process;
+    /// via `RA_SOLO_LOGIN=1` (legacy `OCTOS_SOLO_LOGIN`). In Local mode profiles
+    /// run in this process;
     /// per-profile gateways are not auto-started. Do NOT set on a host fronted by a
     /// reverse proxy (e.g. the Caddy-fronted fleet) — see `api::solo_auth`.
     #[arg(long)]
@@ -431,18 +433,20 @@ pub struct ServeCommand {
 
     /// Default every session to the dangerous FULL-ACCESS permission
     /// profile: sandbox disabled, network allowed, approvals never —
-    /// ra' analogue of Claude Code's `--dangerously-skip-permissions`.
+    /// ra's analogue of Claude Code's `--dangerously-skip-permissions`.
     /// Requires `--solo` (the same local-single-user keystone that gates
     /// selecting Full Access from the `/permissions` menu). A session's
     /// explicit `/permissions` choice still overrides the default. Also
-    /// settable via `OCTOS_DANGER_FULL_ACCESS=1`.
+    /// settable via `RA_DANGER_FULL_ACCESS=1` (legacy
+    /// `OCTOS_DANGER_FULL_ACCESS`).
     #[arg(long)]
     pub danger_full_access: bool,
 
     /// Opt OUT of the network-on default. By default a fresh Local session with
     /// no explicit `/permissions` choice runs Workspace-Write with network
     /// ALLOWED (filesystem still sandboxed) so `npm install` / git / fetch work
-    /// out of the box. Pass `--no-network` (or `OCTOS_NO_NETWORK=1`) to revert
+    /// out of the box. Pass `--no-network` (or `RA_NO_NETWORK=1`, legacy
+    /// `OCTOS_NO_NETWORK`) to revert
     /// the default to network DENIED. Cloud/tenant deployments always default to
     /// network-denied regardless. An explicit `/permissions` choice still wins.
     #[arg(long)]
@@ -518,9 +522,10 @@ enum AuthTokenSource {
 }
 
 /// Resolve the operator-supplied auth token with the documented precedence
-/// `--auth-token` > `OCTOS_AUTH_TOKEN` > config `auth_token` (an empty
-/// config token counts as absent). `None` means no operator source produced
-/// a token — the caller then auto-generates one for non-loopback binds.
+/// `--auth-token` > `RA_AUTH_TOKEN` (legacy `OCTOS_AUTH_TOKEN`) > config
+/// `auth_token` (an empty config token counts as absent). `None` means no
+/// operator source produced a token — the caller then auto-generates one for
+/// non-loopback binds.
 fn resolve_auth_token(
     argv: Option<String>,
     env: Option<String>,
@@ -819,7 +824,7 @@ fn acquire_serve_data_dir_lock(data_dir: &std::path::Path) -> Result<ServeDataDi
                 if now >= deadline {
                     return Err(eyre::eyre!(
                         "{DATA_DIR_LOCKED_MARKER}: another ra server is already running for \
-                         this data directory ({}). Close the other octoscode (or `octos serve`), \
+                         this data directory ({}). Close the other octoscode (or `ra serve`), \
                          or start this one against a different --data-dir.",
                         data_dir.display()
                     ));
@@ -864,7 +869,7 @@ impl ServeCommand {
 
         // Multi-instance stdio split. `state_home` is the SHARED, config-like
         // root that holds the profile REGISTRY and the model catalog — always
-        // the normal resolution (`--data-dir`/`OCTOS_HOME`/`~/.ra`), never
+        // the normal resolution (`--data-dir`/`RA_HOME`/`~/.ra`), never
         // the per-instance dir. The `data_dir` used from here on is the
         // per-instance RUNTIME root (redb stores, sessions, goals, serve lock,
         // per-profile data): the private per-instance dir when set, else the
@@ -873,7 +878,9 @@ impl ServeCommand {
         //
         // The per-instance dir comes from `--instance-data-dir` (flag wins) or
         // `RA_INSTANCE_DATA_DIR` (empty ⇒ unset). Env is read here because
-        // the workspace `clap` build omits the `env` feature.
+        // the workspace `clap` build omits the `env` feature. The variable name
+        // is a cross-repo marker the client emits verbatim, so it stays a
+        // literal read (no `RA_` spelling exists).
         let state_home = data_dir.clone();
         let instance_data_dir = self.instance_data_dir.clone().or_else(|| {
             std::env::var("RA_INSTANCE_DATA_DIR")
@@ -952,7 +959,7 @@ impl ServeCommand {
                 %error,
                 "failed to configure durable agent supervisor store; continuing with in-process supervision only"
             );
-        } else if self.solo && std::env::var("OCTOS_SOLO_RESUME_LOOPS").ok().as_deref() != Some("1")
+        } else if self.solo && ra_core::brand::env_compat_str("SOLO_RESUME_LOOPS").as_deref() != Some("1")
         {
             // Solo-boot loop safety: restored loops must not silently resume
             // firing model turns on a single-operator box. Park them paused;
@@ -971,7 +978,7 @@ impl ServeCommand {
             // resumes autonomous model turns nobody asked this process
             // for. Park paused; `/goal resume` re-arms,
             // OCTOS_SOLO_RESUME_GOALS=1 opts out.
-            if std::env::var("OCTOS_SOLO_RESUME_GOALS").ok().as_deref() != Some("1") {
+            if ra_core::brand::env_compat_str("SOLO_RESUME_GOALS").as_deref() != Some("1") {
                 // #1973 fix C — resolve each parked goal's PROFILE data dir so
                 // the park also flips the durable per-goal SQLite ledger row to
                 // `paused` (it used to keep saying `active` forever). A
@@ -1095,7 +1102,9 @@ impl ServeCommand {
             // read from /proc/<pid>/environ.
             for name in [
                 crate::api::host_managed::HOST_TOKEN_ENV,
+                crate::api::host_managed::LEGACY_HOST_TOKEN_ENV,
                 crate::api::host_managed::EXTERNAL_TOKEN_ENV,
+                crate::api::host_managed::LEGACY_EXTERNAL_TOKEN_ENV,
             ] {
                 eyre::ensure!(
                     std::env::var_os(name).is_none(),
@@ -1120,7 +1129,7 @@ impl ServeCommand {
             Some(host_token.clone())
         } else if let Some((token, source)) = resolve_auth_token(
             self.auth_token.clone(),
-            std::env::var("OCTOS_AUTH_TOKEN").ok(),
+            ra_core::brand::env_compat_str("AUTH_TOKEN"),
             config.auth_token.as_deref(),
         ) {
             if source == AuthTokenSource::Argv {
@@ -1128,7 +1137,7 @@ impl ServeCommand {
                 // steer operators to the env var or the config file.
                 tracing::warn!(
                     "--auth-token exposes the bearer token in the process list (ps); \
-                     prefer the OCTOS_AUTH_TOKEN env var or the config file"
+                     prefer the RA_AUTH_TOKEN env var (legacy OCTOS_AUTH_TOKEN) or the config file"
                 );
             }
             Some(token)
@@ -1581,7 +1590,7 @@ impl ServeCommand {
         // `OCTOS_SOLO_LOGIN`) but also runs its profiles in this process.
         let solo_login_enabled_flag = !self.host_managed
             && (self.solo
-                || std::env::var("OCTOS_SOLO_LOGIN")
+                || ra_core::brand::env_compat_str("SOLO_LOGIN")
                     .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                     .unwrap_or(false));
         let solo_in_process = (solo_login_enabled_flag || self.host_managed)
@@ -1735,7 +1744,7 @@ impl ServeCommand {
         // every `/api/swarm/*` endpoint returns 503 (legacy behaviour).
         // `stdio` pairs with `--swarm-backend-cmd <path>`; `http` pairs
         // with `--swarm-backend-url <url>`.
-        let harness_sink_init = std::env::var("OCTOS_HARNESS_EVENT_SINK").ok();
+        let harness_sink_init = ra_core::brand::env_compat_str("HARNESS_EVENT_SINK");
         // #713: pass `config.tool_policy` so the swarm dispatch policy
         // mirrors the operator's native tool-policy denylist. Cloned
         // here because `config` is borrowed for the rest of init.
@@ -1766,11 +1775,11 @@ impl ServeCommand {
         );
 
         let dangerous_default_permissions_flag = self.danger_full_access
-            || std::env::var("OCTOS_DANGER_FULL_ACCESS")
+            || ra_core::brand::env_compat_str("DANGER_FULL_ACCESS")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
         let default_network_denied_flag = self.no_network
-            || std::env::var("OCTOS_NO_NETWORK")
+            || ra_core::brand::env_compat_str("NO_NETWORK")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
         // SECURITY KEYSTONE: the dangerous default rides the SAME solo
@@ -1801,13 +1810,7 @@ impl ServeCommand {
         // A malformed explicit origin aborts startup instead of silently
         // weakening CORS/WS behavior. Empty env means "use config"; a
         // non-empty env value replaces the config list for deployments.
-        let appui_allowed_origins_env = match std::env::var("OCTOS_APPUI_ALLOWED_ORIGINS") {
-            Ok(value) => Some(value),
-            Err(std::env::VarError::NotPresent) => None,
-            Err(std::env::VarError::NotUnicode(_)) => {
-                eyre::bail!("OCTOS_APPUI_ALLOWED_ORIGINS must be valid Unicode")
-            }
-        };
+        let appui_allowed_origins_env = ra_core::brand::env_compat_str("APPUI_ALLOWED_ORIGINS");
         // A host-managed server trusts only the configured origins: not even
         // this listener's own loopback origins (it serves no host UI pages).
         let appui_allowed_origins = resolve_appui_allowed_origins(
@@ -1866,8 +1869,7 @@ impl ServeCommand {
             // `OCTOS_BASE_DOMAIN` (env) takes precedence over config.json so
             // operators can override without touching the file. `None` falls
             // back to `crate::api::DEFAULT_BASE_DOMAIN` at read sites.
-            base_domain: std::env::var("OCTOS_BASE_DOMAIN")
-                .ok()
+            base_domain: ra_core::brand::env_compat_str("BASE_DOMAIN")
                 .filter(|s| !s.trim().is_empty())
                 .or_else(|| config.base_domain.clone().filter(|s| !s.trim().is_empty())),
             appui_allowed_origins,

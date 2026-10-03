@@ -811,7 +811,7 @@ pub(crate) fn load_catalog_models() -> BTreeMap<String, Vec<String>> {
         std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("model_catalog.json"))),
-        dirs::home_dir().map(|d| d.join(".ra").join("model_catalog.json")),
+        ra_core::brand::state_home().map(|d| d.join("model_catalog.json")),
         Some(PathBuf::from("model_catalog.json")),
     ];
 
@@ -841,7 +841,7 @@ fn detect_from_env() -> Option<usize> {
 #[derive(Debug, Args)]
 pub struct InitCommand {
     /// Project working directory. When set, init writes to `<cwd>/.ra/`.
-    /// Otherwise it writes to `$OCTOS_HOME` or `~/.ra`.
+    /// Otherwise it writes to `$RA_HOME` or `~/.ra`.
     #[arg(short, long)]
     pub cwd: Option<PathBuf>,
 
@@ -881,8 +881,8 @@ impl Executable for InitCommand {
 
         // Where to write the starter config:
         //   --cwd C        → C/.ra (explicit project-local request)
-        //   otherwise      → the resolver's config_home (OCTOS_CONFIG_DIR if
-        //                    set; the state dir for an explicit OCTOS_HOME /
+        //   otherwise      → the resolver's config_home (RA_CONFIG_DIR if
+        //                    set; the state dir for an explicit RA_HOME /
         //                    --data-dir; else the XDG default for a default
         //                    install).
         let config_dir = match self.cwd {

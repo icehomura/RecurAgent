@@ -53,8 +53,8 @@ fn show_system_status(cwd: &std::path::Path) -> Result<()> {
     let ctx = super::resolve_command_context(None)?;
     let data_dir = ctx.data_dir.clone();
     let config_home_config = ctx.config_home.join("config.json");
-    // Legacy back-compat location (default installs only).
-    let legacy_config = dirs::home_dir().map(|h| h.join(".ra").join("config.json"));
+    // State-home config (the pre-XDG default installs used).
+    let state_config = ra_core::brand::state_home().map(|h| h.join("config.json"));
 
     // Config location — report the ACTUAL resolved config_home, not the data
     // dir, so the operator sees where config really lives (XDG by default).
@@ -77,7 +77,7 @@ fn show_system_status(cwd: &std::path::Path) -> Result<()> {
             "(found)".green()
         );
     } else if ctx.is_default
-        && legacy_config
+        && state_config
             .as_deref()
             .map(|p| p != config_home_config && p.exists())
             .unwrap_or(false)
@@ -85,7 +85,7 @@ fn show_system_status(cwd: &std::path::Path) -> Result<()> {
         println!(
             "{}: {} {}",
             "Config".green(),
-            legacy_config.as_deref().unwrap().display(),
+            state_config.as_deref().unwrap().display(),
             "(legacy)".yellow()
         );
     } else {

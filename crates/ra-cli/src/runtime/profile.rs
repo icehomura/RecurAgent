@@ -317,7 +317,7 @@ pub fn build_goal_verifier_provider(config: &Config) -> Option<Arc<dyn LlmProvid
 ///   bootstrap time to register profile-scoped skills into
 ///   [`Self::tool_specs`].
 /// - **`plugin_env_template`** — the env-var pairs (e.g.
-///   `OCTOS_PROFILE_ID`, `OCTOS_VOICE_DIR`) every plugin spawn for
+///   `RA_PROFILE_ID`, `RA_VOICE_DIR`) every plugin spawn for
 ///   this profile should inherit. Sessions clone this into their own
 ///   plugin spawns; if a session needs to add session-scoped vars it
 ///   does so on top of this template.
@@ -360,7 +360,7 @@ pub struct ProfileRuntime {
     /// Stable identifier for the profile (matches
     /// `UserProfile::id`). Used as part of the cache key in
     /// [`super::SessionRuntimeCache`] and as the value of
-    /// `OCTOS_PROFILE_ID` in plugin spawns.
+    /// `RA_PROFILE_ID` in plugin spawns.
     pub profile_id: String,
 
     /// The profile's data directory, conventionally
@@ -440,7 +440,7 @@ pub struct ProfileRuntime {
     pub skills_dir: Option<PathBuf>,
 
     /// Env-var pairs every plugin spawn for this profile should
-    /// inherit (`OCTOS_PROFILE_ID`, `OCTOS_VOICE_DIR`, etc.).
+    /// inherit (`RA_PROFILE_ID`, `RA_VOICE_DIR`, etc.).
     pub plugin_env_template: Vec<(String, String)>,
 
     /// The profile's tool policy (allow/deny lists, named groups,
@@ -1007,7 +1007,7 @@ impl ProfileRuntime {
     /// - `data_dir` — the resolved per-profile data dir, typically
     ///   `~/.ra/profiles/<id>/data`.
     /// - `octos_home` — the host's `~/.ra` (or `--ra-home`
-    ///   override). Used to seed `OCTOS_HOME` in
+    ///   override). Used to seed `RA_HOME` in
     ///   `plugin_env_template`; defaults to `data_dir` when `None`.
     ///
     /// # Errors
@@ -1278,8 +1278,9 @@ impl ProfileRuntime {
             .exists()
             .then_some(skills_dir_candidate);
 
-        // Step 8: build the plugin env template — `OCTOS_DATA_DIR`,
-        // `OCTOS_HOME`, `OCTOS_PROFILE_ID`, `OCTOS_VOICE_DIR`, and
+        // Step 8: build the plugin env template — `RA_DATA_DIR`,
+        // `RA_HOME`, `RA_PROFILE_ID`, `RA_VOICE_DIR` (each mirrored to its
+        // legacy `OCTOS_` spelling), and
         // (when discoverable) `OMINIX_API_URL` — plus the profile's
         // search provider keys and any first-party skill env vars
         // (`OPENAI_API_KEY`, `GEMINI_API_KEY`, ...).
@@ -1360,10 +1361,10 @@ impl ProfileRuntime {
         // M11-F regression fix REG-5: replace the hand-rolled
         // per-profile-only assembly with `Config::plugin_dirs_from_project`
         // (the canonical helper pre-M11-F serve.rs used) so the resulting
-        // set includes the deployment-scoped `<octos_home>/plugins`,
-        // `<octos_home>/skills`, the colon-separated `OCTOS_SKILLS_PATH`
-        // env var, and the already-scanned `<octos_home>/bundled-app-skills/`.
-        // Platform skills (`<octos_home>/platform-skills/`, admin-only) and
+        // set includes the deployment-scoped `<ra-home>/plugins`,
+        // `<ra-home>/skills`, the colon-separated `RA_SKILLS_PATH`
+        // env var, and the already-scanned `<ra-home>/bundled-app-skills/`.
+        // Platform skills (`<ra-home>/platform-skills/`, admin-only) and
         // the per-profile `data_dir/skills/` are layered on top so the
         // gateway behaviour is matched 1:1.
         //
@@ -2823,13 +2824,14 @@ mod tests {
     }
 
     /// M11-F regression fix REG-5: bootstrap's plugin_dirs must include
-    /// the *global* `~/.ra/plugins` and `~/.ra/skills` (via
+    /// the *global* `~/.ra/plugins` and `~/.ra/skills` (legacy
+    /// `~/.ra/plugins`, `~/.ra/skills`) (via
     /// `Config::plugin_dirs_from_project`) so admin-installed skills
     /// are visible to every profile, matching the pre-M11-F serve
     /// behaviour at `serve.rs:1224`.
     ///
     /// We construct an `octos_home` override and plant a fake skill
-    /// under `<octos_home>/plugins/`, then assert the resulting
+    /// under `<ra-home>/plugins/`, then assert the resulting
     /// `plugin_dirs` set includes that directory. We do not require
     /// the skill to load (loaders gate on a manifest); we only assert
     /// the dir was *scanned*.
@@ -2841,7 +2843,7 @@ mod tests {
         let data_dir = octos_home.join("profiles").join("reg5").join("data");
         std::fs::create_dir_all(&data_dir).unwrap();
 
-        // Plant the global "<octos_home>/plugins" dir so
+        // Plant the global "<ra-home>/plugins" dir so
         // `Config::plugin_dirs_from_project` picks it up.
         let global_plugins = octos_home.join("plugins");
         std::fs::create_dir_all(&global_plugins).unwrap();
@@ -2854,7 +2856,7 @@ mod tests {
 
         assert!(
             rt.plugin_dirs.contains(&global_plugins),
-            "plugin_dirs should include `<octos_home>/plugins`; got: {:?}",
+            "plugin_dirs should include `<ra-home>/plugins`; got: {:?}",
             rt.plugin_dirs
         );
     }

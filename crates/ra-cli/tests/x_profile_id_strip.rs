@@ -46,7 +46,7 @@ use tower::util::ServiceExt;
 /// Loopback `SocketAddr` for tests that need a TRUSTED hop (Caddy
 /// ingress is `127.0.0.1:NN` in production). `is_trusted_proxy_addr`
 /// returns `true` for any address whose `is_loopback()` is `true`,
-/// without consulting `OCTOS_TRUSTED_PROXY_CIDRS`.
+/// without consulting `RA_TRUSTED_PROXY_CIDRS`.
 fn loopback_socket_addr() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 65432)
 }

@@ -364,7 +364,7 @@ pub struct AppState {
     /// and the client falls back to the manual origin+token form.
     pub pairing: Option<Arc<pairing::PairingState>>,
     /// Opt-in for the no-password "solo" REST login (`/api/auth/solo*`).
-    /// OFF by default; set by `ra serve --solo` / `OCTOS_SOLO_LOGIN=1`.
+    /// OFF by default; set by `ra serve --solo` / `RA_SOLO_LOGIN=1`.
     ///
     /// SECURITY: `deployment_mode == Local` is NOT sufficient to enable solo
     /// login. A hosted fleet daemon runs Local mode behind a Caddy reverse
@@ -387,7 +387,7 @@ pub struct AppState {
     /// `--danger-full-access`: sessions with NO explicit `/permissions`
     /// selection default to the dangerous full-access profile (sandbox off,
     /// network allowed, approvals never) instead of the gated
-    /// workspace-write default — ra' analogue of Claude Code's
+    /// workspace-write default — ra's analogue of Claude Code's
     /// `--dangerously-skip-permissions`. Solo-gated at serve startup (the
     /// same keystone that gates selecting the profile from the menu); an
     /// explicit per-session `/permissions` choice always overrides it.
@@ -396,7 +396,7 @@ pub struct AppState {
     /// solo/Local session with NO explicit `/permissions` selection resolves to
     /// Workspace-Write **with network ALLOWED** (filesystem still sandboxed) so
     /// the common dev workflow — `npm install`, git, fetch — works out of the
-    /// box. Setting this (via `--no-network` / `OCTOS_NO_NETWORK=1`) reverts the
+    /// box. Setting this (via `--no-network` / `RA_NO_NETWORK=1`) reverts the
     /// default to Workspace-Write with network DENIED. Cloud/tenant deployments
     /// are unaffected (they always default to network-denied). An explicit
     /// per-session `/permissions` choice always overrides either default.
@@ -424,7 +424,7 @@ pub struct AppState {
     /// to the file in addition to being broadcast live to harness
     /// SSE subscribers. When `None`, events are broadcast-only — so a
     /// decision made while no subscriber is connected is lost. Wired
-    /// by `ra serve` from the `OCTOS_HARNESS_EVENT_SINK` env var.
+    /// by `ra serve` from the `RA_HARNESS_EVENT_SINK` env var.
     pub harness_event_sink_path: Option<String>,
     /// Credential pool (M6.5, F-005). Initialised at startup from
     /// `config.credential_pool` when present; `None` falls back to the

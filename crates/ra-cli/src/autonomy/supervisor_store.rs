@@ -2488,11 +2488,10 @@ fn fs_ctx<T>(op: &'static str, path: &Path, r: io::Result<T>) -> io::Result<T> {
 
 /// #39 — total retry budget, environment-tunable. Default ~2.5s (the
 /// 34h bound); CI's slow runners can raise it (e.g. 10s) via
-/// `OCTOS_FS_RETRY_TOTAL_MS`. Read once per call (cheap env read, no lock).
+/// `RA_FS_RETRY_TOTAL_MS`. Read once per call (cheap env read, no lock).
 #[cfg(windows)]
 fn fs_retry_total_ms() -> u64 {
-    std::env::var("OCTOS_FS_RETRY_TOTAL_MS")
-        .ok()
+    ra_core::brand::env_compat_str("FS_RETRY_TOTAL_MS")
         .and_then(|v| v.parse().ok())
         .filter(|v| *v > 0)
         .unwrap_or(2_500)
@@ -2505,7 +2504,7 @@ fn fs_retry_total_ms() -> u64 {
 /// #42 — injectable retry clock: `now` for elapsed-time bookkeeping and
 /// `sleep` for the backoff pause. Production passes the real pair
 /// (semantics unchanged: real Instant + real thread sleep, budget from
-/// OCTOS_FS_RETRY_TOTAL_MS); tests pass a virtual clock so attempt counts
+/// RA_FS_RETRY_TOTAL_MS); tests pass a virtual clock so attempt counts
 /// are DERIVED from virtual time, not the machine's speed (the round-8
 /// winlab reds were slow runners eating the 2.5s budget with real sleeps
 /// before the 10th attempt).
@@ -2613,7 +2612,7 @@ pub(crate) fn replace_with(ops: &ReplaceOps, src: &Path, dst: &Path) -> io::Resu
     #[cfg(windows)]
     {
         // #39 — both steps route through fs_retry (shared env-tunable
-        // budget, OCTOS_FS_RETRY_TOTAL_MS; default 2.5s). The injectable
+        // budget, RA_FS_RETRY_TOTAL_MS; default 2.5s). The injectable
         // sleep/is_transient keep the ###29 mechanical pins meaningful.
         let is_t = &ops.is_transient;
         let remove_result = fs_retry(

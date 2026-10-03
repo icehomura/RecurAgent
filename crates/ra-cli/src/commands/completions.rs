@@ -14,7 +14,7 @@ use super::{Args as CliArgs, Executable};
 ///
 /// The printed scripts are static (flags and subcommands only). For
 /// completions that call back into `ra` as you type, source
-/// `OCTOS_COMPLETE=<shell> ra` instead — see the book's completions section.
+/// `RA_COMPLETE=<shell> ra` instead — see the book's completions section.
 #[derive(Debug, Args)]
 pub struct CompletionsCommand {
     /// Shell to generate completions for.

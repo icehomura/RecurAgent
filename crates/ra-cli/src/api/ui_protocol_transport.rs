@@ -194,7 +194,7 @@ const WS_WRITER_CHANNEL_CAPACITY: usize = 1024;
 /// at the WebSocket layer (browsers auto-Pong; octoscode's transport replies
 /// with an explicit Pong). That Pong is the inbound evidence the read-side
 /// liveness deadline needs; a text-only heartbeat can never be answered by an
-/// idle client. `OCTOS_WS_LIVENESS_PING_SECS` overrides the cadence in
+/// idle client. `RA_WS_LIVENESS_PING_SECS` overrides the cadence in
 /// seconds (protocol e2e shortens it; deployments can tune it against proxy
 /// idle timeouts).
 const WS_LIVENESS_PING_SECS_DEFAULT: u64 = 20;
@@ -216,7 +216,7 @@ fn ws_liveness_ping_secs_from(raw: Option<&str>) -> Option<u64> {
 fn ws_liveness_ping_interval() -> std::time::Duration {
     static PING_SECS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
     std::time::Duration::from_secs(*PING_SECS.get_or_init(|| {
-        let raw = std::env::var("OCTOS_WS_LIVENESS_PING_SECS").ok();
+        let raw = ra_core::brand::env_compat_str("WS_LIVENESS_PING_SECS");
         match ws_liveness_ping_secs_from(raw.as_deref()) {
             Some(secs) => secs,
             None => {
@@ -224,7 +224,7 @@ fn ws_liveness_ping_interval() -> std::time::Duration {
                     tracing::warn!(
                         target: "ra::ui_protocol::ws",
                         value = %value,
-                        "ignoring unusable OCTOS_WS_LIVENESS_PING_SECS; using the default liveness cadence"
+                        "ignoring unusable RA_WS_LIVENESS_PING_SECS; using the default liveness cadence"
                     );
                 }
                 WS_LIVENESS_PING_SECS_DEFAULT
@@ -1816,7 +1816,7 @@ impl SessionPermissionProfileStore {
 }
 
 /// Session permission state honoring the serve-level dangerous default
-/// (`--danger-full-access`, ra' analogue of Claude Code's
+/// (`--danger-full-access`, ra's analogue of Claude Code's
 /// `--dangerously-skip-permissions`): a session with NO explicit
 /// `/permissions` selection falls back to the full-access profile —
 /// sandbox off, network allowed, approvals never — instead of the gated
@@ -1857,7 +1857,7 @@ fn effective_session_permission_state(
     // SBPL otherwise emits `(deny network*)` and silently breaks the most common
     // dev workflow. Scoped exactly like the dangerous default (Local deployment +
     // a session key that doesn't encode a tenant/cloud scope) so cloud/tenant
-    // stays network-denied. Opt OUT with `--no-network` (`OCTOS_NO_NETWORK=1`).
+    // stays network-denied. Opt OUT with `--no-network` (`RA_NO_NETWORK=1`).
     // An explicit `/permissions` choice still overrides this.
     if !state.default_network_denied
         && state.deployment_mode == crate::config::DeploymentMode::Local
@@ -2014,7 +2014,7 @@ enum M9ProtocolFixture {
 
 fn m9_protocol_fixture_for_prompt(prompt: &str) -> Option<M9ProtocolFixture> {
     let prompt_lower = prompt.to_ascii_lowercase();
-    if std::env::var("OCTOS_M15_LIVE_SUBAGENT_FIXTURE").as_deref() == Ok("1")
+    if ra_core::brand::env_compat_str("M15_LIVE_SUBAGENT_FIXTURE").as_deref() == Some("1")
         && (prompt_lower.contains("m15 code review")
             || prompt_lower.contains("live subagent")
             || prompt_lower.contains("supervised subagents"))
@@ -2022,7 +2022,7 @@ fn m9_protocol_fixture_for_prompt(prompt: &str) -> Option<M9ProtocolFixture> {
         return Some(M9ProtocolFixture::M15LiveSubagents);
     }
 
-    if std::env::var("OCTOS_M9_PROTOCOL_FIXTURES").as_deref() != Ok("1") {
+    if ra_core::brand::env_compat_str("M9_PROTOCOL_FIXTURES").as_deref() != Some("1") {
         return None;
     }
 
@@ -3601,16 +3601,15 @@ fn publish_appui_context_status(session_id: &SessionKey, manager: &ContextManage
 
 fn appui_context_compact_threshold_tokens(llm_provider: &dyn ra_llm::LlmProvider) -> usize {
     appui_compact_threshold_tokens_for(
-        env_usize("OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS"),
+        env_usize("CONTEXT_COMPACT_THRESHOLD_TOKENS"),
         llm_provider.context_window() as usize * APPUI_CONTEXT_COMPACT_RATIO_NUMERATOR
             / APPUI_CONTEXT_COMPACT_RATIO_DENOMINATOR,
     )
 }
 
+/// Parse a `usize` from `RA_<name>` (legacy `OCTOS_<name>`; empty = unset).
 fn env_usize(name: &str) -> Option<usize> {
-    std::env::var(name)
-        .ok()
-        .and_then(|raw| raw.trim().parse::<usize>().ok())
+    ra_core::brand::env_compat_str(name).and_then(|raw| raw.trim().parse::<usize>().ok())
 }
 
 fn appui_compact_threshold_tokens_for(
@@ -3636,7 +3635,7 @@ fn parse_oup_semantic_context_rollout_mode(raw: Option<&str>) -> OupSemanticCont
         Some(other) => {
             tracing::warn!(
                 value = other,
-                "invalid OCTOS_OUP_SEMANTIC_CONTEXT_MODE; using semantic boundary mode"
+                "invalid RA_OUP_SEMANTIC_CONTEXT_MODE; using semantic boundary mode"
             );
             OupSemanticContextRolloutMode::On
         }
@@ -3644,7 +3643,7 @@ fn parse_oup_semantic_context_rollout_mode(raw: Option<&str>) -> OupSemanticCont
 }
 
 fn oup_semantic_context_rollout_mode() -> OupSemanticContextRolloutMode {
-    let value = std::env::var("OCTOS_OUP_SEMANTIC_CONTEXT_MODE").ok();
+    let value = ra_core::brand::env_compat_str("OUP_SEMANTIC_CONTEXT_MODE");
     parse_oup_semantic_context_rollout_mode(value.as_deref())
 }
 
@@ -3671,7 +3670,7 @@ fn appui_compaction_budgets_for(
                 requested,
                 threshold_tokens,
                 derived_target,
-                "invalid OCTOS_CONTEXT_COMPACT_TARGET_TOKENS: the post-compaction target must be \
+                "invalid RA_CONTEXT_COMPACT_TARGET_TOKENS: the post-compaction target must be \
                  at least 1 and below the compaction threshold; using the derived target"
             );
             derived_target
@@ -3696,7 +3695,7 @@ fn appui_compaction_budgets_for(
 fn appui_compaction_budgets(threshold_tokens: usize) -> AppUiCompactionBudgets {
     appui_compaction_budgets_for(
         threshold_tokens,
-        env_usize("OCTOS_CONTEXT_COMPACT_TARGET_TOKENS"),
+        env_usize("CONTEXT_COMPACT_TARGET_TOKENS"),
     )
 }
 
@@ -4415,7 +4414,7 @@ struct AppUiLoopPromptScratch {
 /// turn. Caps ONLY the outgoing projection the model sees — the persisted
 /// transcript is untouched — so older turns are trimmed (recent-first kept,
 /// any compaction summary preserved) to keep the spoken-turn prefill small.
-/// Override via `OCTOS_VOICE_MAX_PROMPT_TOKENS`.
+/// Override via `RA_VOICE_MAX_PROMPT_TOKENS`.
 const VOICE_TURN_MAX_PROMPT_TOKENS: usize = 8000;
 
 /// Delivery hook for mid-turn (in-loop) compaction lifecycle notifications.
@@ -4524,8 +4523,7 @@ impl AppUiPromptContextBridge {
 
     /// Voice-turn history budget (tokens), env-overridable.
     fn voice_prompt_budget() -> usize {
-        std::env::var("OCTOS_VOICE_MAX_PROMPT_TOKENS")
-            .ok()
+        ra_core::brand::env_compat_str("VOICE_MAX_PROMPT_TOKENS")
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(VOICE_TURN_MAX_PROMPT_TOKENS)
     }
@@ -4547,8 +4545,7 @@ impl AppUiPromptContextBridge {
     }
 
     fn threshold_tokens(request: &PromptContextRequest) -> usize {
-        std::env::var("OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS")
-            .ok()
+        ra_core::brand::env_compat_str("CONTEXT_COMPACT_THRESHOLD_TOKENS")
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or_else(|| {
                 (request.context_window as usize * APPUI_CONTEXT_COMPACT_RATIO_NUMERATOR
@@ -10185,7 +10182,7 @@ fn raw_profile_id(params: &RawProfileParams, connection_profile_id: Option<&str>
 /// so a proxied client reaches the daemon over loopback; without this gate it
 /// could create a top-level Admin user over EITHER transport. Fleet configs
 /// never set the opt-in, so solo stays off there; a genuine solo install runs
-/// `ra serve --solo` / `OCTOS_SOLO_LOGIN=1`.
+/// `ra serve --solo` / `RA_SOLO_LOGIN=1`.
 pub(crate) fn supports_local_solo_profile_create(state: &AppState) -> bool {
     state.solo_login_enabled
         && state.deployment_mode == crate::config::DeploymentMode::Local
@@ -24938,9 +24935,9 @@ fn append_workspace_root_hint(mut prompt: String, workspace_root: Option<&Path>)
     // breaks KV-cache prefix reuse for every new session (measured on the
     // appui card-generation path: 35% shared prefix with the hint, ~99%
     // without). Hosts whose agents never do file work (the phone's
-    // card-generation appui) set OCTOS_OMIT_WORKSPACE_HINT=1 in the kernel's
+    // card-generation appui) set RA_OMIT_WORKSPACE_HINT=1 in the kernel's
     // spawn env to drop it; every other surface keeps today's bytes.
-    if std::env::var_os("OCTOS_OMIT_WORKSPACE_HINT").is_some_and(|v| v == "1") {
+    if ra_core::brand::env_compat("OMIT_WORKSPACE_HINT").is_some_and(|v| v == "1") {
         return prompt;
     }
     if let Some(workspace_root) = workspace_root {
@@ -28968,7 +28965,7 @@ async fn handle_task_cancel(
 
     let task_id = params.task_id.clone();
 
-    // octos#1380: gateway-mode — the `octos serve` API server owns no task
+    // octos#1380: gateway-mode — the `ra serve` API server owns no task
     // supervisor (`task_query_store == None`); the supervisor lives in the
     // gateway process. Proxy the cancel to that process (mirroring the REST
     // `/api/tasks/{id}/cancel` handler) instead of failing `runtime_unavailable`.
@@ -35804,7 +35801,7 @@ fn terminal_agent_updated_event(params: &Value) -> Option<AgentUpdatedEvent> {
     .then_some(event)
 }
 
-const REVIEW_NATIVE_SPECIALISTS_ENV: &str = "OCTOS_REVIEW_NATIVE_SPECIALISTS_JSON";
+const REVIEW_NATIVE_SPECIALISTS_ENV: &str = "RA_REVIEW_NATIVE_SPECIALISTS_JSON";
 const MAX_NATIVE_REVIEW_SPECIALISTS: usize = 16;
 
 #[derive(Debug, Clone)]
@@ -35878,7 +35875,7 @@ fn native_code_review_specs(
 }
 
 fn native_code_review_specs_from_env() -> Option<Vec<NativeCodeReviewSpec>> {
-    let raw = std::env::var(REVIEW_NATIVE_SPECIALISTS_ENV).ok()?;
+    let raw = ra_core::brand::env_compat_str("REVIEW_NATIVE_SPECIALISTS_JSON")?;
     if raw.trim().is_empty() {
         return None;
     }
@@ -36628,9 +36625,16 @@ fn maybe_spawn_cli_review_specialist(
     let command = crate::cli_agent_adapter::CliAgentCommandConfig::new(program.clone())
         .args(args.iter().cloned())
         .cwd(workspace_root)
+        .env("RA_REVIEW_OBJECTIVE", objective)
         .env("OCTOS_REVIEW_OBJECTIVE", objective)
+        .env("RA_REVIEW_TARGET", target)
         .env("OCTOS_REVIEW_TARGET", target)
+        .env("RA_REVIEW_AGENT_ID", agent_id.clone())
         .env("OCTOS_REVIEW_AGENT_ID", agent_id.clone())
+        .env(
+            "RA_REVIEW_ARTIFACT_PATH",
+            artifact_path.to_string_lossy().into_owned(),
+        )
         .env(
             "OCTOS_REVIEW_ARTIFACT_PATH",
             artifact_path.to_string_lossy().into_owned(),
@@ -36707,7 +36711,7 @@ fn maybe_spawn_mcp_review_specialist(
         }],
     };
     let tool_name =
-        std::env::var("OCTOS_REVIEW_MCP_TOOL_NAME").unwrap_or_else(|_| "run_task".to_owned());
+        ra_core::brand::env_compat_str("REVIEW_MCP_TOOL_NAME").unwrap_or_else(|| "run_task".to_owned());
     let task = json!({
         "objective": objective,
         "target": target,
@@ -36752,7 +36756,7 @@ fn maybe_spawn_mcp_review_specialist(
 }
 
 fn review_cli_argv() -> Option<Vec<String>> {
-    let raw = std::env::var("OCTOS_REVIEW_CLI_SPECIALIST_ARGV_JSON").ok()?;
+    let raw = ra_core::brand::env_compat_str("REVIEW_CLI_SPECIALIST_ARGV_JSON")?;
     let argv = serde_json::from_str::<Vec<String>>(&raw).ok()?;
     let argv = argv
         .into_iter()
@@ -36763,8 +36767,7 @@ fn review_cli_argv() -> Option<Vec<String>> {
 }
 
 fn review_mcp_timeout() -> std::time::Duration {
-    std::env::var("OCTOS_REVIEW_MCP_TIMEOUT_SECS")
-        .ok()
+    ra_core::brand::env_compat_str("REVIEW_MCP_TIMEOUT_SECS")
         .and_then(|value| value.parse::<u64>().ok())
         .filter(|value| *value > 0)
         .map(std::time::Duration::from_secs)
@@ -37331,8 +37334,7 @@ async fn run_m15_live_subagent_process(
     turn_id: TurnId,
     spec: M15LiveSubagentSpec,
 ) -> Result<M15LiveSubagentResult, String> {
-    let delay_seconds = std::env::var("OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE")
-        .ok()
+    let delay_seconds = ra_core::brand::env_compat_str("M15_LIVE_SUBAGENT_DELAY_SCALE")
         .and_then(|value| value.parse::<f64>().ok())
         .filter(|scale| scale.is_finite() && *scale > 0.0)
         .map(|scale| {

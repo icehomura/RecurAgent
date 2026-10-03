@@ -341,7 +341,7 @@ impl GatewayRuntime {
 
         // Open ProfileStore for /account commands and bot management.
         // Derive octos_home from: --ra-home flag > data_dir (which already
-        // resolves --data-dir > $OCTOS_HOME > ~/.ra).
+        // resolves --data-dir > $RA_HOME > ~/.ra).
         let effective_octos_home = cmd.octos_home.clone().unwrap_or_else(|| data_dir.clone());
         let profile_store: Option<Arc<crate::profiles::ProfileStore>> =
             crate::profiles::ProfileStore::open_unified(&effective_octos_home)
@@ -1226,11 +1226,11 @@ impl GatewayRuntime {
         // admin_mode adds admin API tools on top of the full tool set
         // (profile management, server diagnostics via REST).
         if admin_mode {
-            let serve_url_env = std::env::var("OCTOS_SERVE_URL").ok();
+            let serve_url_env = ra_core::brand::env_compat_str("SERVE_URL");
             let serve_url = serve_url_env
                 .clone()
                 .unwrap_or_else(|| "http://127.0.0.1:8080".to_string());
-            let admin_token = std::env::var("OCTOS_ADMIN_TOKEN").unwrap_or_default();
+            let admin_token = ra_core::brand::env_compat_str("ADMIN_TOKEN").unwrap_or_default();
             let admin_ctx = Arc::new(ra_agent::AdminApiContext {
                 http: reqwest::Client::new(),
                 serve_url,

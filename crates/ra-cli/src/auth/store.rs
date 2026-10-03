@@ -2,7 +2,7 @@
 //!
 //! The store path is `auth_home/auth.json`, where `auth_home` comes from the
 //! canonical [`ConfigContext`](crate::config_context::ConfigContext) — GLOBAL
-//! (XDG) unless `OCTOS_CONFIG_DIR` is set. The store NEVER recomputes its path
+//! (XDG) unless `RA_CONFIG_DIR` is set. The store NEVER recomputes its path
 //! from the environment on its own; callers pass the resolved location via
 //! [`AuthStore::open`] or [`AuthStore::at`]. There is intentionally no no-arg
 //! `load()` so no site can diverge from the resolver.

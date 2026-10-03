@@ -121,8 +121,9 @@ const MODEL_CATALOG: &str = include_str!(concat!(
 /// Run the binary against the compiled-in catalog, not whatever catalog a
 /// developer's own `~/.ra` holds: catalog loading is disk-first, so a
 /// machine that has run ra would otherwise shadow the SSOT and break the
-/// comparisons below. Also clears the completion channel so a globally
-/// exported var can't turn the invocation into a completion answer.
+/// comparisons below. Also clears the completion channel (both the new and
+/// the legacy variable) so a globally exported var can't turn the invocation
+/// into a completion answer.
 fn run_completions(args: &[&str]) -> String {
     static CALL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let scratch = std::env::temp_dir().join(format!(
@@ -134,6 +135,7 @@ fn run_completions(args: &[&str]) -> String {
     let mut cmd = Command::new(octos_binary());
     cmd.args(args)
         .current_dir(&scratch)
+        .env_remove("RA_COMPLETE")
         .env_remove("OCTOS_COMPLETE")
         .env_remove("COMPLETE");
     for home_var in ["HOME", "USERPROFILE"] {
@@ -222,20 +224,35 @@ fn test_completions_dynamic_providers_match_registry() {
 
 #[test]
 fn test_completions_env_channel_wiring() {
-    // With OCTOS_COMPLETE set the binary answers the completion request —
+    // With RA_COMPLETE set the binary answers the completion request —
     // the registration script the shell sources — and exits 0 (#2413).
     let scratch = std::env::temp_dir().join(format!("ra-cli-tests-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("scratch dir is created");
     let answered = Command::new(octos_binary())
-        .env("OCTOS_COMPLETE", "bash")
+        .env("RA_COMPLETE", "bash")
         .current_dir(&scratch)
         .output()
         .expect("Failed to execute command");
     assert!(answered.status.success());
     let stdout = String::from_utf8_lossy(&answered.stdout);
     assert!(
-        stdout.contains("_clap_complete_octos"),
+        stdout.contains("_clap_complete_RA"),
         "the binary must answer the completion channel with the registration script"
+    );
+
+    // The legacy `OCTOS_COMPLETE` name keeps shells registered before the
+    // rename working, so it must still answer the channel.
+    let legacy = Command::new(octos_binary())
+        .env_remove("RA_COMPLETE")
+        .env("OCTOS_COMPLETE", "bash")
+        .current_dir(&scratch)
+        .output()
+        .expect("Failed to execute command");
+    assert!(legacy.status.success());
+    let stdout = String::from_utf8_lossy(&legacy.stdout);
+    assert!(
+        stdout.contains("_clap_complete_RA"),
+        "the legacy OCTOS_COMPLETE name must still answer the completion channel"
     );
 
     // The channel is namespaced: a generic COMPLETE exported for some other
@@ -243,6 +260,8 @@ fn test_completions_env_channel_wiring() {
     // empty value keeps the documented off switch.
     let unaffected = Command::new(octos_binary())
         .env("COMPLETE", "bash")
+        .env_remove("RA_COMPLETE")
+        .env_remove("OCTOS_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -258,7 +277,8 @@ fn test_completions_env_channel_wiring() {
     );
 
     let disabled = Command::new(octos_binary())
-        .env("OCTOS_COMPLETE", "")
+        .env("RA_COMPLETE", "")
+        .env_remove("OCTOS_COMPLETE")
         .arg("--version")
         .output()
         .expect("Failed to execute command");
@@ -266,7 +286,7 @@ fn test_completions_env_channel_wiring() {
     let stdout = String::from_utf8_lossy(&disabled.stdout);
     assert!(
         !stdout.contains("_clap_complete"),
-        "an empty OCTOS_COMPLETE must keep the channel off"
+        "an empty RA_COMPLETE must keep the channel off"
     );
     let _ = std::fs::remove_dir_all(&scratch);
 }
@@ -281,7 +301,7 @@ fn test_completions_bash() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Bash completions should contain function definitions
-    assert!(stdout.contains("_octos"));
+    assert!(stdout.contains("_RA"));
 }
 
 #[test]
@@ -407,7 +427,7 @@ fn test_init_defaults_uses_octos_home_when_cwd_not_provided() {
     clear_provider_env(&mut cmd);
     let output = cmd
         .env("OPENAI_API_KEY", "test-openai-key")
-        .env("OCTOS_HOME", &octos_home)
+        .env("RA_HOME", &octos_home)
         .current_dir(&unrelated_cwd)
         .args(["init", "--defaults"])
         .output()
@@ -418,11 +438,12 @@ fn test_init_defaults_uses_octos_home_when_cwd_not_provided() {
     let home_config = octos_home.join("config.json");
     assert!(
         home_config.exists(),
-        "expected init to write config into OCTOS_HOME"
+        "expected init to write config into RA_HOME"
     );
+    // `cwd/.ra` is the project-local state dir, which keeps its legacy name.
     assert!(
         !unrelated_cwd.join(".ra").join("config.json").exists(),
-        "init should not create a separate cwd/.ra config when OCTOS_HOME is set"
+        "init should not create a separate cwd/.ra config when RA_HOME is set"
     );
 
     let content = std::fs::read_to_string(&home_config).unwrap();

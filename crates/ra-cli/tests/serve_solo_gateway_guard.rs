@@ -19,7 +19,7 @@
 //! - `non_solo_serve_still_starts_gateways_manually` — without `--solo`, the
 //!   same admin start route spawns the gateway exactly as before, proving
 //!   the guard does not over-block.
-//! - `solo_login_env_gates_manual_gateway_starts_too` — `OCTOS_SOLO_LOGIN`
+//! - `solo_login_env_gates_manual_gateway_starts_too` — `RA_SOLO_LOGIN`
 //!   alone (no flag) trips the same refusal.
 //!
 //! Same serial-step discipline as `serve_sigterm` (the #21 outer-loop
@@ -96,12 +96,15 @@ mod serve_solo_gateway_guard {
             // Bootstrap admin token: with no admin_token.json rotation, this
             // grants `AuthIdentity::Admin` for the admin routes and resolves
             // the self-service `my` routes to the `admin` profile.
-            .env("OCTOS_AUTH_TOKEN", "solo-guard-e2e-token")
+            .env("RA_AUTH_TOKEN", "solo-guard-e2e-token")
             .env_remove("RA_INSTANCE_DATA_DIR")
+            .env_remove("RA_HOME")
             .env_remove("OCTOS_HOME")
+            .env_remove("RA_DATA_DIR")
             .env_remove("OCTOS_DATA_DIR")
             // The solo condition also rides this env var; scrub it so a
             // developer shell exporting it cannot flip the non-solo scenario.
+            .env_remove("RA_SOLO_LOGIN")
             .env_remove("OCTOS_SOLO_LOGIN");
         #[cfg(unix)]
         unsafe {
@@ -428,7 +431,7 @@ mod serve_solo_gateway_guard {
         drop(cleanup);
     }
 
-    /// The solo condition also rides the `OCTOS_SOLO_LOGIN` env var — the
+    /// The solo condition also rides the `RA_SOLO_LOGIN` env var — the
     /// flag is not the only trigger. Pin that the guard keys off the
     /// resolved solo state: an env-only solo serve refuses just the same.
     #[test]
@@ -442,7 +445,7 @@ mod serve_solo_gateway_guard {
         let err_path = data_dir.join("stderr.log");
         let err_file = std::fs::File::create(&err_path).unwrap();
         let mut cmd = serve_command(port, &data_dir, false);
-        cmd.env("OCTOS_SOLO_LOGIN", "1");
+        cmd.env("RA_SOLO_LOGIN", "1");
         cmd.stdout(Stdio::null()).stderr(Stdio::from(err_file));
         let child = cmd.spawn().expect("failed to start ra serve");
 

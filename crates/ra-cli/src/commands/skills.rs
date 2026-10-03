@@ -482,7 +482,7 @@ fn cmd_list(skills_dir: &Path) -> Result<()> {
         println!();
         println!(
             "  Install system skills: {}",
-            "octos skills install octos-org/system-skills".cyan()
+            "ra skills install octos-org/system-skills".cyan()
         );
         println!();
         return Ok(());
@@ -537,7 +537,7 @@ fn cmd_list(skills_dir: &Path) -> Result<()> {
         println!();
         println!(
             "  Install system skills: {}",
-            "octos skills install octos-org/system-skills".cyan()
+            "ra skills install octos-org/system-skills".cyan()
         );
     }
 
@@ -1798,10 +1798,11 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 }
 
 /// Scan SKILL.md for references to sibling directories (shared deps).
-/// Looks for patterns like `~/.ra/skills/XXX/` where XXX is a sibling dir in the clone.
+/// Looks for patterns like `~/.ra/skills/XXX/` (or the legacy `~/.ra/skills/XXX/`)
+/// where XXX is a sibling dir in the clone.
 fn find_shared_deps(skill_md: &str, clone_dir: &Path, self_name: &str) -> Vec<String> {
     let mut deps = Vec::new();
-    let re = regex::Regex::new(r"~/.ra/skills/([a-zA-Z0-9_-]+)/").unwrap();
+    let re = regex::Regex::new(r"~/\.(?:ra|ra)/skills/([a-zA-Z0-9_-]+)/").unwrap();
     for cap in re.captures_iter(skill_md) {
         let dep_name = cap[1].to_string();
         if dep_name == self_name {

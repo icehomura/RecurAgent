@@ -239,7 +239,7 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
     ));
     report.push(shadow_check(&located, &method, &spec));
 
-    // --- Installations (every octos + octoscode copy, with versions) --------
+    // --- Installations (every ra + octoscode copy, with versions) --------
     // Parity with `octoscode doctor`'s Installations section: enumerate BOTH
     // binaries across PATH + the known install dirs so duplicate / mismatched
     // installs are visible from either doctor.
@@ -334,12 +334,13 @@ fn build_report(cmd: &DoctorCommand, with_network: bool) -> Result<Report> {
 }
 
 // ---------------------------------------------------------------------------
-// Installations — every octos + octoscode on the machine, with versions
+// Installations — every ra + octoscode on the machine, with versions
 // ---------------------------------------------------------------------------
 
 /// Parity with `octoscode doctor`'s Installations section: enumerate every
-/// octos AND octoscode copy (across `$PATH`, Homebrew, cargo, the shell
-/// installer's `~/.local/bin`, and octoscode's `~/.ra/bin` auto-install dir),
+/// ra AND octoscode copy (across `$PATH`, Homebrew, cargo, the shell
+/// installer's `~/.local/bin`, and octoscode's `~/.ra/bin` / legacy
+/// `~/.ra/bin` auto-install dir),
 /// with each copy's `--version` + inferred install method — so duplicate /
 /// mismatched installs are visible from `ra doctor` too, not just the TUI's.
 fn installations_checks(ra: &ProductSpec) -> Vec<Check> {
@@ -385,23 +386,26 @@ fn octoscode_legacy_spec() -> ProductSpec {
 }
 
 /// `locate()` scans PATH + Homebrew/cargo/`~/.local/bin`, but octoscode's
-/// auto-installer drops `ra` into `~/.ra/bin`, off both — add it (deduped
-/// by canonical path).
+/// auto-installer drops the binary into `~/.ra/bin` (or the legacy `~/.ra/bin`),
+/// off both — add both (deduped by canonical path).
 fn locate_with_octos_bin(spec: &ProductSpec) -> LocatedBinaries {
     let mut located = locate(spec);
     if let Some(home) = std::env::var_os("HOME") {
-        let candidate = Path::new(&home)
-            .join(".ra")
-            .join("bin")
-            .join(spec.binary_file_name());
-        if candidate.is_file() {
-            let canonical = std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
-            let already = located
-                .all()
-                .iter()
-                .any(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()) == canonical);
-            if !already {
-                located.off_path.push(candidate);
+        for dir in [ra_core::brand::STATE_DIR, ra_core::brand::LEGACY_STATE_DIR] {
+            let candidate = Path::new(&home)
+                .join(dir)
+                .join("bin")
+                .join(spec.binary_file_name());
+            if candidate.is_file() {
+                let canonical =
+                    std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+                let already = located
+                    .all()
+                    .iter()
+                    .any(|p| std::fs::canonicalize(p).unwrap_or_else(|_| p.clone()) == canonical);
+                if !already {
+                    located.off_path.push(candidate);
+                }
             }
         }
     }
@@ -417,7 +421,7 @@ fn install_method_for_path(path: &Path) -> &'static str {
         "npm"
     } else if p.contains("/homebrew/") || p.contains("/Cellar/") || p.starts_with("/usr/local/") {
         "brew"
-    } else if p.contains("/.ra/bin/") {
+    } else if p.contains("/.ra/bin/") || p.contains("/.ra/bin/") {
         "octoscode auto-install"
     } else if p.contains("/.local/bin/") {
         "shell installer"
@@ -1182,7 +1186,7 @@ fn profile_checks(profiles: &[DiscoveredProfile]) -> Vec<Check> {
         checks.push(Check::pass(
             CAT_PROFILES,
             "profiles",
-            "none yet — created by octoscode onboarding (or `octos serve` solo mode)",
+            "none yet — created by octoscode onboarding (or `ra serve` solo mode)",
         ));
         return checks;
     }

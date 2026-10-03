@@ -311,7 +311,7 @@ pub(crate) fn routed_profile_id_from_headers(
 /// [`routed_profile_id_from_headers`].
 ///
 /// On TRUSTED hops (loopback by default, or
-/// `OCTOS_TRUSTED_PROXY_CIDRS`-matched addresses) the strip middleware
+/// `RA_TRUSTED_PROXY_CIDRS`-matched addresses) the strip middleware
 /// preserves the operator-set `X-Profile-Id`, so authenticated requests
 /// can still smuggle a victim-profile id past the routing layer. This
 /// helper closes that gap: when both a header-resolved profile id AND
@@ -1116,7 +1116,7 @@ pub async fn session_messages(
             //
             // Codex P2 round 5: in production deployments using admin auth
             // on a hosted subdomain (`dspfac.crew.ominix.io` +
-            // `OCTOS_AUTH_TOKEN=admin-…`), the WS handler accepts bare
+            // `RA_AUTH_TOKEN=admin-…`), the WS handler accepts bare
             // `SessionKey`s and persists under those raw keys. Pass the
             // request identity into the candidate helper so admin auth
             // unlocks the unprofiled fallbacks even when the request
@@ -4110,8 +4110,8 @@ pub async fn status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> 
 /// GET /api/version — public version endpoint (no auth required).
 pub async fn version(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let version = env!("CARGO_PKG_VERSION");
-    let git_hash = option_env!("OCTOS_GIT_HASH").unwrap_or("");
-    let build_date = option_env!("OCTOS_BUILD_DATE").unwrap_or("");
+    let git_hash = option_env!("RA_GIT_HASH").unwrap_or("");
+    let build_date = option_env!("RA_BUILD_DATE").unwrap_or("");
     let full = if git_hash.is_empty() {
         version.to_string()
     } else {
@@ -4128,7 +4128,7 @@ pub async fn version(State(state): State<Arc<AppState>>) -> Json<serde_json::Val
 /// GET /health — public health check (no auth required).
 pub async fn health() -> Json<serde_json::Value> {
     let version = env!("CARGO_PKG_VERSION");
-    let git_hash = option_env!("OCTOS_GIT_HASH").unwrap_or("");
+    let git_hash = option_env!("RA_GIT_HASH").unwrap_or("");
     let full = if git_hash.is_empty() {
         version.to_string()
     } else {

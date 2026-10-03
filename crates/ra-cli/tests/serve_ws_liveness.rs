@@ -11,7 +11,7 @@
 //! closes the connection once `WS_LIVENESS_MISSED_PINGS + 1` ping intervals
 //! pass with zero inbound frames (any frame counts: a conforming client's
 //! Pong alone proves the peer is alive). These tests drive the REAL ra
-//! binary with the cadence shortened via `OCTOS_WS_LIVENESS_PING_SECS=1`
+//! binary with the cadence shortened via `RA_WS_LIVENESS_PING_SECS=1`
 //! (deadline = 4 × 1 s = 4 s):
 //!
 //! - `serve_ws_liveness_closes_fully_silent_connection` — a client that
@@ -50,7 +50,7 @@ mod serve_ws_liveness {
         SERIAL.lock().await
     }
 
-    /// `OCTOS_WS_LIVENESS_PING_SECS` handed to the serve child: a 1 s cadence
+    /// `RA_WS_LIVENESS_PING_SECS` handed to the serve child: a 1 s cadence
     /// puts the close deadline (`WS_LIVENESS_MISSED_PINGS + 1` intervals) at
     /// 4 s so both scenarios finish in seconds.
     const PING_SECS: u64 = 1;
@@ -93,10 +93,12 @@ mod serve_ws_liveness {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .env("OCTOS_WS_LIVENESS_PING_SECS", PING_SECS.to_string())
-            .env("OCTOS_AUTH_TOKEN", AUTH_TOKEN)
+            .env("RA_WS_LIVENESS_PING_SECS", PING_SECS.to_string())
+            .env("RA_AUTH_TOKEN", AUTH_TOKEN)
             .env_remove("RA_INSTANCE_DATA_DIR")
+            .env_remove("RA_HOME")
             .env_remove("OCTOS_HOME")
+            .env_remove("RA_DATA_DIR")
             .env_remove("OCTOS_DATA_DIR")
             .spawn()
             .expect("failed to spawn ra serve");

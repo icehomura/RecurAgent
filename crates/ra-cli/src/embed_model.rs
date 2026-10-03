@@ -10,8 +10,8 @@
 //! by every profile under that data dir.
 //!
 //! The download is opt-out (`embedding.auto_download = false` or
-//! `OCTOS_NO_MODEL_DOWNLOAD=1`); without the file the runtime stays
-//! keyword-only, which every memory path supports.
+//! `RA_NO_MODEL_DOWNLOAD=1`, legacy `OCTOS_NO_MODEL_DOWNLOAD=1`); without the
+//! file the runtime stays keyword-only, which every memory path supports.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -33,7 +33,7 @@ pub const DEFAULT_MODEL_LICENSE_URL: &str = "https://ai.google.dev/gemma/terms";
 pub const DEFAULT_MODEL_ID: &str = "llamacpp/embeddinggemma-300M-Q8_0";
 
 /// Environment switch that disables the automatic download everywhere.
-pub const NO_DOWNLOAD_ENV: &str = "OCTOS_NO_MODEL_DOWNLOAD";
+pub const NO_DOWNLOAD_ENV: &str = "RA_NO_MODEL_DOWNLOAD";
 
 /// Total wall-clock budget for ONE fetch, shared across its retry attempts
 /// (each attempt receives the remaining budget as its own total timeout).
@@ -95,7 +95,7 @@ pub fn model_status(data_dir: &Path) -> ModelStatus {
 
 /// Whether automatic downloads are allowed for this process.
 pub fn downloads_allowed(config_flag: Option<bool>) -> bool {
-    if std::env::var_os(NO_DOWNLOAD_ENV).is_some_and(|v| !v.is_empty() && v != "0") {
+    if ra_core::brand::env_compat("NO_MODEL_DOWNLOAD").is_some_and(|v| !v.is_empty() && v != "0") {
         return false;
     }
     config_flag.unwrap_or(true)
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn should_default_to_downloading_unless_config_says_no() {
-        if std::env::var_os(NO_DOWNLOAD_ENV).is_none() {
+        if ra_core::brand::env_compat("NO_MODEL_DOWNLOAD").is_none() {
             assert!(downloads_allowed(None));
             assert!(downloads_allowed(Some(true)));
         }

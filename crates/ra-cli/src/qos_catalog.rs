@@ -44,7 +44,8 @@ pub(crate) fn apply_context_window_override(
 /// context-window / pricing floor. It ships next to the binary at release time
 /// (see `scripts/build-local-bundle.sh`), but is also embedded so a fresh
 /// install — one with no per-profile data-dir catalog and no `~/.ra`
-/// catalog yet — still seeds the adaptive router, the context-window table, and
+/// (legacy `~/.ra`) catalog yet — still seeds the adaptive router, the
+/// context-window table, and
 /// the pricing table with researched values instead of cold-start zeros.
 ///
 /// `crates/ra-cli/src/api/ui_protocol.rs` (onboarding) and
@@ -237,7 +238,7 @@ pub(crate) enum ExporterMode {
 ///    `config.adaptive_routing`. Otherwise falls back to
 ///    `ProviderChain` (or the bare `RetryProvider` when no fallbacks).
 /// 3. Loads `provider_baseline.json` from `data_dir` first, then
-///    `~/.ra/`. Seeds the router with the parsed entries. Logs an
+///    `~/.ra/` (legacy `~/.ra/`). Seeds the router with the parsed entries. Logs an
 ///    info line either way.
 /// 4. Seeds the router with the model catalog from
 ///    `load_seed_qos_catalog`.
@@ -382,9 +383,7 @@ pub(crate) fn build_adaptive_provider_chain(
         // Look in data_dir first, then fall back to ~/.ra/ (shared across profiles)
         let baseline_candidates = [
             data_dir.join("provider_baseline.json"),
-            dirs::home_dir()
-                .unwrap_or_default()
-                .join(".ra/provider_baseline.json"),
+            ra_core::brand::state_path("provider_baseline.json"),
         ];
         let mut baseline_loaded = false;
         for baseline_path in &baseline_candidates {
@@ -502,9 +501,7 @@ pub(crate) fn derive_cold_start_qos_catalog(
 pub(crate) fn load_seed_qos_catalog(data_dir: &Path) -> Option<QosCatalog> {
     let candidates = [
         data_dir.join("model_catalog.json"),
-        dirs::home_dir()
-            .unwrap_or_default()
-            .join(".ra/model_catalog.json"),
+        ra_core::brand::state_path("model_catalog.json"),
     ];
     for path in &candidates {
         if let Ok(json) = std::fs::read_to_string(path) {

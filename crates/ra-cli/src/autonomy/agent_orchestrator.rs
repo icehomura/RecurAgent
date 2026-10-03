@@ -21166,9 +21166,6 @@ fn parse_loop_create(request: &LoopCreateRequest) -> Result<ParsedLoopCreate, Rp
 /// CLI/serve daemon already runs with the project root as cwd, so a
 /// relative path is sufficient.
 const PROJECT_MAINTENANCE_PROMPT_PATH: &str = ".ra/loop.md";
-/// User-level fallback. Tilde expansion mirrors `tools/hooks` semantics
-/// (HOME-prefixed, no `~user` form).
-const USER_MAINTENANCE_PROMPT_PATH: &str = "~/.ra/loop.md";
 
 /// Build a fresh [`LoopRuntime`] view from the persisted record. The
 /// runtime is stateless across fires — it inspects the record's status,
@@ -21270,8 +21267,9 @@ fn resolve_maintenance_prompt_at_fire_time() -> MaintenancePromptResolution {
 /// #38 — the cwd-parameterized core of the fire-time prompt resolution.
 fn resolve_maintenance_prompt_at_fire_time_in(cwd: &Path) -> MaintenancePromptResolution {
     let project = std::fs::read_to_string(cwd.join(PROJECT_MAINTENANCE_PROMPT_PATH)).ok();
-    let user = expand_home_path(USER_MAINTENANCE_PROMPT_PATH)
-        .and_then(|path| std::fs::read_to_string(path).ok());
+    // User-level fallback: the brand state home's `loop.md` (`~/.ra`, or the
+    // existing legacy `~/.ra` — see `ra_core::brand::state_home`).
+    let user = std::fs::read_to_string(ra_core::brand::state_path("loop.md")).ok();
     // `resolve_maintenance_prompt` only errors when *every* candidate is
     // empty; we always pass the built-in as the final fallback, so the
     // result is infallible here.
@@ -21284,12 +21282,6 @@ fn resolve_maintenance_prompt_at_fire_time_in(cwd: &Path) -> MaintenancePromptRe
         source: MaintenancePromptSource::BuiltIn,
         prompt: BUILT_IN_MAINTENANCE_PROMPT.to_owned(),
     })
-}
-
-fn expand_home_path(input: &str) -> Option<PathBuf> {
-    let suffix = input.strip_prefix("~/")?;
-    let home = std::env::var_os("HOME")?;
-    Some(PathBuf::from(home).join(suffix))
 }
 
 fn maintenance_prompt_source_label(source: MaintenancePromptSource) -> &'static str {

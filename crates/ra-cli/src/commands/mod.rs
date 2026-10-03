@@ -106,11 +106,11 @@ pub struct Args {
 /// Build a version string like "0.1.0 (abc1234 2026-03-02)".
 fn version_string() -> &'static str {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    const GIT_HASH: &str = match option_env!("OCTOS_GIT_HASH") {
+    const GIT_HASH: &str = match option_env!("RA_GIT_HASH") {
         Some(v) => v,
         None => "",
     };
-    const BUILD_DATE: &str = match option_env!("OCTOS_BUILD_DATE") {
+    const BUILD_DATE: &str = match option_env!("RA_BUILD_DATE") {
         Some(v) => v,
         None => "",
     };
@@ -149,7 +149,7 @@ pub enum Command {
     Doctor(DoctorCommand),
     /// Generate documentation for tools and providers.
     Docs(DocsCommand),
-    /// Initialize a new .ra configuration.
+    /// Initialize a new ra configuration.
     Init(InitCommand),
     /// Query inbox notes file paths (read-only; OLP observability).
     Inbox(InboxCommand),
@@ -226,7 +226,7 @@ pub trait Executable {
 
 /// Resolve the data directory for episodes, memory, sessions, etc.
 ///
-/// Priority: `--data-dir` CLI flag > `OCTOS_HOME` env var > `~/.ra` default.
+/// Priority: `--data-dir` CLI flag > `RA_HOME` env var > `~/.ra` default.
 /// Delegates to the canonical [`resolve_config_context`] so the `data_dir`
 /// computation (including empty-string env handling) never diverges from
 /// config/auth resolution.
@@ -267,8 +267,8 @@ pub fn resolve_command_context(
 /// Load a prompt from `~/.ra/prompts/{name}.md` at runtime.
 /// Falls back to `compiled_default` if the file doesn't exist or is empty.
 pub(crate) fn load_prompt(name: &str, compiled_default: &str) -> String {
-    if let Some(home) = dirs::home_dir() {
-        let path = home.join(".ra/prompts").join(format!("{name}.md"));
+    if let Some(home) = ra_core::brand::state_home() {
+        let path = home.join("prompts").join(format!("{name}.md"));
         if let Ok(content) = std::fs::read_to_string(&path) {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
@@ -357,7 +357,7 @@ pub(crate) fn build_credential_pool(
     }
 }
 
-/// Load optional bootstrap/personality files from the .ra/ directory.
+/// Load optional bootstrap/personality files from the data directory.
 /// Used by both chat and gateway to build the system prompt from AGENTS.md, SOUL.md, etc.
 pub(crate) fn load_bootstrap_files(data_dir: &std::path::Path) -> String {
     const FILES: &[&str] = &["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"];
@@ -383,8 +383,8 @@ pub(crate) fn load_profile_prompt_template(
     profile_name: &str,
     template_rel: &std::path::Path,
 ) -> Option<String> {
-    let home = dirs::home_dir()?;
-    let base = home.join(".ra/profiles").join(profile_name);
+    let home = ra_core::brand::state_home()?;
+    let base = home.join("profiles").join(profile_name);
     let path = base.join(template_rel);
     match std::fs::read_to_string(&path) {
         Ok(text) => {

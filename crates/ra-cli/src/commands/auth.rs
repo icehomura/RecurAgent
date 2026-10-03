@@ -14,7 +14,7 @@ use crate::profiles::ProfileStore;
 
 /// Open the global auth store for the `auth login/logout/status` commands.
 ///
-/// Auth is GLOBAL: it lives under the resolver's `auth_home` (OCTOS_CONFIG_DIR
+/// Auth is GLOBAL: it lives under the resolver's `auth_home` (RA_CONFIG_DIR
 /// if set, else the XDG default), independent of `--data-dir`. We run the
 /// migrations first so a legacy `~/.ra/auth.json` is copied into the XDG
 /// location (0600, legacy left intact) before the store opens.
@@ -256,8 +256,9 @@ fn status() -> Result<()> {
 // ── Keychain subcommands ───────────────────────────────────────────────────
 
 fn open_profile_store() -> Result<ProfileStore> {
-    let home = dirs::home_dir().ok_or_else(|| eyre::eyre!("cannot determine home directory"))?;
-    ProfileStore::open_unified(&home.join(".ra"))
+    let home = ra_core::brand::state_home()
+        .ok_or_else(|| eyre::eyre!("cannot determine the ra state home directory"))?;
+    ProfileStore::open_unified(&home)
 }
 
 /// Whether storing `secret` under `name` must be scoped per profile: a declared

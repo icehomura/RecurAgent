@@ -3051,8 +3051,8 @@ pub async fn platform_service_logs(
         .min(200);
 
     // Match the runtime's home resolution (api/ominix_runtime.rs): a custom
-    // OCTOS_OMINIX_HOME relocates the whole OMiniX home, logs included.
-    let home = std::env::var_os("OCTOS_OMINIX_HOME")
+    // RA_OMINIX_HOME relocates the whole OMiniX home, logs included.
+    let home = ra_core::brand::env_compat("OMINIX_HOME")
         .or_else(|| std::env::var_os("HOME"))
         .map(std::path::PathBuf::from)
         .or_else(dirs::home_dir)
@@ -4283,7 +4283,7 @@ pub async fn model_limits() -> Json<serde_json::Value> {
     // Read the runtime catalog from the profile data dir
     let home = std::env::var("HOME").unwrap_or_default();
     for base in &[
-        format!("{home}/.ra/profiles"),
+        ra_core::brand::state_path("profiles").display().to_string(),
         format!("{home}/.crew/profiles"),
     ] {
         if let Ok(entries) = std::fs::read_dir(base) {
@@ -4298,7 +4298,9 @@ pub async fn model_limits() -> Json<serde_json::Value> {
         }
     }
     // Fallback to shared catalog
-    let shared = format!("{home}/.ra/model_catalog.json");
+    let shared = ra_core::brand::state_path("model_catalog.json")
+        .display()
+        .to_string();
     if let Ok(content) = std::fs::read_to_string(&shared) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&content) {
             return Json(value);
@@ -6750,7 +6752,7 @@ mod tests {
         assert!(last_lines("", 5).is_empty());
     }
 
-    /// With a custom `OCTOS_OMINIX_HOME`, the logs endpoint must read the
+    /// With a custom `RA_OMINIX_HOME`, the logs endpoint must read the
     /// main log from the relocated home and surface the plist's stderr
     /// log (`api.err.log`) alongside it.
     #[tokio::test]
@@ -6769,12 +6771,12 @@ mod tests {
         std::fs::write(ominix.join("api.log"), "boot ok\nserving\n").unwrap();
         std::fs::write(ominix.join("api.err.log"), "panic: bind failed\n").unwrap();
 
-        let keys = ["OCTOS_OMINIX_HOME", "HOME"];
+        let keys = ["RA_OMINIX_HOME", "HOME"];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
             keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         // SAFETY: serialized by TEST_ENV_LOCK; restored below.
         unsafe {
-            std::env::set_var("OCTOS_OMINIX_HOME", custom.path());
+            std::env::set_var("RA_OMINIX_HOME", custom.path());
             std::env::set_var("HOME", default_home.path());
         }
         let result =
@@ -6810,12 +6812,12 @@ mod tests {
         std::fs::create_dir_all(&ominix).unwrap();
         std::fs::write(ominix.join("api.err.log"), "panic: bind failed\n").unwrap();
 
-        let keys = ["OCTOS_OMINIX_HOME", "HOME"];
+        let keys = ["RA_OMINIX_HOME", "HOME"];
         let saved: Vec<(&str, Option<std::ffi::OsString>)> =
             keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         // SAFETY: serialized by TEST_ENV_LOCK; restored below.
         unsafe {
-            std::env::set_var("OCTOS_OMINIX_HOME", custom.path());
+            std::env::set_var("RA_OMINIX_HOME", custom.path());
             std::env::set_var("HOME", default_home.path());
         }
         let result =

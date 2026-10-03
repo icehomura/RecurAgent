@@ -33,7 +33,7 @@ pub struct InboxPathArgs {
     #[arg(long)]
     pub session: String,
     /// Data-dir override (defaults to the standard resolution:
-    /// `OCTOS_HOME` > `~/.ra`).
+    /// `RA_HOME` > `~/.ra`).
     #[arg(long, value_name = "DIR")]
     pub data_dir: Option<PathBuf>,
 }

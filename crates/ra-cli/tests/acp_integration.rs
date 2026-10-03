@@ -416,8 +416,8 @@ fn should_emit_only_valid_json_on_stdout_when_running_acp() {
         ])
         .env("RUST_LOG", "info") // force startup logging so a leak would show
         .env("HOME", &home)
-        .env("OCTOS_HOME", &data)
-        .env("OCTOS_CONFIG_DIR", &config)
+        .env("RA_HOME", &data)
+        .env("RA_CONFIG_DIR", &config)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

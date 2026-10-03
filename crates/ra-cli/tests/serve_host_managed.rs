@@ -56,11 +56,16 @@ mod serve_host_managed {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .env("NO_COLOR", "1")
+        .env_remove("RA_AUTH_TOKEN")
         .env_remove("OCTOS_AUTH_TOKEN")
+        .env_remove("RA_HOST_EXTERNAL_TOKEN")
         .env_remove("OCTOS_HOST_EXTERNAL_TOKEN")
         .env_remove("RA_INSTANCE_DATA_DIR")
+        .env_remove("RA_HOME")
         .env_remove("OCTOS_HOME")
+        .env_remove("RA_DATA_DIR")
         .env_remove("OCTOS_DATA_DIR")
+        .env_remove("RA_SOLO_LOGIN")
         .env_remove("OCTOS_SOLO_LOGIN");
         cmd
     }
@@ -241,10 +246,11 @@ mod serve_host_managed {
             .arg("--instance-data-dir")
             .arg(dir.path())
             .env(
-                "OCTOS_AUTH_TOKEN",
+                "RA_AUTH_TOKEN",
                 "host-managed-e2e-host-token-0123456789abcdef",
             )
             .env_remove("RA_INSTANCE_DATA_DIR")
+            .env_remove("RA_HOME")
             .env_remove("OCTOS_HOME")
             .stdin(std::process::Stdio::null())
             .output()

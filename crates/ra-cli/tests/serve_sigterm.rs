@@ -99,11 +99,13 @@ mod serve_sigterm {
         .env("DEEPSEEK_API_KEY", "sigterm-e2e-dummy")
         // Bearer token for the SSE endpoint the third test subscribes to.
         // Harmless to the other scenarios (they never authenticate).
-        .env("OCTOS_AUTH_TOKEN", "sigterm-e2e-token")
+        .env("RA_AUTH_TOKEN", "sigterm-e2e-token")
         // The host session may export RA_INSTANCE_DATA_DIR (shared instance
         // lock). Remove it so the child uses ONLY our private --instance-data-dir.
         .env_remove("RA_INSTANCE_DATA_DIR")
+        .env_remove("RA_HOME")
         .env_remove("OCTOS_HOME")
+        .env_remove("RA_DATA_DIR")
         .env_remove("OCTOS_DATA_DIR");
         #[cfg(unix)]
         unsafe {

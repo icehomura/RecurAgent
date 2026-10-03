@@ -7830,7 +7830,7 @@ async fn launch_resolve_prefers_persisted_default_profile() {
     use ra_core::ui_protocol::{LaunchDecisionKind, LaunchResolveParams};
 
     let tmp = tempfile::tempdir().unwrap();
-    // The default-profile pointer lives in its own ra home; each profile
+    // The default-profile pointer lives in its own ra state home; each profile
     // bootstraps in a separate data dir because the redb episode store takes
     // an exclusive lock and two profiles cannot share one.
     let home = tmp.path().join("home");

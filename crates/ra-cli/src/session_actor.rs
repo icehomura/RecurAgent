@@ -221,7 +221,7 @@ const DEFAULT_CONTEXT_COMPACT_KEEP_ITEMS: usize = 16;
 /// pathological inputs; lower values short-circuit legitimate two-step
 /// recoveries (e.g. "pick a valid voice → MiniMax rate-limit on retry").
 ///
-/// Configurable at runtime via `OCTOS_MAX_CONSECUTIVE_RECOVERY_TURNS`. Clamped
+/// Configurable at runtime via `RA_MAX_CONSECUTIVE_RECOVERY_TURNS`. Clamped
 /// to `[1, 10]` so a misconfigured env var cannot disable the cap or
 /// runaway the loop.
 const MAX_CONSECUTIVE_RECOVERY_TURNS: u32 = 2;
@@ -274,7 +274,7 @@ fn hashed_session_sidecar_path(
 }
 
 fn verifier_flag_enabled() -> bool {
-    verifier_flag_value_enabled(std::env::var("OCTOS_AGENT_VERIFIER").ok().as_deref())
+    verifier_flag_value_enabled(ra_core::brand::env_compat_str("AGENT_VERIFIER").as_deref())
 }
 
 fn verifier_flag_value_enabled(value: Option<&str>) -> bool {
@@ -656,8 +656,7 @@ impl SessionActorPromptContextBridge {
     }
 
     fn threshold_tokens(request: &PromptContextRequest) -> usize {
-        std::env::var("OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS")
-            .ok()
+        ra_core::brand::env_compat_str("CONTEXT_COMPACT_THRESHOLD_TOKENS")
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or_else(|| {
                 (request.context_window as usize * DEFAULT_CONTEXT_COMPACT_RATIO_NUMERATOR
@@ -667,8 +666,7 @@ impl SessionActorPromptContextBridge {
     }
 
     fn keep_items() -> usize {
-        std::env::var("OCTOS_CONTEXT_COMPACT_KEEP_ITEMS")
-            .ok()
+        ra_core::brand::env_compat_str("CONTEXT_COMPACT_KEEP_ITEMS")
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(DEFAULT_CONTEXT_COMPACT_KEEP_ITEMS)
     }
@@ -2235,13 +2233,13 @@ pub(crate) fn build_recovery_prompt_body(
     )
 }
 
-/// Prototype gate (env `OCTOS_AUTO_REVIEW_BACKGROUND`): when truthy, a
+/// Prototype gate (env `RA_AUTO_REVIEW_BACKGROUND`): when truthy, a
 /// delivered background-task result triggers ONE agent turn so the model
 /// reviews/summarizes it instead of waiting for the user to type "check".
 /// Off by default — this is the event-driven completion-acknowledgment
 /// prototype; graduate it to a profile config field before GA.
 fn auto_review_background_completions_enabled() -> bool {
-    std::env::var("OCTOS_AUTO_REVIEW_BACKGROUND")
+    ra_core::brand::env_compat_str("AUTO_REVIEW_BACKGROUND")
         .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
         .unwrap_or(false)
 }
@@ -4131,8 +4129,8 @@ impl ActorFactory {
         agent = agent.with_persistent_retry_state(persistent_retry_state.clone());
 
         if verifier_flag_enabled() {
-            let model_label = std::env::var("OCTOS_AGENT_VERIFIER_MODEL")
-                .unwrap_or_else(|_| "session-cheap-verifier".to_string());
+            let model_label = ra_core::brand::env_compat_str("AGENT_VERIFIER_MODEL")
+                .unwrap_or_else(|| "session-cheap-verifier".to_string());
             agent = agent.with_verifier_config(
                 AgentVerifierConfig::with_provider(self.llm_for_compaction.clone(), model_label)
                     .with_ledger_path(turn_ledger_sidecar_path(&self.data_dir, &session_key)),
@@ -4891,10 +4889,10 @@ impl SessionActor {
     }
 
     /// Effective ceiling on consecutive recovery turns, env-overridable via
-    /// `OCTOS_MAX_CONSECUTIVE_RECOVERY_TURNS`. Clamped to `[1, 10]` so a
+    /// `RA_MAX_CONSECUTIVE_RECOVERY_TURNS`. Clamped to `[1, 10]` so a
     /// misconfigured value cannot disable the cap entirely.
     fn max_consecutive_recovery_turns(&self) -> u32 {
-        if let Ok(raw) = std::env::var("OCTOS_MAX_CONSECUTIVE_RECOVERY_TURNS") {
+        if let Some(raw) = ra_core::brand::env_compat_str("MAX_CONSECUTIVE_RECOVERY_TURNS") {
             if let Ok(value) = raw.parse::<u32>() {
                 return value.clamp(1, 10);
             }
@@ -5006,7 +5004,7 @@ impl SessionActor {
     }
 
     fn context_compact_threshold_tokens(&self) -> usize {
-        if let Ok(raw) = std::env::var("OCTOS_CONTEXT_COMPACT_THRESHOLD_TOKENS") {
+        if let Some(raw) = ra_core::brand::env_compat_str("CONTEXT_COMPACT_THRESHOLD_TOKENS") {
             if let Ok(value) = raw.parse::<usize>() {
                 return value;
             }
@@ -5018,8 +5016,7 @@ impl SessionActor {
     }
 
     fn context_compact_keep_items(&self) -> usize {
-        std::env::var("OCTOS_CONTEXT_COMPACT_KEEP_ITEMS")
-            .ok()
+        ra_core::brand::env_compat_str("CONTEXT_COMPACT_KEEP_ITEMS")
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(DEFAULT_CONTEXT_COMPACT_KEEP_ITEMS)
     }
@@ -6117,7 +6114,7 @@ impl SessionActor {
                                 let _ = ack.send(persisted);
                             }
                             // Event-driven completion review (prototype, gated by
-                            // OCTOS_AUTO_REVIEW_BACKGROUND): the actor is idle and a
+                            // RA_AUTO_REVIEW_BACKGROUND): the actor is idle and a
                             // background task's result just landed — exactly the case
                             // where the user otherwise has to type "check". Dispatch
                             // ONE agent turn so the model reviews/summarizes the

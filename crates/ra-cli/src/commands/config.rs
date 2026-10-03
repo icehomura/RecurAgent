@@ -29,7 +29,7 @@ pub struct ConfigCommand {
     #[arg(long, global = true, value_name = "FILE")]
     config: Option<PathBuf>,
 
-    /// Data directory (defaults to $OCTOS_HOME or ~/.ra).
+    /// Data directory (defaults to $RA_HOME or ~/.ra).
     #[arg(long, global = true, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 

@@ -49,6 +49,8 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
     std::fs::create_dir_all(&cwd).expect("cwd");
     let session = "prod:local:tui#coding";
     // Seed a REAL session transcript so the CLI's existence check passes.
+    // "ra" is the production default profile id (stored state, not brand):
+    // its on-disk directory keeps the legacy name.
     let root = project_sessions_root(&cwd, "ra");
     let base = session.split('#').next().expect("base");
     let topic = session.split('#').nth(1).unwrap_or("default");
@@ -59,7 +61,7 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
         .join(format!("{}.jsonl", encode_path_component(topic)));
     std::fs::create_dir_all(transcript.parent().expect("parent")).expect("mkdir");
     std::fs::write(&transcript, "{}\n").expect("seed transcript");
-    // Instance data dir under OCTOS_HOME.
+    // Instance data dir under RA_HOME.
     let state_home = temp.path().join("home");
     let instance_data = state_home.join("profiles").join("ra").join("data");
     std::fs::create_dir_all(&instance_data).expect("instance data");
@@ -67,7 +69,7 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
     let output = Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(["steer", "--session", session, "--text", "读黑板第 7 条"])
         .current_dir(&cwd)
-        .env("OCTOS_HOME", &state_home)
+        .env("RA_HOME", &state_home)
         .output()
         .expect("run ra steer");
     assert!(
@@ -100,7 +102,7 @@ fn olp_ctrl_steer_subprocess_cli_writes_sidecar_and_marker() {
     let ghost = Command::new(env!("CARGO_BIN_EXE_ra"))
         .args(["steer", "--session", "ghost:nonexistent", "--text", "hi"])
         .current_dir(&cwd)
-        .env("OCTOS_HOME", &state_home)
+        .env("RA_HOME", &state_home)
         .output()
         .expect("run ra steer ghost");
     assert!(!ghost.status.success(), "ghost session must be refused");

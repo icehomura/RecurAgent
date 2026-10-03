@@ -46,7 +46,7 @@ pub enum AuthIdentity {
 }
 
 /// Backward-compatible default when the operator has not configured a
-/// base domain via `config.base_domain` or `OCTOS_BASE_DOMAIN`.
+/// base domain via `config.base_domain` or `RA_BASE_DOMAIN`.
 pub const DEFAULT_BASE_DOMAIN: &str = "crew.ominix.io";
 
 /// Return the matched route template for logging, never the raw request path.
@@ -198,7 +198,7 @@ fn normalize_appui_origin(raw: &str) -> eyre::Result<String> {
 
 /// Resolve the effective operator/loopback origin list at serve startup.
 ///
-/// A non-empty `OCTOS_APPUI_ALLOWED_ORIGINS` value replaces the config list;
+/// A non-empty `RA_APPUI_ALLOWED_ORIGINS` value replaces the config list;
 /// an absent or whitespace-only value leaves config authoritative. The
 /// bound HTTP port's three loopback spellings are appended automatically.
 /// HTTP serve resolves an ephemeral `--port 0` before calling this helper;
@@ -215,7 +215,7 @@ pub(crate) fn resolve_appui_allowed_origins(
     };
 
     let source = if env_override.is_some() {
-        "OCTOS_APPUI_ALLOWED_ORIGINS"
+        "RA_APPUI_ALLOWED_ORIGINS"
     } else {
         "appui.allowed_origins"
     };
@@ -993,7 +993,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-/// Cached parsed list of trusted-proxy CIDRs from `OCTOS_TRUSTED_PROXY_CIDRS`.
+/// Cached parsed list of trusted-proxy CIDRs from `RA_TRUSTED_PROXY_CIDRS`.
 ///
 /// Initialised once on first call. Empty if the env var is unset or no
 /// entries parse. Each entry is `(network address as 16-byte big-endian, prefix bits)`,
@@ -1004,7 +1004,7 @@ fn trusted_proxy_cidrs() -> &'static [TrustedProxyCidr] {
     static CACHE: OnceLock<Vec<TrustedProxyCidr>> = OnceLock::new();
     CACHE
         .get_or_init(|| {
-            let raw = std::env::var("OCTOS_TRUSTED_PROXY_CIDRS").unwrap_or_default();
+            let raw = ra_core::brand::env_compat_str("TRUSTED_PROXY_CIDRS").unwrap_or_default();
             let mut out = Vec::new();
             for entry in raw.split(',') {
                 let entry = entry.trim();
@@ -1016,7 +1016,7 @@ fn trusted_proxy_cidrs() -> &'static [TrustedProxyCidr] {
                     None => tracing::warn!(
                         target: "ra::api::auth",
                         cidr = %entry,
-                        "OCTOS_TRUSTED_PROXY_CIDRS entry could not be parsed; ignoring"
+                        "RA_TRUSTED_PROXY_CIDRS entry could not be parsed; ignoring"
                     ),
                 }
             }
@@ -1102,7 +1102,7 @@ fn ip_matches_cidr(ip: std::net::IpAddr, cidr: &TrustedProxyCidr) -> bool {
 /// host as the daemon and `reverse_proxy localhost:NN`, so the
 /// `X-Profile-Id` it sets always arrives over loopback. The fleet's
 /// trust model is therefore: loopback ⇒ trusted, anything else ⇒ untrusted
-/// unless the operator explicitly opts in via `OCTOS_TRUSTED_PROXY_CIDRS`
+/// unless the operator explicitly opts in via `RA_TRUSTED_PROXY_CIDRS`
 /// (a comma-separated list of CIDRs).
 ///
 /// `None` for the remote addr means we couldn't read `ConnectInfo` —
@@ -1306,8 +1306,8 @@ async fn resolve_identity(state: &AppState, token: &str) -> Option<AuthIdentity>
         }
     }
 
-    // 1b. Check OCTOS_TEST_TOKEN for e2e test auth bypass
-    if let Ok(test_token) = std::env::var("OCTOS_TEST_TOKEN") {
+    // 1b. Check RA_TEST_TOKEN for e2e test auth bypass
+    if let Some(test_token) = ra_core::brand::env_compat_str("TEST_TOKEN") {
         if !test_token.is_empty() && constant_time_eq(token.as_bytes(), test_token.as_bytes()) {
             return Some(AuthIdentity::User {
                 id: "e2e-test".into(),
@@ -1395,7 +1395,7 @@ async fn user_auth_middleware(
     // so requests through the proxy are implicitly authenticated.
     // SECURITY: Only accept this header from a TRUSTED proxy address —
     // loopback by default, plus any CIDR listed in
-    // `OCTOS_TRUSTED_PROXY_CIDRS`. The Layer-1 strip middleware uses
+    // `RA_TRUSTED_PROXY_CIDRS`. The Layer-1 strip middleware uses
     // the SAME helper (`is_trusted_proxy_addr`), so operators who run
     // an off-host reverse proxy can opt the auth path in via the same
     // env var that controls the strip path — keeping the two layers
@@ -2244,7 +2244,7 @@ mod tests {
     #[test]
     fn is_trusted_proxy_addr_rejects_public_ipv4() {
         // 1.1.1.1 (Cloudflare DNS) is not in any default-trusted block,
-        // so without `OCTOS_TRUSTED_PROXY_CIDRS` it must be rejected.
+        // so without `RA_TRUSTED_PROXY_CIDRS` it must be rejected.
         assert!(!is_trusted_proxy_addr(Some(IpAddr::V4(Ipv4Addr::new(
             1, 1, 1, 1
         )))));
@@ -2265,7 +2265,7 @@ mod tests {
         // private blocks are NOT auto-trusted because a corp VPN may
         // assign them to attacker workstations. Operators with a real
         // upstream proxy on the LAN can opt in via
-        // `OCTOS_TRUSTED_PROXY_CIDRS`.
+        // `RA_TRUSTED_PROXY_CIDRS`.
         assert!(!is_trusted_proxy_addr(Some(IpAddr::V4(Ipv4Addr::new(
             10, 0, 0, 1
         )))));

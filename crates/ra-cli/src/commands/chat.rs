@@ -38,7 +38,7 @@ pub struct ChatCommand {
     #[arg(short, long)]
     pub cwd: Option<PathBuf>,
 
-    /// Data directory for episodes, memory, sessions (defaults to $OCTOS_HOME or ~/.ra).
+    /// Data directory for episodes, memory, sessions (defaults to $RA_HOME or ~/.ra).
     #[arg(long)]
     pub data_dir: Option<PathBuf>,
 
@@ -100,7 +100,7 @@ pub struct ChatCommand {
     /// JSON/TOML file.
     ///
     /// If the id names a stored serve/onboarding profile (one created by
-    /// `octos serve` or octoscode, saved as `~/.ra/profiles/<id>.json`),
+    /// `ra serve` or octoscode, saved as `~/.ra/profiles/<id>.json`),
     /// its LLM provider/model, route, and API key (`env_vars`) are reused too —
     /// so you don't re-enter a model or key that a profile already holds.
     /// `--config`, `--provider`, and `--model` still override.
@@ -820,8 +820,8 @@ pub(crate) fn resolve_profile(
     // filesystem APIs, which `load` will then detect as a path arg) or a
     // simple profile name if the link points at a directory under
     // `~/.ra/profiles/`.
-    if let Some(home) = dirs::home_dir() {
-        let pointer = home.join(".ra/profile");
+    if let Some(home) = ra_core::brand::state_home() {
+        let pointer = home.join("profile");
         if pointer.symlink_metadata().is_ok() {
             // Plain symlink: dereference and feed the target into `load`.
             if let Ok(target) = std::fs::read_link(&pointer) {
@@ -855,7 +855,7 @@ pub(crate) fn resolve_profile(
 }
 
 /// Load the LLM config from a stored serve/onboarding profile so
-/// `octos chat --profile <id>` can reuse an octoscode / `serve` profile's
+/// `ra chat --profile <id>` can reuse an octoscode / `serve` profile's
 /// provider, model, route (base URL + API type), API key (`config.env_vars`),
 /// and fallbacks — without a separate flat config or a duplicated key.
 ///
@@ -926,7 +926,8 @@ pub(crate) fn resolve_provider_policy(
 /// With the default build (feature `embed-llama`) and no `embedding` section,
 /// the bundled in-process embedder is used: EmbeddingGemma-300M under
 /// `<data_dir>/models/`, fetched on first use unless downloads are disabled
-/// (`embedding.auto_download = false` / `OCTOS_NO_MODEL_DOWNLOAD`). Without
+/// (`embedding.auto_download = false` / `RA_NO_MODEL_DOWNLOAD`, legacy
+/// `OCTOS_NO_MODEL_DOWNLOAD`). Without
 /// the model the runtime stays keyword-only.
 pub(crate) fn create_embedder(config: &Config) -> Option<Arc<dyn EmbeddingProvider>> {
     let data_dir = ra_services::config_context::resolve_config_context(None).data_dir;

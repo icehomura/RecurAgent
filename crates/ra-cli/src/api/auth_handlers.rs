@@ -5867,8 +5867,8 @@ mod tests {
     #[ignore = "requires built learning-coach and an explicitly supplied Gemini test key"]
     async fn profile_model_real_coach_acceptance() {
         use std::os::unix::fs::PermissionsExt;
-        let coach = std::path::PathBuf::from(std::env::var("OCTOS_TEST_COACH_ROOT").unwrap());
-        let key = std::env::var("OCTOS_TEST_LESSON_KEY").unwrap();
+        let coach = std::path::PathBuf::from(ra_core::brand::env_compat_str("TEST_COACH_ROOT").unwrap());
+        let key = ra_core::brand::env_compat_str("TEST_LESSON_KEY").unwrap();
         let (_dir, mut state, _, store) = temp_app_state();
         state.deployment_mode = crate::config::DeploymentMode::Cloud;
         state.solo_login_enabled = false;
@@ -6011,17 +6011,21 @@ mod tests {
             store.save(&profile).unwrap();
             let skill = store.resolve_data_dir(&profile).join("skills/env-probe");
             std::fs::create_dir_all(&skill).unwrap();
-            std::fs::write(skill.join("manifest.json"), r#"{"name":"env-probe","version":"1.0","tools":[{"name":"env_probe","description":"fixture","input_schema":{"type":"object"},"env":["GEMINI_API_KEY","OCTOS_PROFILE_ID","OCTOS_DATA_DIR","OCTOS_PROFILE_LLM_MODEL","OCTOS_PROFILE_LLM_CONFIG_REVISION"]}]}"#).unwrap();
+            std::fs::write(skill.join("manifest.json"), r#"{"name":"env-probe","version":"1.0","tools":[{"name":"env_probe","description":"fixture","input_schema":{"type":"object"},"env":["GEMINI_API_KEY","RA_PROFILE_ID","OCTOS_PROFILE_ID","RA_DATA_DIR","OCTOS_DATA_DIR","RA_PROFILE_LLM_MODEL","OCTOS_PROFILE_LLM_MODEL","RA_PROFILE_LLM_CONFIG_REVISION","OCTOS_PROFILE_LLM_CONFIG_REVISION"]}]}"#).unwrap();
             let binary = skill.join("env-probe");
             std::fs::write(&binary, r#"#!/bin/sh
 read INPUT || true
+profile_id="${RA_PROFILE_ID:-$OCTOS_PROFILE_ID}"
+data_dir="${RA_DATA_DIR:-$OCTOS_DATA_DIR}"
+model="${RA_PROFILE_LLM_MODEL:-$OCTOS_PROFILE_LLM_MODEL}"
+revision="${RA_PROFILE_LLM_CONFIG_REVISION:-$OCTOS_PROFILE_LLM_CONFIG_REVISION}"
 ok=false
-if [ "$GEMINI_API_KEY" = "fixture-$OCTOS_PROFILE_ID" ]; then ok=true; fi
-if [ -f "$OCTOS_DATA_DIR/hold" ]; then
-  touch "$OCTOS_DATA_DIR/started"
-  while [ -f "$OCTOS_DATA_DIR/hold" ]; do sleep 0.02; done
+if [ "$GEMINI_API_KEY" = "fixture-$profile_id" ]; then ok=true; fi
+if [ -f "$data_dir/hold" ]; then
+  touch "$data_dir/started"
+  while [ -f "$data_dir/hold" ]; do sleep 0.02; done
 fi
-printf '{"success":%s,"output":"%s","structured_metadata":{"revision":"%s"}}\n' "$ok" "$OCTOS_PROFILE_LLM_MODEL" "$OCTOS_PROFILE_LLM_CONFIG_REVISION"
+printf '{"success":%s,"output":"%s","structured_metadata":{"revision":"%s"}}\n' "$ok" "$model" "$revision"
 "#).unwrap();
             std::fs::set_permissions(binary, std::fs::Permissions::from_mode(0o700)).unwrap();
             let Json(response) = update_my_profile(

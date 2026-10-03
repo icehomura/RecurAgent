@@ -970,11 +970,11 @@ thread_local! {
 }
 
 /// Kill switch for the source-history fast path: set
-/// `OCTOS_CONTEXT_FINGERPRINT=0` to force the exact replay on every check.
+/// `RA_CONTEXT_FINGERPRINT=0` to force the exact replay on every check.
 fn source_history_fingerprint_enabled() -> bool {
     !matches!(
-        std::env::var("OCTOS_CONTEXT_FINGERPRINT").as_deref(),
-        Ok("0") | Ok("off") | Ok("false")
+        ra_core::brand::env_compat_str("CONTEXT_FINGERPRINT").as_deref(),
+        Some("0") | Some("off") | Some("false")
     )
 }
 

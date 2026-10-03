@@ -2,7 +2,7 @@
 //!
 //! Each profile is a named configuration bundle that defines an LLM provider,
 //! channel credentials, and gateway settings. Profiles are stored as individual
-//! JSON files in `~/.ra/profiles/`.
+//! JSON files in `~/.ra/profiles/` (legacy `~/.ra/profiles/`).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -15,6 +15,9 @@ use crate::config::{ChannelEntry, CloudTtsConfig, Config, FallbackModel, Gateway
 
 pub const MAX_SUB_ACCOUNTS_PER_PARENT: usize = 10;
 pub(crate) const HOST_ASR_LANGUAGE_ENV: &str = "OCTOS_HOST_ASR_LANGUAGE";
+/// New-name spelling of [`HOST_ASR_LANGUAGE_ENV`]; spawned children get both so
+/// readers on either side of the rename agree.
+pub(crate) const RA_HOST_ASR_LANGUAGE_ENV: &str = "RA_HOST_ASR_LANGUAGE";
 
 pub const SUPPORTED_ASR_LANGUAGES: &[&str] = &[
     "Chinese",
@@ -2925,7 +2928,7 @@ pub(crate) fn config_from_profile(
     }
 }
 
-/// Convert a `ChannelCredentials` to a ra `ChannelEntry` JSON value.
+/// Convert a `ChannelCredentials` to an ra `ChannelEntry` JSON value.
 fn channel_to_entry(cred: &ChannelCredentials) -> serde_json::Value {
     match cred {
         ChannelCredentials::Telegram {
@@ -3811,11 +3814,7 @@ mod tests {
     #[test]
     #[ignore = "reads the operator's live ~/.ra/profiles/ra.json; run explicitly"]
     fn live_profile_carries_zai_and_goal_verifier_lanes() {
-        let path = dirs::home_dir()
-            .expect("home dir")
-            .join(".ra")
-            .join("profiles")
-            .join("ra.json");
+        let path = ra_core::brand::state_path("profiles").join("ra.json");
         let content = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("live profile unreadable at {}: {e}", path.display()));
         let profile: UserProfile =

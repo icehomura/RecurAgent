@@ -47,7 +47,7 @@ pub struct GatewayCommand {
     #[arg(short, long)]
     pub cwd: Option<PathBuf>,
 
-    /// Data directory for episodes, memory, sessions (defaults to $OCTOS_HOME or ~/.ra).
+    /// Data directory for episodes, memory, sessions (defaults to $RA_HOME or ~/.ra).
     #[arg(long)]
     pub data_dir: Option<PathBuf>,
 

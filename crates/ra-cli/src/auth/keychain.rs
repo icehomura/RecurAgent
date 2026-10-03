@@ -258,7 +258,8 @@ pub fn is_accessible() -> bool {
 //
 // `<ra home>/secrets/<account>` — one file per secret, 0600, directory
 // 0700. The root mirrors the `ProfileStore::octos_home_dir()` the CLI auth
-// commands use (`~/.ra`): same resolver, `secrets/` sibling of `profiles/`.
+// commands use (`~/.ra`, legacy `~/.ra`): same resolver, `secrets/`
+// sibling of `profiles/`.
 #[cfg(any(target_os = "linux", all(test, unix)))]
 pub(crate) mod linux_file {
     use std::io::{Read as _, Write as _};
@@ -275,15 +276,13 @@ pub(crate) mod linux_file {
 
     /// The secrets root: `<ra home>/secrets`, with the ra home resolved
     /// exactly as `ProfileStore::octos_home_dir()` does for the CLI auth
-    /// commands (`~/.ra`).
+    /// commands (`~/.ra`, legacy `~/.ra`).
     fn secrets_root() -> Result<PathBuf> {
         #[cfg(test)]
         if let Some(dir) = super::test_store::root() {
             return Ok(dir);
         }
-        let home = dirs::home_dir()
-            .ok_or_else(|| eyre::eyre!("cannot determine home directory for the secret store"))?;
-        Ok(home.join(".ra").join("secrets"))
+        Ok(ra_core::brand::state_path("secrets"))
     }
 
     /// Account names are env-var names or `<ENV>::<profile_id>`; reject
@@ -305,8 +304,9 @@ pub(crate) mod linux_file {
             .file_name()
             .ok_or_else(|| eyre::eyre!("secret root has no name"))?;
         if create {
-            // The production parent is ~/.ra. Refuse a symlink at that
-            // boundary below, rather than following it while chmod'ing secrets.
+            // The production parent is ~/.ra (legacy ~/.ra). Refuse a
+            // symlink at that boundary below, rather than following it while
+            // chmod'ing secrets.
             std::fs::DirBuilder::new()
                 .recursive(true)
                 .mode(0o700)
@@ -927,8 +927,9 @@ mod tests {
     #[cfg(unix)]
     fn should_keep_owner_read_write_permissions_under_restrictive_umask() {
         use std::os::unix::fs::PermissionsExt;
-        const CHILD_ROOT: &str = "OCTOS_TEST_SECRET_UMASK_ROOT";
-        if let Some(root) = std::env::var_os(CHILD_ROOT) {
+        // Manual knob: `RA_TEST_SECRET_UMASK_ROOT=<dir>` (legacy
+        // `OCTOS_TEST_SECRET_UMASK_ROOT`) points this test at a real directory.
+        if let Some(root) = ra_core::brand::env_compat("TEST_SECRET_UMASK_ROOT") {
             let root = std::path::PathBuf::from(root);
             let _root = test_override_secrets_root(root.clone());
             set_secret("KEY", "fixture").unwrap();

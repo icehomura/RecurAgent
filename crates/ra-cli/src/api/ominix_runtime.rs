@@ -136,13 +136,13 @@ pub(crate) struct OminixServiceActionResponse {
 
 impl OminixRuntimeConfig {
     pub(crate) fn from_env() -> Self {
-        let home_dir = std::env::var_os("OCTOS_OMINIX_HOME")
+        let home_dir = ra_core::brand::env_compat("OMINIX_HOME")
             .or_else(|| std::env::var_os("HOME"))
             .map(PathBuf::from)
             .or_else(dirs::home_dir)
             .unwrap_or_else(|| PathBuf::from("/tmp"));
 
-        let binary_path = std::env::var_os("OCTOS_OMINIX_BIN")
+        let binary_path = ra_core::brand::env_compat("OMINIX_BIN")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let local = home_dir.join(".local/bin/ominix-api");
@@ -153,7 +153,7 @@ impl OminixRuntimeConfig {
                 }
             });
 
-        let metallib_path = std::env::var_os("OCTOS_OMINIX_METALLIB")
+        let metallib_path = ra_core::brand::env_compat("OMINIX_METALLIB")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let beside_binary = binary_path
@@ -178,26 +178,23 @@ impl OminixRuntimeConfig {
                 }
             });
 
-        let skip_launchctl = std::env::var("OCTOS_OMINIX_SKIP_LAUNCHCTL")
+        let skip_launchctl = ra_core::brand::env_compat_str("OMINIX_SKIP_LAUNCHCTL")
             .map(|v| is_truthy(&v))
             .unwrap_or(false);
-        let require_metallib = std::env::var("OCTOS_OMINIX_REQUIRE_METALLIB")
+        let require_metallib = ra_core::brand::env_compat_str("OMINIX_REQUIRE_METALLIB")
             .map(|v| is_truthy(&v))
             .unwrap_or(false);
-        let skip_platform_check = std::env::var("OCTOS_OMINIX_SKIP_PLATFORM_CHECK")
+        let skip_platform_check = ra_core::brand::env_compat_str("OMINIX_SKIP_PLATFORM_CHECK")
             .map(|v| is_truthy(&v))
             .unwrap_or(false);
-        let release_repo = std::env::var("OCTOS_OMINIX_RELEASE_REPO")
-            .ok()
+        let release_repo = ra_core::brand::env_compat_str("OMINIX_RELEASE_REPO")
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| DEFAULT_RELEASE_REPO.to_string());
-        let release_version = std::env::var("OCTOS_OMINIX_VERSION")
-            .ok()
+        let release_version = ra_core::brand::env_compat_str("OMINIX_VERSION")
             .map(|v| v.trim().trim_start_matches('v').to_string())
             .filter(|v| !v.is_empty());
-        let release_base_url = std::env::var("OCTOS_OMINIX_RELEASE_BASE_URL")
-            .ok()
+        let release_base_url = ra_core::brand::env_compat_str("OMINIX_RELEASE_BASE_URL")
             .map(|v| v.trim().trim_end_matches('/').to_string())
             .filter(|v| !v.is_empty());
 

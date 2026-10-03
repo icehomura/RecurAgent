@@ -7433,7 +7433,7 @@ fn completion_review_prompt_frames_result_for_the_model() {
 
 #[tokio::test]
 async fn background_result_does_not_auto_review_when_gate_disabled() {
-    // Default (OCTOS_AUTO_REVIEW_BACKGROUND unset): a delivered background
+    // Default (RA_AUTO_REVIEW_BACKGROUND unset): a delivered background
     // result is persisted + broadcast but must NOT spend an extra LLM turn,
     // preserving the pre-prototype behavior. (The enabled path is validated
     // live; edition-2024 makes `set_var` unsafe under deny(unsafe_code), so

@@ -137,7 +137,7 @@ impl ConfigWatcher {
     /// files (codex review round-8 P2).
     ///
     /// Section B (codex review round-7 P2): apply the same
-    /// `OCTOS_PLUGINS_REQUIRE_SIGNED` env-merge that `Config::from_file`
+    /// `RA_PLUGINS_REQUIRE_SIGNED` env-merge that `Config::from_file`
     /// does so the diff doesn't see spurious "plugins changed from true
     /// to false" transitions on a hot edit. Without this, a gateway
     /// spawned with the env-forced policy would emit a bogus restart on

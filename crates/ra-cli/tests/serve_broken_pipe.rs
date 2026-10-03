@@ -107,7 +107,9 @@ mod serve_broken_pipe {
         // The host session may export RA_INSTANCE_DATA_DIR (shared instance
         // lock). Remove it so the child uses ONLY our private --instance-data-dir.
         .env_remove("RA_INSTANCE_DATA_DIR")
+        .env_remove("RA_HOME")
         .env_remove("OCTOS_HOME")
+        .env_remove("RA_DATA_DIR")
         .env_remove("OCTOS_DATA_DIR");
         #[cfg(unix)]
         unsafe {
@@ -126,7 +128,7 @@ mod serve_broken_pipe {
 
     /// Test 1: subprocess_panic_stderr_broken_pipe_no_abort
     ///
-    /// Drive the REAL ra binary with OCTOS_TEST_PANIC_AFTER_BOOT=1, which
+    /// Drive the REAL ra binary with RA_TEST_PANIC_AFTER_BOOT=1, which
     /// triggers a genuine Rust panic AFTER the production hooks are
     /// installed in `main`. stderr is a pipe whose read end is closed
     /// (EPIPE). The production hook (write_panic_report via install_error_hooks)
@@ -141,11 +143,11 @@ mod serve_broken_pipe {
         }
 
         let output = Command::new(octos_binary())
-            .env("OCTOS_TEST_PANIC_AFTER_BOOT", "1")
+            .env("RA_TEST_PANIC_AFTER_BOOT", "1")
             .stderr(unsafe { Stdio::from_raw_fd(fds[1]) })
             .stdout(Stdio::null())
             .status()
-            .expect("failed to run ra with OCTOS_TEST_PANIC_AFTER_BOOT=1");
+            .expect("failed to run ra with RA_TEST_PANIC_AFTER_BOOT=1");
 
         let code = output.code().unwrap_or(-1);
         // Real panic → standard Rust exit code 101. A signal death

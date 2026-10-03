@@ -11,7 +11,7 @@
 //! Both handlers gate on [`solo_login_allowed`], which requires ALL of:
 //!   1. [`supports_local_solo_profile_create`] — which itself requires the
 //!      explicit operator **opt-in** (`ra serve --solo` /
-//!      `OCTOS_SOLO_LOGIN=1`) AND `deployment_mode == Local` with profile +
+//!      `RA_SOLO_LOGIN=1`) AND `deployment_mode == Local` with profile +
 //!      user stores. The opt-in lives on the shared predicate so it gates the
 //!      WS `profile/local/create` path too, not just these REST endpoints.
 //!   2. a loopback request peer (`ConnectInfo` IP `is_loopback()`), AND

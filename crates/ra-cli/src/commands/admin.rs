@@ -343,14 +343,14 @@ pub(crate) fn run_set_smtp_password(data_dir: &Path, password: &str) -> Result<(
 
 fn resolve_base_url(cli_value: Option<String>) -> String {
     cli_value
-        .or_else(|| std::env::var("OCTOS_BASE_URL").ok())
-        .or_else(|| std::env::var("OCTOS_TEST_URL").ok())
+        .or_else(|| ra_core::brand::env_compat_str("BASE_URL"))
+        .or_else(|| ra_core::brand::env_compat_str("TEST_URL"))
         .unwrap_or_else(|| DEFAULT_ADMIN_BASE_URL.to_string())
 }
 
 fn resolve_auth_token(cli_value: Option<String>) -> Option<String> {
     cli_value
-        .or_else(|| std::env::var("OCTOS_AUTH_TOKEN").ok())
+        .or_else(|| ra_core::brand::env_compat_str("AUTH_TOKEN"))
         .filter(|value| !value.trim().is_empty())
 }
 

@@ -8,7 +8,8 @@
 //!
 //! - `stdio` (default): JSON-RPC over stdin/stdout. Parent-trust auth.
 //! - `http`: MCP Streamable HTTP served by the rmcp SDK. Requires a bearer
-//!   token supplied via the `OCTOS_MCP_SERVER_TOKEN` environment variable.
+//!   token supplied via the `RA_MCP_SERVER_TOKEN` environment variable (the
+//!   legacy `OCTOS_MCP_SERVER_TOKEN` is still honoured).
 //!
 //! # Session dispatch (M7.2a)
 //!
@@ -49,7 +50,7 @@ use ra_agent::arc_task::{
 };
 use ra_agent::mcp_server::{
     McpServer, McpServerError, McpSessionCost, McpSessionDispatch, McpSessionOutcome,
-    OCTOS_MCP_SERVER_TOKEN_ENV, SessionLifecycleObserver,
+    SessionLifecycleObserver,
 };
 use ra_agent::task_supervisor::{TaskLifecycleState, TaskSupervisor};
 use ra_agent::validators::{
@@ -74,11 +75,15 @@ pub enum McpTransport {
     Http,
 }
 
+/// Bearer-token variable for the HTTP transport: `RA_MCP_SERVER_TOKEN`
+/// (legacy `OCTOS_MCP_SERVER_TOKEN` still honoured).
+const MCP_SERVER_TOKEN_ENV: &str = "RA_MCP_SERVER_TOKEN";
+
 /// Run ra as an MCP server for outer orchestrators.
 #[derive(Debug, Args)]
 pub struct McpServeCommand {
     /// Transport to bind. `stdio` (default) uses parent-trust auth; `http`
-    /// requires a bearer token via `OCTOS_MCP_SERVER_TOKEN`.
+    /// requires a bearer token via `RA_MCP_SERVER_TOKEN`.
     #[arg(long, value_enum, default_value_t = McpTransport::Stdio)]
     pub transport: McpTransport,
 
@@ -90,7 +95,7 @@ pub struct McpServeCommand {
     #[arg(short, long)]
     pub cwd: Option<PathBuf>,
 
-    /// Data directory for episodes, memory, sessions (defaults to $OCTOS_HOME or ~/.ra).
+    /// Data directory for episodes, memory, sessions (defaults to $RA_HOME or ~/.ra).
     #[arg(long)]
     pub data_dir: Option<PathBuf>,
 
@@ -182,11 +187,14 @@ impl McpServeCommand {
                 server.serve_stdio().await
             }
             McpTransport::Http => {
-                let token = std::env::var(OCTOS_MCP_SERVER_TOKEN_ENV).map_err(|_| {
-                    eyre::eyre!("{OCTOS_MCP_SERVER_TOKEN_ENV} must be set for the http transport")
+                // New name first; the legacy `OCTOS_MCP_SERVER_TOKEN` (the name
+                // ra-agent's `OCTOS_MCP_SERVER_TOKEN_ENV` const still spells)
+                // keeps existing deployments working.
+                let token = ra_core::brand::env_compat_str("MCP_SERVER_TOKEN").ok_or_else(|| {
+                    eyre::eyre!("{MCP_SERVER_TOKEN_ENV} must be set for the http transport")
                 })?;
                 if token.trim().is_empty() {
-                    eyre::bail!("{OCTOS_MCP_SERVER_TOKEN_ENV} must not be empty");
+                    eyre::bail!("{MCP_SERVER_TOKEN_ENV} must not be empty");
                 }
                 tracing::info!(
                     bind = %self.bind,

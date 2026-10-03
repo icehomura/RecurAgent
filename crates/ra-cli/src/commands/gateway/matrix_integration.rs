@@ -39,6 +39,9 @@ pub(super) const MATRIX_DEFAULT_PORT: u16 = 8009;
 pub(super) const MATRIX_MISSING_TOKENS_ERROR: &str =
     "matrix channel requires settings.as_token and settings.hs_token";
 #[cfg(feature = "matrix")]
+/// Profile `env_vars` key carrying the Matrix bot user id. KEPT as the legacy
+/// spelling: it is stored state inside existing sub-account profiles, so
+/// renaming it would orphan the value for every already-created Matrix bot.
 pub(super) const MATRIX_BOT_USER_ID_ENV_KEY: &str = "OCTOS_MATRIX_BOT_USER_ID";
 /// Appservice mention-only gating. When `true` (the default), a bot in a
 /// multi-participant room only replies when explicitly addressed; a 1:1 DM

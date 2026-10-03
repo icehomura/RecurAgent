@@ -12,7 +12,7 @@ fn run_octos(args: &[&str], data_dir: &Path) -> std::process::Output {
         .args(args)
         .arg("--data-dir")
         .arg(data_dir)
-        .env("OCTOS_HOME", data_dir)
+        .env("RA_HOME", data_dir)
         .output()
         .expect("spawn ra")
 }

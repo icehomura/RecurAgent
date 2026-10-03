@@ -96,7 +96,7 @@ pub struct SessionRuntime {
     pub workspace_root: PathBuf,
 
     /// Per-session plugin scratch directory. Plugins are spawned
-    /// with this as their cwd / `OCTOS_PLUGIN_WORK_DIR` so
+    /// with this as their cwd / `RA_PLUGIN_WORK_DIR` so
     /// intermediate files don't collide across sessions.
     pub plugin_work_dir: PathBuf,
 
@@ -966,7 +966,7 @@ pub(crate) fn configured_agent_defaults(profile: &ProfileRuntime) -> AgentConfig
         // #1774: opt-in post-edit formatting (rustfmt/prettier/black/gofmt).
         format_after_edit: profile.format_after_edit,
         // #2172: thread the profile's gateway LLM knobs onto serve /
-        // octoscode sessions, exactly as `octos chat` does. Without this a
+        // octoscode sessions, exactly as `ra chat` does. Without this a
         // profile-driven session silently ran with the built-in defaults
         // (greedy temperature=0.0, no sampler, 16384 max output) — dropping
         // the local-model repetition-collapse mitigations. Each is `None`
