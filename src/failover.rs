@@ -905,11 +905,15 @@ pub fn resolve_chain_spec_preferring(
 // caller, because those genuinely differ per surface.
 // ---------------------------------------------------------------------------
 
-/// Exponential backoff delay for same-provider retry `attempt` (1-based).
+/// Exponential backoff CAP for same-provider retry `attempt` (1-based).
 ///
 /// `attempt` 0 and 1 both yield `base_delay_ms`; each later attempt doubles,
 /// capped at `max_delay_ms`. Saturating throughout so a large attempt count
 /// clamps at the cap rather than overflowing.
+///
+/// This is the cap, not the wait: surfaces draw the actual wait below it with
+/// [`jittered_delay_ms`]. `decide` stays pure and deterministic by returning
+/// the cap, and every sleep site applies the jitter at the I/O boundary.
 #[must_use]
 pub fn retry_delay_ms(base_delay_ms: u32, max_delay_ms: u32, attempt: u32) -> u32 {
     let base = u64::from(base_delay_ms);
@@ -918,6 +922,47 @@ pub fn retry_delay_ms(base_delay_ms: u32, max_delay_ms: u32, attempt: u32) -> u3
     let multiplier = 1u64.checked_shl(shift).unwrap_or(u64::MAX);
     let delay = base.saturating_mul(multiplier).min(max);
     u32::try_from(delay).unwrap_or(u32::MAX)
+}
+
+/// Full-jitter an exponential backoff cap: uniform in `[0, cap_ms]`.
+///
+/// AWS "full jitter". Ten sessions that all hit the same 429 otherwise re-enter
+/// the provider in lockstep — every `cap_ms` apart, at the same doubling
+/// schedule — which is exactly the load a rate limiter is trying to shed. The
+/// expected wait is `cap_ms / 2`, so the tail is also shorter without giving up
+/// the cap. `sample` is the caller's random draw; keeping it a parameter keeps
+/// this pure and testable.
+#[must_use]
+pub fn full_jitter_delay_ms(cap_ms: u32, sample: u64) -> u32 {
+    if cap_ms == 0 {
+        return 0;
+    }
+    let span = u64::from(cap_ms) + 1;
+    u32::try_from(sample % span).unwrap_or(cap_ms)
+}
+
+/// Jitter a backoff cap with a fresh random sample.
+///
+/// The sleep sites call this on the `delay_ms` a [`TurnDecision::Retry`] (or
+/// [`retry_delay_ms`]) carries, so both the wait and the emitted
+/// `auto_retry_start` delay describe what actually happens.
+#[must_use]
+pub fn jittered_delay_ms(cap_ms: u32) -> u32 {
+    full_jitter_delay_ms(cap_ms, jitter_sample())
+}
+
+/// One uniformly random `u64`, without a `rand` dependency.
+///
+/// `RandomState` is seeded from OS entropy by the standard library and every
+/// fresh instance carries independent keys, so finishing a hasher built from
+/// one yields a fresh sample. Cryptographic quality is irrelevant here: the
+/// only property required is that concurrent sessions do not draw the same
+/// wait, and this is not on any hot path (one draw per retry).
+fn jitter_sample() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::hash::RandomState::new().build_hasher();
+    hasher.write_u64(0x9E37_79B9_7F4A_7C15);
+    hasher.finish()
 }
 
 /// Terminal marker check (bd-8188r): does this error text describe a
@@ -1036,7 +1081,9 @@ pub enum TurnDecision {
     Retry {
         /// 1-based attempt number, for the surface's retry events.
         attempt: u32,
-        /// Backoff before re-entry.
+        /// Exponential backoff CAP before re-entry, not the wait itself. The
+        /// surface applies full jitter with [`jittered_delay_ms`] so both the
+        /// sleep and the emitted `auto_retry_start` delay are the real wait.
         delay_ms: u32,
     },
     /// Walk the fallback chain. The caller resolves the next entry with
@@ -1108,6 +1155,10 @@ pub struct TurnProgress {
 /// `context_window` is the active model's window when the caller can resolve
 /// it. Supplying it lets a context overflow be recognised as never-retryable;
 /// omitting it means an overflow is retried until the budget is spent.
+///
+/// A `Retry` decision carries the backoff CAP; the caller jitters it with
+/// [`jittered_delay_ms`] at its sleep site, which keeps this function pure and
+/// its tests deterministic.
 #[must_use]
 pub fn decide(
     outcome: TurnOutcome<'_>,
@@ -2045,6 +2096,35 @@ mod tests {
         // Saturates at the cap instead of overflowing the shift.
         assert_eq!(retry_delay_ms(500, 8_000, 30), 8_000);
         assert_eq!(retry_delay_ms(500, 8_000, u32::MAX), 8_000);
+    }
+
+    #[test]
+    fn full_jitter_stays_below_the_exponential_cap() {
+        for cap in [0u32, 1, 500, 8_000, u32::MAX] {
+            for sample in [0u64, 1, 2, 499, 500, 501, 7_999, u64::MAX, u64::MAX / 3] {
+                let delay = full_jitter_delay_ms(cap, sample);
+                assert!(delay <= cap, "cap={cap} sample={sample} delay={delay}");
+            }
+        }
+        // Both ends of the range are reachable, so the draw is not biased to 0.
+        assert_eq!(full_jitter_delay_ms(500, 0), 0);
+        assert_eq!(full_jitter_delay_ms(500, 500), 500);
+        // `span = cap + 1`: sample == cap + 1 wraps to 0, keeping it uniform.
+        assert_eq!(full_jitter_delay_ms(500, 501), 0);
+        assert_eq!(full_jitter_delay_ms(0, 42), 0);
+    }
+
+    #[test]
+    fn jittered_delay_is_bounded_and_sampled() {
+        for cap in [0u32, 1, 2_000, 60_000] {
+            for _ in 0..16 {
+                assert!(jittered_delay_ms(cap) <= cap);
+            }
+        }
+        // A constant sample would make the "jitter" inert. The samples come from
+        // `RandomState`, which the standard library seeds from OS entropy.
+        let draws: std::collections::HashSet<u64> = (0..32).map(|_| jitter_sample()).collect();
+        assert!(draws.len() > 1, "32 draws produced {draws:?}");
     }
 
     #[test]
