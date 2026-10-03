@@ -40,7 +40,8 @@
 //!
 //! Tuning
 //! ------
-//! The strict layer is gated behind `OCTOS_MANIFEST_VALIDATION`:
+//! The strict layer is gated behind `RA_MANIFEST_VALIDATION` (the legacy
+//! `OCTOS_MANIFEST_VALIDATION` spelling is still honoured):
 //!
 //! - `strict` (default) — all rules above are enforced.
 //! - `lenient` — Draft 07 sanity only; the ra rules are skipped.
@@ -49,7 +50,6 @@
 //!   default.
 
 use std::collections::HashSet;
-use std::env;
 use std::fmt;
 
 use serde_json::Value;
@@ -120,18 +120,19 @@ pub enum ValidationProfile {
 }
 
 impl ValidationProfile {
-    /// Resolve the profile from the `OCTOS_MANIFEST_VALIDATION`
-    /// environment variable. Unknown values fall back to `Strict`
+    /// Resolve the profile from the `RA_MANIFEST_VALIDATION`
+    /// environment variable (the legacy `OCTOS_MANIFEST_VALIDATION`
+    /// spelling is still honoured). Unknown values fall back to `Strict`
     /// (fail-closed) and a single `warn!` is emitted via `tracing`.
     pub fn from_env() -> Self {
-        match env::var("OCTOS_MANIFEST_VALIDATION").ok().as_deref() {
+        match ra_core::brand::env_compat_str("MANIFEST_VALIDATION").as_deref() {
             Some("strict") | None | Some("") => ValidationProfile::Strict,
             Some("lenient") => ValidationProfile::Lenient,
             Some("off") => ValidationProfile::Off,
             Some(other) => {
                 tracing::warn!(
                     value = %other,
-                    "OCTOS_MANIFEST_VALIDATION has unknown value; defaulting to 'strict'"
+                    "RA_MANIFEST_VALIDATION has unknown value; defaulting to 'strict'"
                 );
                 ValidationProfile::Strict
             }
@@ -229,7 +230,7 @@ fn validate_one_schema(
     // Layer 1: Draft 07 sanity — always run.
     walk_draft07(tool_name, schema_kind, schema, "", errors);
 
-    // Layer 2: ra strict rules — run unless explicitly relaxed.
+    // Layer 2: strict ra rules — run unless explicitly relaxed.
     if matches!(profile, ValidationProfile::Strict) {
         // The empty-schema rule belongs to the strict ra profile —
         // `{}` is a valid Draft 07 schema, so accepting it in lenient
@@ -387,7 +388,7 @@ fn walk_draft07(
     });
 }
 
-// ── Layer 2: strict ra rules ──────────────────────────────────────
+// ── Layer 2: strict ra rules ─────────────────────────────────────────
 
 fn check_root(
     tool_name: &str,
@@ -679,7 +680,7 @@ fn kind_label(v: &Value) -> &'static str {
 mod tests {
     //! Unit tests for the strict validator.
     //!
-    //! These tests intentionally do **not** mutate `OCTOS_MANIFEST_VALIDATION`.
+    //! These tests intentionally do **not** mutate `RA_MANIFEST_VALIDATION`.
     //! Cargo runs tests in parallel threads inside one process; an env-var
     //! mutation in one test leaks into siblings and yields flakey runs.
     //! Each test passes an explicit [`ValidationProfile`] instead — that's the
@@ -880,7 +881,7 @@ mod tests {
 
     /// Lenient profile must accept the strict-failing mofa-slides
     /// shape so operators can unblock prod immediately by setting
-    /// `OCTOS_MANIFEST_VALIDATION=lenient`.
+    /// `RA_MANIFEST_VALIDATION=lenient`.
     #[test]
     fn lenient_profile_accepts_bare_anyof_branch() {
         let schema = schema_of(json!({

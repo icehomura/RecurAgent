@@ -197,7 +197,7 @@ impl PluginManifest {
     ///
     /// RFC-2 (issue #1291): after structural validation, every tool's
     /// `input_schema` is run through [`validate_manifest_schemas_with`]
-    /// using the profile selected by `OCTOS_MANIFEST_VALIDATION`
+    /// using the profile selected by `RA_MANIFEST_VALIDATION`
     /// (defaults to `strict`). The schema-validation failure mode is a
     /// composite error: every violation is reported on its own line so
     /// authors can fix them all in a single round-trip.
@@ -288,7 +288,7 @@ impl PluginManifest {
                     .collect::<Vec<_>>()
                     .join("\n");
                 bail!(
-                    "plugin '{}' has {} schema violation(s):\n{}\n\nSet OCTOS_MANIFEST_VALIDATION=lenient to relax the strict ra profile, or =off to disable validation entirely.",
+                    "plugin '{}' has {} schema violation(s):\n{}\n\nSet RA_MANIFEST_VALIDATION=lenient to relax the strict ra profile, or =off to disable validation entirely.",
                     self.id,
                     errs.len(),
                     detail

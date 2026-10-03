@@ -64,7 +64,7 @@ fn main() -> ExitCode {
 /// which runs structural validation (`id`, `version`, tool names,
 /// `type: "tool"` requires `tools`, `type: "hook"` requires `hooks`),
 /// schema validation (Draft 07 sanity + the strict ra profile),
-/// and honours `OCTOS_MANIFEST_VALIDATION`. Re-using this entrypoint
+/// and honours `RA_MANIFEST_VALIDATION`. Re-using this entrypoint
 /// means CI cannot drift from runtime — codex review (2026-05-25, P3)
 /// flagged a hand-rolled structural copy that omitted the type/tools
 /// and type/hooks checks; we now share the canonical path.

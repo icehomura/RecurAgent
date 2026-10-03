@@ -524,7 +524,7 @@ mod tests {
     #[test]
     fn nonexistent_source_dir_is_harmless() {
         let sources = vec![PluginSource {
-            path: PathBuf::from("/tmp/nonexistent_octos_plugin_dir_xyz"),
+            path: PathBuf::from("/tmp/nonexistent_ra_plugin_dir_xyz"),
             origin: PluginOrigin::User,
         }];
         let plugins = discover_plugins(&sources, &HashMap::new());
