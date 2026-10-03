@@ -205,7 +205,7 @@ impl LlmProvider for OpenRouterProvider {
             )
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/heyong4725/ra")
-            .header("X-Title", "ra")
+            .header("X-Title", ra_core::brand::APP_NAME)
             .json(&request)
             .send()
             .await
@@ -306,7 +306,7 @@ impl LlmProvider for OpenRouterProvider {
             )
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/heyong4725/ra")
-            .header("X-Title", "ra")
+            .header("X-Title", ra_core::brand::APP_NAME)
             .json(&body)
             .send()
             .await

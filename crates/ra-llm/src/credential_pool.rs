@@ -439,37 +439,15 @@ impl PersistentCredentialPoolOptions {
 pub const DEFAULT_COOLDOWN_US: u64 = 60 * 1_000_000;
 
 /// Canonical filename for the credential pool database (M6.5 spec).
-/// Callers that root their data directory in `~/.ra/` should join this
-/// constant onto that path to match the spec-documented location.
+/// Callers that root their data directory in the product state home should
+/// join this constant onto that path to match the spec-documented location.
 pub const DEFAULT_CREDENTIAL_POOL_DB_FILENAME: &str = "credential_pool.redb";
 
-/// Resolve the default credential pool db path at `<home>/.ra/credential_pool.redb`.
-/// Returns `None` when the home directory cannot be detected.
+/// Resolve the default credential pool db path at
+/// `<RA_HOME>/credential_pool.redb` (see [`ra_core::brand::state_path`]).
+/// Returns `None` when no state home can be resolved.
 pub fn default_credential_pool_path() -> Option<std::path::PathBuf> {
-    let mut home = dirs_home()?;
-    home.push(".ra");
-    home.push(DEFAULT_CREDENTIAL_POOL_DB_FILENAME);
-    Some(home)
-}
-
-fn dirs_home() -> Option<std::path::PathBuf> {
-    // Avoid a hard dependency on the `dirs` crate at this layer; the CLI
-    // passes the resolved path in explicitly. We still check the env vars
-    // for parity with dirs's lookup so tests + unit callers can override.
-    if let Ok(home) = std::env::var("HOME") {
-        if !home.is_empty() {
-            return Some(std::path::PathBuf::from(home));
-        }
-    }
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(home) = std::env::var("USERPROFILE") {
-            if !home.is_empty() {
-                return Some(std::path::PathBuf::from(home));
-            }
-        }
-    }
-    None
+    Some(ra_core::brand::state_path(DEFAULT_CREDENTIAL_POOL_DB_FILENAME))
 }
 
 /// redb-backed implementation of [`CredentialPool`].

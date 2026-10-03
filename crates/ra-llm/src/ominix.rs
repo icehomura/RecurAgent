@@ -2,8 +2,8 @@
 //!
 //! Model metadata lives in ominix-api (`~/.OminiX/local_models_config.json`
 //! and `/v1/models/catalog`).  ra only maintains a small allowlist at
-//! `~/.ra/platform-models.json` that specifies which ominix-api models the
-//! platform skills are permitted to use.
+//! `state_home()/platform-models.json` that specifies which ominix-api models
+//! the platform skills are permitted to use.
 
 use std::path::{Path, PathBuf};
 
@@ -62,7 +62,7 @@ fn parse_transcription_response(json: &serde_json::Value) -> Result<AsrTranscrip
 }
 
 // ---------------------------------------------------------------------------
-// Platform model allowlist — ~/.ra/platform-models.json
+// Platform model allowlist — state_home()/platform-models.json
 // ---------------------------------------------------------------------------
 
 /// An entry in the platform allowlist.
@@ -74,7 +74,7 @@ pub struct PlatformModel {
     pub role: String,
 }
 
-/// The allowlist file: `~/.ra/platform-models.json`.
+/// The allowlist file: `state_home()/platform-models.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlatformModels {
     pub platform_models: Vec<PlatformModel>,
@@ -98,8 +98,8 @@ impl PlatformModels {
     }
 
     /// Load from disk, or create with defaults if missing.
-    pub fn load_or_create(octos_home: &Path) -> Self {
-        let path = Self::path(octos_home);
+    pub fn load_or_create(state_home: &Path) -> Self {
+        let path = Self::path(state_home);
         if let Ok(data) = std::fs::read_to_string(&path) {
             if let Ok(list) = serde_json::from_str::<PlatformModels>(&data) {
                 return list;
@@ -108,15 +108,15 @@ impl PlatformModels {
         }
         let list = Self::defaults();
         if let Ok(json) = serde_json::to_string_pretty(&list) {
-            let _ = std::fs::create_dir_all(octos_home);
+            let _ = std::fs::create_dir_all(state_home);
             let _ = std::fs::write(&path, json);
         }
         list
     }
 
     /// Path to the allowlist file.
-    pub fn path(octos_home: &Path) -> PathBuf {
-        octos_home.join("platform-models.json")
+    pub fn path(state_home: &Path) -> PathBuf {
+        state_home.join("platform-models.json")
     }
 
     /// Find an entry by model ID.
@@ -125,9 +125,9 @@ impl PlatformModels {
     }
 
     /// Save the allowlist to disk.
-    pub fn save(&self, octos_home: &Path) -> Result<()> {
-        let path = Self::path(octos_home);
-        let _ = std::fs::create_dir_all(octos_home);
+    pub fn save(&self, state_home: &Path) -> Result<()> {
+        let path = Self::path(state_home);
+        let _ = std::fs::create_dir_all(state_home);
         let json = serde_json::to_string_pretty(self)
             .wrap_err("failed to serialise platform-models.json")?;
         std::fs::write(&path, json)

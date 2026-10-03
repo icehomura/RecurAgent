@@ -8,13 +8,14 @@
 //! prompt text, tool schema, media bytes, or hidden reasoning is retained.
 //!
 //! Set `RUST_LOG=ra.prompt_cache=trace` to enable provider manifest
-//! construction. Adding `OCTOS_PROMPT_CACHE_MANIFEST_JSONL=/path/to/log.jsonl`
+//! construction. Adding `RA_PROMPT_CACHE_MANIFEST_JSONL=/path/to/log.jsonl`
 //! writes the same redacted observations for offline soak analysis: one
 //! `manifest` row per request, a `usage` row once provider usage is
 //! correlated, and a standalone `usage_unmatched` row when usage arrives with
 //! no manifest to enrich (TRACE disabled, or the manifest already evicted).
-//! `OCTOS_PROMPT_CACHE_OBSERVER_CAPACITY` adjusts the retained in-process
-//! event/stream bound (default 1024, hard-capped at 16384).
+//! `RA_PROMPT_CACHE_OBSERVER_CAPACITY` adjusts the retained in-process
+//! event/stream bound (default 1024, hard-capped at 16384). The legacy
+//! `OCTOS_*` spellings of both knobs are still honoured.
 
 use std::collections::{HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
@@ -91,7 +92,9 @@ pub(crate) fn prompt_cache_features_enabled_from(env_value: Option<&str>) -> boo
 }
 
 pub(crate) fn prompt_cache_features_enabled() -> bool {
-    prompt_cache_features_enabled_from(std::env::var("OCTOS_PROMPT_CACHING").ok().as_deref())
+    prompt_cache_features_enabled_from(
+        ra_core::brand::env_compat_str("PROMPT_CACHING").as_deref(),
+    )
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -623,12 +626,11 @@ fn request_key_hash(identity: &CorrelationIdentity, manifest: &PromptCacheInputM
 fn global_observer() -> &'static PromptCacheObserver {
     static OBSERVER: OnceLock<PromptCacheObserver> = OnceLock::new();
     OBSERVER.get_or_init(|| {
-        let capacity = std::env::var("OCTOS_PROMPT_CACHE_OBSERVER_CAPACITY")
-            .ok()
+        let capacity = ra_core::brand::env_compat_str("PROMPT_CACHE_OBSERVER_CAPACITY")
             .and_then(|value| value.parse::<usize>().ok())
             .unwrap_or(DEFAULT_OBSERVER_CAPACITY)
             .clamp(1, MAX_OBSERVER_CAPACITY);
-        let Some(path) = std::env::var_os("OCTOS_PROMPT_CACHE_MANIFEST_JSONL") else {
+        let Some(path) = ra_core::brand::env_compat("PROMPT_CACHE_MANIFEST_JSONL") else {
             return PromptCacheObserver::in_memory(capacity);
         };
         PromptCacheObserver::with_jsonl_path(capacity, path).unwrap_or_else(|error| {

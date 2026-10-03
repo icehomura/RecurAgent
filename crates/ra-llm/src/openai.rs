@@ -266,7 +266,8 @@ pub struct OpenAIProvider {
     provider_label: String,
     /// OpenAI-only request affinity. Defaults to official-endpoint-only so
     /// Kimi/DeepSeek/vLLM never see a reserved field they may reject; the
-    /// operator kill-switch (`OCTOS_PROMPT_CACHING`) is evaluated per request.
+    /// operator kill-switch (`RA_PROMPT_CACHING`, legacy `OCTOS_PROMPT_CACHING`
+    /// still honoured) is evaluated per request.
     prompt_cache_affinity: bool,
     /// Whether a builder call explicitly selected the affinity mode. An
     /// explicit opt-in/out must survive either builder-call order (mirrors
@@ -363,7 +364,7 @@ impl OpenAIProvider {
     /// Explicit override for an endpoint known to implement OpenAI's
     /// `prompt_cache_key` contract. Custom endpoints remain opt-out by
     /// default; this explicit choice survives either builder-call order. The
-    /// operator kill-switch (`OCTOS_PROMPT_CACHING`) still applies per request.
+    /// operator kill-switch (`RA_PROMPT_CACHING`) still applies per request.
     pub fn with_prompt_cache_affinity(mut self, enabled: bool) -> Self {
         self.prompt_cache_affinity = enabled;
         self.prompt_cache_affinity_override = Some(enabled);
@@ -371,7 +372,7 @@ impl OpenAIProvider {
     }
 
     /// Affinity key for this request, if any. `features_enabled` is the
-    /// operator kill-switch (`OCTOS_PROMPT_CACHING`), passed in so the
+    /// operator kill-switch (`RA_PROMPT_CACHING`), passed in so the
     /// decision is made per request — like the Responses provider — and stays
     /// unit-testable without mutating process env.
     fn prompt_cache_key_for<'a>(
