@@ -14566,9 +14566,18 @@ impl AgentSession {
         // Background compaction polls the same deep provider/summarization
         // future chain. Size the runtime's worker threads explicitly: unsized
         // they inherit the PE default and a deep future aborts the whole
-        // process with no unwinding. See `RUNTIME_WORKER_STACK_BYTES` in
-        // `main.rs`.
-        const COMPACTION_STACK_BYTES: usize = 64 * 1024 * 1024;
+        // process with no unwinding. Same reserve as `RUNTIME_WORKER_STACK_BYTES`
+        // in `main.rs`, from the same measured basis: a complete offline agent
+        // turn — including a `dag` whose node runs `run_code` (dag_tool +
+        // ptc_bridge + QuickJS) — holds at 724992 B (708 KiB) and aborts at
+        // 720896 B (704 KiB), flat to DAG N=256 (probe
+        // `agent::tests::probe_full_turn_stack_scaling`, commit `905433d68`).
+        // That probe uses a mock provider, so real transport (TLS/HTTP) and
+        // session persistence (sqlite/JSONL) are unexercised (`-Zprint-type-sizes`
+        // puts those frames at <= ~30 KiB each); 16 MiB keeps ~23x headroom over
+        // the floor. Bead `bd-qtffv` tracks verifying the transport-heavy chains
+        // and going lower.
+        const COMPACTION_STACK_BYTES: usize = 16 * 1024 * 1024;
         let runtime = RuntimeBuilder::new()
             .thread_stack_size(COMPACTION_STACK_BYTES)
             .build()
