@@ -2625,7 +2625,7 @@ fn register_task_refuses_201st_child_for_same_parent() {
     // sub-process-friendly cap value that is set before any other
     // register call resolves the cache.
     //
-    // Note: setting `OCTOS_MAX_CHILDREN_PER_PARENT` here would be
+    // Note: setting `RA_MAX_CHILDREN_PER_PARENT` here would be
     // racy because `max_children_per_parent` caches with `OnceLock`.
     // Instead we exercise the production cap (200) — register 200
     // children, then assert the 201st is refused.

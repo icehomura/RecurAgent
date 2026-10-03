@@ -10,7 +10,7 @@
 //! 3. Brave Search (`BRAVE_API_KEY`) — free tier: 2k queries/month
 //! 4. You.com (`YDC_API_KEY`) — rich JSON results with snippets
 //! 5. Perplexity Sonar (`PERPLEXITY_API_KEY`) — AI-synthesized fallback (most expensive)
-//! 6. DuckDuckGo HTML results page — on unless `OCTOS_ALLOW_SERP_SCRAPE=0`
+//! 6. DuckDuckGo HTML results page — on unless `RA_ALLOW_SERP_SCRAPE=0`
 //! 7. Headless-Chrome (CDP) Bing — same switch
 //!
 //! Each provider is tried in order. If a provider returns no results or fails,
@@ -30,8 +30,9 @@
 //!
 //! DuckDuckGo HTML and Bing-in-Chrome read search engines' results pages (ADR
 //! 0002 §6: honest User-Agent, a challenge is a miss, no CAPTCHA solving).
-//! They are on unless the operator sets `OCTOS_ALLOW_SERP_SCRAPE=0` (alias
-//! `OCTOS_ALLOW_BROWSER_SERP`). Bing drives the
+//! They are on unless the operator sets `RA_ALLOW_SERP_SCRAPE=0` (alias
+//! `RA_ALLOW_BROWSER_SERP`; the legacy `OCTOS_` spellings are still
+//! honoured). Bing drives the
 //! same in-process `chromiumoxide`
 //! headless browser the `browser` tool uses and is gated behind the `browser`
 //! cargo feature. On any box with no Chrome/Chromium it degrades to a fast,
@@ -83,10 +84,22 @@ pub(crate) fn is_quota_or_rate_limit_error(result: &ToolResult) -> bool {
     CHINESE.iter().any(|kw| result.output.contains(kw))
 }
 
+/// Env lookup for the research knobs: `RA_<NAME>` wins over the legacy
+/// `OCTOS_<NAME>`. Accepts the bare suffix or either fully-prefixed spelling,
+/// so callers (including a future ra-research that resolves names itself)
+/// cannot end up double-prefixing.
+pub(crate) fn compat_env_lookup(name: &str) -> Option<String> {
+    let suffix = name
+        .strip_prefix(ra_core::brand::LEGACY_ENV_PREFIX)
+        .or_else(|| name.strip_prefix(ra_core::brand::ENV_PREFIX))
+        .unwrap_or(name);
+    ra_core::brand::env_compat_str(suffix)
+}
+
 pub struct WebSearchTool {
     client: Client,
     /// Identifiable client for the free providers (GDELT, Google News,
-    /// SearXNG): these are APIs/feeds, requested as ra, not as a browser.
+    /// SearXNG): these are APIs/feeds, requested as ra-research, not as a browser.
     research_client: Client,
     config: Option<Arc<super::tool_config::ToolConfigStore>>,
     provider_keys: HashMap<String, String>,
@@ -262,15 +275,16 @@ impl FreeTierControls {
 }
 
 /// Whether results-page search (DuckDuckGo HTML, Bing in headless Chrome)
-/// is on: yes unless the operator set `OCTOS_ALLOW_SERP_SCRAPE=0`
+/// is on: yes unless the operator set `RA_ALLOW_SERP_SCRAPE=0`
 /// (ADR 0002 §6: general web search, honest, no CAPTCHA solving).
 pub(crate) fn serp_scrape_opted_in(lookup: impl Fn(&str) -> Option<String>) -> bool {
     ra_research::serp_scrape_allowed(lookup)
 }
 
-/// Whether the ra metasearch is on (`OCTOS_METASEARCH`, default on).
+/// Whether the ra metasearch is on (`RA_METASEARCH`, default on; legacy
+/// `OCTOS_METASEARCH` is still honoured).
 fn metasearch_on() -> bool {
-    ra_research::metasearch::enabled(|k| std::env::var(k).ok())
+    ra_research::metasearch::enabled(compat_env_lookup)
 }
 
 /// Free-tier providers in order: the ra metasearch (every category), or
@@ -443,7 +457,7 @@ impl FreeTierAnswer {
         if let Some(notice) = self.browser_notice {
             output.push_str(&format!("Note: {notice}\n"));
         }
-        if ra_research::respect_robots(|k| std::env::var(k).ok())
+        if ra_research::respect_robots(compat_env_lookup)
             && self.hits.iter().any(|h| {
                 h.provider == "google_news_rss" || h.engines.iter().any(|e| e == "google_news")
             })
@@ -638,14 +652,12 @@ impl Tool for WebSearchTool {
 
         let serp_scrape = self
             .serp_scrape
-            .unwrap_or_else(|| serp_scrape_opted_in(|k| std::env::var(k).ok()));
+            .unwrap_or_else(|| serp_scrape_opted_in(compat_env_lookup));
         // Upgrade visibility: say once per process that results-page search
         // runs because of the new default.
         if serp_scrape && self.serp_scrape.is_none() {
             static NOTICE: std::sync::Once = std::sync::Once::new();
-            if let Some(notice) =
-                ra_research::serp_scrape_default_notice(|k| std::env::var(k).ok())
-            {
+            if let Some(notice) = ra_research::serp_scrape_default_notice(compat_env_lookup) {
                 NOTICE.call_once(|| warn!("{notice}"));
             }
         }
@@ -681,7 +693,7 @@ impl Tool for WebSearchTool {
         // 3. Brave Search (free tier: 2k queries/month)
         // 4. You.com (API key required)
         // 5. Perplexity Sonar (AI-synthesized, most expensive — fallback only)
-        // Then, only with OCTOS_ALLOW_SERP_SCRAPE=1: DuckDuckGo HTML, Bing CDP.
+        // Then, only with RA_ALLOW_SERP_SCRAPE=1: DuckDuckGo HTML, Bing CDP.
 
         // Tavily (AI-optimized search — best for recent/niche topics)
         if let Some(api_key) = self.provider_key("tavily", "TAVILY_API_KEY") {
@@ -1048,7 +1060,7 @@ impl WebSearchTool {
         // environment) governs the metasearch's results-page engines too.
         req.results_pages = self
             .serp_scrape
-            .unwrap_or_else(|| serp_scrape_opted_in(|k| std::env::var(k).ok()));
+            .unwrap_or_else(|| serp_scrape_opted_in(compat_env_lookup));
         self.metasearch().search(&req).await
     }
 
@@ -2437,7 +2449,7 @@ mod tests {
             vec![Provider::Metasearch],
             "metasearch serves general queries too"
         );
-        // With OCTOS_METASEARCH=0: the direct news sources.
+        // With RA_METASEARCH=0: the direct news sources.
         assert_eq!(
             free_tier_providers(true, false, true),
             vec![Provider::Gdelt, Provider::GoogleNewsRss, Provider::Searxng]
@@ -2461,6 +2473,15 @@ mod tests {
                 |k| (k == key).then(|| "0".to_string())
             ));
         }
+    }
+
+    #[test]
+    fn compat_env_lookup_resolves_unset_names_to_none() {
+        // Pure: neither the `RA_` nor the legacy `OCTOS_` spelling is set,
+        // so the helper must not invent a value (no process env is touched).
+        assert_eq!(compat_env_lookup("NOT_SET_XYZ"), None);
+        assert_eq!(compat_env_lookup("OCTOS_NOT_SET_XYZ"), None);
+        assert_eq!(compat_env_lookup("RA_NOT_SET_XYZ"), None);
     }
 
     #[test]

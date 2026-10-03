@@ -27,7 +27,8 @@
 //! ## What it does NOT do
 //!
 //! - Never alters a tool's arguments, output, or success.
-//! - Records nothing unless armed (`OCTOS_READ_PAGING_PROBE=1`).
+//! - Records nothing unless armed (`RA_READ_PAGING_PROBE=1`; legacy
+//!   `OCTOS_READ_PAGING_PROBE` is still honoured).
 //! - Does not price anything. Reported spend is not cache-write-aware today,
 //!   so any cost conclusion drawn from it would be wrong; this records raw
 //!   shape instead and leaves pricing to a separate fix.
@@ -128,7 +129,7 @@ pub(crate) fn enabled() -> bool {
     if FORCED_ON.load(Ordering::Relaxed) {
         return true;
     }
-    std::env::var("OCTOS_READ_PAGING_PROBE").is_ok_and(|value| value == "1")
+    ra_core::brand::env_compat_str("READ_PAGING_PROBE").is_some_and(|value| value == "1")
 }
 
 /// Arm the probe for a test.

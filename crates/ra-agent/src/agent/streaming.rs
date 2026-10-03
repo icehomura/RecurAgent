@@ -91,8 +91,9 @@ impl Agent {
         emit_progress: bool,
     ) -> Result<(ChatResponse, bool)> {
         // Thresholds flow from `AgentConfig` (env-overridable: see
-        // `OCTOS_LLM_FIRST_TOKEN_GRACE_SECS` / `OCTOS_LLM_STREAM_IDLE_SECS` /
-        // `OCTOS_LLM_CALL_MAX_SECS`). The first-token grace caps the
+        // `RA_LLM_FIRST_TOKEN_GRACE_SECS` / `RA_LLM_STREAM_IDLE_SECS` /
+        // `RA_LLM_CALL_MAX_SECS`; legacy `OCTOS_*` names still honoured). The
+        // first-token grace caps the
         // input-scaled TTFT budget so a stream that never yields a single
         // token can't hang the turn; the inter-chunk idle catches a stream
         // that stalls mid-flight; `llm_call_max` is the overall wall-clock
@@ -130,10 +131,11 @@ impl Agent {
     /// slow-but-healthy reasoning stream is not guillotined mid-flight while
     /// tokens are still flowing — Pi has no such cap, and the inter-chunk idle
     /// and TTFT guards still catch a genuinely dead provider. An operator who
-    /// explicitly sets `OCTOS_LLM_CALL_MAX_SECS` gets exactly that value even on
-    /// local. Cloud keeps the `DEFAULT_LLM_CALL_MAX_SECS` (1200s) backstop.
+    /// explicitly sets `RA_LLM_CALL_MAX_SECS` (legacy
+    /// `OCTOS_LLM_CALL_MAX_SECS` still honoured) gets exactly that value even
+    /// on local. Cloud keeps the `DEFAULT_LLM_CALL_MAX_SECS` (1200s) backstop.
     fn effective_llm_call_max_secs(&self) -> u64 {
-        if self.is_local_provider() && std::env::var("OCTOS_LLM_CALL_MAX_SECS").is_err() {
+        if self.is_local_provider() && ra_core::brand::env_compat("LLM_CALL_MAX_SECS").is_none() {
             0
         } else {
             self.config.llm_call_max.as_secs()
@@ -197,16 +199,16 @@ impl Agent {
         // - TTFT (first token): generous — models need time to process large
         //   inputs before generating. Scales with input: base 30s + 1s per 1K
         //   input tokens, capped at the configured first-token grace
-        //   (default 180s, env `OCTOS_LLM_FIRST_TOKEN_GRACE_SECS`). The cap
+        //   (default 180s, env `RA_LLM_FIRST_TOKEN_GRACE_SECS`). The cap
         //   guarantees a stream that never yields a single token still aborts.
         // - Inter-chunk: once streaming starts, the per-poll idle deadline is
         //   the configured stream-idle (default 90s, env
-        //   `OCTOS_LLM_STREAM_IDLE_SECS`). A reasoning model legitimately
+        //   `RA_LLM_STREAM_IDLE_SECS`). A reasoning model legitimately
         //   pausing mid-stream stays under it; a genuinely stalled provider
         //   trips it. Production evidence:
         //   `docs/STREAMING-TRANSACTIONAL-BOUNDARY-ADR.md`.
         // - Overall: a final wall-clock backstop (default 1200s, env
-        //   `OCTOS_LLM_CALL_MAX_SECS`) catches a pathological stream that
+        //   `RA_LLM_CALL_MAX_SECS`) catches a pathological stream that
         //   trickles one token every <idle>s indefinitely — the inter-chunk
         //   guard never trips for it, but the turn must still end.
         let first_token_grace_secs = thresholds.first_token_grace_secs.max(1);
@@ -1503,8 +1505,8 @@ mod tests {
         // inter-chunk idle back down to the production-broken 30s (or
         // collapses the first-token grace below it) trips this test. These
         // are the values that actually drive production via `AgentConfig`
-        // (env-overridable: OCTOS_LLM_STREAM_IDLE_SECS /
-        // OCTOS_LLM_FIRST_TOKEN_GRACE_SECS / OCTOS_LLM_CALL_MAX_SECS).
+        // (env-overridable: RA_LLM_STREAM_IDLE_SECS /
+        // RA_LLM_FIRST_TOKEN_GRACE_SECS / RA_LLM_CALL_MAX_SECS).
         use super::super::{
             DEFAULT_LLM_CALL_MAX_SECS, DEFAULT_LLM_FIRST_TOKEN_GRACE_SECS,
             DEFAULT_LLM_STREAM_IDLE_SECS,

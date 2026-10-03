@@ -38,8 +38,8 @@ const PAGE_INTERVAL: Duration = Duration::from_secs(1);
 /// Chrome flags for the crawler. Automation is not hidden (OctoSense
 /// ADR 0002): no `AutomationControlled` switches, no spoofed `--user-agent`,
 /// no `--disable-infobars`, no script that rewrites `navigator.webdriver`.
-/// The tab identifies itself with Chrome's own User-Agent plus the ra
-/// product token (see [`identify`]).
+/// The tab identifies itself with Chrome's own User-Agent plus the
+/// ra-research product token (see [`identify`]).
 const CRAWL_ARGS: &[&str] = &[
     "--disable-dev-shm-usage",
     "--disable-extensions",
@@ -119,7 +119,7 @@ async fn launch_browser() -> Result<(
     Ok((browser, page, handle, temp_dir))
 }
 
-/// The browser's own User-Agent with the ra product token appended, so
+/// The browser's own User-Agent with the ra-research product token appended, so
 /// sites can tell who is crawling (never a disguised desktop browser).
 fn identifiable_user_agent(base: &str) -> String {
     format!("{} {}", base.trim(), ra_research::USER_AGENT)
@@ -290,9 +290,10 @@ fn challenged(url: &str) -> CrawledPage {
 }
 
 /// robots.txt verdict for `url` when the operator turned robots checks on
-/// (`OCTOS_RESPECT_ROBOTS`); `None` = allowed or checks off.
+/// (`RA_RESPECT_ROBOTS`; legacy `OCTOS_RESPECT_ROBOTS` is still honoured);
+/// `None` = allowed or checks off.
 async fn robots_refusal(cache: &ra_research::RobotsCache, url: &str) -> Option<String> {
-    if !ra_research::respect_robots(|k| std::env::var(k).ok()) {
+    if !ra_research::respect_robots(super::web_search::compat_env_lookup) {
         return None;
     }
     let decision = cache
@@ -310,7 +311,7 @@ async fn robots_refusal(cache: &ra_research::RobotsCache, url: &str) -> Option<S
         })
         .await;
     (!decision.allowed)
-        .then(|| format!("skipped: {} (OCTOS_RESPECT_ROBOTS is on)", decision.reason))
+        .then(|| format!("skipped: {} (RA_RESPECT_ROBOTS is on)", decision.reason))
 }
 
 /// Normalize a URL: remove fragment, trailing slash, lowercase scheme+host.

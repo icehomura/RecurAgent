@@ -119,7 +119,7 @@ impl McpServerConfig {
 #[allow(clippy::field_reassign_with_default)]
 fn octos_client_info() -> ClientInfo {
     let mut info = ClientInfo::default();
-    info.client_info = Implementation::new("ra", env!("CARGO_PKG_VERSION"));
+    info.client_info = Implementation::new(ra_core::brand::APP_NAME, env!("CARGO_PKG_VERSION"));
     info
 }
 
@@ -650,6 +650,12 @@ mod tests {
             scopes: vec![],
             concurrency_class: None,
         }
+    }
+
+    #[test]
+    fn client_info_identifies_as_ra() {
+        let info = octos_client_info();
+        assert_eq!(info.client_info.name.as_str(), ra_core::brand::APP_NAME);
     }
 
     #[test]

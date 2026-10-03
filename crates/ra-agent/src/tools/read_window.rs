@@ -1,6 +1,7 @@
 //! Flag-gated windowed `read_file` enforcement (#1638). **Off by default.**
 //!
-//! Armed via `OCTOS_READ_WINDOW=1`. When armed, `read_file` returns at most
+//! Armed via `RA_READ_WINDOW=1` (legacy `OCTOS_READ_WINDOW` is still
+//! honoured). When armed, `read_file` returns at most
 //! [`WINDOW_MAX_LINES`] lines and at most [`WINDOW_MAX_BYTES`] bytes of
 //! formatted output — whichever limit is hit first — with a footer naming the
 //! limit that fired, the range actually returned, the file's totals, and the
@@ -167,7 +168,7 @@ pub(crate) const TRANSFORMED_VIEW_OVERWRITE_PREFIX: &str = "[TRANSFORMED_VIEW_OV
 
 /// Whether window enforcement is armed by the environment.
 ///
-/// Mirrors the #2126 probe's gate shape (`OCTOS_READ_PAGING_PROBE=1`). The
+/// Mirrors the #2126 probe's gate shape (`RA_READ_PAGING_PROBE=1`). The
 /// test-side arming override is per-tool-instance
 /// (`with_window_enforcement`), NOT a process-global like the probe's
 /// `FORCED_ON`: arming CHANGES `read_file`'s output, so a global test switch
@@ -175,7 +176,7 @@ pub(crate) const TRANSFORMED_VIEW_OVERWRITE_PREFIX: &str = "[TRANSFORMED_VIEW_OV
 /// (`set_var` is `unsafe` under edition 2024 and this workspace denies
 /// unsafe, so tests cannot scope the env var either).
 pub(crate) fn armed_from_env() -> bool {
-    std::env::var("OCTOS_READ_WINDOW").is_ok_and(|value| value == "1")
+    ra_core::brand::env_compat_str("READ_WINDOW").is_some_and(|value| value == "1")
 }
 
 /// The identity of one on-disk generation of a file (#2193 R4).
@@ -847,7 +848,7 @@ mod tests {
 
     #[test]
     fn armed_from_env_defaults_to_off() {
-        // The suite never sets OCTOS_READ_WINDOW (set_var is unsafe under
+        // The suite never sets RA_READ_WINDOW (set_var is unsafe under
         // edition 2024), so this pins the shipped default: off.
         assert!(!armed_from_env(), "window enforcement must be opt-in");
     }

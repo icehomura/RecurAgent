@@ -37,7 +37,8 @@
 //! 1. If the argument starts with `/`, `./`, or `~/` it is treated as a
 //!    filesystem path. The file is loaded directly.
 //! 2. Otherwise the argument is a profile id. The loader first checks
-//!    `~/.ra/profiles/<id>/profile.{toml,json}`.
+//!    `<state home>/profiles/<id>/profile.{toml,json}` (the state home is
+//!    `~/.ra`, or an existing `~/.ra`).
 //! 3. Finally the loader falls back to the crate-shipped built-in registry
 //!    (JSON files under `crates/ra-agent/src/assets/profiles/`).
 //!
@@ -94,7 +95,7 @@ const BUILTIN_PROFILES: &[(&str, &str)] = &[
 pub enum ProfileSource {
     /// Explicit `--profile <path>` pointing at a file on disk.
     ExplicitPath,
-    /// Named profile found in `~/.ra/profiles/<name>/profile.{toml,json}`.
+    /// Named profile found in `<state home>/profiles/<name>/profile.{toml,json}`.
     UserDir,
     /// Named profile that fell back to the crate-shipped built-in set.
     Builtin,
@@ -395,23 +396,40 @@ impl ProfileDefinition {
     /// source so the caller can log `profile resolved: ... source=...`.
     pub fn load(arg: &str) -> Result<(Self, ProfileSource)> {
         let home = dirs::home_dir();
-        Self::load_with_home(arg, home.as_deref())
+        let profiles_dir = ra_core::brand::state_path("profiles");
+        Self::resolve(arg, home.as_deref(), Some(&profiles_dir))
     }
 
     /// Variant of [`Self::load`] that takes an explicit home directory so
     /// unit tests can exercise the user-dir lookup without touching the
     /// real filesystem.
+    ///
+    /// Mirrors the product state-home rule under `home`: an existing
+    /// `<home>/.ra/profiles` wins, otherwise an existing `<home>/.ra/profiles`,
+    /// otherwise `<home>/.ra/profiles`. `home` is also the base for `~`
+    /// expansion in [`expand_tilde`].
     pub fn load_with_home(arg: &str, home: Option<&Path>) -> Result<(Self, ProfileSource)> {
+        let profiles_dir = home.map(profiles_dir_under);
+        Self::resolve(arg, home, profiles_dir.as_deref())
+    }
+
+    /// Shared resolver: an explicit path wins, then the user profile
+    /// directory (when one is known), then the built-in registry.
+    fn resolve(
+        arg: &str,
+        home: Option<&Path>,
+        profiles_dir: Option<&Path>,
+    ) -> Result<(Self, ProfileSource)> {
         if looks_like_path(arg) {
             let resolved = expand_tilde(arg, home);
             let def = Self::from_file(&resolved)?;
             return Ok((def, ProfileSource::ExplicitPath));
         }
 
-        if let Some(home_dir) = home {
-            let profile_dir = home_dir.join(".ra/profiles").join(arg);
+        if let Some(profile_dir) = profiles_dir {
+            let dir = profile_dir.join(arg);
             for candidate in ["profile.toml", "profile.json"] {
-                let path = profile_dir.join(candidate);
+                let path = dir.join(candidate);
                 if path.exists() {
                     let def = Self::from_file(&path)?;
                     return Ok((def, ProfileSource::UserDir));
@@ -424,7 +442,7 @@ impl ProfileDefinition {
         }
 
         eyre::bail!(
-            "unknown profile '{arg}': not a file, no entry in ~/.ra/profiles/, and \
+            "unknown profile '{arg}': not a file, no entry in the profile state directory, and \
              not a built-in ({})",
             Self::builtin_ids().join(", "),
         )
@@ -458,6 +476,18 @@ fn expand_tilde(arg: &str, home: Option<&Path>) -> PathBuf {
         }
     }
     PathBuf::from(arg)
+}
+
+/// Resolve the user profile directory under an explicit home, applying the
+/// product-rename rule: prefer an existing `<home>/.ra/profiles`, fall back to
+/// an existing `<home>/.ra/profiles` (legacy installs), and default to
+/// `<home>/.ra/profiles` when neither exists.
+fn profiles_dir_under(home: &Path) -> PathBuf {
+    let new_dir = home.join(ra_core::brand::STATE_DIR).join("profiles");
+    let legacy_dir = home.join(ra_core::brand::LEGACY_STATE_DIR).join("profiles");
+    let new_exists = new_dir.is_dir();
+    let legacy_exists = legacy_dir.is_dir();
+    ra_core::brand::choose(None, None, new_dir, legacy_dir, new_exists, legacy_exists)
 }
 
 #[cfg(test)]
@@ -635,11 +665,15 @@ mod tests {
     }
 
     #[test]
-    fn should_resolve_profile_name_via_user_dir() {
-        // Place a profile.json under `<home>/.ra/profiles/<name>/` and
-        // confirm load() picks it up with source=UserDir.
+    fn should_resolve_profile_name_via_legacy_user_dir() {
+        // Legacy fallback: a profile.json under `<home>/<legacy slug>/profiles/<name>/`
+        // (the pre-rename ra home) still resolves when no
+        // `<home>/<app slug>/profiles/<name>/` exists.
         let fake_home = tempfile::tempdir().expect("tempdir");
-        let profiles_dir = fake_home.path().join(".ra/profiles/alpha");
+        let profiles_dir = fake_home
+            .path()
+            .join(ra_core::brand::LEGACY_STATE_DIR)
+            .join("profiles/alpha");
         std::fs::create_dir_all(&profiles_dir).expect("mkdirs");
         std::fs::write(
             profiles_dir.join("profile.json"),
@@ -650,6 +684,66 @@ mod tests {
         let (def, source) = ProfileDefinition::load_with_home("alpha", Some(fake_home.path()))
             .expect("load from user dir");
         assert_eq!(def.name, "alpha");
+        assert_eq!(source, ProfileSource::UserDir);
+    }
+
+    #[test]
+    fn should_resolve_profile_name_via_ra_user_dir() {
+        // New-name-first: a profile.json under `<home>/<app slug>/profiles/<name>/`
+        // resolves with source=UserDir.
+        let fake_home = tempfile::tempdir().expect("tempdir");
+        let profiles_dir = fake_home
+            .path()
+            .join(ra_core::brand::STATE_DIR)
+            .join("profiles/beta");
+        std::fs::create_dir_all(&profiles_dir).expect("mkdirs");
+        std::fs::write(
+            profiles_dir.join("profile.json"),
+            r#"{"name": "beta", "version": 1, "description": "new"}"#,
+        )
+        .expect("write");
+
+        let (def, source) = ProfileDefinition::load_with_home("beta", Some(fake_home.path()))
+            .expect("load from ra user dir");
+        assert_eq!(def.name, "beta");
+        assert_eq!(def.description.as_deref(), Some("new"));
+        assert_eq!(source, ProfileSource::UserDir);
+    }
+
+    #[test]
+    fn should_prefer_ra_user_dir_over_legacy_octos_dir() {
+        // Both directories exist: the new `<home>/<app slug>/profiles` MUST win
+        // over the legacy `<home>/<legacy slug>/profiles` copy.
+        let fake_home = tempfile::tempdir().expect("tempdir");
+        let new_dir = fake_home
+            .path()
+            .join(ra_core::brand::STATE_DIR)
+            .join("profiles/gamma");
+        std::fs::create_dir_all(&new_dir).expect("mkdirs ra");
+        std::fs::write(
+            new_dir.join("profile.json"),
+            r#"{"name": "gamma", "version": 1, "description": "new"}"#,
+        )
+        .expect("write ra");
+        let legacy_dir = fake_home
+            .path()
+            .join(ra_core::brand::LEGACY_STATE_DIR)
+            .join("profiles/gamma");
+        std::fs::create_dir_all(&legacy_dir).expect("mkdirs legacy");
+        std::fs::write(
+            legacy_dir.join("profile.json"),
+            r#"{"name": "gamma", "version": 1, "description": "legacy"}"#,
+        )
+        .expect("write legacy");
+
+        let (def, source) = ProfileDefinition::load_with_home("gamma", Some(fake_home.path()))
+            .expect("load from ra user dir");
+        assert_eq!(def.name, "gamma");
+        assert_eq!(
+            def.description.as_deref(),
+            Some("new"),
+            "the new-slug profile must win over the legacy copy"
+        );
         assert_eq!(source, ProfileSource::UserDir);
     }
 

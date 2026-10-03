@@ -50,8 +50,8 @@ impl Tool for PlatformSkillsTool {
          - logs: View recent OminiX engine log output (optional: lines, default 50)\n\
          - models: List platform-enabled models with download status\n\
          - available_models: List ALL ominix-api models (to see what can be enabled)\n\
-         - enable_model: Add a model to ra platform allowlist (model_id + role required)\n\
-         - disable_model: Remove a model from ra platform allowlist (model_id required)\n\
+         - enable_model: Add a model to the ra platform allowlist (model_id + role required)\n\
+         - disable_model: Remove a model from the ra platform allowlist (model_id required)\n\
          - download_model: Download a model by model_id (e.g. 'qwen3-asr-1.7b', 'qwen3-tts')\n\
          - remove_model: Remove a downloaded model by model_id\n\
          - install: Bootstrap an OminiX skill binary\n\

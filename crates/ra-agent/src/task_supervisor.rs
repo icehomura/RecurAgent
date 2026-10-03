@@ -38,8 +38,9 @@ const CURRENT_TASK_LEDGER_SCHEMA: u32 = 1;
 /// structured reason so the runaway loop's downstream registers see the
 /// poisoned state and stop submitting.
 ///
-/// Override at process start by setting the `OCTOS_MAX_CHILDREN_PER_PARENT`
-/// env var to a positive integer; the value is parsed once and cached.
+/// Override at process start by setting the `RA_MAX_CHILDREN_PER_PARENT` env
+/// var (legacy `OCTOS_MAX_CHILDREN_PER_PARENT` still honoured) to a positive
+/// integer; the value is parsed once and cached.
 pub const MAX_CHILDREN_PER_PARENT: usize = 200;
 
 /// Codex round-2 MAJOR (PR #1324): upper bound on `AckAndPending::pending`
@@ -74,8 +75,7 @@ const MAX_FAILURE_SIGNAL_EMITTED_IDS: usize = 1024;
 fn max_children_per_parent() -> usize {
     static CACHE: OnceLock<usize> = OnceLock::new();
     *CACHE.get_or_init(|| {
-        std::env::var("OCTOS_MAX_CHILDREN_PER_PARENT")
-            .ok()
+        ra_core::brand::env_compat_str("MAX_CHILDREN_PER_PARENT")
             .and_then(|raw| raw.parse::<usize>().ok())
             .filter(|cap| *cap > 0)
             .unwrap_or(MAX_CHILDREN_PER_PARENT)

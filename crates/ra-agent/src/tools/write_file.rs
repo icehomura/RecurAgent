@@ -23,8 +23,8 @@ pub struct WriteFileTool {
     /// pre-#1976 construction) = writes governed by scope/access alone.
     write_grant: Option<WritePathGrant>,
     /// Partial-view overwrite guard (#1638), armed with windowed reads.
-    /// `None` = the `OCTOS_READ_WINDOW` env flag decides (production);
-    /// `Some` = explicit, for tests.
+    /// `None` = the `RA_READ_WINDOW` env flag decides (production; legacy
+    /// `OCTOS_READ_WINDOW` is still honoured); `Some` = explicit, for tests.
     window_enforcement: Option<bool>,
 }
 

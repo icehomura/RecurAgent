@@ -101,8 +101,7 @@ impl LoopDetector {
             doom_last_signature: None,
             doom_streak: 0,
             file_mutations: HashMap::new(),
-            file_churn_threshold: std::env::var("OCTOS_FILE_CHURN_THRESHOLD")
-                .ok()
+            file_churn_threshold: ra_core::brand::env_compat_str("FILE_CHURN_THRESHOLD")
                 .and_then(|value| value.parse::<usize>().ok())
                 .map(|value| value.clamp(2, 100))
                 .unwrap_or(5),

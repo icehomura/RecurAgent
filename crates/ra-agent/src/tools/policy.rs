@@ -43,7 +43,8 @@ pub struct ToolPolicy {
     /// appends a nudge to prefer `edit_file`/`diff_edit` when the command
     /// actually changed files; `deny` = a heuristic pre-screen refuses
     /// write-shaped commands and points at `edit_file` (escape hatch: a
-    /// trailing `# ra:allow-write` comment on the command line).
+    /// trailing `# ra:allow-write` comment on the command line; the legacy
+    /// `# ra:allow-write` spelling is still accepted).
     /// Loaded ONCE with the policy (never re-read per call).
     #[serde(default)]
     pub bash_file_writes: BashFileWrites,
@@ -60,7 +61,8 @@ pub enum BashFileWrites {
     Warn,
     /// Write-shaped commands are refused before execution; heuristic-based,
     /// false-negatives tolerated (the 28a receipt still backs it up),
-    /// false-positives escape via the `# ra:allow-write` comment.
+    /// false-positives escape via the `# ra:allow-write` comment (legacy
+    /// `# ra:allow-write` still accepted).
     Deny,
 }
 

@@ -122,8 +122,10 @@ pub struct PluginLoadOptions<'a> {
     /// preserved for backward compatibility.
     pub require_signed: bool,
     /// Override the directory used to store the verified-hash ledger.
-    /// When `None`, the loader resolves to `~/.ra/cache/verified/` so
-    /// the ledger lives outside the skill source tree (writing into the
+    /// When `None`, the loader resolves under the shared state dir
+    /// (`ra_core::brand::state_path("cache").join("verified")`: `RA_HOME`,
+    /// legacy `OCTOS_HOME`, an existing `~/.ra`, or a legacy `~/.ra`),
+    /// so the ledger lives outside the skill source tree (writing into the
     /// source dir taints ownership when the daemon runs as a different
     /// uid — see 2026-05 fleet skill-dir-root-ownership bug). Tests pass
     /// a tempdir here for isolation; production callers leave this `None`.
@@ -261,7 +263,7 @@ impl PluginLoader {
 
         // Delegate dir scanning + dedup to ra_plugin::discovery so the
         // legacy loader inherits "first occurrence wins" semantics. Without
-        // this, a plugin id present in both `~/.ra/skills/` and the
+        // this, a plugin id present in both the user-global skills dir and the
         // per-profile `<data_dir>/skills/` would register twice — and
         // because `ToolRegistry::register` overwrites by tool name, the
         // *last* dir's plugin would silently shadow the earlier one. The
@@ -736,7 +738,7 @@ impl PluginLoader {
         // Write a verified-hash ledger entry OUTSIDE the skill source dir
         // recording "we hashed the in-place binary at time T and got hash
         // H". The ledger lives at `<verified_cache_dir>/<plugin>/hash.txt`
-        // (production: `~/.ra/cache/verified/<plugin>/hash.txt`). The
+        // (production: `<state>/cache/verified/<plugin>/hash.txt`). The
         // plugin executes from its skill source directory unchanged so
         // asset-resolution (sibling `<skill>/styles/`, `<skill>/templates/`,
         // etc. that plugins like `mofa-slides` walk via `exe_parent`) keeps
@@ -1117,7 +1119,7 @@ fn validate_manifest_tool_schemas_with(
         .collect::<Vec<_>>()
         .join("\n");
     eyre::bail!(
-        "plugin '{}' has {} schema violation(s):\n{}\n\nSet OCTOS_MANIFEST_VALIDATION=lenient to relax the strict ra profile, or =off to disable validation entirely.",
+        "plugin '{}' has {} schema violation(s):\n{}\n\nSet RA_MANIFEST_VALIDATION=lenient to relax the strict ra profile, or =off to disable validation entirely.",
         manifest.name,
         errors.len(),
         details
@@ -1302,9 +1304,11 @@ fn compute_sha256(path: &Path) -> Result<String> {
 /// 1. Explicit `override_dir` from [`PluginLoadOptions::verified_cache_dir`]
 ///    (used by tests to isolate from the real cache).
 /// 2. Under `cargo test`, a process-scoped tempdir auto-cleaned at exit —
-///    keeps the test suite from polluting `~/.ra/cache/verified/` and
+///    keeps the test suite from polluting the user's real cache dir and
 ///    avoids cross-test races on shared plugin names.
-/// 3. `~/.ra/cache/verified/` derived from `dirs::home_dir()`.
+/// 3. `ra_core::brand::state_path("cache").join("verified")` — the shared
+///    state home (`RA_HOME`, legacy `OCTOS_HOME`, an existing `~/.ra`, or a
+///    legacy `~/.ra`).
 /// 4. `std::env::temp_dir().join("ra-verified")` as a last resort when
 ///    HOME is unavailable (e.g. sandbox).
 ///
@@ -1331,8 +1335,8 @@ fn resolve_verified_hash_path(override_dir: Option<&Path>, plugin_name: &str) ->
         // through this default path; keep them out of the user's real
         // cache (and let TempDir auto-cleanup at process exit).
         test_default_cache_dir()
-    } else if let Some(home) = dirs::home_dir() {
-        home.join(".ra").join("cache").join("verified")
+    } else if ra_core::brand::state_home().is_some() {
+        ra_core::brand::state_path("cache").join("verified")
     } else {
         std::env::temp_dir().join("ra-verified")
     };
@@ -1342,7 +1346,7 @@ fn resolve_verified_hash_path(override_dir: Option<&Path>, plugin_name: &str) ->
 /// Process-scoped tempdir for tests that don't explicitly pass a
 /// `verified_cache_dir`. Created once on first access; auto-cleaned when
 /// the test process exits. Without this, every test would write into the
-/// dev machine's real `~/.ra/cache/verified/` and tests reusing the
+/// dev machine's real state cache dir and tests reusing the
 /// same plugin name in parallel would race.
 #[cfg(test)]
 fn test_default_cache_dir() -> PathBuf {

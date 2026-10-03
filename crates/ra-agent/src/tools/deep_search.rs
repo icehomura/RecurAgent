@@ -10,8 +10,8 @@
 //! backoff on 429/503 honouring `Retry-After`, a body-size cap, SSRF checks
 //! with DNS pinning on every hop, and a real browser only to render JS-heavy
 //! pages (private destinations blocked inside it, result re-validated).
-//! robots.txt is an operator setting (`OCTOS_RESPECT_ROBOTS=1`), off by
-//! default.
+//! robots.txt is an operator setting (`RA_RESPECT_ROBOTS=1`; legacy
+//! `OCTOS_RESPECT_ROBOTS` is still honoured), off by default.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -516,7 +516,7 @@ fn research_reader() -> ra_research::reader::Reader {
         keep_html: false,
         // Operator setting, default off (maintainer decision: personal
         // assistant reads on the person's behalf).
-        respect_robots: ra_research::respect_robots(|k| std::env::var(k).ok()),
+        respect_robots: ra_research::respect_robots(super::web_search::compat_env_lookup),
         fallback_text: Some(html_to_markdown),
         renderer,
         ..Default::default()

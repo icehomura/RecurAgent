@@ -285,8 +285,8 @@ pub(crate) fn toolchain_write_grants(allow_network: bool) -> ToolchainWriteGrant
     // is globally allowed; it does not write settings.toml or the toolchain
     // dirs. Granting settings.toml write let a sandboxed command
     // persistently change the user's default toolchain/overrides — removed.
-    // (rustup's original "could not READ settings" symptom was an
-    // octoscode read-restriction, not an octos one.)
+    // (rustup's original "could not READ settings" symptom was a
+    // sandbox read-restriction, not an ra one.)
     grants
 }
 

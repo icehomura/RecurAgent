@@ -16,8 +16,9 @@ pub struct ReadFileTool {
     base_dir: PathBuf,
     /// Effective filesystem scope.
     filesystem_scope: FilesystemScope,
-    /// Windowed-read enforcement (#1638). `None` = the `OCTOS_READ_WINDOW`
-    /// env flag decides (production); `Some` = explicit, for tests — arming
+    /// Windowed-read enforcement (#1638). `None` = the `RA_READ_WINDOW`
+    /// env flag decides (production; legacy `OCTOS_READ_WINDOW` is still
+    /// honoured); `Some` = explicit, for tests — arming
     /// changes output, so tests must not arm process-globally (see
     /// `read_window::armed_from_env`).
     window_enforcement: Option<bool>,
@@ -122,7 +123,7 @@ impl Tool for ReadFileTool {
     // the prefix for all of them. Both are therefore conditional on the arm:
     // unarmed returns exactly the origin strings; armed adds the windowing
     // contract and the byte-mode parameters. (`window_armed()` reads the
-    // per-instance override or `OCTOS_READ_WINDOW`, both stable for a process,
+    // per-instance override or `RA_READ_WINDOW`, both stable for a process,
     // so `specs()` sees a consistent answer.)
     fn description(&self) -> &str {
         if self.window_armed() {
@@ -297,7 +298,7 @@ impl ReadFileTool {
             let message = if !window_armed {
                 Some(
                     "byte_offset/byte_limit are only available when windowed reads are enabled \
-                     (OCTOS_READ_WINDOW=1)."
+                     (RA_READ_WINDOW=1)."
                         .to_string(),
                 )
             } else if input.start_line.is_some()

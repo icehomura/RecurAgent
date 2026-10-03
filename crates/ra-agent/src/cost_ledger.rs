@@ -23,8 +23,9 @@
 //!   blocks the runtime on disk I/O.
 //! - One record per dispatch, keyed by the event's UUIDv7 ID so
 //!   insertions are lock-free and ordering on read reflects dispatch time.
-//! - Default on-disk path: `~/.ra/cost_ledger.redb`. Tests use
-//!   [`PersistentCostLedger::open`] with a tempdir path.
+//! - Default on-disk path: `<state home>/cost_ledger.redb` (`~/.ra`, or an
+//!   existing `~/.ra`). Tests use [`PersistentCostLedger::open`] with a
+//!   tempdir path.
 //!
 //! # Budget enforcement
 //!
@@ -252,11 +253,14 @@ pub struct PersistentCostLedger {
 }
 
 impl PersistentCostLedger {
-    /// Default storage path under the user's home directory. Matches
-    /// the `~/.ra/` convention used by the auth store and episode
-    /// database.
+    /// Default storage path in the product state home (`~/.ra`, or an
+    /// existing `~/.ra`). Matches the state-home convention used by the
+    /// auth store and episode database.
+    ///
+    /// Kept returning an `Option` for API compatibility; the state path
+    /// always resolves (falling back to a relative `ra/` when no home exists).
     pub fn home_default_path() -> Option<PathBuf> {
-        dirs::home_dir().map(|h| h.join(".ra").join(COST_LEDGER_FILE))
+        Some(ra_core::brand::state_path(COST_LEDGER_FILE))
     }
 
     /// Open or create a ledger at `data_dir`. The redb file is created
@@ -285,8 +289,9 @@ impl PersistentCostLedger {
         Ok(Self { db: Arc::new(db) })
     }
 
-    /// Open the default `~/.ra/cost_ledger.redb` ledger. Fails
-    /// cleanly if the home directory cannot be resolved.
+    /// Open the default ledger from the product state home (`~/.ra`, or an
+    /// existing `~/.ra`). Fails cleanly if the state path cannot be
+    /// resolved.
     pub async fn open_default() -> Result<Self> {
         let path = Self::home_default_path()
             .ok_or_else(|| eyre::eyre!("could not determine home directory for cost ledger"))?;

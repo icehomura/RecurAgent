@@ -357,7 +357,10 @@ impl ServerHandler for OctosMcpHandler {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_protocol_version(ProtocolVersion::LATEST)
-            .with_server_info(Implementation::new("ra", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new(
+                ra_core::brand::APP_NAME,
+                env!("CARGO_PKG_VERSION"),
+            ))
             .with_instructions(
                 "Exposes a single tool, `run_ra_session`, that runs a complete ra \
                  session (workspace contract + input to artifact) to completion, including \
@@ -555,7 +558,7 @@ pub fn build_initialize_response(_server: &McpServer) -> Value {
             "tools": {"listChanged": false},
         },
         "serverInfo": {
-            "name": "ra",
+            "name": ra_core::brand::APP_NAME,
             "version": env!("CARGO_PKG_VERSION"),
         },
     })
@@ -739,9 +742,10 @@ fn extract_outcome_from_result(result: &Value) -> (String, Option<String>, Optio
 
 fn caller_id_for_transport(transport: &str) -> String {
     match transport {
-        "stdio" => {
-            std::env::var("OCTOS_MCP_CALLER_LABEL").unwrap_or_else(|_| "parent-process".into())
-        }
+        // Caller label injected by the parent: `RA_MCP_CALLER_LABEL` wins, the
+        // legacy `OCTOS_MCP_CALLER_LABEL` is still honoured.
+        "stdio" => ra_core::brand::env_compat_str("MCP_CALLER_LABEL")
+            .unwrap_or_else(|| "parent-process".into()),
         "http" => "http-bearer".into(),
         other => format!("unknown:{other}"),
     }

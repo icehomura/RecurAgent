@@ -3323,7 +3323,7 @@ mod bash_file_writes_28d {
         assert!(!out.success, "exec deny: {}", out.output);
         assert!(out.output.contains("bash_file_writes=deny"));
 
-        // Escape hatch: trailing `# ra:allow-write` runs the write.
+        // Escape hatch: the legacy `# ra:allow-write` spelling still runs the write.
         let hatch = dir.path().join("hatch.txt");
         let out = bash(dir.path(), BashFileWrites::Deny)
             .execute(&json!({ "cmd": format!("echo h > {:?} # ra:allow-write", hatch) }))

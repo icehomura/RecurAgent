@@ -488,7 +488,7 @@ fn tool_result_placeholder_rejects_unsupported_schema_version() {
         "reason": "r"
     })
     .to_string();
-    let prefixed = format!("[OCTOS_TOOL_RESULT_PLACEHOLDER]{raw}");
+    let prefixed = format!("[RA_TOOL_RESULT_PLACEHOLDER]{raw}");
     let err = ToolResultPlaceholder::from_placeholder_content(&prefixed).unwrap_err();
     assert!(matches!(
         err,

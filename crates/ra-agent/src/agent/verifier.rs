@@ -543,7 +543,8 @@ impl Agent {
         // model that actually answered, resolved from the provider (which
         // also handles verifier-side failover). `config.model_label` is a
         // DISPLAY label ("session-cheap-verifier" when no explicit
-        // OCTOS_AGENT_VERIFIER_MODEL is set) and misses the catalog.
+        // RA_AGENT_VERIFIER_MODEL is set — legacy `OCTOS_AGENT_VERIFIER_MODEL`
+        // still honoured) and misses the catalog.
         let verifier_metadata = config
             .provider
             .provider_metadata_for_index(response.provider_index);

@@ -88,7 +88,8 @@ impl Agent {
     ) -> Result<(ChatResponse, bool, Option<f64>)> {
         // Measurement only (#pi/dsh append-only study): report whether this
         // turn's request history is still a prefix-extension of the last one.
-        // Off unless OCTOS_APPEND_ONLY_AUDIT=1, and never alters the request —
+        // Off unless RA_APPEND_ONLY_AUDIT=1 (legacy `OCTOS_APPEND_ONLY_AUDIT`
+        // still honoured), and never alters the request —
         // a rewrite here means the sent history stopped being reconstructable
         // from what came before, which is the drift that makes a resumed
         // session differ from the one the model actually had.

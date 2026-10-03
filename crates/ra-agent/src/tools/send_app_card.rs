@@ -8,7 +8,7 @@
 //! The outgoing Matrix event content must carry these fields when this tool
 //! is used. Keeping the contract narrow lets the Robrix-side consumer (see
 //! `specs/task-agent-to-app-system.spec.md` in the robrix2 repo) and the
-//! OctOS-side producer evolve without drift:
+//! ra-side producer evolve without drift:
 //!
 //! - `msgtype` — always `"m.text"`
 //! - `body` — user-facing fallback text shown by clients that do not
@@ -224,7 +224,7 @@ impl Tool for SendAppCardTool {
                 },
                 "actions": {
                     "type": "array",
-                    "description": "Optional shared OctOS action buttons. \
+                    "description": "Optional shared ra action buttons. \
                         Each item should include id, label, and optional style.",
                     "items": {
                         "type": "object",

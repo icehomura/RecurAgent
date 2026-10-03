@@ -102,19 +102,19 @@ pub(super) struct ConvergenceController {
 impl ConvergenceController {
     pub(super) fn from_env(started_at: Instant) -> Self {
         let llm_call_interval = env_u64(
-            "OCTOS_CONVERGENCE_LLM_CALLS",
+            "CONVERGENCE_LLM_CALLS",
             u64::from(DEFAULT_LLM_CALL_INTERVAL),
             2,
             10_000,
         ) as u32;
         let active_token_interval = env_u64(
-            "OCTOS_CONVERGENCE_ACTIVE_TOKENS",
+            "CONVERGENCE_ACTIVE_TOKENS",
             DEFAULT_ACTIVE_TOKEN_INTERVAL,
             1_000,
             100_000_000,
         );
         let elapsed_interval = Duration::from_secs(env_u64(
-            "OCTOS_CONVERGENCE_SECS",
+            "CONVERGENCE_SECS",
             DEFAULT_ELAPSED_INTERVAL_SECS,
             10,
             86_400,
@@ -299,9 +299,11 @@ pub(super) fn format_elapsed(elapsed: Duration) -> String {
     }
 }
 
-fn env_u64(name: &str, default: u64, min: u64, max: u64) -> u64 {
-    std::env::var(name)
-        .ok()
+/// Read a `u64` knob, clamped to `[min, max]`. `suffix` resolves through
+/// [`ra_core::brand::env_compat_str`] (`RA_<suffix>` first, legacy
+/// `OCTOS_<suffix>` second).
+fn env_u64(suffix: &str, default: u64, min: u64, max: u64) -> u64 {
+    ra_core::brand::env_compat_str(suffix)
         .and_then(|value| value.parse::<u64>().ok())
         .map(|value| value.clamp(min, max))
         .unwrap_or(default)

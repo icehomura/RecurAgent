@@ -1287,7 +1287,7 @@ impl Tool for SpawnAgentTool {
     }
 
     fn description(&self) -> &str {
-        "Start a Codex-compatible subagent. When ra' native spawn tool is registered, this forwards to it and returns the supervised agent handle."
+        "Start a Codex-compatible subagent. When ra's native spawn tool is registered, this forwards to it and returns the supervised agent handle."
     }
 
     fn tags(&self) -> &[&str] {

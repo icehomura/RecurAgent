@@ -877,7 +877,7 @@ async fn perform_stdio_handshake_and_call(
         serde_json::json!({
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "ra", "version": env!("CARGO_PKG_VERSION")}
+            "clientInfo": {"name": ra_core::brand::APP_NAME, "version": env!("CARGO_PKG_VERSION")}
         }),
     )
     .await

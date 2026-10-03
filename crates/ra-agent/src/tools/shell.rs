@@ -1533,6 +1533,21 @@ mod tests {
     }
 
     #[test]
+    fn bash_file_writes_escape_hatch_accepts_the_new_marker() {
+        assert!(command_allows_write_explicitly(
+            "sed -i s/a/b/ file # ra:allow-write"
+        ));
+        assert!(command_allows_write_explicitly(
+            "echo x > /tmp/f # ra:allow-write"
+        ));
+        // Only the LAST line's comment counts as the hatch.
+        assert!(!command_allows_write_explicitly(
+            "# ra:allow-write\nsed -i s/a/b/ file"
+        ));
+        assert!(!command_allows_write_explicitly("sed -i s/a/b/ file"));
+    }
+
+    #[test]
     fn bash_file_writes_deny_refuses_write_command() {
         let temp = tempfile::tempdir().expect("tempdir");
         let tool = super::ShellTool::new(temp.path())
@@ -2527,11 +2542,13 @@ mod tests {
 
 /// #28b — escape hatch: a trailing `# ra:allow-write` comment on the
 /// command line explicitly authorizes a write-shaped command under `deny`.
+/// The legacy `# ra:allow-write` spelling is still accepted.
 pub(crate) fn command_allows_write_explicitly(command: &str) -> bool {
+    const MARKERS: [&str; 2] = ["# ra:allow-write", "# ra:allow-write"];
     command
         .lines()
         .last()
-        .is_some_and(|last| last.contains("# ra:allow-write"))
+        .is_some_and(|last| MARKERS.iter().any(|marker| last.contains(*marker)))
 }
 
 /// #28b — heuristic: does this command LOOK like it writes files? A

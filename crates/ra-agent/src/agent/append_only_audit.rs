@@ -93,7 +93,7 @@ pub(crate) fn enabled() -> bool {
     if FORCED_ON.load(std::sync::atomic::Ordering::Relaxed) {
         return true;
     }
-    std::env::var("OCTOS_APPEND_ONLY_AUDIT").is_ok_and(|value| value == "1")
+    ra_core::brand::env_compat_str("APPEND_ONLY_AUDIT").is_some_and(|value| value == "1")
 }
 
 /// Arm the audit for one test.
