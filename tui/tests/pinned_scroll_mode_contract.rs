@@ -9,13 +9,13 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ra_core::{Message, SessionKey};
-use octoscode::app;
-use octoscode::cli::{ScrollMode, ThemeName, load_config_file};
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::model::{AppState, SessionView};
-use octoscode::store::Store;
-use octoscode::theme::Palette;
-use octoscode::tui_terminal::FrameLike;
+use ra_tui::app;
+use ra_tui::cli::{ScrollMode, ThemeName, load_config_file};
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::model::{AppState, SessionView};
+use ra_tui::store::Store;
+use ra_tui::theme::Palette;
+use ra_tui::tui_terminal::FrameLike;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::widgets::Widget;

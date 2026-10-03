@@ -12082,12 +12082,14 @@ mod tests {
                 cwd: None,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             })
         };
         let mut state = AppState::new(Vec::new(), 0, "ready".into(), None, false);
         for _ in 0..16 {
             state.enqueue_autonomy_hydration(AppUiCommand::ListSessions(SessionListParams {
                 cwd: None,
+                profile_id: None,
             }));
         }
         state.enqueue_local_session_open_front(open("local:b"));
@@ -12128,6 +12130,7 @@ mod tests {
         for _ in 0..15 {
             state.enqueue_autonomy_hydration(AppUiCommand::ListSessions(SessionListParams {
                 cwd: None,
+                profile_id: None,
             }));
         }
         state
@@ -12139,6 +12142,7 @@ mod tests {
                 cwd: None,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             }));
         assert_eq!(
             state.pending_autonomy_hydration.len(),
@@ -12158,6 +12162,7 @@ mod tests {
             rewrite_for: None,
             reasoning_effort: None,
             live_video: false,
+            origin: None,
         }));
 
         assert!(
@@ -12197,6 +12202,7 @@ mod tests {
                 cwd: None,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             }));
         }
         let dropped_session = SessionKey("local:dropped".into());
@@ -12246,6 +12252,7 @@ mod tests {
             cwd: None,
             sandbox: None,
             after: None,
+            client_commands: None,
         }));
         assert_eq!(state.pending_autonomy_hydration.len(), 16);
         assert!(
@@ -13193,7 +13200,7 @@ mod tests {
         // historical empty object `{}`, byte-identical to what old clients
         // sent, so an OLD server (no per-project session storage) still
         // deserializes it unchanged (`cwd: None` -> legacy global listing).
-        let params = SessionListParams { cwd: None };
+        let params = SessionListParams { cwd: None, profile_id: None };
         let wire = serde_json::to_value(&params).expect("SessionListParams serializes");
         assert_eq!(wire, serde_json::json!({}));
     }
@@ -13206,6 +13213,7 @@ mod tests {
         // the project rooted at that path.
         let params = SessionListParams {
             cwd: Some("/tmp/project".into()),
+            profile_id: None,
         };
         let wire = serde_json::to_value(&params).expect("SessionListParams serializes");
         assert_eq!(wire, serde_json::json!({ "cwd": "/tmp/project" }));

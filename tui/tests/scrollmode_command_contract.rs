@@ -3,10 +3,10 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::{Message, SessionKey};
-use octoscode::app;
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::model::{AppState, SessionView};
-use octoscode::store::Store;
+use ra_tui::app;
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::model::{AppState, SessionView};
+use ra_tui::store::Store;
 
 fn chat_store() -> Store {
     Store {
@@ -157,7 +157,7 @@ fn popup_enter_dispatches_optional_arg_command() {
 
 #[test]
 fn popup_entry_shows_current_mode() {
-    use octoscode::menu::MenuBuildResult;
+    use ra_tui::menu::MenuBuildResult;
     let mut store = chat_store();
 
     let entry_desc = |store: &mut Store| -> String {

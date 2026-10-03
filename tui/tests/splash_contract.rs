@@ -1,6 +1,6 @@
 //! Contract tests for specs/task-startup-splash.spec.
 
-use octoscode::splash::{
+use ra_tui::splash::{
     SPLASH_EFFECTS, SplashGate, effect_args_for, pick_effect_args, should_play, splash_text,
 };
 
@@ -104,7 +104,7 @@ fn splash_text_carries_logo_and_version() {
     );
 }
 
-use octoscode::splash::{SessionOpts, SplashSession};
+use ra_tui::splash::{SessionOpts, SplashSession};
 
 fn test_opts() -> SessionOpts {
     SessionOpts {

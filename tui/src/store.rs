@@ -1383,6 +1383,7 @@ impl Store {
                     cwd: Some(entry.cwd.clone()),
                     sandbox: None,
                     after: None,
+                    client_commands: None,
                 });
                 if first_open.is_none() {
                     first_open = Some(open);
@@ -1429,6 +1430,7 @@ impl Store {
                 cwd: Some(result.cwd),
                 sandbox: None,
                 after: None,
+                client_commands: None,
             },
         ))
     }
@@ -1493,6 +1495,7 @@ impl Store {
                 cwd: Some(event.cwd),
                 sandbox: None,
                 after: None,
+                client_commands: None,
             },
         ))
     }
@@ -1721,6 +1724,7 @@ impl Store {
             rewrite_for: None,
             reasoning_effort: None,
             live_video: false,
+            origin: None,
         }))
     }
 
@@ -2877,7 +2881,7 @@ impl Store {
                     // `ProtocolAppUiBackend::fill_session_list_cwd`) so a
                     // server with per-project session storage scopes the
                     // listing to this project.
-                    Some(AppUiCommand::ListSessions(SessionListParams { cwd: None }))
+                    Some(AppUiCommand::ListSessions(SessionListParams { cwd: None, profile_id: None }))
                 } else if !self.state.resume_list_loaded {
                     // `/resume <query>` before the list ever loaded: the local
                     // resolve below would ALWAYS fail (`resume_sessions` is only
@@ -2895,7 +2899,7 @@ impl Store {
                     // `ProtocolAppUiBackend::fill_session_list_cwd`) so a
                     // server with per-project session storage scopes the
                     // listing to this project.
-                    Some(AppUiCommand::ListSessions(SessionListParams { cwd: None }))
+                    Some(AppUiCommand::ListSessions(SessionListParams { cwd: None, profile_id: None }))
                 } else {
                     // `/resume <query>` shortcut: resolve to a session id
                     // (exact / prefix / substring) and switch directly, reusing
@@ -3050,6 +3054,7 @@ impl Store {
                 cwd,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             },
         ))
     }
@@ -5240,6 +5245,7 @@ impl Store {
             cwd: onboarding_workspace_cwd(&self.state.workspace.root),
             sandbox: None,
             after: None,
+            client_commands: None,
         }))
     }
 
@@ -6927,6 +6933,7 @@ impl Store {
             rewrite_for: None,
             reasoning_effort,
             live_video: false,
+            origin: None,
         }))
     }
 
@@ -10181,6 +10188,7 @@ impl Store {
                 cwd: self.launch_workspace_cwd(),
                 sandbox: None,
                 after: None,
+                client_commands: None,
             },
         ))
     }
@@ -10865,6 +10873,7 @@ impl Store {
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             });
             drain = drain.or(Some(prompt_command));
         }
@@ -13814,6 +13823,7 @@ impl Store {
                             tokens_in,
                             tokens_out,
                             session_result: None,
+                            token_usage: None,
                         })
                     }
                     // RateLimited (ra-core v2.0.3-rc.1) is a terminal
@@ -14927,6 +14937,7 @@ impl Store {
                 cwd,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             }));
         self.enqueue_staged_drain_after_switch();
         true
@@ -17583,6 +17594,7 @@ mod tests {
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -17606,6 +17618,7 @@ mod tests {
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -19173,6 +19186,7 @@ mod tests {
                     tokens_in: None,
                     tokens_out: None,
                     session_result: None,
+                    token_usage: None,
                 },
             )))
             .expect("the first staged prompt drains at turn end");
@@ -19658,6 +19672,9 @@ mod tests {
             source: None,
             media: Vec::new(),
             reasoning_content: None,
+            tool_call_id: None,
+            tool_name: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -20301,6 +20318,7 @@ mod tests {
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -21221,6 +21239,8 @@ now analyzing the bus module"
                 { "id": "s:new", "message_count": 9, "title": "Newest", "updated_at": "2026-07-01T00:00:00Z" },
                 { "id": "s:legacy", "message_count": 3 }
             ]),
+            workspace_root: None,
+            profile_id: None,
         }));
 
         let ids: Vec<&str> = store
@@ -21820,6 +21840,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -21907,6 +21928,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         let Some(AppUiCommand::SubmitPrompt(params)) = command else {
@@ -22296,6 +22318,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -22335,6 +22358,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -23317,6 +23341,9 @@ now analyzing the bus module"
                     source: None,
                     media: Vec::new(),
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 }]),
                 threads: None,
                 turns: None,
@@ -23380,6 +23407,9 @@ now analyzing the bus module"
                     source: None,
                     media: Vec::new(),
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 }]),
                 threads: None,
                 turns: None,
@@ -23451,6 +23481,9 @@ now analyzing the bus module"
                     source: None,
                     media: Vec::new(),
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 }]),
                 threads: None,
                 turns: None,
@@ -23491,6 +23524,8 @@ now analyzing the bus module"
         // Server returns zero prior sessions.
         store.apply_client_event(ClientEvent::SessionList(SessionListResult {
             sessions: serde_json::json!([]),
+            workspace_root: None,
+            profile_id: None,
         }));
 
         assert!(
@@ -23922,6 +23957,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -23997,6 +24033,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert_eq!(
@@ -24144,6 +24181,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -24244,6 +24282,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -24433,6 +24472,7 @@ now analyzing the bus module"
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }))
     }
 
@@ -31377,6 +31417,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -32069,6 +32110,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -32375,6 +32417,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -32448,6 +32491,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -32479,6 +32523,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -32541,6 +32586,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         // The committed message carries the streamed reasoning as reasoning_content,
@@ -32581,6 +32627,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         let reasoning = store.state.sessions[0]
@@ -32812,6 +32859,7 @@ now analyzing the bus module"
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         };
 
         store.apply_event(AppUiEvent::Protocol(UiNotification::TurnCompleted(
@@ -32854,6 +32902,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert_eq!(store.state.sessions[0].messages.len(), 1);
@@ -32902,6 +32951,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(store.state.sessions[0].live_reply.is_none());
@@ -32926,6 +32976,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -32969,6 +33020,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33005,6 +33057,7 @@ now analyzing the bus module"
                     tokens_in: None,
                     tokens_out: None,
                     session_result: None,
+                    token_usage: None,
                 },
             )));
         }
@@ -33056,6 +33109,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33107,6 +33161,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33136,6 +33191,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33189,6 +33245,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33281,6 +33338,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33311,6 +33369,7 @@ now analyzing the bus module"
                     tokens_in: None,
                     tokens_out: None,
                     session_result: None,
+                    token_usage: None,
                 },
             )));
             assert_eq!(store.state.sessions[0].messages.len(), 1);
@@ -33362,6 +33421,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33391,6 +33451,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33426,6 +33487,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33456,6 +33518,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33487,6 +33550,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33547,6 +33611,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33584,6 +33649,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33612,6 +33678,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33705,6 +33772,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33730,6 +33798,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33794,6 +33863,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33825,6 +33895,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33879,6 +33950,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -33917,6 +33989,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -33973,6 +34046,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -34197,6 +34271,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -34295,6 +34370,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -34373,6 +34449,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -34446,6 +34523,7 @@ now analyzing the bus module"
                     tokens_in: u32::try_from(token_usage.input_tokens).ok(),
                     tokens_out: u32::try_from(token_usage.output_tokens).ok(),
                     session_result: None,
+                    token_usage: None,
                 })
             }
         }
@@ -35029,6 +35107,7 @@ now analyzing the bus module"
                     tokens_in: None,
                     tokens_out: None,
                     session_result: None,
+                    token_usage: None,
                 },
             )))
             .expect("staged prompt submits after turn completion");
@@ -35066,6 +35145,7 @@ now analyzing the bus module"
                     tokens_in: None,
                     tokens_out: None,
                     session_result: None,
+                    token_usage: None,
                 },
             )))
             .expect("first staged prompt submits after turn completion");
@@ -35152,6 +35232,7 @@ now analyzing the bus module"
                     tokens_in: None,
                     tokens_out: None,
                     session_result: None,
+                    token_usage: None,
                 },
             )))
             .expect("queued prompt submits after active turn completes");
@@ -35720,6 +35801,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -35872,6 +35954,7 @@ now analyzing the bus module"
             filesystem: None,
             network: None,
             sandbox_escalation: None,
+            host_tool: None,
         });
 
         let command = store
@@ -35940,6 +36023,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -36875,6 +36959,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -36924,6 +37009,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -37485,6 +37571,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert_eq!(store.state.composer, "summarize the diff");
@@ -38959,6 +39046,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -38976,6 +39064,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(!store.state.live_compaction.contains_key(&session_id));
@@ -39619,6 +39708,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -40075,6 +40165,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -40144,6 +40235,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
 
@@ -43119,6 +43211,9 @@ now analyzing the bus module"
             source: None,
             media: Vec::new(),
             reasoning_content: None,
+            tool_call_id: None,
+            tool_name: None,
+            tool_calls: Vec::new(),
         };
         assert!(hydrated_row_is_displayable(&row(
             "user",
@@ -43171,6 +43266,9 @@ now analyzing the bus module"
                 source: None,
                 media: Vec::new(),
                 reasoning_content: None,
+                tool_call_id: None,
+                tool_name: None,
+                tool_calls: Vec::new(),
             }]),
             threads: None,
             turns: None,
@@ -43277,6 +43375,9 @@ now analyzing the bus module"
                         source: None,
                         media: Vec::new(),
                         reasoning_content: None,
+                        tool_call_id: None,
+                        tool_name: None,
+                        tool_calls: Vec::new(),
                     })
                     .collect::<Vec<_>>(),
             )
@@ -45351,6 +45452,9 @@ now analyzing the bus module"
                 source: None,
                 media: Vec::new(),
                 reasoning_content: None,
+                tool_call_id: None,
+                tool_name: None,
+                tool_calls: Vec::new(),
             }]),
             threads: None,
             turns: None,
@@ -45425,6 +45529,9 @@ now analyzing the bus module"
                     source: Some("user".into()),
                     media: Vec::new(),
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 },
                 HydratedMessage {
                     seq: 2,
@@ -45438,6 +45545,9 @@ now analyzing the bus module"
                     source: Some("background".into()),
                     media: vec!["companion.md".into()],
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 },
                 HydratedMessage {
                     seq: 3,
@@ -45451,6 +45561,9 @@ now analyzing the bus module"
                     source: Some("background".into()),
                     media: Vec::new(),
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 },
             ]),
             threads: Some(vec![ThreadGraphEntry {
@@ -45614,6 +45727,9 @@ now analyzing the bus module"
                     source: None,
                     media: vec![],
                     reasoning_content: None,
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 },
                 HydratedMessage {
                     seq: 1,
@@ -45627,6 +45743,9 @@ now analyzing the bus module"
                     source: None,
                     media: vec![],
                     reasoning_content: Some("compare 0.9 vs 0.11".into()),
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_calls: Vec::new(),
                 },
             ]),
             threads: None,
@@ -46306,6 +46425,7 @@ now analyzing the bus module"
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }))
     }
 
@@ -46940,6 +47060,9 @@ now analyzing the bus module"
                 source: None,
                 media: Vec::new(),
                 reasoning_content: None,
+                tool_call_id: None,
+                tool_name: None,
+                tool_calls: Vec::new(),
             }]),
             threads: None,
             turns: None,
@@ -48303,6 +48426,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         let rendered = crate::app::finalized_history_lines_range_dedup_live(
@@ -48365,6 +48489,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(
@@ -48432,6 +48557,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert_eq!(store.state.unread_turns.get(&b).copied(), Some(1));
@@ -48447,6 +48573,7 @@ now analyzing the bus module"
                 tokens_in: None,
                 tokens_out: None,
                 session_result: None,
+                token_usage: None,
             },
         )));
         assert!(!store.state.unread_turns.contains_key(&a));

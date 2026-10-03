@@ -9,9 +9,9 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::SessionKey;
-use octoscode::event_loop::{KeyAction, handle_terminal_event};
-use octoscode::model::{AppState, FocusPane, SessionView};
-use octoscode::store::Store;
+use ra_tui::event_loop::{KeyAction, handle_terminal_event};
+use ra_tui::model::{AppState, FocusPane, SessionView};
+use ra_tui::store::Store;
 
 fn composer_store(text: &str, cursor: Option<usize>) -> Store {
     let session = SessionView {

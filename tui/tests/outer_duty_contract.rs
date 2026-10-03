@@ -16,7 +16,7 @@ fn bin() -> PathBuf {
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("../../octoscode")))
             .map(|p| p.canonicalize().unwrap_or(p)),
-        std::env::var("CARGO_BIN_EXE_octoscode")
+        std::env::var("CARGO_BIN_EXE_ra-tui")
             .ok()
             .map(PathBuf::from),
         Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/octoscode")),
@@ -26,7 +26,7 @@ fn bin() -> PathBuf {
             return candidate;
         }
     }
-    PathBuf::from(env!("CARGO_BIN_EXE_octoscode"))
+    PathBuf::from(env!("CARGO_BIN_EXE_ra-tui"))
 }
 
 struct TempHome(PathBuf);
@@ -654,7 +654,7 @@ fn duty_lock_digest_golden_and_convergence() {
     // sha256("octoscode/outer-duty/v1\0/tmp/duty-golden-proj")
     let golden = "d258b689203cfb1b3c95d56e0bbef32a436cb0952817f581c6bb3aed82461bbb";
     assert_eq!(
-        octoscode::outer_duty::lock_digest(b"/tmp/duty-golden-proj"),
+        ra_tui::outer_duty::lock_digest(b"/tmp/duty-golden-proj"),
         golden,
         "stable lock-name digest must match the independent golden"
     );

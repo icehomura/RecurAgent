@@ -8,9 +8,9 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use ra_core::{Message, SessionKey};
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::model::{AppState, FocusPane, SessionView};
-use octoscode::store::Store;
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::model::{AppState, FocusPane, SessionView};
+use ra_tui::store::Store;
 
 fn chat_store(message_count: usize) -> Store {
     let messages = (1..=message_count)

@@ -4,14 +4,14 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::ui_protocol::TurnId;
 use ra_core::{Message, SessionKey};
-use octoscode::app;
-use octoscode::app::LiveTurnFinalization;
-use octoscode::cli::ThemeName;
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::model::{ActivityItem, ActivityKind, AppState, LiveReply, SessionView};
-use octoscode::store::Store;
-use octoscode::theme::Palette;
-use octoscode::tui_terminal::FrameLike;
+use ra_tui::app;
+use ra_tui::app::LiveTurnFinalization;
+use ra_tui::cli::ThemeName;
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::model::{ActivityItem, ActivityKind, AppState, LiveReply, SessionView};
+use ra_tui::store::Store;
+use ra_tui::theme::Palette;
+use ra_tui::tui_terminal::FrameLike;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::widgets::Widget;
@@ -137,7 +137,7 @@ fn scrollback_flush_keeps_children() {
     store
         .state
         .turn_activity_logs
-        .push(octoscode::model::TurnActivityLog {
+        .push(ra_tui::model::TurnActivityLog {
             session_id: SessionKey("local:collapse-test".into()),
             turn_id: turn_id.clone(),
             request: None,
@@ -154,7 +154,7 @@ fn scrollback_flush_keeps_children() {
         turn_id: turn_id.0.to_string(),
         ..Default::default()
     };
-    let lines = octoscode::app::finalized_late_activity_lines_for_coverages(
+    let lines = ra_tui::app::finalized_late_activity_lines_for_coverages(
         &store.state,
         Palette::for_theme(ThemeName::default()),
         100,

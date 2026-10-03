@@ -7,13 +7,13 @@
 
 use ra_core::SessionKey;
 use ra_core::ui_protocol::{TurnId, TurnLifecycleState, TurnStateGetResult};
-use octoscode::client_event::{AutonomyClientEvent, AutonomyResult, ClientEvent};
-use octoscode::menu::CapabilitySet;
-use octoscode::model::{
+use ra_tui::client_event::{AutonomyClientEvent, AutonomyResult, ClientEvent};
+use ra_tui::menu::CapabilitySet;
+use ra_tui::model::{
     APPUI_FEATURE_TURN_STATE_GET_V1, APPUI_METHOD_TURN_STATE_GET, AppState, AppUiCommand,
     LiveReply, SessionView,
 };
-use octoscode::store::Store;
+use ra_tui::store::Store;
 
 fn store_with_live_turn(turn_id: TurnId) -> Store {
     let session = SessionView {

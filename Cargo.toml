@@ -1,5 +1,8 @@
 [workspace]
 resolver = "2"
+# `tui/` is its own workspace (the ra terminal client ships and releases on its
+# own cadence, like upstream's octoscode); it path-depends on crates/ra-core.
+exclude = ["tui"]
 members = [
     "crates/ra-core",
     "crates/ra-diagnostics",

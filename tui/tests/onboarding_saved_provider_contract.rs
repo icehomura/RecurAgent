@@ -9,14 +9,14 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::ui_protocol::UiProtocolCapabilities;
-use octoscode::client_event::{CapabilitiesClientEvent, ClientEvent, ProfileLlmListClientEvent};
-use octoscode::event_loop::{KeyAction, handle_terminal_event};
-use octoscode::menu::MenuBuildResult;
-use octoscode::model::{
+use ra_tui::client_event::{CapabilitiesClientEvent, ClientEvent, ProfileLlmListClientEvent};
+use ra_tui::event_loop::{KeyAction, handle_terminal_event};
+use ra_tui::menu::MenuBuildResult;
+use ra_tui::model::{
     APPUI_METHOD_MODEL_LIST, APPUI_METHOD_PROFILE_LLM_CATALOG, APPUI_METHOD_PROFILE_LOCAL_CREATE,
     AppState, AppUiCommand, ConfigCapabilitiesListResult, ProfileLlmListResult,
 };
-use octoscode::store::Store;
+use ra_tui::store::Store;
 use serde_json::json;
 
 fn first_launch_store() -> Store {

@@ -8,13 +8,13 @@
 use chrono::Utc;
 use ra_core::SessionKey;
 use ra_core::ui_protocol::{HydratedMessage, SessionHydrateResult, TurnId, UiCursor};
-use octoscode::client_event::ClientEvent;
-use octoscode::menu::CapabilitySet;
-use octoscode::model::{
+use ra_tui::client_event::ClientEvent;
+use ra_tui::menu::CapabilitySet;
+use ra_tui::model::{
     APPUI_FEATURE_SESSION_HYDRATE_V1, APPUI_METHOD_SESSION_HYDRATE, AppState, AppUiCommand,
     SessionView,
 };
-use octoscode::store::Store;
+use ra_tui::store::Store;
 
 fn store_with_hydrate_capability() -> Store {
     let session = SessionView {
@@ -88,6 +88,9 @@ fn session_hydrate_result_replaces_durable_messages() {
             source: Some("assistant".into()),
             media: Vec::new(),
             reasoning_content: None,
+            tool_call_id: None,
+            tool_name: None,
+            tool_calls: Vec::new(),
         }]),
         threads: None,
         turns: None,

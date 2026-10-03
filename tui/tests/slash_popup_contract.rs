@@ -10,15 +10,15 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::ui_protocol::UiProtocolCapabilities;
 use ra_core::{Message, SessionKey};
-use octoscode::client_event::{CapabilitiesClientEvent, ClientEvent};
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::menu::MenuBuildResult;
-use octoscode::model::SessionView;
-use octoscode::model::{
+use ra_tui::client_event::{CapabilitiesClientEvent, ClientEvent};
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::menu::MenuBuildResult;
+use ra_tui::model::SessionView;
+use ra_tui::model::{
     APPUI_METHOD_MODEL_LIST, APPUI_METHOD_PROFILE_LLM_CATALOG, APPUI_METHOD_PROFILE_LOCAL_CREATE,
     AppState, ConfigCapabilitiesListResult,
 };
-use octoscode::store::Store;
+use ra_tui::store::Store;
 
 #[test]
 fn typing_slash_scrollmode_filters_help_popup() {
@@ -151,7 +151,7 @@ struct BufferFrame {
     area: ratatui::layout::Rect,
     buffer: ratatui::buffer::Buffer,
 }
-impl octoscode::tui_terminal::FrameLike for BufferFrame {
+impl ra_tui::tui_terminal::FrameLike for BufferFrame {
     fn area(&self) -> ratatui::layout::Rect {
         self.area
     }
@@ -207,17 +207,17 @@ fn slash_popup_renders_in_short_viewport() {
     }
 
     // The inline viewport sizes itself; render at the computed height.
-    let height = octoscode::app::live_ui_height(&store.state, 100, 40);
+    let height = ra_tui::app::live_ui_height(&store.state, 100, 40);
     eprintln!("VIEWPORT HEIGHT: {height}");
     let area = ratatui::layout::Rect::new(0, 0, 100, height);
     let mut frame = BufferFrame {
         area,
         buffer: ratatui::buffer::Buffer::empty(area),
     };
-    octoscode::app::render_viewport(
+    ra_tui::app::render_viewport(
         &mut frame,
         &store.state,
-        octoscode::theme::Palette::for_theme(octoscode::cli::ThemeName::default()),
+        ra_tui::theme::Palette::for_theme(ra_tui::cli::ThemeName::default()),
     );
     let rows: Vec<String> = (0..height)
         .map(|y| (0..100).map(|x| frame.buffer[(x, y)].symbol()).collect())

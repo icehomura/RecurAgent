@@ -211,3 +211,8 @@ tsconfig.tsbuildinfo
 /scripts/build-index.py
 /scripts/verify-research.py
 /scripts/rename_to_ra.py
+
+# Imported terminal client (tui/). It is its own workspace with its own
+# .gitignore, but the repo-wide `*.md` and `.ra/*` rules above would drop its
+# docs, skills and loop state, so re-include the whole tree here.
+!tui/**

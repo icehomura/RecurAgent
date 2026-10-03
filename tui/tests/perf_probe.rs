@@ -1,11 +1,11 @@
 //! One-off timing probe (ignored by default): how expensive is one pager
 //! frame on a long transcript with many highlighted code blocks?
 use ra_core::{Message, SessionKey};
-use octoscode::app;
-use octoscode::cli::ThemeName;
-use octoscode::model::{AppState, SessionView};
-use octoscode::theme::Palette;
-use octoscode::tui_terminal::FrameLike;
+use ra_tui::app;
+use ra_tui::cli::ThemeName;
+use ra_tui::model::{AppState, SessionView};
+use ra_tui::theme::Palette;
+use ra_tui::tui_terminal::FrameLike;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::widgets::Widget;

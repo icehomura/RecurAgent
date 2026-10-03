@@ -17,13 +17,13 @@ use ra_core::SessionKey;
 use ra_core::app_ui::AppUiEvent;
 use ra_core::ui_protocol::{SessionOpened, UiNotification};
 
-use octoscode::menu::CapabilitySet;
-use octoscode::model::{
+use ra_tui::menu::CapabilitySet;
+use ra_tui::model::{
     APPUI_FEATURE_CODING_AUTONOMY_V1, APPUI_METHOD_AGENT_LIST, APPUI_METHOD_LOOP_LIST,
     APPUI_METHOD_SESSION_GOAL_GET, AgentListParams, AppState, AppUiCommand, LoopListParams,
     SessionGoalGetParams, SessionView,
 };
-use octoscode::store::Store;
+use ra_tui::store::Store;
 
 fn store_with_autonomy_session() -> Store {
     let session = SessionView {

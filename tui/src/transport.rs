@@ -2003,6 +2003,7 @@ impl ProtocolAppUiBackend {
                 cwd,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             })
         })
     }
@@ -2077,6 +2078,7 @@ impl ProtocolAppUiBackend {
                 .or_else(|| self.launch.cwd.clone()),
             sandbox: None,
             after: None,
+            client_commands: None,
         }))
     }
 
@@ -2809,6 +2811,7 @@ impl AppUiBackend for ProtocolAppUiBackend {
                     cwd: self.launch.cwd.clone(),
                     sandbox: None,
                     after: None,
+                    client_commands: None,
                 },
             ))?;
         }
@@ -5541,6 +5544,7 @@ impl MockAppUiBackend {
             tokens_in: None,
             tokens_out: None,
             session_result: None,
+            token_usage: None,
         }));
     }
 }
@@ -6133,6 +6137,8 @@ impl AppUiBackend for MockAppUiBackend {
                                 "message_count": 47
                             }
                         ]),
+                        workspace_root: None,
+                        profile_id: None,
                     }));
                 Ok(())
             }
@@ -6168,6 +6174,9 @@ impl AppUiBackend for MockAppUiBackend {
                                 message_id: None,
                                 source: None,
                                 media: Vec::new(),
+                                tool_call_id: None,
+                                tool_name: None,
+                                tool_calls: Vec::new(),
                             }]),
                             threads: None,
                             turns: None,
@@ -6619,6 +6628,7 @@ fn mock_approval_details(kind: &str) -> ApprovalTypedDetails {
             filesystem: None,
             network: None,
             sandbox_escalation: None,
+            host_tool: None,
         },
         approval_kinds::FILESYSTEM => ApprovalTypedDetails {
             kind: approval_kinds::FILESYSTEM.into(),
@@ -6633,6 +6643,7 @@ fn mock_approval_details(kind: &str) -> ApprovalTypedDetails {
             }),
             network: None,
             sandbox_escalation: None,
+            host_tool: None,
         },
         approval_kinds::NETWORK => ApprovalTypedDetails {
             kind: approval_kinds::NETWORK.into(),
@@ -6647,6 +6658,7 @@ fn mock_approval_details(kind: &str) -> ApprovalTypedDetails {
                 urls: vec!["https://example.com".into()],
             }),
             sandbox_escalation: None,
+            host_tool: None,
         },
         approval_kinds::SANDBOX_ESCALATION => ApprovalTypedDetails {
             kind: approval_kinds::SANDBOX_ESCALATION.into(),
@@ -6668,6 +6680,7 @@ fn mock_approval_details(kind: &str) -> ApprovalTypedDetails {
                 justification: Some("probe a privileged command in the mock fixture".into()),
                 suggested_prefix_rule: vec!["sudo".into(), "true".into()],
             }),
+            host_tool: None,
         },
         _ => ApprovalTypedDetails::command(
             ApprovalCommandDetails {
@@ -7449,6 +7462,7 @@ mod tests {
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }),
         )
         .expect("request encodes");
@@ -7484,6 +7498,7 @@ mod tests {
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }),
         )
         .expect("request encodes");
@@ -9434,6 +9449,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 cwd: Some("/repo".into()),
                 after: None,
+                client_commands: None,
             }),
             AppUiCommand::ReadSessionStatus(SessionStatusReadParams {
                 session_id: session_id.clone(),
@@ -9464,7 +9480,7 @@ mod tests {
                 after: None,
                 include: Vec::new(),
             }),
-            AppUiCommand::ListSessions(ra_core::ui_protocol::SessionListParams { cwd: None }),
+            AppUiCommand::ListSessions(ra_core::ui_protocol::SessionListParams { cwd: None, profile_id: None }),
             AppUiCommand::GetThreadGraph(ThreadGraphGetParams {
                 session_id: session_id.clone(),
                 at: None,
@@ -9517,6 +9533,7 @@ mod tests {
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }),
             AppUiCommand::InterruptTurn(TurnInterruptParams {
                 session_id: session_id.clone(),
@@ -10972,6 +10989,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 cwd: None,
                 after: None,
+                client_commands: None,
             }))
             .expect("request builds");
 
@@ -11456,6 +11474,7 @@ mod tests {
             cwd: None,
             sandbox: None,
             after: None,
+            client_commands: None,
         });
         // Let the writer task observe the close before we send.
         thread::sleep(Duration::from_millis(200));
@@ -11774,6 +11793,7 @@ mod tests {
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }))
             .expect("request builds");
 
@@ -11875,6 +11895,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 cwd: Some("/repo".into()),
                 after: None,
+                client_commands: None,
             }))
             .expect("request builds");
 
@@ -12498,6 +12519,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 cwd: None,
                 after: None,
+                client_commands: None,
             }))
             .expect("request builds");
         let request_id = request.id.clone();
@@ -12579,6 +12601,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 cwd: Some("/tmp/project".into()),
                 after: None,
+                client_commands: None,
             }))
             .expect("request builds");
 
@@ -12602,7 +12625,7 @@ mod tests {
         });
         let request = backend
             .build_tracked_request(AppUiCommand::ListSessions(
-                ra_core::ui_protocol::SessionListParams { cwd: None },
+                ra_core::ui_protocol::SessionListParams { cwd: None, profile_id: None },
             ))
             .expect("request builds");
 
@@ -12625,7 +12648,7 @@ mod tests {
         });
         let request = backend
             .build_tracked_request(AppUiCommand::ListSessions(
-                ra_core::ui_protocol::SessionListParams { cwd: None },
+                ra_core::ui_protocol::SessionListParams { cwd: None, profile_id: None },
             ))
             .expect("request builds");
 
@@ -12661,6 +12684,7 @@ mod tests {
                 cwd: cwd.map(str::to_owned),
                 sandbox: None,
                 after: None,
+                client_commands: None,
             })
         };
 
@@ -12764,6 +12788,7 @@ mod tests {
                 profile_id: Some("coding".into()),
                 cwd: None,
                 after: None,
+                client_commands: None,
             }))
             .expect("request builds");
 
@@ -12989,6 +13014,7 @@ mod tests {
             cwd: Some("/tmp/other".into()),
             sandbox: None,
             after: None,
+            client_commands: None,
         }));
         assert_eq!(
             expect_reopen(&backend).cwd.as_deref(),
@@ -13605,6 +13631,7 @@ wait
                 cwd: Some("/workspace".into()),
                 sandbox: None,
                 after: None,
+                client_commands: None,
             }))
             .expect("open request");
         let request_id = request.id;
@@ -13617,7 +13644,7 @@ wait
         });
         backend
             .deferred_until_reconnect_open
-            .push_back(AppUiCommand::ListSessions(SessionListParams { cwd: None }));
+            .push_back(AppUiCommand::ListSessions(SessionListParams { cwd: None, profile_id: None }));
         (backend, request_id)
     }
 
@@ -13633,6 +13660,7 @@ wait
             cwd: Some("/workspace".into()),
             sandbox: None,
             after: None,
+            client_commands: None,
         });
         backend.record_reopen_target(&command);
         let request = backend
@@ -14334,6 +14362,7 @@ done
                 cwd: None,
                 sandbox: None,
                 after: None,
+                client_commands: None,
             }))
             .expect("open request");
         let context_state = json!({
@@ -14452,6 +14481,7 @@ done
             cwd: Some("/shell/cwd".into()),
             sandbox: None,
             after: None,
+            client_commands: None,
         }));
         let reopen = backend
             .reopen_session_open_command()
@@ -14526,6 +14556,7 @@ done
                 stream: resumed_session.0.clone(),
                 seq: 7,
             }),
+            client_commands: None,
         }));
 
         let reopen = backend
@@ -14690,6 +14721,7 @@ done
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }))
             .expect("readonly send is local");
         backend
@@ -14754,6 +14786,7 @@ done
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }))
             .expect("send");
 
@@ -14789,6 +14822,7 @@ done
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }))
             .expect("submit prompt");
 
@@ -14943,6 +14977,7 @@ done
                 rewrite_for: None,
                 reasoning_effort: None,
                 live_video: false,
+                origin: None,
             }))
             .expect("send");
 

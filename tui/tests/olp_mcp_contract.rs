@@ -17,7 +17,7 @@ fn server_binary() -> std::path::PathBuf {
     if let Ok(path) = std::env::var("OLP_MCP_SERVER_BIN") {
         return std::path::PathBuf::from(path);
     }
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_octoscode"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_ra-tui"))
 }
 
 struct ServerProc {

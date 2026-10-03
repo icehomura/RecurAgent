@@ -1,5 +1,5 @@
 use ra_core::SessionKey;
-use octoscode::model::{
+use ra_tui::model::{
     APPUI_FEATURE_CONTEXT_LIFECYCLE_V1, APPUI_FEATURE_CONTEXT_SEMANTIC_CACHE_V1,
     APPUI_METHOD_CONTEXT_COMPACTION_COMPLETED, APPUI_METHOD_CONTEXT_NORMALIZATION_REPORTED,
     ContextCacheDiagnostics, ContextCompactionSummary, ContextLifecycleState,
@@ -228,12 +228,12 @@ fn cache_diagnostics_are_optional_and_do_not_leak_into_lifecycle_summary() {
         ContextNormalizationReportedEvent, UiContextNormalizationReport, UiContextState,
         UiNotification,
     };
-    use octoscode::app::finalized_history_lines;
-    use octoscode::cli::ThemeName;
-    use octoscode::client_event::{ClientEvent, ContextLifecycleClientEvent};
-    use octoscode::model::{AppState, SessionView};
-    use octoscode::store::Store;
-    use octoscode::theme::Palette;
+    use ra_tui::app::finalized_history_lines;
+    use ra_tui::cli::ThemeName;
+    use ra_tui::client_event::{ClientEvent, ContextLifecycleClientEvent};
+    use ra_tui::model::{AppState, SessionView};
+    use ra_tui::store::Store;
+    use ra_tui::theme::Palette;
 
     const CACHE_EPOCH: &str = "sha256:epoch-9";
     const INVALIDATION_REASON: &str = "compaction_installed";

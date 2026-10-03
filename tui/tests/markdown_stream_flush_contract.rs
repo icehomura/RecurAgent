@@ -8,14 +8,14 @@
 
 use ra_core::ui_protocol::TurnId;
 use ra_core::{Message, SessionKey};
-use octoscode::app::{
+use ra_tui::app::{
     LiveTurnFinalization, finalized_history_lines_range_dedup_live,
     finalized_live_turn_lines_between, next_live_turn_finalization,
 };
-use octoscode::cli::ThemeName;
-use octoscode::model::{AppState, LiveReply, SessionView};
-use octoscode::store::Store;
-use octoscode::theme::Palette;
+use ra_tui::cli::ThemeName;
+use ra_tui::model::{AppState, LiveReply, SessionView};
+use ra_tui::store::Store;
+use ra_tui::theme::Palette;
 
 fn streaming_store(live_text: &str) -> Store {
     let turn_id = TurnId::new();
@@ -99,7 +99,7 @@ fn closed_fence_flushes_as_complete_block() {
         "a closed fence is flushable"
     );
 
-    let previous_empty = octoscode::app::LiveTurnFinalization::default();
+    let previous_empty = ra_tui::app::LiveTurnFinalization::default();
     let lines = finalized_live_turn_lines_between(
         &store.state,
         palette(),
@@ -142,7 +142,7 @@ fn only_first_batch_carries_prose_marker() {
     assert_eq!(next.reply_flushed_text, text);
 
     // Batch 1: from empty watermark — carries the bullet.
-    let empty = octoscode::app::LiveTurnFinalization::default();
+    let empty = ra_tui::app::LiveTurnFinalization::default();
     let first_batch = lines_text(&finalized_live_turn_lines_between(
         &store.state,
         palette(),

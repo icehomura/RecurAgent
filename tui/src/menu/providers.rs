@@ -2259,6 +2259,7 @@ fn launch_prompt_menu(ctx: &MenuContext<'_>) -> MenuBuildResult {
                 cwd: Some(prompt.cwd.clone()),
                 sandbox: None,
                 after: None,
+                client_commands: None,
             },
         ))
     };

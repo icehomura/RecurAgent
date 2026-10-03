@@ -7,10 +7,10 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::{Message, SessionKey};
-use octoscode::cli::{Lang, ScrollMode, ThemeName, load_config_file, save_ui_settings};
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::model::{AppState, SessionView};
-use octoscode::store::Store;
+use ra_tui::cli::{Lang, ScrollMode, ThemeName, load_config_file, save_ui_settings};
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::model::{AppState, SessionView};
+use ra_tui::store::Store;
 use std::path::PathBuf;
 
 fn chat_store() -> Store {
@@ -160,7 +160,7 @@ fn saveconfig_excludes_thinking() {
 fn default_config_path_resolves_under_config_dir() {
     // The fallback used when launched without --config: a pure, non-destructive
     // resolution (the dispatch path feeds this into the same merge writer).
-    let path = octoscode::cli::default_config_path().expect("HOME is set in test env");
+    let path = ra_tui::cli::default_config_path().expect("HOME is set in test env");
     let suffix: std::path::PathBuf = [".config", "octoscode", "config.json"].iter().collect();
     assert!(
         path.ends_with(&suffix),

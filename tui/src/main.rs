@@ -1,5 +1,5 @@
 use eyre::Result;
-use octoscode::{backend_ensure, cli::Cli, cmd, event_loop};
+use ra_tui::{backend_ensure, cli::Cli, cmd, event_loop};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     // Startup splash: ttfx-rendered logo on the main screen, before the event
     // loop claims the terminal. Gated (non-TTY/CI/--no-splash) and best-effort;
     // see specs/task-startup-splash.spec.
-    octoscode::splash::play(&cli);
+    ra_tui::splash::play(&cli);
     event_loop::run(cli)
 }
 

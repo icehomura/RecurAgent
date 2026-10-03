@@ -4,15 +4,15 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::ui_protocol::TaskRuntimeState;
 use ra_core::{Message, SessionKey, TaskId};
-use octoscode::app::{self, ActivityNavigatorStatus};
-use octoscode::cli::ThemeName;
-use octoscode::event_loop::handle_terminal_event;
-use octoscode::model::{
+use ra_tui::app::{self, ActivityNavigatorStatus};
+use ra_tui::cli::ThemeName;
+use ra_tui::event_loop::handle_terminal_event;
+use ra_tui::model::{
     ActivityItem, ActivityKind, ActivityNavigatorFilter, AppState, SessionView, TaskView,
 };
-use octoscode::store::Store;
-use octoscode::theme::Palette;
-use octoscode::tui_terminal::FrameLike;
+use ra_tui::store::Store;
+use ra_tui::theme::Palette;
+use ra_tui::tui_terminal::FrameLike;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::widgets::Widget;

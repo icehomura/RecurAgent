@@ -17,14 +17,14 @@
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ra_core::ui_protocol::UiProtocolCapabilities;
-use octoscode::client_event::{CapabilitiesClientEvent, ClientEvent};
-use octoscode::event_loop::{KeyAction, handle_terminal_event};
-use octoscode::menu::MenuBuildResult;
-use octoscode::model::{
+use ra_tui::client_event::{CapabilitiesClientEvent, ClientEvent};
+use ra_tui::event_loop::{KeyAction, handle_terminal_event};
+use ra_tui::menu::MenuBuildResult;
+use ra_tui::model::{
     APPUI_METHOD_PROFILE_LLM_CATALOG, APPUI_METHOD_PROFILE_LOCAL_CREATE, AppState,
     ConfigCapabilitiesListResult,
 };
-use octoscode::store::Store;
+use ra_tui::store::Store;
 
 /// A first-launch store: no sessions, backend advertising the local-solo
 /// profile-create surface. Applying the capabilities event auto-opens the

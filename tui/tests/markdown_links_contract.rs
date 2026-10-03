@@ -4,10 +4,10 @@
 //! `inline_markdown_spans` used by the live tail and the pager.
 
 use ra_core::{Message, SessionKey};
-use octoscode::app::finalized_history_lines;
-use octoscode::cli::ThemeName;
-use octoscode::model::{AppState, SessionView};
-use octoscode::theme::Palette;
+use ra_tui::app::finalized_history_lines;
+use ra_tui::cli::ThemeName;
+use ra_tui::model::{AppState, SessionView};
+use ra_tui::theme::Palette;
 use ratatui::style::Modifier;
 use ratatui::text::Line;
 
