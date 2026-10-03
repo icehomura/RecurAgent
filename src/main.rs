@@ -213,7 +213,7 @@ fn write_resource_diagnostics_since(
 ///
 /// The headless surfaces — `--print`, RPC, and every `subagent` child — drive
 /// the same deeply nested asupersync future on the process's initial thread.
-/// Windows sizes that thread from the PE header (1 MiB default; 32 MiB after
+/// Windows sizes that thread from the PE header (1 MiB default; 16 MiB after
 /// the `/STACK:` linker override), which aborts with `STATUS_STACK_OVERFLOW`
 /// (0xC00000FD) before the future can finish; that crash is why a `dag`/
 /// `subagent` call reported "child emitted an error event". Reserve the budget
