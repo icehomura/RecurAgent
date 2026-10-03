@@ -10553,6 +10553,12 @@ impl Store {
             .map(|session| session.messages.as_slice())
             .unwrap_or_default();
         let projected_messages = project_hydrated_messages(&result, existing);
+        // Tool chips rebuilt from the rows (UPCR-2026-039) are applied below,
+        // after the messages land but before terminal-turn archiving.
+        let tool_activities = projected_messages
+            .as_ref()
+            .map(|projection| projection.tool_activities.clone())
+            .unwrap_or_default();
         let message_count = projected_messages
             .as_ref()
             .map_or(0, |projection| projection.messages.len());
@@ -10691,6 +10697,36 @@ impl Store {
                 });
         }
 
+        // UPCR-2026-039: rehydrated rows carry the tool-call rows themselves
+        // (`tool_calls` / `tool_call_id` / `tool_name`). Rebuild the same
+        // activity chips the live stream produces so a resumed session keeps
+        // its tool rows, not only the assistant answers. Deduped against live
+        // rows and already-archived turn logs (a replayed envelope or a live
+        // `ToolStarted` may already own the same call).
+        for mut item in tool_activities {
+            item.session_id = Some(session_id.clone());
+            let id = item.tool_call_id.clone().unwrap_or_default();
+            let in_live = self.state.activity.iter().any(|existing| {
+                existing.kind == ActivityKind::Tool
+                    && existing.session_id.as_ref() == Some(&session_id)
+                    && existing.tool_call_id.as_deref() == Some(id.as_str())
+                    && existing.turn_id == item.turn_id
+            });
+            let in_archive = item.turn_id.as_ref().is_some_and(|turn| {
+                self.state.turn_activity_logs.iter().any(|log| {
+                    &log.session_id == &session_id
+                        && &log.turn_id == turn
+                        && log.items.iter().any(|existing| {
+                            existing.kind == ActivityKind::Tool
+                                && existing.tool_call_id.as_deref() == Some(id.as_str())
+                        })
+                })
+            });
+            if !in_live && !in_archive {
+                self.state.push_activity(item);
+            }
+        }
+
         // Re-apply the server's canonical v2 tool projection envelopes so
         // archived turn groups regain their per-action rows after a restart,
         // rather than rendering a bare "N action(s)" header with no children.
@@ -10712,7 +10748,9 @@ impl Store {
             // Archive replayed rows of already-terminal turns so they render
             // as completed turn groups (children under the summary chip)
             // rather than lingering in the live activity strip. Never capture
-            // the currently-streaming turn.
+            // the currently-streaming turn. Kept gated on the envelope replay:
+            // a plain hydrate (no envelopes) leaves its chips live and lets the
+            // reconcile sweep below settle them, per the existing contract.
             let live_turn = self
                 .state
                 .sessions
@@ -16485,6 +16523,9 @@ struct HydratedMessageProjection {
     messages: Vec<Message>,
     background_rows: std::collections::HashMap<String, crate::model::BackgroundCompletionRow>,
     turn_anchors: Vec<(TurnId, usize)>,
+    /// Tool-activity chips rebuilt from the rows (UPCR-2026-039), applied by
+    /// `apply_session_hydrate_result` so a resumed session keeps its tool rows.
+    tool_activities: Vec<crate::model::ActivityItem>,
 }
 
 fn hydrated_user_turn_id(result: &SessionHydrateResult, row: &HydratedMessage) -> Option<TurnId> {
@@ -16536,6 +16577,7 @@ fn project_hydrated_messages(
     existing: &[Message],
 ) -> Option<HydratedMessageProjection> {
     let rows = result.messages.as_ref()?;
+    let tool_activities = hydrated_tool_activities(rows);
     let envelopes = result.replayed_envelopes.as_deref().unwrap_or_default();
     let envelope_message_ids = envelopes
         .iter()
@@ -16688,6 +16730,7 @@ fn project_hydrated_messages(
         messages,
         background_rows,
         turn_anchors,
+        tool_activities,
     })
 }
 
@@ -16731,13 +16774,116 @@ fn hydrated_row_is_covered_by_envelope(
         .is_some_and(|id| envelope_message_ids.contains(id))
 }
 
+/// Tool-activity chips rebuilt from hydrated rows (UPCR-2026-039). Mirrors the
+/// live `ToolStarted`/`ToolCompleted` chips so a resumed session keeps its
+/// tool-call rows instead of only the assistant answers: an assistant row's
+/// `tool_calls` become one chip each — `running`, or `complete` when a later
+/// tool-result row answers that call — and an orphan tool-result row (whose
+/// call the snapshot no longer holds) still becomes a completed chip named from
+/// its `tool_name`. The session id is stamped by the caller.
+fn hydrated_tool_activities(rows: &[HydratedMessage]) -> Vec<crate::model::ActivityItem> {
+    use crate::model::{ActivityItem, ActivityKind};
+    use std::collections::{HashMap, HashSet};
+
+    // `tool_call_id` -> the answer row's (content, turn).
+    let mut answers: HashMap<&str, (&str, Option<TurnId>)> = HashMap::new();
+    for row in rows {
+        if row.role == "tool"
+            && let Some(id) = row.tool_call_id.as_deref().filter(|id| !id.is_empty())
+        {
+            answers.insert(id, (row.content.as_str(), row.turn_id.clone()));
+        }
+    }
+
+    /// Bound the chip's result excerpt the way the live path bounds previews.
+    const PREVIEW_MAX: usize = 400;
+    let preview = |content: &str| -> String {
+        let clean = crate::sanitize::strip_terminal_controls(content).into_owned();
+        let mut out: String = clean.chars().take(PREVIEW_MAX).collect();
+        if clean.chars().count() > PREVIEW_MAX {
+            out.push('…');
+        }
+        out
+    };
+
+    let mut items = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for row in rows {
+        for call in &row.tool_calls {
+            let id = call.tool_call_id.as_str();
+            if !seen.insert(id) {
+                continue;
+            }
+            let answered = answers.get(id);
+            let mut item = ActivityItem::new(
+                ActivityKind::Tool,
+                call.tool_name.clone(),
+                if answered.is_some() { "complete" } else { "running" },
+            )
+            .with_tool_call(id);
+            if let Some(turn) = row.turn_id.clone() {
+                item = item.with_turn(turn);
+            }
+            if let Some((content, turn)) = answered {
+                item = item.with_output_preview(preview(content)).with_success(true);
+                if item.turn_id.is_none() {
+                    if let Some(turn) = turn.clone() {
+                        item = item.with_turn(turn);
+                    }
+                }
+            }
+            items.push(item);
+        }
+    }
+    // Orphan tool-result rows: a completed chip even without the assistant row.
+    for row in rows {
+        if row.role != "tool" {
+            continue;
+        }
+        let Some(id) = row.tool_call_id.as_deref().filter(|id| !id.is_empty()) else {
+            continue;
+        };
+        if !seen.insert(id) {
+            continue;
+        }
+        let mut item = ActivityItem::new(
+            ActivityKind::Tool,
+            row.tool_name.clone().unwrap_or_else(|| "tool".to_owned()),
+            "complete",
+        )
+        .with_tool_call(id)
+        .with_output_preview(preview(&row.content))
+        .with_success(true);
+        if let Some(turn) = row.turn_id.clone() {
+            item = item.with_turn(turn);
+        }
+        items.push(item);
+    }
+    items
+}
+
 fn hydrated_row_to_message(row: HydratedMessage) -> Message {
     Message {
         role: hydrated_role(&row.role),
         content: crate::sanitize::strip_terminal_controls(&row.content).into_owned(),
         media: row.media,
-        tool_calls: None,
-        tool_call_id: None,
+        // UPCR-2026-039: a hydrated row carries the tool call it made
+        // (assistant `tool_calls`) or the call it answers (tool `tool_call_id`).
+        // Map them into the client message model so the linkage survives a
+        // resume; the visible render is the activity chip rebuilt from the same
+        // rows in `hydrated_tool_activities`.
+        tool_calls: (!row.tool_calls.is_empty()).then(|| {
+            row.tool_calls
+                .iter()
+                .map(|call| ra_core::ToolCall {
+                    id: call.tool_call_id.clone(),
+                    name: call.tool_name.clone(),
+                    arguments: Value::Null,
+                    metadata: None,
+                })
+                .collect()
+        }),
+        tool_call_id: row.tool_call_id.clone(),
         // Persisted thinking text — mapping it here is what makes the
         // "· reasoning" block survive a client restart (the server surfaces
         // it on negotiated hydrates; older servers simply omit the field).
