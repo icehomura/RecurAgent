@@ -1,6 +1,6 @@
 # Gateway & Channels
 
-Octos runs as a **gateway** that bridges messaging platforms to your LLM agent. Each platform connection is called a **channel**. You can run multiple channels simultaneously -- for example, Telegram and Slack in the same gateway process.
+ra runs as a **gateway** that bridges messaging platforms to your LLM agent. Each platform connection is called a **channel**. You can run multiple channels simultaneously -- for example, Telegram and Slack in the same gateway process.
 
 ## Channel Overview
 
@@ -9,7 +9,7 @@ Channels are configured in the `gateway.channels` array of your `config.json`. E
 Check which channels are compiled and configured:
 
 ```bash
-octos channels status
+ra channels status
 ```
 
 This shows a table with each channel's compile status (feature flags) and config summary (environment variables set or missing).
@@ -99,19 +99,19 @@ export DINGTALK_BOT_SECRET="SEC..."
 }
 ```
 
-For inbound events, configure the DingTalk outgoing robot callback URL. Behind `octos serve`, use the proxy route; in standalone `octos gateway` mode, point at the channel's own webhook server on `webhook_port`:
+For inbound events, configure the DingTalk outgoing robot callback URL. Behind `ra serve`, use the proxy route; in standalone `ra gateway` mode, point at the channel's own webhook server on `webhook_port`:
 
 ```text
-# behind octos serve (proxy)
+# behind ra serve (proxy)
 https://YOUR_OCTOS_HOST/webhook/dingtalk/<profile_id>
-# standalone octos gateway
+# standalone ra gateway
 http://YOUR_OCTOS_HOST:<webhook_port>/dingtalk/webhook
 ```
 
 Build with the `dingtalk` feature flag:
 
 ```bash
-cargo build --release -p octos-cli --features dingtalk
+cargo build --release -p ra-cli --features dingtalk
 ```
 
 ---
@@ -153,7 +153,7 @@ export FEISHU_APP_SECRET="..."
 Build with the `feishu` feature flag:
 
 ```bash
-cargo build --release -p octos-cli --features feishu
+cargo build --release -p ra-cli --features feishu
 ```
 
 ---
@@ -245,7 +245,7 @@ With encryption enabled, Lark sends encrypted POST bodies. The gateway decrypts 
 ngrok http 9321
 
 # Start gateway
-LARK_APP_ID="cli_xxxxx" LARK_APP_SECRET="xxxxx" octos gateway --cwd /path/to/workdir
+LARK_APP_ID="cli_xxxxx" LARK_APP_SECRET="xxxxx" ra gateway --cwd /path/to/workdir
 ```
 
 ### Troubleshooting
@@ -316,10 +316,10 @@ export WECOM_AGENT_SECRET="..."
 
 ## WeChat (via WorkBuddy Bridge)
 
-Regular WeChat users can connect to your agent through a WorkBuddy desktop bridge. WorkBuddy handles the WeChat transport; Octos handles the AI logic via its WeCom Bot channel.
+Regular WeChat users can connect to your agent through a WorkBuddy desktop bridge. WorkBuddy handles the WeChat transport; ra handles the AI logic via its WeCom Bot channel.
 
 ```
-WeChat (mobile) --> WorkBuddy (desktop) --> WeCom group robot (WSS) --> octos wecom-bot channel
+WeChat (mobile) --> WorkBuddy (desktop) --> WeCom group robot (WSS) --> ra wecom-bot channel
 ```
 
 ### Setup
@@ -346,8 +346,8 @@ export WECOM_BOT_SECRET="your_robot_secret_here"
 3. Build and start:
 
 ```bash
-cargo build --release -p octos-cli --features "wecom-bot"
-octos gateway
+cargo build --release -p ra-cli --features "wecom-bot"
+ra gateway
 ```
 
 4. Install the **WorkBuddy** desktop client, link it to your WeChat via QR scan, and connect it to the same WeCom group robot.
@@ -369,7 +369,7 @@ The `wecom-bot` channel uses an outbound WebSocket connection -- no public URL o
 
 - **Text only** -- voice and image messages are passed as placeholders
 - **No message editing** -- responses are sent as new messages
-- **One direction** -- WeChat-to-Octos is automatic; for proactive messages, use cron jobs
+- **One direction** -- WeChat-to-ra is automatic; for proactive messages, use cron jobs
 
 ---
 
@@ -392,7 +392,7 @@ When `mode` is omitted the gateway falls back to **`appservice`** (which then re
     "homeserver": "https://matrix.org",
     "user_id": "@mybot:matrix.org",
     "access_token": "syt_...",
-    "device_name": "octos",
+    "device_name": "ra",
     "rooms": ["!roomid:matrix.org"],
     "auto_join": "allowlist",
     "auto_join_allowlist": ["!roomid:matrix.org", "#alias:matrix.org"]
@@ -445,7 +445,7 @@ export LINE_CHANNEL_ACCESS_TOKEN="..."
 }
 ```
 
-In standalone `octos gateway` mode, LINE pushes events to the channel's own webhook server at `http://YOUR_OCTOS_HOST:<webhook_port>/line/webhook`; behind `octos serve`, use the proxy route `https://YOUR_OCTOS_HOST/webhook/line/<profile_id>` instead. Inbound signatures are verified over the request **body** with the channel secret (HMAC-SHA256), so either URL works. Build with the `line` feature flag.
+In standalone `ra gateway` mode, LINE pushes events to the channel's own webhook server at `http://YOUR_OCTOS_HOST:<webhook_port>/line/webhook`; behind `ra serve`, use the proxy route `https://YOUR_OCTOS_HOST/webhook/line/<profile_id>` instead. Inbound signatures are verified over the request **body** with the channel secret (HMAC-SHA256), so either URL works. Build with the `line` feature flag.
 
 ---
 
@@ -497,7 +497,7 @@ Only one session is **active** at a time per chat. Messages are routed to the ac
 Voice and audio messages from channels are automatically transcribed before being sent to the agent. The system tries local ASR first (via the OminiX engine) and falls back to cloud-based Whisper when local ASR is unavailable. The transcription is prepended as `[transcription: ...]`.
 
 ```bash
-# Local ASR (preferred) -- set automatically by octos serve
+# Local ASR (preferred) -- set automatically by ra serve
 export OMINIX_API_URL="http://localhost:8080"
 
 # Cloud fallback
@@ -544,14 +544,14 @@ Each channel type uses its own sender identifier format (Telegram user IDs, emai
 The agent can schedule recurring tasks that deliver messages through any channel:
 
 ```bash
-octos cron list                          # List active jobs
-octos cron list --all                    # Include disabled jobs
-octos cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
-octos cron add --name "check" --message "Check status" --every 3600
-octos cron add --name "once" --message "Run migration" --at "2025-03-01T09:00:00Z"
-octos cron remove <job-id>
-octos cron enable <job-id>               # Enable a job
-octos cron enable <job-id> --disable     # Disable a job
+ra cron list                          # List active jobs
+ra cron list --all                    # Include disabled jobs
+ra cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
+ra cron add --name "check" --message "Check status" --every 3600
+ra cron add --name "once" --message "Run migration" --at "2025-03-01T09:00:00Z"
+ra cron remove <job-id>
+ra cron enable <job-id>               # Enable a job
+ra cron enable <job-id> --disable     # Disable a job
 ```
 
 Jobs support an optional `timezone` field with IANA timezone names (e.g., `"America/New_York"`, `"Asia/Shanghai"`). When omitted, UTC is used.

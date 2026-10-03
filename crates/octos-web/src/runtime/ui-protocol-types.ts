@@ -1,13 +1,13 @@
 // UI Protocol v1 — M9-γ canonical projection envelope (UPCR-2026-014).
 //
 // This file is the TypeScript counterpart of
-// `crates/octos-core/src/ui_protocol.rs` for the M9-γ projection
+// `crates/ra-core/src/ui_protocol.rs` for the M9-γ projection
 // envelope. The two MUST stay byte-aligned: the Rust enum uses
 // `serde(tag = "type", content = "data", rename_all = "snake_case")`,
 // so every wire JSON value here round-trips through `serde_json` on
 // the server side and through this discriminated union on the client.
 //
-// Spec: `api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 14
+// Spec: `api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 14
 // "M9-γ Envelope".
 // ADR: `docs/M9-GAMMA-SERVER-PROJECTION-ADR.md`.
 //
@@ -22,8 +22,8 @@
 // ── Identifier aliases ───────────────────────────────────────────────────
 //
 // All wire strings; the projection treats them as opaque. They mirror
-// the Rust newtypes in `octos-core` but are NOT the same as the legacy
-// fixture-types in `crates/octos-web/src/state/__tests__/lib/fixture-types.ts`,
+// the Rust newtypes in `ra-core` but are NOT the same as the legacy
+// fixture-types in `crates/ra-web/src/state/__tests__/lib/fixture-types.ts`,
 // which carry `turn_id`. Identity in M9-γ collapses to `seq` — there
 // is no `turn_id` on the envelope.
 
@@ -227,7 +227,7 @@ export type Payload =
  *  **Hard barrier** (spec § 14.6): after a `turn_completed` envelope
  *  for `thread_id` T, any subsequent envelope with the same `thread_id`
  *  is DROPPED by the projection (and counted in the
- *  `octos_projection_post_completion_drop_total` metric). Threads are
+ *  `ra_projection_post_completion_drop_total` metric). Threads are
  *  NOT reused — a new turn must use a NEW `thread_id`. */
 export interface Envelope {
   thread_id: ThreadId;
@@ -245,7 +245,7 @@ export interface Envelope {
 
 /** Wire-form capability flag for the canonical projection envelope. Servers
  *  advertise it via `UiProtocolCapabilities.supported_features`; clients
- *  request it via the `X-Octos-Ui-Features` header. Mirrors
+ *  request it via the `X-Ra-Ui-Features` header. Mirrors
  *  `UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2` in the Rust types. */
 export const UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2 = 'projection.envelope.v2';
 

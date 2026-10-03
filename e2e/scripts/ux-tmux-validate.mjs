@@ -3,8 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const VALIDATION_SCHEMA = 'octos.ux.validation.v1';
-const ARTIFACT_ABI = 'octos.ux.artifacts.v1';
+const VALIDATION_SCHEMA = 'ra.ux.validation.v1';
+const ARTIFACT_ABI = 'ra.ux.artifacts.v1';
 const REQUIRED_ARTIFACTS = [
   'scenario.json',
   'summary.json',
@@ -283,8 +283,8 @@ function validateRuntimePolicyStampJson(value) {
 
 function validateTerminalSizeJson(value) {
   const problems = [];
-  if (value.schema !== 'octos.ux.terminal_size.v1') {
-    problems.push('terminal-size.json schema must be octos.ux.terminal_size.v1');
+  if (value.schema !== 'ra.ux.terminal_size.v1') {
+    problems.push('terminal-size.json schema must be ra.ux.terminal_size.v1');
   }
   if (!Number.isInteger(value.cols) || value.cols <= 0) {
     problems.push('terminal-size.json cols must be a positive integer');
@@ -866,7 +866,7 @@ function checkTerminalLayoutSnapshot(artifactDir) {
   if (!terminal.ok) problems.push(`terminal-size.json is not parseable JSON: ${terminal.error}`);
   problems.push(...cursorSamples.errors);
   const snapshot = {
-    schema: 'octos.ux.terminal_layout_snapshot.v1',
+    schema: 'ra.ux.terminal_layout_snapshot.v1',
     terminal: terminal.ok
       ? { cols: terminal.value.cols, rows: terminal.value.rows }
       : null,
@@ -1480,7 +1480,7 @@ function checkRestartReconnectScenario(artifactDir) {
   const problems = [];
   if (!preCapture.ok) {
     problems.push(`tui-capture-pre-restart.txt could not be read: ${preCapture.error}`);
-  } else if (!/Before backend restart|Done|Protocol backend connected|Ask Octos to change code/.test(preCapture.text)) {
+  } else if (!/Before backend restart|Done|Protocol backend connected|Ask ra to change code/.test(preCapture.text)) {
     problems.push('pre-restart TUI capture is missing visible active-session state');
   }
   if (!postCapture.ok) {

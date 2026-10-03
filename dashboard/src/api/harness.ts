@@ -7,7 +7,7 @@
  *
  * The dashboard is a read-only view of backend truth — there is no UI-side
  * state machine. If a field needs to appear in the dashboard, the backend
- * must expose it (see crates/octos-cli/src/api/metrics.rs).
+ * must expose it (see crates/ra-cli/src/api/metrics.rs).
  */
 
 export type HarnessLifecycleState =
@@ -127,7 +127,7 @@ export interface OperatorSummaryResponse {
 /**
  * M6.1 — structured harness error taxonomy.
  *
- * Counter name is `octos_loop_error_total` and rolls up to the
+ * Counter name is `ra_loop_error_total` and rolls up to the
  * `loop_errors` key in `OperatorSummaryResponse.totals` and
  * `OperatorSummaryResponse.breakdowns`. `variant` names match
  * `HarnessError::variant_name()` in Rust (snake_case identifiers such as
@@ -155,7 +155,7 @@ export function harnessErrorTotal(summary: OperatorSummaryResponse | null): numb
 /**
  * M6.2 — loop retry bucket decisions.
  *
- * Counter `octos_loop_retry_total{variant, decision}` — `variant` is the
+ * Counter `ra_loop_retry_total{variant, decision}` — `variant` is the
  * `HarnessError::variant_name()` (plus the synthetic `shell_spiral` bucket),
  * `decision` is `LoopDecision::as_str()` (one of
  * `continue | rotate_and_retry | compact_and_retry | escalate | exhausted |
@@ -250,7 +250,7 @@ export function loopRetryBuckets(
 /**
  * M6.3 — compaction preservation violations.
  *
- * Counter `octos_compaction_preservation_violations_total{phase}` counts
+ * Counter `ra_compaction_preservation_violations_total{phase}` counts
  * cases where the compaction policy dropped or mutated messages that the
  * workspace contract required to be preserved verbatim. A non-zero total is
  * always a bug signal.
@@ -275,7 +275,7 @@ export function compactionViolationTotal(
 /**
  * M6.5 — credential pool rotations.
  *
- * Counter `octos_llm_credential_rotation_total{reason, strategy}`. The
+ * Counter `ra_llm_credential_rotation_total{reason, strategy}`. The
  * dashboard surfaces the reason/strategy mix and the total count, which is a
  * rough proxy for how often the pool cycles credentials (auth failures,
  * cooldowns, manual releases).
@@ -323,7 +323,7 @@ export function credentialRotationsByReason(
 /**
  * M6.6 — content-classified smart routing decisions.
  *
- * Counter `octos_routing_decision_total{tier, lane}`. `tier` is
+ * Counter `ra_routing_decision_total{tier, lane}`. `tier` is
  * `cheap | strong`, `lane` is an optional pool-aware hint set by M6.5.
  * A `cheap_share` close to 1.0 means the router offloaded most chat turns
  * to the cheap tier; anything near 0 flags the router as falling back to

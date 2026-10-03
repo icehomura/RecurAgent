@@ -15,7 +15,7 @@ const runRoot = path.resolve(
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const sessionId = process.env.OCTOS_M15_TASK_SUPERVISOR_SESSION || `api:m15-task-mirror-${stamp}`;
 const profileId = process.env.OCTOS_M15_TASK_SUPERVISOR_PROFILE || '_main';
 const timeoutMs = Number(process.env.OCTOS_M15_TASK_SUPERVISOR_TIMEOUT_MS || 45_000);
@@ -153,7 +153,7 @@ function mirroredAgent(params) {
 async function main() {
   await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error('octos serve --stdio did not spawn')),
+      () => reject(new Error('ra serve --stdio did not spawn')),
       10_000,
     );
     child.once('spawn', () => {

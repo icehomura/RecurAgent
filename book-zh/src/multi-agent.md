@@ -1,6 +1,6 @@
 # 多 Agent 编排
 
-octos 可以同时运行多个 Agent，形态分为三种。按**由谁拥有这份工作**以及**你何时需要结果**来选择：
+ra 可以同时运行多个 Agent，形态分为三种。按**由谁拥有这份工作**以及**你何时需要结果**来选择：
 
 | 模型 | 入口 | 归属 | 结果 | 生命周期 |
 |------|------|------|------|----------|
@@ -23,7 +23,7 @@ octos 可以同时运行多个 Agent，形态分为三种。按**由谁拥有这
 
 ## 对等 Agent 工具
 
-Agent 通过五个工具与对等 Agent 交互，覆盖完整生命周期 —— **创建**（`peer_handoff`）、**引导**（`peer_send_input`）、**读取**（`peer_gather`）、**列举**（`peer_list`）、**关闭**（`peer_close`）。它们仅在网关/serve 运行时可用（一次性的 `octos chat` 中不可用）。
+Agent 通过五个工具与对等 Agent 交互，覆盖完整生命周期 —— **创建**（`peer_handoff`）、**引导**（`peer_send_input`）、**读取**（`peer_gather`）、**列举**（`peer_list`）、**关闭**（`peer_close`）。它们仅在网关/serve 运行时可用（一次性的 `ra chat` 中不可用）。
 
 ### `peer_handoff` —— 创建对等 Agent
 
@@ -67,7 +67,7 @@ Agent 通过五个工具与对等 Agent 交互，覆盖完整生命周期 ——
 - **`peer/prepare`** —— 以编队方式暂存 1–8 个对等 Agent（全有或全无）。传入 `token_budget` 可为每个 Peer 设置相同的累计 token 上限；省略则不设置 Peer 专属上限。响应会回显该值，随后由客户端打开会话并启动首轮。
 - **`peer/gather`** —— 黑板的面向人类的一侧；把各对等 Agent 的结果汇入调用方的会话。
 
-例如，`peer/prepare` 接受 `{"brief":"审查 API 改动","cwd":"/workspace/octos","token_budget":250000}`。预算保存在 Peer 目录中，OUP 重连或更换会话 ID 不会重置它。完成、失败和中断的轮次都会计入用量；累计值达到上限后，下一轮以 `peer_token_budget_exceeded` 结束。检查发生在轮次边界，因此单轮可能超出上限。若 Peer 绑定了 master goal，其用量还会计入 master 的共享 goal 预算。
+例如，`peer/prepare` 接受 `{"brief":"审查 API 改动","cwd":"/workspace/ra","token_budget":250000}`。预算保存在 Peer 目录中，OUP 重连或更换会话 ID 不会重置它。完成、失败和中断的轮次都会计入用量；累计值达到上限后，下一轮以 `peer_token_budget_exceeded` 结束。检查发生在轮次边界，因此单轮可能超出上限。若 Peer 绑定了 master goal，其用量还会计入 master 的共享 goal 预算。
 
 ## 生命周期
 

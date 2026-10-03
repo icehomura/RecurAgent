@@ -133,7 +133,7 @@ function writeDiagnostic(
 ): void {
   fs.mkdirSync(path.dirname(DIAGNOSTIC_JSON), { recursive: true });
   const diagnostic = {
-    schema: 'octos.swarm.m7.live_gate.diagnostic.v1',
+    schema: 'ra.swarm.m7.live_gate.diagnostic.v1',
     status,
     kind,
     detail,

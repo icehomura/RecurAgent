@@ -9,7 +9,7 @@
 # Environment:
 #   FRPS_DASHBOARD_PASSWORD  (optional) Dashboard password (default: random)
 #   FRPS_VERSION             (optional) frp version to install (default: 0.65.0)
-#   OCTOS_SERVE_PORT         (optional) octos serve port for auth plugin (default: 8080)
+#   OCTOS_SERVE_PORT         (optional) ra serve port for auth plugin (default: 8080)
 
 set -euo pipefail
 
@@ -98,7 +98,7 @@ auth.method = "token"
 auth.token = ""
 
 [[httpPlugins]]
-name = "octos-auth"
+name = "ra-auth"
 addr = "127.0.0.1:${OCTOS_SERVE_PORT}"
 path = "/api/internal/frps-auth"
 ops = ["Login", "NewProxy"]
@@ -114,13 +114,13 @@ else
     sudo tee "${CONFIG_DIR}/404.html" > /dev/null << 'HTMLEOF'
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Octos Cloud</title>
+<title>ra Cloud</title>
 <style>*{margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0a0a0f;color:#e4e4ef;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}
 h1{font-size:24px;margin:24px 0 12px}p{color:#8888a0;font-size:16px;margin-bottom:32px}
 a{background:#6366f1;color:#fff;text-decoration:none;padding:12px 32px;border-radius:8px;font-size:15px}</style></head>
 <body><div><div style="font-size:64px">&#x1F419;</div><h1>This subdomain is not active</h1>
 <p>This subdomain is not claimed or the node is currently offline.</p>
-<a href="https://octos-cloud.org">Go to Octos Cloud</a></div></body></html>
+<a href="https://ra-cloud.org">Go to ra Cloud</a></div></body></html>
 HTMLEOF
     echo "    Created inline 404 page"
 fi
@@ -130,14 +130,14 @@ echo "    Wrote config to ${CONFIG_FILE}"
 # ── Create system service ─────────────────────────────────────────────
 case "$(uname -s)" in
     Darwin)
-        PLIST="/Library/LaunchDaemons/io.octos.frps.plist"
+        PLIST="/Library/LaunchDaemons/io.ra.frps.plist"
         sudo tee "$PLIST" > /dev/null << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.octos.frps</string>
+    <string>io.ra.frps</string>
     <key>ProgramArguments</key>
     <array>
         <string>${INSTALL_DIR}/frps</string>

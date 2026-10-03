@@ -1,7 +1,7 @@
 //! Smoke test for `harness-starter-report`.
 //!
 //! Matches the 4-part acceptance spec in
-//! `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md` Part 2 Step 5.
+//! `docs/ra_HARNESS_DEVELOPER_GUIDE.md` Part 2 Step 5.
 
 use std::path::{Path, PathBuf};
 

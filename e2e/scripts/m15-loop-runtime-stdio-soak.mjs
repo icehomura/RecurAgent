@@ -7,7 +7,7 @@
 //   1. Open an AppUI session.
 //   2. Create a `fixed_interval` loop at the minimum interval the runtime
 //      accepts (`LOOP_MIN_INTERVAL_SECONDS` in
-//      crates/octos-cli/src/api/agent_orchestrator.rs — currently 60s).
+//      crates/ra-cli/src/api/agent_orchestrator.rs — currently 60s).
 //   3. Wait for ≥3 scheduled fires to drain through the master
 //      continuation queue, observed via `task/updated` AppUI frames.
 //   4. Call `loop/fire_now` once explicitly to confirm manual firing.
@@ -37,7 +37,7 @@ const runRoot = path.resolve(
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const profileId = process.env.OCTOS_M15_LOOP_PROFILE || 'm15-loop';
 const sessionId =
   process.env.OCTOS_M15_LOOP_SESSION || `${profileId}:local:m15-loop-runtime-${stamp}`;
@@ -282,7 +282,7 @@ function captureAssistantExcerpt(beforeMessageDeltaCount) {
 async function main() {
   await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error('octos serve --stdio did not spawn')),
+      () => reject(new Error('ra serve --stdio did not spawn')),
       10_000,
     );
     child.once('spawn', () => {

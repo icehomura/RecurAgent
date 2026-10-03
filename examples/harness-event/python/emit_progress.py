@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dependency-light Octos harness event emitter for Python tools."""
+"""Dependency-light ra harness event emitter for Python tools."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import sys
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-SCHEMA = "octos.harness.event.v1"
+SCHEMA = "ra.harness.event.v1"
 
 
 def build_progress_event(
@@ -87,7 +87,7 @@ def emit_event(event: dict[str, Any], sink: str | None = None) -> bool:
             _append_file(path, line)
         return True
     except Exception as exc:
-        print(f"octos event sink write failed: {exc}", file=sys.stderr)
+        print(f"ra event sink write failed: {exc}", file=sys.stderr)
         return False
 
 
@@ -114,7 +114,7 @@ def emit_progress(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Emit an Octos harness progress event")
+    parser = argparse.ArgumentParser(description="Emit an ra harness progress event")
     parser.add_argument("--session-id", required=True)
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--workflow", required=True)

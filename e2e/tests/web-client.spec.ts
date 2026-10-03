@@ -9,7 +9,7 @@
  * carries text losslessly so any encoding bug regressing in the LLM provider
  * chain still surfaces.
  *
- * Run against a live octos-serve instance:
+ * Run against a live ra-serve instance:
  *   OCTOS_TEST_URL=http://localhost:3000 npx playwright test web-client
  *
  * NOTE: on the deterministic fixture protocol server (`OCTOS_M9_PROTOCOL_FIXTURES=1`,
@@ -246,7 +246,7 @@ test('session persists across requests', async ({ request, baseURL }) => {
 test.fixme('file delivery is visible via WS or committed session result', async ({ request, baseURL }) => {
   test.slow();
   const sid = `test-file-${Date.now()}`;
-  const fileDir = `octos-web-file-${Date.now()}`;
+  const fileDir = `ra-web-file-${Date.now()}`;
   const filePath = `./${fileDir}/octos_e2e_test.txt`;
 
   const { events, doneEvent } = await chatViaWs(

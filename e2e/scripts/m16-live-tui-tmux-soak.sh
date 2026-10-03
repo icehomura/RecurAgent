@@ -9,13 +9,13 @@ tui_repo="${OCTOSCODE_REPO:-$(dirname "$repo_root")/octoscode}"
 tui_runner="${OCTOS_M16_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
 out_root="${OCTOS_M16_UX_OUT_ROOT:-$repo_root/e2e/test-results-m16-tmux-ux}"
 out_dir="${OCTOS_M16_UX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${OCTOS_M16_UX_RUNTIME_ROOT:-/tmp/octos-m16-ux-$run_id}"
+runtime_root="${OCTOS_M16_UX_RUNTIME_ROOT:-/tmp/ra-m16-ux-$run_id}"
 data_dir="${OCTOS_M16_UX_DATA_DIR:-$runtime_root/data}"
 workdir="${OCTOS_M16_UX_WORKDIR:-$runtime_root/workspace}"
 replay_file="${OCTOS_M16_UX_REPLAY:-$out_dir/m16-code-review-replay.txt}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/octos}"
+octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
 tui_bin="${OCTOSCODE_BIN:-$tui_repo/target/debug/octoscode}"
-session_name="${OCTOS_M16_UX_TMUX_SESSION:-octos-m16-ux-$run_id}"
+session_name="${OCTOS_M16_UX_TMUX_SESSION:-ra-m16-ux-$run_id}"
 profile_id="${OCTOS_M16_UX_PROFILE:-coding}"
 session_id="${OCTOS_M16_UX_SESSION_ID:-$profile_id:local:m16-ux:$run_id}"
 delay_scale="${OCTOS_M16_UX_SUBAGENT_DELAY_SCALE:-8}"
@@ -34,15 +34,15 @@ usage() {
   cat <<'USAGE'
 Usage: e2e/scripts/m16-live-tui-tmux-soak.sh <run|self-test|help>
 
-Runs the M16 visual TUI tmux soak against a real octos serve --stdio backend.
+Runs the M16 visual TUI tmux soak against a real ra serve --stdio backend.
 The script reuses the octoscode tmux driver but writes all M16 evidence under
-octos/e2e/test-results-m16-tmux-ux/<run-id>.
+ra/e2e/test-results-m16-tmux-ux/<run-id>.
 
 Key environment:
   OCTOSCODE_REPO              Path to octoscode checkout. Default: an octoscode checkout next to this repo.
-  OCTOS_BIN                   octos binary. Default: octos/target/debug/octos.
+  OCTOS_BIN                   ra binary. Default: ra/target/debug/ra.
   OCTOSCODE_BIN               octoscode binary. Default: octoscode/target/debug/octoscode.
-  OCTOS_M16_BUILD             Set 0 to skip building octos with api. Default: 1.
+  OCTOS_M16_BUILD             Set 0 to skip building ra with api. Default: 1.
   OCTOS_M16_BUILD_TUI         Set 1 to rebuild octoscode. Default: build only if missing.
   OCTOS_M16_UX_KEEP_SESSION   Set 1 to keep tmux session after the run.
   OCTOS_M16_UX_OUT_DIR        Override evidence output directory.
@@ -60,19 +60,19 @@ shell_quote() {
 
 ensure_binaries() {
   if [[ "${OCTOS_M16_BUILD:-1}" == "1" ]]; then
-    (cd "$repo_root" && cargo build -p octos-cli --bin octos --features api)
+    (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
   if [[ "${OCTOS_M16_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$tui_repo" && cargo build --bin octoscode)
   fi
-  [[ -x "$octos_bin" ]] || die "octos binary is not executable: $octos_bin"
+  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
   [[ -x "$tui_bin" ]] || die "octoscode binary is not executable: $tui_bin"
 }
 
 write_replay() {
   mkdir -p "$out_dir"
   cat > "$replay_file" <<'REPLAY'
-# M16 real octos serve stdio visual review/start orchestration soak.
+# M16 real ra serve stdio visual review/start orchestration soak.
 sleep 8
 capture tui-capture-before-scroll.txt
 
@@ -404,7 +404,7 @@ for (const root of roots) {
 }
 
 const report = {
-  schema: 'octos.m16.secret_cleanup.v1',
+  schema: 'ra.m16.secret_cleanup.v1',
   scanned_roots: scannedRoots,
   scanned_files: scannedFiles,
   scanned_file_count: scannedFiles.length,
@@ -559,7 +559,7 @@ if (!fs.existsSync(reportPath)) {
   throw new Error(`missing cleanup report: ${reportPath}`);
 }
 const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-if (report.schema !== 'octos.m16.secret_cleanup.v1') {
+if (report.schema !== 'ra.m16.secret_cleanup.v1') {
   throw new Error(`unexpected cleanup schema: ${report.schema}`);
 }
 if (!report.removed_live_provider_config) {

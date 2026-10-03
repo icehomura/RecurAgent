@@ -1,7 +1,7 @@
 // Layer 1 SPA reducer fixture format.
 //
 // The fixture format mirrors the typed UI Protocol v1 envelope (see
-// `crates/octos-core/src/ui_protocol.rs::TurnStartedEvent`,
+// `crates/ra-core/src/ui_protocol.rs::TurnStartedEvent`,
 // `MessageDeltaEvent`, etc.). Every event MUST carry an explicit `turn_id` —
 // that is the contract this layer enforces. The replay engine feeds events
 // into the reducer in `t` order; assertions run against the final state.
@@ -41,7 +41,7 @@ export type SessionKey = string;
 // ── SSE / UI Protocol event payloads ─────────────────────────────────────
 //
 // These are the SHAPES the SPA reducer consumes. They mirror the Rust
-// `UiNotification` variants in `octos-core/src/ui_protocol.rs`. The shape
+// `UiNotification` variants in `ra-core/src/ui_protocol.rs`. The shape
 // names match the wire `"type"` (snake_case as serialized by the server).
 //
 // Every event carries `turn_id` — even `user_sent`, which is the client's

@@ -1,27 +1,27 @@
 # Skill Development
 
-This guide covers the full lifecycle of an Octos skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
+This guide covers the full lifecycle of an ra skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
 
 ---
 
 ## The Skill Ecosystem
 
 ```
- Developer                    Octos Hub                     User
+ Developer                    ra Hub                     User
  ─────────                    ─────────                     ────
  1. Develop skill        ──▶  3. Publish to registry   ──▶  5. Search & discover
  2. Test locally              4. Pre-built binaries         6. Install
                                                             7. Update
 ```
 
-| Concept | App Store Analogy | Octos Equivalent |
+| Concept | App Store Analogy | ra Equivalent |
 |---------|-------------------|------------------|
 | **App** | iOS/Android app | Skill (binary + manifest + docs) |
 | **SDK** | Xcode / Android Studio | Rust + `manifest.json` + `SKILL.md` |
 | **App Store** | Apple App Store | [octos-hub](https://github.com/octos-org/octos-hub) registry |
 | **Distribution** | App Store binary delivery | Pre-built binaries in GitHub Releases |
-| **Install** | Tap "Get" | `octos skills install user/repo` |
-| **Sideload** | Ad-hoc / TestFlight | `octos skills --profile <profile> install ./my-skill` |
+| **Install** | Tap "Get" | `ra skills install user/repo` |
+| **Sideload** | Ad-hoc / TestFlight | `ra skills --profile <profile> install ./my-skill` |
 
 ---
 
@@ -34,7 +34,7 @@ A skill is a **standalone executable** that communicates via **stdin/stdout JSON
 ```
 User message → LLM → tool_use("get_weather", {"city": "Paris"})
                         ↓
-             Gateway spawns: ~/.octos/profiles/<profile>/data/skills/weather/main get_weather
+             Gateway spawns: ~/.ra/profiles/<profile>/data/skills/weather/main get_weather
                         ↓
              Stdin:  {"city": "Paris"}
              Stdout: {"output": "25°C, sunny", "success": true}
@@ -105,7 +105,7 @@ The manifest declares what tools the skill provides. The LLM reads this to decid
 | `sha256` | Strongly recommended for production fleets | — | Binary integrity check (hex hash). Required when the host has `plugins.require_signed = true` — plugins missing it are rejected at load time. TOCTOU-safe: verified copy written to `.{name}_verified` (`plugins/loader.rs:283-491`). Compute via `shasum -a 256 main`. |
 | `protocol_version` | No | 1 | `1` = stdin/stdout JSON only (default). `2` = also emit structured events on stderr. See [Plugin Protocol v2](#plugin-protocol-v2). |
 | `synthesis_config` | No | — | v2 only: declare a synthesis LLM call so the host injects provider/model + env keys |
-| `x-octos-host-config-keys` | No | `[]` | v2 only: env keys the host should forward into the skill (e.g. provider API keys for synthesis) |
+| `x-ra-host-config-keys` | No | `[]` | v2 only: env keys the host should forward into the skill (e.g. provider API keys for synthesis) |
 | `tools` | No | `[]` | Array of tool definitions. Each may set `spawn_only: true` to be auto-routed to background execution by `agent/execution.rs`. Spawn-only tools may emit a `named_outputs` map — see [Part 7: Workspace Contract](#part-7-workspace-contract). |
 | `mcp_servers` | No | `[]` | MCP server declarations |
 | `hooks` | No | `[]` | Lifecycle hook definitions |
@@ -252,7 +252,7 @@ fi
 
 ### Step 4: For Bundled Skills (Rust Crate)
 
-If contributing a skill to the core Octos distribution:
+If contributing a skill to the core ra distribution:
 
 ```bash
 mkdir -p crates/app-skills/my-skill/src
@@ -284,7 +284,7 @@ members = [
 ]
 ```
 
-Register in `crates/octos-agent/src/bundled_app_skills.rs`:
+Register in `crates/ra-agent/src/bundled_app_skills.rs`:
 
 ```rust
 pub const BUNDLED_APP_SKILLS: &[(&str, &str, &str, &str)] = &[
@@ -333,14 +333,14 @@ echo '{"param1": "hello"}' | ./my-skill/main my_tool
 cargo build --release --workspace
 
 # Install into the profile you want to test
-octos skills --profile alice install ./my-skill
+ra skills --profile alice install ./my-skill
 
 # Verify skill loaded
-ls ~/.octos/profiles/alice/data/skills/my-skill/
+ls ~/.ra/profiles/alice/data/skills/my-skill/
 # main  manifest.json  SKILL.md
 
 # Start the gateway
-octos gateway
+ra gateway
 
 # Ask the agent to use your skill in conversation
 ```
@@ -358,7 +358,7 @@ octos gateway
 
 ## Part 3: Publish
 
-Publishing makes your skill discoverable to all Octos users — like submitting an app to the App Store.
+Publishing makes your skill discoverable to all ra users — like submitting an app to the App Store.
 
 ### Push to GitHub
 
@@ -428,7 +428,7 @@ The [octos-hub](https://github.com/octos-org/octos-hub) registry is the central 
 Once the PR is merged, users can discover your skill:
 
 ```bash
-octos skills search keyword1
+ra skills search keyword1
 ```
 
 ---
@@ -506,7 +506,7 @@ jobs:
 
 ### Install Resolution Order
 
-When a user runs `octos skills install`, the installer tries these sources in order:
+When a user runs `ra skills install`, the installer tries these sources in order:
 
 1. **manifest.json `binaries`** — skill author's own CI/CD builds
 2. **Registry `binaries`** — registry-audited pre-built binaries
@@ -523,20 +523,20 @@ Pre-built binaries are verified with SHA-256 before installation.
 
 ```bash
 # Search the registry
-octos skills search weather
-octos skills search "deep research"
+ra skills search weather
+ra skills search "deep research"
 
 # Install from GitHub (all skills in repo)
-octos skills install user/repo
+ra skills install user/repo
 
 # Install a specific skill from a multi-skill repo
-octos skills install user/repo/skill-name
+ra skills install user/repo/skill-name
 
 # Install with a specific branch
-octos skills install user/repo --branch dev
+ra skills install user/repo --branch dev
 
 # Force reinstall
-octos skills install user/repo --force
+ra skills install user/repo --force
 ```
 
 ### Per-Profile Installation
@@ -545,13 +545,13 @@ Skills are isolated per profile (like per-user app installs):
 
 ```bash
 # Install to a specific profile
-octos skills --profile alice install user/repo/my-skill
+ra skills --profile alice install user/repo/my-skill
 
 # List skills for a profile
-octos skills --profile alice list
+ra skills --profile alice list
 
 # Remove from a profile
-octos skills --profile alice remove my-skill
+ra skills --profile alice remove my-skill
 ```
 
 ### In-Chat Installation
@@ -582,9 +582,9 @@ DELETE /api/admin/profiles/alice/skills/my-skill
 
 ### Fleet Deploy
 
-For multi-host fleets, use `scripts/fleet-install-skills.sh` (PR #939) — it replaces the legacy `mofa-skills/scripts/deploy-mini.sh` `scp` flow. The new script rsyncs each skill to a staging path on every host and then runs `octos skills --profile <profile> install <staging-path>` server-side so the manifest's sha256 verification runs inside the same code path the runtime uses.
+For multi-host fleets, use `scripts/fleet-install-skills.sh` (PR #939) — it replaces the legacy `mofa-skills/scripts/deploy-mini.sh` `scp` flow. The new script rsyncs each skill to a staging path on every host and then runs `ra skills --profile <profile> install <staging-path>` server-side so the manifest's sha256 verification runs inside the same code path the runtime uses.
 
-See [`docs/SKILL_DEPLOYMENT.md`](./SKILL_DEPLOYMENT.md) for the operator-side runbook (CLI flags, env overrides, migration from legacy `~/.octos/skills/`, verification commands).
+See [`docs/SKILL_DEPLOYMENT.md`](./SKILL_DEPLOYMENT.md) for the operator-side runbook (CLI flags, env overrides, migration from legacy `~/.ra/skills/`, verification commands).
 
 ### Sideloading (Manual Install)
 
@@ -592,7 +592,7 @@ Install a local skill directory into the profile that should be allowed to use
 it:
 
 ```bash
-octos skills --profile alice install ./my-skill --force
+ra skills --profile alice install ./my-skill --force
 ```
 
 For one-off debugging you can copy the directory yourself, but keep the target
@@ -600,22 +600,22 @@ profile-scoped:
 
 ```bash
 # Canonical: per-profile install
-cp -r my-skill/ ~/.octos/profiles/alice/data/skills/my-skill/
-chmod +x ~/.octos/profiles/alice/data/skills/my-skill/main
+cp -r my-skill/ ~/.ra/profiles/alice/data/skills/my-skill/
+chmod +x ~/.ra/profiles/alice/data/skills/my-skill/main
 
 # Legacy (deprecated): global skills directory — loader emits a warning
-cp -r my-skill/ ~/.octos/skills/my-skill/
-chmod +x ~/.octos/skills/my-skill/main
+cp -r my-skill/ ~/.ra/skills/my-skill/
+chmod +x ~/.ra/skills/my-skill/main
 ```
 
-The global `~/.octos/skills/` directory is retired for new installs. It is kept
+The global `~/.ra/skills/` directory is retired for new installs. It is kept
 only as a legacy migration source; new deployments should write directly to the
-per-profile path or use `octos skills --profile <profile> install`.
+per-profile path or use `ra skills --profile <profile> install`.
 
 ### Installed Skill Layout
 
 ```
-~/.octos/profiles/alice/data/skills/my-skill/
+~/.ra/profiles/alice/data/skills/my-skill/
 ├── main                # Executable binary
 ├── manifest.json       # Tool definitions
 ├── SKILL.md            # Documentation
@@ -640,10 +640,10 @@ Loading dedupes by `manifest.id` — the **first** directory scanned that contai
 
 | Priority | Location | Source |
 |----------|----------|--------|
-| 1 (highest) | `~/.octos/profiles/<profile>/data/skills/` | **Canonical** per-profile install (`octos skills --profile <p> install`; `fleet-install-skills.sh`) |
+| 1 (highest) | `~/.ra/profiles/<profile>/data/skills/` | **Canonical** per-profile install (`ra skills --profile <p> install`; `fleet-install-skills.sh`) |
 | 2 | `<project-dir>/skills/` | Project-local (development checkouts) |
-| 3 | `<project-dir>/bundled-app-skills/` | Bundled app-skills (constant `BUNDLED_APP_SKILLS_DIR` in `octos-agent/src/bootstrap.rs`; scanned by `Config::plugin_dirs_from_project`) |
-| 4 (lowest, **deprecated**) | `~/.octos/skills/` | Legacy global install — the loader emits a deprecation warning on every startup that sees this directory. See [Part 5: Install](#part-5-install) and [`docs/SKILL_DEPLOYMENT.md`](./SKILL_DEPLOYMENT.md) for the per-profile-only migration (PR #944). |
+| 3 | `<project-dir>/bundled-app-skills/` | Bundled app-skills (constant `BUNDLED_APP_SKILLS_DIR` in `ra-agent/src/bootstrap.rs`; scanned by `Config::plugin_dirs_from_project`) |
+| 4 (lowest, **deprecated**) | `~/.ra/skills/` | Legacy global install — the loader emits a deprecation warning on every startup that sees this directory. See [Part 5: Install](#part-5-install) and [`docs/SKILL_DEPLOYMENT.md`](./SKILL_DEPLOYMENT.md) for the per-profile-only migration (PR #944). |
 
 **Lesson from the fleet (2026):** before PR #936 the loader registered duplicate
 ids twice and `ToolRegistry::register` overwrote by tool name — so a stale
@@ -651,7 +651,7 @@ per-profile install could silently shadow a freshly-deployed global skill, and
 vice versa. Two production regressions (yangmi, douwentao) traced back to this
 trap before the dedup landed. On fleet upgrades, migrate legacy global skills
 into the intended per-profile directories and then stop refreshing
-`~/.octos/skills/`; do not keep the two locations in lock-step.
+`~/.ra/skills/`; do not keep the two locations in lock-step.
 
 ---
 
@@ -659,13 +659,13 @@ into the intended per-profile directories and then stop refreshing
 
 ```bash
 # Update a skill from its source repo
-octos skills update my-skill
+ra skills update my-skill
 
 # Update from a specific branch
-octos skills update my-skill --branch main
+ra skills update my-skill --branch main
 
 # View skill details (version, source, tools)
-octos skills info my-skill
+ra skills info my-skill
 ```
 
 The updater reads the `.source` file to know where to pull from, then re-runs the install flow (clone → discover → build/download → copy).
@@ -679,12 +679,12 @@ Skill binaries can be updated without restarting the gateway:
 cargo build --release -p my-skill
 
 # Replace the binary
-cp target/release/my_skill ~/.octos/profiles/alice/data/skills/my-skill/main
+cp target/release/my_skill ~/.ra/profiles/alice/data/skills/my-skill/main
 
 # Next tool call automatically uses the new binary
 ```
 
-> **Note:** If you change `SKILL.md` or `manifest.json` for a *bundled* skill, you must rebuild the `octos` binary too (they're embedded via `include_str!`). External skills reload immediately.
+> **Note:** If you change `SKILL.md` or `manifest.json` for a *bundled* skill, you must rebuild the `ra` binary too (they're embedded via `include_str!`). External skills reload immediately.
 
 ---
 
@@ -698,11 +698,11 @@ As of 2026-05-13 the harness owns every post-condition through the **workspace_p
 
 ### The five-layer model
 
-1. **Contract in the harness** — `WorkspacePolicy::for_session()` / `for_coding()` / per-workspace `.octos-workspace.toml`. The validators that fire post-task are declared here, not in skill code.
+1. **Contract in the harness** — `WorkspacePolicy::for_session()` / `for_coding()` / per-workspace `.ra-workspace.toml`. The validators that fire post-task are declared here, not in skill code.
 2. **`named_outputs`** — spawn-only tools emit a structured `{key: value}` envelope on stdout the harness reads into `${output.X}` template references (PR #941).
 3. **Per-profile install** — every customer skill lives at `<profile>/data/skills/`; no global shadow trap (PR #944).
 4. **sha256-bound binary** — manifest's top-level `sha256` is hashed at install AND re-hashed at exec to close the load→exec TOCTOU window (`plugins/tool.rs:920-970`).
-5. **Verify-at-merge + verify-at-deploy** — `fleet-install-skills.sh` routes through `octos skills install`, which re-verifies sha256 against the manifest before copying.
+5. **Verify-at-merge + verify-at-deploy** — `fleet-install-skills.sh` routes through `ra skills install`, which re-verifies sha256 against the manifest before copying.
 
 ### The spawn-only output envelope
 
@@ -751,11 +751,11 @@ println!(
 );
 ```
 
-> No helper exists in `octos-plugin` today — emit the envelope directly. A typed `SpawnOnlyResult` helper is on the open list.
+> No helper exists in `ra-plugin` today — emit the envelope directly. A typed `SpawnOnlyResult` helper is on the open list.
 
 ### Anatomy of a validator
 
-Every workspace-contract validator is a `Validator` struct (`crates/octos-agent/src/workspace_policy.rs:142-167`):
+Every workspace-contract validator is a `Validator` struct (`crates/ra-agent/src/workspace_policy.rs:142-167`):
 
 ```rust
 pub struct Validator {
@@ -781,7 +781,7 @@ Soft-fail is the canonical way to express partial-artifact contracts: "the prima
 
 ### ValidatorSpec variants
 
-Every `ValidatorSpec` variant currently merged. Source: `crates/octos-agent/src/workspace_policy.rs:263-357`.
+Every `ValidatorSpec` variant currently merged. Source: `crates/ra-agent/src/workspace_policy.rs:263-357`.
 
 | Variant | Serde shape | Interpolation | One-line use |
 |---------|-------------|---------------|--------------|
@@ -823,7 +823,7 @@ For glob-pattern templates (`MagicBytes.glob`, `AudioNonSilent.glob`, `Sha256Mat
 
 ### Where to declare the contract
 
-**Option A — Harness-owned (canonical).** Add to `WorkspacePolicy::for_session()` in `crates/octos-agent/src/workspace_policy.rs`. Worked example, an imaginary `mofa_widget` skill:
+**Option A — Harness-owned (canonical).** Add to `WorkspacePolicy::for_session()` in `crates/ra-agent/src/workspace_policy.rs`. Worked example, an imaginary `mofa_widget` skill:
 
 ```rust
 let mofa_widget_contract = WorkspaceSpawnTaskPolicy {
@@ -862,7 +862,7 @@ let mofa_widget_contract = WorkspaceSpawnTaskPolicy {
 spawn_tasks.insert("mofa_widget".into(), mofa_widget_contract);
 ```
 
-**Option B — Per-workspace TOML override.** Each session can ship a `.octos-workspace.toml` next to the working directory that overrides the defaults. The serde schema is the same as the `WorkspacePolicy` struct. Example:
+**Option B — Per-workspace TOML override.** Each session can ship a `.ra-workspace.toml` next to the working directory that overrides the defaults. The serde schema is the same as the `WorkspacePolicy` struct. Example:
 
 ```toml
 schema_version = 1
@@ -942,13 +942,13 @@ For skill authors with existing skills, here's what to align with as of 2026-05-
 ### Action items
 
 - [ ] **Add `sha256` to `manifest.json`** — compute via `shasum -a 256 main` and commit. Required if any fleet host enables `plugins.require_signed = true`.
-- [ ] **Remove any skill-internal contract block.** The historical pattern of declaring a `workspace_contract` field inside `manifest.json` (used by mofa-fm pre-2026-05-13) is unsupported. The agent-side manifest type does not parse such a field — it was always documentation-only — and the canonical equivalent lives in `WorkspacePolicy::for_session()` or a `.octos-workspace.toml` override.
+- [ ] **Remove any skill-internal contract block.** The historical pattern of declaring a `workspace_contract` field inside `manifest.json` (used by mofa-fm pre-2026-05-13) is unsupported. The agent-side manifest type does not parse such a field — it was always documentation-only — and the canonical equivalent lives in `WorkspacePolicy::for_session()` or a `.ra-workspace.toml` override.
 - [ ] **Strip skill-internal validators from skill source code.** If your skill currently runs its own post-condition (silent-MP3 detector, HTTP probe of a remote API, magic-byte parse), move it onto the canonical `ValidatorSpec` path. Concrete examples — these are the ad-hoc patterns being retired (audit section 3):
   - `assert_voice_registered` / `fetch_registered_voices` (mofa-fm) → replace with `ValidatorSpec::OminixVoiceExists`.
   - `has_meaningful_tts_audio` / `parse_wav_metadata` (mofa-podcast) → replace with `ValidatorSpec::AudioNonSilent` + `ValidatorSpec::MagicBytes`.
   - `poll_training_status` (mofa-fm) → replace with `ValidatorSpec::HttpProbeUntil`.
 - [ ] **For spawn-only artifact-producers, emit `named_outputs` where the harness needs to validate the output.** e.g. a `mofa_publish`-style skill must emit `{ "deploy_url": "..." }` so the harness's `HttpProbe { url_template = "${output.deploy_url}" }` can probe the live URL.
-- [ ] **Move to per-profile install.** Stop writing to `~/.octos/skills/`; use `octos skills --profile <p> install` or the fleet script.
+- [ ] **Move to per-profile install.** Stop writing to `~/.ra/skills/`; use `ra skills --profile <p> install` or the fleet script.
 - [ ] **Ship `manifest.json` `binaries.<platform>.sha256` if you publish pre-built binaries.** The installer verifies before copy.
 
 ### Backward compatibility
@@ -963,14 +963,14 @@ For skill authors with existing skills, here's what to align with as of 2026-05-
 ## Part 10: Reference
 
 - **Audit:** [`docs/audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md`](./audits/HARNESS_CONTRACT_AUDIT_2026-05-13.md) — full per-tool table, ad-hoc patterns inventory, framework gaps.
-- **Workspace policy source:** `crates/octos-agent/src/workspace_policy.rs` — `Validator`, `ValidatorSpec`, `MagicByteKind`, `Required`, `WorkspacePolicy::for_session()`.
-- **Validator runner:** `crates/octos-agent/src/validators.rs` — `ValidatorRunner`, interpolation, HTTP probe wiring (with the shared SSRF gate from `tools/ssrf.rs`).
-- **Workspace contract enforcement:** `crates/octos-agent/src/workspace_contract.rs` — `enforce_spawn_task_contract`, `run_declared_validators`, `bind_explicit_files_to_artifacts`.
-- **Plugin loader / sha256 gates:** `crates/octos-agent/src/plugins/loader.rs:70-491`, `crates/octos-agent/src/plugins/tool.rs:104-970`.
-- **EndTurn auto-fire:** `crates/octos-agent/src/agent/loop_runner.rs:42-80, 1435-1480`.
-- **Hook config:** `crates/octos-agent/src/hooks.rs:46-78` (HookConfig), `crates/octos-agent/src/workspace_policy.rs:1142-1212` (Coding detection + defaults).
-- **Plugin SDK protocol:** [`crates/octos-plugin/docs/protocol-v2.md`](../crates/octos-plugin/docs/protocol-v2.md).
-- **Compatibility contract:** [`docs/OCTOS_HARNESS_SKILL_COMPAT.md`](./OCTOS_HARNESS_SKILL_COMPAT.md) — the productization boundary every third-party skill must uphold.
+- **Workspace policy source:** `crates/ra-agent/src/workspace_policy.rs` — `Validator`, `ValidatorSpec`, `MagicByteKind`, `Required`, `WorkspacePolicy::for_session()`.
+- **Validator runner:** `crates/ra-agent/src/validators.rs` — `ValidatorRunner`, interpolation, HTTP probe wiring (with the shared SSRF gate from `tools/ssrf.rs`).
+- **Workspace contract enforcement:** `crates/ra-agent/src/workspace_contract.rs` — `enforce_spawn_task_contract`, `run_declared_validators`, `bind_explicit_files_to_artifacts`.
+- **Plugin loader / sha256 gates:** `crates/ra-agent/src/plugins/loader.rs:70-491`, `crates/ra-agent/src/plugins/tool.rs:104-970`.
+- **EndTurn auto-fire:** `crates/ra-agent/src/agent/loop_runner.rs:42-80, 1435-1480`.
+- **Hook config:** `crates/ra-agent/src/hooks.rs:46-78` (HookConfig), `crates/ra-agent/src/workspace_policy.rs:1142-1212` (Coding detection + defaults).
+- **Plugin SDK protocol:** [`crates/ra-plugin/docs/protocol-v2.md`](../crates/ra-plugin/docs/protocol-v2.md).
+- **Compatibility contract:** [`docs/ra_HARNESS_SKILL_COMPAT.md`](./OCTOS_HARNESS_SKILL_COMPAT.md) — the productization boundary every third-party skill must uphold.
 - **Fleet deploy runbook:** [`docs/SKILL_DEPLOYMENT.md`](./SKILL_DEPLOYMENT.md).
 - **Worked examples that already conform:** the four `crates/app-skills/harness-starter-*/` templates (audio / coding / generic / report). Their manifests demonstrate `spawn_only` + `concurrency_class` and they intentionally ship without skill-internal validators.
 - **Real spawn-only contracts in production:** see `WorkspacePolicy::for_session()` entries for `fm_tts`, `podcast_generate`, `voice_synthesize`, `fm_voice_save`, `mofa_slides`, `mofa_cards`, `mofa_comic`, `mofa_infographic`, `mofa_publish`, `manage_skills`, `synthesize_research`, `deep_search` (`workspace_policy.rs:692-1087`).
@@ -999,7 +999,7 @@ The host parses each line, surfaces phase/progress events through the UI Protoco
 
 **Stdout** still carries the final v1-shaped JSON: `{"output": "<final result>", "success": true, "files_to_send": [...]}`.
 
-**Synthesis-style skills (`deep-search`, `deep-crawl`)** declare `synthesis_config` plus `x-octos-host-config-keys` so the host injects the correct LLM provider/model and forwards env keys for the synthesis call:
+**Synthesis-style skills (`deep-search`, `deep-crawl`)** declare `synthesis_config` plus `x-ra-host-config-keys` so the host injects the correct LLM provider/model and forwards env keys for the synthesis call:
 
 ```json
 {
@@ -1009,15 +1009,15 @@ The host parses each line, surfaces phase/progress events through the UI Protoco
     "provider": "anthropic",
     "model": "claude-sonnet-4-20250514"
   },
-  "x-octos-host-config-keys": ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+  "x-ra-host-config-keys": ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
 }
 ```
 
 The host resolves these keys from the active profile's auth store and passes them on the skill's environment for the synthesis sub-call only.
 
-**Contract tests:** if you author a v2 skill, mirror the contract tests at `crates/octos-plugin/tests/lifecycle_sandbox.rs` so CI verifies that your binary emits well-formed events and respects the BLOCKED_ENV_VARS list.
+**Contract tests:** if you author a v2 skill, mirror the contract tests at `crates/ra-plugin/tests/lifecycle_sandbox.rs` so CI verifies that your binary emits well-formed events and respects the BLOCKED_ENV_VARS list.
 
-**spawn_only mechanics in detail** — when a tool's manifest declares `spawn_only: true`, the agent execution loop (`crates/octos-agent/src/agent/execution.rs`) intercepts the call **before** the LLM round-trip:
+**spawn_only mechanics in detail** — when a tool's manifest declares `spawn_only: true`, the agent execution loop (`crates/ra-agent/src/agent/execution.rs`) intercepts the call **before** the LLM round-trip:
 
 1. The tool invocation is wrapped in `tokio::spawn` and immediately returns an acknowledgement to the LLM.
 2. `task_supervisor.rs` registers the task, applies the per-profile fan-out cap (#610), and sets up the orphan reaper.
@@ -1222,13 +1222,13 @@ crates/app-skills/send-email/
 ```
 crates/app-skills/deep-search/
 ├── Cargo.toml          # reqwest, async runtime, serde
-├── manifest.json       # protocol_version: 2, synthesis_config + x-octos-host-config-keys
+├── manifest.json       # protocol_version: 2, synthesis_config + x-ra-host-config-keys
 ├── SKILL.md            # spawn_only: true (long-running)
 └── src/main.rs         # Multi-step research; emits PhaseEvent + ProgressEvent
                         # + CostEvent on stderr; final synthesis on stdout
 ```
 
-Demonstrates the full v2 protocol: structured stderr events, host-injected synthesis LLM config, spawn_only background execution, and contract tests under `crates/octos-plugin/tests/lifecycle_sandbox.rs`.
+Demonstrates the full v2 protocol: structured stderr events, host-injected synthesis LLM config, spawn_only background execution, and contract tests under `crates/ra-plugin/tests/lifecycle_sandbox.rs`.
 
 ### Example 5: Harness Starters (Templates to Copy)
 
@@ -1257,13 +1257,13 @@ Their `SKILL.md` says "Replace with a real ... when adapting the starter." Use t
 - [ ] Error cases return `success: false` with clear messages
 - [ ] No silent-failure paths in skill code — surface as `success: false` or rely on a harness validator (don't write your own post-condition check)
 - [ ] If `spawn_only: true` and the harness needs to validate a structured output (e.g. a deploy URL), the binary emits `named_outputs` with keys matching `[a-z][a-z0-9_]*` and string values
-- [ ] Workspace contract entry exists in `WorkspacePolicy::for_session()` or `.octos-workspace.toml` (see [Part 7](#part-7-workspace-contract))
+- [ ] Workspace contract entry exists in `WorkspacePolicy::for_session()` or `.ra-workspace.toml` (see [Part 7](#part-7-workspace-contract))
 - [ ] If the skill produces audio, the contract declares `AudioNonSilent` (whole-file) — and `PerFileNonSilent` if per-segment guarantees are needed (PR #955)
 - [ ] Standalone test passes: `echo '{"param": "val"}' | ./main my_tool`
 - [ ] Gateway test passes: skill loads and agent can invoke it
 - [ ] `cargo clippy -D warnings` clean (for Rust skills)
 - [ ] If the skill publishes pre-built binaries, every `binaries.<platform>.sha256` matches the released archive
-- [ ] If the skill behavior is gated on the `api` feature (e.g. exposes via `octos serve`), the test plan includes `--features api` (M11-G lesson)
+- [ ] If the skill behavior is gated on the `api` feature (e.g. exposes via `ra serve`), the test plan includes `--features api` (M11-G lesson)
 
 ### Extras Skill (MCP / hooks / prompts)
 

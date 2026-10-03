@@ -1,6 +1,6 @@
 # 网关与频道
 
-Octos 以**网关**模式运行，将各消息平台桥接到你的 LLM 智能体。每个平台连接称为一个**频道**。你可以在同一个网关进程中同时运行多个频道——例如同时接入 Telegram 和 Slack。
+ra 以**网关**模式运行，将各消息平台桥接到你的 LLM 智能体。每个平台连接称为一个**频道**。你可以在同一个网关进程中同时运行多个频道——例如同时接入 Telegram 和 Slack。
 
 ## 频道概览
 
@@ -9,7 +9,7 @@ Octos 以**网关**模式运行，将各消息平台桥接到你的 LLM 智能�
 查看已编译和已配置的频道：
 
 ```bash
-octos channels status
+ra channels status
 ```
 
 该命令会显示一张表格，列出每个频道的编译状态（feature flags）和配置摘要（环境变量的设置情况）。
@@ -115,7 +115,7 @@ export FEISHU_APP_SECRET="..."
 构建时需启用 `feishu` feature flag：
 
 ```bash
-cargo build --release -p octos-cli --features feishu
+cargo build --release -p ra-cli --features feishu
 ```
 
 ---
@@ -207,7 +207,7 @@ export LARK_APP_SECRET="..."
 ngrok http 9321
 
 # 启动网关
-LARK_APP_ID="cli_xxxxx" LARK_APP_SECRET="xxxxx" octos gateway --cwd /path/to/workdir
+LARK_APP_ID="cli_xxxxx" LARK_APP_SECRET="xxxxx" ra gateway --cwd /path/to/workdir
 ```
 
 ### 常见问题排查
@@ -278,10 +278,10 @@ export WECOM_AGENT_SECRET="..."
 
 ## 微信（通过 WorkBuddy 桥接）
 
-普通微信用户可以通过 WorkBuddy 桌面端桥接连接到你的智能体。WorkBuddy 负责微信传输层；Octos 通过其 WeCom Bot 频道处理 AI 逻辑。
+普通微信用户可以通过 WorkBuddy 桌面端桥接连接到你的智能体。WorkBuddy 负责微信传输层；ra 通过其 WeCom Bot 频道处理 AI 逻辑。
 
 ```
-微信（手机） --> WorkBuddy（桌面端） --> 企业微信群机器人（WSS） --> octos wecom-bot 频道
+微信（手机） --> WorkBuddy（桌面端） --> 企业微信群机器人（WSS） --> ra wecom-bot 频道
 ```
 
 ### 配置步骤
@@ -308,8 +308,8 @@ export WECOM_BOT_SECRET="your_robot_secret_here"
 3. 构建并启动：
 
 ```bash
-cargo build --release -p octos-cli --features "wecom-bot"
-octos gateway
+cargo build --release -p ra-cli --features "wecom-bot"
+ra gateway
 ```
 
 4. 安装 **WorkBuddy** 桌面客户端，通过扫码关联你的微信，并连接到同一个企业微信群机器人。
@@ -331,7 +331,7 @@ octos gateway
 
 - **仅支持文本** -- 语音和图片消息以占位符形式传递
 - **不支持消息编辑** -- 回复以新消息形式发送
-- **单向触发** -- 微信到 Octos 自动触发；主动推送需使用定时任务
+- **单向触发** -- 微信到 ra 自动触发；主动推送需使用定时任务
 
 ---
 
@@ -356,19 +356,19 @@ export DINGTALK_BOT_SECRET="SEC..."
 }
 ```
 
-入站事件请配置钉钉 outgoing 机器人的回调 URL。在 `octos serve` 之后使用代理路由；在独立的 `octos gateway` 模式下，则指向该渠道自带的 webhook 服务器（`webhook_port`）：
+入站事件请配置钉钉 outgoing 机器人的回调 URL。在 `ra serve` 之后使用代理路由；在独立的 `ra gateway` 模式下，则指向该渠道自带的 webhook 服务器（`webhook_port`）：
 
 ```text
-# 在 octos serve 之后（代理）
+# 在 ra serve 之后（代理）
 https://YOUR_OCTOS_HOST/webhook/dingtalk/<profile_id>
-# 独立的 octos gateway
+# 独立的 ra gateway
 http://YOUR_OCTOS_HOST:<webhook_port>/dingtalk/webhook
 ```
 
 使用 `dingtalk` 特性标志编译：
 
 ```bash
-cargo build --release -p octos-cli --features dingtalk
+cargo build --release -p ra-cli --features dingtalk
 ```
 
 ---
@@ -392,7 +392,7 @@ Matrix 是一等公民频道，也是本章多处提到的「人工审批」与�
     "homeserver": "https://matrix.org",
     "user_id": "@mybot:matrix.org",
     "access_token": "syt_...",
-    "device_name": "octos",
+    "device_name": "ra",
     "rooms": ["!roomid:matrix.org"],
     "auto_join": "allowlist",
     "auto_join_allowlist": ["!roomid:matrix.org", "#alias:matrix.org"]
@@ -445,7 +445,7 @@ export LINE_CHANNEL_ACCESS_TOKEN="..."
 }
 ```
 
-在独立的 `octos gateway` 模式下，LINE 将事件推送到该渠道自带的 webhook 服务器 `http://YOUR_OCTOS_HOST:<webhook_port>/line/webhook`；在 `octos serve` 之后，则改用代理路由 `https://YOUR_OCTOS_HOST/webhook/line/<profile_id>`。入站签名针对请求**体**用 channel secret 校验（HMAC-SHA256），因此两种 URL 均可用。使用 `line` 特性标志编译。
+在独立的 `ra gateway` 模式下，LINE 将事件推送到该渠道自带的 webhook 服务器 `http://YOUR_OCTOS_HOST:<webhook_port>/line/webhook`；在 `ra serve` 之后，则改用代理路由 `https://YOUR_OCTOS_HOST/webhook/line/<profile_id>`。入站签名针对请求**体**用 channel secret 校验（HMAC-SHA256），因此两种 URL 均可用。使用 `line` 特性标志编译。
 
 ---
 
@@ -497,7 +497,7 @@ export TWILIO_AUTH_TOKEN="..."
 来自频道的语音和音频消息在发送给智能体前会自动转写。系统优先尝试本地 ASR（通过 OminiX 引擎），本地不可用时降级到云端 Whisper。转写结果会以 `[transcription: ...]` 的形式前置。
 
 ```bash
-# 本地 ASR（优先） -- 由 octos serve 自动设置
+# 本地 ASR（优先） -- 由 ra serve 自动设置
 export OMINIX_API_URL="http://localhost:8080"
 
 # 云端降级
@@ -544,14 +544,14 @@ export GROQ_API_KEY="gsk_..."
 智能体可以调度周期性任务，通过任意频道发送消息：
 
 ```bash
-octos cron list                          # 列出活跃任务
-octos cron list --all                    # 包含已禁用的任务
-octos cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
-octos cron add --name "check" --message "Check status" --every 3600
-octos cron add --name "once" --message "Run migration" --at "2025-03-01T09:00:00Z"
-octos cron remove <job-id>
-octos cron enable <job-id>               # 启用任务
-octos cron enable <job-id> --disable     # 禁用任务
+ra cron list                          # 列出活跃任务
+ra cron list --all                    # 包含已禁用的任务
+ra cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
+ra cron add --name "check" --message "Check status" --every 3600
+ra cron add --name "once" --message "Run migration" --at "2025-03-01T09:00:00Z"
+ra cron remove <job-id>
+ra cron enable <job-id>               # 启用任务
+ra cron enable <job-id> --disable     # 禁用任务
 ```
 
 任务支持可选的 `timezone` 字段，使用 IANA 时区名称（如 `"America/New_York"`、`"Asia/Shanghai"`）。未指定时使用 UTC。

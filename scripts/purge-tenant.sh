@@ -4,14 +4,14 @@
 # Usage:
 #   purge-tenant.sh <node-name> [--force] [--data-dir <path>]
 #
-# Calls POST /api/admin/profiles/by-node/<node-name>/purge on the local octos serve.
+# Calls POST /api/admin/profiles/by-node/<node-name>/purge on the local ra serve.
 # By default prompts for type-to-confirm. Use --force to skip the prompt.
 #
 # Config resolution mirrors the CLI:
-#   1. <cwd>/.octos/config.json  (project-local)
+#   1. <cwd>/.ra/config.json  (project-local)
 #   2. <--data-dir>/config.json  (explicit override)
 #   3. $OCTOS_HOME/config.json   (env var)
-#   4. ~/.octos/config.json      (default)
+#   4. ~/.ra/config.json      (default)
 set -euo pipefail
 
 NODE_NAME="${1:-}"
@@ -32,22 +32,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve data directory: --data-dir flag > OCTOS_HOME env var > ~/.octos
+# Resolve data directory: --data-dir flag > OCTOS_HOME env var > ~/.ra
 if [[ -n "$DATA_DIR_OVERRIDE" ]]; then
   DATA_DIR="$DATA_DIR_OVERRIDE"
 elif [[ -n "${OCTOS_HOME:-}" ]]; then
   DATA_DIR="$OCTOS_HOME"
 else
-  DATA_DIR="$HOME/.octos"
+  DATA_DIR="$HOME/.ra"
 fi
 
 # Resolve config file following the same priority as the CLI:
-#   1. project-local <cwd>/.octos/config.json
+#   1. project-local <cwd>/.ra/config.json
 #   2. <data-dir>/config.json
 CONFIG_FILE=""
 CWD="$(pwd)"
-if [[ -f "$CWD/.octos/config.json" ]]; then
-  CONFIG_FILE="$CWD/.octos/config.json"
+if [[ -f "$CWD/.ra/config.json" ]]; then
+  CONFIG_FILE="$CWD/.ra/config.json"
 elif [[ -f "$DATA_DIR/config.json" ]]; then
   CONFIG_FILE="$DATA_DIR/config.json"
 fi
@@ -57,7 +57,7 @@ API_HOST="127.0.0.1"
 API_PORT="8080"
 API_BASE="http://${API_HOST}:${API_PORT}"
 
-# Auth token — mirrors `octos serve`'s own resolution (commands/serve.rs:109-114):
+# Auth token — mirrors `ra serve`'s own resolution (commands/serve.rs:109-114):
 #   1. $OCTOS_AUTH_TOKEN         — the env var the server itself reads
 #   2. config.json .auth_token   — the persisted fallback the server uses
 # (Not auth.json — that's a provider OAuth credential store, not an admin token.)

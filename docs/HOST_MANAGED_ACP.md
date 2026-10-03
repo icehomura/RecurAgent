@@ -1,10 +1,10 @@
 # Host-managed ACP workers
 
-`octos acp --host-managed` runs the existing Octos agent loop in a confined
+`ra acp --host-managed` runs the existing ra agent loop in a confined
 process. The parent supplies model completions and tools over the same ACP
-connection. This mode does not load Octos configuration, provider credentials,
+connection. This mode does not load ra configuration, provider credentials,
 plugins, bootstrap files, native tools, embeddings, or persistent conversation
-history. Ordinary `octos acp` and embedded factories keep their existing behavior.
+history. Ordinary `ra acp` and embedded factories keep their existing behavior.
 Host-managed turns default to 20 model-loop iterations; a positive
 `--max-iterations` overrides that limit. In this mode, zero selects the bounded
 default, while ordinary ACP retains its unlimited-zero convention.
@@ -16,10 +16,10 @@ executable starts. The worker then calls `confine_host_managed()` before creatin
 runtime threads or accepting input. Failure is fatal; there is no unconfined
 fallback. The capability response reports this startup state, and is not a
 cryptographic attestation of an arbitrary executable. Hosts must select a trusted
-Octos binary and use the parent launcher, rather than trusting the response alone.
+ra binary and use the parent launcher, rather than trusting the response alone.
 
 Only macOS and Linux with the required kernel confinement facilities are
-supported. See `octos-sandbox` for the exact platform restrictions. One worker is
+supported. See `ra-sandbox` for the exact platform restrictions. One worker is
 bound to one host compartment and accepts exactly one `session/new`. Session
 loading and client-specified MCP servers are rejected. `cwd` does not grant file
 access. Session state stays in memory, including the required episode-store
@@ -29,7 +29,7 @@ handle; all of it disappears when the worker exits.
 
 Host-managed execution is a distinct, opt-in mode. It does not replace ordinary
 ACP execution or its configured runtime. Upstream moved ordinary ACP turns into
-the Octos UI Protocol (OUP) dispatcher in
+the ra UI Protocol (OUP) dispatcher in
 [#2265](https://github.com/octos-org/octos/pull/2265). The ordinary adapter stays
 on that dispatcher. Host-managed mode uses the current shared `octos_agent::Agent`
 loop through a separate ACP adapter with private, memory-only session bookkeeping.
@@ -60,11 +60,11 @@ followed by the worker's Landlock and stricter seccomp initialization. Missing o
 partial confinement terminates startup. These restrictions are independent of
 ordinary tool-sandbox configuration; they do not rely on tool names, prompts,
 or a worker's self-reported `confined` flag. See the
-[platform restrictions and escape probes](../crates/octos-sandbox/HOST_MANAGED.md).
+[platform restrictions and escape probes](../crates/ra-sandbox/HOST_MANAGED.md).
 
 ## Negotiation
 
-The parent advertises `initialize.clientCapabilities._meta["octos.hostManaged"]`:
+The parent advertises `initialize.clientCapabilities._meta["ra.hostManaged"]`:
 
 ```json
 {
@@ -81,7 +81,7 @@ The parent advertises `initialize.clientCapabilities._meta["octos.hostManaged"]`
 
 No endpoint or credentials cross this boundary. The worker validates the version
 and metadata, then advertises the same version with `confined: true` and a
-platform mechanism name in `initialize.agentCapabilities._meta["octos.hostManaged"]`.
+platform mechanism name in `initialize.agentCapabilities._meta["ra.hostManaged"]`.
 Missing negotiation, unsupported versions, and repeated initialization fail.
 
 ## Broker methods
@@ -136,11 +136,11 @@ authority or persistence. Review these boundaries when changing either path:
 
 | Boundary to review | Current implementation | Invariant across conflict resolution |
 |---|---|---|
-| Process entry and confinement | `octos-cli/src/main.rs`, `commands/acp.rs`, `octos-sandbox/src/{lib,macos,linux}.rs` | Select host-managed mode before configuration, logging workers, runtime threads, or host input. Launcher or worker confinement failure must terminate, never select ordinary ACP/OUP execution. |
-| Model and tool authority | `commands/acp/host_managed.rs`, `octos-llm/src/host.rs` | Retain broker-only provider/tool construction, bounded protocol messages, per-turn tool refresh, and cancellation. Compaction, retries, and notification turns must use the same parent authority. |
-| Session and storage lifecycle | `commands/acp/host_managed.rs`, `octos-memory/src/store.rs` | Keep one compartment per process, RAM-only history/episodes, no session loading, and no external MCP servers. An OUP repository or episode-store default must not introduce disk access during construction. |
+| Process entry and confinement | `ra-cli/src/main.rs`, `commands/acp.rs`, `ra-sandbox/src/{lib,macos,linux}.rs` | Select host-managed mode before configuration, logging workers, runtime threads, or host input. Launcher or worker confinement failure must terminate, never select ordinary ACP/OUP execution. |
+| Model and tool authority | `commands/acp/host_managed.rs`, `ra-llm/src/host.rs` | Retain broker-only provider/tool construction, bounded protocol messages, per-turn tool refresh, and cancellation. Compaction, retries, and notification turns must use the same parent authority. |
+| Session and storage lifecycle | `commands/acp/host_managed.rs`, `ra-memory/src/store.rs` | Keep one compartment per process, RAM-only history/episodes, no session loading, and no external MCP servers. An OUP repository or episode-store default must not introduce disk access during construction. |
 
-Paths in the table are under `crates/`, with `commands/` under `octos-cli/src/`.
+Paths in the table are under `crates/`, with `commands/` under `ra-cli/src/`.
 The ordinary `commands/acp/oup.rs`, agent execution implementation, and provider
 registry are unchanged by this feature. Host-managed providers and tools are
 constructed directly; they do not depend on a registered provider, hosted profile,

@@ -1,6 +1,6 @@
 # Nix
 
-Octos provides a first-class Nix flake for reproducible builds, development shells, and system-wide integration on NixOS and macOS (via nix-darwin).
+ra provides a first-class Nix flake for reproducible builds, development shells, and system-wide integration on NixOS and macOS (via nix-darwin).
 
 ## Supported Systems
 
@@ -13,14 +13,14 @@ Octos provides a first-class Nix flake for reproducible builds, development shel
 ```
 .
 ├── packages.<system>
-│   ├── default          → octos (minimal)
-│   ├── octos            → octos CLI (no features)
-│   ├── octos-minimal    → alias for octos
-│   └── octos-full       → octos with all channels + app-skills
+│   ├── default          → ra (minimal)
+│   ├── ra            → ra CLI (no features)
+│   ├── ra-minimal    → alias for ra
+│   └── ra-full       → ra with all channels + app-skills
 ├── devShells.<system>
 │   └── default          → Rust + Nix tooling shell
-├── nixosModules.default → NixOS module (programs.octos)
-├── darwinModules.default → nix-darwin module (programs.octos)
+├── nixosModules.default → NixOS module (programs.ra)
+├── darwinModules.default → nix-darwin module (programs.ra)
 ├── formatter.<system>   → nixfmt-tree
 └── checks.<system>
     ├── darwin-module    → Darwin module evaluation test
@@ -41,12 +41,12 @@ nix run github:octos-org/octos#octos-full -- chat --message "Hello"
 
 ```bash
 # Minimal build (CLI only, no channel features)
-nix build .#octos
+nix build .#ra
 
 # Full build (all channels + app-skills)
-nix build .#octos-full
+nix build .#ra-full
 
-# Default package (same as octos)
+# Default package (same as ra)
 nix build .
 ```
 
@@ -56,11 +56,11 @@ You can override features on any package:
 
 ```bash
 # Only Telegram + API
-nix build .#octos --override-input features '["api" "telegram"]'
+nix build .#ra --override-input features '["api" "telegram"]'
 
 # Or in your own flake:
 let
-  myOctos = octos.packages.${system}.octos.override {
+  myOctos = ra.packages.${system}.ra.override {
     features = [ "api" "telegram" "discord" ];
     enableAppSkills = true;
   };
@@ -82,11 +82,11 @@ in
 ```
 
 ```nix
-# octos.nix
+# ra.nix
 { inputs, ... }: {
-  imports = [ inputs.octos.nixosModules.default ];
+  imports = [ inputs.ra.nixosModules.default ];
 
-  programs.octos = {
+  programs.ra = {
     enable = true;
   };
 }
@@ -95,7 +95,7 @@ in
 ### With Channels and Skills
 
 ```nix
-programs.octos = {
+programs.ra = {
   enable = true;
   channels = [ "telegram" "discord" ];
   enableAppSkills = true;
@@ -105,7 +105,7 @@ programs.octos = {
 ### Full Configuration with Service
 
 ```nix
-programs.octos = {
+programs.ra = {
   enable = true;
   enableAllChannels = true;
   enableAppSkills = true;
@@ -115,13 +115,13 @@ programs.octos = {
     enable = true;
     host = "127.0.0.1";
     port = 8080;
-    dataDir = "/var/lib/octos";
+    dataDir = "/var/lib/ra";
     authToken = "your-secret-token";
   };
 };
 ```
 
-This creates a `systemd` service (`octos-serve.service`) that runs `octos serve` automatically on boot.
+This creates a `systemd` service (`ra-serve.service`) that runs `ra serve` automatically on boot.
 
 ## nix-darwin Module
 
@@ -130,9 +130,9 @@ This creates a `systemd` service (`octos-serve.service`) that runs `octos serve`
 ```nix
 # darwin-configuration.nix
 { inputs, ... }: {
-  imports = [ inputs.octos.darwinModules.default ];
+  imports = [ inputs.ra.darwinModules.default ];
 
-  programs.octos = {
+  programs.ra = {
     enable = true;
     channels = [ "telegram" ];
     enableAppSkills = true;
@@ -141,31 +141,31 @@ This creates a `systemd` service (`octos-serve.service`) that runs `octos serve`
       enable = true;
       host = "127.0.0.1";
       port = 8080;
-      dataDir = "/var/lib/octos";
+      dataDir = "/var/lib/ra";
       authToken = "your-secret-token";
     };
   };
 }
 ```
 
-This creates a launchd daemon (`org.octos.serve`) managed by the system.
+This creates a launchd daemon (`org.ra.serve`) managed by the system.
 
 ## Module Options Reference
 
 | Option                               | Type         | Default            | Description                                               |
 | ------------------------------------ | ------------ | ------------------ | --------------------------------------------------------- |
-| `programs.octos.enable`              | bool         | `false`            | Enable the octos module                                   |
-| `programs.octos.package`             | package      | `octos`            | Base octos package to use                                 |
-| `programs.octos.finalPackage`        | package      | (computed)         | Read-only; the resolved package after overrides           |
-| `programs.octos.channels`            | list of enum | `null`             | Channels to enable. `null` preserves the package default  |
-| `programs.octos.enableAllChannels`   | bool         | `false`            | Enable all supported channels                             |
-| `programs.octos.enableAppSkills`     | bool or null | `null`             | Include app-skill binaries. `null` preserves package default |
-| `programs.octos.enableExtraPackages` | bool         | `false`            | Install chromium, nodejs, ffmpeg, libreoffice, poppler-utils |
-| `programs.octos.service.enable`      | bool         | `false`            | Enable `octos serve` as a system service                  |
-| `programs.octos.service.host`        | string       | `"127.0.0.1"`      | Host to bind the dashboard to                             |
-| `programs.octos.service.port`        | int          | `8080`             | Port for the dashboard                                    |
-| `programs.octos.service.dataDir`     | string       | `"/var/lib/octos"` | Data directory for sessions, memory, etc.                 |
-| `programs.octos.service.authToken`   | string       | (required)         | Auth token for dashboard access                           |
+| `programs.ra.enable`              | bool         | `false`            | Enable the ra module                                   |
+| `programs.ra.package`             | package      | `ra`            | Base ra package to use                                 |
+| `programs.ra.finalPackage`        | package      | (computed)         | Read-only; the resolved package after overrides           |
+| `programs.ra.channels`            | list of enum | `null`             | Channels to enable. `null` preserves the package default  |
+| `programs.ra.enableAllChannels`   | bool         | `false`            | Enable all supported channels                             |
+| `programs.ra.enableAppSkills`     | bool or null | `null`             | Include app-skill binaries. `null` preserves package default |
+| `programs.ra.enableExtraPackages` | bool         | `false`            | Install chromium, nodejs, ffmpeg, libreoffice, poppler-utils |
+| `programs.ra.service.enable`      | bool         | `false`            | Enable `ra serve` as a system service                  |
+| `programs.ra.service.host`        | string       | `"127.0.0.1"`      | Host to bind the dashboard to                             |
+| `programs.ra.service.port`        | int          | `8080`             | Port for the dashboard                                    |
+| `programs.ra.service.dataDir`     | string       | `"/var/lib/ra"` | Data directory for sessions, memory, etc.                 |
+| `programs.ra.service.authToken`   | string       | (required)         | Auth token for dashboard access                           |
 
 ## Contributing
 
@@ -177,7 +177,7 @@ The Nix integration follows three principles:
 
 1. **Feature parity with Cargo** — Every Cargo feature flag is exposed through the Nix package system. The `cli.nix` derivation reads `Cargo.toml` directly and maps features to `cargoBuildFlags`.
 
-2. The module uses a **transparent override** strategy: if no feature-related options are set (`channels`, `enableAllChannels`, `service.enable`, `enableAppSkills`), the module returns your `package` option as-is. This means pre-configured packages like `octos-full` remain bit-identical and reuse existing build caches. Once you set any customization, the module applies `.override` with the computed feature set. The `api` feature is auto-added whenever channels or the service is enabled.
+2. The module uses a **transparent override** strategy: if no feature-related options are set (`channels`, `enableAllChannels`, `service.enable`, `enableAppSkills`), the module returns your `package` option as-is. This means pre-configured packages like `ra-full` remain bit-identical and reuse existing build caches. Once you set any customization, the module applies `.override` with the computed feature set. The `api` feature is auto-added whenever channels or the service is enabled.
 
 3. **Cross-platform parity** — NixOS and nix-darwin modules share the same `options.nix` definition. Platform-specific differences (systemd vs launchd, tmpfiles vs activationScripts) live only in the platform-specific module files.
 
@@ -188,7 +188,7 @@ flake.nix                          # Entry point — wires everything together
 ├── nix/
 │   ├── packages/
 │   │   ├── default.nix            # Composite package (CLI + optional app-skills)
-│   │   ├── cli.nix                # Rust build derivation for octos-cli
+│   │   ├── cli.nix                # Rust build derivation for ra-cli
 │   │   ├── app-skills.nix         # Rust build derivation for app-skill binaries
 │   │   └── admin-dashboard.nix    # npm build for the web dashboard
 │   ├── modules/
@@ -224,8 +224,8 @@ nix build .#checks.x86_64-linux.nixos-module-vm --print-build-logs
 
 Runs a full NixOS VM that:
 
-- Installs octos with Telegram + Discord channels and app-skills
-- Starts the `octos-serve` systemd service
+- Installs ra with Telegram + Discord channels and app-skills
+- Starts the `ra-serve` systemd service
 - Verifies the service responds on the configured port
 - Checks that all app-skill binaries are on PATH
 - Validates data directory permissions

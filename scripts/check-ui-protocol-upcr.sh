@@ -11,7 +11,7 @@
 #
 # Coverage rules:
 #   * Any change to a *.rs protocol file requires an added/modified
-#     `docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md` in the same diff
+#     `docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md` in the same diff
 #     range. Editing the spec doc alone does NOT satisfy this because the
 #     spec edit may be unrelated (typo fix, broken link, etc.).
 #   * If the only protocol-visible change is the spec doc itself, the spec
@@ -28,15 +28,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 PROTOCOL_PATHS=(
-  "crates/octos-core/src/ui_protocol.rs"
-  "crates/octos-cli/src/api/ui_protocol.rs"
+  "crates/ra-core/src/ui_protocol.rs"
+  "crates/ra-cli/src/api/ui_protocol.rs"
 )
 PROTOCOL_GLOBS=(
-  "crates/octos-cli/src/api/ui_protocol_*.rs"
+  "crates/ra-cli/src/api/ui_protocol_*.rs"
 )
-SPEC_GLOB="api/OCTOS_UI_PROTOCOL_V1_SPEC_*.md"
-UPCR_GLOB="docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md"
-UPCR_TEMPLATE="docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md"
+SPEC_GLOB="api/ra_UI_PROTOCOL_V1_SPEC_*.md"
+UPCR_GLOB="docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md"
+UPCR_TEMPLATE="docs/ra_UI_PROTOCOL_CHANGE_REQUEST_TEMPLATE.md"
 
 # Resolve a base ref for the merge-base diff. Allow override via UPCR_BASE_REF.
 resolve_base_ref() {
@@ -369,7 +369,7 @@ upcr_real=""
 while IFS= read -r name; do
   [ -z "$name" ] && continue
   case "$name" in
-    docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md)
+    docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md)
       upcr_real="$name"
       break
       ;;
@@ -419,7 +419,7 @@ EOF
 fi
 cat >&2 <<'EOF'
 
-Add or update docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md in the same
+Add or update docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md in the same
 branch, or set UPCR_ALLOW_NO_DOC=1 only for a documented reviewer override.
 EOF
 exit 1

@@ -9,7 +9,7 @@
  *
  * Run against a live deployment:
  *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   npx playwright test tests/refactor-capabilities.spec.ts
  */
@@ -17,7 +17,7 @@ import { expect, test } from '@playwright/test';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
 const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.crew.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
 
 test.setTimeout(240_000);

@@ -2,7 +2,7 @@
 name: harness-starter-report
 description: Harnessed report-generator starter. Writes a markdown artifact under reports/ and relies on the workspace contract to deliver it.
 version: 1.0.0
-author: octos
+author: ra
 always: false
 ---
 
@@ -19,7 +19,7 @@ rendered document (weekly summary, research brief, status report, etc.).
   content length.
 - `on_failure: ["notify_user:..."]` — structured failure notification.
 
-See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
+See `docs/ra_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
 
 ## Tools
 

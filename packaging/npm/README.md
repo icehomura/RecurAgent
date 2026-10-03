@@ -5,14 +5,14 @@ Rust-native, API-first Agentic OS.
 
 ```bash
 npm install -g @octos-org/octos
-octos serve
+ra serve
 ```
 
 This package downloads the prebuilt release bundle for your platform and installs
-the `octos` server **together with its bundled skills** (`news_fetch`,
+the `ra` server **together with its bundled skills** (`news_fetch`,
 `deep-search`, `deep_crawl`, `send_email`, `account_manager`, `voice`, `clock`,
-`weather`). The skills are kept as siblings of the `octos` binary so that
-`octos serve` can discover them at startup.
+`weather`). The skills are kept as siblings of the `ra` binary so that
+`ra serve` can discover them at startup.
 
 ## Supported platforms
 
@@ -35,6 +35,6 @@ macOS Intel is not supported (no prebuilt build is published).
 # Homebrew
 brew install octos-org/octos/octos
 
-# Shell installer (sets up octos serve as a service)
+# Shell installer (sets up ra serve as a service)
 curl -fsSL https://github.com/octos-org/octos/releases/latest/download/install.sh | bash
 ```

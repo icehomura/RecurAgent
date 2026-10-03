@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end test for the frps plugin: real frps + real frpc + octos serve.
+# End-to-end test for the frps plugin: real frps + real frpc + ra serve.
 #
 # This test would have caught the v2 design flaw where built-in VerifyLogin
 # rejects the tenant's per-tenant privilege_key. The unit tests in
@@ -24,7 +24,7 @@ command -v frpc >/dev/null 2>&1 || skip "frpc binary not on PATH — install via
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 
-WORK=$(mktemp -d /tmp/octos-frps-e2e.XXXXXX)
+WORK=$(mktemp -d /tmp/ra-frps-e2e.XXXXXX)
 EXIT_STATUS=1
 KEEP_LOGS="${KEEP_LOGS:-0}"
 trap 'cleanup' EXIT
@@ -59,48 +59,48 @@ LOCAL_APP_PORT=$(pick_port)
 SSH_REMOTE_PORT=$(pick_port)
 
 info "working dir: $WORK"
-info "octos:$OCTOS_PORT  frps:$FRPS_BIND_PORT  local app:$LOCAL_APP_PORT  ssh remote:$SSH_REMOTE_PORT"
+info "ra:$OCTOS_PORT  frps:$FRPS_BIND_PORT  local app:$LOCAL_APP_PORT  ssh remote:$SSH_REMOTE_PORT"
 
-# ── 1. Build octos CLI with the api feature ─────────────────────────
-info "building octos-cli with api feature"
-(cd "$ROOT_DIR" && cargo build -q -p octos-cli --features api) \
+# ── 1. Build ra CLI with the api feature ─────────────────────────
+info "building ra-cli with api feature"
+(cd "$ROOT_DIR" && cargo build -q -p ra-cli --features api) \
     || fail "cargo build failed"
 
-OCTOS_BIN="$ROOT_DIR/target/debug/octos"
-[ -x "$OCTOS_BIN" ] || fail "octos binary not found at $OCTOS_BIN"
+OCTOS_BIN="$ROOT_DIR/target/debug/ra"
+[ -x "$OCTOS_BIN" ] || fail "ra binary not found at $OCTOS_BIN"
 
-# ── 2. Start octos serve with an isolated data dir ─────────────────
+# ── 2. Start ra serve with an isolated data dir ─────────────────
 AUTH_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
-export OCTOS_HOME="$WORK/octos-home"
+export OCTOS_HOME="$WORK/ra-home"
 mkdir -p "$OCTOS_HOME"
 
 cat > "$OCTOS_HOME/config.json" <<EOF
 {
   "mode": "cloud",
-  "tunnel_domain": "octos-cloud.test",
+  "tunnel_domain": "ra-cloud.test",
   "frps_server": "127.0.0.1",
   "frps_port": $FRPS_BIND_PORT,
   "auth_token": "$AUTH_TOKEN"
 }
 EOF
 
-info "starting octos serve on :$OCTOS_PORT"
+info "starting ra serve on :$OCTOS_PORT"
 "$OCTOS_BIN" serve --port "$OCTOS_PORT" --host 127.0.0.1 --auth-token "$AUTH_TOKEN" \
-    > "$WORK/octos.log" 2>&1 &
+    > "$WORK/ra.log" 2>&1 &
 OCTOS_PID=$!
 
-# Wait for octos to accept connections.
+# Wait for ra to accept connections.
 for i in $(seq 1 40); do
     if curl -sf -o /dev/null "http://127.0.0.1:$OCTOS_PORT/api/health" 2>/dev/null; then
         break
     fi
     sleep 0.25
     if ! kill -0 "$OCTOS_PID" 2>/dev/null; then
-        tail -40 "$WORK/octos.log" >&2
-        fail "octos serve crashed during startup"
+        tail -40 "$WORK/ra.log" >&2
+        fail "ra serve crashed during startup"
     fi
 done
-ok "octos serve is up"
+ok "ra serve is up"
 
 # ── 3. Register a tenant, capture its tunnel_token ─────────────────
 info "creating tenant 'alice' via admin API"
@@ -108,7 +108,7 @@ CREATE_RESP=$(curl -sf -H "Authorization: Bearer $AUTH_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"name":"alice","local_port":'"$LOCAL_APP_PORT"'}' \
     "http://127.0.0.1:$OCTOS_PORT/api/admin/tenants") \
-    || { tail -40 "$WORK/octos.log" >&2; fail "tenant create returned error"; }
+    || { tail -40 "$WORK/ra.log" >&2; fail "tenant create returned error"; }
 
 TUNNEL_TOKEN=$(python3 -c 'import sys,json; d=json.loads(sys.argv[1]); print(d["tunnel_token"])' "$CREATE_RESP")
 SSH_PORT=$(python3 -c 'import sys,json; d=json.loads(sys.argv[1]); print(d["ssh_port"])' "$CREATE_RESP")
@@ -136,7 +136,7 @@ auth.method = "token"
 auth.token = ""
 
 [[httpPlugins]]
-name = "octos-auth"
+name = "ra-auth"
 addr = "127.0.0.1:$OCTOS_PORT"
 path = "/api/internal/frps-auth"
 ops = ["Login", "NewProxy"]
@@ -159,7 +159,7 @@ loginFailExit = true
 name = "alice-web"
 type = "http"
 localPort = $LOCAL_APP_PORT
-customDomains = ["alice.octos-cloud.test"]
+customDomains = ["alice.ra-cloud.test"]
 
 [[proxies]]
 name = "alice-ssh"
@@ -193,8 +193,8 @@ for i in $(seq 1 40); do
         tail -40 "$WORK/frpc.stdout" 2>&1 >&2 || true
         echo "── frps log ────────────────────────────" >&2
         tail -40 "$WORK/frps.log" 2>/dev/null >&2 || true
-        echo "── octos log ───────────────────────────" >&2
-        tail -40 "$WORK/octos.log" 2>&1 >&2 || true
+        echo "── ra log ───────────────────────────" >&2
+        tail -40 "$WORK/ra.log" 2>&1 >&2 || true
         fail "frpc reported login failure — plugin fix regressed"
     fi
     if grep -Fq "login to server success" "$WORK/frpc.log" 2>/dev/null \

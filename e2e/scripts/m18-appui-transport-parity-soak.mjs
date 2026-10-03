@@ -47,7 +47,7 @@ const taskLedgerPath = path.join(runRoot, 'task-ledger.jsonl');
 const tuiCapturePath = path.join(runRoot, 'tui-capture.txt');
 const routeInventoryPath = path.join(repoRoot, 'e2e', 'fixtures', 'appui-conformance', 'm18-route-inventory.json');
 const allowlistPath = path.join(repoRoot, 'e2e', 'fixtures', 'appui-conformance', 'm18-conformance-allowlist.json');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const authToken = process.env.OCTOS_M18_APPUI_AUTH_TOKEN || `m18-${crypto.randomBytes(8).toString('hex')}`;
 const profileId = process.env.OCTOS_M18_APPUI_PROFILE || 'm18-parity';
 const sessionId = process.env.OCTOS_M18_APPUI_SESSION || `${profileId}:local:appui-parity-${stamp}`;
@@ -310,7 +310,7 @@ function seedBackingStores() {
     }
   }
   return {
-    schema: 'octos-m18-backing-store-seed-v1',
+    schema: 'ra-m18-backing-store-seed-v1',
     issue: 'octos#1044',
     sessionId,
     profileId,
@@ -535,7 +535,7 @@ class WsClient extends AppUiClient {
       headers: {
         Authorization: `Bearer ${authToken}`,
         'X-Profile-Id': profileId,
-        'X-Octos-Ui-Features': wsUiFeatures.join(','),
+        'X-Ra-Ui-Features': wsUiFeatures.join(','),
       },
     });
     await new Promise((resolve, reject) => {
@@ -653,7 +653,7 @@ class StdioClient extends AppUiClient {
 
   async waitSpawn() {
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('stdio: octos serve --stdio did not spawn')), 10_000);
+      const timer = setTimeout(() => reject(new Error('stdio: ra serve --stdio did not spawn')), 10_000);
       this.child.once('spawn', () => {
         clearTimeout(timer);
         resolve();
@@ -749,7 +749,7 @@ async function startWsServer(port) {
   child.stdout.on('data', (chunk) => appendText(serverLog, `[ws stdout] ${chunk.toString()}`));
   child.stderr.on('data', (chunk) => appendText(serverLog, `[ws stderr] ${chunk.toString()}`));
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('ws: octos serve did not spawn')), 10_000);
+    const timer = setTimeout(() => reject(new Error('ws: ra serve did not spawn')), 10_000);
     child.once('spawn', () => {
       clearTimeout(timer);
       resolve();
@@ -2100,7 +2100,7 @@ async function main() {
   const backingStoreSeed = scenarioMode === 'backing-store'
     ? seedBackingStores()
     : {
-      schema: 'octos-m18-backing-store-seed-v1',
+      schema: 'ra-m18-backing-store-seed-v1',
       issue: 'octos#1032',
       mode: scenarioMode,
       seeded: false,

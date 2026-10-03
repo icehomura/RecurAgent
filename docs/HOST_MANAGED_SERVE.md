@@ -1,11 +1,11 @@
 # Host-managed serve
 
-`octos serve --host-managed` runs the HTTP/WebSocket server as a child of an
+`ra serve --host-managed` runs the HTTP/WebSocket server as a child of an
 embedding host, such as an app shell on a phone or desktop. The host starts
 the process, owns its lifecycle, and decides whether an external client (a web
 client or a terminal UI the person runs) may attach to the same agent runtime.
-It is the serve counterpart of [`octos acp --host-managed`](HOST_MANAGED_ACP.md):
-opt-in, fail-closed, and without effect on ordinary `octos serve`.
+It is the serve counterpart of [`ra acp --host-managed`](HOST_MANAGED_ACP.md):
+opt-in, fail-closed, and without effect on ordinary `ra serve`.
 
 The protocol-visible parts are specified in
 [UPCR-2026-036](OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_036_HOST_MANAGED_SERVE.md).
@@ -72,7 +72,7 @@ An external identity:
   handlers fold a topic into the session key, so it could name an app peer's
   session), and may attach turn media only as upload handles (`up/…`):
   `external_parameter_denied`. `session.workspace_cwd.v1` is never negotiated
-  for it, so its sessions stay in the workspace octos bound them to (for a
+  for it, so its sessions stay in the workspace ra bound them to (for a
   new session, `<data dir>/users/<session>/workspace`);
 - steers, interrupts, and answers approvals and questions only for turns its
   own connection started: `external_turn_denied` for any other turn, such as
@@ -93,7 +93,7 @@ An external identity:
   never decides for an external client (OctoSense ADR 0004, gap G1). The
   ownership survives a restart: the ledger records of these prompts are
   stored with an `external_prompt` marker, and after a restart they are
-  replayed to nobody, the host included. Records written by an octos
+  replayed to nobody, the host included. Records written by an ra
   older than #2625 have no marker and replay as before;
 - learns no other turn's id from a refusal: a `turn/start` on a session that
   is already running a turn fails with `data.kind: "turn_in_progress"` and no
@@ -163,15 +163,15 @@ re-checked, and DNS answers are pinned.
 In order of preference:
 
 1. `Authorization: Bearer <token>` (native clients).
-2. `Sec-WebSocket-Protocol: octos-ui, octos.bearer.<token>` (browsers, which
-   cannot set `Authorization` on a WebSocket). The server selects `octos-ui`,
+2. `Sec-WebSocket-Protocol: ra-ui, ra.bearer.<token>` (browsers, which
+   cannot set `Authorization` on a WebSocket). The server selects `ra-ui`,
    so the bearer entry is never echoed. Offer both entries: a browser fails a
    handshake in which the server selects none of the offered protocols.
 3. `?token=<token>`, kept for compatibility. It is never logged (request
    spans record route templates), but URLs can end up in browser history, so
    prefer 2.
 
-The subprotocol path works on every `octos serve`, not only host-managed.
+The subprotocol path works on every `ra serve`, not only host-managed.
 
 ## Pairing
 
@@ -224,7 +224,7 @@ guessing. A claim that carries an `Origin` must come from a configured origin.
 
 ```sh
 printf '%s\n%s\n' "$HOST_TOKEN" "$EXTERNAL_TOKEN" | NO_COLOR=1 \
-  octos serve --host-managed --host 127.0.0.1 --port 0 --data-dir <dir>
+  ra serve --host-managed --host 127.0.0.1 --port 0 --data-dir <dir>
 # (a real host keeps the pipe open: its end of stdin is the lifeline)
 ```
 

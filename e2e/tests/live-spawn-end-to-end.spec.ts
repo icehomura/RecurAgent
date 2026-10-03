@@ -16,10 +16,10 @@
  * with a diagnostic, so the spec can land before W1+W2+W3 ship and
  * auto-promote as they merge.
  *
- * Run from ~/home/octos/e2e:
+ * Run from ~/home/ra/e2e:
  *
  *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/live-spawn-end-to-end.spec.ts --workers=1
@@ -32,7 +32,7 @@ import { execSync } from 'node:child_process';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
 const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
 
 // Refuse to run against mini5 — coding-green territory.
@@ -64,7 +64,7 @@ const SSH_HOST =
     }
   })();
 
-const REMOTE_DATA_DIR = `~/.octos/profiles/${PROFILE}/data`;
+const REMOTE_DATA_DIR = `~/.ra/profiles/${PROFILE}/data`;
 
 test.setTimeout(900_000);
 

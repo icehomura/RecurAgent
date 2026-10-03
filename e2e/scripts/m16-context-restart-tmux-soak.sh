@@ -9,12 +9,12 @@ tui_repo="${OCTOSCODE_REPO:-$(dirname "$repo_root")/octoscode}"
 tui_runner="${OCTOS_M16_CONTEXT_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
 out_root="${OCTOS_M16_CONTEXT_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m16-context-restart-tmux}"
 out_dir="${OCTOS_M16_CONTEXT_TMUX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${OCTOS_M16_CONTEXT_TMUX_RUNTIME_ROOT:-/tmp/octos-m16-context-tmux-$run_id}"
+runtime_root="${OCTOS_M16_CONTEXT_TMUX_RUNTIME_ROOT:-/tmp/ra-m16-context-tmux-$run_id}"
 bootstrap_dir="$out_dir/bootstrap-stdio"
 replay_file="$out_dir/context-reconnect-replay.txt"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/octos}"
+octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
 tui_bin="${OCTOSCODE_BIN:-$tui_repo/target/debug/octoscode}"
-session_name="${OCTOS_M16_CONTEXT_TMUX_SESSION:-octos-m16-context-$run_id}"
+session_name="${OCTOS_M16_CONTEXT_TMUX_SESSION:-ra-m16-context-$run_id}"
 
 usage() {
   cat <<'USAGE'
@@ -43,12 +43,12 @@ json_get() {
 
 ensure_binaries() {
   if [[ "${OCTOS_M16_CONTEXT_BUILD:-1}" == "1" ]]; then
-    (cd "$repo_root" && cargo build -p octos-cli --bin octos --features api)
+    (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
   if [[ "${OCTOS_M16_CONTEXT_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$tui_repo" && cargo build --bin octoscode)
   fi
-  [[ -x "$octos_bin" ]] || die "octos binary is not executable: $octos_bin"
+  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
   [[ -x "$tui_bin" ]] || die "octoscode binary is not executable: $tui_bin"
   [[ -x "$tui_runner" ]] || die "octoscode tmux runner is not executable: $tui_runner"
 }

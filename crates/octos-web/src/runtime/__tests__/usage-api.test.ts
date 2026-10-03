@@ -30,7 +30,7 @@ describe('UsageApiClient', () => {
   it('loads own session totals from the persistent usage API', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(emptyUsage));
     const client = new UsageApiClient({
-      baseUrl: 'https://octos.example/',
+      baseUrl: 'https://ra.example/',
       token: 'session-token',
       fetchImpl,
     });
@@ -41,7 +41,7 @@ describe('UsageApiClient', () => {
     });
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      'https://octos.example/api/my/usage/sessions/session%2Fa%20b?from=2026-05-01T00%3A00%3A00Z&to=2026-06-01T00%3A00%3A00.000Z',
+      'https://ra.example/api/my/usage/sessions/session%2Fa%20b?from=2026-05-01T00%3A00%3A00Z&to=2026-06-01T00%3A00%3A00.000Z',
       {
         headers: {
           Accept: 'application/json',

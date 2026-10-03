@@ -103,7 +103,7 @@ class WsProbeClient {
       headers: {
         Authorization: `Bearer ${authToken}`,
         'X-Profile-Id': profileId,
-        'X-Octos-Ui-Features': requestedFeatures.join(','),
+        'X-Ra-Ui-Features': requestedFeatures.join(','),
       },
     });
     await new Promise((resolve, reject) => {
@@ -276,7 +276,7 @@ async function main() {
     assert(hydrate?.session_id === sessionId, 'session/hydrate returned wrong session_id');
     const cursor = hydrate?.cursor || opened?.opened?.cursor || null;
     writeJson(snapshotPath, {
-      schema: 'octos.ux.restart_reconnect.snapshot.v1',
+      schema: 'ra.ux.restart_reconnect.snapshot.v1',
       generated_at: new Date().toISOString(),
       phase,
       endpoint,
@@ -303,7 +303,7 @@ async function main() {
     // as one event per probe phase. The post-phase event records a successful
     // reconnect + hydrate against the restarted backend.
     appendJsonl(reconnectEvents, {
-      schema: 'octos.ux.restart_reconnect.reconnect_event.v1',
+      schema: 'ra.ux.restart_reconnect.reconnect_event.v1',
       phase,
       event: phase === 'post' ? 'reconnected' : 'connected',
       endpoint,

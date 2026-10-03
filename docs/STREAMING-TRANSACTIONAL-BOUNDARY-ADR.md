@@ -7,7 +7,7 @@
 
 ## Context
 
-octos's LLM streaming layer treats partially-received SSE responses as if they were complete, then ships the corrupted state downstream. The agent loop, tool dispatcher, and plugin executor all act on the corrupted state as if it were a real `ChatResponse`, producing a cascade of secondary failures that look like model defects, plugin defects, or LLM misbehavior — but are all consequences of a single missing invariant in the streaming layer.
+ra's LLM streaming layer treats partially-received SSE responses as if they were complete, then ships the corrupted state downstream. The agent loop, tool dispatcher, and plugin executor all act on the corrupted state as if it were a real `ChatResponse`, producing a cascade of secondary failures that look like model defects, plugin defects, or LLM misbehavior — but are all consequences of a single missing invariant in the streaming layer.
 
 ### Empirical evidence
 
@@ -25,9 +25,9 @@ WARN spawn_only background tool failed tool=mofa_slides error=missing 'out'
 
 Initial hypothesis was kimi-k2.5 (the upstream model on moonshot@autodl) truncating its output. Direct API tests refuted that: 15 back-to-back calls with payloads up to 14k input tokens, 8 slides × 800 chars each, returned valid JSON every time. The model is not defective.
 
-The actual root cause is that octos's SSE handler (`crates/octos-agent/src/agent/streaming.rs:62-91`) breaks its read loop on the 30s inter-chunk timeout with a half-assembled `tool_calls[].arguments` buffer. The half-assembled buffer is then handed to `serde_json::from_str` at line 172, which legitimately fails ("EOF while parsing a string at column N"). The recovery code at lines 186-190 wraps the parse error as a sentinel `Value::String("MALFORMED_JSON: ... Raw input: <truncated 200 chars>")` and stores it as `ToolCall.arguments`. The agent loop accepts this as a valid `ChatResponse`, the tool dispatcher hands the sentinel string to the plugin, and the plugin errors with "missing 'out'" because it expected an object.
+The actual root cause is that ra's SSE handler (`crates/ra-agent/src/agent/streaming.rs:62-91`) breaks its read loop on the 30s inter-chunk timeout with a half-assembled `tool_calls[].arguments` buffer. The half-assembled buffer is then handed to `serde_json::from_str` at line 172, which legitimately fails ("EOF while parsing a string at column N"). The recovery code at lines 186-190 wraps the parse error as a sentinel `Value::String("MALFORMED_JSON: ... Raw input: <truncated 200 chars>")` and stores it as `ToolCall.arguments`. The agent loop accepts this as a valid `ChatResponse`, the tool dispatcher hands the sentinel string to the plugin, and the plugin errors with "missing 'out'" because it expected an object.
 
-The smoking-gun signal that this is a streaming-completeness bug, not a model defect, is `output_tokens=0` on the failing turns — the SSE `usage` event (sent only in the very last chunk per OpenAI's `stream_options.include_usage=true`) never arrived. The provider had more bytes to send; octos stopped listening prematurely.
+The smoking-gun signal that this is a streaming-completeness bug, not a model defect, is `output_tokens=0` on the failing turns — the SSE `usage` event (sent only in the very last chunk per OpenAI's `stream_options.include_usage=true`) never arrived. The provider had more bytes to send; ra stopped listening prematurely.
 
 ### Why this keeps recurring
 
@@ -103,35 +103,35 @@ The `RetryProvider` / `ProviderChain` / lane-based router infrastructure already
 
 ### What gets deleted
 
-- `recover_write_file_args` at `crates/octos-agent/src/agent/streaming.rs:307-332` and its helper `extract_json_string_field` at `:336-375`.
+- `recover_write_file_args` at `crates/ra-agent/src/agent/streaming.rs:307-332` and its helper `extract_json_string_field` at `:336-375`.
 - The `Value::String("MALFORMED_JSON: ...")` sentinel fallback at `streaming.rs:186-190`.
 - The "fixing stop_reason: EndTurn with tool_calls present" warning + recovery path at `streaming.rs:209-215`.
-- The "fixing empty/duplicate tool_call_id" salvager at `crates/octos-agent/src/agent/loop_runner.rs:1937`.
+- The "fixing empty/duplicate tool_call_id" salvager at `crates/ra-agent/src/agent/loop_runner.rs:1937`.
 - The silent-break on inter-chunk timeout at `streaming.rs:62-91` — replaced by `Err(StreamError::IdleTimeout)`.
 - Any tool-specific pre-flight validator that was added to compensate for the streaming layer shipping garbage. (PR #1323's mofa_slides style validator remains useful for catching bad style names, but is no longer load-bearing for catching truncated args.)
 - Tool-specific salvagers that future PRs would otherwise add (mofa_slides arg salvager, podcast arg salvager, etc.) — the structural fix obviates them.
 
 ### What gets added
 
-- A new `StreamBuffer` type in `crates/octos-llm/src/streaming.rs` (or a new submodule). Holds per-turn streaming state. Sealed: cannot be observed externally except via `finalize() -> Result<ChatResponse, StreamError>`.
+- A new `StreamBuffer` type in `crates/ra-llm/src/streaming.rs` (or a new submodule). Holds per-turn streaming state. Sealed: cannot be observed externally except via `finalize() -> Result<ChatResponse, StreamError>`.
 - A new `StreamError` enum: `IdleTimeout`, `Incomplete` (missing `finish_reason` or usage), `MalformedArgs(tool_id, parse_err)`, `Transport`. All variants implement `is_retryable() -> bool` similar to codex's policy at `protocol/src/error.rs:193-202`.
-- Per-provider `StreamBuffer` adapter. For chat-completions providers (most of octos's fleet today: AnthropicProvider, OpenAIProvider, GeminiProvider, OpenRouterProvider, 8 OpenAI-compatible bases), the adapter buffers `tool_call.arguments` deltas internally and only emits the assembled `ToolCall` after seeing `finish_reason`. For any future Responses-API provider, the adapter delivers atomic tool_call frames directly.
+- Per-provider `StreamBuffer` adapter. For chat-completions providers (most of ra's fleet today: AnthropicProvider, OpenAIProvider, GeminiProvider, OpenRouterProvider, 8 OpenAI-compatible bases), the adapter buffers `tool_call.arguments` deltas internally and only emits the assembled `ToolCall` after seeing `finish_reason`. For any future Responses-API provider, the adapter delivers atomic tool_call frames directly.
 - Bumped default idle timeout: 30s → 180s (per-provider tunable). Configurable via existing provider config. Reasoning models on slower providers (kimi-k2.5/autodl, deepseek-r1, etc.) get more headroom.
 - A test fixture suite that simulates stream stalls at every byte position in a tool_call args string and asserts `Err(IdleTimeout)` propagates cleanly — no `Ok(ChatResponse)` ever produced with partial state. (codex has a similar test at `codex-rs/core/tests/suite/stream_no_completed.rs`.)
 
 ### Behavioral consequences
 
 - **Mid-turn stalls become retries, not failures.** Today: stall → corrupted ChatResponse → plugin fails → turn dies. After: stall → `Err(IdleTimeout)` → `RetryProvider` retries → if succeeds, turn proceeds normally with a valid response. The user sees nothing except slightly longer turn latency on the rare stall.
-- **Some lane-routing decisions become explicit.** A provider that exhibits stalls more than N% of the time can be deprioritized by the existing adaptive router (`octos-llm/src/router.rs`). Today, stalls are invisible to the router because they look like success.
+- **Some lane-routing decisions become explicit.** A provider that exhibits stalls more than N% of the time can be deprioritized by the existing adaptive router (`ra-llm/src/router.rs`). Today, stalls are invisible to the router because they look like success.
 - **The L3 post-spawn failure feedback path (PR #1324, #1348) carries less load.** It exists for legitimate post-spawn failures (Gemini API errors mid-render, disk full, etc.). It was being abused as a backstop for streaming-layer corruption. Post-migration, the path handles only real plugin failures.
 - **Per-tool pre-flight validators (PR #1323) become optional polish.** They are no longer load-bearing for catching truncated args, since truncated args no longer reach pre-flight. They remain useful for catching LLM-authored-but-honestly-wrong args (e.g. `style='made-up-name'`).
-- **Metric coverage for streaming health.** A new metric `octos_stream_failures_total{kind="idle_timeout"|"incomplete"|"malformed_args"}` makes provider degradation observable.
+- **Metric coverage for streaming health.** A new metric `ra_stream_failures_total{kind="idle_timeout"|"incomplete"|"malformed_args"}` makes provider degradation observable.
 
 ### Risk
 
 - **Performance**: chat-completions adapter must hold tool_call args deltas in memory until `finish_reason` arrives. For very large tool calls (e.g. mofa_slides with 8 slides × 1KB prompts = ~8KB), this is negligible. Bounded by existing message-size limits.
 - **Latency on transient stalls**: the 180s idle timeout (vs 30s today) means a genuinely-stuck provider takes longer to fail. But: (a) genuinely-stuck calls are rare, (b) retry happens automatically afterward, (c) 30s was producing false-positive stalls under normal load (the empirical case). Net latency is expected to *decrease* across the fleet because turn-retry on cleanly-typed errors is cheaper than recovering from corrupted state mid-turn.
-- **Provider-specific quirks**: some providers (notably Anthropic streaming, Gemini streaming) have wire formats that don't perfectly fit the OpenAI Responses model. Per-provider adapter handles this by hiding the wire shape from the rest of octos.
+- **Provider-specific quirks**: some providers (notably Anthropic streaming, Gemini streaming) have wire formats that don't perfectly fit the OpenAI Responses model. Per-provider adapter handles this by hiding the wire shape from the rest of ra.
 
 ## Migration plan
 
@@ -140,8 +140,8 @@ Each phase is independently shippable. The plan is intentionally additive at eve
 ### Phase 1 — Introduce `StreamBuffer` + `StreamError` types (additive, no behavior change)
 
 Files:
-- `crates/octos-llm/src/streaming.rs` (new) — `StreamBuffer` struct, `StreamError` enum, `is_retryable()` policy.
-- `crates/octos-llm/src/provider.rs` — extend `LlmProvider` trait with `chat_stream_v2(...) -> Result<ChatResponse, StreamError>` alongside existing `chat(...)`. Default impl wraps existing `chat` to maintain backward compat. New providers can implement v2 directly.
+- `crates/ra-llm/src/streaming.rs` (new) — `StreamBuffer` struct, `StreamError` enum, `is_retryable()` policy.
+- `crates/ra-llm/src/provider.rs` — extend `LlmProvider` trait with `chat_stream_v2(...) -> Result<ChatResponse, StreamError>` alongside existing `chat(...)`. Default impl wraps existing `chat` to maintain backward compat. New providers can implement v2 directly.
 
 Tests:
 - `stream_buffer_finalize_requires_finish_reason`
@@ -156,8 +156,8 @@ Risk: zero. Pure additive.
 ### Phase 2 — Migrate chat-completions providers to `chat_stream_v2`
 
 Files:
-- `crates/octos-llm/src/openai.rs` — internal buffering of `tool_calls[].arguments` deltas. Emit assembled `ToolCall` only after `finish_reason` is observed. On idle timeout, `Err(StreamError::IdleTimeout)`. On missing usage, `Err(StreamError::Incomplete)`.
-- `crates/octos-llm/src/anthropic.rs`, `gemini.rs`, `openrouter.rs` — same pattern. Each is ~50-100 LOC of contained refactor.
+- `crates/ra-llm/src/openai.rs` — internal buffering of `tool_calls[].arguments` deltas. Emit assembled `ToolCall` only after `finish_reason` is observed. On idle timeout, `Err(StreamError::IdleTimeout)`. On missing usage, `Err(StreamError::Incomplete)`.
+- `crates/ra-llm/src/anthropic.rs`, `gemini.rs`, `openrouter.rs` — same pattern. Each is ~50-100 LOC of contained refactor.
 - Per-provider adapter stays in the provider impl — the rest of the workspace doesn't see the wire shape.
 
 Tests:
@@ -169,12 +169,12 @@ Risk: medium. Each provider's wire format has quirks. Mitigate with a comprehens
 ### Phase 3 — Switch streaming.rs to consume v2 path
 
 Files:
-- `crates/octos-agent/src/agent/streaming.rs` — replace SSE assembly loop with a call to `provider.chat_stream_v2(...)`. Discard the local buffer.
+- `crates/ra-agent/src/agent/streaming.rs` — replace SSE assembly loop with a call to `provider.chat_stream_v2(...)`. Discard the local buffer.
 - Delete `recover_write_file_args` and `extract_json_string_field`.
 - Delete the `MALFORMED_JSON:` sentinel fallback.
 - Delete the "fixing stop_reason" warning + recovery at `:209-215`.
 - Replace the 30s `break` with reliance on the provider's internal idle timeout.
-- `crates/octos-agent/src/agent/loop_runner.rs` — delete the "fixing empty/duplicate tool_call_id" salvager at `:1937`. Tool_call IDs come fully-formed from v2.
+- `crates/ra-agent/src/agent/loop_runner.rs` — delete the "fixing empty/duplicate tool_call_id" salvager at `:1937`. Tool_call IDs come fully-formed from v2.
 
 Tests:
 - Existing streaming tests must still pass with v2 path under the hood (no behavior change on happy path).
@@ -185,7 +185,7 @@ Risk: medium-high. This is the cutover phase. Recommended canary deploy to one m
 ### Phase 4 — Bump default idle timeout + per-provider tuning
 
 Files:
-- `crates/octos-llm/src/provider.rs` — `DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 180_000`.
+- `crates/ra-llm/src/provider.rs` — `DEFAULT_STREAM_IDLE_TIMEOUT_MS: u64 = 180_000`.
 - Per-provider config: kimi-k2.5/autodl → 300s, claude-opus → 300s (reasoning blocks), faster providers → 60s. Stored in profile config or model_catalog.json.
 
 Risk: low. Tuning knob, easy to roll back.
@@ -193,8 +193,8 @@ Risk: low. Tuning knob, easy to roll back.
 ### Phase 5 — Cleanup compensating code that's no longer load-bearing
 
 Files:
-- `crates/octos-agent/src/plugins/tool.rs` — review `pre_flight_validate` callsites. mofa_slides style validator (PR #1323) stays. Any required-field validator added later to compensate for streaming corruption can be removed.
-- `crates/octos-cli/src/api/ui_protocol.rs` — review the L3 routing on `run_standalone_turn` (PR #1348). It remains necessary for real post-spawn failures, but the volume of failures it sees should drop sharply.
+- `crates/ra-agent/src/plugins/tool.rs` — review `pre_flight_validate` callsites. mofa_slides style validator (PR #1323) stays. Any required-field validator added later to compensate for streaming corruption can be removed.
+- `crates/ra-cli/src/api/ui_protocol.rs` — review the L3 routing on `run_standalone_turn` (PR #1348). It remains necessary for real post-spawn failures, but the volume of failures it sees should drop sharply.
 
 Risk: low. Pure cleanup.
 
@@ -218,7 +218,7 @@ Rejected as primary fix. **Useful tuning knob for Phase 4 even after the structu
 
 What codex did. Architecturally cleaner — Responses API delivers atomic tool_call frames, eliminating the delta-assembly problem at the wire level.
 
-Rejected because octos's multi-provider strategy includes providers that do not speak Responses API (Anthropic, Gemini, wisemodel-hosted models, most OpenAI-compatible reseller endpoints). Maintaining Responses-API-only would force octos out of those provider lanes.
+Rejected because ra's multi-provider strategy includes providers that do not speak Responses API (Anthropic, Gemini, wisemodel-hosted models, most OpenAI-compatible reseller endpoints). Maintaining Responses-API-only would force ra out of those provider lanes.
 
 The architectural pattern (atomic delivery + sealed-result construction) is adopted; the wire-format restriction is not.
 
@@ -230,23 +230,23 @@ Rejected. Anti-pattern: every new tool requires a new salvager. The salvagers th
 
 ### Alternative E: Keep the current code, lean on PR #1348 (L3 routing) to make failures recoverable
 
-PR #1348 ensures that any post-spawn failure (including those caused by corrupted-args dispatch) reaches the LLM as a synthetic user message, prompting retry. Under this alternative, octos accepts that the streaming layer ships garbage but ensures the LLM can recover from each garbage dispatch.
+PR #1348 ensures that any post-spawn failure (including those caused by corrupted-args dispatch) reaches the LLM as a synthetic user message, prompting retry. Under this alternative, ra accepts that the streaming layer ships garbage but ensures the LLM can recover from each garbage dispatch.
 
-Rejected. This treats the agent loop as a fault-tolerance mechanism for streaming-layer bugs. The LLM is asked to debug octos's streaming-corruption every time it occurs, which: (a) burns LLM turns + tokens, (b) requires the LLM to figure out from the error message that the call was corrupted (it can't always tell — "missing 'out'" looks like its own mistake), (c) doesn't fix the latency cost (each garbage dispatch + LLM-retry is more expensive than a clean stream-layer retry). L3 routing remains useful for real plugin failures; it should not be the primary defense for streaming corruption.
+Rejected. This treats the agent loop as a fault-tolerance mechanism for streaming-layer bugs. The LLM is asked to debug ra's streaming-corruption every time it occurs, which: (a) burns LLM turns + tokens, (b) requires the LLM to figure out from the error message that the call was corrupted (it can't always tell — "missing 'out'" looks like its own mistake), (c) doesn't fix the latency cost (each garbage dispatch + LLM-retry is more expensive than a clean stream-layer retry). L3 routing remains useful for real plugin failures; it should not be the primary defense for streaming corruption.
 
 ## References
 
-### octos code referenced in this ADR
+### ra code referenced in this ADR
 
-- `crates/octos-agent/src/agent/streaming.rs:62-91` — SSE inter-chunk timeout + break
-- `crates/octos-agent/src/agent/streaming.rs:172-198` — JSON parse + sentinel fallback
-- `crates/octos-agent/src/agent/streaming.rs:209-215` — "fixing stop_reason" recovery
-- `crates/octos-agent/src/agent/streaming.rs:307-375` — `recover_write_file_args` + helpers
-- `crates/octos-agent/src/agent/loop_runner.rs:1937` — "fixing empty/duplicate tool_call_id"
-- `crates/octos-llm/src/openai.rs:797` — chat-completions delta accumulation
-- `crates/octos-llm/src/anthropic.rs:478` — Anthropic delta accumulation
-- `crates/octos-llm/src/provider.rs:124` — `DEFAULT_LLM_TIMEOUT_SECS`
-- `crates/octos-agent/src/plugins/tool.rs:2057-2064` — `pre_flight_validate` callsite
+- `crates/ra-agent/src/agent/streaming.rs:62-91` — SSE inter-chunk timeout + break
+- `crates/ra-agent/src/agent/streaming.rs:172-198` — JSON parse + sentinel fallback
+- `crates/ra-agent/src/agent/streaming.rs:209-215` — "fixing stop_reason" recovery
+- `crates/ra-agent/src/agent/streaming.rs:307-375` — `recover_write_file_args` + helpers
+- `crates/ra-agent/src/agent/loop_runner.rs:1937` — "fixing empty/duplicate tool_call_id"
+- `crates/ra-llm/src/openai.rs:797` — chat-completions delta accumulation
+- `crates/ra-llm/src/anthropic.rs:478` — Anthropic delta accumulation
+- `crates/ra-llm/src/provider.rs:124` — `DEFAULT_LLM_TIMEOUT_SECS`
+- `crates/ra-agent/src/plugins/tool.rs:2057-2064` — `pre_flight_validate` callsite
 
 ### codex code referenced for architectural patterns
 

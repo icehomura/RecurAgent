@@ -5,7 +5,7 @@
 ## The Problem
 
 Robot hardware runs on Dora-RS dataflow graphs — camera nodes, motion planners,
-gripper controllers. The LLM agent runs on octos with MCP tools. These are two
+gripper controllers. The LLM agent runs on ra with MCP tools. These are two
 separate worlds with no connection. Without a bridge:
 
 - **Developers write glue code for every robot tool.** Each Dora node needs a
@@ -37,7 +37,7 @@ Each mapping declares:
 A DOT graph that defines multi-step robot missions as a DAG with safety
 guarantees at each step. Each node has a `HandlerKind` that determines behavior.
 
-The current `octos-pipeline` DOT parser recognises this set of handlers:
+The current `ra-pipeline` DOT parser recognises this set of handlers:
 
 | Handler (parser keyword) | Purpose | Example use in this graph |
 |---|---|---|
@@ -150,7 +150,7 @@ safety_gate -> emergency_stop [condition="outcome.status == \"fail\""];
 ```
 The supported predicate language is `outcome.status == "pass"|"fail"`,
 `outcome.contains("...")`, plus `&& || !` combinators (see
-`crates/octos-pipeline/src/condition.rs`). Without a `prompt`, `gate` nodes
+`crates/ra-pipeline/src/condition.rs`). Without a `prompt`, `gate` nodes
 default to `"true"` (always Pass), and without `condition=` on the
 outgoing edges the executor falls back to label substring matching against
 outcome content — so both halves are required for real branching.

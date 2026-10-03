@@ -23,13 +23,13 @@ OctOS 的 Matrix/Robrix human-approval 流程在用户批准后只执行被批�
 ### Allowed Changes
 - .gitignore
 - **/.gitignore
-- crates/octos-cli/src/session_actor.rs
-- **/crates/octos-cli/src/session_actor.rs
-- crates/octos-agent/src/agent/execution.rs
-- crates/octos-agent/src/agent/loop_runner.rs
-- crates/octos-agent/src/agent/mod.rs
-- crates/octos-cli/tests/**
-- crates/octos-agent/tests/**
+- crates/ra-cli/src/session_actor.rs
+- **/crates/ra-cli/src/session_actor.rs
+- crates/ra-agent/src/agent/execution.rs
+- crates/ra-agent/src/agent/loop_runner.rs
+- crates/ra-agent/src/agent/mod.rs
+- crates/ra-cli/tests/**
+- crates/ra-agent/tests/**
 - specs/task-approval-post-tool-continuation.spec.md
 - **/specs/task-approval-post-tool-continuation.spec.md
 
@@ -54,7 +54,7 @@ OctOS 的 Matrix/Robrix human-approval 流程在用户批准后只执行被批�
 
 Scenario: Approved tool resumes the normal agent loop
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approved_tool_success_enqueues_internal_continuation_turn
   Given an agent turn is suspended by `human_approval_rules` before executing `list_dir`
   And an authorized approver approves the request with the matching digest
@@ -65,7 +65,7 @@ Scenario: Approved tool resumes the normal agent loop
 
 Scenario: Approved write_file does not auto-send files from the approval handler
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approved_write_file_continuation_does_not_directly_send_media
   Level: integration
   Test Double: mock LLM provider plus outbound channel receiver
@@ -78,7 +78,7 @@ Scenario: Approved write_file does not auto-send files from the approval handler
 
 Scenario: Synthetic continuation carries facts, not directives
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approval_continuation_prompt_contains_facts_not_directives
   Level: unit
   Test Double: direct synthetic inbound builder invocation
@@ -92,7 +92,7 @@ Scenario: Synthetic continuation carries facts, not directives
 
 Scenario: Agent can ask the user for next action after approved write_file
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approved_write_file_continuation_can_ask_user_to_send_artifact
   Given an approved `write_file` call creates a user-facing file
   And the mock LLM continuation chooses to ask whether the user wants the file sent
@@ -103,7 +103,7 @@ Scenario: Agent can ask the user for next action after approved write_file
 
 Scenario: Continuation may call ordinary tools through the normal policy path
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approved_tool_continuation_can_use_allowed_tool_normally
   Level: integration
   Test Double: mock LLM provider plus test tool registered in `ToolRegistry`
@@ -115,7 +115,7 @@ Scenario: Continuation may call ordinary tools through the normal policy path
 
 Scenario: Continuation that needs another gated tool suspends for approval again
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approved_tool_continuation_reenters_approval_for_gated_tool
   Given an approved tool succeeds
   And the continuation mock LLM chooses another tool covered by `human_approval_rules`
@@ -126,7 +126,7 @@ Scenario: Continuation that needs another gated tool suspends for approval again
 
 Scenario: Approved tool failure is surfaced through continuation without follow-up tool execution
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approved_tool_failure_continuation_reports_failure_without_followup_tool
   Given an approved tool returns `success: false`
   When the approval response is handled
@@ -136,7 +136,7 @@ Scenario: Approved tool failure is surfaced through continuation without follow-
 
 Scenario: Invalid or unauthorized approval responses do not trigger continuation
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: rejected_approval_response_does_not_enqueue_continuation
   Given a pending approval exists
   When an unauthorized sender or mismatched digest submits an approval response
@@ -146,7 +146,7 @@ Scenario: Invalid or unauthorized approval responses do not trigger continuation
 
 Scenario: Internal continuation is not persisted as a user-authored request
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: approval_continuation_inbound_is_internal_not_user_message
   Given a successful approved tool triggers a synthetic continuation inbound
   When the continuation turn is processed

@@ -1,8 +1,8 @@
-# Octos 应用技能开发指南
+# ra 应用技能开发指南
 
 [English](app-skill-dev-guide.md) | [中文](app-skill-dev-guide-zh.md)
 
-本指南涵盖了构建、注册和部署 octos 应用技能所需的全部内容。
+本指南涵盖了构建、注册和部署 ra 应用技能所需的全部内容。
 
 ---
 
@@ -35,7 +35,7 @@
 
 ### 现有功能各归各位
 
-下列属于 **workspace 契约**（`workspace_policy.toml`，详见 `crates/octos-agent/src/workspace_policy.rs::ValidatorSpec`）：
+下列属于 **workspace 契约**（`workspace_policy.toml`，详见 `crates/ra-agent/src/workspace_policy.rs::ValidatorSpec`）：
 
 - **`AudioNonSilent`** / **`PerFileNonSilent`** — TTS 输出内容不变量。系统必须拒绝把静音 `.wav` 当作"成功生成"。适用于任何 TTS skill，不分厂商。
 - **`MagicBytes`** — 文件格式完整性校验。适用所有产出文件的工具。
@@ -46,7 +46,7 @@
 下列属于 **插件工具**（本指南）：
 
 - **`fm_tts`**、**`mofa_slides`**、**`mofa_publish`**、**`search`**（原 `deep_search`）— 能力本身。每个都是具体实现，常包装外部运行时（Python、Chromium、原生 CLI），版本独立于宿主。
-- **`qwen-tts`** 声音克隆 — 包装外部 HTTP API + 鉴权；按租户凭据；无需重编 octos 即可更新。
+- **`qwen-tts`** 声音克隆 — 包装外部 HTTP API + 鉴权；按租户凭据；无需重编 ra 即可更新。
 
 下列才适合作为**插件 hook**（仅在它属于**可选增强**、缺失也不影响工具本身的情况下）：
 
@@ -71,7 +71,7 @@
 
 **5 个主维度（加上两条决胜规则）全都指向宿主 / 进程内 — 不是插件。** 用生命周期 hook 是类别错位。实际线上也证实了这一点：每次守护进程启动 manifest 解析报错；解析失败时 hook 就静默不跑。
 
-**正确的归属是 `octos-pipeline` 内联。** 推荐形态（截稿时尚未落地）：
+**正确的归属是 `ra-pipeline` 内联。** 推荐形态（截稿时尚未落地）：
 
 ```rust
 // 在 RunPipelineTool::execute 中，parse_dot 之后：
@@ -116,18 +116,18 @@ pub enum ValidatorSpec {
    契约     （可定制能力）
 ```
 
-如果你正准备用插件 hook 来强制一个用户绝不能覆盖的不变量 — 停下，去 `octos-agent` 提个 issue，看看是不是该加一个 workspace 契约变体作为更合适的家。
+如果你正准备用插件 hook 来强制一个用户绝不能覆盖的不变量 — 停下，去 `ra-agent` 提个 issue，看看是不是该加一个 workspace 契约变体作为更合适的家。
 
 ---
 
 ## 架构概览
 
-应用技能是一个**独立的可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 octos 网关通信。网关为每次工具调用将技能二进制文件作为子进程启动，通过 stdin 传递 JSON 参数，并从 stdout 读取 JSON 结果。
+应用技能是一个**独立的可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 ra 网关通信。网关为每次工具调用将技能二进制文件作为子进程启动，通过 stdin 传递 JSON 参数，并从 stdout 读取 JSON 结果。
 
 ```
 User message → LLM → tool_use("get_weather", {"city": "Paris"})
                          ↓
-              Gateway spawns: ~/.octos/profiles/<profile>/data/skills/weather/main get_weather
+              Gateway spawns: ~/.ra/profiles/<profile>/data/skills/weather/main get_weather
                          ↓
               Stdin:  {"city": "Paris"}
               Stdout: {"output": "Paris, France\nClear sky\n...", "success": true}
@@ -153,7 +153,7 @@ crates/app-skills/my-skill/
 启动引导后，技能安装在：
 
 ```
-~/.octos/profiles/alice/data/skills/my-skill/
+~/.ra/profiles/alice/data/skills/my-skill/
 ├── main                # 可执行二进制文件（从 target/ 复制）
 ├── manifest.json       # 工具定义
 └── SKILL.md            # 文档
@@ -376,7 +376,7 @@ members = [
 
 ### 7. 在 bundled_app_skills.rs 中注册
 
-在 `crates/octos-agent/src/bundled_app_skills.rs` 中添加到 `BUNDLED_APP_SKILLS`：
+在 `crates/ra-agent/src/bundled_app_skills.rs` 中添加到 `BUNDLED_APP_SKILLS`：
 
 ```rust
 pub const BUNDLED_APP_SKILLS: &[(&str, &str, &str, &str)] = &[
@@ -432,14 +432,14 @@ echo '{"param1": "test"}' | ./target/debug/my_skill unknown_tool
 cargo build --release --workspace
 
 # 安装到要测试的配置文件
-octos skills --profile alice install ./my-skill
+ra skills --profile alice install ./my-skill
 
 # 检查技能是否已加载
-ls ~/.octos/profiles/alice/data/skills/my-skill/
+ls ~/.ra/profiles/alice/data/skills/my-skill/
 # main  manifest.json  SKILL.md
 
 # 启动网关
-octos gateway
+ra gateway
 
 # 让 Agent 使用你的技能
 ```
@@ -675,7 +675,7 @@ fn get_smtp_config() -> SmtpConfig {
 **示例：技能目录布局**
 
 ```
-~/.octos/profiles/alice/data/skills/my-style-guide/
+~/.ra/profiles/alice/data/skills/my-style-guide/
 ├── manifest.json
 ├── SKILL.md
 └── prompts/
@@ -882,12 +882,12 @@ requires_env: MY_API_KEY
 cargo build --release -p weather
 
 # 复制到远程服务器上的目标配置文件
-scp target/release/weather remote:~/.octos/profiles/alice/data/skills/weather/main
+scp target/release/weather remote:~/.ra/profiles/alice/data/skills/weather/main
 
 # 无需重启网关 — 下次工具调用时使用新二进制文件
 ```
 
-注意：如果修改了 `SKILL.md` 或 `manifest.json`，则需要重新构建 `octos` 二进制文件（因为它们通过 `include_str!` 嵌入）。
+注意：如果修改了 `SKILL.md` 或 `manifest.json`，则需要重新构建 `ra` 二进制文件（因为它们通过 `include_str!` 嵌入）。
 
 ---
 
@@ -897,8 +897,8 @@ scp target/release/weather remote:~/.octos/profiles/alice/data/skills/weather/ma
 
 | 类型 | 位置 | 安装方式 | 二进制文件 | 使用场景 |
 |------|----------|---------------|--------|----------|
-| **内置** | `crates/app-skills/` | 编译进 `octos` 二进制 | 嵌入式 | 随每个版本发布的核心技能 |
-| **外部** | GitHub 仓库 | `octos skills install user/repo` | 下载或构建 | 社区/自定义技能 |
+| **内置** | `crates/app-skills/` | 编译进 `ra` 二进制 | 嵌入式 | 随每个版本发布的核心技能 |
+| **外部** | GitHub 仓库 | `ra skills install user/repo` | 下载或构建 | 社区/自定义技能 |
 | **配置文件本地** | `<profile-data>/skills/` | 按配置文件安装 | 自包含 | 租户隔离技能 |
 
 ### 按配置文件的技能管理
@@ -906,7 +906,7 @@ scp target/release/weather remote:~/.octos/profiles/alice/data/skills/weather/ma
 技能按配置文件安装以确保租户隔离。每个配置文件有独立的技能目录：
 
 ```
-~/.octos/profiles/alice/data/
+~/.ra/profiles/alice/data/
   skills/
     mofa-comic/
       main              ← 二进制文件（自包含，不在 ~/.cargo/bin）
@@ -928,9 +928,9 @@ scp target/release/weather remote:~/.octos/profiles/alice/data/skills/weather/ma
 
 ```bash
 # CLI（--profile 标志放在子命令之前）
-octos skills --profile alice install mofa-org/mofa-skills/mofa-comic
-octos skills --profile alice list
-octos skills --profile alice remove mofa-comic
+ra skills --profile alice install mofa-org/mofa-skills/mofa-comic
+ra skills --profile alice list
+ra skills --profile alice remove mofa-comic
 
 # 聊天中（自动使用当前配置文件）
 /skills install mofa-org/mofa-skills/mofa-comic
@@ -956,7 +956,7 @@ manage_skills(action="search", query="comic")
 1. `<profile-data>/skills/` — 按配置文件（最高优先级）
 2. `<project-dir>/skills/` — 项目本地
 3. `<project-dir>/bundled-app-skills/` — 内置应用技能
-4. `~/.octos/skills/` — 旧版全局目录，仅用于迁移
+4. `~/.ra/skills/` — 旧版全局目录，仅用于迁移
 
 ### 发布到注册表
 
@@ -979,8 +979,8 @@ manage_skills(action="search", query="comic")
 3. 用户即可查找并安装你的技能：
 
 ```bash
-octos skills search keyword1
-octos skills --profile alice install your-user/your-repo/skill-a
+ra skills search keyword1
+ra skills --profile alice install your-user/your-repo/skill-a
 ```
 
 ### 预编译二进制分发

@@ -1,6 +1,6 @@
 spec: task
 name: "原生 peer 报告绑定 runtime turn_id"
-tags: [peer, review, provenance, octos-cli]
+tags: [peer, review, provenance, ra-cli]
 ---
 
 ## Intent
@@ -17,8 +17,8 @@ tags: [peer, review, provenance, octos-cli]
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-cli/src/api/ui_protocol_transport.rs
-- crates/octos-cli/src/api/ui_protocol_tests.rs
+- crates/ra-cli/src/api/ui_protocol_transport.rs
+- crates/ra-cli/src/api/ui_protocol_tests.rs
 - specs/task-peer-result-turn-identity.spec.md
 
 ### Forbidden
@@ -29,7 +29,7 @@ tags: [peer, review, provenance, octos-cli]
 
 Scenario: 正常与失败终态报告携带各自真实 ID(critical)
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: peer_fleet_result_writer_and_gather_roundtrip
   Given 一个真实暂存的 peer 与两个不同 TurnId
   When writer 先写 completed 报告再写 errored 报告
@@ -38,7 +38,7 @@ Scenario: 正常与失败终态报告携带各自真实 ID(critical)
 
 Scenario: 原生文件写入失败后恢复仍携带后续真实 ID(critical)
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: peer_fleet_result_writer_and_gather_roundtrip
   Given peer 的 result-1.md 和 turns.txt 位置被测试自建目录占据
   When writer 遇到实际文件写入错误，移除仅由该测试创建的阻挡目录后写入下一轮

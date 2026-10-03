@@ -61,37 +61,37 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
 # CI-equivalent sharded fallback:
-cargo test -p octos-core
-cargo test -p octos-memory
-cargo test -p octos-llm --lib
-cargo test -p octos-llm --tests
-cargo test -p octos-bus
-cargo test -p octos-pipeline
-cargo test -p octos-plugin
-cargo test -p octos-swarm
-cargo test -p octos-agent --lib
-cargo test -p octos-agent --tests
-cargo test -p octos-cli --lib
-cargo test -p octos-cli --tests
+cargo test -p ra-core
+cargo test -p ra-memory
+cargo test -p ra-llm --lib
+cargo test -p ra-llm --tests
+cargo test -p ra-bus
+cargo test -p ra-pipeline
+cargo test -p ra-plugin
+cargo test -p ra-swarm
+cargo test -p ra-agent --lib
+cargo test -p ra-agent --tests
+cargo test -p ra-cli --lib
+cargo test -p ra-cli --tests
 cargo test -p harness-starter-generic
 cargo test -p harness-starter-report
 cargo test -p harness-starter-audio
 cargo test -p harness-starter-coding
 cargo test --workspace --doc
-cargo test -p octos-cli --features api api::auth_handlers
-cargo test -p octos-llm test_qos_ranking_changes_lane_selection -- --nocapture
-cargo test -p octos-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
-cargo test -p octos-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
-cargo test -p octos-cli gateway_runtime::tests --features api -- --nocapture
+cargo test -p ra-cli --features api api::auth_handlers
+cargo test -p ra-llm test_qos_ranking_changes_lane_selection -- --nocapture
+cargo test -p ra-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
+cargo test -p ra-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
+cargo test -p ra-cli gateway_runtime::tests --features api -- --nocapture
 
 # 3. Focused M9 Rust tests.
-cargo test -p octos-core ui_protocol -- --nocapture
-cargo test -p octos-core app_ui -- --nocapture
-cargo test -p octos-cli ui_protocol --features api -- --nocapture
+cargo test -p ra-core ui_protocol -- --nocapture
+cargo test -p ra-core app_ui -- --nocapture
+cargo test -p ra-cli ui_protocol --features api -- --nocapture
 
 # 4. Build and boot a local API server for live browser/protocol checks.
-cargo build --release -p octos-cli --features "octos-cli/api,octos-cli/telegram"
-OCTOS_AUTH_TOKEN=ci-test-token ./target/release/octos serve --port 3000
+cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
+OCTOS_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000
 # M12 Phase D-5: `/api/status` was retired; use `/health` for liveness
 # probes and the WS `system/status.get` RPC for the structured payload.
 curl -sf http://localhost:3000/health
@@ -130,8 +130,8 @@ approval/replay cases deterministic for the protocol gate.
 
 Use this gate for M12 solo-mode runtime evidence. The runner records AppUI
 stdio/WebSocket transcripts and policy artifacts without requiring a model
-provider. Live transports require an API-enabled `octos` binary with the
-`serve` subcommand; set `OCTOS_BIN` if it is not `target/debug/octos`:
+provider. Live transports require an API-enabled `ra` binary with the
+`serve` subcommand; set `OCTOS_BIN` if it is not `target/debug/ra`:
 
 ```bash
 # Offline artifact schema and no-OTP assertion.
@@ -274,13 +274,13 @@ After the full workspace run, the CI script re-runs critical subsystems individu
 
 | Group | Crate | Test Filter | What It Covers |
 |-------|-------|-------------|----------------|
-| Adaptive routing | `octos-llm` | `adaptive::tests` | Off/Hedge/Lane modes, circuit breaker, failover, scoring, metrics, racing |
-| Responsiveness | `octos-llm` | `responsiveness::tests` | Baseline learning, degradation detection, recovery, threshold boundaries |
-| Session actor | `octos-cli` | `session_actor::tests` | Queue modes (Followup/Collect/Steer/Interrupt/Speculative), overflow, auto-escalation/deescalation |
-| Session persistence | `octos-bus` | `session::tests` | JSONL storage, LRU eviction, fork, rewrite, timestamp sort, sticky thread_id |
-| Replay harness | `octos-bus` | `tests/jsonl_replay_thread_binding.rs` | thread_id binding correctness on JSONL fixtures (#656) |
-| Plugin lifecycle | `octos-plugin` | `tests/lifecycle_sandbox` | Plugin protocol v2 contract — log/phase/progress/cost/artifact events |
-| Swarm contract | `octos-swarm` | `tests/{subtask_contracts,swarm_dispatch}` | Swarm fan-out, ledger, validator gate |
+| Adaptive routing | `ra-llm` | `adaptive::tests` | Off/Hedge/Lane modes, circuit breaker, failover, scoring, metrics, racing |
+| Responsiveness | `ra-llm` | `responsiveness::tests` | Baseline learning, degradation detection, recovery, threshold boundaries |
+| Session actor | `ra-cli` | `session_actor::tests` | Queue modes (Followup/Collect/Steer/Interrupt/Speculative), overflow, auto-escalation/deescalation |
+| Session persistence | `ra-bus` | `session::tests` | JSONL storage, LRU eviction, fork, rewrite, timestamp sort, sticky thread_id |
+| Replay harness | `ra-bus` | `tests/jsonl_replay_thread_binding.rs` | thread_id binding correctness on JSONL fixtures (#656) |
+| Plugin lifecycle | `ra-plugin` | `tests/lifecycle_sandbox` | Plugin protocol v2 contract — log/phase/progress/cost/artifact events |
+| Swarm contract | `ra-swarm` | `tests/{subtask_contracts,swarm_dispatch}` | Swarm fan-out, ledger, validator gate |
 | Harness starters | `harness-starter-*` | `cargo test -p harness-starter-{audio,coding,generic,report}` | Starter-template skill binaries |
 
 Session actor tests always run single-threaded (`--test-threads=1`) because they spawn full actors with mock providers and can OOM under parallel execution.
@@ -306,7 +306,7 @@ Session actor tests always run single-threaded (`--test-threads=1`) because they
 
 ## Feature Coverage
 
-### Adaptive Routing (`crates/octos-llm/src/adaptive.rs` — 19 tests)
+### Adaptive Routing (`crates/ra-llm/src/adaptive.rs` — 19 tests)
 
 Tests the `AdaptiveRouter` which manages multiple LLM providers with metrics-driven selection.
 
@@ -359,7 +359,7 @@ Tests the `AdaptiveRouter` which manages multiple LLM providers with metrics-dri
 | `test_adaptive_status_reports_correctly` | Status struct reflects current mode/count |
 | `test_empty_router_panics` | Asserts at least 1 provider required |
 
-### Responsiveness Observer (`crates/octos-llm/src/responsiveness.rs` — 8 tests)
+### Responsiveness Observer (`crates/ra-llm/src/responsiveness.rs` — 8 tests)
 
 Tests the latency tracker that drives auto-escalation.
 
@@ -386,7 +386,7 @@ Tests the latency tracker that drives auto-escalation.
 | `test_multiple_activation_cycles` | Activate → deactivate → reactivate works |
 | `test_window_caps_at_max_size` | Rolling window stays at 20 entries |
 
-### Queue Modes and Session Actor (`crates/octos-cli/src/session_actor.rs` — 9 tests)
+### Queue Modes and Session Actor (`crates/ra-cli/src/session_actor.rs` — 9 tests)
 
 Tests the per-session actor that owns message processing, queue policies, and auto-protection.
 
@@ -431,7 +431,7 @@ Tests the per-session actor that owns message processing, queue policies, and au
 |------|-----------------|
 | `test_strip_think_tags` | `<think>...</think>` block removal from LLM output |
 
-### Session Persistence (`crates/octos-bus/src/session.rs` — 28 tests)
+### Session Persistence (`crates/ra-bus/src/session.rs` — 28 tests)
 
 Tests JSONL-backed session storage with LRU caching.
 
@@ -522,16 +522,16 @@ Tests JSONL-backed session storage with LRU caching.
 
 ```bash
 # Single test
-cargo test -p octos-llm --lib adaptive::tests::test_hedged_racing_picks_faster_provider
+cargo test -p ra-llm --lib adaptive::tests::test_hedged_racing_picks_faster_provider
 
 # One subsystem
-cargo test -p octos-llm --lib adaptive::tests
+cargo test -p ra-llm --lib adaptive::tests
 
 # Session actor (always single-threaded)
-cargo test -p octos-cli session_actor::tests -- --test-threads=1
+cargo test -p ra-cli session_actor::tests -- --test-threads=1
 
 # With output
-cargo test -p octos-cli session_actor::tests -- --test-threads=1 --nocapture
+cargo test -p ra-cli session_actor::tests -- --test-threads=1 --nocapture
 ```
 
 ## GitHub Actions CI
@@ -556,12 +556,12 @@ The local `scripts/ci.sh` is a superset — it runs the same three steps plus fo
 | `scripts/pre-release.sh` | Full release smoke tests (build, E2E, skill binaries) |
 | `scripts/milestone-ci.sh` | Canonical milestone CI suites (hosted-fast, workspace-all-features, dashboard, release-bundle) |
 | `.github/workflows/ci.yml` | GitHub Actions CI (sharded per-crate to fit runner memory) |
-| `crates/octos-llm/src/adaptive.rs` | Adaptive router tests |
-| `crates/octos-llm/src/responsiveness.rs` | Responsiveness observer tests |
-| `crates/octos-cli/src/session_actor.rs` | Session actor tests |
-| `crates/octos-bus/src/session.rs` | Session persistence tests |
-| `crates/octos-bus/tests/jsonl_replay_thread_binding.rs` | Replay harness for thread_id binding correctness on JSONL fixtures |
-| `crates/octos-agent/tests/` | Agent integration tests (compaction, m8 end-to-end gate, plugin v2 contract, validator runner, abi compat) |
-| `crates/octos-plugin/tests/lifecycle_sandbox.rs` | Plugin protocol v2 contract tests |
-| `crates/octos-swarm/tests/{subtask_contracts,swarm_dispatch}.rs` | Swarm dispatcher + ledger tests |
+| `crates/ra-llm/src/adaptive.rs` | Adaptive router tests |
+| `crates/ra-llm/src/responsiveness.rs` | Responsiveness observer tests |
+| `crates/ra-cli/src/session_actor.rs` | Session actor tests |
+| `crates/ra-bus/src/session.rs` | Session persistence tests |
+| `crates/ra-bus/tests/jsonl_replay_thread_binding.rs` | Replay harness for thread_id binding correctness on JSONL fixtures |
+| `crates/ra-agent/tests/` | Agent integration tests (compaction, m8 end-to-end gate, plugin v2 contract, validator runner, abi compat) |
+| `crates/ra-plugin/tests/lifecycle_sandbox.rs` | Plugin protocol v2 contract tests |
+| `crates/ra-swarm/tests/{subtask_contracts,swarm_dispatch}.rs` | Swarm dispatcher + ledger tests |
 | `e2e/tests/` | Playwright live-runtime suites (M8 invariants, progress gate, thread interleave, etc.) |

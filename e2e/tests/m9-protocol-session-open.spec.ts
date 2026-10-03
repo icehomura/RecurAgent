@@ -2,7 +2,7 @@
  * M9 wire-level e2e: `session/open`.
  *
  * Issue: https://github.com/octos-org/octos/issues/647
- * Spec  : api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 Command Semantics
+ * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 Command Semantics
  *
  * Asserts envelope shape, error codes and cursor monotonicity ONLY — no
  * rendered DOM. Each test mints its own session id and tears down its own

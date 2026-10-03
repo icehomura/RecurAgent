@@ -1,0 +1,11 @@
+[package]
+name = "ra-dora-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Compatibility re-export crate for the dora bridge (canonical home: ra-agent::tools::dora_bridge)"
+
+[dependencies]
+ra-agent = { workspace = true }

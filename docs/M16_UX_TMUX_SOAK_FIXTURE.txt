@@ -10,7 +10,7 @@ multi-agent orchestration through the real AppUI stdio path.
 
 It launches:
 
-- octos serve --stdio from this repo.
+- ra serve --stdio from this repo.
 - octoscode --mode protocol --stdio-command ... through the octoscode tmux
   harness.
 - A typed AppUI review/start request that asks for supervised specialist
@@ -20,14 +20,14 @@ It launches:
   reviewer-cli and reviewer-mcp specialists are added when their backends are
   configured.
 
-The backend uses the production review/start path inside octos serve --stdio.
+The backend uses the production review/start path inside ra serve --stdio.
 Native model-backed specialists, a CLI-process specialist, and an MCP stdio
 specialist are normalized into the same AppUI agent lifecycle. The Python
 AppUI fixture backend is not used.
 
 Command
 
-From the octos repo:
+From the ra repo:
 
   bash e2e/scripts/m16-live-tui-tmux-soak.sh run
 
@@ -37,7 +37,7 @@ Useful overrides:
   OCTOS_M16_UX_RUN_ID=m16-local \
   bash e2e/scripts/m16-live-tui-tmux-soak.sh run
 
-Set OCTOS_M16_BUILD=0 to skip building octos with the api feature.
+Set OCTOS_M16_BUILD=0 to skip building ra with the api feature.
 Set OCTOS_M16_BUILD_TUI=1 to force rebuilding octoscode; by default the script
 uses an existing octoscode binary and only builds it when missing.
 Set OCTOS_M16_UX_KEEP_SESSION=1 to leave tmux open after the run.
@@ -67,7 +67,7 @@ Required evidence includes:
 
 The M16 validator asserts:
 
-- The TUI used a real octos serve --stdio backend, not the Python fixture
+- The TUI used a real ra serve --stdio backend, not the Python fixture
   backend.
 - The replay submitted a real review/start request and names the configured
   specialist agents.
@@ -84,7 +84,7 @@ The M16 validator asserts:
 
 Latest passing evidence
 
-  ~/home/octos/e2e/test-results-m16-tmux-ux/m16-context-promote-20260516T203002Z
+  ~/home/ra/e2e/test-results-m16-tmux-ux/m16-context-promote-20260516T203002Z
 
 Validator status:
 

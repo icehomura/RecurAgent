@@ -26,8 +26,8 @@
  * each user bubble in DOM order matches the prompt by content.
  *
  * Required env:
- *   OCTOS_TEST_URL=https://dspfac.octos.ominix.io   (mini3, pre-#649)
- *   OCTOS_AUTH_TOKEN=octos-admin-2026
+ *   OCTOS_TEST_URL=https://dspfac.ra.ominix.io   (mini3, pre-#649)
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026
  *   OCTOS_PROFILE=dspfac
  *
  * Behind the same v2 flag as live-thread-interleave: the new thread-by-cmid

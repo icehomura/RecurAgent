@@ -5,7 +5,7 @@
 //! Substack/Medium RSS, then deep-fetches top article content.
 //! Writes JSON to stdout: `{"output": "...", "success": true}`
 //!
-//! No LLM calls, no octos-agent dependencies.
+//! No LLM calls, no ra-agent dependencies.
 
 use std::collections::HashSet;
 use std::io::Read as _;

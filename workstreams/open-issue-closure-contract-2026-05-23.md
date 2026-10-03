@@ -149,7 +149,7 @@ correctness, and config-path correctness.
 | #424 | Security/audit feature | Closure PR open - review gate | PR #1249 carries `Closes #424` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
 | #423 | User role feature | Closure PR open - review gate | PR #1244 carries `Closes #423` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
 | #422 | User deletion bug | Closure PR open - review gate | PR #1224 carries `Closes #422` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
-| #420 | UI correctness | Closure PR open - review gate | PR #1239 carries `Closes #420` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Duplicate PR #1296 also closes #420 but currently has a red `test-octos-cli` flake; merge only one accepted closure path. |
+| #420 | UI correctness | Closure PR open - review gate | PR #1239 carries `Closes #420` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Duplicate PR #1296 also closes #420 but currently has a red `test-ra-cli` flake; merge only one accepted closure path. |
 | #290 | CLI safety bug | Closure PR open - review gate | PRs #1234 and #1288 both carry `Closes #290` and are review-gated; merge only one accepted closure path and retarget or close the duplicate. |
 | #289 | CLI init feature | Closure PR open - review gate | PR #1247 carries `Closes #289` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
 | #288 | CLI init feature | Closure PR open - review gate | PR #1238 carries `Closes #288` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
@@ -166,7 +166,7 @@ that sit above the backend protocol.
 |---|---|---|---|
 | #716 | Protocol docs/testing | Closure PR open - review gate | PR #1228 carries `Closes #716` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. PR #1302 is related non-closing UPCR coverage. Merge only the accepted closure path after required review. |
 | #573 | Web client migration | Pending coding | Complete web client adoption of UI Protocol v1. Close with protocol fixture tests and manual/web smoke showing no legacy dependency. |
-| #383 | Web task tracker bug | Pending coding | Rehydrate octos-web cross-session background task tracker on page load. Add reconnect/reload test and close. |
+| #383 | Web task tracker bug | Pending coding | Rehydrate ra-web cross-session background task tracker on page load. Add reconnect/reload test and close. |
 | #334 | Chat title UX | Closed | Closed on 2026-05-26. Do not select for new closure work. |
 | #333 | Chat layout UX | Pending coding | Improve chat sidebar and file panel layout behavior. Add responsive tests or screenshots for narrow/wide layouts. |
 | #332 | Chat shell redesign | Pending coding | Redesign web chat shell with intentional motion and glass-panel style only if still desired. Close with screenshots and accessibility pass. |
@@ -180,7 +180,7 @@ tested, and documented.
 
 | Issue | Nature | Status | How to close |
 |---|---|---|---|
-| #455 | Robotics integration | Pending coding | Add real dora-rs forwarding for octos-dora-mcp. Include integration test or documented hardware/simulator proof. |
+| #455 | Robotics integration | Pending coding | Add real dora-rs forwarding for ra-dora-mcp. Include integration test or documented hardware/simulator proof. |
 | #381 | Gateway shutdown bug | Closure PR open - review gate | PR #1215 carries `Closes #381` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
 | #239 | Windows deploy feature | Closure PR open - review gate | PR #1254 carries `Closes #239` and is mergeable with green checks, but is blocked by `REVIEW_REQUIRED`. Do not manually close; let the PR close the issue after required review and merge. |
 | #237 | Linux deploy feature | Pending validation | Verify current deploy scripts against Linux bare-metal. If support is incomplete, finish it; if complete, close with command transcript and target OS matrix. |

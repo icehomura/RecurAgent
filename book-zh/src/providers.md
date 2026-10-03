@@ -1,6 +1,6 @@
 # LLM 服务商与路由
 
-Octos 开箱即用地支持 17 家 LLM 服务商。每个服务商需要一个存储在环境变量中的 API 密钥（本地服务商如 Ollama、以及使用服务账号 JSON 的 Vertex AI 除外）。
+ra 开箱即用地支持 17 家 LLM 服务商。每个服务商需要一个存储在环境变量中的 API 密钥（本地服务商如 Ollama、以及使用服务账号 JSON 的 Vertex AI 除外）。
 
 ## 支持的服务商
 
@@ -49,8 +49,8 @@ Octos 开箱即用地支持 17 家 LLM 服务商。每个服务商需要一个�
 ### 命令行参数
 
 ```bash
-octos chat --provider deepseek --model deepseek-chat
-octos chat --model gpt-4o  # 根据模型名自动检测服务商
+ra chat --provider deepseek --model deepseek-chat
+ra chat --model gpt-4o  # 根据模型名自动检测服务商
 ```
 
 ### 凭证存储
@@ -59,27 +59,27 @@ octos chat --model gpt-4o  # 根据模型名自动检测服务商
 
 ```bash
 # OAuth PKCE (OpenAI)
-octos auth login --provider openai
+ra auth login --provider openai
 
 # Device code 流程 (OpenAI)
-octos auth login --provider openai --device-code
+ra auth login --provider openai --device-code
 
 # 粘贴令牌（其他所有服务商）
-octos auth login --provider anthropic
+ra auth login --provider anthropic
 # -> 提示: "Paste your API key:"
 
 # 查看已存储的凭证
-octos auth status
+ra auth status
 
 # 删除凭证
-octos auth logout --provider openai
+ra auth logout --provider openai
 ```
 
-凭证存储在 `~/.octos/auth.json`（文件权限 0600）。解析 API 密钥时，凭证存储的优先级**高于**环境变量。
+凭证存储在 `~/.ra/auth.json`（文件权限 0600）。解析 API 密钥时，凭证存储的优先级**高于**环境变量。
 
 ## 自动检测
 
-省略 `--provider` 时，Octos 会根据模型名推断服务商：
+省略 `--provider` 时，ra 会根据模型名推断服务商：
 
 | 模型名模式 | 检测到的服务商 |
 |--------------|-------------------|
@@ -93,11 +93,11 @@ octos auth logout --provider openai
 | `llama-*` | groq |
 
 ```bash
-octos chat --model gpt-4o           # -> openai
-octos chat --model claude-sonnet-4-20250514  # -> anthropic
-octos chat --model deepseek-chat    # -> deepseek
-octos chat --model glm-4-plus       # -> zhipu
-octos chat --model qwen-max         # -> dashscope
+ra chat --model gpt-4o           # -> openai
+ra chat --model claude-sonnet-4-20250514  # -> anthropic
+ra chat --model deepseek-chat    # -> deepseek
+ra chat --model glm-4-plus       # -> zhipu
+ra chat --model qwen-max         # -> dashscope
 ```
 
 ## 自定义端点

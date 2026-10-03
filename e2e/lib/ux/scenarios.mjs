@@ -5,7 +5,7 @@
 //   classifyRunnability(scenario, env) -> "runnable" | "skipped" | "blocked" | "quarantined"
 //   filterByTier(scenarios, tier) -> Scenario[]
 //
-// The classifier does NOT spawn tmux, run octos, or read any process. It only
+// The classifier does NOT spawn tmux, run ra, or read any process. It only
 // inspects:
 //   - the requested tier (env.tier)
 //   - whether the scenario is marked `quarantine = true` in the manifest

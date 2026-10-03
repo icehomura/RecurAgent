@@ -7,15 +7,15 @@
 #
 # Arguments:
 #   subdomain     Tenant subdomain (e.g. "alice")
-#   tunnel-token  Per-tenant tunnel token (from 'octos admin create-tenant';
+#   tunnel-token  Per-tenant tunnel token (from 'ra admin create-tenant';
 #                 written into metadatas.token — not a host-wide shared token)
 #
 # Options:
 #   --server <addr>       frps relay server address (required; or set FRPS_SERVER)
 #   --port <port>         frps control port (default: 7000)
-#   --local-port <port>   Local octos serve port (default: 8080)
+#   --local-port <port>   Local ra serve port (default: 8080)
 #   --ssh-port <port>     SSH tunnel remote port (default: 6001)
-#   --domain <domain>     Base domain (default: octos-cloud.org)
+#   --domain <domain>     Base domain (default: ra-cloud.org)
 #   --frpc-version <ver>  frpc version (default: 0.65.0)
 
 set -euo pipefail
@@ -27,9 +27,9 @@ if [ $# -lt 2 ]; then
     echo "Options:"
     echo "  --server <addr>       frps relay server (required; or set FRPS_SERVER)"
     echo "  --port <port>         frps port (default: 7000)"
-    echo "  --local-port <port>   Local octos port (default: 8080)"
+    echo "  --local-port <port>   Local ra port (default: 8080)"
     echo "  --ssh-port <port>     SSH tunnel port (default: 6001)"
-    echo "  --domain <domain>     Base domain (default: octos-cloud.org)"
+    echo "  --domain <domain>     Base domain (default: ra-cloud.org)"
     exit 1
 fi
 
@@ -42,7 +42,7 @@ FRPS_SERVER="${FRPS_SERVER:-}"
 FRPS_PORT=7000
 LOCAL_PORT=8080
 SSH_PORT=6001
-TUNNEL_DOMAIN="octos-cloud.org"
+TUNNEL_DOMAIN="ra-cloud.org"
 FRPC_VERSION="0.65.0"
 
 # Parse optional flags
@@ -133,7 +133,7 @@ echo "    Config written to /etc/frp/frpc.toml"
 echo "    (sudo is needed to install the frpc system service)"
 if [ "$OS" = "darwin" ]; then
     # macOS: LaunchDaemon (runs as root, survives logout)
-    PLIST_PATH="/Library/LaunchDaemons/io.octos.frpc.plist"
+    PLIST_PATH="/Library/LaunchDaemons/io.ra.frpc.plist"
 
     sudo tee "$PLIST_PATH" > /dev/null << PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -141,7 +141,7 @@ if [ "$OS" = "darwin" ]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.octos.frpc</string>
+    <string>io.ra.frpc</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/frpc</string>
@@ -164,17 +164,17 @@ PLIST_EOF
     sudo chmod 644 "$PLIST_PATH"
 
     # Also clean up legacy LaunchAgent if present
-    launchctl unload "$HOME/Library/LaunchAgents/io.octos.frpc.plist" 2>/dev/null || true
-    rm -f "$HOME/Library/LaunchAgents/io.octos.frpc.plist"
+    launchctl unload "$HOME/Library/LaunchAgents/io.ra.frpc.plist" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/io.ra.frpc.plist"
 
     sudo launchctl unload "$PLIST_PATH" 2>/dev/null || true
     sudo launchctl load "$PLIST_PATH"
-    echo "    LaunchDaemon loaded (io.octos.frpc)"
+    echo "    LaunchDaemon loaded (io.ra.frpc)"
 else
     # Linux: systemd
     sudo tee /etc/systemd/system/frpc.service > /dev/null << SYSTEMD_EOF
 [Unit]
-Description=frpc tunnel client for octos
+Description=frpc tunnel client for ra
 After=network.target
 
 [Service]
@@ -206,13 +206,13 @@ else
     echo "    Check logs: cat /tmp/frpc.log"
 fi
 
-# Check local octos. `/api/status` was retired in M12 Phase D-5 — use
+# Check local ra. `/api/status` was retired in M12 Phase D-5 — use
 # the public `/health` endpoint for liveness probes.
 if curl -sf --max-time 3 "http://localhost:${LOCAL_PORT}/health" > /dev/null 2>&1; then
-    echo "    octos serve is running on port ${LOCAL_PORT}"
+    echo "    ra serve is running on port ${LOCAL_PORT}"
 else
-    echo "    NOTE: octos serve is not running on port ${LOCAL_PORT}"
-    echo "    Start it with: octos serve --port ${LOCAL_PORT}"
+    echo "    NOTE: ra serve is not running on port ${LOCAL_PORT}"
+    echo "    Start it with: ra serve --port ${LOCAL_PORT}"
 fi
 
 echo ""

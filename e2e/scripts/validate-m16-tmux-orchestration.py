@@ -4,7 +4,7 @@
 This validator checks the production review/start path:
 
 - octoscode sends review/start to octos serve --stdio.
-- octos emits AppUI agent lifecycle/output/artifact events.
+- ra emits AppUI agent lifecycle/output/artifact events.
 - native, CLI, and MCP specialists all participate.
 - tmux captures show user-visible orchestration traces.
 """
@@ -238,9 +238,9 @@ class Validator:
         self.add(
             "real_octos_serve_stdio_backend",
             ok,
-            "TUI launched against octos serve --stdio with review/start and stdio MCP swarm backend"
+            "TUI launched against ra serve --stdio with review/start and stdio MCP swarm backend"
             if ok
-            else f"backend evidence does not prove octos serve --stdio review/start without leaked secrets; secret leaks={self.secret_leaks or 'none'}",
+            else f"backend evidence does not prove ra serve --stdio review/start without leaked secrets; secret leaks={self.secret_leaks or 'none'}",
             ["launch-command.txt", "appui-transcript.jsonl", "summary.env"],
         )
 
@@ -252,7 +252,7 @@ class Validator:
             for root in expected_roots
             if root not in cleanup_roots and str(Path(root).resolve()) not in cleanup_roots
         ]
-        report_ok = self.cleanup_report.get("schema") == "octos.m16.secret_cleanup.v1"
+        report_ok = self.cleanup_report.get("schema") == "ra.m16.secret_cleanup.v1"
         removed_config = bool(self.cleanup_report.get("removed_live_provider_config"))
         scanned_files = int(self.cleanup_report.get("scanned_file_count") or 0)
         no_leaks = not self.secret_leaks
@@ -441,7 +441,7 @@ class Validator:
         self.check_artifacts()
         failures = [check for check in self.checks if check["status"] == "failed"]
         result = {
-            "schema": "octos.m16.tui_tmux_orchestration_soak.v1",
+            "schema": "ra.m16.tui_tmux_orchestration_soak.v1",
             "generated_at": utc_now(),
             "status": "failed" if failures else "passed",
             "output_dir": str(self.out_dir),

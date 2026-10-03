@@ -6,7 +6,7 @@ estimate: 0.5d
 
 ## Intent
 
-octos 的 agent loop 目前在回合中途做两类"重写前缀"的操作,导致前缀缓存
+ra 的 agent loop 目前在回合中途做两类"重写前缀"的操作,导致前缀缓存
 (KV cache)提供商(Kimi k3、DeepSeek)在每轮迭代重新 prefill 全量上下文:
 (1) LRU 工具驱逐每轮迭代都可能改变请求最前部的 tools 数组(2026-08-02 实测:
 kimi k3 回合第 5 轮 tools 47→32,之后每轮重刷约 36k token 输入);(2) Tier-1
@@ -40,16 +40,16 @@ reasoning_content 存根)。
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-agent/src/agent/loop_runner.rs
-- **/crates/octos-agent/src/agent/loop_runner.rs
-- crates/octos-agent/src/agent/loop_runner_tests.rs
-- **/crates/octos-agent/src/agent/loop_runner_tests.rs
-- crates/octos-llm/src/openai.rs
-- **/crates/octos-llm/src/openai.rs
-- crates/octos-agent/src/agent/compaction.rs
-- **/crates/octos-agent/src/agent/compaction.rs
-- crates/octos-agent/src/compaction_tiered.rs
-- **/crates/octos-agent/src/compaction_tiered.rs
+- crates/ra-agent/src/agent/loop_runner.rs
+- **/crates/ra-agent/src/agent/loop_runner.rs
+- crates/ra-agent/src/agent/loop_runner_tests.rs
+- **/crates/ra-agent/src/agent/loop_runner_tests.rs
+- crates/ra-llm/src/openai.rs
+- **/crates/ra-llm/src/openai.rs
+- crates/ra-agent/src/agent/compaction.rs
+- **/crates/ra-agent/src/agent/compaction.rs
+- crates/ra-agent/src/compaction_tiered.rs
+- **/crates/ra-agent/src/compaction_tiered.rs
 - specs/kv-cache-friendly-compaction.spec.md
 - **/specs/kv-cache-friendly-compaction.spec.md
 
@@ -59,13 +59,13 @@ reasoning_content 存根)。
 - 不要改变 `prune()` 的公开签名或默认阈值常量
   (`DEFAULT_TIER1_MAX_AGE_TURNS`、`DEFAULT_TIER1_MAX_SIZE_BYTES_PER_RESULT`)
 - 不要修改 Tier-2 (Anthropic context-editing) 与 Tier-3 (FullCompactor) 行为
-- 不要修改 octos-cli 的 ContextManager / appui 压缩通道
+- 不要修改 ra-cli 的 ContextManager / appui 压缩通道
 - 不要添加新的 crate 依赖
 
 ## Out of Scope
 
 - 按 provider 粒度的 cache-aware 开关(先让默认行为对所有 provider 更优)
-- octos-cli ContextManager 通道的前缀稳定性验证(已由 2026-08-02 日志确认
+- ra-cli ContextManager 通道的前缀稳定性验证(已由 2026-08-02 日志确认
   为追加式;如未来日志显示相反再立新约)
 - Kimi 显式 context caching API 接入
 
@@ -73,7 +73,7 @@ reasoning_content 存根)。
 
 Scenario: OversizedOnly 档不触碰陈旧结果
   Test:
-    Package: octos-agent
+    Package: ra-agent
     Filter: oversized_only_pass_never_touches_stale_results
   Given 历史中存在一条超过年龄阈值但体积小的工具结果
   And 当前回合刚落地一条超过 8KB 的工具结果
@@ -83,7 +83,7 @@ Scenario: OversizedOnly 档不触碰陈旧结果
 
 Scenario: Full 档仍然清理陈旧结果
   Test:
-    Package: octos-agent
+    Package: ra-agent
     Filter: full_pass_still_prunes_stale_results
   Given 历史中存在一条超过年龄阈值的工具结果
   When 以 Full 档执行 prune_with_pass
@@ -91,7 +91,7 @@ Scenario: Full 档仍然清理陈旧结果
 
 Scenario: 保护名单在 OversizedOnly 档同样生效
   Test:
-    Package: octos-agent
+    Package: ra-agent
     Filter: protected_ids_survive_the_oversized_only_pass
   Given 一条超过 8KB 的工具结果,其 tool_call_id 在保护名单中
   When 以 OversizedOnly 档执行 prune_with_pass

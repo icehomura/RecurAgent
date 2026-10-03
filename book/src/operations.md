@@ -9,7 +9,7 @@ This chapter covers day-to-day operational tasks: upgrading, credential manageme
 Pull the latest source and rebuild:
 
 ```bash
-cd octos
+cd ra
 git pull origin main
 ./scripts/local-tenant-deploy.sh --full   # Rebuilds and reinstalls
 ```
@@ -18,11 +18,11 @@ If running as a service, restart it after the upgrade:
 
 ```bash
 # macOS (launchd system daemon):
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 
 # Linux (systemd):
-sudo systemctl restart octos-serve
+sudo systemctl restart ra-serve
 ```
 
 ---
@@ -41,16 +41,16 @@ Sessions are stored as rolling JSONL segments, not one ever-growing file. When t
 
 ## Keychain Integration
 
-Octos supports storing API keys in the OS secret store instead of plaintext in profile JSON files: the macOS Keychain on macOS (hardware-backed, per-user access control), a 0600 file under `~/.octos/secrets` on Linux, and no store on Windows yet — use the process environment or plain `env_vars` there. The diagram below shows the macOS backend.
+ra supports storing API keys in the OS secret store instead of plaintext in profile JSON files: the macOS Keychain on macOS (hardware-backed, per-user access control), a 0600 file under `~/.ra/secrets` on Linux, and no store on Windows yet — use the process environment or plain `env_vars` there. The diagram below shows the macOS backend.
 
 ### Architecture
 
 ```
                      +------------------------------+
-  octos auth set-key |     macOS Keychain            |
+  ra auth set-key |     macOS Keychain            |
   -----------------> |  (AES encrypted, per-user)    |
                      |                               |
-                     |  service: "octos"             |
+                     |  service: "ra"             |
                      |  account: "OPENAI_API_KEY"    |
                      |  password: "sk-proj-abc..."   |
                      +---------------+--------------+
@@ -75,34 +75,34 @@ Octos supports storing API keys in the OS secret store instead of plaintext in p
 
 ```bash
 # Unlock keychain for SSH sessions (required before set-key via SSH)
-octos auth unlock --password <login-password>
-octos auth unlock                               # interactive prompt
+ra auth unlock --password <login-password>
+ra auth unlock                               # interactive prompt
 
 # Store a key in Keychain + update profile to use keychain marker
-octos auth set-key OPENAI_API_KEY sk-proj-abc123
-octos auth set-key OPENAI_API_KEY              # interactive prompt
+ra auth set-key OPENAI_API_KEY sk-proj-abc123
+ra auth set-key OPENAI_API_KEY              # interactive prompt
 
 # With specific profile
-octos auth set-key GEMINI_API_KEY AIzaSy... -p my-profile
+ra auth set-key GEMINI_API_KEY AIzaSy... -p my-profile
 
 # List all keys and their storage status
-octos auth keys
-octos auth keys -p my-profile
+ra auth keys
+ra auth keys -p my-profile
 
 # Remove from Keychain + clean up profile
-octos auth remove-key OPENAI_API_KEY
+ra auth remove-key OPENAI_API_KEY
 ```
 
 ### Keychain Entry Format
 
-- **Service**: `octos` (constant for all entries)
+- **Service**: `ra` (constant for all entries)
 - **Account**: The environment variable name (e.g., `OPENAI_API_KEY`)
 - **Password**: The actual secret value
 
 Verify with:
 
 ```bash
-security find-generic-password -s octos -a OPENAI_API_KEY -w
+security find-generic-password -s ra -a OPENAI_API_KEY -w
 ```
 
 ### SSH and Headless Server Setup
@@ -117,7 +117,7 @@ The macOS Keychain is tied to the GUI login session. SSH sessions cannot access 
 ssh user@<host>
 
 # Unlock the keychain (requires login password)
-octos auth unlock --password <login-password>
+ra auth unlock --password <login-password>
 
 # That's it -- auto-lock is disabled automatically.
 # The keychain stays unlocked until reboot.
@@ -138,10 +138,10 @@ security set-keychain-settings ~/Library/Keychains/login.keychain-db
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| "User interaction is not allowed" | Keychain locked (SSH session) | `octos auth unlock --password <pw>` |
+| "User interaction is not allowed" | Keychain locked (SSH session) | `ra auth unlock --password <pw>` |
 | Keychain lookup timed out (3s) | Keychain locked (LaunchDaemon) | Enable auto-login, reboot |
-| "keychain marker found but no secret" | Key never stored or wrong keychain | Re-run `octos auth set-key` after unlock |
-| Gateway hangs at startup | Keychain lookup blocking | Update to latest octos binary |
+| "keychain marker found but no secret" | Key never stored or wrong keychain | Re-run `ra auth set-key` after unlock |
+| Gateway hangs at startup | Keychain lookup blocking | Update to latest ra binary |
 
 ### Security Comparison
 
@@ -162,13 +162,13 @@ The macOS Keychain was designed for interactive desktop use. On headless servers
 | **Developer laptop** | Keychain (`"keychain:"`) | GUI session keeps keychain unlocked; ACL prompts are fine |
 | **Mac with auto-login + GUI** | Keychain (`"keychain:"`) | Works if ACL dialogs were approved once via screen sharing |
 | **Headless Mac (SSH only)** | Plain text in `env_vars` or launchd plist | Most reliable; no unlock/ACL dependencies |
-| **Linux server** | Secret store (0600 files under `~/.octos/secrets`) | File store needs no unlock or D-Bus; plain env vars also work |
+| **Linux server** | Secret store (0600 files under `~/.ra/secrets`) | File store needs no unlock or D-Bus; plain env vars also work |
 | **Windows** | Plain text in `env_vars` or env vars | No secret store yet (#2234) |
 
 **Why Keychain is unreliable on headless servers:**
 
 1. **Requires the macOS login password** -- To unlock the keychain via SSH, you need the user's login password stored somewhere, reducing the security benefit.
-2. **Re-locks on reboot/sleep** -- The LaunchDaemon that starts `octos serve` runs before GUI login, so the keychain is locked at that point.
+2. **Re-locks on reboot/sleep** -- The LaunchDaemon that starts `ra serve` runs before GUI login, so the keychain is locked at that point.
 3. **Re-locks after idle timeout** -- Even after unlock, macOS may re-lock. The `set-keychain-settings` workaround can be reset by macOS updates.
 4. **ACL prompts block headless access** -- If the binary was not the one that originally stored the secret, macOS may pop an unanswerable GUI dialog.
 5. **Session isolation** -- Unlocking from SSH does not unlock for the LaunchDaemon session, and vice versa.
@@ -191,8 +191,8 @@ The macOS Keychain was designed for interactive desktop use. On headless servers
 Protect the files with filesystem permissions:
 
 ```bash
-chmod 600 ~/.octos/profiles/*.json
-sudo chmod 600 /Library/LaunchDaemons/io.octos.serve.plist
+chmod 600 ~/.ra/profiles/*.json
+sudo chmod 600 /Library/LaunchDaemons/io.ra.serve.plist
 ```
 
 ---
@@ -204,7 +204,7 @@ An external CLI or scripted agent should not hold your dashboard bearer token. A
 Issue one (operator notes go to stderr, the encoded secret to stdout):
 
 ```bash
-octos auth issue-work-secret \
+ra auth issue-work-secret \
   --session "dspfac:local:tui#coding" \
   --profile dspfac \
   --ttl 1h \
@@ -212,12 +212,12 @@ octos auth issue-work-secret \
 ```
 
 - `--ttl` accepts values like `15m`, `1h`, or `3600s` (default `1h`).
-- Re-issuing for the same session replaces the earlier grant; grants are persisted as SHA-256 hashes in the serve data directory (`~/.octos/work_secrets.json` by default — the token itself is never stored).
-- `octos auth list-work-secrets` lists recorded grants; `octos auth revoke-work-secret '<secret>'` revokes one.
+- Re-issuing for the same session replaces the earlier grant; grants are persisted as SHA-256 hashes in the serve data directory (`~/.ra/work_secrets.json` by default — the token itself is never stored).
+- `ra auth list-work-secrets` lists recorded grants; `ra auth revoke-work-secret '<secret>'` revokes one.
 
 The guest decodes the secret and connects to `/v1/session_ingress/ws/<url-encoded session id>` with `Authorization: Bearer <token>`. WebSocket clients that cannot set headers may fall back to `?token=<token>`; that form is deprecated and logged by the server. The socket speaks normal UI Protocol frames, the grant is revalidated before every client request, and the socket closes with code 1008 once the grant no longer validates (revoked, expired, or replaced). Only methods scoped to the granted session are accepted.
 
-Full walkthrough (including a minimal Python client): `docs/OCTOS_WORK_SECRET_SESSION_INGRESS.md`.
+Full walkthrough (including a minimal Python client): `docs/ra_WORK_SECRET_SESSION_INGRESS.md`.
 
 ---
 
@@ -225,17 +225,17 @@ Full walkthrough (including a minimal Python client): `docs/OCTOS_WORK_SECRET_SE
 
 ### macOS (launchd)
 
-The deploy script installs octos as a **system LaunchDaemon** at `/Library/LaunchDaemons/io.octos.serve.plist` (so it survives logout and starts before GUI login). Manage it with `sudo`:
+The deploy script installs ra as a **system LaunchDaemon** at `/Library/LaunchDaemons/io.ra.serve.plist` (so it survives logout and starts before GUI login). Manage it with `sudo`:
 
 ```bash
 # Load the service
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 
 # Unload the service
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
 
 # Check status
-sudo launchctl print system/io.octos.serve
+sudo launchctl print system/io.ra.serve
 ```
 
 If the service needs environment variables (e.g., SMTP credentials), add them to the plist:
@@ -248,30 +248,30 @@ If the service needs environment variables (e.g., SMTP credentials), add them to
 </dict>
 ```
 
-Check logs at `~/.octos/serve.log`.
+Check logs at `~/.ra/serve.log`.
 
 ### Linux (systemd)
 
-The deploy script installs a **system unit** at `/etc/systemd/system/octos-serve.service`. Manage it with `sudo`:
+The deploy script installs a **system unit** at `/etc/systemd/system/ra-serve.service`. Manage it with `sudo`:
 
 ```bash
 # Start / stop / restart
-sudo systemctl start octos-serve
-sudo systemctl stop octos-serve
-sudo systemctl restart octos-serve
+sudo systemctl start ra-serve
+sudo systemctl stop ra-serve
+sudo systemctl restart ra-serve
 
 # Enable on boot
-sudo systemctl enable octos-serve
+sudo systemctl enable ra-serve
 
 # Check status and logs
-sudo systemctl status octos-serve
-sudo journalctl -u octos-serve -f
+sudo systemctl status ra-serve
+sudo journalctl -u ra-serve -f
 ```
 
 ### Stopping via `server/shutdown` (Local Solo)
 
-The server stops three ways: Ctrl+C in the terminal running the foreground `octos serve`, the platform service manager (`launchctl` / `systemctl`, above), and the `server/shutdown` UI Protocol method described here.
+The server stops three ways: Ctrl+C in the terminal running the foreground `ra serve`, the platform service manager (`launchctl` / `systemctl`, above), and the `server/shutdown` UI Protocol method described here.
 
 A UI Protocol client connected over the authenticated WebSocket (`/api/ui-protocol/ws`) can stop the server with the `server/shutdown` method. It stops the process exactly like Ctrl+C: connections drain, gateways stop, the process exits. The call is idempotent, and the stop fires ~250 ms after the request is handled so the acknowledgement still gets a chance to reach the client (under outbound backpressure the client may miss it; the stop still happens).
 
-The method is only accepted on a local deployment (`config.mode = "local"`) with solo login opted in (`octos serve --solo` / `OCTOS_SOLO_LOGIN=1`) and only by an HTTP serve (`octos serve` without `--stdio`). One call stops the process for every connected client and cancels their running turns. Fleet/hosted servers and `--stdio` serve reject the call with `invalid_request` (-32600) and `data.kind: "server_shutdown_unavailable"` and stop nothing; session-scoped (session-ingress) connections can never call it and are refused with a plain `invalid_request`. Note the local-solo trust model: on a solo serve, any local process -- or any page on an allowed origin -- that can open the WebSocket can stop the server.
+The method is only accepted on a local deployment (`config.mode = "local"`) with solo login opted in (`ra serve --solo` / `OCTOS_SOLO_LOGIN=1`) and only by an HTTP serve (`ra serve` without `--stdio`). One call stops the process for every connected client and cancels their running turns. Fleet/hosted servers and `--stdio` serve reject the call with `invalid_request` (-32600) and `data.kind: "server_shutdown_unavailable"` and stop nothing; session-scoped (session-ingress) connections can never call it and are refused with a plain `invalid_request`. Note the local-solo trust model: on a solo serve, any local process -- or any page on an allowed origin -- that can open the WebSocket can stop the server.

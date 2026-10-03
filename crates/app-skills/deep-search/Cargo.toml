@@ -3,7 +3,7 @@ name = "deep-search"
 version = "2.0.0"
 edition = "2021"
 description = "Deep multi-round web research: iterative search, parallel crawling, reference chasing"
-authors = ["octos"]
+authors = ["ra"]
 
 [[bin]]
 name = "deep-search"
@@ -22,8 +22,8 @@ url = "2"
 chrono = "0.4"
 # `impersonate`: results-page engines that need a browser-like client
 # (Google, as SearXNG does). `browser`: engines that render load in the
-# octos browser profile when OCTOS_BROWSER is set.
-octos-research = { path = "../../octos-research", features = ["http", "browser", "impersonate"] }
+# ra browser profile when OCTOS_BROWSER is set.
+ra-research = { path = "../../ra-research", features = ["http", "browser", "impersonate"] }
 
 [package.metadata.release]
 release = false

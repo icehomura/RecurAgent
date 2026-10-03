@@ -10,7 +10,7 @@
 
 - Spec: `specs/task-evo-goal-verifier.spec.md`（**历史快照时点 v3/29 scenarios**；现行 44——见上方权威指向；agent-spec lint 100%；v2 吸收外层复核 8 条，v3 吸收 GLM/k3 设计审查——双 APPROVE-WITH-CHANGES 收编）
 - Native goal: `goal_01` (profile `octosfix`)
-- 分支: `fix/evo-goal-verifier`（已合并 #2273）；构建/测试经共享 target 定点运行（-p octos-cli --features api），全量 all-targets 由外层集成树统一执行。
+- 分支: `fix/evo-goal-verifier`（已合并 #2273）；构建/测试经共享 target 定点运行（-p ra-cli --features api），全量 all-targets 由外层集成树统一执行。
 
 ## v3 关键裁决（两 peer 分歧点）
 
@@ -25,8 +25,8 @@
 1. [x] 合约：spec v3 + lint（100%，29 scenarios）。
 2. [x] GLM/k3 双只读 peer 独立设计审查（design-glm.md / design-k3.md），先不互读。
 3. [x] 定点互审收编：v3 合并裁决已落 spec；两 peer 结论一致度高，分歧（散文归类 InvalidResponse vs InsufficientEvidence）裁决为 InvalidResponse（k3：无法区分语义 vs 协议违规，归格式错更诚实）。
-4. [x] RED：按 spec 29 个场景写失败测试（外层 runtime 反例 0pass/2fail EXIT101 → .octos/k3-rescue-logs/red-outer-probes.log）。
-5. [x] GREEN：分层实现（纯函数解析 → 自由函数重构 → wrapper → 账本 → 调用点迁移；22pass/0fail/1ignored + 2 outer probes EXIT0 + clippy -D warnings EXIT0，.octos/k3-rescue-logs/）。
+4. [x] RED：按 spec 29 个场景写失败测试（外层 runtime 反例 0pass/2fail EXIT101 → .ra/k3-rescue-logs/red-outer-probes.log）。
+5. [x] GREEN：分层实现（纯函数解析 → 自由函数重构 → wrapper → 账本 → 调用点迁移；22pass/0fail/1ignored + 2 outer probes EXIT0 + clippy -D warnings EXIT0，.ra/k3-rescue-logs/）。
 6. [x]（历史完成度更正）实现轮验证当时全过：clippy -D warnings EXIT0、fmt EXIT0、全量 all-targets 经 root d246b74b 合并树 10030 pass / 0 fail 采信（含两旧 CLI 时序测试）。原文"fail-open"为当时草稿措辞——最终账本读侧 fail-closed（坏行/未知版本/外来 scope 拒收），以 spec Decisions 为准。后续修复增量与全量见 2026-09-10 新 plan。
 7. [x] 独立实现审查 implementation-glm-first.md（APPROVE-WITH-CHANGES）/ implementation-k3-first.md（APPROVE）→ cross-primary-on-k3.md / cross-strong-on-glm.md（含 root 纠偏追加），sha256 全冻结，token_cost.model 双证（glm-5.3 / k3-256k）。
 8. [x]（历史完成度更正）修复增量（M1/M3/M4/M5 + GAP-1..8 + Filter 绑定）已完成 RED→GREEN 并经双模型互审 + root 8b4da851 全量门采信；后续 merged-review 修复（warning wire 键 / replay note 去重 / spec 44 场景）见 2026-09-10 新 plan。

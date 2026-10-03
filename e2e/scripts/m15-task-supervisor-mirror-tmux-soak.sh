@@ -9,13 +9,13 @@ tui_repo="${OCTOSCODE_REPO:-$(dirname "$repo_root")/octoscode}"
 tui_runner="${OCTOS_M15_TASK_MIRROR_TUI_RUNNER:-$tui_repo/scripts/run-m15-live-tmux-ux-soak.sh}"
 out_root="${OCTOS_M15_TASK_MIRROR_TMUX_OUT_ROOT:-$repo_root/e2e/test-results-m15-task-supervisor-mirror-tmux}"
 out_dir="${OCTOS_M15_TASK_MIRROR_TMUX_OUT_DIR:-$out_root/$run_id}"
-runtime_root="${OCTOS_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/octos-m15-task-mirror-$run_id}"
+runtime_root="${OCTOS_M15_TASK_MIRROR_TMUX_RUNTIME_ROOT:-/tmp/ra-m15-task-mirror-$run_id}"
 data_dir="${OCTOS_M15_TASK_MIRROR_TMUX_DATA_DIR:-$runtime_root/data}"
 workdir="${OCTOS_M15_TASK_MIRROR_TMUX_WORKDIR:-$runtime_root/workspace}"
 replay_file="${OCTOS_M15_TASK_MIRROR_TMUX_REPLAY:-$out_dir/m15-task-supervisor-mirror-replay.txt}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/octos}"
+octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
 tui_bin="${OCTOSCODE_BIN:-$tui_repo/target/debug/octoscode}"
-session_name="${OCTOS_M15_TASK_MIRROR_TMUX_SESSION:-octos-m15-task-mirror-$run_id}"
+session_name="${OCTOS_M15_TASK_MIRROR_TMUX_SESSION:-ra-m15-task-mirror-$run_id}"
 profile_id="${OCTOS_M15_TASK_MIRROR_PROFILE:-coding}"
 session_id="${OCTOS_M15_TASK_MIRROR_SESSION_ID:-$profile_id:local:m15-task-mirror:$run_id}"
 
@@ -28,9 +28,9 @@ TaskSupervisor task mirrored into the AppUI agent lifecycle over stdio.
 
 Environment:
   OCTOSCODE_REPO                         Path to octoscode checkout. Default: an octoscode checkout next to this repo.
-  OCTOS_BIN                              octos binary. Default: octos/target/debug/octos.
+  OCTOS_BIN                              ra binary. Default: ra/target/debug/ra.
   OCTOSCODE_BIN                          octoscode binary. Default: octoscode/target/debug/octoscode.
-  OCTOS_M15_TASK_MIRROR_BUILD            Set 0 to skip building octos. Default: 1.
+  OCTOS_M15_TASK_MIRROR_BUILD            Set 0 to skip building ra. Default: 1.
   OCTOS_M15_TASK_MIRROR_BUILD_TUI        Set 1 to rebuild octoscode. Default: build only if missing.
   OCTOS_M15_TASK_MIRROR_TMUX_KEEP_SESSION
                                          Set 1 to keep tmux session after the run.
@@ -48,12 +48,12 @@ shell_quote() {
 
 ensure_binaries() {
   if [[ "${OCTOS_M15_TASK_MIRROR_BUILD:-1}" == "1" ]]; then
-    (cd "$repo_root" && cargo build -p octos-cli --bin octos --features api)
+    (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
   if [[ "${OCTOS_M15_TASK_MIRROR_BUILD_TUI:-0}" == "1" || ! -x "$tui_bin" ]]; then
     (cd "$tui_repo" && cargo build --bin octoscode)
   fi
-  [[ -x "$octos_bin" ]] || die "octos binary is not executable: $octos_bin"
+  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
   [[ -x "$tui_bin" ]] || die "octoscode binary is not executable: $tui_bin"
   [[ -x "$tui_runner" ]] || die "octoscode tmux runner is not executable: $tui_runner"
 }

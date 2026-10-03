@@ -2,7 +2,7 @@
 name: harness-starter-generic
 description: Minimal harnessed single-artifact starter. Use as a template for a custom app that produces one deliverable.
 version: 1.0.0
-author: octos
+author: ra
 always: false
 ---
 
@@ -20,7 +20,7 @@ artifact and rely on the runtime to verify and deliver it.
   artifact is produced, and the stable `lifecycle_state` values are
   `Queued -> Running -> Verifying -> Ready`.
 
-See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
+See `docs/ra_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
 
 ## Tools
 

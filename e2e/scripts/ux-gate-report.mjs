@@ -27,7 +27,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..", "..");
-const DEFAULT_MANIFEST = resolve(REPO_ROOT, "e2e", "matrix", "octos-ux.toml");
+const DEFAULT_MANIFEST = resolve(REPO_ROOT, "e2e", "matrix", "ra-ux.toml");
 const DEFAULT_OUT_ROOT = resolve(REPO_ROOT, "e2e", "test-results-ux", "summaries");
 const SUMMARY_JSON = "ux-summary.json";
 const SUMMARY_MD = "ux-summary.md";
@@ -288,7 +288,7 @@ function baseRow(scenario, classification) {
       ? {
           id: `${classification.status}_reason`,
           detail: classification.reasons[0],
-          evidence: ["e2e/matrix/octos-ux.toml"],
+          evidence: ["e2e/matrix/ra-ux.toml"],
         }
       : null,
   };
@@ -419,7 +419,7 @@ function main() {
   const outDir = opts.outDir || resolve(DEFAULT_OUT_ROOT, `ux-gate-${compactTimestamp()}`);
   mkdirSync(outDir, { recursive: true });
   const report = {
-    schema: "octos.ux.gate_summary.v1",
+    schema: "ra.ux.gate_summary.v1",
     generated_at: new Date().toISOString(),
     tier: opts.tier,
     manifest: formatRelative(opts.manifest),

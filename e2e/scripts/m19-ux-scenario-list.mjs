@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..', '..');
-const defaultManifestPath = path.join(repoRoot, 'e2e', 'matrix', 'octos-ux.toml');
+const defaultManifestPath = path.join(repoRoot, 'e2e', 'matrix', 'ra-ux.toml');
 const siblingOctoscodeRepo = path.resolve(repoRoot, '..', 'octoscode');
 const statusClasses = ['runnable', 'skipped', 'blocked', 'quarantined'];
 const initialM19ScenarioIds = [
@@ -26,10 +26,10 @@ const initialM19ScenarioIds = [
 function usage() {
   console.log(`Usage: node scripts/m19-ux-scenario-list.mjs [--manifest <path>] [--json]
 
-Print the M19 UX scenario matrix from e2e/matrix/octos-ux.toml.
+Print the M19 UX scenario matrix from e2e/matrix/ra-ux.toml.
 
 The command only reads the manifest and checks host-tool availability. It does
-not launch tmux, the Octos backend, or any scenario runner.`);
+not launch tmux, the ra backend, or any scenario runner.`);
 }
 
 function parseArgs(argv) {
@@ -328,10 +328,10 @@ function firstExecutable(candidates) {
 
 function resolveSpecialHostTool(tool) {
   switch (tool) {
-    case 'octos-bin':
+    case 'ra-bin':
       return firstExecutable([
         process.env.OCTOS_BIN,
-        path.join(repoRoot, 'target', 'debug', executableName('octos')),
+        path.join(repoRoot, 'target', 'debug', executableName('ra')),
       ]);
     case 'octoscode-bin':
       return firstExecutable([

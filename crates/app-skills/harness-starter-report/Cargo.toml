@@ -3,7 +3,7 @@ name = "harness-starter-report"
 version = "1.0.0"
 edition = "2024"
 description = "Starter for a harnessed report-generator custom app"
-authors = ["octos team"]
+authors = ["ra team"]
 license = "Apache-2.0"
 
 [lib]
@@ -20,8 +20,8 @@ eyre = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
-octos-agent = { workspace = true }
-octos-plugin = { workspace = true }
+ra-agent = { workspace = true }
+ra-plugin = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
 

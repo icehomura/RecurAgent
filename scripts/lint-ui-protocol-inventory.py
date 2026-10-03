@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep the UI Protocol wire inventory honest against the code constants.
 
-The inventory (`api/OCTOS_UI_PROTOCOL_WIRE_INVENTORY_2026-05-24.md`) claims to
+The inventory (`api/ra_UI_PROTOCOL_WIRE_INVENTORY_2026-05-24.md`) claims to
 reconcile the shipped wire surface with the spec and UPCR documents, but the
 claim was never checked: `server/shutdown` (UPCR-2026-032) landed in the spec's
 §6 method catalog on merge day while the inventory went unupdated, and three
@@ -38,9 +38,9 @@ import re
 import sys
 from pathlib import Path
 
-DEFAULT_INVENTORY = Path("api/OCTOS_UI_PROTOCOL_WIRE_INVENTORY_2026-05-24.md")
-DEFAULT_CORE = Path("crates/octos-core/src/ui_protocol.rs")
-DEFAULT_TRANSPORT = Path("crates/octos-cli/src/api/ui_protocol_transport.rs")
+DEFAULT_INVENTORY = Path("api/ra_UI_PROTOCOL_WIRE_INVENTORY_2026-05-24.md")
+DEFAULT_CORE = Path("crates/ra-core/src/ui_protocol.rs")
+DEFAULT_TRANSPORT = Path("crates/ra-cli/src/api/ui_protocol_transport.rs")
 
 
 def _strip_line_comments(text: str) -> str:
@@ -62,7 +62,7 @@ def parse_method_name_constants(core: str) -> dict[str, str]:
     """`pub mod methods` constants: `pub const X: &str = "x/y";`."""
     module = re.search(r"pub mod methods \{(.*?)\n\}", core, re.S)
     if not module:
-        raise ValueError("could not find `pub mod methods` in octos-core ui_protocol.rs")
+        raise ValueError("could not find `pub mod methods` in ra-core ui_protocol.rs")
     names = {
         m.group(1): m.group(2)
         for m in re.finditer(r'pub const (\w+): &str = "([^"]*)";', module.group(1))

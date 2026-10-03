@@ -51,7 +51,7 @@ function parseArgs(argv) {
     transport: "fixture",
     outDir: "",
     endpoint: "ws://127.0.0.1:50179/api/ui-protocol/ws",
-    token: "octos-m12-soak-token",
+    token: "ra-m12-soak-token",
     stdioCommand: "",
     workspace: "",
     dataDir: "",
@@ -137,7 +137,7 @@ function parseArgs(argv) {
     throw new Error(`--transport must be fixture, stdio, or ws; got ${out.transport}`);
   }
   if (!out.outDir) {
-    out.outDir = fs.mkdtempSync(path.join(os.tmpdir(), "octos-m12-solo-probe-"));
+    out.outDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-m12-solo-probe-"));
   }
   if (!out.workspace) {
     out.workspace = path.join(out.outDir, "workspace");
@@ -379,7 +379,7 @@ class WsTransport {
     this.ws = new WebSocket(url, {
       headers: {
         Authorization: `Bearer ${this.options.token}`,
-        "X-Octos-Ui-Features": FEATURE_TOKENS.join(","),
+        "X-Ra-Ui-Features": FEATURE_TOKENS.join(","),
         "X-Profile-Id": this.options.profileId,
       },
     });
@@ -562,7 +562,7 @@ class FixtureTransport {
         return {
           capabilities: {
             schema_version: 2,
-            protocol: "octos-ui/v1alpha1",
+            protocol: "ra-ui/v1alpha1",
             supported_features: FEATURE_TOKENS,
             supported_methods: [
               "config/capabilities/list",
@@ -734,7 +734,7 @@ async function main() {
   recorder.resetArtifacts();
 
   const summary = {
-    schema: "octos-m12-solo-appui-soak-v1",
+    schema: "ra-m12-solo-appui-soak-v1",
     started_at: nowIso(),
     transport: options.transport,
     endpoint: options.transport === "ws" ? options.endpoint : undefined,
@@ -1071,7 +1071,7 @@ async function main() {
   }
 
   const filesystemProbe = {
-    schema: "octos-m12-filesystem-probe-v1",
+    schema: "ra-m12-filesystem-probe-v1",
     workspace: path.resolve(options.workspace),
     cases: [
       {
@@ -1102,7 +1102,7 @@ async function main() {
   };
 
   writeJson(recorder.paths.runtimePolicy, {
-    schema: "octos-m12-runtime-policy-stamp-v1",
+    schema: "ra-m12-runtime-policy-stamp-v1",
     captured_at: nowIso(),
     transport: options.transport,
     session_id: options.sessionId,
@@ -1111,7 +1111,7 @@ async function main() {
     blockers: summary.blockers.filter((b) => b.area === "M12-B" || b.area === "M12-C"),
   });
   writeJson(recorder.paths.toolRegistry, {
-    schema: "octos-m12-tool-registry-snapshot-v1",
+    schema: "ra-m12-tool-registry-snapshot-v1",
     captured_at: nowIso(),
     transport: options.transport,
     session_id: options.sessionId,
@@ -1158,7 +1158,7 @@ async function main() {
     }));
   }
   writeJson(recorder.paths.workspaceContract, {
-    schema: "octos-m12-workspace-contract-status-v1",
+    schema: "ra-m12-workspace-contract-status-v1",
     captured_at: nowIso(),
     transport: options.transport,
     session_id: options.sessionId,

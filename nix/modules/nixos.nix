@@ -1,6 +1,6 @@
 { config, lib, ... }:
 let
-  cfg = config.programs.octos;
+  cfg = config.programs.ra;
   serviceCfg = cfg.service;
 in
 {
@@ -10,9 +10,9 @@ in
       "d ${serviceCfg.dataDir} 0770 root root -"
     ];
 
-    systemd.services.octos-serve = lib.mkIf serviceCfg.enable {
+    systemd.services.ra-serve = lib.mkIf serviceCfg.enable {
       script = ''
-        exec ${cfg.finalPackage}/bin/octos serve \
+        exec ${cfg.finalPackage}/bin/ra serve \
           --port ${toString serviceCfg.port} \
           --host ${lib.escapeShellArg serviceCfg.host} \
           --data-dir ${lib.escapeShellArg serviceCfg.dataDir} \
@@ -35,7 +35,7 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
-      description = "octos serve";
+      description = "ra serve";
     };
 
   };

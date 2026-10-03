@@ -18,7 +18,7 @@ const runRoot = path.resolve(
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const authToken = process.env.OCTOS_M15_TASK_SUPERVISOR_AUTH_TOKEN
   || `m15-task-mirror-${crypto.randomBytes(8).toString('hex')}`;
 const sessionId = process.env.OCTOS_M15_TASK_SUPERVISOR_SESSION
@@ -230,7 +230,7 @@ class WsAppUiClient {
     this.ws = new WebSocket(this.url, {
       headers: {
         Authorization: `Bearer ${authToken}`,
-        'X-Octos-Ui-Features': requestedUiFeatures.join(','),
+        'X-Ra-Ui-Features': requestedUiFeatures.join(','),
       },
     });
     await new Promise((resolve, reject) => {
@@ -343,7 +343,7 @@ async function startWsServer(port) {
   child.stdout.on('data', (chunk) => appendText(serverLog, `[stdout] ${chunk.toString()}`));
   child.stderr.on('data', (chunk) => appendText(serverLog, `[stderr] ${chunk.toString()}`));
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('octos serve did not spawn')), 10_000);
+    const timer = setTimeout(() => reject(new Error('ra serve did not spawn')), 10_000);
     child.once('spawn', () => {
       clearTimeout(timer);
       resolve();

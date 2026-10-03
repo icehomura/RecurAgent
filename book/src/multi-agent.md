@@ -1,6 +1,6 @@
 # Multi-Agent Orchestration
 
-octos can run more than one agent at a time in three distinct shapes. Pick by **who owns the work** and **when you need the result**:
+ra can run more than one agent at a time in three distinct shapes. Pick by **who owns the work** and **when you need the result**:
 
 | Model | Entry | Ownership | Result | Lifetime |
 |-------|-------|-----------|--------|----------|
@@ -23,7 +23,7 @@ Use a peer when the work should live on its own — a parallel investigation, a 
 
 ## The peer tools
 
-An agent works with peers through five tools that cover the full lifecycle — **create** (`peer_handoff`), **steer** (`peer_send_input`), **read** (`peer_gather`), **list** (`peer_list`), and **close** (`peer_close`). They are only available on the gateway/serve runtimes (not in a plain one-shot `octos chat`).
+An agent works with peers through five tools that cover the full lifecycle — **create** (`peer_handoff`), **steer** (`peer_send_input`), **read** (`peer_gather`), **list** (`peer_list`), and **close** (`peer_close`). They are only available on the gateway/serve runtimes (not in a plain one-shot `ra chat`).
 
 ### `peer_handoff` — create a peer
 
@@ -67,7 +67,7 @@ Humans drive peers through two server methods, surfaced as `/peer` and `/gather`
 - **`peer/prepare`** — stage 1–8 peers as a fleet (all-or-nothing). Set `token_budget` to give each staged peer the same cumulative token limit; omit it to leave peer-specific spend unrestricted. The response echoes the limit. The client then opens each session and starts its first turn.
 - **`peer/gather`** — the human-facing side of the blackboard; composes the peers' results into the caller's session.
 
-For example, `peer/prepare` accepts `{"brief":"Review the API change","cwd":"/workspace/octos","token_budget":250000}`. The limit is stored with the peer and survives OUP reconnects, even if the client opens it under a new session id. Completed, failed, and interrupted turns contribute to its usage; once the total reaches the limit, the next turn ends with `peer_token_budget_exceeded`. Enforcement is at turn boundaries, so one turn can exceed the limit. A goal-bound peer also charges the master's separate shared goal budget.
+For example, `peer/prepare` accepts `{"brief":"Review the API change","cwd":"/workspace/ra","token_budget":250000}`. The limit is stored with the peer and survives OUP reconnects, even if the client opens it under a new session id. Completed, failed, and interrupted turns contribute to its usage; once the total reaches the limit, the next turn ends with `peer_token_budget_exceeded`. Enforcement is at turn boundaries, so one turn can exceed the limit. A goal-bound peer also charges the master's separate shared goal budget.
 
 ## Lifecycle
 

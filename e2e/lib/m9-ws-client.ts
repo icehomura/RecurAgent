@@ -1,10 +1,10 @@
 /**
- * M9 wire-level test client for the Octos UI Protocol v1
- * (`octos-ui/v1alpha1`) — JSON-RPC 2.0 over WebSocket served from
+ * M9 wire-level test client for the ra UI Protocol v1
+ * (`ra-ui/v1alpha1`) — JSON-RPC 2.0 over WebSocket served from
  * `/api/ui-protocol/ws`.
  *
  * Thin typed wrapper. Types mirror the serde shapes in
- * `crates/octos-core/src/ui_protocol.rs` by hand. Every spec under
+ * `crates/ra-core/src/ui_protocol.rs` by hand. Every spec under
  * `e2e/tests/m9-protocol-*.spec.ts` constructs one client, exercises the
  * methods it cares about, then `close()`s. Specs assert wire-level only:
  * envelope shape, error codes, cursor monotonicity — not rendered DOM.
@@ -112,7 +112,7 @@ export interface UiNotification { jsonrpc: "2.0"; method: string; params: any }
 /**
  * Flattened wire params of a `projection/envelope` notification — the
  * canonical v2 projection (`EnvelopeV2` in
- * `crates/octos-core/src/ui_protocol.rs`). Since the Stage-5 cutover
+ * `crates/ra-core/src/ui_protocol.rs`). Since the Stage-5 cutover
  * (#2318) this is the ONLY lane on which turn terminals and streamed
  * content reach a client: raw `message/delta` / `tool/*` / `turn/completed`
  * / `turn/error` frames are suppressed for every connection.
@@ -198,7 +198,7 @@ export class M9WsClient {
   constructor(opts: M9WsClientOptions) {
     // Normalize scheme and path, then append `ui_feature=<feat>` query
     // params per UPCR-2026-007. The server accepts both repeated query
-    // entries and an `X-Octos-Ui-Features` header; we use the query form
+    // entries and an `X-Ra-Ui-Features` header; we use the query form
     // because some WebSocket clients (and proxies) drop custom request
     // headers on the upgrade. We forward via the header anyway as a
     // belt-and-braces fallback below.
@@ -235,7 +235,7 @@ export class M9WsClient {
     // server-side gates accept the handshake even when an intermediary
     // strips query-string features (the server checks header OR query).
     if (this.opts.uiFeatures.length > 0) {
-      headers["X-Octos-Ui-Features"] = this.opts.uiFeatures.join(",");
+      headers["X-Ra-Ui-Features"] = this.opts.uiFeatures.join(",");
     }
     // Forward profile scope on the handshake so handlers that resolve
     // routing via `routed_profile_id_from_headers` (`session/list`,

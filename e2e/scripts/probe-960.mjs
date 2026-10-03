@@ -6,7 +6,7 @@ import WebSocket from 'ws';
 import { randomBytes, randomUUID } from 'node:crypto';
 
 const url = process.env.PROBE_URL || 'http://127.0.0.1:50080';
-const token = process.env.PROBE_TOKEN || 'octos-admin-2026';
+const token = process.env.PROBE_TOKEN || 'ra-admin-2026';
 const sessionId = process.env.PROBE_SESSION || `dspfac:api:probe-960-${Date.now()}`;
 const profileId = process.env.PROBE_PROFILE || 'dspfac';
 const message = process.env.PROBE_MESSAGE || 'Use run_pipeline to research the weather in San Francisco today (1 paragraph).';

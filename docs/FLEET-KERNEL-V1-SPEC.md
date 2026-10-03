@@ -22,9 +22,9 @@ only genuinely new code is a thin kernel dispatch entry + one keeper tool.
 
 Buildable from existing in-process primitives with **one new thin piece**:
 
-- **LIFTED verbatim:** the redb store pattern (`octos-swarm/src/persistence.rs`),
-  the `CostAccountant` reserve/commit (`octos-agent/src/cost_ledger.rs`), the
-  `ValidatorRunner` acceptance gate (`octos-agent/src/validators.rs`), the
+- **LIFTED verbatim:** the redb store pattern (`ra-swarm/src/persistence.rs`),
+  the `CostAccountant` reserve/commit (`ra-agent/src/cost_ledger.rs`), the
+  `ValidatorRunner` acceptance gate (`ra-agent/src/validators.rs`), the
   `GoalContinue` keeper-turn machinery (`spawn_global_master_continuation_drain` →
   `run_standalone_turn`), and the `goal_tool.rs` "stateless tool over the
   `default_agent_orchestrator()` singleton" durable-state hook.
@@ -38,7 +38,7 @@ Buildable from existing in-process primitives with **one new thin piece**:
 
 ## 1. The store — `fleet-kernel.redb`
 
-Lift `octos-swarm/src/persistence.rs` structure verbatim:
+Lift `ra-swarm/src/persistence.rs` structure verbatim:
 
 - `struct FleetKernelStore { db: Arc<Database>, path: Arc<PathBuf>, io_gate: Arc<tokio::sync::Mutex<()>> }`.
 - `open(dir)`: `spawn_blocking { Database::create → begin_write → open_table (creates each) → commit }`.
@@ -340,8 +340,8 @@ closed registry) is where the "stateless" guarantee is won.
 
 ## References
 
-- Grounding: `octos-swarm/src/{persistence,dispatcher,result}.rs`,
-  `octos-agent/src/{cost_ledger,validators,agent/loop_runner}.rs`,
-  `octos-cli/src/api/{agent_orchestrator,ui_protocol}.rs`,
-  `octos-cli/src/goal_tool.rs`.
+- Grounding: `ra-swarm/src/{persistence,dispatcher,result}.rs`,
+  `ra-agent/src/{cost_ledger,validators,agent/loop_runner}.rs`,
+  `ra-cli/src/api/{agent_orchestrator,ui_protocol}.rs`,
+  `ra-cli/src/goal_tool.rs`.
 - `docs/FLEET-KERNEL-FOUNDATION-SPEC.md`, `docs/FLEET-RUNTIME-ADR.md`.

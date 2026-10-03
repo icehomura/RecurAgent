@@ -25,32 +25,32 @@
 
 ```bash
 git clone https://github.com/octos-org/octos
-cd octos
+cd ra
 
 # 推荐：规范特性集（与 scripts/milestone-ci.sh 一致）。
-# 包含 REST API + 仪表板（`octos serve`）以及常用的消息渠道适配器——
+# 包含 REST API + 仪表板（`ra serve`）以及常用的消息渠道适配器——
 # 这是 CI 所构建的集合。（发布工作流使用相近的集合；确切的发布特性
 # 请查看 .github/workflows。）如需其他渠道（slack、email、matrix、
 # line、qq-bot、wechat），从下方列表按需添加。
-cargo install --path crates/octos-cli \
+cargo install --path crates/ra-cli \
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"
 
 # 最小：仅 CLI + chat + gateway（仅 CLI 渠道）。
-# 该二进制不含 `octos serve`（是 api 特性注册了该子命令），
+# 该二进制不含 `ra serve`（是 api 特性注册了该子命令），
 # 也不编译任何消息渠道适配器。
-cargo install --path crates/octos-cli
+cargo install --path crates/ra-cli
 
 # 按需裁剪特性列表。可用的渠道特性：
 #   telegram、discord、dingtalk、slack、whatsapp、feishu、email、wecom、wecom-bot、
 #   matrix、line、qq-bot、twilio、wechat
-# `octos serve` 必需：api
+# `ra serve` 必需：api
 # 其他特性：git（gitoxide）、ast（tree-sitter）、
 #   audio_mp3（用于音频工作区契约校验的 MP3 解码）
 # 注意：浏览器工具（通过 CDP 的无头 Chrome）始终编译在内——没有 `browser` 特性。
-cargo install --path crates/octos-cli --features "api,telegram,slack"
+cargo install --path crates/ra-cli --features "api,telegram,slack"
 
 # 验证安装
-octos --version
+ra --version
 ```
 
 ## 部署脚本
@@ -83,7 +83,7 @@ octos --version
 
 ### NixOS
 
-如果你使用 Nix，Octos 提供了包含软件包、开发环境以及 NixOS / nix-darwin 模块的 Flake。详见 [Nix](nix.md) 页面。
+如果你使用 Nix，ra 提供了包含软件包、开发环境以及 NixOS / nix-darwin 模块的 Flake。详见 [Nix](nix.md) 页面。
 
 ### macOS
 
@@ -98,30 +98,30 @@ brew install --cask libreoffice
 
 # 3. 克隆并部署
 git clone https://github.com/octos-org/octos.git
-cd octos
+cd ra
 ./scripts/local-tenant-deploy.sh --full
 
 # 4. 设置 API 密钥并运行
 export ANTHROPIC_API_KEY=sk-ant-...
-octos chat
+ra chat
 ```
 
 **后台服务（launchd 系统守护进程）：**
 
-部署脚本会创建 `/Library/LaunchDaemons/io.octos.serve.plist`。
+部署脚本会创建 `/Library/LaunchDaemons/io.ra.serve.plist`。
 
 ```bash
 # 启动服务（需要 sudo）
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 
 # 停止服务
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
 
 # 查看状态
-sudo launchctl print system/io.octos.serve
+sudo launchctl print system/io.ra.serve
 
 # 查看日志
-tail -f ~/.octos/serve.log
+tail -f ~/.ra/serve.log
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -140,33 +140,33 @@ sudo apt install -y nodejs npm ffmpeg poppler-utils
 
 # 4. 克隆并部署
 git clone https://github.com/octos-org/octos.git
-cd octos
+cd ra
 ./scripts/local-tenant-deploy.sh --full
 
 # 5. 设置 API 密钥并运行
 export ANTHROPIC_API_KEY=sk-ant-...
-octos chat
+ra chat
 ```
 
 **后台服务（systemd 系统单元）：**
 
-部署脚本会创建 `/etc/systemd/system/octos-serve.service`。
+部署脚本会创建 `/etc/systemd/system/ra-serve.service`。
 
 ```bash
 # 启动服务
-sudo systemctl start octos-serve
+sudo systemctl start ra-serve
 
 # 开机自启
-sudo systemctl enable octos-serve
+sudo systemctl enable ra-serve
 
 # 查看状态
-sudo systemctl status octos-serve
+sudo systemctl status ra-serve
 
 # 查看日志
-sudo journalctl -u octos-serve -f
+sudo journalctl -u ra-serve -f
 
 # 停止服务
-sudo systemctl stop octos-serve
+sudo systemctl stop ra-serve
 ```
 
 ### Linux (Fedora/RHEL)
@@ -180,22 +180,22 @@ sudo dnf install -y gcc pkg-config openssl-devel
 
 ### Windows（原生）
 
-Octos 支持在 Windows 上原生编译和运行。Shell 命令通过 `cmd /C` 执行。
+ra 支持在 Windows 上原生编译和运行。Shell 命令通过 `cmd /C` 执行。
 
 ```powershell
 # 1. 安装 Rust（从 https://rustup.rs 下载 rustup-init.exe）
 rustup-init.exe
 
 # 2. 克隆并使用规范特性集编译
-#    （若只想要 `octos chat` 可省略特性；`octos serve` 需要 api 特性）
+#    （若只想要 `ra chat` 可省略特性；`ra serve` 需要 api 特性）
 git clone https://github.com/octos-org/octos.git
-cd octos
-cargo install --path crates/octos-cli `
+cd ra
+cargo install --path crates/ra-cli `
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"
 
 # 3. 设置 API 密钥并运行
 $env:ANTHROPIC_API_KEY = "sk-ant-..."
-octos chat
+ra chat
 ```
 
 **Windows 注意事项：**
@@ -215,7 +215,7 @@ wsl --install -d Ubuntu
 # 2. 打开 Ubuntu 终端，然后按照上方 Linux (Ubuntu) 的步骤操作
 ```
 
-在 WSL2 中运行 `octos serve` 时，可以通过 Windows 浏览器访问 `http://localhost:50080`（WSL2 自动转发端口）。
+在 WSL2 中运行 `ra serve` 时，可以通过 Windows 浏览器访问 `http://localhost:50080`（WSL2 自动转发端口）。
 
 ## Docker
 
@@ -243,7 +243,7 @@ Options:
   --frps-server ADDR frps 中继服务器地址（隧道必需，无默认值；也可设置 FRPS_SERVER，
                      例如 frps.example.com。未设置时跳过隧道配置）
   --ssh-port PORT    SSH 隧道远端端口（默认：6001）
-  --domain DOMAIN    隧道域名（默认：octos-cloud.org）
+  --domain DOMAIN    隧道域名（默认：ra-cloud.org）
   --auth-token TOKEN 仪表板认证令牌（默认：自动生成）
 ```
 
@@ -252,10 +252,10 @@ Options:
 **脚本执行流程：**
 
 1. 检查前置条件（Rust、平台依赖）
-2. 使用所选特性编译 `octos` 二进制文件
+2. 使用所选特性编译 `ra` 二进制文件
 3. 编译应用技能二进制文件（除非指定了 `--no-skills`）
 4. 在 macOS 上对二进制文件进行签名（ad-hoc codesign）
-5. 创建运行时数据目录，并写入 `~/.octos/config.json`，其中 `mode` 为 `"local"` 或 `"tenant"`
+5. 创建运行时数据目录，并写入 `~/.ra/config.json`，其中 `mode` 为 `"local"` 或 `"tenant"`
 6. 在启用 dashboard/API 功能时创建后台服务
 7. 在租户部署场景下可选配置 `frpc` 隧道
 
@@ -263,8 +263,8 @@ Options:
 
 ```bash
 ./scripts/local-tenant-deploy.sh --uninstall
-# 数据目录（~/.octos）不会被移除。如需删除请手动执行：
-rm -rf ~/.octos
+# 数据目录（~/.ra）不会被移除。如需删除请手动执行：
+rm -rf ~/.ra
 ```
 
 ## 安装后验证
@@ -279,40 +279,40 @@ export ANTHROPIC_API_KEY=sk-ant-...
 # 或
 export OPENAI_API_KEY=sk-...
 # 或使用 OAuth 登录
-octos auth login --provider openai
+ra auth login --provider openai
 ```
 
 ### 验证
 
 ```bash
-octos --version              # 检查二进制文件
-octos status                 # 检查配置和 API 密钥
-octos chat --message "Hello" # 快速测试
+ra --version              # 检查二进制文件
+ra status                 # 检查配置和 API 密钥
+ra chat --message "Hello" # 快速测试
 ```
 
 ## 升级
 
 ```bash
-cd octos
+cd ra
 git pull origin main
 ./scripts/local-tenant-deploy.sh --full   # 重新编译并安装
 
 # 如果以服务方式运行，需要重启：
 # macOS：
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 # Linux：
-sudo systemctl restart octos-serve
+sudo systemctl restart ra-serve
 ```
 
 ## 常见问题
 
 | 问题 | 解决方案 |
 |------|----------|
-| `octos: command not found` | 将 `~/.cargo/bin` 加入 PATH：`export PATH="$HOME/.cargo/bin:$PATH"` |
+| `ra: command not found` | 将 `~/.cargo/bin` 加入 PATH：`export PATH="$HOME/.cargo/bin:$PATH"` |
 | Linux 上编译失败 | 安装 `build-essential pkg-config libssl-dev` |
-| macOS 代码签名警告 | 执行：`codesign -s - ~/.cargo/bin/octos` |
-| 无法访问仪表板 | 检查端口：`octos serve --port 50080`，打开 `http://localhost:50080` |
+| macOS 代码签名警告 | 执行：`codesign -s - ~/.cargo/bin/ra` |
+| 无法访问仪表板 | 检查端口：`ra serve --port 50080`，打开 `http://localhost:50080` |
 | WSL2 端口未转发 | 重启 WSL：`wsl --shutdown`，然后重新打开终端 |
-| 服务无法启动 | 检查日志：`tail -f ~/.octos/serve.log` 或 `journalctl --user -u octos-serve` |
+| 服务无法启动 | 检查日志：`tail -f ~/.ra/serve.log` 或 `journalctl --user -u ra-serve` |
 | 找不到 API 密钥 | 确保环境变量在服务环境中已设置，而不仅仅在你的 Shell 中 |

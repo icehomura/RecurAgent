@@ -1,6 +1,6 @@
 # LLM Providers & Routing
 
-Octos supports 17 LLM providers out of the box. Each provider needs an API key stored in an environment variable (except local providers like Ollama and Vertex AI, which uses a service-account JSON).
+ra supports 17 LLM providers out of the box. Each provider needs an API key stored in an environment variable (except local providers like Ollama and Vertex AI, which uses a service-account JSON).
 
 ## Supported Providers
 
@@ -48,21 +48,21 @@ The `api_key_env` field overrides the default environment variable name for the 
 
 ### CLI Flags
 
-Every provider setting is also an `octos chat` flag, for one-off runs without touching config:
+Every provider setting is also an `ra chat` flag, for one-off runs without touching config:
 
 ```bash
 # Known vendor (shorthand: supplies its default base URL + key env var)
-octos chat --provider deepseek --model deepseek-chat
+ra chat --provider deepseek --model deepseek-chat
 
 # Auto-detect the provider from the model name
-octos chat --model gpt-4o
+ra chat --model gpt-4o
 
 # Custom endpoint — name the real vendor, pick the wire protocol explicitly
-octos chat --provider zai --api-type anthropic \
+ra chat --provider zai --api-type anthropic \
   --base-url https://api.z.ai/api/anthropic --model glm-5.2
 
 # Full autonomy (bypass approvals + sandbox) alongside model selection
-octos chat --yolo --provider zai --api-type anthropic \
+ra chat --yolo --provider zai --api-type anthropic \
   --base-url https://api.z.ai/api/anthropic --model glm-5.2
 ```
 
@@ -82,42 +82,42 @@ Instead of environment variables, you can store API keys through the auth CLI:
 
 ```bash
 # OAuth PKCE (OpenAI)
-octos auth login --provider openai
+ra auth login --provider openai
 
 # Device code flow (OpenAI)
-octos auth login --provider openai --device-code
+ra auth login --provider openai --device-code
 
 # Paste-token (all other providers)
-octos auth login --provider anthropic
+ra auth login --provider anthropic
 # -> prompts: "Paste your API key:"
 
 # Check stored credentials
-octos auth status
+ra auth status
 
 # Remove credentials
-octos auth logout --provider openai
+ra auth logout --provider openai
 ```
 
-Credentials are stored in `~/.octos/auth.json` (file mode 0600). The auth store is checked **before** environment variables when resolving API keys.
+Credentials are stored in `~/.ra/auth.json` (file mode 0600). The auth store is checked **before** environment variables when resolving API keys.
 
 ### Providing the API Key
 
 There is **no `--api-key` flag** — the key is resolved, in order:
 
-1. **Auth store** — `octos auth login --provider <name>` (stored once, in `~/.octos/auth.json`).
+1. **Auth store** — `ra auth login --provider <name>` (stored once, in `~/.ra/auth.json`).
 2. **Config** — the `env_vars` map in `config.json` (below), or an `api_key_env` pointing at a variable.
 3. **Environment variable** — whose name is the provider's default: `zai` → `ZAI_API_KEY`, `anthropic` → `ANTHROPIC_API_KEY`, `openai` → `OPENAI_API_KEY`, `deepseek` → `DEEPSEEK_API_KEY`, … (see the [table above](#supported-providers)).
 
 ```bash
 # Quickest — export the provider's env var, then run
 export ZAI_API_KEY=<your-key>
-octos chat --provider zai --api-type anthropic \
+ra chat --provider zai --api-type anthropic \
   --base-url https://api.z.ai/api/anthropic --model glm-5.2
 
 # Or log in once (no env var afterward)
-octos auth login --provider zai      # prompts: "Paste your API key:"
-octos auth status                    # which providers are logged in
-octos auth keys                      # keys + keychain vs plaintext
+ra auth login --provider zai      # prompts: "Paste your API key:"
+ra auth status                    # which providers are logged in
+ra auth keys                      # keys + keychain vs plaintext
 ```
 
 Or bake it into `config.json` so nothing is needed at runtime:
@@ -132,11 +132,11 @@ Or bake it into `config.json` so nothing is needed at runtime:
 }
 ```
 
-> Passing a secret on the command line would land it in shell history and the process list; prefer `octos auth login`, an env var, or the config `env_vars` map.
+> Passing a secret on the command line would land it in shell history and the process list; prefer `ra auth login`, an env var, or the config `env_vars` map.
 
 ## Auto-Detection
 
-When `--provider` is omitted, Octos infers the provider from the model name:
+When `--provider` is omitted, ra infers the provider from the model name:
 
 | Model Pattern | Detected Provider |
 |--------------|-------------------|
@@ -150,11 +150,11 @@ When `--provider` is omitted, Octos infers the provider from the model name:
 | `llama-*` | groq |
 
 ```bash
-octos chat --model gpt-4o           # -> openai
-octos chat --model claude-sonnet-4-20250514  # -> anthropic
-octos chat --model deepseek-chat    # -> deepseek
-octos chat --model glm-4-plus       # -> zhipu
-octos chat --model qwen-max         # -> dashscope
+ra chat --model gpt-4o           # -> openai
+ra chat --model claude-sonnet-4-20250514  # -> anthropic
+ra chat --model deepseek-chat    # -> deepseek
+ra chat --model glm-4-plus       # -> zhipu
+ra chat --model qwen-max         # -> dashscope
 ```
 
 ## Custom Endpoints
@@ -202,7 +202,7 @@ In config:
 Or on the command line with `--api-type` (alias `--api-style`), which overrides the config value:
 
 ```bash
-octos chat --provider zai --api-type anthropic \
+ra chat --provider zai --api-type anthropic \
   --base-url https://api.z.ai/api/anthropic --model glm-5.2
 ```
 

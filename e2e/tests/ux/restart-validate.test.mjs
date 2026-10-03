@@ -1,6 +1,6 @@
 // Fixture tests for the restart-reconnect visible contract in
 // e2e/scripts/ux-tmux-validate.mjs, including the reconnect-events.jsonl
-// artifact that e2e/matrix/octos-ux.toml declares for the lane.
+// artifact that e2e/matrix/ra-ux.toml declares for the lane.
 // Run with: `node --test e2e/tests/ux/restart-validate.test.mjs`
 
 import { test } from 'node:test';
@@ -110,7 +110,7 @@ function reconnectEventRows() {
   return [
     {
       ts: '2026-07-09T00:00:00.000Z',
-      schema: 'octos.ux.restart_reconnect.reconnect_event.v1',
+      schema: 'ra.ux.restart_reconnect.reconnect_event.v1',
       phase: 'pre',
       event: 'connected',
       endpoint: ENDPOINT,
@@ -120,7 +120,7 @@ function reconnectEventRows() {
     },
     {
       ts: '2026-07-09T00:01:00.000Z',
-      schema: 'octos.ux.restart_reconnect.reconnect_event.v1',
+      schema: 'ra.ux.restart_reconnect.reconnect_event.v1',
       phase: 'post',
       event: 'reconnected',
       endpoint: ENDPOINT,
@@ -133,7 +133,7 @@ function reconnectEventRows() {
 
 function snapshotValue(phase, seq) {
   return {
-    schema: 'octos.ux.restart_reconnect.snapshot.v1',
+    schema: 'ra.ux.restart_reconnect.snapshot.v1',
     generated_at: '2026-07-09T00:00:00.000Z',
     phase,
     endpoint: ENDPOINT,
@@ -144,12 +144,12 @@ function snapshotValue(phase, seq) {
 }
 
 function makeArtifactDir() {
-  const dir = mkdtempSync(join(tmpdir(), 'octos-restart-validate-'));
+  const dir = mkdtempSync(join(tmpdir(), 'ra-restart-validate-'));
   mkdirSync(dir, { recursive: true });
 
   writeJson(join(dir, 'scenario.json'), {
-    schema: 'octos.ux.scenario.v1',
-    artifact_abi: 'octos.ux.artifacts.v1',
+    schema: 'ra.ux.scenario.v1',
+    artifact_abi: 'ra.ux.artifacts.v1',
     id: 'restart-reconnect',
     scenario_id: 'restart-reconnect',
     session_id: SESSION_ID,
@@ -157,7 +157,7 @@ function makeArtifactDir() {
     required_artifacts: requiredArtifacts,
   });
   writeJson(join(dir, 'summary.json'), {
-    schema: 'octos.ux.summary.v1',
+    schema: 'ra.ux.summary.v1',
     status: 'passed',
     mode: 'run',
     placeholder_artifacts: false,
@@ -179,12 +179,12 @@ function makeArtifactDir() {
     'utf8',
   );
   writeJson(join(dir, 'terminal-size.json'), {
-    schema: 'octos.ux.terminal_size.v1',
+    schema: 'ra.ux.terminal_size.v1',
     cols: 100,
     rows: 30,
   });
   writeJson(join(dir, 'runtime-policy-stamp.json'), {
-    schema: 'octos.ux.runtime_policy_stamp.v1',
+    schema: 'ra.ux.runtime_policy_stamp.v1',
     stamp: {},
   });
   writeJsonl(join(dir, 'appui-transcript.jsonl'), appuiRows());

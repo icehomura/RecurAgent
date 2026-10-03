@@ -3,7 +3,7 @@ name = "skill-evolve"
 version = "0.1.0"
 edition = "2021"
 description = "Online skill self-correction: detects plugin tool failures and suggests SKILL.md improvements"
-authors = ["octos"]
+authors = ["ra"]
 
 [[bin]]
 name = "skill-evolve"

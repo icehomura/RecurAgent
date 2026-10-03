@@ -1,24 +1,24 @@
 # 记忆与技能
 
-Octos 拥有分层记忆系统和可扩展的技能框架。记忆赋予智能体跨会话的持久上下文，技能则为智能体提供新的工具和能力。
+ra 拥有分层记忆系统和可扩展的技能框架。记忆赋予智能体跨会话的持久上下文，技能则为智能体提供新的工具和能力。
 
 ## 引导文件
 
-这些文件在启动时加载到系统提示词中。使用 `octos init` 创建它们。
+这些文件在启动时加载到系统提示词中。使用 `ra init` 创建它们。
 
 | 文件 | 用途 |
 |------|---------|
-| `.octos/AGENTS.md` | 智能体指令与准则 |
-| `.octos/SOUL.md` | 人格与价值观 |
-| `.octos/USER.md` | 用户信息与偏好 |
-| `.octos/TOOLS.md` | 工具使用指南 |
-| `.octos/IDENTITY.md` | 自定义身份定义 |
+| `.ra/AGENTS.md` | 智能体指令与准则 |
+| `.ra/SOUL.md` | 人格与价值观 |
+| `.ra/USER.md` | 用户信息与偏好 |
+| `.ra/TOOLS.md` | 工具使用指南 |
+| `.ra/IDENTITY.md` | 自定义身份定义 |
 
 引导文件支持热更新——编辑后智能体会自动获取更改，无需重启。
 
 ## 记忆系统
 
-Octos 采用三层记忆架构，结合自动记录与智能体驱动的知识管理：
+ra 采用三层记忆架构，结合自动记录与智能体驱动的知识管理：
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -63,30 +63,30 @@ Octos 采用三层记忆架构，结合自动记录与智能体驱动的知识�
 
 ### 第二层：长期记忆与每日笔记（基于文件）
 
-**长期记忆**（`.octos/memory/MEMORY.md`）保存跨会话的持久化事实和笔记。可通过手动编辑或 `write_file` 工具写入——其内容会在每轮对话中完整注入系统提示词。
+**长期记忆**（`.ra/memory/MEMORY.md`）保存跨会话的持久化事实和笔记。可通过手动编辑或 `write_file` 工具写入——其内容会在每轮对话中完整注入系统提示词。
 
-**每日笔记**（`.octos/memory/YYYY-MM-DD.md`）提供近期活动的滚动窗口。最近 **7 天**的每日笔记会自动纳入智能体上下文。这些文件通过手动创建或 `write_file` 工具生成——下文的记忆刷新流水线整合进 `MEMORY.md`，不写入每日笔记。
+**每日笔记**（`.ra/memory/YYYY-MM-DD.md`）提供近期活动的滚动窗口。最近 **7 天**的每日笔记会自动纳入智能体上下文。这些文件通过手动创建或 `write_file` 工具生成——下文的记忆刷新流水线整合进 `MEMORY.md`，不写入每日笔记。
 
-`MEMORY.md` 可以手动编辑，但一旦刷新流水线迁移过它，每个以空行分隔的块都必须保留其结尾的 `^m…` id。手动添加没有 id 的块会让解析器判定文件为混合状态并 fail-closed，从而暂停整合直到修复——因此新增事实时优先使用 `octos memory remember`。
+`MEMORY.md` 可以手动编辑，但一旦刷新流水线迁移过它，每个以空行分隔的块都必须保留其结尾的 `^m…` id。手动添加没有 id 的块会让解析器判定文件为混合状态并 fail-closed，从而暂停整合直到修复——因此新增事实时优先使用 `ra memory remember`。
 
 ### 自动记忆刷新（抽取 + 整合）
 
-Octos 内置一套自动记忆流水线，从你的对话中读取持久化事实并整合进 `MEMORY.md`——无需手动编辑文件即可让长期记忆自动生长。该功能**默认开启**。
+ra 内置一套自动记忆流水线，从你的对话中读取持久化事实并整合进 `MEMORY.md`——无需手动编辑文件即可让长期记忆自动生长。该功能**默认开启**。
 
-**运行位置。** 后台扫描只在持有该 profile 刷新锁的长期运行进程中执行——即 `octos serve` 或 `octos gateway`。普通的 `octos chat` 从不运行后台扫描（否则会争用锁）。流水线分三部分：
+**运行位置。** 后台扫描只在持有该 profile 刷新锁的长期运行进程中执行——即 `ra serve` 或 `ra gateway`。普通的 `ra chat` 从不运行后台扫描（否则会争用锁）。流水线分三部分：
 
 1. **捕获（Capture）**——一轮对话中，轻量的 `memory_note` 工具 + 捕获策略让智能体记下候选事实。
 2. **抽取扫描（Extraction sweep）**——按定时器扫描空闲会话并抽取持久事实（增量游标保证每条消息至多读取一次，后续扫描不会重复计费）。
 3. **整合（Consolidation）**——把候选合并进 `MEMORY.md`（每条条目获得稳定 id，如 `^m4k2abq`），归档陈旧条目，并将文件保持在大小上限内。
 
-**手动控制——`octos memory`：**
+**手动控制——`ra memory`：**
 
 ```bash
-octos memory refresh          # 立即执行一次抽取 + 整合
-octos memory status           # 锁持有者、待处理积压、每日预算
-octos memory remember "..."   # 本地暂存一条事实（写入时不调用 LLM；整合时应用）
-octos memory forget "..."     # 自由文本遗忘 → 进入确认流程
-octos memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
+ra memory refresh          # 立即执行一次抽取 + 整合
+ra memory status           # 锁持有者、待处理积压、每日预算
+ra memory remember "..."   # 本地暂存一条事实（写入时不调用 LLM；整合时应用）
+ra memory forget "..."     # 自由文本遗忘 → 进入确认流程
+ra memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 ```
 
 即使后台扫描被禁用，`refresh` 仍可运行；但当运行中的服务持有锁时会拒绝（请先停止它，或让它自行扫描）。
@@ -120,7 +120,7 @@ octos memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 
 ### 第三层：实体知识库（工具驱动）
 
-实体知识库是位于 `.octos/memory/bank/entities/` 的结构化知识存储。每个实体是一个 Markdown 文件，包含智能体对特定主题的所有认知。
+实体知识库是位于 `.ra/memory/bank/entities/` 的结构化知识存储。每个实体是一个 Markdown 文件，包含智能体对特定主题的所有认知。
 
 **工作原理：**
 
@@ -138,7 +138,7 @@ octos memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 ## 文件结构
 
 ```
-.octos/
+.ra/
 ├── config.json              # 配置文件（版本化，自动迁移）
 ├── cron.json                # 定时任务存储
 ├── AGENTS.md                # 智能体指令
@@ -152,7 +152,7 @@ octos memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 │   └── bank/
 │       └── entities/        # 实体知识库（由 save/recall 工具管理）
 │           ├── alice.md   # 实体：「用户是谁」
-│           └── octos.md     # 实体：「这个项目是什么」
+│           └── ra.md     # 实体：「这个项目是什么」
 ├── skills/                  # 自定义技能
 ├── episodes.redb            # 情景记忆数据库（自动填充）
 └── history/
@@ -163,7 +163,7 @@ octos memory forget --id ^m4k2abq   # 硬删除某条精确的 MEMORY.md 条目
 
 ## 内置系统技能
 
-Octos 在编译时内置了 3 个系统技能：
+ra 在编译时内置了 3 个系统技能：
 
 | 技能 | 说明 |
 |-------|-------------|
@@ -171,11 +171,11 @@ Octos 在编译时内置了 3 个系统技能：
 | `skill-store` | 技能安装与管理 |
 | `skill-creator` | 自定义技能创建指南 |
 
-工作区中 `.octos/skills/` 下的技能会覆盖同名的内置技能。
+工作区中 `.ra/skills/` 下的技能会覆盖同名的内置技能。
 
 ## 预装应用技能
 
-八个应用技能以编译后的二进制文件形式随 Octos 分发。它们在网关启动时自动部署到 `.octos/skills/`——无需手动安装。
+八个应用技能以编译后的二进制文件形式随 ra 分发。它们在网关启动时自动部署到 `.ra/skills/`——无需手动安装。
 
 ### 新闻获取
 
@@ -344,19 +344,19 @@ export SMTP_FROM="your-email@gmail.com"
 
 ```bash
 # 安装仓库中的所有技能
-octos skills install user/repo
+ra skills install user/repo
 
 # 安装特定技能
-octos skills install user/repo/skill-name
+ra skills install user/repo/skill-name
 
 # 从指定分支安装
-octos skills install user/repo --branch develop
+ra skills install user/repo --branch develop
 
 # 强制覆盖已有技能
-octos skills install user/repo --force
+ra skills install user/repo --force
 
 # 安装到指定配置文件
-octos skills --profile my-bot install user/repo
+ra skills --profile my-bot install user/repo
 ```
 
 安装程序会优先从技能注册表下载预编译二进制文件（SHA-256 校验），如有 `Cargo.toml` 则回退到 `cargo build --release`，如有 `package.json` 则运行 `npm install`。
@@ -364,33 +364,33 @@ octos skills --profile my-bot install user/repo
 ### 技能管理
 
 ```bash
-octos skills list                    # 列出已安装的技能
-octos skills info skill-name         # 查看技能详情
-octos skills update skill-name       # 更新指定技能
-octos skills update all              # 更新所有技能
-octos skills remove skill-name       # 删除技能
-octos skills search "web scraping"   # 搜索在线注册表
+ra skills list                    # 列出已安装的技能
+ra skills info skill-name         # 查看技能详情
+ra skills update skill-name       # 更新指定技能
+ra skills update all              # 更新所有技能
+ra skills remove skill-name       # 删除技能
+ra skills search "web scraping"   # 搜索在线注册表
 ```
 
 ### 技能解析顺序
 
 配置文件 gateway 按以下优先级加载技能：
 
-1. `~/.octos/profiles/<profile>/data/skills/`（配置文件作用域的自定义技能）
+1. `~/.ra/profiles/<profile>/data/skills/`（配置文件作用域的自定义技能）
 2. `<octos_home>/bundled-app-skills/`（预装应用技能）
 3. `<octos_home>/platform-skills/`（管理员加载的平台技能）
 
-独立项目运行还可以加载 `<project>/.octos/plugins/` 和
-`<project>/.octos/skills/`。旧的 HOME 全局目录仅用于迁移，不再属于常规扫描路径。
+独立项目运行还可以加载 `<project>/.ra/plugins/` 和
+`<project>/.ra/skills/`。旧的 HOME 全局目录仅用于迁移，不再属于常规扫描路径。
 
 ---
 
 ## 技能开发
 
-自定义技能位于 `.octos/skills/<name>/` 目录下，包含：
+自定义技能位于 `.ra/skills/<name>/` 目录下，包含：
 
 ```
-.octos/skills/my-skill/
+.ra/skills/my-skill/
 ├── SKILL.md         # 必需：指令 + frontmatter
 ├── manifest.json    # 工具技能必需：工具定义
 ├── main             # 编译后的二进制文件（或脚本）

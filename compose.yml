@@ -1,38 +1,38 @@
 services:
   # ─────────────────────────────────────────────
-  # octos Chat (one-shot query)
-  #   docker compose --profile agent run --rm octos-agent -m "Hello"
+  # ra Chat (one-shot query)
+  #   docker compose --profile agent run --rm ra-agent -m "Hello"
   # ─────────────────────────────────────────────
-  octos-agent:
+  ra-agent:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: octos-agent
+    container_name: ra-agent
     profiles:
       - agent
     volumes:
-      - ./.octos/config.json:/root/.octos/config.json:ro
-      - octos-workspace:/root/.octos
-    entrypoint: ["octos", "chat"]
+      - ./.ra/config.json:/root/.ra/config.json:ro
+      - ra-workspace:/root/.ra
+    entrypoint: ["ra", "chat"]
     stdin_open: true
     tty: true
 
   # ─────────────────────────────────────────────
-  # octos Gateway (long-running bot)
+  # ra Gateway (long-running bot)
   #   docker compose --profile gateway up -d
   # ─────────────────────────────────────────────
-  octos-gateway:
+  ra-gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: octos-gateway
+    container_name: ra-gateway
     restart: unless-stopped
     profiles:
       - gateway
     volumes:
-      - ./.octos/config.json:/root/.octos/config.json:ro
-      - octos-workspace:/root/.octos
+      - ./.ra/config.json:/root/.ra/config.json:ro
+      - ra-workspace:/root/.ra
     command: ["gateway"]
 
 volumes:
-  octos-workspace:
+  ra-workspace:

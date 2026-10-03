@@ -24,7 +24,7 @@
  *
  * Required env:
  *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io
- *   OCTOS_AUTH_TOKEN=octos-admin-2026
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026
  *   OCTOS_PROFILE=dspfac
  *
  * Optional env:
@@ -50,7 +50,7 @@ import {
   login,
 } from './live-browser-helpers';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
 const INSTALL_SOURCE =
   process.env.OCTOS_MOFA_INSTALL_SOURCE || 'mofa-org/mofa-skills/mofa-cli';

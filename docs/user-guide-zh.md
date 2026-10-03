@@ -1,6 +1,6 @@
-# Octos 用户指南
+# ra 用户指南
 
-部署、配置和使用 Octos AI 智能体平台的完整指南。
+部署、配置和使用 ra AI 智能体平台的完整指南。
 
 ---
 
@@ -38,13 +38,13 @@
 
 ## 1. 概览
 
-Octos 是一个 Rust 原生的 AI 智能体平台，支持三种运行模式：
+ra 是一个 Rust 原生的 AI 智能体平台，支持三种运行模式：
 
-- **`octos serve`** — 控制面板 + 管理仪表盘 + 约 140 个 REST 端点。管理多个 **配置文件**（机器人实例），每个实例作为独立的 gateway 子进程运行，拥有独立的配置、记忆、会话和消息通道。首次启动且无管理员配置时，嵌入式仪表盘会运行**首次设置向导**。
-- **`octos gateway`** — 单个 gateway 实例，服务于各消息通道（Telegram、Discord、Slack、WhatsApp、Matrix、飞书、邮件、微信、企业微信、企业微信群机器人、QQ 机器人、Twilio）。
-- **`octos chat`** — 交互式 CLI 聊天，用于开发和测试。
+- **`ra serve`** — 控制面板 + 管理仪表盘 + 约 140 个 REST 端点。管理多个 **配置文件**（机器人实例），每个实例作为独立的 gateway 子进程运行，拥有独立的配置、记忆、会话和消息通道。首次启动且无管理员配置时，嵌入式仪表盘会运行**首次设置向导**。
+- **`ra gateway`** — 单个 gateway 实例，服务于各消息通道（Telegram、Discord、Slack、WhatsApp、Matrix、飞书、邮件、微信、企业微信、企业微信群机器人、QQ 机器人、Twilio）。
+- **`ra chat`** — 交互式 CLI 聊天，用于开发和测试。
 
-chat 和 `octos acp` 通过进程内连接使用与 OctosCode 相同的 OUP 会话 runtime，
+chat 和 `ra acp` 通过进程内连接使用与 OctosCode 相同的 OUP 会话 runtime，
 共享历史、压缩、权限和取消逻辑，不再各自执行另一套 Agent 循环。
 两者需要默认启用的 `api` feature，无需额外启动服务进程或网络监听。
 ACP 支持 `session/load` 回放和工具权限请求；OUP 结构化用户提问仍由
@@ -53,7 +53,7 @@ ACP 支持 `session/load` 回放和工具权限请求；OUP 结构化用户提�
 ### 架构
 
 ```
-octos serve（控制面板 + 仪表盘，约 140 个 REST 端点）
+ra serve（控制面板 + 仪表盘，约 140 个 REST 端点）
   ├── 首次设置向导 /api/admin/setup/{state,step,complete,skip}
   ├── 配置 A → gateway 进程（Telegram、WhatsApp）
   ├── 配置 B → gateway 进程（飞书、Slack、Matrix）
@@ -78,13 +78,13 @@ octos serve（控制面板 + 仪表盘，约 140 个 REST 端点）
 
 ## 2. 仪表盘与 OTP 登录
 
-管理仪表盘是嵌入在 `octos serve` 二进制文件中的 React Web 应用。它提供了管理配置文件、监控 gateway 状态和配置系统的可视化界面。
+管理仪表盘是嵌入在 `ra serve` 二进制文件中的 React Web 应用。它提供了管理配置文件、监控 gateway 状态和配置系统的可视化界面。
 
 ### 2.1 访问仪表盘
 
 ```bash
 # 启动控制面板
-octos serve --host 0.0.0.0
+ra serve --host 0.0.0.0
 
 # 仪表盘地址：
 # http://localhost:50080
@@ -98,7 +98,7 @@ octos serve --host 0.0.0.0
 
 #### 配置 SMTP 发送 OTP 邮件
 
-在 serve 配置文件中添加 `dashboard_auth`（`~/.octos/config.json` 或按配置文件）：
+在 serve 配置文件中添加 `dashboard_auth`（`~/.ra/config.json` 或按配置文件）：
 
 ```json
 {
@@ -164,9 +164,9 @@ export SMTP_PASSWORD="your-app-password"
 
 ### 2.4 首次设置向导
 
-当 `octos serve` 首次启动且没有管理员配置时，嵌入式仪表盘会启动**设置向导**，引导操作员依次完成：
+当 `ra serve` 首次启动且没有管理员配置时，嵌入式仪表盘会启动**设置向导**，引导操作员依次完成：
 
-1. **部署模式** — 在本地、自托管云 + 租户、Octos Cloud 注册之间选择，每种模式有相应指引文本。
+1. **部署模式** — 在本地、自托管云 + 租户、ra Cloud 注册之间选择，每种模式有相应指引文本。
 2. **SMTP 配置** — OTP 邮件登录所需（本地部署可跳过）。
 3. **LLM 提供商** — 选择提供商、填入 API 密钥并在保存前进行联通测试。
 4. **管理员配置** — 名称、通道、可选的 Family Plan 子账户。
@@ -178,7 +178,7 @@ export SMTP_PASSWORD="your-app-password"
 - `POST /api/admin/setup/complete` — 完成并创建管理员配置
 - `POST /api/admin/setup/skip` — 操作员逃生口（跳过剩余可选步骤）
 
-源码：`crates/octos-cli/src/api/admin_setup.rs`、`dashboard/src/pages/wizard/`。
+源码：`crates/ra-cli/src/api/admin_setup.rs`、`dashboard/src/pages/wizard/`。
 
 ### 2.5 给外部代理授予会话访问（工作密钥）
 
@@ -186,30 +186,30 @@ export SMTP_PASSWORD="your-app-password"
 
 ```bash
 # 运维提示走 stderr，编码后的密钥走 stdout
-octos auth issue-work-secret \
+ra auth issue-work-secret \
   --session "dspfac:local:tui#coding" \
   --profile dspfac \
   --ttl 1h \
   --api-base-url http://127.0.0.1:50080
 
 # 列出已记录的授权（只有 SHA-256 哈希前缀；令牌从不落盘）
-octos auth list-work-secrets
+ra auth list-work-secrets
 
 # 在过期前撤销
-octos auth revoke-work-secret '<secret>'
+ra auth revoke-work-secret '<secret>'
 ```
 
 - `--ttl` 接受 `15m`、`1h`、`3600s` 这类值（默认 `1h`）；对同一会话重新签发会替换早先的授权。
 - 访客解码密钥后带 `Authorization: Bearer <token>` 连接。无法设置请求头的 WebSocket 客户端仍可用 `?token=` 查询参数，但该形式已弃用且会被服务端记录。
 - 每个客户端请求前都会重验授权；授权被撤销、过期或被重签替换后，存活套接字以 1008 关闭。只接受限定在被授权会话内的方法。
 
-完整走查（含最小 Python 客户端）：`docs/OCTOS_WORK_SECRET_SESSION_INGRESS.md`。
+完整走查（含最小 Python 客户端）：`docs/ra_WORK_SECRET_SESSION_INGRESS.md`。
 
 ---
 
 ## 3. 配置 LLM 提供商
 
-Octos 开箱即用支持 17 个 LLM 提供商家族。云端提供商需要设置对应的环境变量 API 密钥；本地服务器（见 [3.6](#36-本地模型llamacppollamavllmlm-studio)）无需密钥。
+ra 开箱即用支持 17 个 LLM 提供商家族。云端提供商需要设置对应的环境变量 API 密钥；本地服务器（见 [3.6](#36-本地模型llamacppollamavllmlm-studio)）无需密钥。
 
 ### 3.1 支持的提供商
 
@@ -330,13 +330,13 @@ Octos 开箱即用支持 17 个 LLM 提供商家族。云端提供商需要设�
 #### 方法 2：CLI 参数
 
 ```bash
-octos chat --provider deepseek --model deepseek-chat
-octos chat --model gpt-4o  # 从模型名称自动检测提供商
+ra chat --provider deepseek --model deepseek-chat
+ra chat --model gpt-4o  # 从模型名称自动检测提供商
 ```
 
 #### 方法 3：自动检测
 
-省略 `provider` 时，Octos 会从模型名称自动检测提供商：
+省略 `provider` 时，ra 会从模型名称自动检测提供商：
 
 | 模型名模式 | 检测到的提供商 |
 |-----------|--------------|
@@ -390,27 +390,27 @@ octos chat --model gpt-4o  # 从模型名称自动检测提供商
 
 ```bash
 # OAuth PKCE（仅 OpenAI）
-octos auth login --provider openai
+ra auth login --provider openai
 
 # 设备码流程（仅 OpenAI）
-octos auth login --provider openai --device-code
+ra auth login --provider openai --device-code
 
 # 粘贴令牌（所有其他提供商）
-octos auth login --provider anthropic
+ra auth login --provider anthropic
 # → 提示："Paste your API key:"
 
 # 查看已存储的凭据
-octos auth status
+ra auth status
 
 # 删除凭据
-octos auth logout --provider openai
+ra auth logout --provider openai
 ```
 
-凭据存储在 `~/.octos/auth.json`（文件权限 0600）。解析 API 密钥时，认证存储**优先于**环境变量。
+凭据存储在 `~/.ra/auth.json`（文件权限 0600）。解析 API 密钥时，认证存储**优先于**环境变量。
 
 ### 3.6 本地模型（llama.cpp、Ollama、vLLM、LM Studio）
 
-主流本地模型服务器都提供 OpenAI 兼容 API，因此 Octos 将它们统一为**一个提供商家族：`local`**。无需关心背后是哪个引擎——选择 `local`，把 `base_url` 指向服务器即可。引擎名也可作为别名使用（`"provider": "llamacpp"`、`"lmstudio"` 等都会解析为 `local`）。
+主流本地模型服务器都提供 OpenAI 兼容 API，因此 ra 将它们统一为**一个提供商家族：`local`**。无需关心背后是哪个引擎——选择 `local`，把 `base_url` 指向服务器即可。引擎名也可作为别名使用（`"provider": "llamacpp"`、`"lmstudio"` 等都会解析为 `local`）。
 
 零配置默认指向 llama.cpp `llama-server` 的标准端口：
 
@@ -433,9 +433,9 @@ octos auth logout --provider openai
 
 如果服务器启动时设置了 API 密钥（llama.cpp 的 `--api-key`），照常通过 `api_key_env` 提供。在**共享/多用户机器**上，请务必为服务器设置密钥：未鉴权的 localhost 端点可被任意本地进程抢占绑定，从而截获你的完整对话内容。`ollama`、`vllm` 家族仍然可用且行为一致——推荐使用与引擎无关的 `local`。
 
-**用 `octos doctor` 验证配置。** 对本地家族，doctor 会查询服务器的 `/v1/models` 端点，报告实际加载的模型，并在配置的 `model` 不在列表中或端口无响应时给出警告（并列出常见的本地端点）。
+**用 `ra doctor` 验证配置。** 对本地家族，doctor 会查询服务器的 `/v1/models` 端点，报告实际加载的模型，并在配置的 `model` 不在列表中或端口无响应时给出警告（并列出常见的本地端点）。
 
-**工具调用注意事项：** Agent 循环依赖工具/函数调用，而对本地服务器来说这取决于*模型及其聊天模板*，与 Octos 无关。请使用支持工具调用的模型；llama.cpp 需以 `--jinja` 启动以启用模板的工具支持。如果聊天正常但工具异常，请首先检查这一点。
+**工具调用注意事项：** Agent 循环依赖工具/函数调用，而对本地服务器来说这取决于*模型及其聊天模板*，与 ra 无关。请使用支持工具调用的模型；llama.cpp 需以 `--jinja` 启动以启用模板的工具支持。如果聊天正常但工具异常，请首先检查这一点。
 
 ---
 
@@ -603,7 +603,7 @@ export PERPLEXITY_API_KEY="pplx-your-key"
 
 ### 7.2 命名分组
 
-权威定义：`crates/octos-agent/src/tools/policy.rs:154-223` 中的 `TOOL_GROUPS`。具体工具清单：
+权威定义：`crates/ra-agent/src/tools/policy.rs:154-223` 中的 `TOOL_GROUPS`。具体工具清单：
 
 | 分组 | 展开为 |
 |------|--------|
@@ -618,7 +618,7 @@ export PERPLEXITY_API_KEY="pplx-your-key"
 | `group:media` | `mofa_comic`、`mofa_slides`、`mofa_infographic`、`mofa_cards`、`fm_tts`、`fm_voice_list` |
 | `group:delegated` | `delegate_task`、`spawn`、`send_message`、`message`、`save_memory`、`execute_code` —— 委派子 Agent 通用的拒绝列表。把它加到子 Agent 的 deny 列表，即可一次性关闭再委派、后台扇出、用户消息、记忆写入和任意代码执行。 |
 
-`group:robot:*` 系列机器人分级分组在 `docs/OCTOS_ROBOTICS_ARCHITECTURE.md` 描述，由 `robot_groups::group_covers_tool` 解析，而不通过 `TOOL_GROUPS`。
+`group:robot:*` 系列机器人分级分组在 `docs/ra_ROBOTICS_ARCHITECTURE.md` 描述，由 `robot_groups::group_covers_tool` 解析，而不通过 `TOOL_GROUPS`。
 
 ### 7.3 通配符匹配
 
@@ -959,7 +959,7 @@ curl -X POST http://localhost:50080/api/admin/test-provider \
 
 每个 通道:聊天ID 对维护独立的会话（对话历史）。
 
-- **会话持久化：** `.octos/sessions/` 中的 JSONL 文件
+- **会话持久化：** `.ra/sessions/` 中的 JSONL 文件
 - **最大历史记录：** 通过 `gateway.max_history` 配置（默认：50 条消息）
 - **具名会话：** `/new <name>` 切换到——或创建——具名会话；裸 `/new` 与 `/clear` 一样清空历史。若一次后台封存被中断（历史已封存、活跃文件缺失），该会话会自愈：打开它，或在网关上 `/new <name>`，都会从封存分段重建活跃文件并接续历史，而不是从空白开始。
 - **内部派生的子会话**（如后台 spawn）带有 `parent_key` 字段指向其来源——用户创建的具名会话没有。
@@ -972,7 +972,7 @@ curl -X POST http://localhost:50080/api/admin/test-provider \
 智能体跨会话维护长期记忆：
 
 - **`MEMORY.md`** — 持久化笔记，始终加载到上下文中
-- **每日笔记** — `.octos/memory/YYYY-MM-DD.md`，自动创建
+- **每日笔记** — `.ra/memory/YYYY-MM-DD.md`，自动创建
 - **近期记忆** — 最近 7 天的每日笔记包含在上下文中
 - **回忆录** — 任务完成摘要存储在 `episodes.redb` 中
 
@@ -1006,13 +1006,13 @@ curl -X POST http://localhost:50080/api/admin/test-provider \
 也可以通过 CLI 管理定时任务：
 
 ```bash
-octos cron list                              # 列出活跃任务
-octos cron list --all                        # 包含已禁用的
-octos cron add --name "report" --message "生成日报" --cron "0 0 9 * * * *"
-octos cron add --name "check" --message "检查状态" --every 3600
-octos cron remove <job-id>
-octos cron enable <job-id>
-octos cron enable <job-id> --disable
+ra cron list                              # 列出活跃任务
+ra cron list --all                        # 包含已禁用的
+ra cron add --name "report" --message "生成日报" --cron "0 0 9 * * * *"
+ra cron add --name "check" --message "检查状态" --every 3600
+ra cron remove <job-id>
+ra cron enable <job-id>
+ra cron enable <job-id> --disable
 ```
 
 ### 11.5 多轮工具使用
@@ -1099,9 +1099,9 @@ octos cron enable <job-id> --disable
 
 **子 Agent 输出路由器（M8.7）**：长子 Agent 文稿由 `AgentSummaryGenerator` 生成精简摘要进入父上下文；完整文稿落盘以便事后查看。即使委派大型研究任务也能保持父上下文紧凑。
 
-**Swarm 调度**：扇出工作请使用 swarm API 而非多次 spawn。单次 swarm 调度将契约扇出到 N 个子 Agent，聚合产物，通过校验器审核，并把成本汇总回父级。状态持久化在 `crates/octos-swarm/src/persistence.rs`，账本在 `crates/octos-swarm/src/ledger.rs`。
+**Swarm 调度**：扇出工作请使用 swarm API 而非多次 spawn。单次 swarm 调度将契约扇出到 N 个子 Agent，聚合产物，通过校验器审核，并把成本汇总回父级。状态持久化在 `crates/ra-swarm/src/persistence.rs`，账本在 `crates/ra-swarm/src/ledger.rs`。
 
-**`spawn_only` 技能工具自动转后台**：清单里 `spawn_only: true` 的插件工具会在执行层（`crates/octos-agent/src/agent/execution.rs`）被拦截，无论调用方意图如何都强制后台执行。Agent 立即收到「任务已启动」回执，结果稍后以新入站消息送达。子 Agent 不能再生成更深层子 Agent（`group:delegated` 递归 deny-wins）。
+**`spawn_only` 技能工具自动转后台**：清单里 `spawn_only: true` 的插件工具会在执行层（`crates/ra-agent/src/agent/execution.rs`）被拦截，无论调用方意图如何都强制后台执行。Agent 立即收到「任务已启动」回执，结果稍后以新入站消息送达。子 Agent 不能再生成更深层子 Agent（`group:delegated` 递归 deny-wins）。
 
 ### 11.10 消息队列模式
 
@@ -1123,10 +1123,10 @@ octos cron enable <job-id> --disable
 
 ### 11.11 心跳
 
-心跳服务每 30 分钟读取 `.octos/HEARTBEAT.md` 并将其内容发送给智能体。用于后台任务指令：
+心跳服务每 30 分钟读取 `.ra/HEARTBEAT.md` 并将其内容发送给智能体。用于后台任务指令：
 
 ```markdown
-<!-- .octos/HEARTBEAT.md -->
+<!-- .ra/HEARTBEAT.md -->
 检查 GitHub 仓库中的新 issue，汇总所有紧急问题。
 ```
 
@@ -1146,7 +1146,7 @@ octos cron enable <job-id> --disable
 
 ## 12. 内置应用技能
 
-内置应用技能作为编译好的二进制文件随 `octos` 一起发布。Gateway 启动时会写入 `<octos_home>/bundled-app-skills/<name>/`，运维或用户自定义技能安装到当前 profile 的 `~/.octos/profiles/<profile>/data/skills/`，因此重新部署不会覆盖自定义内容。完整列表见 `BUNDLED_APP_SKILLS`（`crates/octos-agent/src/bundled_app_skills.rs`）：
+内置应用技能作为编译好的二进制文件随 `ra` 一起发布。Gateway 启动时会写入 `<octos_home>/bundled-app-skills/<name>/`，运维或用户自定义技能安装到当前 profile 的 `~/.ra/profiles/<profile>/data/skills/`，因此重新部署不会覆盖自定义内容。完整列表见 `BUNDLED_APP_SKILLS`（`crates/ra-agent/src/bundled_app_skills.rs`）：
 
 > **自动安装的内置技能：** news、deep-search、deep-crawl、send-email、account-manager、time（二进制名 `clock`）、weather、smart-home、skill-evolve。加上平台技能 `voice`。
 
@@ -1530,7 +1530,7 @@ export LARK_FROM_ADDRESS="your-feishu-email@company.com"
 **前置条件：** 需要先为该 profile 配置好桥接（设置 → 智能家居）
 **上下文触发：** 当对话提到"智能家居"、"设备"、"灯"、"空调"、"开灯"、"关灯"、"窗帘"等关键词时激活
 
-通过当前 profile 配置的桥接（如 Home Assistant）列出并控制智能家居设备（灯具、空调、窗帘、音箱等）。直接从 profile 读取桥接 URL 和 token —— 不经过正在运行的 gateway 转发。摄像头视频串流仍然是 octos-web 中面向人类、仅通过 WebSocket 提供的功能，不对 agent 开放。
+通过当前 profile 配置的桥接（如 Home Assistant）列出并控制智能家居设备（灯具、空调、窗帘、音箱等）。直接从 profile 读取桥接 URL 和 token —— 不经过正在运行的 gateway 转发。摄像头视频串流仍然是 ra-web 中面向人类、仅通过 WebSocket 提供的功能，不对 agent 开放。
 
 #### smart_home_list_devices 参数
 
@@ -1637,18 +1637,18 @@ curl http://localhost:50080/api/admin/platform-skills/ominix-api/logs?lines=100
 
 将音频文件转录为文本。
 
-在启动 `octos serve` 或 `octos gateway` 前，把 `ASR_API_URL` 设置为服务基址，
+在启动 `ra serve` 或 `ra gateway` 前，把 `ASR_API_URL` 设置为服务基址，
 即可让 AppUI 语音轮、Gateway 语音消息和 `voice_transcribe` 工具统一走独立 ASR：
 
 ```bash
-ASR_API_URL=http://127.0.0.1:8091 octos serve --port 50080
+ASR_API_URL=http://127.0.0.1:8091 ra serve --port 50080
 ```
 
 服务必须接受 `POST /v1/audio/transcriptions`，JSON 请求字段为 `file`（base64
 音频）、可选的 `language` 和 `response_format`，并返回包含字符串 `text` 的
 JSON。成功但为空的 `text` 会被视为“未检测到人声”，不会发送给智能体。
-Octos 会通过 `GET /health` 检查 readiness；没有该路由的服务可返回 `404` 或
-`405`。如果 `ASR_API_URL` 未设置或为空，Octos 会继续使用 OminiX ASR。
+ra 会通过 `GET /health` 检查 readiness；没有该路由的服务可返回 `404` 或
+`405`。如果 `ASR_API_URL` 未设置或为空，ra 会继续使用 OminiX ASR。
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -1698,7 +1698,7 @@ Octos 会通过 `GET /health` 检查 readiness；没有该路由的服务可返�
 
 #### 13.5.1 部署时注册克隆音色（#653）
 
-`fm_tts` 把克隆参考 WAV 输出到 `~/.octos/profiles/<profile>/data/voice_profiles/<name>.wav`。`fm_tts` 在调用前会和 OminiX-API 的音色注册表对照校验；该注册表是进程内内存表，启动时从 `~/.OminiX/models/voices.json` 加载 —— 落盘的 profile WAV **不会被自动发现**。
+`fm_tts` 把克隆参考 WAV 输出到 `~/.ra/profiles/<profile>/data/voice_profiles/<name>.wav`。`fm_tts` 在调用前会和 OminiX-API 的音色注册表对照校验；该注册表是进程内内存表，启动时从 `~/.OminiX/models/voices.json` 加载 —— 落盘的 profile WAV **不会被自动发现**。
 
 `scripts/register-fleet-voices.sh` 在远端主机上写入 `voices.json`，让 OminiX-API 的 `/v1/voices` 列出所有已保存的 profile，然后通知守护进程重新加载。该脚本是幂等的（运维手工微调过的 `ref_text` / 别名会被保留）。可作为 `./scripts/deploy.sh` 部署后步骤运行，也可直接修单机：
 
@@ -1761,22 +1761,22 @@ Octos 会通过 `GET /health` 检查 readiness；没有该路由的服务可返�
 
 ```bash
 # 安装仓库中的所有技能
-octos skills install user/repo
+ra skills install user/repo
 
 # 安装特定的技能子目录
-octos skills install user/repo/skill-name
+ra skills install user/repo/skill-name
 
 # 从特定分支安装
-octos skills install user/repo --branch develop
+ra skills install user/repo --branch develop
 
 # 强制覆盖已有技能
-octos skills install user/repo --force
+ra skills install user/repo --force
 
 # 安装到特定配置文件
-octos skills --profile my-bot install user/repo
+ra skills --profile my-bot install user/repo
 ```
 
-`user/repo` 之后的路径相对仓库根目录解析，因此嵌套目录中的技能需写完整路径——例如位于 `skills/my-skill` 的技能用 `octos skills install user/repo/skills/my-skill` 安装。
+`user/repo` 之后的路径相对仓库根目录解析，因此嵌套目录中的技能需写完整路径——例如位于 `skills/my-skill` 的技能用 `ra skills install user/repo/skills/my-skill` 安装。
 
 **安装过程：**
 1. 尝试从技能注册表下载预编译二进制文件（SHA-256 验证）
@@ -1788,30 +1788,30 @@ octos skills --profile my-bot install user/repo
 
 ```bash
 # 列出已安装的技能
-octos skills list
+ra skills list
 
 # 显示技能详情
-octos skills info skill-name
+ra skills info skill-name
 
 # 更新特定技能
-octos skills update skill-name
+ra skills update skill-name
 
 # 更新所有技能
-octos skills update all
+ra skills update all
 
 # 删除技能
-octos skills remove skill-name
+ra skills remove skill-name
 
 # 搜索在线注册表
-octos skills search "网页抓取"
+ra skills search "网页抓取"
 ```
 
 ### 14.3 技能目录结构
 
-技能位于 `.octos/skills/<名称>/`，包含：
+技能位于 `.ra/skills/<名称>/`，包含：
 
 ```
-.octos/skills/my-skill/
+.ra/skills/my-skill/
 ├── SKILL.md         # 必需：指令 + frontmatter
 ├── manifest.json    # 工具技能必需：工具定义
 ├── main             # 编译好的二进制文件（或脚本）
@@ -1906,13 +1906,13 @@ requires_env: MY_API_KEY
 
 配置文件 gateway 按以下优先级加载技能：
 
-1. `~/.octos/profiles/<profile>/data/skills/`（配置文件作用域的自定义技能）
+1. `~/.ra/profiles/<profile>/data/skills/`（配置文件作用域的自定义技能）
 2. `<octos_home>/bundled-app-skills/`（内置：news、deep-search 等）
 3. `<octos_home>/platform-skills/`（管理员加载的平台技能，如 ASR/TTS）
 
-独立项目运行还可以加载 `<project>/.octos/plugins/` 和
-`<project>/.octos/skills/`。旧的 HOME 全局目录 `~/.octos/plugins/` 和
-`~/.octos/skills/` 仅用于迁移，不再属于常规扫描路径。
+独立项目运行还可以加载 `<project>/.ra/plugins/` 和
+`<project>/.ra/skills/`。旧的 HOME 全局目录 `~/.ra/plugins/` 和
+`~/.ra/skills/` 仅用于迁移，不再属于常规扫描路径。
 
 ### 14.7 创建自定义技能
 
@@ -1921,7 +1921,7 @@ requires_env: MY_API_KEY
 1. 创建技能目录：
 
 ```bash
-mkdir -p .octos/skills/translator
+mkdir -p .ra/skills/translator
 ```
 
 2. 创建 `SKILL.md`：
@@ -2004,7 +2004,7 @@ with urllib.request.urlopen(req) as resp:
 5. 设置可执行权限：
 
 ```bash
-chmod +x .octos/skills/translator/main
+chmod +x .ra/skills/translator/main
 ```
 
 6. 测试使用：
@@ -2116,7 +2116,7 @@ chmod +x .octos/skills/translator/main
   // 钩子
   "hooks": [],
 
-  // MCP 服务器 — octos 作为客户端接入的外部工具源。
+  // MCP 服务器 — ra 作为客户端接入的外部工具源。
   // stdio: command + args(可选 env);HTTP: url(可选 headers 或 oauth)。
   "mcp_servers": [
     // {
@@ -2138,7 +2138,7 @@ chmod +x .octos/skills/translator/main
 
   // 沙箱 — 完整说明见 docs/SANDBOX.md。
   // 后端：bwrap（Linux）、sandbox-exec（macOS）、AppContainer（Windows，
-  // 由 octos-sandbox 辅助 crate 提供）、docker（任意 OS）。auto 按 OS 选择。
+  // 由 ra-sandbox 辅助 crate 提供）、docker（任意 OS）。auto 按 OS 选择。
   "sandbox": {
     "enabled": true,
     "mode": "auto",
@@ -2216,7 +2216,7 @@ chmod +x .octos/skills/translator/main
 ### 15.3 文件布局
 
 ```
-~/.octos/                        # 全局配置目录
+~/.ra/                        # 全局配置目录
 ├── auth.json                   # 存储的 API 凭据（权限 0600）
 ├── profiles/                   # 每个配置的数据根（serve 模式）
 │   └── <profile-id>/
@@ -2228,7 +2228,7 @@ chmod +x .octos/skills/translator/main
 ├── skills/                     # 全局自定义技能
 └── serve.log                   # Serve 模式日志文件
 
-.octos/                          # 项目/配置文件数据目录
+.ra/                          # 项目/配置文件数据目录
 ├── config.json                 # 配置
 ├── cron.json                   # 定时任务
 ├── AGENTS.md                   # 智能体指令
@@ -2244,7 +2244,7 @@ chmod +x .octos/skills/translator/main
 ├── bundled-app-skills/         # gateway 启动时由 bootstrap 自动安装
 │   │                           #（常量 BUNDLED_APP_SKILLS_DIR = "bundled-app-skills"；
 │   │                           # 内容来自
-│   │                           # crates/octos-agent/src/bundled_app_skills.rs）。
+│   │                           # crates/ra-agent/src/bundled_app_skills.rs）。
 │   │                           # 重新部署会刷新此目录；用户改动会被覆盖 ——
 │   │                           # 自定义请放到 skills/。
 │   ├── news/                   # news_fetch
@@ -2268,13 +2268,13 @@ chmod +x .octos/skills/translator/main
     └── chat_history            # Readline 历史（CLI）
 ```
 
-> **运行时目录里看不到**：`harness-starter-{audio,coding,generic,report}` 与 `wechat-bridge` 都是仅在 workspace 中的示例/工具 crate，位于 `crates/app-skills/`。它们能被 `cargo build --workspace` 编译，但不在 `BUNDLED_APP_SKILLS` 中，因此 gateway 不会把它们写入 `~/.octos/bundled-app-skills/`。需要看模板请直接打开源码树。
+> **运行时目录里看不到**：`harness-starter-{audio,coding,generic,report}` 与 `wechat-bridge` 都是仅在 workspace 中的示例/工具 crate，位于 `crates/app-skills/`。它们能被 `cargo build --workspace` 编译，但不在 `BUNDLED_APP_SKILLS` 中，因此 gateway 不会把它们写入 `~/.ra/bundled-app-skills/`。需要看模板请直接打开源码树。
 
 ---
 
 ## 16. Matrix Appservice（Palpo）
 
-Octos 可以作为 [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/)（应用服务）运行在 Matrix 主服务器后面。本节介绍如何使用 Docker Compose 将 Octos 与 [Palpo](https://github.com/palpo-im/palpo) 一起部署，使用户可以从任何 Matrix 客户端与机器人对话。
+ra 可以作为 [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/)（应用服务）运行在 Matrix 主服务器后面。本节介绍如何使用 Docker Compose 将 ra 与 [Palpo](https://github.com/palpo-im/palpo) 一起部署，使用户可以从任何 Matrix 客户端与机器人对话。
 
 ### 16.1 工作原理
 
@@ -2285,13 +2285,13 @@ Matrix 客户端（Element 等）
   Palpo（主服务器 :8008）
        │  通过 Appservice API 推送事件
        ▼
-  Octos（应用服务监听 :8009）
+  ra（应用服务监听 :8009）
        │  通过 Palpo 的 Client-Server API 回复消息
        ▼
   Palpo ──► Matrix 客户端
 ```
 
-Palpo 在启动时加载一个**注册 YAML 文件**，告诉它哪些用户命名空间属于 Octos，以及将事件转发到哪里。Octos 在专用端口（默认 `8009`）监听这些事件，并通过 Palpo 的 Client-Server API 回复。
+Palpo 在启动时加载一个**注册 YAML 文件**，告诉它哪些用户命名空间属于 ra，以及将事件转发到哪里。ra 在专用端口（默认 `8009`）监听这些事件，并通过 Palpo 的 Client-Server API 回复。
 
 ### 16.2 目录结构
 
@@ -2300,13 +2300,13 @@ palpo_with_octos/
 ├── compose.yml                        # Docker Compose 文件
 ├── palpo.toml                         # Palpo 主服务器配置
 ├── appservices/
-│   └── octos-registration.yaml        # 应用服务注册文件
+│   └── ra-registration.yaml        # 应用服务注册文件
 ├── config/
-│   ├── botfather.json                 # Octos 配置文件（Matrix 频道）
-│   └── octos.json                     # Octos 全局配置
+│   ├── botfather.json                 # ra 配置文件（Matrix 频道）
+│   └── ra.json                     # ra 全局配置
 ├── data/
 │   ├── pgsql/                         # PostgreSQL 数据
-│   ├── octos/                         # Octos 运行时数据
+│   ├── ra/                         # ra 运行时数据
 │   └── media/                         # Palpo 媒体存储
 └── static/
     └── index.html                     # Palpo 主页
@@ -2316,7 +2316,7 @@ palpo_with_octos/
 
 #### 1. 生成令牌
 
-应用服务注册文件和 Octos 配置文件必须共享两个令牌。只需生成一次：
+应用服务注册文件和 ra 配置文件必须共享两个令牌。只需生成一次：
 
 ```bash
 # 生成 as_token 和 hs_token（任意随机十六进制字符串）
@@ -2328,14 +2328,14 @@ openssl rand -hex 32   # → hs_token
 
 #### 2. 创建应用服务注册文件
 
-创建 `appservices/octos-registration.yaml`：
+创建 `appservices/ra-registration.yaml`：
 
 ```yaml
-# Matrix 应用服务注册 — octos
-id: octos-matrix-appservice
+# Matrix 应用服务注册 — ra
+id: ra-matrix-appservice
 
-# Palpo 推送事件到 octos 的 URL（使用 Docker 服务名，不是 localhost）
-url: "http://octos:8009"
+# Palpo 推送事件到 ra 的 URL（使用 Docker 服务名，不是 localhost）
+url: "http://ra:8009"
 
 # 令牌 — 必须与 config/botfather.json 匹配
 as_token: "<你的-as-token>"
@@ -2358,9 +2358,9 @@ namespaces:
 
 | 字段 | 说明 |
 |------|------|
-| `url` | Palpo 发送事件的目标地址。使用 Docker 服务名（如 `http://octos:8009`），不要用 `localhost`。 |
-| `as_token` | Octos 调用 Palpo API 时使用的令牌。 |
-| `hs_token` | Palpo 向 Octos 推送事件时使用的令牌。 |
+| `url` | Palpo 发送事件的目标地址。使用 Docker 服务名（如 `http://ra:8009`），不要用 `localhost`。 |
+| `as_token` | ra 调用 Palpo API 时使用的令牌。 |
+| `hs_token` | Palpo 向 ra 推送事件时使用的令牌。 |
 | `sender_localpart` | 机器人的 Matrix 本地用户名（最终变为 `@octosbot:your.server.name`）。 |
 | `namespaces.users` | 应用服务管理的用户 ID 正则匹配模式。包含机器人本身和桥接用户前缀。 |
 
@@ -2387,7 +2387,7 @@ server = "your.server.name"
 client = "https://your.server.name"
 ```
 
-#### 4. 创建 Octos 配置文件
+#### 4. 创建 ra 配置文件
 
 创建 `config/botfather.json`，配置使用相同令牌的 Matrix 频道：
 
@@ -2432,9 +2432,9 @@ Matrix 频道字段说明：
 | `server_name` | Matrix 域名（必须与 `palpo.toml` 一致）。 |
 | `sender_localpart` | 机器人用户名（必须与注册文件一致）。 |
 | `user_prefix` | 此应用服务管理的桥接用户 ID 前缀。 |
-| `port` | Octos 监听来自 Palpo 的应用服务事件的端口。 |
+| `port` | ra 监听来自 Palpo 的应用服务事件的端口。 |
 | `allowed_senders` | 允许与机器人对话的 Matrix 用户 ID。空数组 = 允许所有人。 |
-| `mention_only` | 可选，默认 `true`。在真正的 1:1 私聊之外，机器人只在被显式寻址时才回复（`m.mentions` 条目、MXID pill/提及、或客户端指定的 target）。真正的 1:1 私聊——1 个人类 + 该应用服务在此房间仅管理 1 个机器人（以应用服务自己的房间映射为准）——始终回复。多机器人房间即使只有 1 个人类也要求提及，避免所有机器人同时应答。设为 `false` 则在所有房间回复每条消息（带 `org.octos.explicit_room` 标记的消息仍走门控）。 |
+| `mention_only` | 可选，默认 `true`。在真正的 1:1 私聊之外，机器人只在被显式寻址时才回复（`m.mentions` 条目、MXID pill/提及、或客户端指定的 target）。真正的 1:1 私聊——1 个人类 + 该应用服务在此房间仅管理 1 个机器人（以应用服务自己的房间映射为准）——始终回复。多机器人房间即使只有 1 个人类也要求提及，避免所有机器人同时应答。设为 `false` 则在所有房间回复每条消息（带 `org.ra.explicit_room` 标记的消息仍走门控）。 |
 
 #### 5. Docker Compose
 
@@ -2476,22 +2476,22 @@ services:
     networks:
       - internal
 
-  octos:
+  ra:
     build:
-      context: /path/to/octos       # Octos 源码仓库路径
+      context: /path/to/ra       # ra 源码仓库路径
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - 8009:8009     # 应用服务监听（接收 Palpo 推送的事件）
-      - 8010:8080     # Octos 仪表盘 / 管理 API
+      - 8010:8080     # ra 仪表盘 / 管理 API
     environment:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      RUST_LOG: octos=debug,info
+      RUST_LOG: ra=debug,info
     volumes:
-      - ./data/octos:/root/.octos
-      - ./config/botfather.json:/root/.octos/profiles/botfather.json:ro
-      - ./config/octos.json:/config/octos.json:ro
-    command: ["serve", "--host", "0.0.0.0", "--port", "8080", "--config", "/config/octos.json"]
+      - ./data/ra:/root/.ra
+      - ./config/botfather.json:/root/.ra/profiles/botfather.json:ro
+      - ./config/ra.json:/config/ra.json:ro
+    command: ["serve", "--host", "0.0.0.0", "--port", "8080", "--config", "/config/ra.json"]
     depends_on:
       - palpo
     networks:
@@ -2508,13 +2508,13 @@ networks:
 docker compose up -d
 ```
 
-Palpo 在启动时读取 `appservices/octos-registration.yaml`。当 Matrix 用户在机器人所在的房间发送消息时，Palpo 将事件推送到 `http://octos:8009`，Octos 通过智能体循环处理消息，并通过 Palpo 的 Client-Server API 回复。
+Palpo 在启动时读取 `appservices/ra-registration.yaml`。当 Matrix 用户在机器人所在的房间发送消息时，Palpo 将事件推送到 `http://ra:8009`，ra 通过智能体循环处理消息，并通过 Palpo 的 Client-Server API 回复。
 
 ### 16.4 令牌匹配检查清单
 
 最常见的配置错误是令牌不匹配。以下三处必须一致：
 
-| 值 | `octos-registration.yaml` | `botfather.json` |
+| 值 | `ra-registration.yaml` | `botfather.json` |
 |----|--------------------------|-------------------|
 | `as_token` | `as_token: "abc..."` | `"as_token": "abc..."` |
 | `hs_token` | `hs_token: "def..."` | `"hs_token": "def..."` |
@@ -2526,7 +2526,7 @@ Palpo 在启动时读取 `appservices/octos-registration.yaml`。当 Matrix 用�
 | 症状 | 原因 | 解决方法 |
 |------|------|----------|
 | 机器人无响应 | 注册文件与配置文件之间令牌不匹配 | 检查[令牌匹配清单](#164-令牌匹配检查清单) |
-| Palpo 日志中出现 `Connection refused` | Octos 未运行或注册文件中 `url` 错误 | 确保 Octos 已启动；使用 Docker 服务名（`http://octos:8009`），不要用 `localhost` |
+| Palpo 日志中出现 `Connection refused` | ra 未运行或注册文件中 `url` 错误 | 确保 ra 已启动；使用 Docker 服务名（`http://ra:8009`），不要用 `localhost` |
 | `User ID not in namespace` | `sender_localpart` 与注册文件 `namespaces.users` 正则不匹配 | 更新正则以包含机器人的完整用户 ID |
 | 未授权用户的消息被忽略 | `allowed_senders` 过滤 | 将用户的 Matrix ID 添加到数组中，或设置为 `[]` 以允许所有人 |
 

@@ -29,21 +29,21 @@ def main():
     if sys.platform.startswith("win"):
         library = library_dir / "octos_uniffi.dll"
         bindgen = bindgen.with_suffix(".exe")
-    with tempfile.TemporaryDirectory(prefix="octos-binding-parity-") as output:
+    with tempfile.TemporaryDirectory(prefix="ra-binding-parity-") as output:
         subprocess.run([str(bindgen), "generate", "--library", str(library),
                         "--language", "python", "--no-format", "--out-dir", output],
                        check=True, cwd=ROOT, timeout=120)
-        expected = (ROOT / "crates/octos-uniffi/bindings/python/octos.py").read_text()
-        actual = normalized_generated((Path(output) / "octos.py").read_text())
+        expected = (ROOT / "crates/ra-uniffi/bindings/python/ra.py").read_text()
+        actual = normalized_generated((Path(output) / "ra.py").read_text())
         if expected != actual:
             sys.stderr.writelines(difflib.unified_diff(
                 expected.splitlines(keepends=True), actual.splitlines(keepends=True),
-                fromfile="committed octos.py", tofile="generated octos.py"))
+                fromfile="committed ra.py", tofile="generated ra.py"))
             raise SystemExit("Python bindings are stale; regenerate using the README instructions")
     subprocess.run([os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror",
-                    "-fsyntax-only", "-I", str(ROOT / "crates/octos-ffi/include"),
-                    str(ROOT / "crates/octos-ffi/tests/header_contract.c")], check=True, timeout=30)
-    subprocess.run([sys.executable, str(ROOT / "crates/octos-uniffi/tests/incomplete_bindings.py"),
+                    "-fsyntax-only", "-I", str(ROOT / "crates/ra-ffi/include"),
+                    str(ROOT / "crates/ra-ffi/tests/header_contract.c")], check=True, timeout=30)
+    subprocess.run([sys.executable, str(ROOT / "crates/ra-uniffi/tests/incomplete_bindings.py"),
                     "--library-dir", str(library_dir)], check=True, timeout=120)
     print("PASS: generated Python parity, C declarations and actual C/Python runtime contracts")
 

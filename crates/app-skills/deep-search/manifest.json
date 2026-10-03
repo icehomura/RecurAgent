@@ -1,7 +1,7 @@
 {
   "name": "deep-search",
   "version": "2.0.0",
-  "author": "octos",
+  "author": "ra",
   "description": "Deep multi-round web research: free sources first (GDELT, Google News RSS, optional SearXNG, then keyed APIs), polite page reading (honest User-Agent, per-host spacing, browser for JS-heavy pages; robots.txt optional, off by default), reference chasing, a cited report and structured items.",
   "timeout_secs": 600,
   "tools": [
@@ -135,7 +135,7 @@
           }
         },
         "required": ["query"],
-        "x-octos-host-config-keys": ["synthesis_config"]
+        "x-ra-host-config-keys": ["synthesis_config"]
       }
     }
   ]

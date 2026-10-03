@@ -108,7 +108,7 @@ Acceptance:
 
 Deliverables:
 
-- Update `api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md` before code behavior changes are considered complete.
+- Update `api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md` before code behavior changes are considered complete.
 - Add fixtures for WebSocket JSON frames and stdio NDJSON frames.
 - Cover session lifecycle, turn lifecycle, tool events, approval events, profile errors, auth errors, capability negotiation, disconnect, interrupt, and reconnect.
 - Provide a conformance runner that can execute the same scenario over both transports and diff normalized transcripts.
@@ -163,15 +163,15 @@ M18 is complete only when:
 
 Backend verification:
 
-- `cargo test -p octos-cli --features api --lib -- --nocapture`
+- `cargo test -p ra-cli --features api --lib -- --nocapture`
   passed: 1111 passed, 0 failed, 4 ignored.
-- `cargo build -p octos-cli --features api --bin octos` passed.
+- `cargo build -p ra-cli --features api --bin ra` passed.
 - `npm --prefix e2e run soak:m18:appui-transport-parity` passed.
 - WS-vs-stdio normalized diff: 0 unexpected differences and 0
   allowlisted differences; unauthenticated stdio auth-bound methods are capability
   omissions with explicit unsupported reports, not allowlisted runtime diffs.
 - Backend evidence directory:
-  `~/home/octos/e2e/test-results-m18-appui-transport-parity/20260518T011535Z`.
+  `~/home/ra/e2e/test-results-m18-appui-transport-parity/20260518T011535Z`.
 
 TUI verification:
 
@@ -184,10 +184,10 @@ TUI verification:
 Claude review:
 
 - Backend focused review:
-  `/tmp/octos-m18-claude-backend-focused-review.txt`, verdict:
+  `/tmp/ra-m18-claude-backend-focused-review.txt`, verdict:
   "No must-fix findings".
 - TUI focused review:
-  `/tmp/octos-m18-claude-tui-focused-review.txt`, verdict:
+  `/tmp/ra-m18-claude-tui-focused-review.txt`, verdict:
   "No must-fix findings".
 - Claude backend follow-ups addressed before final verification:
   stdio profile binding now updates only after successful `session/open`;

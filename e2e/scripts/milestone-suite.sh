@@ -6,7 +6,7 @@ SCRIPT_PATH="${SCRIPT_DIR}/$(basename "$0")"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT"
 
-AUTH_TOKEN="${OCTOS_AUTH_TOKEN:-octos-admin-2026}"
+AUTH_TOKEN="${OCTOS_AUTH_TOKEN:-ra-admin-2026}"
 PROFILE_ID="${OCTOS_PROFILE:-dspfac}"
 TEST_EMAIL="${OCTOS_TEST_EMAIL:-dspfac@gmail.com}"
 

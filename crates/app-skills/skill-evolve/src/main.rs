@@ -585,7 +585,7 @@ fn resolve_skills_dirs() -> Vec<PathBuf> {
         Ok(h) => PathBuf::from(h),
         Err(_) => return vec![],
     };
-    let octos_home = home.join(".octos");
+    let octos_home = home.join(".ra");
     let mut dirs = Vec::new();
 
     // Layer 2: bundled app-skills

@@ -1,7 +1,7 @@
 {
   "name": "@octos-org/octos",
   "version": "0.0.0-managed",
-  "description": "Rust-native, API-first Agentic OS server (octos serve + bundled skills). Installs the prebuilt release bundle.",
+  "description": "Rust-native, API-first Agentic OS server (ra serve + bundled skills). Installs the prebuilt release bundle.",
   "homepage": "https://github.com/octos-org/octos",
   "license": "Apache-2.0",
   "repository": {
@@ -9,7 +9,7 @@
     "url": "git+https://github.com/octos-org/octos.git"
   },
   "bin": {
-    "octos": "bin/octos.js"
+    "ra": "bin/ra.js"
   },
   "scripts": {
     "postinstall": "node install.js"

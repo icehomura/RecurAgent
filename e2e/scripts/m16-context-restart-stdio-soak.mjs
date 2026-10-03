@@ -16,7 +16,7 @@ const runRoot = path.resolve(
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const profileId = process.env.OCTOS_M16_CONTEXT_RESTART_PROFILE || 'm16-context';
 const sessionId =
   process.env.OCTOS_M16_CONTEXT_RESTART_SESSION
@@ -172,7 +172,7 @@ class StdioClient {
   async waitSpawn() {
     await new Promise((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error(`${this.label}: octos serve --stdio did not spawn`)),
+        () => reject(new Error(`${this.label}: ra serve --stdio did not spawn`)),
         10_000,
       );
       this.child.once('spawn', () => {

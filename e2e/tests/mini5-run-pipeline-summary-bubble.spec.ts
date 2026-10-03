@@ -14,9 +14,9 @@
  *   - capturing the result bubble's text content, files, and timing.
  *
  * Run:
- *   cd ~/home/octos/e2e
+ *   cd ~/home/ra/e2e
  *   OCTOS_TEST_URL=https://dspfac.ocean.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *     npx playwright test tests/mini5-run-pipeline-summary-bubble.spec.ts \
  *     --reporter=list --workers=1

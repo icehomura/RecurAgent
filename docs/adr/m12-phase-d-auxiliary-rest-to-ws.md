@@ -2,7 +2,7 @@
 
 - Date: 2026-05-12 (proposal) / 2026-05-27 (backfilled to repo)
 - Status: **Accepted**. Implementation landed across `#912` (D-1 server frames),
-  the D-3 client cutover sequence in `octos-web`, and `#914` (D-5 REST
+  the D-3 client cutover sequence in `ra-web`, and `#914` (D-5 REST
   retirement). This ADR backfills the contract record that was missed during
   the original landing (tracked as issue `#1330`).
 - Branch (target at proposal time): `main`. The ADR is now part of the
@@ -14,8 +14,8 @@
 
 M9-α-5/α-6 (PRs `#855`, `#908`, `#909`) deleted the SSE foreground chat
 transport. The sole chat transport is now `/api/ui-protocol/ws` (see
-`crates/octos-cli/src/api/router.rs` and `docs/M9-ALPHA-SOLE-TRANSPORT-ADR.md`).
-On the client, ingest goes through `octos-web/src/runtime/ui-protocol-bridge.ts`
+`crates/ra-cli/src/api/router.rs` and `docs/M9-ALPHA-SOLE-TRANSPORT-ADR.md`).
+On the client, ingest goes through `ra-web/src/runtime/ui-protocol-bridge.ts`
 exclusively.
 
 ### What Phase C did NOT do
@@ -23,7 +23,7 @@ exclusively.
 Everything the web UI did **outside** the assistant streaming lifecycle still
 went over REST. Concretely, every endpoint in `my_api` and the non-chat half of
 `chat_api` was REST-only. The web client called them via the helper at
-`octos-web/src/api/client.ts` (the `request<T>()` function), which carried a
+`ra-web/src/api/client.ts` (the `request<T>()` function), which carried a
 global 401/403 interceptor that wiped the bearer token from `localStorage` and
 redirected to `/login`.
 
@@ -62,7 +62,7 @@ belongs) and **blob I/O** (where HTTP fits the shape).
 
 ## Decision
 
-The **data plane** for the octos web client is WebSocket UI Protocol v1
+The **data plane** for the ra web client is WebSocket UI Protocol v1
 (`/api/ui-protocol/ws`). REST survives only for two carve-outs:
 
 1. **AUTH** — `/api/auth/*` and the bootstrap helper `GET /api/my/profile` used
@@ -77,7 +77,7 @@ The **data plane** for the octos web client is WebSocket UI Protocol v1
    `GET /api/files/{path}`, `GET /api/my/content/{id}/thumbnail`,
    `GET /api/files/list` (small JSON, but driven by the same blob-shaped use
    case). Multi-megabyte bodies belong on HTTP, not on the WS text-frame budget
-   (`MAX_TEXT_FRAME_BYTES = 1 MiB` per `octos-core/src/ui_protocol.rs`).
+   (`MAX_TEXT_FRAME_BYTES = 1 MiB` per `ra-core/src/ui_protocol.rs`).
 
 Everything else — session list, snapshot, messages, files panel, tasks panel,
 status, content panel, content delete — became a JSON-RPC method on the
@@ -100,7 +100,7 @@ surfaced by the panel that called it — not a session detonation.
 
 ## Endpoint inventory
 
-Sourced from the pre-D-5 REST router and the `octos-web` API clients. One row
+Sourced from the pre-D-5 REST router and the `ra-web` API clients. One row
 per URL the web client actually called.
 
 | URL | Method | Current client caller (pre-cutover) | Category | Shipped WS frame |
@@ -164,16 +164,16 @@ clients cannot trip into the new methods without explicit negotiation.
 | `content/bulk_delete` | Bulk-content deletion. | `POST /api/my/content/bulk-delete` |
 
 Per-method request and response shapes are documented in
-`api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 7 ("M12 Phase D: Auxiliary
-RPC"). Request/response Rust types live in `crates/octos-core/src/ui_protocol.rs`
+`api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 7 ("M12 Phase D: Auxiliary
+RPC"). Request/response Rust types live in `crates/ra-core/src/ui_protocol.rs`
 (`SessionListParams`/`SessionListResult`, …, `ContentBulkDeleteParams`/
 `ContentBulkDeleteResult`). Implementation dispatchers live in
-`crates/octos-cli/src/api/ui_protocol.rs::handle_session_list` and siblings.
+`crates/ra-cli/src/api/ui_protocol.rs::handle_session_list` and siblings.
 
 ### Per-method error envelopes
 
 Every method uses the standard JSON-RPC 2.0 error envelope documented in
-`octos-core/src/ui_protocol.rs`. The Phase D dispatchers map REST status codes
+`ra-core/src/ui_protocol.rs`. The Phase D dispatchers map REST status codes
 to typed errors with `data.kind` keys so clients can branch on the kind, not
 the HTTP status:
 
@@ -195,7 +195,7 @@ the HTTP status:
 - `auth_unavailable` (`-32120`) — content methods called without a usable
   identity. The WS connection is also closed with code `1008 auth_expired` so
   the client's `crew:auth_expired` flow can clear the token and route to
-  `/login`. See `close_ws_with_code` in `crates/octos-cli/src/api/ui_protocol.rs`.
+  `/login`. See `close_ws_with_code` in `crates/ra-cli/src/api/ui_protocol.rs`.
 - `method_not_supported` (`-32004`) — capability not negotiated.
 - `internal_error` (`-32603`) — REST 5xx other than 503; non-JSON REST body.
 
@@ -250,8 +250,8 @@ defaulted to OFF until soak passed.
 ### D-1 — Server: add WS frames (additive)
 
 Shipped as `#912`. Added the thirteen `UiCommand` variants in
-`crates/octos-cli/src/api/ui_protocol.rs`, their typed
-params/results in `crates/octos-core/src/ui_protocol.rs`, and the
+`crates/ra-cli/src/api/ui_protocol.rs`, their typed
+params/results in `crates/ra-core/src/ui_protocol.rs`, and the
 `UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1` capability flag. Each WS
 dispatcher delegates to the corresponding REST handler function so business
 logic stays single-sourced. Codex review on the original PR landed as a
@@ -262,8 +262,8 @@ over-length-title validation.
 
 ### D-2 — Client: WS bridge methods (additive, behind flag)
 
-Shipped in `octos-web` behind the `aux_rest_to_ws_v1` feature flag (default
-OFF). Added typed wrappers in `octos-web/src/runtime/ui-protocol-bridge.ts`
+Shipped in `ra-web` behind the `aux_rest_to_ws_v1` feature flag (default
+OFF). Added typed wrappers in `ra-web/src/runtime/ui-protocol-bridge.ts`
 that mirror the existing `request<T>()` private-method pattern.
 
 ### D-3 — Client: panel-by-panel cutover
@@ -274,10 +274,10 @@ history scroll → workspace contract panel → content panel → title editor.
 
 ### D-4 — Default flag ON; tighten 401 reaper
 
-Flipped the flag default to ON in `octos-web/src/lib/feature-flags.ts` after
-the fleet soaked clean. Narrowed `octos-web/src/api/client.ts:128-136` to fire
+Flipped the flag default to ON in `ra-web/src/lib/feature-flags.ts` after
+the fleet soaked clean. Narrowed `ra-web/src/api/client.ts:128-136` to fire
 only for `/api/auth/*`. Removed the duplicate reaper in
-`octos-web/src/api/chat.ts:45-52`.
+`ra-web/src/api/chat.ts:45-52`.
 
 ### D-5 — Retire REST endpoints (cleanup)
 
@@ -296,9 +296,9 @@ were **not** retired and stay REST.
 
 ## Acceptance criteria (closed)
 
-1. `git grep -E "/api/sessions|/api/status|/api/my/content" octos-web/src`
+1. `git grep -E "/api/sessions|/api/status|/api/my/content" ra-web/src`
    returns ZERO matches in non-test, non-BLOB files.
-2. The 401 reaper in `octos-web/src/api/client.ts` triggers only on paths
+2. The 401 reaper in `ra-web/src/api/client.ts` triggers only on paths
    starting with `/api/auth/`. Unit test asserts this.
 3. The mini5 incident reproduction passes: with a misconfigured global agent
    that 401s the data plane during bootstrap, the user stays logged in and
@@ -342,7 +342,7 @@ were **not** retired and stay REST.
 - Phase C cleanup PRs: `#855`, `#908`, `#909`
 - Phase D landing PRs: `#912` (D-1), `#914` (D-5)
 - Capability flag: `UI_PROTOCOL_FEATURE_AUXILIARY_REST_TO_WS_V1` in
-  `crates/octos-core/src/ui_protocol.rs`
-- WS dispatchers: `crates/octos-cli/src/api/ui_protocol.rs::handle_session_list`
+  `crates/ra-core/src/ui_protocol.rs`
+- WS dispatchers: `crates/ra-cli/src/api/ui_protocol.rs::handle_session_list`
   and siblings
 - Tracking issue: `#1330` (this backfill)

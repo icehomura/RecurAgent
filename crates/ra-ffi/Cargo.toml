@@ -1,0 +1,63 @@
+[package]
+name = "ra-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "C-ABI bindings for embedding ra in non-Rust apps (Python/Node/Go/C)."
+
+[lib]
+# cdylib   -> the shared library non-Rust hosts dlopen/link against.
+# staticlib -> a `.a` for static linking into C/Go binaries.
+# rlib      -> lets this crate's own Rust integration tests call the
+#              `extern "C"` symbols directly (see tests/ffi.rs).
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+ra-core = { workspace = true }
+ra-agent = { workspace = true }
+ra-llm = { workspace = true }
+ra-memory = { workspace = true }
+# Path dep (ra-cli is a workspace member, not a `workspace.dependencies`
+# entry). default-features = false keeps out the heavy `api`/channel features —
+# only the ungated `config` + `commands::chat` modules are needed to reuse
+# `Config` + `create_provider_with_api_type`.
+ra-cli = { path = "../ra-cli", default-features = false }
+# Optional: the in-process GGUF embedder. Pulled only under `embed-llama`
+# (a CMake build of llama.cpp), so the default `cargo build --workspace`
+# stays pure Rust.
+ra-embed-llama = { workspace = true, optional = true }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# `since`/`until` parsing for `ra_memory_search` (RFC3339 or YYYY-MM-DD).
+chrono = { workspace = true }
+libc = { workspace = true }
+# Only for the "default embedding model unavailable, running keyword-only"
+# warning; the host's subscriber decides whether it is shown.
+tracing = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+eyre = { workspace = true }
+tempfile = { workspace = true }
+
+[features]
+# In-process embedder on by default so the embedded runtime (phone shells)
+# can search memory semantically; hosts opt out with --no-default-features.
+default = ["embed-llama"]
+# Compile the GGUF embedding backend into `ra_embed`. Without it,
+# `ra_embed` reports "embedding support not compiled in".
+embed-llama = ["dep:ra-embed-llama", "ra-embed-llama/embed-llama"]
+embed-llama-metal = ["embed-llama", "ra-embed-llama/metal"]
+embed-llama-cuda = ["embed-llama", "ra-embed-llama/cuda"]
+
+# NOTE: this crate deliberately does NOT set `[lints] workspace = true` at the
+# table level the same way as leaf crates — it still inherits the workspace
+# `deny(unsafe_code)`, but overrides it at the crate root with
+# `#![allow(unsafe_code)]` because an FFI boundary is unsafe by nature. See the
+# SAFETY rationale at the top of src/lib.rs.
+[lints]
+workspace = true

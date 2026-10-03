@@ -6,7 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-const BOOTSTRAP_TOKEN = 'octos-setup-wizard-bootstrap';
+const BOOTSTRAP_TOKEN = 'ra-setup-wizard-bootstrap';
 const ROTATED_TOKEN = 'Setup512';
 const SERVER_READY_TIMEOUT_MS = 360_000;
 
@@ -32,7 +32,7 @@ test('first-install admin setup wizard rotates token and persists completion', a
   try {
     await loginWithBootstrapToken(page, serve.baseURL);
     await expect(page).toHaveURL(/\/admin\/setup\/welcome$/);
-    await expect(page.getByRole('heading', { name: 'Welcome to Octos' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome to ra' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Get Started' }).click();
     await expect(page).toHaveURL(/\/admin\/setup\/rotate-token$/);
@@ -58,7 +58,7 @@ test('first-install admin setup wizard rotates token and persists completion', a
 
 async function startServe(testInfo: TestInfo): Promise<SpawnedServe> {
   const port = await freePort();
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'octos-setup-wizard-e2e-'));
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ra-setup-wizard-e2e-'));
   const baseURL = `http://127.0.0.1:${port}`;
   const logs: string[] = [];
   const serveArgs = [
@@ -102,14 +102,14 @@ function serveCommand(serveArgs: string[]): { bin: string; args: string[] } {
   const configured = process.env.OCTOS_SETUP_WIZARD_BIN;
   const candidates = [
     configured,
-    path.join(repoRoot, 'target', 'release', 'octos'),
-    path.join(repoRoot, 'target', 'debug', 'octos'),
+    path.join(repoRoot, 'target', 'release', 'ra'),
+    path.join(repoRoot, 'target', 'debug', 'ra'),
   ].filter((candidate): candidate is string => Boolean(candidate));
   const binary = candidates.find((candidate) => existsSync(candidate));
   if (binary) return { bin: binary, args: serveArgs };
   return {
     bin: 'cargo',
-    args: ['run', '-p', 'octos-cli', '--features', 'api', '--', ...serveArgs],
+    args: ['run', '-p', 'ra-cli', '--features', 'api', '--', ...serveArgs],
   };
 }
 
@@ -126,7 +126,7 @@ async function waitForServe(
 
   while (Date.now() < deadline) {
     if (exitCode !== null) {
-      throw new Error(`octos serve exited early with code ${exitCode}\n${logs.join('')}`);
+      throw new Error(`ra serve exited early with code ${exitCode}\n${logs.join('')}`);
     }
     try {
       const response = await fetch(`${baseURL}/admin/login`);
@@ -137,7 +137,7 @@ async function waitForServe(
     await sleep(500);
   }
 
-  throw new Error(`octos serve did not become ready at ${baseURL}\n${logs.join('')}`);
+  throw new Error(`ra serve did not become ready at ${baseURL}\n${logs.join('')}`);
 }
 
 async function loginWithBootstrapToken(page: Page, baseURL: string) {
@@ -239,7 +239,7 @@ async function stopServe(serve: SpawnedServe) {
 }
 
 async function attachServeLogs(testInfo: TestInfo, logs: string[]) {
-  await testInfo.attach('octos-serve.log', {
+  await testInfo.attach('ra-serve.log', {
     body: logs.join(''),
     contentType: 'text/plain',
   });

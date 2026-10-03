@@ -407,7 +407,7 @@ test.describe('Slides workspace', () => {
 
     // Should mention workspace policy
     expect(
-      content.includes('.octos-workspace.toml') || content.includes('policy'),
+      content.includes('.ra-workspace.toml') || content.includes('policy'),
     ).toBe(true);
   });
 
@@ -537,7 +537,7 @@ test.describe('Session create & delete lifecycle', () => {
 
     // Verify project was created by checking via a second message
     const { content } = await chatViaWs(
-      `Use shell to run: ls slides/${slug}/.octos-workspace.toml 2>&1 && echo EXISTS || echo MISSING`,
+      `Use shell to run: ls slides/${slug}/.ra-workspace.toml 2>&1 && echo EXISTS || echo MISSING`,
       sid,
       30_000,
     );

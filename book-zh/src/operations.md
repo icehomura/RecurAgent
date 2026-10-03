@@ -9,7 +9,7 @@
 拉取最新源码并重新构建：
 
 ```bash
-cd octos
+cd ra
 git pull origin main
 ./scripts/local-tenant-deploy.sh --full   # Rebuilds and reinstalls
 ```
@@ -18,11 +18,11 @@ git pull origin main
 
 ```bash
 # macOS（launchd 系统守护进程）：
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 
 # Linux (systemd)：
-sudo systemctl restart octos-serve
+sudo systemctl restart ra-serve
 ```
 
 ---
@@ -41,16 +41,16 @@ sudo systemctl restart octos-serve
 
 ## 钥匙串集成
 
-Octos 支持将 API 密钥存储在操作系统的密钥存储中，而不是以明文形式存放在配置文件的 JSON 中：macOS 使用钥匙串（Apple Silicon 上提供硬件级加密和操作系统级别的访问控制），Linux 使用 `~/.octos/secrets` 下的 0600 文件，Windows 暂无密钥存储——请改用环境变量或明文 `env_vars`。下图展示的是 macOS 后端。
+ra 支持将 API 密钥存储在操作系统的密钥存储中，而不是以明文形式存放在配置文件的 JSON 中：macOS 使用钥匙串（Apple Silicon 上提供硬件级加密和操作系统级别的访问控制），Linux 使用 `~/.ra/secrets` 下的 0600 文件，Windows 暂无密钥存储——请改用环境变量或明文 `env_vars`。下图展示的是 macOS 后端。
 
 ### 架构
 
 ```
                      +------------------------------+
-  octos auth set-key |     macOS Keychain            |
+  ra auth set-key |     macOS Keychain            |
   -----------------> |  (AES encrypted, per-user)    |
                      |                               |
-                     |  service: "octos"             |
+                     |  service: "ra"             |
                      |  account: "OPENAI_API_KEY"    |
                      |  password: "sk-proj-abc..."   |
                      +---------------+--------------+
@@ -75,34 +75,34 @@ Octos 支持将 API 密钥存储在操作系统的密钥存储中，而不是以
 
 ```bash
 # 为 SSH 会话解锁钥匙串（通过 SSH 使用 set-key 前必须执行）
-octos auth unlock --password <login-password>
-octos auth unlock                               # interactive prompt
+ra auth unlock --password <login-password>
+ra auth unlock                               # interactive prompt
 
 # 将密钥存入钥匙串并更新配置文件使用 keychain 标记
-octos auth set-key OPENAI_API_KEY sk-proj-abc123
-octos auth set-key OPENAI_API_KEY              # interactive prompt
+ra auth set-key OPENAI_API_KEY sk-proj-abc123
+ra auth set-key OPENAI_API_KEY              # interactive prompt
 
 # 指定配置文件
-octos auth set-key GEMINI_API_KEY AIzaSy... -p my-profile
+ra auth set-key GEMINI_API_KEY AIzaSy... -p my-profile
 
 # 列出所有密钥及其存储状态
-octos auth keys
-octos auth keys -p my-profile
+ra auth keys
+ra auth keys -p my-profile
 
 # 从钥匙串移除并清理配置文件
-octos auth remove-key OPENAI_API_KEY
+ra auth remove-key OPENAI_API_KEY
 ```
 
 ### 钥匙串条目格式
 
-- **Service**：`octos`（所有条目使用相同常量）
+- **Service**：`ra`（所有条目使用相同常量）
 - **Account**：环境变量名（例如 `OPENAI_API_KEY`）
 - **Password**：实际的密钥值
 
 验证方法：
 
 ```bash
-security find-generic-password -s octos -a OPENAI_API_KEY -w
+security find-generic-password -s ra -a OPENAI_API_KEY -w
 ```
 
 ### SSH 和无头服务器设置
@@ -117,7 +117,7 @@ macOS 钥匙串绑定到 GUI 登录会话。SSH 会话无法访问已锁定的�
 ssh user@<host>
 
 # 解锁钥匙串（需要登录密码）
-octos auth unlock --password <login-password>
+ra auth unlock --password <login-password>
 
 # 完成 -- 自动锁定已自动禁用。
 # 钥匙串保持解锁状态直到重启。
@@ -138,10 +138,10 @@ security set-keychain-settings ~/Library/Keychains/login.keychain-db
 
 | 现象 | 原因 | 解决方法 |
 |---------|-------|-----|
-| "User interaction is not allowed" | 钥匙串已锁定（SSH 会话） | `octos auth unlock --password <pw>` |
+| "User interaction is not allowed" | 钥匙串已锁定（SSH 会话） | `ra auth unlock --password <pw>` |
 | 钥匙串查找超时（3 秒） | 钥匙串已锁定（LaunchDaemon） | 启用自动登录，重启 |
-| "keychain marker found but no secret" | 密钥未存储或使用了错误的钥匙串 | 解锁后重新执行 `octos auth set-key` |
-| 网关启动时卡住 | 钥匙串查找阻塞 | 更新到最新的 octos 二进制文件 |
+| "keychain marker found but no secret" | 密钥未存储或使用了错误的钥匙串 | 解锁后重新执行 `ra auth set-key` |
+| 网关启动时卡住 | 钥匙串查找阻塞 | 更新到最新的 ra 二进制文件 |
 
 ### 安全性对比
 
@@ -162,13 +162,13 @@ macOS 钥匙串是为桌面交互使用设计的。在无头服务器上，它�
 | **开发者笔记本** | 钥匙串（`"keychain:"`） | GUI 会话保持钥匙串解锁；ACL 弹窗可以接受 |
 | **自动登录 + GUI 的 Mac** | 钥匙串（`"keychain:"`） | 如果通过屏幕共享批准过 ACL 对话框则可用 |
 | **无头 Mac（仅 SSH）** | `env_vars` 或 launchd plist 中的明文 | 最可靠；无解锁/ACL 依赖 |
-| **Linux 服务器** | 密钥存储（`~/.octos/secrets` 下的 0600 文件） | 文件存储无需解锁或 D-Bus；明文环境变量亦可 |
+| **Linux 服务器** | 密钥存储（`~/.ra/secrets` 下的 0600 文件） | 文件存储无需解锁或 D-Bus；明文环境变量亦可 |
 | **Windows** | `env_vars` 或环境变量中的明文 | 暂无密钥存储（#2234） |
 
 **为什么钥匙串在无头服务器上不可靠：**
 
 1. **需要 macOS 登录密码** -- 通过 SSH 解锁钥匙串需要用户的登录密码存储在某处，降低了安全收益。
-2. **重启/休眠后重新锁定** -- 启动 `octos serve` 的 LaunchDaemon 在 GUI 登录之前运行，此时钥匙串处于锁定状态。
+2. **重启/休眠后重新锁定** -- 启动 `ra serve` 的 LaunchDaemon 在 GUI 登录之前运行，此时钥匙串处于锁定状态。
 3. **空闲超时后重新锁定** -- 即使解锁后，macOS 也可能重新锁定。`set-keychain-settings` 的变通方案可能被 macOS 更新重置。
 4. **ACL 弹窗阻断无头访问** -- 如果二进制文件不是最初存储密钥的那个，macOS 可能弹出一个无法回答的 GUI 对话框。
 5. **会话隔离** -- 从 SSH 解锁不会解锁 LaunchDaemon 会话的钥匙串，反之亦然。
@@ -191,8 +191,8 @@ macOS 钥匙串是为桌面交互使用设计的。在无头服务器上，它�
 使用文件系统权限保护文件：
 
 ```bash
-chmod 600 ~/.octos/profiles/*.json
-sudo chmod 600 /Library/LaunchDaemons/io.octos.serve.plist
+chmod 600 ~/.ra/profiles/*.json
+sudo chmod 600 /Library/LaunchDaemons/io.ra.serve.plist
 ```
 
 ---
@@ -204,7 +204,7 @@ sudo chmod 600 /Library/LaunchDaemons/io.octos.serve.plist
 签发一条（运维提示走 stderr，编码后的密钥走 stdout）：
 
 ```bash
-octos auth issue-work-secret \
+ra auth issue-work-secret \
   --session "dspfac:local:tui#coding" \
   --profile dspfac \
   --ttl 1h \
@@ -212,12 +212,12 @@ octos auth issue-work-secret \
 ```
 
 - `--ttl` 接受 `15m`、`1h`、`3600s` 这类值（默认 `1h`）。
-- 对同一会话重新签发会替换早先的授权；授权以 SHA-256 哈希形式持久化在 serve 数据目录（默认 `~/.octos/work_secrets.json`，令牌本身从不落盘）。
-- `octos auth list-work-secrets` 列出已记录的授权；`octos auth revoke-work-secret '<secret>'` 撤销一条。
+- 对同一会话重新签发会替换早先的授权；授权以 SHA-256 哈希形式持久化在 serve 数据目录（默认 `~/.ra/work_secrets.json`，令牌本身从不落盘）。
+- `ra auth list-work-secrets` 列出已记录的授权；`ra auth revoke-work-secret '<secret>'` 撤销一条。
 
 访客解码密钥后连到 `/v1/session_ingress/ws/<URL 编码后的会话 id>`，带 `Authorization: Bearer <token>`。无法设置请求头的 WebSocket 客户端可退回 `?token=<token>`；该形式已弃用且会被服务端记录。套接字使用普通 UI Protocol 帧，每个客户端请求前都会重验授权，授权被撤销、过期或被重签替换后以 1008 关闭。只接受限定在被授权会话内的方法。
 
-完整走查（含最小 Python 客户端）：`docs/OCTOS_WORK_SECRET_SESSION_INGRESS.md`。
+完整走查（含最小 Python 客户端）：`docs/ra_WORK_SECRET_SESSION_INGRESS.md`。
 
 ---
 
@@ -225,17 +225,17 @@ octos auth issue-work-secret \
 
 ### macOS (launchd)
 
-部署脚本将 octos 安装为**系统 LaunchDaemon**，位于 `/Library/LaunchDaemons/io.octos.serve.plist`（因此登出后仍存活，并在 GUI 登录前启动）。使用 `sudo` 管理：
+部署脚本将 ra 安装为**系统 LaunchDaemon**，位于 `/Library/LaunchDaemons/io.ra.serve.plist`（因此登出后仍存活，并在 GUI 登录前启动）。使用 `sudo` 管理：
 
 ```bash
 # 加载服务
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 
 # 卸载服务
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
 
 # 检查状态
-sudo launchctl print system/io.octos.serve
+sudo launchctl print system/io.ra.serve
 ```
 
 如果服务需要环境变量（例如 SMTP 凭据），将其添加到 plist 中：
@@ -248,30 +248,30 @@ sudo launchctl print system/io.octos.serve
 </dict>
 ```
 
-日志位于 `~/.octos/serve.log`。
+日志位于 `~/.ra/serve.log`。
 
 ### Linux (systemd)
 
-部署脚本会在 `/etc/systemd/system/octos-serve.service` 安装**系统单元**。使用 `sudo` 管理：
+部署脚本会在 `/etc/systemd/system/ra-serve.service` 安装**系统单元**。使用 `sudo` 管理：
 
 ```bash
 # 启动 / 停止 / 重启
-sudo systemctl start octos-serve
-sudo systemctl stop octos-serve
-sudo systemctl restart octos-serve
+sudo systemctl start ra-serve
+sudo systemctl stop ra-serve
+sudo systemctl restart ra-serve
 
 # 设置开机自启
-sudo systemctl enable octos-serve
+sudo systemctl enable ra-serve
 
 # 查看状态和日志
-sudo systemctl status octos-serve
-sudo journalctl -u octos-serve -f
+sudo systemctl status ra-serve
+sudo journalctl -u ra-serve -f
 ```
 
 ### 通过 `server/shutdown` 停止（本地 solo）
 
-服务器有三种停止方式：前台运行 `octos serve` 的终端里按 Ctrl+C、平台服务管理器（上文的 launchd / systemd），以及此处介绍的 UI Protocol 方法 `server/shutdown`。
+服务器有三种停止方式：前台运行 `ra serve` 的终端里按 Ctrl+C、平台服务管理器（上文的 launchd / systemd），以及此处介绍的 UI Protocol 方法 `server/shutdown`。
 
 UI Protocol 客户端可以通过已认证的 WebSocket（`/api/ui-protocol/ws`）调用 `server/shutdown` 方法停止服务器。它的效果与 Ctrl+C 完全一致：连接排空、网关停止、进程退出。该调用是幂等的，停止动作在请求被处理后约 250 ms 触发，确认通常仍能赶在排空前送达客户端（出站背压下客户端可能错过确认，但停止照常发生）。
 
-该方法只在**本地部署**（`config.mode = "local"`）且开启 solo 登录（`octos serve --solo` / `OCTOS_SOLO_LOGIN=1`）时被接受，且仅限 HTTP serve（不带 `--stdio` 的 `octos serve`）。一次调用会停止整个进程，所有已连接客户端一起下线，其运行中的轮次一并取消。fleet/托管服务器与 `--stdio` serve 会以 `invalid_request`（-32600）携带 `data.kind: "server_shutdown_unavailable"` 拒绝该调用，什么都不停；session 级（session-ingress）连接则完全无法调用，只会收到不带 kind 的裸 `invalid_request`。注意本地 solo 的信任模型：solo serve 上，任何能打开 WebSocket 的本地进程——或白名单来源页面——都能停止服务器。
+该方法只在**本地部署**（`config.mode = "local"`）且开启 solo 登录（`ra serve --solo` / `OCTOS_SOLO_LOGIN=1`）时被接受，且仅限 HTTP serve（不带 `--stdio` 的 `ra serve`）。一次调用会停止整个进程，所有已连接客户端一起下线，其运行中的轮次一并取消。fleet/托管服务器与 `--stdio` serve 会以 `invalid_request`（-32600）携带 `data.kind: "server_shutdown_unavailable"` 拒绝该调用，什么都不停；session 级（session-ingress）连接则完全无法调用，只会收到不带 kind 的裸 `invalid_request`。注意本地 solo 的信任模型：solo serve 上，任何能打开 WebSocket 的本地进程——或白名单来源页面——都能停止服务器。

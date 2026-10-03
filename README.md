@@ -11,22 +11,22 @@
 
 </div>
 
-# Octos
+# ra
 
 **An embeddable AI agent harness kernel, written in Rust.**
 
-Octos provides the execution loop, context management, memory, tools, skills,
+ra provides the execution loop, context management, memory, tools, skills,
 workflows, and agent coordination for applications built around AI agents.
 Compile the kernel into your own application, or host it behind **OUP — the
-Octos UI Protocol** — and control it from a native app, a terminal, a browser,
+ra UI Protocol** — and control it from a native app, a terminal, a browser,
 or another agent.
 
 The defining architecture is **a reusable kernel with a programmable protocol
-boundary**. Your application owns its interface and product workflow; Octos
+boundary**. Your application owns its interface and product workflow; ra
 owns agent execution and runtime state. The same OUP contract lets a human-facing
 client and an automated controller operate that runtime.
 
-[Build with Octos](#build-with-octos) · [Control through OUP](#control-through-oup) ·
+[Build with ra](#build-with-ra) · [Control through OUP](#control-through-oup) ·
 [Documentation](https://octos-org.github.io/octos/) · [中文](README-zh.md)
 
 <a id="start-here"></a>
@@ -45,11 +45,11 @@ This repository is for developers embedding, extending, or integrating the
 harness kernel. Application installation and everyday coding workflows belong
 in the client repositories above.
 
-<a id="embed-octos"></a>
+<a id="embed-ra"></a>
 
-## Build with Octos
+## Build with ra
 
-Use Octos as the foundation for a coding application, an agent-powered desktop
+Use ra as the foundation for a coding application, an agent-powered desktop
 app, a research service, a workflow engine, or a fleet of cooperating agents.
 Bring your own interface, model providers, tools, and host environment.
 
@@ -59,7 +59,7 @@ Embed the Rust crates or task bindings in your application, or connect through
 OUP to a hosted runtime. OUP carries both commands into the kernel and responses
 and events back to the client or controller.
 
-![Octos harness kernel architecture](docs/assets/readme/architecture.svg)
+![ra harness kernel architecture](docs/assets/readme/architecture.svg)
 
 ### Native kernel and libraries
 
@@ -67,25 +67,25 @@ The Rust workspace lets you compose the parts your application needs:
 
 | Crate | Role in your application |
 | --- | --- |
-| [`octos-core`](crates/octos-core) | Shared types, OUP commands, notifications, and wire codecs |
-| [`octos-agent`](crates/octos-agent) | Agent execution, context handling, tools, hooks, sandboxing, and task supervision |
-| [`octos-memory`](crates/octos-memory) | Persistent memory, episodes, and retrieval |
-| [`octos-llm`](crates/octos-llm) | Provider interfaces, model routing, retries, and failover |
-| [`octos-plugin`](crates/octos-plugin) | Skill and plugin integration |
-| [`octos-pipeline`](crates/octos-pipeline) / [`octos-swarm`](crates/octos-swarm) | Workflow graphs, parallel workers, validation, and result aggregation |
-| [`octos-bus`](crates/octos-bus) / [`octos-cli`](crates/octos-cli) | Session infrastructure, runtime composition, and OUP hosting/adapters |
+| [`ra-core`](crates/ra-core) | Shared types, OUP commands, notifications, and wire codecs |
+| [`ra-agent`](crates/ra-agent) | Agent execution, context handling, tools, hooks, sandboxing, and task supervision |
+| [`ra-memory`](crates/ra-memory) | Persistent memory, episodes, and retrieval |
+| [`ra-llm`](crates/ra-llm) | Provider interfaces, model routing, retries, and failover |
+| [`ra-plugin`](crates/ra-plugin) | Skill and plugin integration |
+| [`ra-pipeline`](crates/ra-pipeline) / [`ra-swarm`](crates/ra-swarm) | Workflow graphs, parallel workers, validation, and result aggregation |
+| [`ra-bus`](crates/ra-bus) / [`ra-cli`](crates/ra-cli) | Session infrastructure, runtime composition, and OUP hosting/adapters |
 
 From a checkout, build the native agent library or a library for a non-Rust host:
 
 ```bash
-cargo build --release -p octos-agent
-cargo build --release -p octos-ffi
+cargo build --release -p ra-agent
+cargo build --release -p ra-ffi
 ```
 
-Pin related Octos crates to the same Git revision when integrating them into
+Pin related ra crates to the same Git revision when integrating them into
 another workspace. For other host languages, use the
-[C ABI](crates/octos-ffi/README.md), [native Python binding](crates/octos-pyo3/README.md),
-or [Swift/Kotlin bindings](crates/octos-uniffi/README.md). The C ABI produces
+[C ABI](crates/ra-ffi/README.md), [native Python binding](crates/ra-pyo3/README.md),
+or [Swift/Kotlin bindings](crates/ra-uniffi/README.md). The C ABI produces
 shared and static libraries. These bindings expose task execution; OUP provides
 the session, turn, supervision, and replay interface described below.
 
@@ -101,34 +101,34 @@ Other operating systems can connect an application through OUP or port the
 kernel's platform integrations, including process execution, filesystem access,
 and sandboxing. The application/protocol boundary stays the same.
 
-For browser applications, [the WASM crate](crates/octos-wasm/README.md) supplies
+For browser applications, [the WASM crate](crates/ra-wasm/README.md) supplies
 protocol and utility types. The full agent kernel runs natively, with the
 browser communicating over OUP.
 
 ## Control through OUP
 
-**OUP (Octos UI Protocol)** is a JSON-RPC 2.0 interface for applications and agent
+**OUP (ra UI Protocol)** is a JSON-RPC 2.0 interface for applications and agent
 controllers. It carries requests, responses, and typed runtime events over
 WebSocket or newline-delimited stdio. Local runtime adapters also use an
 in-process connection to the OUP dispatcher.
 
-For a local controller, the reference host is `octos serve --stdio`, built from
-`octos-cli` with the `api` feature. A WebSocket client connects to a running
+For a local controller, the reference host is `ra serve --stdio`, built from
+`ra-cli` with the `api` feature. A WebSocket client connects to a running
 host's `/api/ui-protocol/ws` endpoint using that host's authentication settings.
 Use string JSON-RPC request IDs.
 
 Stdio clients negotiate features with `client_hello`; WebSocket clients request
-them through `X-Octos-Ui-Features` or the `ui_feature` query parameter. Query
+them through `X-Ra-Ui-Features` or the `ui_feature` query parameter. Query
 `config/capabilities/list` to discover supported methods, then use the advertised
 capabilities to choose controls and event formats. The runtime owns conversation history, execution state,
 compaction, permissions, and committed results; clients render or act on that
 state through the protocol.
 
-### Drive Octos from another agent
+### Drive ra from another agent
 
 A controller integration can expose OUP requests as tools callable by **Codex,
 Claude Code, or another agent**. This gives the controlling agent a way to
-assign work to Octos agents, observe execution, intervene, and collect results.
+assign work to ra agents, observe execution, intervene, and collect results.
 The integration supplies the OUP client or bridge.
 
 A typical controller flow is:
@@ -175,7 +175,7 @@ a new UUID for each turn:
 }
 ```
 
-The same controller can let Octos perform research or implementation, inspect
+The same controller can let ra perform research or implementation, inspect
 its findings, then steer the next turn. OUP exposes the controls and evidence
 needed to build that collaboration into your own application.
 
@@ -195,7 +195,7 @@ discovery lets an integration adapt to the runtime it is actually connected to.
 ### Context management
 
 Long tasks accumulate conversation, tool output, and intermediate results.
-Octos manages the model's context budget, compacts older material, and preserves
+ra manages the model's context budget, compacts older material, and preserves
 recent tool-call/result relationships. Compaction can use LLM summarization or
 heuristics. Stable prompt prefixes support provider cache reuse, while changing
 task state remains part of the evolving conversation.
@@ -229,7 +229,7 @@ conventions, decisions, and useful task outcomes across sessions.
 
 ### Durable sessions and recovery
 
-Octos owns session identity, workspace scope, conversation history, and committed
+ra owns session identity, workspace scope, conversation history, and committed
 events. A client can reconstruct the runtime's view of a conversation after a
 reload, or build a different interface over the same stored session.
 
@@ -305,7 +305,7 @@ and its output, then request an appropriate retry and track the successor task.
 
 ### Sub-agents and peers
 
-Octos supports several forms of concurrent work. A child agent handles a
+ra supports several forms of concurrent work. A child agent handles a
 delegated task and returns its result to its parent. A peer owns an independent
 session that a client or controller can inspect and steer. A supervised
 background tool task can run without creating another LLM loop.
@@ -380,19 +380,19 @@ controller around these primitives:
 5. Retain session identities and durable cursors so the interface can rehydrate
    committed state when it reconnects.
 
-The host implements the coordination policy. Octos supplies the execution,
+The host implements the coordination policy. ra supplies the execution,
 state, and control primitives that make that policy observable through OUP.
 
 ## Developer documentation
 
 Follow one Calendar request through admission, Tokio tasks, a host tool and its answer in the [OctoSense integration code walkthrough](docs/octosense-integration-walkthrough.md). It also explains app peers, human and system conversations, storage boundaries, and which source revision to read for OctoSense. Contributor guidance is in [AGENTS.md](AGENTS.md).
 
-- [OUP specification](api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
-- [OUP types and codecs](crates/octos-core/src/ui_protocol.rs)
+- [OUP specification](api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
+- [OUP types and codecs](crates/ra-core/src/ui_protocol.rs)
 - [Runtime architecture](docs/ARCHITECTURE.md)
-- [Harness developer interface](docs/OCTOS_HARNESS_DEVELOPER_INTERFACE.md)
-- [Artifact and workflow integration guide](docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md)
-- [Harness compatibility and versioning](docs/OCTOS_HARNESS_ABI_VERSIONING.md)
+- [Harness developer interface](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
+- [Artifact and workflow integration guide](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
+- [Harness compatibility and versioning](docs/ra_HARNESS_ABI_VERSIONING.md)
 - [Documentation site](https://octos-org.github.io/octos/)
 
 ## Contributing

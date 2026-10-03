@@ -135,7 +135,7 @@ Evidence bundle:
 ## Ground Truth
 
 - AppUI change request:
-  `docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md`
+  `docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md`
 - Supervised task inspection:
   `workstreams/M13-appui-supervised-task-swarms.md`
 - Codex-compatible model tools:
@@ -193,7 +193,7 @@ Dependency order:
 
 ### M15-A: AppUI Autonomy Protocol
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -203,10 +203,10 @@ Owns:
 
 Allowed areas:
 
-- `api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md`
-- `docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md`
-- `crates/octos-core/src/ui_protocol.rs`
-- `crates/octos-cli/src/api/ui_protocol.rs`
+- `api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md`
+- `docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_021_AGENT_GOAL_LOOP_AUTONOMY.md`
+- `crates/ra-core/src/ui_protocol.rs`
+- `crates/ra-cli/src/api/ui_protocol.rs`
 - protocol tests and JSON fixtures
 
 Deliverables:
@@ -235,7 +235,7 @@ Acceptance:
 
 ### M15-B: Backend AgentOrchestrator Runtime
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -246,12 +246,12 @@ Owns:
 
 Allowed areas:
 
-- `crates/octos-agent/src/agent_control/*`
-- `crates/octos-agent/src/tools/spawn.rs`
-- `crates/octos-agent/src/tools/delegate.rs`
-- `crates/octos-agent/src/tools/mcp_agent.rs`
-- `crates/octos-agent/src/task_supervisor.rs`
-- `crates/octos-swarm/*`
+- `crates/ra-agent/src/agent_control/*`
+- `crates/ra-agent/src/tools/spawn.rs`
+- `crates/ra-agent/src/tools/delegate.rs`
+- `crates/ra-agent/src/tools/mcp_agent.rs`
+- `crates/ra-agent/src/task_supervisor.rs`
+- `crates/ra-swarm/*`
 - runtime/session factory modules
 
 Deliverables:
@@ -266,7 +266,7 @@ Deliverables:
   state. AppUI handlers become projection/control adapters over
   `AgentOrchestrator`; they must not synthesize backend state.
 - Adapt existing `SpawnTool`, `DelegateTool`, `TaskSupervisor`, and
-  `octos-swarm` to register agent lifecycle state.
+  `ra-swarm` to register agent lifecycle state.
 - Ensure every child agent is created through the server runtime factory and
   inherits profile, cwd, memory, tools, skills, MCP, sandbox, approval, model,
   QoE, and workspace contract policy.
@@ -293,7 +293,7 @@ Boundary with M14:
 
 ### M15-C: Backend GoalRuntime
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -304,9 +304,9 @@ Owns:
 
 Allowed areas:
 
-- `crates/octos-agent/src/goals/*`
-- `crates/octos-agent/src/tools/*`
-- `crates/octos-cli/src/api/ui_protocol.rs`
+- `crates/ra-agent/src/goals/*`
+- `crates/ra-agent/src/tools/*`
+- `crates/ra-cli/src/api/ui_protocol.rs`
 - state/runtime persistence modules
 - session actor and runtime factory modules
 
@@ -341,7 +341,7 @@ Acceptance:
 
 ### M15-D: Backend LoopRuntime And `/loop`
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -353,11 +353,11 @@ Owns:
 
 Allowed areas:
 
-- `crates/octos-bus/src/cron_service.rs`
-- `crates/octos-bus/src/cron_types.rs`
-- `crates/octos-cli/src/cron_tool.rs`
-- `crates/octos-cli/src/session_actor.rs`
-- `crates/octos-cli/src/api/ui_protocol.rs`
+- `crates/ra-bus/src/cron_service.rs`
+- `crates/ra-bus/src/cron_types.rs`
+- `crates/ra-cli/src/cron_tool.rs`
+- `crates/ra-cli/src/session_actor.rs`
+- `crates/ra-cli/src/api/ui_protocol.rs`
 - runtime/session factory modules
 - slash command parsing modules
 
@@ -373,7 +373,7 @@ Deliverables:
 - Add `LoopRuntime` for self-paced loops where the model chooses next delay or
   stop after each iteration.
 - Add prompt lookup for bare `/loop`:
-  `.octos/loop.md`, then `~/.octos/loop.md`, then built-in fallback.
+  `.ra/loop.md`, then `~/.ra/loop.md`, then built-in fallback.
 - Execute the parsed prompt immediately after loop creation.
 - Fire loop prompts only while the session is idle.
 - Implement `loop/fire_now` as an enqueue request that still respects pause
@@ -396,7 +396,7 @@ Acceptance:
 - Test: `loop/fire_now` does not bypass idle gating or pause state.
 - Test: slash commands inside loops are denied when policy disables them.
 - Test: restart reloads loops and does not replay missed fires in bulk.
-- Test: changing `.octos/loop.md` changes the next maintenance fire.
+- Test: changing `.ra/loop.md` changes the next maintenance fire.
 - Test: deleting a loop prevents future fires.
 
 ### M15-E: TUI Autonomy UX

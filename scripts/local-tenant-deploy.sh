@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local deployment for octos on macOS and Linux.
+# Local deployment for ra on macOS and Linux.
 # Usage: ./scripts/local-tenant-deploy.sh [OPTIONS]
 #
 # Options:
@@ -20,7 +20,7 @@
 #   --frps-server ADDR       frps relay server address (required for the tunnel;
 #                            or set FRPS_SERVER; without it the tunnel is skipped)
 #   --ssh-port PORT          SSH tunnel remote port (default: 6001)
-#   --domain DOMAIN          Tunnel domain (default: octos-cloud.org)
+#   --domain DOMAIN          Tunnel domain (default: ra-cloud.org)
 #   --auth-token TOKEN       Dashboard auth token (default: auto-generated)
 set -euo pipefail
 
@@ -36,7 +36,7 @@ UNINSTALL=false
 PURGE=false
 PROFILE="release"
 PREFIX="${CARGO_HOME:-$HOME/.cargo}/bin"
-DATA_DIR="${OCTOS_HOME:-$HOME/.octos}"
+DATA_DIR="${OCTOS_HOME:-$HOME/.ra}"
 
 # Tunnel defaults
 SKIP_TUNNEL=false
@@ -45,7 +45,7 @@ FRPS_TOKEN=""
 FRPS_SERVER="${FRPS_SERVER:-}"
 SSH_PORT="6001"
 AUTH_TOKEN=""
-TUNNEL_DOMAIN="octos-cloud.org"
+TUNNEL_DOMAIN="ra-cloud.org"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -223,27 +223,27 @@ run_purge_data() {
 
 # ── Uninstall ─────────────────────────────────────────────────────────
 if [ "$UNINSTALL" = true ]; then
-    section "Uninstalling octos"
+    section "Uninstalling ra"
 
-    # Stop and remove octos serve + frpc system services
+    # Stop and remove ra serve + frpc system services
     echo "    (sudo is needed to remove the system services)"
     case "$OS" in
         Darwin)
-            sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist 2>/dev/null || true
-            sudo rm -f /Library/LaunchDaemons/io.octos.serve.plist
-            sudo launchctl unload /Library/LaunchDaemons/io.octos.frpc.plist 2>/dev/null || true
-            sudo rm -f /Library/LaunchDaemons/io.octos.frpc.plist
+            sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist 2>/dev/null || true
+            sudo rm -f /Library/LaunchDaemons/io.ra.serve.plist
+            sudo launchctl unload /Library/LaunchDaemons/io.ra.frpc.plist 2>/dev/null || true
+            sudo rm -f /Library/LaunchDaemons/io.ra.frpc.plist
             # Also clean up legacy LaunchAgent if present
-            launchctl unload ~/Library/LaunchAgents/io.octos.octos-serve.plist 2>/dev/null || true
-            rm -f ~/Library/LaunchAgents/io.octos.octos-serve.plist
-            launchctl unload ~/Library/LaunchAgents/io.octos.frpc.plist 2>/dev/null || true
-            rm -f ~/Library/LaunchAgents/io.octos.frpc.plist
+            launchctl unload ~/Library/LaunchAgents/io.ra.ra-serve.plist 2>/dev/null || true
+            rm -f ~/Library/LaunchAgents/io.ra.ra-serve.plist
+            launchctl unload ~/Library/LaunchAgents/io.ra.frpc.plist 2>/dev/null || true
+            rm -f ~/Library/LaunchAgents/io.ra.frpc.plist
             ok "launchd services removed"
             ;;
         Linux)
-            sudo systemctl stop octos-serve.service 2>/dev/null || true
-            sudo systemctl disable octos-serve.service 2>/dev/null || true
-            sudo rm -f /etc/systemd/system/octos-serve.service
+            sudo systemctl stop ra-serve.service 2>/dev/null || true
+            sudo systemctl disable ra-serve.service 2>/dev/null || true
+            sudo rm -f /etc/systemd/system/ra-serve.service
             sudo systemctl stop frpc.service 2>/dev/null || true
             sudo systemctl disable frpc.service 2>/dev/null || true
             sudo rm -f /etc/systemd/system/frpc.service
@@ -253,7 +253,7 @@ if [ "$UNINSTALL" = true ]; then
     esac
 
     # Remove binaries
-    BINS=(octos news_fetch deep-search deep_crawl send_email account_manager clock weather frpc)
+    BINS=(ra news_fetch deep-search deep_crawl send_email account_manager clock weather frpc)
     for bin in "${BINS[@]}"; do
         rm -f "$PREFIX/$bin"
     done
@@ -369,7 +369,7 @@ if [ -n "$CLI_FEATURES" ] && [[ "$CLI_FEATURES" == *"api"* ]]; then
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────
-section "Building octos"
+section "Building ra"
 
 INSTALL_FLAG=""
 BUILD_FLAG=""
@@ -383,13 +383,13 @@ else
 fi
 
 if [ -n "$CLI_FEATURES" ]; then
-    echo "    cargo install octos-cli with features: $CLI_FEATURES"
-    cargo install --path crates/octos-cli --features "$CLI_FEATURES" $INSTALL_FLAG
+    echo "    cargo install ra-cli with features: $CLI_FEATURES"
+    cargo install --path crates/ra-cli --features "$CLI_FEATURES" $INSTALL_FLAG
 else
-    echo "    cargo install octos-cli (no extra features)"
-    cargo install --path crates/octos-cli $INSTALL_FLAG
+    echo "    cargo install ra-cli (no extra features)"
+    cargo install --path crates/ra-cli $INSTALL_FLAG
 fi
-ok "octos binary installed to $PREFIX/octos"
+ok "ra binary installed to $PREFIX/ra"
 
 # App-skills
 if [ "$BUILD_SKILLS" = true ]; then
@@ -421,7 +421,7 @@ if [ "$BUILD_SKILLS" = true ]; then
 fi
 
 # ── Initialize ────────────────────────────────────────────────────────
-section "Initializing octos workspace"
+section "Initializing ra workspace"
 
 mkdir -p "$DATA_DIR"/{profiles,memory,sessions,skills,logs,research,history}
 write_runtime_config
@@ -443,8 +443,8 @@ ok "data dir ready: $DATA_DIR"
 write_launchd_service() {
     # Clean up any legacy LaunchAgent before installing LaunchDaemon
     for LEGACY_PLIST in \
-        "$HOME/Library/LaunchAgents/io.octos.octos-serve.plist" \
-        "$HOME/Library/LaunchAgents/io.octos.serve.plist" \
+        "$HOME/Library/LaunchAgents/io.ra.ra-serve.plist" \
+        "$HOME/Library/LaunchAgents/io.ra.serve.plist" \
         "$HOME/Library/LaunchAgents/io.ominix.crew-serve.plist"; do
         if [ -f "$LEGACY_PLIST" ]; then
             launchctl unload "$LEGACY_PLIST" 2>/dev/null || true
@@ -455,7 +455,7 @@ write_launchd_service() {
     PLIST_FILE="/Library/LaunchDaemons/${PLIST_LABEL}.plist"
 
     # Write plist to temp file first, then sudo move it
-    PLIST_TMP=$(mktemp /tmp/io.octos.serve.plist.XXXXXX)
+    PLIST_TMP=$(mktemp /tmp/io.ra.serve.plist.XXXXXX)
     cat > "$PLIST_TMP" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -509,19 +509,19 @@ EOF
 
     # Start service
     sudo launchctl load "$PLIST_FILE"
-    ok "octos serve started via launchd"
+    ok "ra serve started via launchd"
 }
 
 # Write and start the systemd serve unit (runs as the current user). The
 # token loads from the 0600 serve.env via EnvironmentFile so it never
 # sits in the world-readable unit file (#2496).
 write_systemd_service() {
-    UNIT_FILE="/etc/systemd/system/octos-serve.service"
+    UNIT_FILE="/etc/systemd/system/ra-serve.service"
 
-    UNIT_TMP=$(mktemp /tmp/octos-serve.service.XXXXXX)
+    UNIT_TMP=$(mktemp /tmp/ra-serve.service.XXXXXX)
     cat > "$UNIT_TMP" << EOF
 [Unit]
-Description=octos serve (dashboard + gateway)
+Description=ra serve (dashboard + gateway)
 After=network-online.target
 Wants=network-online.target
 
@@ -546,16 +546,16 @@ EOF
     echo "    (sudo is needed to install the system service)"
     sudo mv "$UNIT_TMP" "$UNIT_FILE"
     sudo systemctl daemon-reload
-    sudo systemctl enable octos-serve
-    sudo systemctl restart octos-serve
-    ok "octos serve started via systemd"
+    sudo systemctl enable ra-serve
+    sudo systemctl restart ra-serve
+    ok "ra serve started via systemd"
 }
 
 # ── Service setup ─────────────────────────────────────────────────────
 if [ "$SETUP_SERVICE" = true ] && [ -n "$CLI_FEATURES" ]; then
     section "Setting up background service"
 
-    OCTOS_BIN="$PREFIX/octos"
+    OCTOS_BIN="$PREFIX/ra"
 
     # Generate auth token if not provided
     if [ -z "$AUTH_TOKEN" ]; then
@@ -564,7 +564,7 @@ if [ "$SETUP_SERVICE" = true ] && [ -n "$CLI_FEATURES" ]; then
         echo "    (save this — needed to access the dashboard)"
     fi
 
-    PLIST_LABEL="io.octos.serve"
+    PLIST_LABEL="io.ra.serve"
 
     # Persist the SMTP password (if set) before starting the service so the
     # fresh process can read it from `$DATA_DIR/smtp_secret.json`.
@@ -581,19 +581,19 @@ if [ "$SETUP_SERVICE" = true ] && [ -n "$CLI_FEATURES" ]; then
             ;;
     esac
 
-    # ── Verify octos is responding ────────────────────────────────────
-    section "Verifying octos serve"
+    # ── Verify ra is responding ────────────────────────────────────
+    section "Verifying ra serve"
     RETRIES=10
     while [ $RETRIES -gt 0 ]; do
         if curl -sf --max-time 2 http://localhost:8080/admin/ > /dev/null 2>&1; then
-            ok "octos serve is running on http://localhost:8080"
+            ok "ra serve is running on http://localhost:8080"
             break
         fi
         RETRIES=$((RETRIES - 1))
         sleep 1
     done
     if [ $RETRIES -eq 0 ]; then
-        warn "octos serve did not respond within 10 seconds"
+        warn "ra serve did not respond within 10 seconds"
         echo "    Check logs: tail -f $DATA_DIR/logs/serve.\$(date +%F).log"
     fi
 else
@@ -659,13 +659,13 @@ fi
 # ── Summary ───────────────────────────────────────────────────────────
 section "Deployment complete"
 echo ""
-echo "    Binary:     $PREFIX/octos"
+echo "    Binary:     $PREFIX/ra"
 echo "    Data dir:   $DATA_DIR"
 echo "    Config:     $DATA_DIR/config.json"
 echo ""
 echo "  Next steps:"
 echo "    1. Set your API key:  export ANTHROPIC_API_KEY=sk-..."
-echo "    2. Start chatting:    octos chat"
+echo "    2. Start chatting:    ra chat"
 if [ -n "$CLI_FEATURES" ]; then
     echo "    3. Open browser:      http://localhost:8080/admin/"
     echo ""
@@ -673,14 +673,14 @@ if [ -n "$CLI_FEATURES" ]; then
     echo "  Logs:         tail -f $DATA_DIR/logs/serve.\$(date +%F).log"
     case "$OS" in
         Darwin)
-            echo "  Status:       sudo launchctl print system/io.octos.serve"
-            echo "  Stop:         sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist"
-            echo "  Start:        sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist"
+            echo "  Status:       sudo launchctl print system/io.ra.serve"
+            echo "  Stop:         sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist"
+            echo "  Start:        sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist"
             ;;
         Linux)
-            echo "  Status:       sudo systemctl status octos-serve"
-            echo "  Stop:         sudo systemctl stop octos-serve"
-            echo "  Start:        sudo systemctl start octos-serve"
+            echo "  Status:       sudo systemctl status ra-serve"
+            echo "  Stop:         sudo systemctl stop ra-serve"
+            echo "  Start:        sudo systemctl start ra-serve"
             ;;
     esac
 fi

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$ROOT/swarm-app"
-OUT_DIR="$ROOT/crates/octos-cli/static/swarm"
+OUT_DIR="$ROOT/crates/ra-cli/static/swarm"
 
 if ! command -v npm >/dev/null 2>&1; then
     echo "npm is required to build swarm-app assets" >&2

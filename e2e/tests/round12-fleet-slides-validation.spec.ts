@@ -11,7 +11,7 @@
  *   4. Does the DOM deck button render (`getByRole('button',
  *      /deck\.pptx/i)`)?
  *   5. SSH disk-check fallback: if (2)/(4) miss, find `*.pptx` on the
- *      host under `~/.octos/profiles/<profile>/data/users/...` newer
+ *      host under `~/.ra/profiles/<profile>/data/users/...` newer
  *      than a session-start marker. Confirmed-on-disk = pass via
  *      `passed_via_disk_check`, which P0-A treats as closed.
  *
@@ -30,11 +30,11 @@
  *
  * Results are written to
  * `test-results-round12-slides/<short>/result.json` (host short: crew,
- * bot, octos, ocean).
+ * bot, ra, ocean).
  *
  * Run:
- *   cd ~/home/octos/e2e
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 OCTOS_PROFILE=dspfac \
+ *   cd ~/home/ra/e2e
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 OCTOS_PROFILE=dspfac \
  *     npx playwright test tests/round12-fleet-slides-validation.spec.ts \
  *     --reporter=json --workers=4
  *
@@ -95,10 +95,10 @@ const HOSTS: HostTrial[] = [
     sshHost: SSH_MAP['dspfac.bot.ominix.io'] || '',
   },
   {
-    short: 'octos',
-    host: 'octos.ominix.io',
-    baseUrl: 'https://dspfac.octos.ominix.io',
-    sshHost: SSH_MAP['dspfac.octos.ominix.io'] || '',
+    short: 'ra',
+    host: 'ra.ominix.io',
+    baseUrl: 'https://dspfac.ra.ominix.io',
+    sshHost: SSH_MAP['dspfac.ra.ominix.io'] || '',
   },
   {
     short: 'ocean',
@@ -313,8 +313,8 @@ function attachWsCapture(page: Page, cap: WsCapture) {
 // SSH disk-check fallback
 // ════════════════════════════════════════════════════════════════════
 //
-// Round-14 retest observation: pptx artefacts DID land on bot/octos/ocean
-// (`~/.octos/profiles/dspfac/data/users/<session_id>/workspace/skill-
+// Round-14 retest observation: pptx artefacts DID land on bot/ra/ocean
+// (`~/.ra/profiles/dspfac/data/users/<session_id>/workspace/skill-
 // output/*.pptx`), but the spec timed out at 9.6-15min waiting for the
 // `file/attached` WS frame and reported "P0-A not closed". This fallback
 // proves disk-side completion when the WS race goes the wrong way.
@@ -372,7 +372,7 @@ interface DiskCheckResult {
 
 /**
  * Scope the find to:
- *   - ~/.octos/profiles/<profile>/data/users/  (per-user workspace root)
+ *   - ~/.ra/profiles/<profile>/data/users/  (per-user workspace root)
  *   - newer than the session-start marker
  *   - *.pptx
  *   - filter to paths that mention deckSlug and/or session-id slug
@@ -397,7 +397,7 @@ function diskCheckPptx(
   deckSlug: string,
 ): DiskCheckResult {
   const marker = markerPath(trial.short);
-  const profileRoot = `~/.octos/profiles/${PROFILE}/data/users`;
+  const profileRoot = `~/.ra/profiles/${PROFILE}/data/users`;
   // Sanitize the patterns: keep only alnum and dashes, replace other
   // characters with `.` so they match-any in BRE. Empty patterns get
   // dropped, NOT joined.

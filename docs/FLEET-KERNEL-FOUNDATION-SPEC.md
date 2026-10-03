@@ -20,7 +20,7 @@ the work so the goal win does not wait on the hard part.
 > **You cannot persist and "resume" a live agentic turn.** After a restart the
 > parked-question oneshot and the awaiting future are gone. Recovery is not
 > *snapshot-and-resume*; it is **interrupt the old attempt and start a fresh,
-> checkpointed one** — which octos already does correctly today (restored children
+> checkpointed one** — which ra already does correctly today (restored children
 > come back `interrupted`, not resumed; see `agent_orchestrator.rs` restore path).
 
 Every structural correction below follows from this.
@@ -213,7 +213,7 @@ require Phase 2b.
 ## References
 
 - `docs/FLEET-RUNTIME-ADR.md` (the decision this refines).
-- Design references: `octos-swarm` (`DispatchRecord`, `io_gate`, reserve/commit,
+- Design references: `ra-swarm` (`DispatchRecord`, `io_gate`, reserve/commit,
   finalize-replay), `SupervisorStore` (event outbox, snapshot/replay), the goal
   machinery + `MasterContinuationScheduler`, `CostAccountant`.
 - Shipped foundations: `peer_respond` (#1843), awaiting-input wake (#1844).

@@ -1,6 +1,6 @@
 // Codex P2 follow-up on #1157 (M22 onboarding matrix):
 //
-// When the spawned `octos serve` process exits before / during an RPC
+// When the spawned `ra serve` process exits before / during an RPC
 // (startup crash, panic, wrong binary at OCTOS_BIN), the original
 // runner would emit `EPIPE` on `child.stdin` with no handler and
 // Node would terminate — leaving no scenario.json or summary.json
@@ -47,7 +47,7 @@ test('rpc() on a backend that already exited resolves to a typed backend_exited 
   // script. (Node is the binary; the args came from the constructor
   // and were `['serve', '--stdio', ...]`; we override via wait then
   // rpc.) Simplest: wait for the child to exit naturally — but our
-  // fake "octos" was launched with `serve --stdio --data-dir ...`,
+  // fake "ra" was launched with `serve --stdio --data-dir ...`,
   // which node will fail-parse and exit non-zero. That is exactly
   // the failure mode codex described.
 

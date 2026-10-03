@@ -5,7 +5,7 @@
  *   1. activate_tools "tool registry not available" (OnceLock stale Weak bug)
  *   2. ffmpeg not found in sandbox PATH
  *
- * Run against a live octos-serve instance:
+ * Run against a live ra-serve instance:
  *   OCTOS_TEST_URL=http://localhost:3000 OCTOS_AUTH_TOKEN=<token> npx playwright test
  *
  * Transport: chat turns ride the M9 WebSocket UI Protocol via `chatWS()`
@@ -61,7 +61,7 @@ async function adminShell(request: any, baseURL: string, command: string) {
 // ---------------------------------------------------------------------------
 // Test 1: ffmpeg reachable in shell PATH
 //
-// The bug: octos-serve started via nohup (not launchd) inherited a minimal
+// The bug: ra-serve started via nohup (not launchd) inherited a minimal
 // PATH without /opt/homebrew/bin, so the agent sandbox couldn't find ffmpeg.
 // ---------------------------------------------------------------------------
 test('ffmpeg is reachable via shell PATH', async ({ request, baseURL }) => {

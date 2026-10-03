@@ -1,6 +1,6 @@
 # Layer 1: SPA reducer fixture tests
 
-This directory is the **Layer 1 testing pyramid** for octos-web's SPA
+This directory is the **Layer 1 testing pyramid** for ra-web's SPA
 reducer. It feeds canned UI Protocol v1 SSE event fixtures into the
 reducer and asserts thread-graph correctness — in **milliseconds, with no
 LLM, no fleet, no Playwright**.
@@ -75,7 +75,7 @@ __tests__/
 
 ## How to run
 
-From `crates/octos-web/`:
+From `crates/ra-web/`:
 
 ```bash
 npm install
@@ -158,14 +158,14 @@ deliberately mirrors that JSON format, so the import is mechanical.
 ## CI
 
 `.github/workflows/web-reducer-fixtures.yml` runs on every PR touching
-`crates/octos-web/` or `crates/octos-core/src/ui_protocol.rs`. Total
+`crates/ra-web/` or `crates/ra-core/src/ui_protocol.rs`. Total
 runtime <1s. No flake budget — these are deterministic.
 
 ## Cross-references
 
-- Architecture rationale: `/tmp/octos-architecture-FINAL.md` sections A,
+- Architecture rationale: `/tmp/ra-architecture-FINAL.md` sections A,
   C, and the loophole-audit table.
 - PoC: `/tmp/fixture-poc/reducer-test.mjs` (50-line proof, 2ms runtime,
   reproduces wave-4 mini3 misroute pattern).
-- UI Protocol v1 spec: `api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md`.
+- UI Protocol v1 spec: `api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md`.
 - The bug chain: issues #649, #664, #673, #680, #738, #740, #742.

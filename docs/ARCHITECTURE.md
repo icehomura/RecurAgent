@@ -1,37 +1,37 @@
-# Architecture Document: octos
+# Architecture Document: ra
 
 ## Overview
 
-octos is a 25-member Rust workspace (Edition 2024, rust-version 1.85.0) providing both a coding agent CLI and a multi-channel messaging gateway. Pure Rust TLS via rustls (no OpenSSL). Error handling via `eyre`/`color-eyre`.
+ra is a 25-member Rust workspace (Edition 2024, rust-version 1.85.0) providing both a coding agent CLI and a multi-channel messaging gateway. Pure Rust TLS via rustls (no OpenSSL). Error handling via `eyre`/`color-eyre`.
 
 For the background-task delivery model used by web chat, see [SESSION_EVENT_ARCHITECTURE.md](SESSION_EVENT_ARCHITECTURE.md).
 For the next hardening/generalization round after the runtime refactor, see [OCTOS_RUNTIME_PHASE2.md](OCTOS_RUNTIME_PHASE2.md).
 
 **Workspace members**:
-- **10 octos-* crates**: octos-core, octos-memory, octos-llm, octos-agent, octos-bus, octos-cli, octos-pipeline, octos-plugin, **octos-sandbox** (Windows AppContainer helper binary), **octos-swarm** (PM/swarm dispatcher, ledger, topology)
-- **14 app-skill workspace crates**, of which **9 are auto-bootstrapped at gateway startup** (the contents of `BUNDLED_APP_SKILLS` in `crates/octos-agent/src/bundled_app_skills.rs`):
+- **10 ra-* crates**: ra-core, ra-memory, ra-llm, ra-agent, ra-bus, ra-cli, ra-pipeline, ra-plugin, **ra-sandbox** (Windows AppContainer helper binary), **ra-swarm** (PM/swarm dispatcher, ledger, topology)
+- **14 app-skill workspace crates**, of which **9 are auto-bootstrapped at gateway startup** (the contents of `BUNDLED_APP_SKILLS` in `crates/ra-agent/src/bundled_app_skills.rs`):
   - **Bundled (9)**: news, deep-search, deep-crawl, send-email, account-manager, time (binary `clock`), weather, smart-home, skill-evolve
   - **Not bundled (5) — workspace example/utility crates only**: `harness-starter-{audio, coding, generic, report}` (templates for new skill authors), `wechat-bridge` (transport helper, not a tool-providing skill)
 - **1 platform-skill crate**: voice (auto-bootstrapped)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        octos-cli                             │
+│                        ra-cli                             │
 │  (CLI: chat, gateway, serve, init, status, wizard, auth,    │
 │   skills, channels, cron, completions)                      │
 ├──────────────────────────┬──────────────────────────────────┤
-│       octos-agent         │           octos-bus               │
+│       ra-agent         │           ra-bus               │
 │  (agent loop, tools,     │  (14 channels, sessions w/      │
 │   profile, sandbox, MCP, │   sticky thread_id, coalescing,  │
 │   hooks, sub-agent       │   cron, heartbeat)              │
 │   router, supervisor)    │                                  │
 ├──────────┬───────────────┼──────────────┬──────────────────┤
-│octos-memory│  octos-llm    │ octos-pipeline│ octos-swarm      │
+│ra-memory│  ra-llm    │ ra-pipeline│ ra-swarm      │
 │(MEMORY +  │  (15 providers│  (DOT graphs,│  (PM dispatcher,  │
 │ episodes  │   3-layer     │   bounded    │   ledger,         │
 │ + HNSW)   │   failover)  │   fan-out)   │   topology)       │
 ├──────────┴──┬────────────┴────┬─────────┴──────────────────┤
-│ octos-plugin │  octos-sandbox  │       octos-core            │
+│ ra-plugin │  ra-sandbox  │       ra-core            │
 │ (manifest,  │ (Windows         │ (Task, Message, Error      │
 │  protocol   │  AppContainer    │  types — no internal deps) │
 │  v1 + v2)   │  helper binary)  │                            │
@@ -40,7 +40,7 @@ For the next hardening/generalization round after the runtime refactor, see [OCT
 
 ---
 
-## octos-core — Foundation Types
+## ra-core — Foundation Types
 
 Shared types with no internal dependencies. Only depends on serde, chrono, uuid, eyre.
 
@@ -159,7 +159,7 @@ pub struct Error {
 
 ---
 
-## octos-llm — LLM Provider Abstraction
+## ra-llm — LLM Provider Abstraction
 
 ### Provider Trait
 
@@ -208,7 +208,7 @@ pub type ChatStream = Pin<Box<dyn Stream<Item = StreamEvent> + Send>>;
 
 ### Provider Registry (`registry/`)
 
-All providers are defined in `octos-llm/src/registry/` — one file per provider. Each file exports a `ProviderEntry` with metadata (name, aliases, default model, API key env var, base URL) and a `create()` factory function. Adding a new provider = one file + one line in `mod.rs`.
+All providers are defined in `ra-llm/src/registry/` — one file per provider. Each file exports a `ProviderEntry` with metadata (name, aliases, default model, API key env var, base URL) and a `create()` factory function. Adding a new provider = one file + one line in `mod.rs`.
 
 ```rust
 pub struct ProviderEntry {
@@ -381,13 +381,13 @@ Two implementations:
 
 **OpenAIEmbedder** — remote, OpenAI-compatible (`provider = "openai"`). Default model `text-embedding-3-small` (1536 dims); `text-embedding-3-large` = 3072 dims. The optional `dimensions` request field pins providers whose native size differs (e.g. DashScope `text-embedding-v4` at 1024).
 
-**LlamaEmbedder** (`octos-embed-llama`) — in-process, any GGUF embedding model over llama.cpp (`provider = "llamacpp"` + `model_path`). Cross-platform, CPU by default; `metal` / `cuda` features offload. Off unless built with `--features embed-llama`.
+**LlamaEmbedder** (`ra-embed-llama`) — in-process, any GGUF embedding model over llama.cpp (`provider = "llamacpp"` + `model_path`). Cross-platform, CPU by default; `metal` / `cuda` features offload. Off unless built with `--features embed-llama`.
 
 **The index is sized from the embedder.** `EpisodeStore` builds its HNSW index at one fixed width and `HybridIndex::insert` DROPS any vector that does not match, degrading that episode to BM25-only — so the store is opened with `embedder.dimension()`, not a constant. Two consequences: Matryoshka truncation only goes *down* (a 768-d model can never fill a 1536-d index), and changing provider or model invalidates a populated index. Embeddings from different backends are not interchangeable — measured agreement between the two above is 0.96–0.99 cosine, the same order as the gap between genuinely related documents — so stored episodes must be re-embedded after a switch.
 
 ### Transcription
 
-**Voice platform skill** — audio is transcribed at the gateway layer, not in `octos-llm`. The gateway spawns the installed `voice` platform-skill binary (`platform-skills/voice/main` under the gateway home: `--octos-home`, else `<cwd>/.octos`) with the `voice_transcribe` subcommand, `{"audio_path", "language"?}` JSON on stdin and `{"success", "output"}` JSON on stdout; 120s timeout. Transcription is wired only when that binary exists and an ASR endpoint is available (`ASR_API_URL`, else a discovered OminiX server — audio goes to that endpoint, see OminixClient). Transcript text merges into the inbound message content (`voice_transcript` metadata), audio-only messages whose transcripts are all rejected skip agent dispatch, and the per-profile ASR language override is re-resolved per message (`octos-cli/src/commands/gateway/message_preprocessing.rs:515`, wiring at `octos-cli/src/commands/gateway/gateway_runtime.rs:613`).
+**Voice platform skill** — audio is transcribed at the gateway layer, not in `ra-llm`. The gateway spawns the installed `voice` platform-skill binary (`platform-skills/voice/main` under the gateway home: `--ra-home`, else `<cwd>/.ra`) with the `voice_transcribe` subcommand, `{"audio_path", "language"?}` JSON on stdin and `{"success", "output"}` JSON on stdout; 120s timeout. Transcription is wired only when that binary exists and an ASR endpoint is available (`ASR_API_URL`, else a discovered OminiX server — audio goes to that endpoint, see OminixClient). Transcript text merges into the inbound message content (`voice_transcript` metadata), audio-only messages whose transcripts are all rejected skip agent dispatch, and the per-profile ASR language override is re-resolved per message (`ra-cli/src/commands/gateway/message_preprocessing.rs:515`, wiring at `ra-cli/src/commands/gateway/gateway_runtime.rs:613`).
 
 ### Vision
 
@@ -411,11 +411,11 @@ Two implementations:
 
 ---
 
-## octos-memory — Persistence & Search
+## ra-memory — Persistence & Search
 
 ### EpisodeStore
 
-redb database at `.octos/episodes.redb` with three tables:
+redb database at `.ra/episodes.redb` with three tables:
 
 | Table | Key | Value | Purpose |
 |---|---|---|---|
@@ -461,7 +461,7 @@ File-based persistent memory at `{data_dir}/memory/`:
 
 ### HybridIndex — BM25 + Vector Search
 
-`HybridIndex` (`crates/octos-memory/src/hybrid_search.rs`) combines a BM25 keyword index with an HNSW vector index. State it tracks:
+`HybridIndex` (`crates/ra-memory/src/hybrid_search.rs`) combines a BM25 keyword index with an HNSW vector index. State it tracks:
 
 - **BM25 side**: an inverted index `HashMap<term, Vec<(doc_idx, u32 raw_count)>>`, per-doc token lengths, a running `total_len` (so `avg_dl` doesn't need an O(n) recomputation on every insert), and `avg_dl`.
 - **Vector side**: optional `Hnsw<'static, f32, DistCosine>` plus a `has_embedding: Vec<bool>` parallel to the doc list and a fixed `dimension`.
@@ -485,12 +485,12 @@ File-based persistent memory at `{data_dir}/memory/`:
 
 ---
 
-## octos-agent — Agent Runtime
+## ra-agent — Agent Runtime
 
-The runtime was refactored into smaller modules over the M8.1–M8.10 milestones. The agent loop now lives in `crates/octos-agent/src/agent/` (subdirectory):
+The runtime was refactored into smaller modules over the M8.1–M8.10 milestones. The agent loop now lives in `crates/ra-agent/src/agent/` (subdirectory):
 
 ```
-crates/octos-agent/src/agent/
+crates/ra-agent/src/agent/
 ├── mod.rs              # Agent struct, public API
 ├── loop_runner.rs      # Outer loop driver
 ├── loop_state.rs       # Per-iteration state machine
@@ -508,7 +508,7 @@ crates/octos-agent/src/agent/
 └── message_repair.rs   # Fix malformed tool-call/tool-result pairs
 ```
 
-Plus M8-era top-level modules in `crates/octos-agent/src/`:
+Plus M8-era top-level modules in `crates/ra-agent/src/`:
 
 - `profile/` — M8.3 profile system (per-profile prompts, models, tool policies)
 - `agents/` — M8.2 agent definition manifest, agent assembly
@@ -573,7 +573,7 @@ pub struct AgentConfig {
 
 **Wall-clock timeout**: Agent aborts after `max_timeout` (default 600s) regardless of iteration count.
 
-**Sticky thread_id (M8.10)**: every SSE event (`token`, `tool_progress`, `done`) carries a `thread_id` bound before the first emission. The `done` event also carries `committed_seq` so clients can replay deterministically. The replay harness lives at `crates/octos-bus/tests/jsonl_replay_thread_binding.rs` (#656); end-to-end coverage is in `e2e/tests/live-overflow-thread-binding.spec.ts` and `e2e/tests/live-thread-interleave.spec.ts`.
+**Sticky thread_id (M8.10)**: every SSE event (`token`, `tool_progress`, `done`) carries a `thread_id` bound before the first emission. The `done` event also carries `committed_seq` so clients can replay deterministically. The replay harness lives at `crates/ra-bus/tests/jsonl_replay_thread_binding.rs` (#656); end-to-end coverage is in `e2e/tests/live-overflow-thread-binding.spec.ts` and `e2e/tests/live-thread-interleave.spec.ts`.
 
 ### Tool Output Sanitization
 
@@ -598,7 +598,7 @@ Triggered when estimated tokens exceed 80% of context window / 1.2 safety margin
 
 ### Bundled App Skills (`bundled_app_skills.rs`)
 
-`BUNDLED_APP_SKILLS` is a `&[(dir_name, binary_name, SKILL.md, manifest.json)]` slice of nine entries — the only app-skills that ship inside the `octos` binary and get auto-installed at gateway startup:
+`BUNDLED_APP_SKILLS` is a `&[(dir_name, binary_name, SKILL.md, manifest.json)]` slice of nine entries — the only app-skills that ship inside the `ra` binary and get auto-installed at gateway startup:
 
 | dir | binary | purpose |
 |---|---|---|
@@ -612,13 +612,13 @@ Triggered when estimated tokens exceed 80% of context window / 1.2 safety margin
 | `smart-home` | `smart_home` | List/control smart-home devices via profile bridge |
 | `skill-evolve` | `skill-evolve` | Patch-management for skill SKILL.md drift |
 
-`PLATFORM_SKILLS` adds one more entry — `voice` — bootstrapped once by `octos serve` at admin-bot startup and shared across all gateway profiles. Its ASR leg uses `ASR_API_URL` when configured or OminiX otherwise; TTS and model-management operations remain on OminiX. Voice cloning is **not** part of the platform voice skill — it is handled by the separate `mofa-fm` skill (`fm_tts`).
+`PLATFORM_SKILLS` adds one more entry — `voice` — bootstrapped once by `ra serve` at admin-bot startup and shared across all gateway profiles. Its ASR leg uses `ASR_API_URL` when configured or OminiX otherwise; TTS and model-management operations remain on OminiX. Voice cloning is **not** part of the platform voice skill — it is handled by the separate `mofa-fm` skill (`fm_tts`).
 
 The other workspace `app-skills/*` crates (`harness-starter-{audio,coding,generic,report}`, `wechat-bridge`) are **not** in `BUNDLED_APP_SKILLS`. They build as part of `cargo build --workspace` but are not auto-installed by the gateway; harness-starters are templates new skill authors copy, and `wechat-bridge` is a WebSocket transport helper rather than a tool-providing skill.
 
 ### Bootstrap (`bootstrap.rs`)
 
-`bootstrap.rs` writes the contents of each `BUNDLED_APP_SKILLS` entry into `<octos_home>/bundled-app-skills/<dir>/` (constant: `BUNDLED_APP_SKILLS_DIR = "bundled-app-skills"`) at gateway startup, then drops the matching binary alongside it. Platform skills live under `<octos_home>/platform-skills/`, while operator or sideloaded custom skills are installed per profile under `~/.octos/profiles/<id>/data/skills/`. Legacy HOME-rooted globals such as `~/.octos/skills/` are migration-only; current profile gateways no longer scan them as a normal install location.
+`bootstrap.rs` writes the contents of each `BUNDLED_APP_SKILLS` entry into `<octos_home>/bundled-app-skills/<dir>/` (constant: `BUNDLED_APP_SKILLS_DIR = "bundled-app-skills"`) at gateway startup, then drops the matching binary alongside it. Platform skills live under `<octos_home>/platform-skills/`, while operator or sideloaded custom skills are installed per profile under `~/.ra/profiles/<id>/data/skills/`. Legacy HOME-rooted globals such as `~/.ra/skills/` are migration-only; current profile gateways no longer scan them as a normal install location.
 
 ### Sub-Agent Output Router (M8.7)
 
@@ -725,7 +725,7 @@ pub enum Decision { Allow, Deny, Ask }
 
 ### Sandbox
 
-Sandbox backends live in `crates/octos-agent/src/sandbox/` (directory) — `mod.rs`, `bwrap.rs`, `docker.rs`, `macos.rs`, `windows.rs`.
+Sandbox backends live in `crates/ra-agent/src/sandbox/` (directory) — `mod.rs`, `bwrap.rs`, `docker.rs`, `macos.rs`, `windows.rs`.
 
 ```rust
 pub enum SandboxMode { Auto, Bwrap, Macos, Docker, AppContainer, None }
@@ -741,7 +741,7 @@ pub enum SandboxMode { Auto, Bwrap, Macos, Docker, AppContainer, None }
 | **Bwrap** (Linux) | RO bind /usr,/lib,/bin,/sbin,/etc; RW bind workdir; tmpfs /tmp; unshare-pid | `--unshare-net` if !allow_network | N/A |
 | **Macos** (sandbox-exec) | SBPL profile: process-exec/fork, file-read*, writes to workdir+/private/tmp; per-user workspace path substituted into SBPL `subpath` | `(allow network*)` or `(deny network*)` | Rejects control chars, `(`, `)`, `\`, `"` |
 | **Docker** | `--rm --security-opt no-new-privileges --cap-drop ALL` | `--network none` | Rejects `:`, `\0`, `\n`, `\r` |
-| **AppContainer** (Windows) | Wraps the helper binary in `crates/octos-sandbox/` (built on `rappct`); per-process AppContainer SID, restricted token, low-IL workdir | Per-capability network restriction | Rejects control chars, NUL, drive escape |
+| **AppContainer** (Windows) | Wraps the helper binary in `crates/ra-sandbox/` (built on `rappct`); per-process AppContainer SID, restricted token, low-IL workdir | Per-capability network restriction | Rejects control chars, NUL, drive escape |
 
 **Docker resource limits**: `--cpus`, `--memory`, `--pids-limit`. Mount modes: None (/tmp workdir), ReadOnly, ReadWrite.
 
@@ -858,11 +858,11 @@ pub const BUILTIN_SKILLS: &[(&str, &str)] = &[...];  // (name, content) pairs
 | skill-store | Skill store browsing and installation |
 | skill-creator | Create new skills |
 
-#### CLI Management (`octos skills`)
+#### CLI Management (`ra skills`)
 
 - `list` — shows built-in skills (with override status) + workspace skills
-- `install <user/repo/skill-name>` — fetches `SKILL.md` from `https://raw.githubusercontent.com/{repo}/main/SKILL.md` (15s timeout), saves to `.octos/skills/{name}/SKILL.md`. Fails if skill already exists.
-- `remove <name>` — deletes `.octos/skills/{name}/` directory
+- `install <user/repo/skill-name>` — fetches `SKILL.md` from `https://raw.githubusercontent.com/{repo}/main/SKILL.md` (15s timeout), saves to `.ra/skills/{name}/SKILL.md`. Fails if skill already exists.
+- `remove <name>` — deletes `.ra/skills/{name}/` directory
 
 #### Integration with Gateway
 
@@ -882,13 +882,13 @@ Plugins extend the agent with external tools via standalone executables. Each pl
 <octos_home>/plugins/                 # deployment-scoped plugins
 <octos_home>/skills/                  # deployment-scoped skills
 <octos_home>/bundled-app-skills/      # bundled app skills
-~/.octos/profiles/<profile>/data/skills/
+~/.ra/profiles/<profile>/data/skills/
   └── my-plugin/
       ├── manifest.json  # plugin metadata + tool definitions
       └── my-plugin      # executable (or "main" as fallback)
 ```
 
-**Discovery order**: `Config::plugin_dirs_from_project()` scans deployment-scoped `<octos_home>/plugins`, `<octos_home>/skills`, `<octos_home>/bundled-app-skills`, and `OCTOS_SKILLS_PATH`; managed profile gateways then layer platform skills and the active profile's `data/skills/` directory on top. Legacy HOME-rooted globals (`~/.octos/plugins`, `~/.octos/skills`) are no longer scanned except for a one-shot migration warning.
+**Discovery order**: `Config::plugin_dirs_from_project()` scans deployment-scoped `<octos_home>/plugins`, `<octos_home>/skills`, `<octos_home>/bundled-app-skills`, and `OCTOS_SKILLS_PATH`; managed profile gateways then layer platform skills and the active profile's `data/skills/` directory on top. Legacy HOME-rooted globals (`~/.ra/plugins`, `~/.ra/skills`) are no longer scanned except for a one-shot migration warning.
 
 #### PluginManifest
 
@@ -1054,7 +1054,7 @@ pub struct ConsoleReporter {
 
 **Duration formatting**: >1s → `{:.1}s`, ≤1s → `{N}ms`.
 
-**EventBroadcaster** (feature: `api`, `octos-cli/src/api/events.rs:32`) — process-wide broadcaster that converts progress events to JSON and publishes them on a `tokio::sync::broadcast` channel. No SSE wire path remains in the chat transport; the JSON frames feed the harness/admin `/api/events/harness` endpoint, the swarm event publishers, and the UI Protocol v1 WS bridge:
+**EventBroadcaster** (feature: `api`, `ra-cli/src/api/events.rs:32`) — process-wide broadcaster that converts progress events to JSON and publishes them on a `tokio::sync::broadcast` channel. No SSE wire path remains in the chat transport; the JSON frames feed the harness/admin `/api/events/harness` endpoint, the swarm event publishers, and the UI Protocol v1 WS bridge:
 
 ```rust
 pub struct EventBroadcaster {
@@ -1108,13 +1108,13 @@ Detects repetitive agent behavior (e.g., calling the same tool with same args). 
 
 ---
 
-## octos-bus — Gateway Infrastructure
+## ra-bus — Gateway Infrastructure
 
 ### Message Bus
 
 `create_bus() -> (AgentHandle, BusPublisher)` linked by mpsc channels (capacity 256). AgentHandle receives InboundMessage; BusPublisher dispatches OutboundMessage.
 
-**Queue Modes** (configured via `gateway.queue_mode`, definition in `octos-cli/src/config.rs:1523-1544`):
+**Queue Modes** (configured via `gateway.queue_mode`, definition in `ra-cli/src/config.rs:1523-1544`):
 - `Followup`: FIFO — process queued messages one at a time
 - `Collect` (default): Merge queued messages by session, concatenating content before processing
 - `Latest`: Keep only the latest queued message, discarding older ones (renamed from `Steer`; the `steer` serde alias keeps old configs parsing)
@@ -1160,7 +1160,7 @@ pub trait Channel: Send + Sync {
 
 **Markdown to HTML**: `markdown_html.rs` converts Markdown to Telegram-compatible HTML for rich message formatting.
 
-**Media**: `download_media()` helper downloads photos/voice/audio/documents to `.octos/media/`.
+**Media**: `download_media()` helper downloads photos/voice/audio/documents to `.ra/media/`.
 
 **Transcription**: Voice/audio auto-transcribed by the voice platform skill before agent processing (see Transcription).
 
@@ -1180,7 +1180,7 @@ MAX_CHUNKS = 50 (DoS limit). UTF-8 safe boundary detection via `char_indices()`.
 
 ### Session Manager
 
-JSONL persistence at `.octos/sessions/{key}.jsonl`.
+JSONL persistence at `.ra/sessions/{key}.jsonl`.
 
 - **In-memory cache**: LRU with disk sync on write
 - **Filenames**: Percent-encoded SessionKey, truncated to 183 chars with `_{hash:016X}` suffix on truncation to prevent collisions
@@ -1190,7 +1190,7 @@ JSONL persistence at `.octos/sessions/{key}.jsonl`.
 
 ### Cron Service
 
-JSON persistence at `.octos/cron.json`.
+JSON persistence at `.ra/cron.json`.
 
 **Schedule types**:
 - `Every { seconds: u64 }` — recurring interval
@@ -1205,7 +1205,7 @@ Periodic check of `HEARTBEAT.md` (default: 30 min interval). Sends content to ag
 
 ---
 
-## octos-cli — CLI & Configuration
+## ra-cli — CLI & Configuration
 
 ### Commands
 
@@ -1213,7 +1213,7 @@ Periodic check of `HEARTBEAT.md` (default: 30 min interval). Sends content to ag
 |---|---|
 | `chat` | Interactive multi-turn chat. Readline with history. Exit: exit/quit/:q |
 | `gateway` | Persistent multi-channel daemon with session management |
-| `init` | Initialize .octos/ with config, templates, directories |
+| `init` | Initialize .ra/ with config, templates, directories |
 | `status` | Show config, provider, API keys, bootstrap files |
 | `auth login/logout/status` | OAuth PKCE (OpenAI), device code, paste-token |
 | `cron list/add/remove/enable` | CLI cron job management |
@@ -1228,13 +1228,13 @@ Periodic check of `HEARTBEAT.md` (default: 30 min interval). Sends content to ag
 
 ### Configuration
 
-Loaded from `.octos/config.json` (local) or `~/.config/octos/config.json` (global). Local takes precedence.
+Loaded from `.ra/config.json` (local) or `~/.config/ra/config.json` (global). Local takes precedence.
 
 - **`${VAR}` expansion**: Environment variable substitution in string values
 - **Versioned config**: Version field with automatic `migrate_config()` framework
 - **Provider auto-detect** (`registry::detect_provider(model)`): claude→anthropic, gpt/o1/o3/o4→openai, gemini→gemini, deepseek→deepseek, kimi/moonshot→moonshot, qwen→dashscope, glm→zhipu, llama/mixtral→groq. Patterns defined per-provider in `registry/`.
 
-**API key resolution order**: Auth store (`~/.octos/auth.json`) → environment variable.
+**API key resolution order**: Auth store (`~/.ra/auth.json`) → environment variable.
 
 ### Auth Module
 
@@ -1249,7 +1249,7 @@ Loaded from `.octos/config.json` (local) or `~/.config/octos/config.json` (globa
 
 **Paste Token**: Prompt for API key from stdin, store as `auth_method: "paste_token"`.
 
-**AuthStore**: `~/.octos/auth.json` (mode 0600). `{credentials: {provider: AuthCredential}}`.
+**AuthStore**: `~/.ra/auth.json` (mode 0600). `{credentials: {provider: AuthCredential}}`.
 
 ### Config Watcher
 
@@ -1271,9 +1271,9 @@ Polls every 5 seconds. SHA-256 hash comparison of file contents.
 
 **Auth**: Optional bearer token with constant-time comparison (API routes only; `/metrics` and static files are public). Browser Origin policy is resolved once at serve startup into `AppState`: legacy OminiX/base-domain and development entries, exact normalized `appui.allowed_origins`, and the active serve port's loopback entries. The router CORS predicate and both `/api/ui-protocol/ws` and `/v1/session_ingress/ws/*` upgrade gates consume that same list; authentication/work-secret checks remain independent, and CORS does not enable credentials. Hosted single-label tenant compatibility remains an additional WS rule. Reverse-proxy and LAN origins are never inferred from request `Host`/forwarding headers. **Max message**: 1MB.
 
-**Web UI**: Embedded SPA via `rust-embed` served as the fallback handler. Session sidebar, chat interface, UI Protocol WebSocket streaming, and dashboard/admin surfaces share the same `octos serve` process.
+**Web UI**: Embedded SPA via `rust-embed` served as the fallback handler. Session sidebar, chat interface, UI Protocol WebSocket streaming, and dashboard/admin surfaces share the same `ra serve` process.
 
-**Prometheus Metrics**: `octos_tool_calls_total` (counter, labels: tool, success), `octos_tool_call_duration_seconds` (histogram, label: tool), `octos_llm_tokens_total` (counter, label: direction). Powered by `metrics` + `metrics-exporter-prometheus` crates.
+**Prometheus Metrics**: `ra_tool_calls_total` (counter, labels: tool, success), `octos_tool_call_duration_seconds` (histogram, label: tool), `ra_llm_tokens_total` (counter, label: direction). Powered by `metrics` + `metrics-exporter-prometheus` crates.
 
 ### Session Compaction (Gateway)
 
@@ -1316,27 +1316,27 @@ Two first-class runtime types make profile scope and session scope explicit:
 2. `state.session_cache.get_or_init(profile, session_key, workspace_hint)`:
    - Cache miss → `SessionRuntime::bootstrap`:
      1. Resolve `workspace_root` from `workspace_hint` (Tier-1/Tier-2, validated) or auto-derive Tier-3.
-     2. Write default `WorkspacePolicy::for_session()` to `<workspace_root>/.octos-workspace.toml` if missing (idempotent).
+     2. Write default `WorkspacePolicy::for_session()` to `<workspace_root>/.ra-workspace.toml` if missing (idempotent).
      3. Compute `plugin_work_dir = <workspace_root>/skill-output`.
      4. Clone `profile.tool_specs`; rebind `cwd` + `set_output_dir_hint` + per-session policy filter.
      5. Build `Agent` from `profile.llm` + cloned tools.
      6. Open per-session `SessionManager` at `<profile.data_dir>/users/<key>/`.
    - Cache hit → return existing `Arc<SessionRuntime>`.
 
-**Bootstrap path is shared between serve and gateway.** Both `commands/serve.rs::run_async` and the `ProcessManager`-spawned `octos gateway` subprocess call `ProfileRuntime::bootstrap` for per-profile state (memory, memory_store, tool_config, credentials, plugin env). Gateway-specific composition (`SwappableProvider`, `provider_router`, `SwitchModelTool`, admin tools, `pipeline_factory`, gateway tool-registry layering) stays as composition ON TOP of the profile runtime — nothing duplicates the LLM/credentials/skills/plugin assembly the runtime owns.
+**Bootstrap path is shared between serve and gateway.** Both `commands/serve.rs::run_async` and the `ProcessManager`-spawned `ra gateway` subprocess call `ProfileRuntime::bootstrap` for per-profile state (memory, memory_store, tool_config, credentials, plugin env). Gateway-specific composition (`SwappableProvider`, `provider_router`, `SwitchModelTool`, admin tools, `pipeline_factory`, gateway tool-registry layering) stays as composition ON TOP of the profile runtime — nothing duplicates the LLM/credentials/skills/plugin assembly the runtime owns.
 
-**Why this exists.** Before M11, `octos serve` ran a server-wide embedded `Agent` constructed by a no-longer-present `try_create_agent`. The agent had no notion of profile or session scope. A series of PRs (#866 / #867 / #868 / #869, all 2026-05-10) retrofitted profile awareness one transient `Config` field at a time. M11 replaced the embedded agent with the two-scope model and M11-F deleted the last of the overlay machinery. See the ADR for the full incident trail.
+**Why this exists.** Before M11, `ra serve` ran a server-wide embedded `Agent` constructed by a no-longer-present `try_create_agent`. The agent had no notion of profile or session scope. A series of PRs (#866 / #867 / #868 / #869, all 2026-05-10) retrofitted profile awareness one transient `Config` field at a time. M11 replaced the embedded agent with the two-scope model and M11-F deleted the last of the overlay machinery. See the ADR for the full incident trail.
 
 ---
 
-## octos-plugin — Plugin SDK
+## ra-plugin — Plugin SDK
 
-Standalone crate for plugin manifest parsing, discovery, gating, and lifecycle. Used by `octos-agent/src/plugins/` for loading plugins at runtime.
+Standalone crate for plugin manifest parsing, discovery, gating, and lifecycle. Used by `ra-agent/src/plugins/` for loading plugins at runtime.
 
 Source layout:
 
 ```
-crates/octos-plugin/src/
+crates/ra-plugin/src/
 ├── lib.rs
 ├── manifest.rs       # PluginManifest, Requirements, InstallSpec
 ├── discovery.rs      # Directory scan + precedence
@@ -1364,13 +1364,13 @@ crates/octos-plugin/src/
 | `CostEvent` | Per-step token + USD cost — rolls up via `cost_ledger.rs` |
 | `ArtifactEvent` | Pointer to a produced artifact (file path or URL) |
 
-Synthesis-style skills (`deep-search`, `deep-crawl`) declare `synthesis_config` so the host injects the correct LLM provider/model and forwards env keys via `x-octos-host-config-keys`.
+Synthesis-style skills (`deep-search`, `deep-crawl`) declare `synthesis_config` so the host injects the correct LLM provider/model and forwards env keys via `x-ra-host-config-keys`.
 
-Contract tests live at `crates/octos-plugin/tests/lifecycle_sandbox.rs`.
+Contract tests live at `crates/ra-plugin/tests/lifecycle_sandbox.rs`.
 
 ---
 
-## octos-pipeline — DOT-based Pipeline Orchestration
+## ra-pipeline — DOT-based Pipeline Orchestration
 
 DOT-based pipeline orchestration engine for defining and executing multi-step workflows.
 
@@ -1396,12 +1396,12 @@ DOT-based pipeline orchestration engine for defining and executing multi-step wo
 
 ---
 
-## octos-swarm — Swarm / PM Dispatcher
+## ra-swarm — Swarm / PM Dispatcher
 
 Fan-out / sequence / pipeline orchestrator over MCP-backed sub-agents.
 
 ```
-crates/octos-swarm/src/
+crates/ra-swarm/src/
 ├── lib.rs
 ├── dispatcher.rs   # Fan-out a contract to N sub-agents, gather artifacts
 ├── ledger.rs       # Per-dispatch ledger of inputs / outputs / cost
@@ -1414,9 +1414,9 @@ Wired into REST under `/api/swarm/dispatch` and `/api/swarm/dispatches/*`.
 
 ---
 
-## octos-sandbox — Windows AppContainer Helper
+## ra-sandbox — Windows AppContainer Helper
 
-Standalone helper binary (`crates/octos-sandbox/src/main.rs`) that wraps a child process inside a Windows AppContainer using the `rappct` library. The agent invokes this binary on Windows when `SandboxMode::AppContainer` is selected (or via `Auto` on Windows). The bwrap / sandbox-exec / Docker code paths still live in `octos-agent/src/sandbox/` — `octos-sandbox` is specifically the Windows complement.
+Standalone helper binary (`crates/ra-sandbox/src/main.rs`) that wraps a child process inside a Windows AppContainer using the `rappct` library. The agent invokes this binary on Windows when `SandboxMode::AppContainer` is selected (or via `Auto` on Windows). The bwrap / sandbox-exec / Docker code paths still live in `ra-agent/src/sandbox/` — `ra-sandbox` is specifically the Windows complement.
 
 ---
 
@@ -1457,7 +1457,7 @@ System messages (cron, heartbeat, spawn results) flow through the same bus with 
 ## Feature Flags
 
 ```toml
-# octos-bus
+# ra-bus
 telegram = ["teloxide"]
 discord  = ["serenity"]
 slack    = ["tokio-tungstenite"]
@@ -1465,25 +1465,25 @@ whatsapp = ["tokio-tungstenite"]
 feishu   = ["tokio-tungstenite"]
 email    = ["async-imap", "tokio-rustls", "rustls", "webpki-roots", "lettre", "mailparse"]
 
-# octos-agent (browser is always compiled in, no longer feature-gated)
+# ra-agent (browser is always compiled in, no longer feature-gated)
 git      = ["gix"]                  # git operations via gitoxide
 ast      = ["tree-sitter"]          # code_structure.rs AST analysis
 admin-bot = [...]                   # admin/ directory tools
 
-# octos-bus (additional)
+# ra-bus (additional)
 wecom    = [...]                    # WeCom/WeChat Work channel
 twilio   = [...]                    # Twilio SMS/MMS channel
 
-# octos-cli
+# ra-cli
 api      = ["axum", "tower-http", "futures"]
-telegram = ["octos-bus/telegram"]
-discord  = ["octos-bus/discord"]
-slack    = ["octos-bus/slack"]
-whatsapp = ["octos-bus/whatsapp"]
-feishu   = ["octos-bus/feishu"]
-email    = ["octos-bus/email"]
-wecom    = ["octos-bus/wecom"]
-twilio   = ["octos-bus/twilio"]
+telegram = ["ra-bus/telegram"]
+discord  = ["ra-bus/discord"]
+slack    = ["ra-bus/slack"]
+whatsapp = ["ra-bus/whatsapp"]
+feishu   = ["ra-bus/feishu"]
+email    = ["ra-bus/email"]
+wecom    = ["ra-bus/wecom"]
+twilio   = ["ra-bus/twilio"]
 ```
 
 ---
@@ -1492,17 +1492,17 @@ twilio   = ["octos-bus/twilio"]
 
 ```
 crates/
-├── octos-core/src/
+├── ra-core/src/
 │   └── lib.rs, task.rs, types.rs, error.rs, gateway.rs, message.rs, utils.rs
-├── octos-llm/src/
+├── ra-llm/src/
 │   ├── lib.rs, provider.rs, config.rs, types.rs, retry.rs, failover.rs, sse.rs
 │   ├── embedding.rs, pricing.rs, context.rs, transcription.rs, vision.rs
 │   ├── adaptive.rs, swappable.rs, router.rs, ominix.rs, catalog.rs
 │   ├── anthropic.rs, openai.rs, gemini.rs, openrouter.rs  (protocol impls)
 │   └── registry/  (mod.rs + 15 provider entries)
-├── octos-memory/src/
+├── ra-memory/src/
 │   └── lib.rs, episode.rs, store.rs, memory_store.rs, hybrid_search.rs
-├── octos-agent/src/
+├── ra-agent/src/
 │   ├── lib.rs, behaviour.rs, bootstrap.rs, builtin_skills.rs,
 │   │  bundled_app_skills.rs, compaction.rs, compaction_tiered.rs,
 │   │  cost_ledger.rs, event_bus.rs, exec_env.rs, file_state_cache.rs,
@@ -1535,7 +1535,7 @@ crates/
 │                        robot_groups, workspace_history,
 │                        admin/ (profiles, skills, sub_accounts, system,
 │                                platform_skills, voice_clones, update))
-├── octos-bus/src/
+├── ra-bus/src/
 │   ├── lib.rs, bus.rs, channel.rs, session.rs, coalesce.rs, media.rs
 │   ├── api_channel.rs, cli_channel.rs, telegram_channel.rs,
 │   │  discord_channel.rs, slack_channel.rs, whatsapp_channel.rs,
@@ -1543,7 +1543,7 @@ crates/
 │   │  wechat_channel.rs, wecom_channel.rs, wecom_bot_channel.rs,
 │   │  qq_bot_channel.rs, twilio_channel.rs, markdown_html.rs
 │   └── cron_service.rs, cron_types.rs, heartbeat.rs, resume_policy.rs
-├── octos-cli/src/
+├── ra-cli/src/
 │   ├── main.rs, config.rs, config_watcher.rs, cron_tool.rs, compaction.rs
 │   ├── auth/      (mod, store, oauth, token)
 │   ├── api/       (mod, router, handlers, sse, metrics, static_files,
@@ -1551,17 +1551,17 @@ crates/
 │   └── commands/  (mod, chat, init, status, gateway, clean,
 │                    completions, cron, channels, auth, skills, docs,
 │                    serve, office, account)
-├── octos-pipeline/src/
+├── ra-pipeline/src/
 │   ├── lib.rs, parser.rs, graph.rs, executor.rs, handler.rs
 │   ├── condition.rs, tool.rs, validate.rs, human_gate.rs, fidelity.rs
 │   ├── manager.rs, thread.rs, server.rs, artifact.rs, checkpoint.rs
 │   ├── events.rs, run_dir.rs, stylesheet.rs
-├── octos-plugin/src/
+├── ra-plugin/src/
 │   ├── lib.rs, manifest.rs, discovery.rs, gating.rs, lifecycle.rs,
 │   │  protocol_v2.rs, types.rs
-├── octos-sandbox/src/
+├── ra-sandbox/src/
 │   └── main.rs    (Windows AppContainer helper binary)
-├── octos-swarm/src/
+├── ra-swarm/src/
 │   └── lib.rs, dispatcher.rs, ledger.rs, topology.rs,
 │       persistence.rs, result.rs
 ├── app-skills/    (14 workspace crates; only 9 are auto-bootstrapped via
@@ -1586,12 +1586,12 @@ crates/
 - `secrecy::SecretString` — all provider API keys are wrapped; prevents accidental logging/display
 
 ### Authentication & Credentials
-- API keys: auth store (`~/.octos/auth.json`, mode 0600) checked before env vars
+- API keys: auth store (`~/.ra/auth.json`, mode 0600) checked before env vars
 - OAuth PKCE with SHA-256 challenges, state parameter (CSRF protection)
 - Constant-time byte comparison for API bearer tokens (timing attack prevention)
 
 ### Execution Sandbox
-- Four backends: bwrap (Linux), sandbox-exec (macOS), Docker, Windows AppContainer (via `octos-sandbox` helper) — `SandboxMode::Auto` detection per OS
+- Four backends: bwrap (Linux), sandbox-exec (macOS), Docker, Windows AppContainer (via `ra-sandbox` helper) — `SandboxMode::Auto` detection per OS
 - 18 BLOCKED_ENV_VARS shared across all sandbox backends, MCP server spawning, hooks, and browser tool
 - Path injection prevention per backend (Docker: `:`, `\0`, `\n`, `\r`; macOS: control chars, `(`, `)`, `\`, `"`)
 - Docker: `--cap-drop ALL`, `--security-opt no-new-privileges`, `--network none`
@@ -1602,7 +1602,7 @@ crates/
 - Tool policies: allow/deny with deny-wins semantics, group support, provider-specific filtering
 - Tool argument size limit: 1MB per invocation (non-allocating `estimate_json_size` with escape char accounting)
 - Path traversal prevention + symlink-safe file I/O via `O_NOFOLLOW` (Unix) eliminating TOCTOU races
-- SSRF protection via `octos_research::net::check_url` — the one shared implementation, adapted for the agent tools by `octos-agent/src/tools/ssrf.rs`: blocks private IPs (10/8, 172.16/12, 192.168/16, 169.254/16, IPv6 ULA/link-local, IPv4-mapped/compatible). Used by web_fetch and browser.
+- SSRF protection via `octos_research::net::check_url` — the one shared implementation, adapted for the agent tools by `ra-agent/src/tools/ssrf.rs`: blocks private IPs (10/8, 172.16/12, 192.168/16, 169.254/16, IPv6 ULA/link-local, IPv4-mapped/compatible). Used by web_fetch and browser.
 - Browser: URL scheme allowlist (http/https only), 10s JS execution timeout, zombie process reaping, secure tempfiles for screenshots
 - MCP: input schema validation (max depth 10, max size 64KB) prevents malicious tool definitions
 
@@ -1624,9 +1624,9 @@ crates/
 
 ### Why Rust
 
-octos uses Rust with the tokio async runtime, which provides significant advantages over Python (OpenClaw, etc.) and Node.js (NanoCloud, etc.) agent frameworks for concurrent session handling:
+ra uses Rust with the tokio async runtime, which provides significant advantages over Python (OpenClaw, etc.) and Node.js (NanoCloud, etc.) agent frameworks for concurrent session handling:
 
-**True parallelism** — Tokio tasks run across all CPU cores simultaneously. Python has the GIL, so even with asyncio, CPU-bound work (JSON parsing, context compaction, token counting) is single-core. Node.js is single-threaded entirely. In octos, 10 concurrent sessions doing context compaction actually execute in parallel across cores.
+**True parallelism** — Tokio tasks run across all CPU cores simultaneously. Python has the GIL, so even with asyncio, CPU-bound work (JSON parsing, context compaction, token counting) is single-core. Node.js is single-threaded entirely. In ra, 10 concurrent sessions doing context compaction actually execute in parallel across cores.
 
 **Memory efficiency** — No garbage collector, no runtime overhead per object. Agent sessions are compact structs on the heap. A Python agent session carries interpreter overhead, GC metadata on every object, and dict-based attribute lookup. This matters with hundreds of sessions and large conversation histories in memory.
 
@@ -1700,21 +1700,21 @@ LLM response: [web_search, read_file, send_email]
 
 ### Multi-Tenant Dashboard
 
-The dashboard (`octos serve`) runs each user profile as a **separate gateway OS process**:
+The dashboard (`ra serve`) runs each user profile as a **separate gateway OS process**:
 
 ```
-Dashboard (octos serve, ~140 REST endpoints)
+Dashboard (ra serve, ~140 REST endpoints)
   ├─ First-run wizard → /api/admin/setup/{state,step,complete,skip}
-  ├─ Profile "alice" → octos gateway --config alice.json  (deepseek, own semaphore)
-  ├─ Profile "bob"   → octos gateway --config bob.json    (kimi, own semaphore)
-  └─ Profile "carol" → octos gateway --config carol.json  (openai, own semaphore)
+  ├─ Profile "alice" → ra gateway --config alice.json  (deepseek, own semaphore)
+  ├─ Profile "bob"   → ra gateway --config bob.json    (kimi, own semaphore)
+  └─ Profile "carol" → ra gateway --config carol.json  (openai, own semaphore)
 ```
 
 Each profile has its own LLM provider, API keys, channels, data directory, and `max_concurrent_sessions` semaphore. Profiles are fully isolated — no shared state between gateway processes.
 
-**Auto-rotate admin token** (#650): on `octos serve` boot, if a stored admin token is older than the configured threshold or has been invalidated, it is rotated automatically and the new value is persisted to `~/.octos/auth.json`.
+**Auto-rotate admin token** (#650): on `ra serve` boot, if a stored admin token is older than the configured threshold or has been invalidated, it is rotated automatically and the new value is persisted to `~/.ra/auth.json`.
 
-**Voice clone registration** (#653): voice cloning is owned by the separate `mofa-fm` skill (`fm_tts`), not the platform `voice` skill (which only does preset-voice TTS). Per-profile clone reference WAVs live under `~/.octos/profiles/<profile>/data/voice_profiles/*.wav`. On deploy, `scripts/register-fleet-voices.sh` merges those filenames into OminiX-API's `~/.OminiX/models/voices.json` on each fleet host so that `fm_tts`'s pre-call validation against `/v1/voices` succeeds. Without that merge step `fm_tts` rejects calls with `"voice 'X' is not registered on ominix-api"`.
+**Voice clone registration** (#653): voice cloning is owned by the separate `mofa-fm` skill (`fm_tts`), not the platform `voice` skill (which only does preset-voice TTS). Per-profile clone reference WAVs live under `~/.ra/profiles/<profile>/data/voice_profiles/*.wav`. On deploy, `scripts/register-fleet-voices.sh` merges those filenames into OminiX-API's `~/.OminiX/models/voices.json` on each fleet host so that `fm_tts`'s pre-call validation against `/v1/voices` succeeds. Without that merge step `fm_tts` rejects calls with `"voice 'X' is not registered on ominix-api"`.
 
 ---
 
@@ -1728,11 +1728,11 @@ Highlights of the current suite:
 - **Adaptive routing**: Off/Hedge/Lane modes, circuit breaker, failover, scoring, metrics, provider racing
 - **Responsiveness**: baseline learning, degradation detection, recovery, threshold boundaries
 - **Queue modes**: Followup, Collect, Latest, Interrupt, Speculative — overflow + auto-escalation/deescalation
-- **Session persistence**: JSONL storage, LRU eviction, fork, rewrite, timestamp sort, concurrent access, sticky thread_id binding (`crates/octos-bus/tests/jsonl_replay_thread_binding.rs`, #656)
+- **Session persistence**: JSONL storage, LRU eviction, fork, rewrite, timestamp sort, concurrent access, sticky thread_id binding (`crates/ra-bus/tests/jsonl_replay_thread_binding.rs`, #656)
 - **M8 runtime invariants**: `e2e/tests/m8-runtime-invariants-live.spec.ts` — sub-agent output router, structured resume, orphan reaper, supervisor caps
 - **Live progress gate**: `e2e/tests/live-progress-gate.spec.ts` — background-task UX (#655)
-- **Plugin contract**: `crates/octos-plugin/tests/lifecycle_sandbox.rs` — protocol v2 events
-- **Swarm contract**: `crates/octos-swarm/tests/{subtask_contracts,swarm_dispatch}.rs`
+- **Plugin contract**: `crates/ra-plugin/tests/lifecycle_sandbox.rs` — protocol v2 events
+- **Swarm contract**: `crates/ra-swarm/tests/{subtask_contracts,swarm_dispatch}.rs`
 - **Integration**: CLI commands, file tools, cron jobs, session forking, plugin loading
 - **Security**: sandbox path injection, env sanitization, SSRF blocking, symlink rejection (O_NOFOLLOW), private IP detection, dedup overflow, tool argument size limits, session segment rolling and load budget, circuit breaker threshold edge cases, MCP schema validation, prompt-injection corpus (67 cases)
 - **Channel**: allowed_senders, message parsing, dedup logic, email address extraction, Matrix MSC4357 finish_stream

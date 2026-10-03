@@ -17,12 +17,12 @@ FILTER="${1:-all}"
 
 # Build test binaries (suppressing warnings)
 echo "Building test binaries..."
-cargo test -p octos-llm --test ux_adaptive --no-run 2>/dev/null
-cargo test -p octos-cli queue_ux --no-run 2>/dev/null
+cargo test -p ra-llm --test ux_adaptive --no-run 2>/dev/null
+cargo test -p ra-cli queue_ux --no-run 2>/dev/null
 
 # Find the test binaries
-LLM_BIN=$(cargo test -p octos-llm --test ux_adaptive --no-run 2>&1 | grep 'Executable tests/ux_adaptive' | awk '{print $NF}' | tr -d '()')
-CLI_BIN=$(cargo test -p octos-cli queue_ux --no-run 2>&1 | grep 'Executable unittests' | awk '{print $NF}' | tr -d '()')
+LLM_BIN=$(cargo test -p ra-llm --test ux_adaptive --no-run 2>&1 | grep 'Executable tests/ux_adaptive' | awk '{print $NF}' | tr -d '()')
+CLI_BIN=$(cargo test -p ra-cli queue_ux --no-run 2>&1 | grep 'Executable unittests' | awk '{print $NF}' | tr -d '()')
 
 run_test() {
     local bin="$1" name="$2"
@@ -38,7 +38,7 @@ run_test() {
 
 FAILED=0
 
-# Adaptive routing tests (octos-llm)
+# Adaptive routing tests (ra-llm)
 if [[ "$FILTER" == "all" || "$FILTER" == "adaptive" ]]; then
     run_test "$LLM_BIN" test_kimi_responds
     run_test "$LLM_BIN" test_deepseek_responds
@@ -50,7 +50,7 @@ if [[ "$FILTER" == "all" || "$FILTER" == "adaptive" ]]; then
     run_test "$LLM_BIN" test_responsiveness_baseline_learning
 fi
 
-# Queue mode tests (octos-cli)
+# Queue mode tests (ra-cli)
 if [[ "$FILTER" == "all" || "$FILTER" == "queue" ]]; then
     run_test "$CLI_BIN" queue_ux_followup_real_llm
     run_test "$CLI_BIN" queue_ux_collect_real_llm
@@ -59,7 +59,7 @@ if [[ "$FILTER" == "all" || "$FILTER" == "queue" ]]; then
     run_test "$CLI_BIN" queue_ux_hedge_mode_real_llm
 fi
 
-# Session switching + deep search buffering tests (octos-cli)
+# Session switching + deep search buffering tests (ra-cli)
 if [[ "$FILTER" == "all" || "$FILTER" == "session" ]]; then
     run_test "$CLI_BIN" queue_ux_session_switching_real_llm
     run_test "$CLI_BIN" queue_ux_deep_search_switch_back_real_llm

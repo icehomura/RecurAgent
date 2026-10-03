@@ -98,7 +98,7 @@ else
 fi
 
 # ─── 5. Missing MOFA_SKILLS_DIR rejected ─────────────────────────────────
-if out=$(MOFA_SKILLS_DIR="/nonexistent/octos/mofa" bash "$TARGET" --dry-run 2>&1); then
+if out=$(MOFA_SKILLS_DIR="/nonexistent/ra/mofa" bash "$TARGET" --dry-run 2>&1); then
     fail "missing mofa-dir should have exited non-zero; output: $out"
 else
     pass "missing mofa-dir exits non-zero"

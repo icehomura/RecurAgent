@@ -7,15 +7,15 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 run_id="${OCTOS_M12_SOAK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 artifact_root="${OCTOS_M12_SOAK_ARTIFACT_ROOT:-$repo_root/e2e/test-results-m12-solo-soak}"
 artifact_dir="${OCTOS_M12_SOAK_ARTIFACT_DIR:-$artifact_root/$run_id}"
-runtime_root="${OCTOS_M12_SOAK_RUNTIME_ROOT:-/tmp/octos-m12-solo-$run_id}"
+runtime_root="${OCTOS_M12_SOAK_RUNTIME_ROOT:-/tmp/ra-m12-solo-$run_id}"
 workspace="${OCTOS_M12_SOAK_WORKSPACE:-$runtime_root/workspace}"
 data_dir="${OCTOS_M12_SOAK_DATA_DIR:-$runtime_root/data}"
 logs_dir="${OCTOS_M12_SOAK_LOGS_DIR:-$runtime_root/logs}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/octos}"
+octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
 transport="${OCTOS_M12_SOAK_TRANSPORT:-both}"
 host="${OCTOS_M12_SOAK_HOST:-127.0.0.1}"
 port="${OCTOS_M12_SOAK_PORT:-50179}"
-auth_token="${OCTOS_M12_SOAK_AUTH_TOKEN:-octos-m12-solo-soak-token}"
+auth_token="${OCTOS_M12_SOAK_AUTH_TOKEN:-ra-m12-solo-soak-token}"
 profile_id="${OCTOS_M12_SOAK_PROFILE:-m12solo}"
 session_id="${OCTOS_M12_SOAK_SESSION:-$profile_id:local:m12-solo#$run_id}"
 serve_args="${OCTOS_M12_SOAK_SERVE_ARGS:-}"
@@ -26,7 +26,7 @@ export OCTOS_SOLO_LOGIN=1
 strict="${OCTOS_M12_SOAK_STRICT:-0}"
 tenant_negative="${OCTOS_M12_SOAK_TENANT_NEGATIVE:-0}"
 api_key_env="${OCTOS_M12_SOAK_API_KEY_ENV:-OPENAI_API_KEY}"
-api_key="${OCTOS_M12_SOAK_API_KEY:-octos-m12-soak-test-key}"
+api_key="${OCTOS_M12_SOAK_API_KEY:-ra-m12-soak-test-key}"
 endpoint="ws://$host:$port/api/ui-protocol/ws"
 
 usage() {
@@ -36,11 +36,11 @@ Usage: scripts/m12-solo-appui-soak.sh <run|self-test|help>
 Environment:
   OCTOS_M12_SOAK_TRANSPORT     ws, stdio, both, or fixture. Default: both.
   OCTOS_M12_SOAK_ARTIFACT_DIR  Artifact directory. Default: e2e/test-results-m12-solo-soak/<run-id>.
-  OCTOS_M12_SOAK_RUNTIME_ROOT  Runtime root. Default: /tmp/octos-m12-solo-<run-id>.
+  OCTOS_M12_SOAK_RUNTIME_ROOT  Runtime root. Default: /tmp/ra-m12-solo-<run-id>.
   OCTOS_M12_SOAK_WORKSPACE     Workspace cwd requested through session/open.cwd.
   OCTOS_M12_SOAK_DATA_DIR      Backend data dir.
-  OCTOS_BIN                    octos binary. Default: target/debug/octos.
-  OCTOS_M12_SOAK_SERVE_ARGS    Extra args for `octos serve`.
+  OCTOS_BIN                    ra binary. Default: target/debug/ra.
+  OCTOS_M12_SOAK_SERVE_ARGS    Extra args for `ra serve`.
   OCTOS_M12_SOAK_STRICT=1      Fail when M12-A/C methods are blocked instead of recording blockers.
   OCTOS_M12_SOAK_TENANT_NEGATIVE=1
                               Also run the tenant/cloud dangerous-mode negative probe. Default 0
@@ -177,7 +177,7 @@ require_node() {
 require_octos() {
   [ -x "$octos_bin" ] || die "OCTOS_BIN is not executable: $octos_bin"
   if ! "$octos_bin" serve --help >/dev/null 2>&1; then
-    die "OCTOS_BIN does not expose 'serve'; build octos-cli with the api feature or set OCTOS_BIN to an API-enabled binary"
+    die "OCTOS_BIN does not expose 'serve'; build ra-cli with the api feature or set OCTOS_BIN to an API-enabled binary"
   fi
 }
 
@@ -317,11 +317,11 @@ run_all() {
 self_test() {
   require_node
   local tmp_root
-  tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/octos-m12-solo-self-test.XXXXXX")"
+  tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/ra-m12-solo-self-test.XXXXXX")"
   OCTOS_M12_SOAK_ARTIFACT_DIR="$tmp_root/artifacts" \
   OCTOS_M12_SOAK_RUNTIME_ROOT="$tmp_root/runtime" \
   OCTOS_M12_SOAK_TRANSPORT=fixture \
-  "$0" run >/tmp/octos-m12-solo-self-test.out
+  "$0" run >/tmp/ra-m12-solo-self-test.out
   local out_dir="$tmp_root/artifacts/fixture"
   [ -f "$out_dir/appui-transcript.jsonl" ] || die "self-test missing appui-transcript.jsonl"
   [ -f "$out_dir/runtime-policy-stamp.json" ] || die "self-test missing runtime-policy-stamp.json"

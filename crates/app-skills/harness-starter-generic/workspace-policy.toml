@@ -1,8 +1,8 @@
 # Example workspace policy for harness-starter-generic.
 #
-# Copy this file to `.octos-workspace.toml` at your workspace root when
+# Copy this file to `.ra-workspace.toml` at your workspace root when
 # adopting this starter. All fields shown here are on the STABLE list in
-# docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md Part 1.
+# docs/ra_HARNESS_DEVELOPER_GUIDE.md Part 1.
 
 [workspace]
 kind = "session"

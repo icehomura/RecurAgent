@@ -14,7 +14,7 @@ class BuildCacheDocs(unittest.TestCase):
         self.assertNotIn("solo 侧 `run_chat_peer`", section)
 
     def test_builder_comment_only_claims_implemented_entry_points(self):
-        agent = (ROOT / "crates/octos-agent/src/agent/mod.rs").read_text()
+        agent = (ROOT / "crates/ra-agent/src/agent/mod.rs").read_text()
         comment = agent.split("pub fn with_build_cache_slot(", 1)[0].rsplit("/// Builder:", 1)[1]
         self.assertNotIn("solo acquires", comment)
         self.assertIn("serve", comment)

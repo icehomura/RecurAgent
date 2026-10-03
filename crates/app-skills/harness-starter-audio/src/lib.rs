@@ -8,7 +8,7 @@
 //! harness contract shape, not on audio quality. Swap in a real TTS or
 //! render engine when adapting the starter.
 //!
-//! See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md`.
+//! See `docs/ra_HARNESS_DEVELOPER_GUIDE.md`.
 
 #![deny(unsafe_code)]
 

@@ -108,18 +108,18 @@ function baseTranscript({
 }
 
 function makeArtifactDir(overrides = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "octos-ux-validate-"));
+  const dir = mkdtempSync(join(tmpdir(), "ra-ux-validate-"));
   mkdirSync(dir, { recursive: true });
   writeJson(join(dir, "scenario.json"), {
-    schema: "octos.ux.scenario.v1",
+    schema: "ra.ux.scenario.v1",
     id: "validator-test",
-    artifact_abi: "octos.ux.artifacts.v1",
+    artifact_abi: "ra.ux.artifacts.v1",
     final_marker: "M19_VALIDATOR_FINAL_LINE",
     required_artifacts: REQUIRED_ARTIFACTS,
     ...(overrides.scenario || {}),
   });
   writeJson(join(dir, "summary.json"), {
-    schema: "octos.ux.summary.v1",
+    schema: "ra.ux.summary.v1",
     status: "passed",
     mode: "self-test",
     scenario_id: "validator-test",
@@ -127,13 +127,13 @@ function makeArtifactDir(overrides = {}) {
     ...(overrides.summary || {}),
   });
   writeJson(join(dir, "terminal-size.json"), {
-    schema: "octos.ux.terminal_size.v1",
+    schema: "ra.ux.terminal_size.v1",
     cols: 120,
     rows: 40,
     ...(overrides.terminal || {}),
   });
   writeJson(join(dir, "runtime-policy-stamp.json"), {
-    schema: "octos.runtime_policy_stamp.v1",
+    schema: "ra.runtime_policy_stamp.v1",
     stamp: { sandbox_mode: "workspace-write", approval_policy: "never" },
   });
   writeFileSync(
@@ -145,7 +145,7 @@ function makeArtifactDir(overrides = {}) {
     join(dir, "tui-capture.txt"),
     overrides.capture ||
       [
-        "Octos TUI",
+        "ra TUI",
         "",
         "Messages",
         "User: validate the UX gate",
@@ -166,7 +166,7 @@ function makeArtifactDir(overrides = {}) {
     writeFileSync(join(dir, "tmux-cursor-samples.jsonl"), overrides.cursorSamples, "utf8");
   }
   writeJson(join(dir, "validation.json"), {
-    schema: "octos.ux.validation.v1",
+    schema: "ra.ux.validation.v1",
     status: "passed",
     checks: [],
   });
@@ -210,9 +210,9 @@ test("validator registry emits required M19 checks and layout snapshot", () => {
     assert.equal(checkById(result, id).status, "passed");
   }
   const layout = checkById(result, "terminal_layout_snapshot").layout_snapshot;
-  assert.equal(layout.schema, "octos.ux.terminal_layout_snapshot.v1");
+  assert.equal(layout.schema, "ra.ux.terminal_layout_snapshot.v1");
   assert.ok(result.validators.includes("terminal_layout_snapshot"));
-  assert.equal(result.layout_snapshot.schema, "octos.ux.terminal_layout_snapshot.v1");
+  assert.equal(result.layout_snapshot.schema, "ra.ux.terminal_layout_snapshot.v1");
   assert.ok(layout.regions.some((region) => region.name === "composer"));
 });
 
@@ -233,7 +233,7 @@ test("known rendered capture bug patterns fail", () => {
     {
       name: "overlap",
       capture: [
-        "Octos TUI",
+        "ra TUI",
         "Messages",
         "Assistant: completed M19_VALIDATOR_FINAL_LINE",
         "┌Work › overlapped input",
@@ -245,7 +245,7 @@ test("known rendered capture bug patterns fail", () => {
     {
       name: "spinner",
       capture: [
-        "Octos TUI",
+        "ra TUI",
         "Messages",
         "Assistant: completed M19_VALIDATOR_FINAL_LINE",
         "Composer",
@@ -257,7 +257,7 @@ test("known rendered capture bug patterns fail", () => {
     {
       name: "stuck-working",
       capture: [
-        "Octos TUI",
+        "ra TUI",
         "Messages",
         "Assistant: completed M19_VALIDATOR_FINAL_LINE",
         "Composer",
@@ -269,7 +269,7 @@ test("known rendered capture bug patterns fail", () => {
     {
       name: "raw-markdown",
       capture: [
-        "Octos TUI",
+        "ra TUI",
         "Messages",
         "Assistant: completed M19_VALIDATOR_FINAL_LINE",
         "• #### leaked markdown control",
@@ -297,7 +297,7 @@ test("known rendered capture bug patterns fail", () => {
 
 test("hidden final answer fails final_answer_visible", () => {
   const dir = makeArtifactDir({
-    capture: ["Octos TUI", "Messages", "Assistant: still working", "Composer", ">", "state Ready"].join("\n"),
+    capture: ["ra TUI", "Messages", "Assistant: still working", "Composer", ">", "state Ready"].join("\n"),
   });
   const { status, result } = runValidator(dir);
   assert.equal(status, 1);
@@ -306,7 +306,7 @@ test("hidden final answer fails final_answer_visible", () => {
 
 test("missing composer fails composer_usable", () => {
   const dir = makeArtifactDir({
-    capture: ["Octos TUI", "Messages", "Assistant: completed M19_VALIDATOR_FINAL_LINE", "state Ready"].join("\n"),
+    capture: ["ra TUI", "Messages", "Assistant: completed M19_VALIDATOR_FINAL_LINE", "state Ready"].join("\n"),
   });
   const { status, result } = runValidator(dir);
   assert.equal(status, 1);

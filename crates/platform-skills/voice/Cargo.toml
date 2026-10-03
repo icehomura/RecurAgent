@@ -3,7 +3,7 @@ name = "voice"
 version = "1.2.0"
 edition = "2021"
 description = "Voice skill binary with external ASR routing and OMiniX TTS/model management"
-authors = ["octos"]
+authors = ["ra"]
 
 [[bin]]
 name = "voice"

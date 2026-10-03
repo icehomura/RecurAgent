@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup-caddy.sh — Install Caddy as reverse proxy for octos serve and frps (Linux/macOS).
+# setup-caddy.sh — Install Caddy as reverse proxy for ra serve and frps (Linux/macOS).
 # Supports HTTP-only mode (default) or HTTPS with wildcard certs via DNS challenge.
 # Idempotent: safe to re-run.
 #
@@ -8,8 +8,8 @@
 #   ./setup-caddy.sh --https --dns-provider cloudflare  # HTTPS with wildcard certs
 #
 # Environment:
-#   TUNNEL_DOMAIN         (optional) Base domain (default: octos-cloud.org)
-#   OCTOS_SERVE_PORT      (optional) octos serve port for apex site (default: 8080)
+#   TUNNEL_DOMAIN         (optional) Base domain (default: ra-cloud.org)
+#   OCTOS_SERVE_PORT      (optional) ra serve port for apex site (default: 8080)
 #   FRPS_VHOST_HTTP_PORT  (optional) frps HTTP vhost port for tenant subdomains (default: 8081)
 #   CF_API_TOKEN          (required for --dns-provider cloudflare)
 #
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────
-TUNNEL_DOMAIN="${TUNNEL_DOMAIN:-octos-cloud.org}"
+TUNNEL_DOMAIN="${TUNNEL_DOMAIN:-ra-cloud.org}"
 OCTOS_SERVE_PORT="${OCTOS_SERVE_PORT:-8080}"
 FRPS_VHOST_HTTP_PORT="${FRPS_VHOST_HTTP_PORT:-8081}"
 ENABLE_HTTPS=false
@@ -501,7 +501,7 @@ if [ "$ENABLE_HTTPS" = true ]; then
 # Caddyfile — managed by setup-caddy.sh
 # HTTPS with wildcard cert via __DNS_PROVIDER__ DNS challenge.
 
-# Main site: all requests proxied to octos serve (landing page embedded)
+# Main site: all requests proxied to ra serve (landing page embedded)
 www.__DOMAIN__, __DOMAIN__ {
     reverse_proxy localhost:__SERVE_PORT__
 }
@@ -573,14 +573,14 @@ CADDY_BIN="$(command -v caddy)"
 
 case "$(uname -s)" in
     Darwin)
-        PLIST="/Library/LaunchDaemons/io.octos.caddy.plist"
+        PLIST="/Library/LaunchDaemons/io.ra.caddy.plist"
         sudo tee "$PLIST" > /dev/null << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.octos.caddy</string>
+    <string>io.ra.caddy</string>
     <key>ProgramArguments</key>
     <array>
         <string>${CADDY_BIN}</string>
@@ -619,7 +619,7 @@ EOF
 
         sudo tee /etc/systemd/system/caddy.service > /dev/null << EOF
 [Unit]
-Description=Caddy reverse proxy for octos tunnel
+Description=Caddy reverse proxy for ra tunnel
 After=network.target frps.service
 
 [Service]
@@ -666,12 +666,12 @@ VPS_IP=$(curl -s ifconfig.me 2>/dev/null || echo "<VPS_IP>")
 echo ""
 echo "==> Caddy is running"
 if [ "$ENABLE_HTTPS" = true ]; then
-    echo "    HTTPS: ${TUNNEL_DOMAIN} → localhost:${OCTOS_SERVE_PORT} (octos serve)"
+    echo "    HTTPS: ${TUNNEL_DOMAIN} → localhost:${OCTOS_SERVE_PORT} (ra serve)"
     echo "    HTTPS: *.${TUNNEL_DOMAIN} → localhost:${FRPS_VHOST_HTTP_PORT} (frps vhost)"
     echo "    DNS challenge: ${DNS_PROVIDER}"
     echo "    Certs: auto-provisioned via Let's Encrypt"
 else
-    echo "    HTTP: ${TUNNEL_DOMAIN} → localhost:${OCTOS_SERVE_PORT} (octos serve)"
+    echo "    HTTP: ${TUNNEL_DOMAIN} → localhost:${OCTOS_SERVE_PORT} (ra serve)"
     echo "    HTTP: *.${TUNNEL_DOMAIN} → localhost:${FRPS_VHOST_HTTP_PORT} (frps vhost)"
 fi
 echo ""

@@ -22,7 +22,7 @@
 //
 // IMPORTANT — known live-runtime limitation:
 // Per the implementation note in `maybe_advance_goal_runtime_after_turn`
-// (crates/octos-cli/src/session_actor.rs), the wire path currently calls
+// (crates/ra-cli/src/session_actor.rs), the wire path currently calls
 // `record_goal_turn(…, tokens_consumed=0, …)`. That means real LLM token
 // spend is NOT yet attributed to `goal.tokens_used`, so the goal cannot
 // organically reach `tokens_used >= token_budget` via real turns. The
@@ -56,7 +56,7 @@ const runRoot = path.resolve(
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const profileId = process.env.OCTOS_M15_GOAL_PROFILE || 'm15-goal';
 const sessionAId =
   process.env.OCTOS_M15_GOAL_SESSION_A
@@ -577,7 +577,7 @@ async function runSentinelCompleteScenario() {
 async function main() {
   await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error('octos serve --stdio did not spawn')),
+      () => reject(new Error('ra serve --stdio did not spawn')),
       10_000,
     );
     child.once('spawn', () => {

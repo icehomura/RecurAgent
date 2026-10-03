@@ -21,7 +21,7 @@ let
     ;
 
   src = cleanSource ../../.;
-  cargoToml = builtins.fromTOML (builtins.readFile (src + "/crates/octos-cli/Cargo.toml"));
+  cargoToml = builtins.fromTOML (builtins.readFile (src + "/crates/ra-cli/Cargo.toml"));
   workspaceToml = builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"));
 
   supportedChannels = [
@@ -59,7 +59,7 @@ rustPlatform.buildRustPackage {
 
   cargoBuildFlags = [
     "-p"
-    "octos-cli"
+    "ra-cli"
   ]
   ++ optionals (cargoFeatures != [ ]) [
     "--features"
@@ -67,14 +67,14 @@ rustPlatform.buildRustPackage {
   ];
 
   preBuild = optionalString (elem "api" cargoFeatures) ''
-    mkdir -p crates/octos-cli/static/admin
-    cp -r ${dashboardPkg}/admin/* crates/octos-cli/static/admin/
+    mkdir -p crates/ra-cli/static/admin
+    cp -r ${dashboardPkg}/admin/* crates/ra-cli/static/admin/
   '';
 
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
-    install -Dm755 ./target/${rustTarget}/release/octos $out/bin/octos
+    install -Dm755 ./target/${rustTarget}/release/ra $out/bin/ra
     runHook postInstall
   '';
 

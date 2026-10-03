@@ -2,7 +2,7 @@
 //
 // This reducer models the production SPA's actual thread-binding behavior
 // today. The bug class (#649 → #664 → #673 → #680 → #738 → #740) is rooted
-// in TWO leaks documented in /tmp/octos-architecture-FINAL.md (the
+// in TWO leaks documented in /tmp/ra-architecture-FINAL.md (the
 // "loophole-audit" table referenced from sections A and C):
 //
 //   LEAK 1 — Server-side sticky-map fallback. When the server's
@@ -13,7 +13,7 @@
 //     delta stamped with the WRONG thread_id.
 //
 //   LEAK 2 — Client-side reducer fallback. The current SPA at
-//     crates/octos-cli/static/app.js does not read thread_id off the wire
+//     crates/ra-cli/static/app.js does not read thread_id off the wire
 //     at all (the SSE stream is treated as a raw token feed). Every delta
 //     is appended to whichever assistant bubble was most recently created.
 //     If a later user sends Q2 mid-stream, Q1's tail tokens land in Q2's

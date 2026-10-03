@@ -19,15 +19,15 @@
  * Trial table (mini -> domain -> prompt):
  *   1. mini1 (dspfac.crew.ominix.io)  -> 深度研究全球量子计算商业化进展 2026
  *   2. mini2 (dspfac.bot.ominix.io)   -> 深度研究印度太空产业崛起 2026
- *   3. mini3 (dspfac.octos.ominix.io) -> Deep research on autonomous trucking commercial rollout 2026
+ *   3. mini3 (dspfac.ra.ominix.io) -> Deep research on autonomous trucking commercial rollout 2026
  *   4. mini5 (dspfac.ocean.ominix.io) -> 深度研究全球海上风电产业 2026 前景
  *   5. mini1 (dspfac.crew.ominix.io)  -> Deep research on Apple Vision Pro adoption and ecosystem 2026
  *
  * Run sequentially per spec (workers=1) so the 12-min trial budget per
  * mini is observed cleanly:
  *
- *   cd ~/home/octos/e2e
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 OCTOS_PROFILE=dspfac \
+ *   cd ~/home/ra/e2e
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 OCTOS_PROFILE=dspfac \
  *     npx playwright test tests/fleet-round2-spawn-only-ui.spec.ts \
  *     --reporter=list --workers=1 \
  *     --output=test-results-fleet-round2
@@ -76,7 +76,7 @@ const TRIALS: TrialConfig[] = [
   },
   {
     mini: 'mini3-trial3',
-    baseUrl: 'https://dspfac.octos.ominix.io',
+    baseUrl: 'https://dspfac.ra.ominix.io',
     prompt: 'Deep research on autonomous trucking commercial rollout 2026',
     topicMarkers: /trucking|autonomous|truck|2026/i,
   },

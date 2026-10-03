@@ -1,6 +1,6 @@
 spec: task
 name: "完成校验错误分类、有界恢复及证据账本 (evo-goal-verifier)"
-tags: [goal, verifier, autonomy, octos-cli, error-classification]
+tags: [goal, verifier, autonomy, ra-cli, error-classification]
 ---
 
 - **task**: evo-goal-verifier
@@ -18,7 +18,7 @@ Native goal completion verifier 的 `NotDone { reason }` 把基础设施故障�
 2. **严格 DONE 解析（k3 §2 最终规则 + GLM §2 边界，合并采纳）**：现状 first-token 解析已拒绝 `DONEgarbage`；真实活漏洞是 `DONE: but ...` 与 `DONE\nNOT_DONE: ...`（first token 均为 DONE → 误判 Done）。最终可判定规则（纯函数实现）：(a) `content` 为 None/trim 后空 → `EmptyResponse`（纯 reasoning 同此态）；(b) 剥至多一层 markdown fence（``` 开头且 ``` 结尾，仅成对时）→ (c) 剥成对反引号（首尾均为 ` 且长度≥2，可重复；**trim_matches 不保证成对——未配对 `DONE 或 DONE` 一律不剥 → InvalidResponse**）→ (d) 取非空白行集合 L；(e) `|L|==1` 且 `L[0]` 忽略大小写 == `DONE` → Done（`DONE\n` 尾随空行也 Done）；(f) 否则 `L[0]` 剥成对反引号后忽略大小写以 `NOT_DONE` 开头，**且下一字符为分隔符（`:`、空白或行尾）** → `NotDone{InsufficientEvidence}`，missing_evidence=冒号后余文（前 200 字符）；融合词（如 `NOT_DONEgarbage`，无分隔符）不满足本条、落入 (g) InvalidResponse——前缀匹配不得吞并融合 token；(g) 其余（多行残余、DONE 带正文、`Done.`、散文式否定如 "The build is still failing"）→ `InvalidResponse`，reason 内嵌原始答复截断（前 120 字符）供模型自我纠正（GLM 边界 2）。大小写不敏感**保留现状**（`done`/`Done` 均判 Done，回归面）。
 3. **有界重试（外层 + 双 peer 收敛）**：仅 `CallFailed`（且 provider 错误 `is_retryable()`，k3 建议）与 `EmptyResponse` 重试，单次验证内最多 1 次额外重试（总计 ≤2 次 `provider.chat`；每次 chat 内部含 lane RetryProvider 最多 4 次 wire 尝试，表述如实）。`InvalidResponse`/`InsufficientEvidence` 不自动重试。**第二次 chat 前置条件：goal.status == "active"**（状态式判据；`charge_goal_tokens_gated` 返回 `Option<Value>` 有五种 None 分支，不可作判据——k3 §7.2）。跨调用去重由持久 gate 承载（Decision 5）：**语义类（Done/InsufficientEvidence/InvalidResponse）同 goal_id+同 digest 永久阻断重放**（幂等）；**infra 类（CallFailed/EmptyResponse）不永久阻断**——同 digest 重放带 `replayed=true` 与 `replayed_of_ts` 标记并加 10 分钟冷却（冷却期内重放旧判词，冷却期满放行新调用），防 provider 恢复后 goal 被陈年 transient 记录楔死（k3 待验证项 + GLM 漏洞 5/6 的并集裁决）。
 4. **失败也计 usage + charge 时点迁移（双 peer 必改项 + 外层细化）**：每次尝试（含失败尝试）的 `TokenUsage` 逐字段（input/output/reasoning/cache_read/cache_write）**saturating_add** 累加（`semantic_checkpoint` 不加，后写者胜并注释）；**每次 attempt 返回立即 charge 该次 usage，然后再做预算判断**（外层裁决：per-attempt 即时收账，attempt 2 的发起条件是 charge 后 goal 仍 active）；**最终合计 usage 仅作报告/落账，不得再收第二遍**。`charge_goal_verifier_usage` 函数签名与 allow_budget_limited=true 语义不动，仅调用位置收敛进 wrapper，4 个调用点的直接 charge 调用与 "Callers must charge BEFORE…" doc comment 删除。gate 重放（replayed=true）不发新调用、不 charge、返回 usage=0/attempts=0 并显示历史来源。provider `Err` 时 octos_llm 错误类型不携带 usage（接口强制），如实按 0 记。usage 不对称注明：charge 只收 input+output（reasoning/cache 只入账本镜像，权威计数在 goals row tokens_used）——与 turn 计费一致，保持。
-5. **持久证据账本（v5 — VG-SCOPE 修订：完整真实 scope 绑定路径与记录）**：`<data_dir>/goal-verifier-ledgers/<scope指纹>.jsonl`（追加式、create_dir_all、一行一记录；独立兄弟目录，不进 goal-ledgers/ 防目录扫描器）。**scope 指纹 = sha256("octos-goal-verifier-scope-v1" + 长度前缀(data_dir 存储身份, cwd-scoped session, profile, goal_id))**——域标签 + 长度前缀序列化，无 sanitize 碰撞/分隔符注入/路径别名错认；data_dir 存储身份取最深存在祖先 canonicalize + 缺失尾段（解析 /var↔/private/var 等符号链接别名，且 preflight 创建目录前后稳定）。记录 schema **v3** 新增必填 `scope` 字段（同指纹）；读侧逐行校验 version==3、record.scope==本 scope 指纹、record.goal_id==本 goal_id，任一不符 fail-closed（旧 v2/缺 scope/未知版本一律 fail-closed，不接受外来 Done）。**同 scope 同 evidence 可跨重启重放；不同 session/profile 同 goal 编号同 evidence 不得重放**（不同文件、不同指纹）。字段 `outcome` **五值**（done/call_failed/empty_response/invalid_response/insufficient_evidence）+ scope、goal_id、ts_ms、attempts、usage（audit mirror，权威是 goals row tokens_used；**cache 重放返回 usage=0/attempts=0** 并在回显标注历史来源 ts，不是沿用历史计数）、missing_evidence、error（call_failed 时截断 provider 错误）、**reason（可选，serde(default)：InvalidResponse 等判词的有界 reason 原文持久化；读侧优先级 reason → missing_evidence → error → 裸 outcome 回退，旧 v3 无 reason 行保持 legacy 回退可读）**、evidence_digest、replayed（重放不追加行、不 charge）。digest = `sha256("octos-goal-verifier-evidence-v1\0" + objective + "\0" + evidence + "\0" + revision)`（域分离标签 + \0 边界分隔；用有边界的序列化而非裸拼接；**诊断/重放事件不得写进 completion_evidence，防止证据流自激变 digest**）。goal resume/reopen 保留历史且同 goal_id；账本判词只用于去重省调用，不得绕过 maybe_complete_goal_from_model 的 snapshot 复查直翻状态。无 data_dir 内存路径用同一完整 scope 指纹做 cache 键 + 同样 10 分钟 infra TTL。**账本保留政策：追加式、无 GC——语义类判词是同 scope 同 evidence 的永久重放证据，删除会重新计费已判定的证据；infra 类行仅参与冷却窗判定，体积可忽略。任何生命周期定义（如按 scope 行数上限或语义类过期）属 operator 决策，需明确授权后才引入，本轮不实现。**
+5. **持久证据账本（v5 — VG-SCOPE 修订：完整真实 scope 绑定路径与记录）**：`<data_dir>/goal-verifier-ledgers/<scope指纹>.jsonl`（追加式、create_dir_all、一行一记录；独立兄弟目录，不进 goal-ledgers/ 防目录扫描器）。**scope 指纹 = sha256("ra-goal-verifier-scope-v1" + 长度前缀(data_dir 存储身份, cwd-scoped session, profile, goal_id))**——域标签 + 长度前缀序列化，无 sanitize 碰撞/分隔符注入/路径别名错认；data_dir 存储身份取最深存在祖先 canonicalize + 缺失尾段（解析 /var↔/private/var 等符号链接别名，且 preflight 创建目录前后稳定）。记录 schema **v3** 新增必填 `scope` 字段（同指纹）；读侧逐行校验 version==3、record.scope==本 scope 指纹、record.goal_id==本 goal_id，任一不符 fail-closed（旧 v2/缺 scope/未知版本一律 fail-closed，不接受外来 Done）。**同 scope 同 evidence 可跨重启重放；不同 session/profile 同 goal 编号同 evidence 不得重放**（不同文件、不同指纹）。字段 `outcome` **五值**（done/call_failed/empty_response/invalid_response/insufficient_evidence）+ scope、goal_id、ts_ms、attempts、usage（audit mirror，权威是 goals row tokens_used；**cache 重放返回 usage=0/attempts=0** 并在回显标注历史来源 ts，不是沿用历史计数）、missing_evidence、error（call_failed 时截断 provider 错误）、**reason（可选，serde(default)：InvalidResponse 等判词的有界 reason 原文持久化；读侧优先级 reason → missing_evidence → error → 裸 outcome 回退，旧 v3 无 reason 行保持 legacy 回退可读）**、evidence_digest、replayed（重放不追加行、不 charge）。digest = `sha256("ra-goal-verifier-evidence-v1\0" + objective + "\0" + evidence + "\0" + revision)`（域分离标签 + \0 边界分隔；用有边界的序列化而非裸拼接；**诊断/重放事件不得写进 completion_evidence，防止证据流自激变 digest**）。goal resume/reopen 保留历史且同 goal_id；账本判词只用于去重省调用，不得绕过 maybe_complete_goal_from_model 的 snapshot 复查直翻状态。无 data_dir 内存路径用同一完整 scope 指纹做 cache 键 + 同样 10 分钟 infra TTL。**账本保留政策：追加式、无 GC——语义类判词是同 scope 同 evidence 的永久重放证据，删除会重新计费已判定的证据；infra 类行仅参与冷却窗判定，体积可忽略。任何生命周期定义（如按 scope 行数上限或语义类过期）属 operator 决策，需明确授权后才引入，本轮不实现。**
    **VG-PREFLIGHT（外层 2RED 裁决）**：有 data_dir 时，wrapper 在任何 `provider.chat` 之前（同 scope single-flight 锁内）先做持久化可用性预检：create_dir_all(data_dir)+is_dir 校验+账本目录创建+以 create+append 打开账本文件并 sync——即 append 将要做的真实操作。不可用 storage（如只读目录/只读账本文件）**两次调用均 0 chat / 0 attempts / 0 charge**，fail-closed 诊断且 goal 保持未完成。真实调用后 append/flush/sync 仍失败 → 组合结局 NotDone + 保留真实 usage，并把该 (scope,digest) infra 失败写入进程内 overlay（10 分钟冷却内重放、0 chat），防止对同坏 storage 无限反复花费；冷却期满放行一次真实重试（恢复的 storage 不被楔死）。
    **IO 语义 fail-closed（外层裁决，覆盖 v3 fail-open）**：有 data_dir 但账本**读失败**（IO 错误、不完整尾行、未知版本字段）→ 保守处理：不回退很旧的 Done、不发新 chat，返回显式诊断类失败（goal 保持未完成）；账本**写失败** → 显式诊断并保持 goal 未完成，不得把已验证 Done 缓存为成功返回。无 data_dir 的 legacy ephemeral 会话 → 明确用进程内 single-flight + 内存 cache，回显标注"无法跨重启恢复"，不得假称已持久化。同 digest 短期冷却（10 分钟）保留为明确瞬态恢复策略（冷却期内重放判词）。
    **并发 single-flight（外层裁决）**：去重不只是 append 时 Mutex——需要 per-goal in-flight reservation：并发两个 gate miss 不得双调 provider；single-flight guard 不得持有整个 orchestrator state 锁跨 await（用独立 per-goal 锁/reservation map）。**恢复语义**：resume/reopen 后证据补齐（digest 变化）应允许重新验证；严禁引导模型仅改写 reason 文本绕过同证据限制。
@@ -33,15 +33,15 @@ Native goal completion verifier 的 `NotDone { reason }` 把基础设施故障�
 
 ### Allowed Changes
 
-crates/octos-bus/src/session.rs
-crates/octos-bus/src/session_tests.rs
-crates/octos-cli/src/autonomy/goal_loop_runtime.rs
-crates/octos-cli/src/autonomy/agent_orchestrator.rs
-crates/octos-cli/src/goal_tool.rs
-crates/octos-cli/src/session_actor.rs
-crates/octos-cli/src/api/ui_protocol_transport.rs
-crates/octos-cli/src/session_actor_tests.rs
-crates/octos-cli/src/api/ui_protocol_tests.rs
+crates/ra-bus/src/session.rs
+crates/ra-bus/src/session_tests.rs
+crates/ra-cli/src/autonomy/goal_loop_runtime.rs
+crates/ra-cli/src/autonomy/agent_orchestrator.rs
+crates/ra-cli/src/goal_tool.rs
+crates/ra-cli/src/session_actor.rs
+crates/ra-cli/src/api/ui_protocol_transport.rs
+crates/ra-cli/src/session_actor_tests.rs
+crates/ra-cli/src/api/ui_protocol_tests.rs
 specs/task-evo-goal-verifier.spec.md
 docs/superpowers/plans/2026-09-09-evo-goal-verifier.md
 docs/superpowers/plans/2026-09-10-merged-verifier-review.md
@@ -58,7 +58,7 @@ docs/superpowers/plans/2026-09-10-merged-verifier-review.md
 Scenario: 调用失败一次后重试成功（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_retries_transient_and_skips_auth_error
   Given mock provider 第一次返回 Err、第二次返回 `DONE`
   When 调用 verifier
@@ -66,7 +66,7 @@ Scenario: 调用失败一次后重试成功（critical）
 
 Scenario: 调用失败两次后如实失败并封顶
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_caps_attempts_at_two_on_persistent_call_failure
   Given mock provider 两次都 Err
   When 调用 verifier
@@ -74,7 +74,7 @@ Scenario: 调用失败两次后如实失败并封顶
 
 Scenario: 首尝试耗尽预算阻止第二次调用
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_budget_exhaustion_prevents_second_call
   Level: unit
   Test Double: scripted mock LlmProvider + 真实 orchestrator goal 记账
@@ -84,7 +84,7 @@ Scenario: 首尝试耗尽预算阻止第二次调用
 
 Scenario: 验证前已 budget_limited 的边角
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_skips_retry_when_goal_not_active_before_first_attempt
   Given goal 在第一次尝试前就已是 budget_limited
   When wrapper 发起验证
@@ -92,7 +92,7 @@ Scenario: 验证前已 budget_limited 的边角
 
 Scenario: 语义 NotDone 不重试
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_not_done_prefix_is_recognized
   Given mock 固定返回 `NOT_DONE: missing X`，其中 X 是 Given 里明示的缺口项名（本场景即字符串 "missing X"）
   When 调用 verifier
@@ -100,7 +100,7 @@ Scenario: 语义 NotDone 不重试
 
 Scenario: 格式错误不自动重试
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_does_not_retry_invalid_response
   Given mock 返回 `DONE: but actually not finished`（first-token DONE 带正文）
   When 调用 verifier
@@ -111,7 +111,7 @@ Scenario: 格式错误不自动重试
 Scenario: 拒绝 DONEgarbage（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_rejects_done_with_trailing_text
   Given mock 返回 `DONEgarbage`
   When 调用 verifier
@@ -119,7 +119,7 @@ Scenario: 拒绝 DONEgarbage（critical）
 
 Scenario: 接受单层 fence 包裹的 DONE
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_accepts_single_paired_fence
   Given mock 返回以 ``` 开头并以 ``` 结尾、内部恰为 DONE 的多行答复
   When 调用 verifier
@@ -127,7 +127,7 @@ Scenario: 接受单层 fence 包裹的 DONE
 
 Scenario: 不成对反引号不剥
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_rejects_unpaired_backticks
   Given mock 返回 `` `DONE ``（仅前导反引号，不成对）
   When 调用 verifier
@@ -135,7 +135,7 @@ Scenario: 不成对反引号不剥
 
 Scenario: 拒绝 Done 句号变体
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_rejects_done_with_trailing_text
   Given mock 返回 `Done.`
   When 调用 verifier
@@ -143,7 +143,7 @@ Scenario: 拒绝 Done 句号变体
 
 Scenario: 散文式否定归 InvalidResponse
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_prose_negation_is_invalid_response_with_quote
   Given mock 返回 "The build is still failing, tests not run"（无 NOT_DONE 前缀）
   When 调用 verifier
@@ -151,7 +151,7 @@ Scenario: 散文式否定归 InvalidResponse
 
 Scenario: 拒绝 DONE 前缀带正文
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_rejects_done_with_trailing_text
   Given mock 返回 `DONE: but the build log was never checked`
   When 调用 verifier
@@ -159,7 +159,7 @@ Scenario: 拒绝 DONE 前缀带正文
 
 Scenario: 拒绝 DONE 后另起 NOT_DONE 的多行答复
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_rejects_done_with_trailing_text
   Given mock 返回 "DONE\nNOT_DONE: tests failing"
   When 调用 verifier
@@ -167,7 +167,7 @@ Scenario: 拒绝 DONE 后另起 NOT_DONE 的多行答复
 
 Scenario: 接受成对反引号 DONE（回归）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: run_goal_completion_verifier_accepts_backticks
   Given mock 返回 `` `DONE` ``
   When 调用 verifier
@@ -175,7 +175,7 @@ Scenario: 接受成对反引号 DONE（回归）
 
 Scenario: 纯 reasoning 不算 DONE
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: classify_empty_and_reasoning_only_is_empty_response
   Given mock 返回 content=Some("") 且 reasoning_content 非空
   When 调用 verifier
@@ -186,7 +186,7 @@ Scenario: 纯 reasoning 不算 DONE
 Scenario: 重试路径 usage 累计（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_sums_billed_second_empty_attempt
   Level: unit
   Test Double: scripted mock LlmProvider
@@ -196,7 +196,7 @@ Scenario: 重试路径 usage 累计（critical）
 
 Scenario: 空答复但已计费
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_sums_billed_second_empty_attempt
   Given Ok(content=Some("")) usage 10/2
   When 调用 verifier
@@ -204,7 +204,7 @@ Scenario: 空答复但已计费
 
 Scenario: 第二次空答复也计入合计
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_sums_billed_second_empty_attempt
   Given 第一次 Ok("") usage 10/2 + 第二次 Ok("") usage 8/1（两次都空、都被计费）
   When 调用 verifier
@@ -214,7 +214,7 @@ Scenario: 第二次空答复也计入合计
 
 Scenario: 账本记录分类与次数
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_ledger_records_failure_kind_and_attempts
   Given 两次 transient 失败
   When verifier 结局落账
@@ -223,7 +223,7 @@ Scenario: 账本记录分类与次数
 Scenario: resume 保留历史同 id（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_ledger_preserves_history_across_resume
   Given goal 有历史 verifier 记录
   When pause→resume（或 reopen）后再次 verifier 落账
@@ -232,7 +232,7 @@ Scenario: resume 保留历史同 id（critical）
 Scenario: 同证据去重 gate 挡下重复 recheck（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_dedupes_same_evidence_recheck
   Given goal g1 已有 outcome=insufficient_evidence、evidence_digest=D 的账本记录（语义类）
   When 再次以同 goal_id g1 + 同证据（digest D）请求验证
@@ -240,7 +240,7 @@ Scenario: 同证据去重 gate 挡下重复 recheck（critical）
 
 Scenario: infra 类判词冷却期后放行
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_memory_cache_infra_cooldown_releases_recall
   Given goal g1 有 outcome=call_failed、digest=D 的记录，且记录时间距本次请求已超过冷却 TTL（10 分钟）
   When 同 digest 再次请求验证
@@ -248,7 +248,7 @@ Scenario: infra 类判词冷却期后放行
 
 Scenario: infra 类判词冷却期内重放
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_infra_cooldown_replay_and_release
   Given goal g1 有 outcome=call_failed、digest=D 的记录，距本次请求在冷却 TTL（10 分钟）内
   When 同 digest 再次请求验证
@@ -257,7 +257,7 @@ Scenario: infra 类判词冷却期内重放
 Scenario: 账本读失败 fail-closed（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_ledger_read_failure_fails_closed
   Level: unit
   Test Double: 损坏的 JSONL 文件（截断尾行/未知版本字段）
@@ -268,7 +268,7 @@ Scenario: 账本读失败 fail-closed（critical）
 Scenario: 账本写失败 fail-closed（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_ledger_write_failure_fails_closed
   Level: unit
   Test Double: 只读账本文件（读可解析、append-open EACCES）
@@ -279,7 +279,7 @@ Scenario: 账本写失败 fail-closed（critical）
 Scenario: 跨 session 不得继承持久 Done（critical，VG-SCOPE 外层探针移植）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: outer_verifier_runtime_durable_done_cannot_cross_session_after_restart
   Level: unit
   Test Double: scripted mock LlmProvider（DONE）
@@ -290,7 +290,7 @@ Scenario: 跨 session 不得继承持久 Done（critical，VG-SCOPE 外层探针
 Scenario: 不可写新账本在任何调用前零花费（critical，VG-PREFLIGHT 外层探针移植）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: outer_verifier_runtime_unwritable_new_ledger_spends_zero_calls
   Level: unit
   Test Double: 存在可读但 0555 不可写的 provided 目录（尚无账本文件）
@@ -301,7 +301,7 @@ Scenario: 不可写新账本在任何调用前零花费（critical，VG-PREFLIGH
 Scenario: 并发 gate miss 单飞（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_single_flight_on_concurrent_gate_miss
   Level: unit
   Test Double: 慢速 mock LlmProvider + 并发两请求
@@ -311,7 +311,7 @@ Scenario: 并发 gate miss 单飞（critical）
 
 Scenario: 无 data_dir 的内存降级
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_no_data_dir_uses_memory_gate
   Given legacy ephemeral 会话无 data_dir
   When 请求验证
@@ -319,7 +319,7 @@ Scenario: 无 data_dir 的内存降级
 
 Scenario: 诊断不污染证据流
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_diagnostics_do_not_mutate_evidence_digest
   Given 一次验证产生 replay/诊断事件后进入下一轮验证
   When 下一轮以相同 objective 与 evidence 计算指纹
@@ -327,7 +327,7 @@ Scenario: 诊断不污染证据流
 
 Scenario: 证据变化释放新验证轮
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_changed_evidence_releases_recheck
   Given goal g1 已有 digest=D 的失败记录
   When 证据更新（digest D' ≠ D）后再次验证
@@ -335,7 +335,7 @@ Scenario: 证据变化释放新验证轮
 
 Scenario: 新 goal 不继承旧判词
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_gate_scoped_to_session_and_charges_per_attempt
   Given 同 orchestrator 下 session A/B 同 profile 同 objective 的 goal，session A 以证据 D 验证 Done 并落账
   When session B 以相同证据 D（同 digest）请求验证
@@ -345,7 +345,7 @@ Scenario: 新 goal 不继承旧判词
 
 Scenario: goal_update 失败回显分类
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_update_reports_call_failed_verifier_failure
   Given verifier 两次 CallFailed
   When 模型调 goal_update status=complete
@@ -353,7 +353,7 @@ Scenario: goal_update 失败回显分类
 
 Scenario: sentinel 路径不误判
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_sentinel_reports_verifier_failure_kind
   Level: unit
   Test Double: scripted mock LlmProvider（EmptyResponse）
@@ -363,7 +363,7 @@ Scenario: sentinel 路径不误判
 
 Scenario: session_actor sentinel 调用点绑定
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_sentinel_reports_verifier_failure_kind
   Level: unit
   Test Double: scripted mock LlmProvider（EmptyResponse）
@@ -373,7 +373,7 @@ Scenario: session_actor sentinel 调用点绑定
 
 Scenario: ui_protocol_transport 两处 sentinel 调用点绑定
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: ui_transport_sentinels_report_verifier_failure_kind
   Level: unit
   Test Double: scripted mock LlmProvider（CallFailed）
@@ -385,7 +385,7 @@ Scenario: ui_protocol_transport 两处 sentinel 调用点绑定
 
 Scenario: 不存在相对路径经 cwd 锚定后身份跨创建稳定
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_storage_identity_stable_across_relative_dir_creation
   Given 真实 cwd 下不存在相对 data_dir（唯一 basename guard，不改进程 cwd；拼写矩阵含 plain、./、new/../other、a/b/../../../shallow、missing/../existing-link/fresh 及其后再 ../，unix-only symlink 探针以 #[cfg(unix)] 隔离）
   When 首次调用触发 preflight 创建目录
@@ -393,7 +393,7 @@ Scenario: 不存在相对路径经 cwd 锚定后身份跨创建稳定
 
 Scenario: CallFailed reason 有界 Unicode 安全
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_call_failed_reason_is_bounded_unicode_safe
   Given provider 返回 600 个多字节 emoji 错误
   When verifier 调用失败
@@ -401,7 +401,7 @@ Scenario: CallFailed reason 有界 Unicode 安全
 
 Scenario: InvalidResponse reason 持久化并跨重启重放
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_invalid_response_reason_persists_and_replays
   Given InvalidResponse 判词落账（新 reason 列，非 missing_evidence）
   When 新 orchestrator（重启语义，同 goal id）读同 evidence
@@ -409,7 +409,7 @@ Scenario: InvalidResponse reason 持久化并跨重启重放
 
 Scenario: 旧 v3 无 reason 行兼容回退
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: goal_verifier_old_v3_row_without_reason_still_replays
   Given 预 reason 列时代的 v3 invalid_response 行（无 reason/missing_evidence/error）
   When 重启后读取
@@ -419,7 +419,7 @@ Scenario: 旧 v3 无 reason 行兼容回退
 
 Scenario: 交互 sentinel 失败告警携带 wire session id
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: interactive_sentinel_failure_warning_carries_wire_session_id
   Given cwd-scoped goal key（含 NUL + ~cwd- 后缀），verifier 返回空答复产生结构化失败
   When 共享构造器 goal_verifier_failure_warning 经真实 WsConnection/send_notification_ephemeral 发送告警
@@ -427,7 +427,7 @@ Scenario: 交互 sentinel 失败告警携带 wire session id
 
 Scenario: plain session 的失败告警 session id 恒等
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: interactive_sentinel_failure_warning_plain_session_unchanged
   Given 无 scope 后缀的 plain session key
   When 同一构造器生成失败告警
@@ -435,7 +435,7 @@ Scenario: plain session 的失败告警 session id 恒等
 
 Scenario: 回放判词不重复追加持久/内存失败注记
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_replayed_failure_does_not_duplicate_durable_note
   Given 真实 session_actor 收尾路径上一次新鲜验证失败（EmptyResponse）已追加 1 条结构化 durable/in-memory note
   When 同一证据再次验证（wrapper 判词 replayed）
@@ -443,7 +443,7 @@ Scenario: 回放判词不重复追加持久/内存失败注记
 
 Scenario: 变更证据后的新失败追加新注记
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_new_evidence_failure_appends_fresh_note
   Given 回放态之后 assistant tail 变化（digest 改变）
   When 再次验证产生非回放的新失败
@@ -453,7 +453,7 @@ Scenario: 变更证据后的新失败追加新注记
 
 Scenario: 判词已落账但注记缺失时新 actor 恢复
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_restart_with_ledger_verdict_but_missing_note_appends_it
   Given 判词 ledger 已落盘但尚未写 note，真实 claim 先落盘再由新 SessionHandle 加载
   When 新 actor 对同一证据再次验证
@@ -461,7 +461,7 @@ Scenario: 判词已落账但注记缺失时新 actor 恢复
 
 Scenario: 注记持久化失败无内存幻影且可重试
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_note_persist_failure_no_phantom_and_retry_recovers
   Given canonical JSONL 路径被目录占据且 verifier ledger 路径可写
   When 真实 verifier 判词产生后 note 写入失败，恢复 JSONL 后重试同证据
@@ -469,7 +469,7 @@ Scenario: 注记持久化失败无内存幻影且可重试
 
 Scenario: 磁盘有注记但旧内存镜像缺失时修复
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: session_actor_missing_ram_note_mirrors_existing_durable_row
   Given 第二个 handle 在第一个 actor 写 note 前打开，磁盘已有 note 而旧 handle 尚无 note
   When 第二个 actor 重放相同验证
@@ -477,7 +477,7 @@ Scenario: 磁盘有注记但旧内存镜像缺失时修复
 
 Scenario: 同注记身份返回原始行
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_same_id_returns_original_row_without_duplicate
   Given 同一 note_id 的首条 note 已写入
   When 以不同内容再次提交相同 note_id
@@ -485,7 +485,7 @@ Scenario: 同注记身份返回原始行
 
 Scenario: 并发相同注记身份只落一行
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_concurrent_same_id_single_durable_row
   Given 八个并发写入使用相同 note_id
   When 在 canonical per-key persist lock 内检查并追加
@@ -493,7 +493,7 @@ Scenario: 并发相同注记身份只落一行
 
 Scenario: 零字节日志初始化失败可恢复
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_zero_byte_file_recovers_and_stays_idempotent
   Given 真实 canonical 文件已创建但为零字节
   When 写入 note 后重试相同 note_id
@@ -501,7 +501,7 @@ Scenario: 零字节日志初始化失败可恢复
 
 Scenario: 坏 header 拒绝且字节不变
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_bad_header_fails_closed_file_untouched
   Given 日志 header 非法但 body 与尾换行完整
   When 尝试追加 note
@@ -509,7 +509,7 @@ Scenario: 坏 header 拒绝且字节不变
 
 Scenario: 坏 body 拒绝
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_bad_body_line_fails_closed
   Given 日志 body 存在无法解析的行
   When 尝试追加 note
@@ -517,7 +517,7 @@ Scenario: 坏 body 拒绝
 
 Scenario: 缺尾换行拒绝追加
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_missing_trailing_newline_fails_closed
   Given 非空日志末行缺换行
   When 尝试追加 note
@@ -525,7 +525,7 @@ Scenario: 缺尾换行拒绝追加
 
 Scenario: 只有 meta 且无尾换行拒绝
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_meta_only_no_newline_fails_closed_bytes_unchanged
   Given 日志仅 meta 行且无尾换行
   When 尝试追加 note
@@ -533,7 +533,7 @@ Scenario: 只有 meta 且无尾换行拒绝
 
 Scenario: JSON 字符串内部非法 UTF-8 拒绝
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_invalid_utf8_fails_closed_bytes_unchanged
   Given 合法 Message JSON 字符串内部含非法 UTF-8，lossy 解码仍可解析为 Message
   When 尝试追加 note
@@ -541,7 +541,7 @@ Scenario: JSON 字符串内部非法 UTF-8 拒绝
 
 Scenario: 日志目标为目录拒绝
   Test:
-    Package: octos-bus
+    Package: ra-bus
     Filter: system_note_once_target_is_directory_fails_closed
   Given canonical JSONL 路径为真实空目录
   When 尝试追加 note

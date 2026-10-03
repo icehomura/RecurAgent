@@ -26,11 +26,11 @@ Runner Labels
 Use these labels exactly so the workflow can target the right machines:
 
 - Fast Linux x64 runner:
-  - self-hosted,linux,x64,octos-fast
+  - self-hosted,linux,x64,ra-fast
 - Linux ARM64 runner:
-  - self-hosted,linux,arm64,octos-arm
+  - self-hosted,linux,arm64,ra-arm
 - Windows x64 runner:
-  - self-hosted,windows,x64,octos-windows
+  - self-hosted,windows,x64,ra-windows
 
 Prerequisites
 -------------
@@ -50,20 +50,20 @@ Fast Linux Runner Example
     cd ~/home/crew-rs-port
 
     scripts/setup-github-runner.sh \
-      --name mini3-octos-fast \
-      --labels self-hosted,linux,x64,octos-fast
+      --name mini3-ra-fast \
+      --labels self-hosted,linux,x64,ra-fast
 
 Then launch it:
 
-    cd ~/.github-runners/mini3-octos-fast && ./run.sh
+    cd ~/.github-runners/mini3-ra-fast && ./run.sh
 
 If you want it as a Linux service:
 
     cd ~/home/crew-rs-port
 
     scripts/setup-github-runner.sh \
-      --name mini3-octos-fast \
-      --labels self-hosted,linux,x64,octos-fast \
+      --name mini3-ra-fast \
+      --labels self-hosted,linux,x64,ra-fast \
       --service
 
 ARM64 Runner Example
@@ -73,7 +73,7 @@ ARM64 Runner Example
 
     scripts/setup-github-runner.sh \
       --name arm-builder \
-      --labels self-hosted,linux,arm64,octos-arm \
+      --labels self-hosted,linux,arm64,ra-arm \
       --service
 
 Windows Runner Example
@@ -84,7 +84,7 @@ Use a standard GitHub Actions runner installation on the Windows machine and reg
 - name:
   - windows-builder
 - labels:
-  - self-hosted,windows,x64,octos-windows
+  - self-hosted,windows,x64,ra-windows
 
 Typical manual flow in PowerShell:
 
@@ -96,7 +96,7 @@ Typical manual flow in PowerShell:
     cd C:\actions-runner
     curl.exe -L -o actions-runner-win-x64-2.328.0.zip https://github.com/actions/runner/releases/download/v2.328.0/actions-runner-win-x64-2.328.0.zip
     tar -xf .\actions-runner-win-x64-2.328.0.zip
-    .\config.cmd --unattended --url $url --token $token --name windows-builder --labels self-hosted,windows,x64,octos-windows --replace
+    .\config.cmd --unattended --url $url --token $token --name windows-builder --labels self-hosted,windows,x64,ra-windows --replace
     .\run.cmd
 
 Triggering The Workflow
@@ -121,8 +121,8 @@ From CLI:
 Recommended Rollout
 -------------------
 
-1. Register one Linux x64 runner first with octos-fast.
+1. Register one Linux x64 runner first with ra-fast.
 2. Confirm CI (self-hosted) succeeds on the fast lane.
-3. Add ARM64 runner with octos-arm.
-4. Add Windows runner with octos-windows.
+3. Add ARM64 runner with ra-arm.
+4. Add Windows runner with ra-windows.
 5. Only after that, decide whether any self-hosted jobs should become required checks.

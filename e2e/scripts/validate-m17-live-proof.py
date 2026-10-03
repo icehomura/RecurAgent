@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "octos.m17.live_proof.validation.v1"
-INDEX_SCHEMA = "octos.m17.live_proof.artifact_index.v1"
+SCHEMA = "ra.m17.live_proof.validation.v1"
+INDEX_SCHEMA = "ra.m17.live_proof.artifact_index.v1"
 EXPECTED_TUI_CAPTURE_FILES = (
     "tui-capture-child-start.txt",
     "tui-capture-child-progress.txt",

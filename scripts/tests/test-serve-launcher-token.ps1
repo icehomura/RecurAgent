@@ -24,7 +24,7 @@ if (-not $m.Success) {
 }
 $template = $m.Groups[1].Value
 
-$dir = Join-Path ([System.IO.Path]::GetTempPath()) ("octos-launcher-" + [Guid]::NewGuid().ToString("N"))
+$dir = Join-Path ([System.IO.Path]::GetTempPath()) ("ra-launcher-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $dir | Out-Null
 try {
     # The restricted token file, exactly as install.ps1 writes it.
@@ -41,7 +41,7 @@ try {
     }
 
     # A stand-in serve binary: dump the env the launcher handed over.
-    $fakeBin = Join-Path $dir "octos.cmd"
+    $fakeBin = Join-Path $dir "ra.cmd"
     Set-Content -Path $fakeBin -Value '@echo TOKEN=%OCTOS_AUTH_TOKEN% DATADIR=%OCTOS_DATA_DIR%' -Encoding ascii
 
     $DataDir = $dir

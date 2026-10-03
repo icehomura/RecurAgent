@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fleet-install-skills.sh — Install mofa-skills onto every fleet mini through
-# `octos skills install`, so every install routes through the same code path
+# `ra skills install`, so every install routes through the same code path
 # that verifies manifest sha256 sums and resolves the correct per-profile
 # install directory.
 #
@@ -17,13 +17,13 @@
 # Environment:
 #   OCTOS_FLEET_HOSTS         Space-or-comma-separated host override (same as --host)
 #   MOFA_SKILLS_DIR           Path to mofa-skills checkout (default: ~/home/mofa-skills)
-#   OCTOS_REMOTE_BIN          Path to octos binary on remote (default:
-#                             /Users/cloud/.octos/bin/octos)
+#   OCTOS_REMOTE_BIN          Path to ra binary on remote (default:
+#                             /Users/cloud/.ra/bin/ra)
 #   OCTOS_REMOTE_USER         SSH user on remote hosts (default: cloud)
 #
 # Per host, per profile, per skill:
 #   1. rsync the local skill directory to a remote staging path
-#   2. SSH in, run `OCTOS_PROFILE_ID=<p> octos skills --profile <p> install
+#   2. SSH in, run `OCTOS_PROFILE_ID=<p> ra skills --profile <p> install
 #      <staging_path> --force` so the install routes through the same code
 #      path as the runtime tool (verifies manifest sha256, builds binaries,
 #      writes .source for `skills update`)
@@ -38,9 +38,9 @@ set -eEuo pipefail
 # ─── Defaults ────────────────────────────────────────────────────────────
 DEFAULT_HOSTS="${OCTOS_FLEET_DEFAULT_HOSTS:-}"  # no built-in host list
 DEFAULT_MOFA_DIR="$HOME/home/mofa-skills"
-DEFAULT_REMOTE_BIN="/Users/cloud/.octos/bin/octos"
+DEFAULT_REMOTE_BIN="/Users/cloud/.ra/bin/ra"
 DEFAULT_REMOTE_USER="cloud"
-DEFAULT_REMOTE_STAGING="/tmp/octos-fleet-install-staging"
+DEFAULT_REMOTE_STAGING="/tmp/ra-fleet-install-staging"
 
 HOSTS_ARG="${OCTOS_FLEET_HOSTS:-}"
 PROFILES_ARG=""
@@ -57,7 +57,7 @@ VERBOSE=false
 usage() {
     cat <<'USAGE'
 fleet-install-skills.sh — Install mofa-skills onto fleet minis via
-`octos skills install` (sha256-verified, per-profile).
+`ra skills install` (sha256-verified, per-profile).
 
 Usage:
   fleet-install-skills.sh [OPTIONS]
@@ -66,14 +66,14 @@ Options:
   --host LIST          Comma-or-space separated hosts (default: mini1-5 IPs)
                        Overrides OCTOS_FLEET_HOSTS
   --profile LIST       Comma-separated profile IDs (default: every profile
-                       enumerated from ~/.octos/profiles/*/data on each host)
+                       enumerated from ~/.ra/profiles/*/data on each host)
   --skill LIST         Comma-separated skill names (default: every dir under
                        MOFA_SKILLS_DIR with SKILL.md AND manifest.json)
   --mofa-dir PATH      Path to mofa-skills checkout (default: ~/home/mofa-skills)
-  --remote-bin PATH    Path to octos binary on the remote
-                       (default: /Users/cloud/.octos/bin/octos)
+  --remote-bin PATH    Path to ra binary on the remote
+                       (default: /Users/cloud/.ra/bin/ra)
   --remote-user USER   SSH user (default: cloud)
-  --no-force           Do NOT pass --force; `octos skills install` will SKIP
+  --no-force           Do NOT pass --force; `ra skills install` will SKIP
                        skills that already exist
   --dry-run            Print every command that WOULD run; execute nothing
   --verbose, -v        Echo each command before running it
@@ -84,7 +84,7 @@ Environment overrides:
   MOFA_SKILLS_DIR           Same as --mofa-dir
   OCTOS_REMOTE_BIN          Same as --remote-bin
   OCTOS_REMOTE_USER         Same as --remote-user
-  OCTOS_REMOTE_STAGING      Remote staging path (default: /tmp/octos-fleet-install-staging)
+  OCTOS_REMOTE_STAGING      Remote staging path (default: /tmp/ra-fleet-install-staging)
 
 Examples:
   # Dry-run against the full fleet
@@ -196,7 +196,7 @@ fi
 # Canonical "all skills" = every dir under MOFA_SKILLS_DIR matching `mofa-*`
 # that contains BOTH SKILL.md and manifest.json. The deploy-mini.sh legacy
 # script used SKILL.md alone, but we tighten to manifest.json so we only
-# install skills with the metadata `octos skills install` expects.
+# install skills with the metadata `ra skills install` expects.
 for d in "$MOFA_DIR"/mofa-*/; do
     [ -d "$d" ] || continue
     [ -f "$d/SKILL.md" ] || continue
@@ -225,7 +225,7 @@ fi
 
 # ─── Profile enumeration per host ────────────────────────────────────────
 # If --profile was given, every host installs into the same explicit set.
-# Otherwise, query each host: `ls ~/.octos/profiles/*/data` -> profile IDs.
+# Otherwise, query each host: `ls ~/.ra/profiles/*/data` -> profile IDs.
 EXPLICIT_PROFILES=()
 if [ -n "$PROFILES_ARG" ]; then
     while IFS= read -r p; do
@@ -237,10 +237,10 @@ fi
 # On SSH failure prints nothing (caller handles empty as host-unreachable).
 enumerate_profiles() {
     local host="$1"
-    # Sniff ~/.octos/profiles for any subdir that contains a `data` child.
+    # Sniff ~/.ra/profiles for any subdir that contains a `data` child.
     # We don't trust globbing the operator's shell so we run a tiny `find`.
     ssh_remote "$host" \
-        "find ~/.octos/profiles -mindepth 2 -maxdepth 2 -type d -name data 2>/dev/null \
+        "find ~/.ra/profiles -mindepth 2 -maxdepth 2 -type d -name data 2>/dev/null \
          | sed 's|.*/profiles/||; s|/data\$||' \
          | sort -u" \
         2>/dev/null || true
@@ -340,7 +340,7 @@ for host in "${HOSTS[@]}"; do
         fi
 
         # Per-profile install via the routed CLI. This is THE point of the
-        # script: every install goes through `octos skills install <local-path>`
+        # script: every install goes through `ra skills install <local-path>`
         # so the per-profile dir is resolved server-side and (when the
         # manifest declares binaries) the sha256 of the downloaded binary
         # is verified.
@@ -356,7 +356,7 @@ for host in "${HOSTS[@]}"; do
             fi
 
             # Capture stderr tail on failure for the summary.
-            tmp_err="$(mktemp -t octos-fleet-err.XXXXXX)"
+            tmp_err="$(mktemp -t ra-fleet-err.XXXXXX)"
             if ssh_remote "$host" "$install_cmd" >/dev/null 2>"$tmp_err"; then
                 record "$host" "$profile" "$skill" "OK" ""
                 log "OK   $profile / $skill"

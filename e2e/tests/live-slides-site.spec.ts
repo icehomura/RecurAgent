@@ -7,7 +7,7 @@
  *
  * Run against a live browser host:
  *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-slides-site.spec.ts
@@ -21,7 +21,7 @@ import {
   SEL,
 } from './live-browser-helpers';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
 const BASE_URL = process.env.OCTOS_TEST_URL || 'http://localhost:3000';
 

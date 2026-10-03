@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import type { CaptureHandle } from '../lib/capture-replay';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
 const TEST_EMAIL = process.env.OCTOS_TEST_EMAIL || 'dspfac@gmail.com';
 const BASE_URL = process.env.OCTOS_TEST_URL || 'http://localhost:3000';
@@ -14,7 +14,7 @@ const BASE_URL = process.env.OCTOS_TEST_URL || 'http://localhost:3000';
 // daemon's strength check (>=32 chars, >=3 char classes from
 // {lowercase, uppercase, digits, symbols}).
 const STRONG_ADMIN_TOKEN =
-  process.env.OCTOS_TEST_ADMIN_TOKEN || 'Octos-E2E-Strong-Token-2026-XYZ-123!';
+  process.env.OCTOS_TEST_ADMIN_TOKEN || 'ra-E2E-Strong-Token-2026-XYZ-123!';
 
 // Cache of `host -> effective token`. The token rotation flow is per-host
 // because every mini in the fleet has its own `admin_token.json`. Memoising
@@ -38,7 +38,7 @@ const tokenCacheByHost: Map<string, Promise<string>> = new Map();
  *
  *  1. **Already-rotated mini**: production minis have a hashed
  *     `admin_token.json` whose hash does NOT match the bootstrap value
- *     (`octos-admin-2026`). The bootstrap token returns 401 against
+ *     (`ra-admin-2026`). The bootstrap token returns 401 against
  *     `/api/auth/me` — even though `/api/sessions` still serves traffic
  *     because the Caddy proxy injects `X-Profile-Id` from the subdomain
  *     and that bypasses the admin gate.
@@ -392,7 +392,7 @@ const THINKING_PLACEHOLDER_RE = /Thinking[\s.…]*\(iteration\s+\d+\)/i;
  * bubbles whose entire body is the ack as "still pending result".
  *
  * Detected by a small set of locale-aware ack phrases the daemon emits in
- * `crates/octos-cli/src/workflows/*.rs`. Anchored phrases are preferred
+ * `crates/ra-cli/src/workflows/*.rs`. Anchored phrases are preferred
  * over unbounded substrings to avoid false-classifying legitimate
  * results that mention "background" or "在后台" in prose as ack-only.
  * The `<200` chars guard in `isSpawnAckOnly` provides a defense-in-
@@ -412,7 +412,7 @@ const SPAWN_ACK_PATTERNS: RegExp[] = [
   /^.{0,30}已在後台運行/,
   /^.{0,80}\b(?:has\s+)?started\s+in\s+(?:the\s+)?background\b/i,
   /^.{0,80}\b(?:is\s+now\s+)?running\s+in\s+(?:the\s+)?background\b/i,
-  // M10 spawn_only intercept (octos-cli/src/agent/loop_runner.rs):
+  // M10 spawn_only intercept (ra-cli/src/agent/loop_runner.rs):
   // "Background work started for <tool>. The final result will be
   // delivered automatically when it is ready." — phrase doesn't match
   // the older "started in (the) background" anchor, so without this

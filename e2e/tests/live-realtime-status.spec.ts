@@ -64,10 +64,10 @@
  * When NodeCard ships (task #651), re-add the tree assertion as an
  * ADDITIONAL gate alongside this timeline check — don't replace it.
  *
- * Run from ~/home/octos/e2e:
+ * Run from ~/home/ra/e2e:
  *
  *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *     npx playwright test tests/live-realtime-status.spec.ts --workers=1
  */
@@ -101,7 +101,7 @@ const TOOL_CALL_BUBBLE = "[data-testid='tool-call-bubble']";
 const TIMELINE = "[data-testid='tool-call-runtime-timeline']";
 
 // Pipeline progress entries the executor emits via `report_progress`
-// (see crates/octos-pipeline/src/executor.rs). The runtime timeline
+// (see crates/ra-pipeline/src/executor.rs). The runtime timeline
 // strips a leading `[info]/[debug]/[warn]/[error]` tag in chat-thread.tsx
 // (lines 169–171), so we match the post-strip surface text.
 //

@@ -10,14 +10,14 @@
  *   M8.7 — SubAgentOutputRouter writes spawn_only output to disk
  *   M8.9 — Spawn failure surfaces an actionable message back to the user
  *
- * Run from ~/home/octos/e2e:
+ * Run from ~/home/ra/e2e:
  *
  *   OCTOS_TEST_URL=https://dspfac.ocean.ominix.io OCTOS_PROFILE=dspfac \
  *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
  *     npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
  *
  * Mini5 SSH: set OCTOS_FLEET_SSH_MAP or OCTOS_TEST_SSH_HOST (key auth assumed).
- *   Profile data dir: ~/.octos/profiles/dspfac/data
+ *   Profile data dir: ~/.ra/profiles/dspfac/data
  *   Workspace dirs:   <data>/users/<percent-encoded session key>/workspace
  *   Subagent outputs: <data>/subagent-outputs/<session_id>/<task_id>.out
  */
@@ -62,7 +62,7 @@ const SSH_HOST =
       return '';
     }
   })();
-const REMOTE_DATA_DIR = `~/.octos/profiles/${PROFILE}/data`;
+const REMOTE_DATA_DIR = `~/.ra/profiles/${PROFILE}/data`;
 
 type SseEvent = ChatWsEvent;
 
@@ -147,7 +147,7 @@ test.describe('M8.4 FileStateCache short-circuit', () => {
 
     // Prefer common candidates if visible, else extract any plain file.
     const candidates = [
-      '.octos-workspace.toml',
+      '.ra-workspace.toml',
       'AGENTS.md',
       'CLAUDE.md',
       'SOUL.md',
@@ -162,7 +162,7 @@ test.describe('M8.4 FileStateCache short-circuit', () => {
       const m =
         probeAll.match(/\[file\]\s+([^\s\n]+)/) ||
         probeAll.match(/([\w.\-]+\.(?:md|txt|toml|json|yaml|yml))/);
-      target = m ? m[1] : '.octos-workspace.toml';
+      target = m ? m[1] : '.ra-workspace.toml';
     }
 
     const prompt = [
@@ -338,7 +338,7 @@ test.describe('M8.6 Resume sanitizer worktree-missing refusal', () => {
           `tool runs in a sandbox where the deletes are 'Operation not permitted'. ` +
           `Observability gap: M8.6 worktree-missing refusal cannot be exercised end-to-end ` +
           `in production from a remote client without elevated host access. ` +
-          `M8.6 is still covered by the unit suite in octos-bus/src/resume_policy.rs ` +
+          `M8.6 is still covered by the unit suite in ra-bus/src/resume_policy.rs ` +
           `(SanitizeError::WorktreeMissing path).`,
       );
       return;
@@ -401,7 +401,7 @@ test.describe('M8.7 SubAgentOutputRouter on-disk write', () => {
     // runtime-regression.spec.ts, the canonical pattern uses voice "yangmi"
     // — but yangmi fails on mini5 with "voice not registered". The router
     // STILL writes the failure to disk (we already saw an example in
-    // ~/.octos/profiles/dspfac/data/subagent-outputs/agent:call_0_10/),
+    // ~/.ra/profiles/dspfac/data/subagent-outputs/agent:call_0_10/),
     // so either outcome satisfies the M8.7 invariant.
     const prompt =
       `直接调用 fm_tts，把 voice 参数精确设为 yangmi（不要使用 clone:yangmi 或任何 clone: 前缀），` +

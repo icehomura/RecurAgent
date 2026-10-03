@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# cloud-host-deploy.sh — Bootstrap a server as an Octos cloud/host relay.
+# cloud-host-deploy.sh — Bootstrap a server as an ra cloud/host relay.
 # Supports Linux (systemd) and macOS (launchd).
-# Reuses install.sh for octos serve, then provisions frps and Caddy.
+# Reuses install.sh for ra serve, then provisions frps and Caddy.
 #
 # Usage:
 #   ./scripts/cloud-host-deploy.sh
-#   ./scripts/cloud-host-deploy.sh --domain octos.example.com --https --dns-provider cloudflare
+#   ./scripts/cloud-host-deploy.sh --domain ra.example.com --https --dns-provider cloudflare
 #   ./scripts/cloud-host-deploy.sh --config ./cloud-bootstrap.env --non-interactive
 
 set -eEuo pipefail
@@ -16,8 +16,8 @@ FRPS_SCRIPT="$ROOT_DIR/scripts/frp/setup-frps.sh"
 CADDY_SCRIPT="$ROOT_DIR/scripts/frp/setup-caddy.sh"
 
 VERSION="latest"
-PREFIX="${OCTOS_PREFIX:-$HOME/.octos/bin}"
-DATA_DIR="${OCTOS_HOME:-$HOME/.octos}"
+PREFIX="${OCTOS_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${OCTOS_HOME:-$HOME/.ra}"
 PORT="8080"
 AUTH_TOKEN="${AUTH_TOKEN:-}"
 FRPS_TOKEN="${FRPS_TOKEN:-}"
@@ -112,20 +112,20 @@ while [ $# -gt 0 ]; do
         --dry-run)           DRY_RUN=true; shift ;;
         --help|-h)
             cat <<'HELPEOF'
-cloud-host-deploy.sh — Bootstrap a server (Linux or macOS) as an Octos cloud/host relay.
+cloud-host-deploy.sh — Bootstrap a server (Linux or macOS) as an ra cloud/host relay.
 
 Usage:
   ./scripts/cloud-host-deploy.sh
-  ./scripts/cloud-host-deploy.sh --domain octos.example.com --https --dns-provider cloudflare
+  ./scripts/cloud-host-deploy.sh --domain ra.example.com --https --dns-provider cloudflare
   ./scripts/cloud-host-deploy.sh --config ./cloud-bootstrap.env --non-interactive
 
 Options:
   --config PATH          Source a shell-style config file for silent install
-  --version TAG          octos release version passed to install.sh (default: latest)
-  --prefix DIR           Binary install prefix (default: ~/.octos/bin)
-  --data-dir DIR         Octos data dir and config home (default: ~/.octos)
+  --version TAG          ra release version passed to install.sh (default: latest)
+  --prefix DIR           Binary install prefix (default: ~/.ra/bin)
+  --data-dir DIR         ra data dir and config home (default: ~/.ra)
   --state-file PATH      Persist rerun settings (default: ./cloud-bootstrap.env)
-  --port PORT            octos serve port behind Caddy (default: 8080)
+  --port PORT            ra serve port behind Caddy (default: 8080)
   --auth-token TOKEN     Admin auth token for the dashboard
   --frps-token TOKEN     Shared FRPS auth token for all tenant tunnels
   --domain DOMAIN        Base public domain for signup and tenant subdomains
@@ -136,15 +136,15 @@ Options:
   --smtp                 Configure SMTP for dashboard OTP emails
   --no-smtp              Disable SMTP for dashboard OTP emails
   --install-deps         Forward to install.sh to install missing runtime deps
-  --uninstall            Remove octos serve, frps, and Caddy host services/config
+  --uninstall            Remove ra serve, frps, and Caddy host services/config
   --purge                Delete the data dir and bootstrap state
   --non-interactive      Fail instead of prompting for missing values
   --dry-run              Write config files but print commands instead of executing them
 
 Config file format:
   Shell-style KEY=value entries, for example:
-    TUNNEL_DOMAIN=octos.example.com
-    FRPS_SERVER=relay.octos.example.com
+    TUNNEL_DOMAIN=ra.example.com
+    FRPS_SERVER=relay.ra.example.com
     ENABLE_HTTPS=true
     DNS_PROVIDER=cloudflare
     CF_API_TOKEN=...
@@ -417,7 +417,7 @@ elif isinstance(dashboard_auth, dict):
     # remaining fields (allow_self_registration, session_expiry_hours)
     # are functionally meaningless without SMTP, and leaving a
     # dashboard_auth block without a `smtp` field used to crash
-    # `octos serve` on startup (DashboardAuthConfig.smtp is now
+    # `ra serve` on startup (DashboardAuthConfig.smtp is now
     # Option<SmtpConfig> upstream of this fix, so the config parses,
     # but a partial block with allow_self_registration=true is still
     # misleading — registration via OTP can't actually succeed).
@@ -595,7 +595,7 @@ run_install_host_tools() {
 }
 
 run_install() {
-    section "Installing octos serve"
+    section "Installing ra serve"
     local cmd=("$INSTALL_SCRIPT" --version "$VERSION" --prefix "$PREFIX" --port "$PORT" --auth-token "$AUTH_TOKEN")
     [ "$INSTALL_DEPS" = true ] && cmd+=(--install-deps)
     if [ "$DRY_RUN" = true ]; then
@@ -655,7 +655,7 @@ run_setup_caddy() {
 }
 
 run_install_uninstall() {
-    section "Removing octos serve"
+    section "Removing ra serve"
     local cmd=("$INSTALL_SCRIPT" --prefix "$PREFIX" --uninstall)
     if [ -n "$PORT" ]; then
         cmd+=(--port "$PORT")
@@ -673,8 +673,8 @@ run_uninstall_frps() {
     section "Removing frps"
     case "$OS" in
         Darwin)
-            run_cmd_best_effort sudo launchctl unload /Library/LaunchDaemons/io.octos.frps.plist
-            run_cmd_best_effort sudo rm -f /Library/LaunchDaemons/io.octos.frps.plist
+            run_cmd_best_effort sudo launchctl unload /Library/LaunchDaemons/io.ra.frps.plist
+            run_cmd_best_effort sudo rm -f /Library/LaunchDaemons/io.ra.frps.plist
             ;;
         Linux)
             run_cmd_best_effort sudo systemctl stop frps.service
@@ -692,8 +692,8 @@ run_uninstall_caddy() {
     section "Removing Caddy host service"
     case "$OS" in
         Darwin)
-            run_cmd_best_effort sudo launchctl unload /Library/LaunchDaemons/io.octos.caddy.plist
-            run_cmd_best_effort sudo rm -f /Library/LaunchDaemons/io.octos.caddy.plist
+            run_cmd_best_effort sudo launchctl unload /Library/LaunchDaemons/io.ra.caddy.plist
+            run_cmd_best_effort sudo rm -f /Library/LaunchDaemons/io.ra.caddy.plist
             ;;
         Linux)
             run_cmd_best_effort sudo systemctl stop caddy.service
@@ -722,7 +722,7 @@ run_host_purge() {
 
     section "Complete"
     if [ "$UNINSTALL" = true ]; then
-        echo "    Removed host services for octos serve, frps, and Caddy."
+        echo "    Removed host services for ra serve, frps, and Caddy."
     else
         echo "    Purged local state only."
         echo "    Preserved installed services and binaries."
@@ -735,7 +735,7 @@ run_host_uninstall() {
     if [ "$DRY_RUN" = false ]; then
         section "Checking sudo access"
         if ! sudo -v 2>/dev/null; then
-            err "sudo access is required to remove system services (frps, Caddy, octos serve)."
+            err "sudo access is required to remove system services (frps, Caddy, ra serve)."
         fi
         ok "sudo credentials cached"
     fi
@@ -748,7 +748,7 @@ run_host_uninstall() {
 
     if [ "$PURGE" = false ]; then
         section "Complete"
-        echo "    Removed host services for octos serve, frps, and Caddy."
+        echo "    Removed host services for ra serve, frps, and Caddy."
         echo "    Preserved data dir: $DATA_DIR"
         echo "    Preserved bootstrap state: $STATE_FILE"
         echo "    To remove them too, re-run with:"
@@ -885,7 +885,7 @@ section "Configuration summary"
 echo "    Domain:              $TUNNEL_DOMAIN"
 echo "    frps server:         $FRPS_SERVER"
 echo "    shared frps token:   ${FRPS_TOKEN:0:8}..."
-echo "    octos serve port:    $PORT"
+echo "    ra serve port:    $PORT"
 echo "    frps bind port:      $FRPS_BIND_PORT"
 echo "    frps vhost HTTP:     $FRPS_VHOST_HTTP_PORT"
 echo "    frps dashboard port: $FRPS_DASHBOARD_PORT"
@@ -912,7 +912,7 @@ fi
 if [ "$DRY_RUN" = false ]; then
     section "Checking sudo access"
     if ! sudo -v 2>/dev/null; then
-        err "sudo access is required to install system services (frps, Caddy, octos serve). Run with sudo privileges or ensure your user is in the sudoers file."
+        err "sudo access is required to install system services (frps, Caddy, ra serve). Run with sudo privileges or ensure your user is in the sudoers file."
     fi
     ok "sudo credentials cached"
 fi
@@ -931,7 +931,7 @@ run_setup_frps
 run_setup_caddy
 
 section "Complete"
-echo "    Octos config:  $DATA_DIR/config.json"
+echo "    ra config:  $DATA_DIR/config.json"
 echo "    Bootstrap cfg: $STATE_FILE"
 echo "    Landing page:  http://$TUNNEL_DOMAIN/"
 if [ "$ENABLE_HTTPS" = true ]; then

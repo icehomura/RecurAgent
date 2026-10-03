@@ -18,8 +18,8 @@ yangmi voice-clone failure on `dspfac.crew.ominix.io`:
 - **#867** — QoE adaptive routing wiring was duplicated between
   gateway and serve. Lifted into shared `qos_catalog::build_adaptive_provider_chain`.
 - **#868** — serve scanned only global skill dirs
-  (`~/.octos/{plugins,skills}/`), not the dashboard-installed
-  per-profile path (`~/.octos/profiles/<id>/data/skills/`). Fixed by
+  (`~/.ra/{plugins,skills}/`), not the dashboard-installed
+  per-profile path (`~/.ra/profiles/<id>/data/skills/`). Fixed by
   adding `Config::profile_skills_dir` and `Config::profile_plugin_env`
   transient fields, and switching the loader to `load_into_with_options`.
 - **#869** — runtime contract for `spawn_only` tools required file
@@ -31,7 +31,7 @@ yangmi voice-clone failure on `dspfac.crew.ominix.io`:
 Despite all four, live re-test on mini1 surfaced a fifth gap:
 `✗ fm_tts failed: workspace policy not found`. The runtime calls
 `enforce_spawn_task_contract` which reads
-`tools.workspace_root() + .octos-workspace.toml`. Serve sets
+`tools.workspace_root() + .ra-workspace.toml`. Serve sets
 `workspace_root = cwd = /Users/cloud` (the daemon's working dir);
 no policy file lives there. Gateway dodges this because its per-session
 workspace bootstrap creates the policy under
@@ -42,7 +42,7 @@ The pattern is unmistakable. Every fix this week patched a single
 mis-scoped variable on `serve::try_create_agent`'s output. Each fix
 surfaces the next gap. We have been retrofitting per-profile and
 per-session awareness onto an `Agent` instance that was originally
-built for the standalone `octos chat` CLI in a single-tenant
+built for the standalone `ra chat` CLI in a single-tenant
 checkout — and it does not match the multi-profile, multi-session
 shape the dashboard, web `/chat`, AppUI coding sessions, and TUI
 multi-window now demand.
@@ -117,7 +117,7 @@ Each `octoscode` is its own process. Two terminals get two isolated
 state spaces by virtue of OS process separation. Inside one TUI
 process you can also have multiple sessions (split panes) sharing the
 one `ProfileRuntime`. Different OS users get extra isolation via
-`~/.octos` being scoped to `$HOME` — separate auth stores, separate
+`~/.ra` being scoped to `$HOME` — separate auth stores, separate
 profile stores, separate processes.
 
 ### Gateway — per-profile subprocess
@@ -135,7 +135,7 @@ The same code path serve uses, just in a child process started by
 | `Config::profile_skills_dir` transient field (#868) | Plugin loader scanned wrong dirs | `ProfileRuntime.skills_dir` populates the base `ToolRegistry` at bootstrap; every session inherits |
 | `Config::profile_plugin_env` transient field (#868) | Skill spawns missed per-profile env | `ProfileRuntime.plugin_env_template` injected into every `SessionRuntime` plugin spawn |
 | `overlay_profile_llm` in `serve.rs` (#866) | Serve had to retrofit profile awareness onto a globally-scoped Agent | `ProfileRuntime::bootstrap(profile)` builds it correctly from the start |
-| `"workspace policy not found"` (today) | Serve's `workspace_root = cwd`; no per-session policy bootstrap | `SessionRuntime::bootstrap` creates `<workspace_root>/.octos-workspace.toml` if missing |
+| `"workspace policy not found"` (today) | Serve's `workspace_root = cwd`; no per-session policy bootstrap | `SessionRuntime::bootstrap` creates `<workspace_root>/.ra-workspace.toml` if missing |
 | Multi-tenant base-registry leak (codex's note on #868) | One global ToolRegistry shared by every session | `SessionRuntime.tools` is a per-session clone of `ProfileRuntime.tool_specs` |
 | Coding-agent N-sessions-per-profile (M10 deliverable) | One Agent per profile gateway subprocess | Each session has its own `SessionRuntime` with its own `Agent` |
 
@@ -212,7 +212,7 @@ mini1/2/3 staging.
    `read_file` in one and assert the other sees its own workspace.
    Existing unit test (`session_filesystem_profile_for_workspace`)
    stays green.
-8. yangmi voice-clone end-to-end on mini1 with the `/Users/cloud/.octos-workspace.toml`
+8. yangmi voice-clone end-to-end on mini1 with the `/Users/cloud/.ra-workspace.toml`
    hotfix DELETED. The workspace policy is bootstrapped under
    `<profile_data_dir>/users/<session_key>/workspace/` per-session.
 9. `cargo clippy --workspace --all-targets -- -D warnings` clean.

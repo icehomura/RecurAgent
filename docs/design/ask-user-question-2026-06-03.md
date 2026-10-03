@@ -8,22 +8,22 @@ Owner: octos-agent + octos-cli (AppUI/UI Protocol) + octoscode.
 
 Related contract surfaces:
 
-- [api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md](../../api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
+- [api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md](../../api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
   (§7 `user_question/respond`, §8 `user_question/requested`, §4.1 UPCR-2026-023)
-- [api/OCTOS_SERVER_FEATURE_REQUIREMENTS.md](../../api/OCTOS_SERVER_FEATURE_REQUIREMENTS.md) (`SRV-041`)
-- [api/OCTOS_APP_FEATURE_REQUIREMENTS.md](../../api/OCTOS_APP_FEATURE_REQUIREMENTS.md) (`APP-037`)
+- [api/ra_SERVER_FEATURE_REQUIREMENTS.md](../../api/ra_SERVER_FEATURE_REQUIREMENTS.md) (`SRV-041`)
+- [api/ra_APP_FEATURE_REQUIREMENTS.md](../../api/ra_APP_FEATURE_REQUIREMENTS.md) (`APP-037`)
 - [api/OCTOSCODE_FEATURE_REQUIREMENTS.md](../../api/OCTOSCODE_FEATURE_REQUIREMENTS.md) (`TUI-037`)
 
 Existing machinery this design reuses (read these before implementing):
 
-- `crates/octos-agent/src/tools/mod.rs` — `ToolApprovalRequester` trait,
+- `crates/ra-agent/src/tools/mod.rs` — `ToolApprovalRequester` trait,
   `TOOL_APPROVAL_CTX` task-local, `ToolApprovalRequest` / `ToolApprovalDecision`.
-- `crates/octos-cli/src/api/ui_protocol_approvals.rs` — `PendingApprovalStore`,
+- `crates/ra-cli/src/api/ui_protocol_approvals.rs` — `PendingApprovalStore`,
   oneshot response channel, turn-scoped cancellation.
-- `crates/octos-cli/src/api/ui_protocol.rs` — `UiProtocolApprovalRequester`
+- `crates/ra-cli/src/api/ui_protocol.rs` — `UiProtocolApprovalRequester`
   impl, `AppState.approvals`, the `TOOL_APPROVAL_CTX.scope(...)` turn wrapper,
   and the `approval/respond` dispatch path.
-- `crates/octos-agent/src/tools/coding_tools.rs` — the `request_user_input`
+- `crates/ra-agent/src/tools/coding_tools.rs` — the `request_user_input`
   codex tool (`request_user_input_body`) whose structured-metadata shape is the
   graceful-fallback template.
 
@@ -31,7 +31,7 @@ Existing machinery this design reuses (read these before implementing):
 
 ## 1. Motivation
 
-octos agents frequently reach a point mid-turn where they must make an
+ra agents frequently reach a point mid-turn where they must make an
 assumption the user could resolve in one tap: which framework, which target
 environment, which of two ambiguous files, opt-in to a destructive cleanup, and
 so on. Today the agent has two poor options:
@@ -47,7 +47,7 @@ so on. Today the agent has two poor options:
 Frontier coding agents (codex, Claude) solve this with a structured
 `AskUserQuestion` tool: the agent emits 1–4 multiple-choice questions, the
 client renders selectable options plus a free-text escape hatch, and the
-selected answer routes straight back into the same turn. octos already has every
+selected answer routes straight back into the same turn. ra already has every
 primitive needed to do this — the approval flow is exactly "pause the turn at a
 tool boundary, surface a typed decision point to the client, route the client's
 answer back, resume." AskUserQuestion is **approval + choices + free-text**.
@@ -81,7 +81,7 @@ mirrors the approval flow.
   **out of scope for Phase 1**. See §8 (Phase 2 / future work). Phase 1 keeps
   the turn paused at the tool's await boundary, identical to `approval/requested`.
 - Persisting answers as durable policy ("always pick X") is out of scope.
-- Pipeline human-gate integration (`octos-pipeline` already has
+- Pipeline human-gate integration (`ra-pipeline` already has
   `HumanInputType::Choice`) is a separate, already-existing surface; see §7.
 
 ## 4. Chosen Approach: Synchronous Tool-Block Mirroring Approvals
@@ -125,7 +125,7 @@ agent loop (turn active)
             │    └─ if present → requester.request_user_question(req).await
             │         (this is the await boundary; the turn is now PAUSED)
             │
-            │  ── server side (octos-cli) ──
+            │  ── server side (ra-cli) ──
             │   SessionUserQuestionRequester::request_user_question:
             │     1. mint question_id, store pending in PendingQuestionStore
             │        keyed by (session, turn, question_id) with a oneshot Sender
@@ -156,7 +156,7 @@ the tool returns a cancelled result and the turn terminates. The server emits a
 
 ### 4.3 Type shapes
 
-The wire types live in `octos-core` (the protocol source of truth). Names below
+The wire types live in `ra-core` (the protocol source of truth). Names below
 are the proposed Rust struct/field names; the JSON field names are the
 snake_case serde renames.
 
@@ -212,7 +212,7 @@ The agent-facing tool surfaces the same answer shape back to the model as its
 `ToolResult.output` JSON, so the model sees `{ answers: [{ selected_labels,
 free_text }, ...] }`.
 
-Agent-side bridge types in `octos-agent` (mirror `ToolApprovalRequest` /
+Agent-side bridge types in `ra-agent` (mirror `ToolApprovalRequest` /
 `ToolApprovalDecision`):
 
 ```rust
@@ -267,9 +267,9 @@ fall back to generic rendering and stay actionable.
 This is the implementation map for the follow-on coding stack. It is not built
 in this docs-only change.
 
-**octos-core** (protocol source of truth):
+**ra-core** (protocol source of truth):
 
-- `crates/octos-core/src/ui_protocol.rs`:
+- `crates/ra-core/src/ui_protocol.rs`:
   - `QuestionId` newtype (mirror `ApprovalId`).
   - `UserQuestion`, `UserQuestionOption`, `UserQuestionRequestedEvent`.
   - `UserQuestionRespondParams`, `UserQuestionRespondResult`,
@@ -282,32 +282,32 @@ in this docs-only change.
   - Add the new method/notification + a representative wire payload to the
     golden contract tests (gated by accepted UPCR-2026-023).
 
-**octos-agent** (tool + bridge):
+**ra-agent** (tool + bridge):
 
-- `crates/octos-agent/src/tools/mod.rs`:
+- `crates/ra-agent/src/tools/mod.rs`:
   - `UserQuestionRequest`, `UserQuestionOutcome`, `UserQuestionRequester`
     trait, and the `USER_QUESTION_CTX` task-local (mirror
     `ToolApprovalRequester` / `TOOL_APPROVAL_CTX`).
-- `crates/octos-agent/src/tools/coding_tools.rs` (or a dedicated module):
+- `crates/ra-agent/src/tools/coding_tools.rs` (or a dedicated module):
   - `AskUserQuestionTool` implementing `Tool`; `spec()` declares the
     `questions[]` schema (1–4, `header`/`question`/`options`/`multi_select`);
     `execute()` validates, reads `USER_QUESTION_CTX`, blocks on the requester,
     falls back when absent (§4.4).
-- `crates/octos-agent/src/tools/registry.rs`: register `AskUserQuestionTool`
+- `crates/ra-agent/src/tools/registry.rs`: register `AskUserQuestionTool`
   (mirror `registry.register(RequestUserInputTool)`).
-- `crates/octos-agent/src/role_template.rs`: add `ask_user_question` to the
+- `crates/ra-agent/src/role_template.rs`: add `ask_user_question` to the
   coding tool roster alongside `request_user_input`.
 - Tool policy: ensure `ask_user_question` is allowed under the relevant
   groups/provider policy (`tools/policy.rs`).
 
-**octos-cli** (server: store + handler + requester + wiring):
+**ra-cli** (server: store + handler + requester + wiring):
 
-- `crates/octos-cli/src/api/ui_protocol_approvals.rs` (or a sibling
+- `crates/ra-cli/src/api/ui_protocol_approvals.rs` (or a sibling
   `ui_protocol_user_questions.rs`): `PendingQuestionStore` (mirror
   `PendingApprovalStore`): pending map keyed by `(session, turn, question_id)`,
   oneshot `Sender`, `register_pending`, `take`/respond, and
   `cancel_pending_for_turn`.
-- `crates/octos-cli/src/api/ui_protocol.rs`:
+- `crates/ra-cli/src/api/ui_protocol.rs`:
   - `SessionUserQuestionRequester` impl of `UserQuestionRequester` (mirror
     `UiProtocolApprovalRequester`): mint id, store pending, emit
     `user_question/requested`, await oneshot.
@@ -336,7 +336,7 @@ in this docs-only change.
 
 Follow the project RED → GREEN → REFACTOR cycle. Tests by layer:
 
-**octos-core (golden contract):**
+**ra-core (golden contract):**
 
 - `user_question/respond` is in `UI_PROTOCOL_COMMAND_METHODS`;
   `user_question/requested` is in `UI_PROTOCOL_NOTIFICATION_METHODS`.
@@ -348,7 +348,7 @@ Follow the project RED → GREEN → REFACTOR cycle. Tests by layer:
 - Round-trip: a generic-fallback event with an unknown extra field still
   deserializes and keeps `title`/`body`.
 
-**octos-agent (tool):**
+**ra-agent (tool):**
 
 - `should_emit_structured_metadata_when_no_requester` — with no
   `USER_QUESTION_CTX`, `execute()` returns the fallback result with
@@ -360,7 +360,7 @@ Follow the project RED → GREEN → REFACTOR cycle. Tests by layer:
 - `should_reject_when_questions_out_of_range` — 0 or >4 questions, or an option
   count outside 2..=4, is a tool input error.
 
-**octos-cli (server + e2e):**
+**ra-cli (server + e2e):**
 
 - `should_emit_user_question_requested_with_structured_questions`.
 - `should_resume_tool_when_user_question_respond_matches`.
@@ -383,18 +383,18 @@ tool await boundary, release the turn, persist a checkpoint, and resume from it
 when `user_question/respond` arrives. This frees the execution context and any
 upstream connection/budget while the user thinks, and degrades better for slow
 human responses. Rejected for Phase 1 because it requires a durable turn-state
-checkpoint/resume mechanism octos does not yet have; that is real new turn-state
+checkpoint/resume mechanism ra does not yet have; that is real new turn-state
 machinery, not a reuse of the approval flow. Deferred to §8.
 
-**B. Pipeline human-gate.** `octos-pipeline` already has a human-input gate with
-`HumanInputType::Choice` (`crates/octos-pipeline/src/human_gate.rs`, re-exported
+**B. Pipeline human-gate.** `ra-pipeline` already has a human-input gate with
+`HumanInputType::Choice` (`crates/ra-pipeline/src/human_gate.rs`, re-exported
 from `lib.rs`). That solves a structurally similar problem — a pipeline node
 pauses for a typed human choice. It was considered as the home for this feature
 but rejected for the interactive-chat path: the pipeline gate is node-scoped and
 checkpoint-based (it fits the DOT-graph pipeline engine), whereas the chat agent
 loop needs a mid-turn, in-place block that the existing approval flow already
 provides. The two can converge later (the pipeline `Choice` gate and the chat
-AskUserQuestion could share the `octos-core` wire types), but Phase 1 keeps the
+AskUserQuestion could share the `ra-core` wire types), but Phase 1 keeps the
 chat path on the approval-mirror mechanism.
 
 **C. Free-text only (status quo `request_user_input`).** The existing codex
@@ -412,4 +412,4 @@ options, multi-select, and the synchronous answer route. We keep
   future UPCR; not part of `user_question.v1`.
 - **Durable answer policy** ("remember this choice").
 - **Convergence with the pipeline `HumanInputType::Choice` gate** on shared
-  `octos-core` wire types.
+  `ra-core` wire types.

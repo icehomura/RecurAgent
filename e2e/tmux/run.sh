@@ -11,7 +11,7 @@ else
   OCTOS_TMUX_ROOT="${OCTOS_TMUX_ROOT:-$ROOT_DIR}"
   OCTOS_TMUX_COLS="${OCTOS_TMUX_COLS:-140}"
   OCTOS_TMUX_ROWS="${OCTOS_TMUX_ROWS:-40}"
-  OCTOS_TMUX_PREFIX="${OCTOS_TMUX_PREFIX:-octos-tmux-}"
+  OCTOS_TMUX_PREFIX="${OCTOS_TMUX_PREFIX:-ra-tmux-}"
   OCTOS_TMUX_RUN_ID="${OCTOS_TMUX_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
   OCTOS_TMUX_RUN_PREFIX="${OCTOS_TMUX_PREFIX}${OCTOS_TMUX_RUN_ID}-"
   OCTOS_TMUX_ARTIFACT_ROOT="${OCTOS_TMUX_ARTIFACT_ROOT:-${OCTOS_TMUX_ROOT}/e2e/test-results-tmux}"
@@ -347,7 +347,7 @@ else
 fi
 
 LANE="${1:-default}"
-OCTOS_TMUX_AUTH_TOKEN="${OCTOS_TMUX_AUTH_TOKEN:-octos-tmux-secret-token-2026}"
+OCTOS_TMUX_AUTH_TOKEN="${OCTOS_TMUX_AUTH_TOKEN:-ra-tmux-secret-token-2026}"
 
 shell_quote() {
   printf '%q' "$1"
@@ -355,12 +355,12 @@ shell_quote() {
 
 if [ -n "${OCTOS_BIN:-}" ]; then
   OCTOS_BIN_CMD="$OCTOS_BIN"
-elif [ -x "$ROOT_DIR/target/debug/octos" ]; then
-  OCTOS_BIN_CMD="$ROOT_DIR/target/debug/octos"
+elif [ -x "$ROOT_DIR/target/debug/ra" ]; then
+  OCTOS_BIN_CMD="$ROOT_DIR/target/debug/ra"
 elif [ -f "$ROOT_DIR/Cargo.toml" ]; then
-  OCTOS_BIN_CMD="cargo run --manifest-path $(printf '%q' "$ROOT_DIR/Cargo.toml") -p octos-cli --features api --bin octos --"
+  OCTOS_BIN_CMD="cargo run --manifest-path $(printf '%q' "$ROOT_DIR/Cargo.toml") -p ra-cli --features api --bin ra --"
 else
-  echo "Unable to locate octos CLI. Set OCTOS_BIN." >&2
+  echo "Unable to locate ra CLI. Set OCTOS_BIN." >&2
   exit 2
 fi
 
@@ -426,22 +426,22 @@ run_tui_mock() {
   local session
   session="$(tmux_session_name "$name")"
   tmux_new_default "$session" bash -lc "$OCTOSCODE_BIN_CMD --mode mock"
-  tmux_wait_for "$session" "Opened coding:local:prototype#m9|Ask Octos to change code" 45
-  tmux_assert_capture "$session" "Opened coding:local:prototype#m9|Ask Octos to change code"
+  tmux_wait_for "$session" "Opened coding:local:prototype#m9|Ask ra to change code" 45
+  tmux_assert_capture "$session" "Opened coding:local:prototype#m9|Ask ra to change code"
   tmux_assert_capture "$session" "Composer"
   tmux_assert_capture "$session" "Tab inspector"
   tmux_assert_capture "$session" "model coding"
   tmux_assert_capture "$session" "usage"
   tmux_assert_capture "$session" "approval gated"
-  tmux_assert_capture "$session" "Ask Octos to change code"
+  tmux_assert_capture "$session" "Ask ra to change code"
   tmux_assert_not_capture "$session" "▌"
   tmux_assert_not_capture "$session" "Current Tasks|tasks/status"
   tmux_send "$session" "complete m9 contract"
   tmux_key "$session" Enter
   tmux_wait_for "$session" "Approval Requested" 20
   tmux_assert_capture "$session" "complete m9 cont"
-  tmux_assert_capture "$session" "command cargo test -p octos-core ui_protocol"
-  tmux_assert_capture "$session" "cwd .*octos"
+  tmux_assert_capture "$session" "command cargo test -p ra-core ui_protocol"
+  tmux_assert_capture "$session" "cwd .*ra"
   tmux_assert_not_capture "$session" "INFO calling LLM|parallel_tools|result_sizes|tool_ids="
   tmux_capture_clean "$session" "$name" >/dev/null
   tmux_key "$session" C-q
@@ -457,7 +457,7 @@ run_tui_mock_approval_kind() {
   session="$(tmux_session_name "$name")"
   tmux_new_default "$session" bash -lc \
     "OCTOSCODE_MOCK_APPROVAL_KIND=$(shell_quote "$kind") $OCTOSCODE_BIN_CMD --mode mock"
-  tmux_wait_for "$session" "Opened coding:local:prototype#m9|Ask Octos to change code" 45
+  tmux_wait_for "$session" "Opened coding:local:prototype#m9|Ask ra to change code" 45
   tmux_send "$session" "approval ${kind}"
   tmux_key "$session" Enter
   tmux_wait_for "$session" "Approval Requested|\\[approval\\]|kind ${kind}|Mock .*approval|Diff Preview" 20
@@ -617,7 +617,7 @@ run_default() {
   tmux_init_artifacts
   tmux_log "artifacts: $OCTOS_TMUX_ARTIFACT_DIR"
 
-  run_line_capture "octos-help" "$OCTOS_BIN_CMD --help" "Usage: octos" "Commands:" "serve"
+  run_line_capture "ra-help" "$OCTOS_BIN_CMD --help" "Usage: ra" "Commands:" "serve"
   run_line_capture \
     "octoscode-help" \
     "$OCTOSCODE_BIN_CMD --help" \
@@ -630,9 +630,9 @@ run_default() {
     "--auth-token" \
     "--readonly"
   run_tui_mock
-  run_tui_mock_approval_kind "command" "cargo test -p octos-core ui_protocol"
+  run_tui_mock_approval_kind "command" "cargo test -p ra-core ui_protocol"
   run_tui_mock_approval_kind "diff" "Mock approval diff|src/coding_loop.rs|Diff Preview"
-  run_tui_mock_approval_kind "filesystem" "/tmp/octos-mock-approval.txt"
+  run_tui_mock_approval_kind "filesystem" "/tmp/ra-mock-approval.txt"
   run_tui_mock_approval_kind "network" "https://example.com"
   run_tui_mock_approval_kind "sandbox_escalation" "danger-full-access"
   run_tui_protocol_readonly
@@ -681,8 +681,8 @@ run_live() {
   tmux_wait_for "$server_session" "Listening: http://${host}:${port}" 45
 
   tmux_new_default "$tui_session" bash -lc "$tui_cmd"
-  tmux_wait_for "$tui_session" "Protocol backend connected|Connected to octos-ui|Opened" 45
-  tmux_assert_capture "$tui_session" "Protocol backend connected|Connected to octos-ui|Opened"
+  tmux_wait_for "$tui_session" "Protocol backend connected|Connected to ra-ui|Opened" 45
+  tmux_assert_capture "$tui_session" "Protocol backend connected|Connected to ra-ui|Opened"
   tmux_send "$tui_session" "tmux live protocol smoke"
   tmux_key "$tui_session" Enter
   tmux_wait_for "$tui_session" "tmux live protocol smoke|Turn started|turn/start request|Agent not available" 20
@@ -706,7 +706,7 @@ run_live() {
   tmux_log "live lane passed"
 }
 
-# M9-FIX-09: wire-level protocol harness lane. Boots `octos serve` headless
+# M9-FIX-09: wire-level protocol harness lane. Boots `ra serve` headless
 # and drives the UI Protocol v1 directly through `e2e/tests/m9-protocol-*.spec.ts`,
 # bypassing the TUI binary. Use this to catch wire regressions without
 # depending on a working TUI build.
@@ -715,20 +715,20 @@ run_m9_protocol() {
   tmux_init_artifacts
   tmux_log "artifacts: $OCTOS_TMUX_ARTIFACT_DIR"
 
-  if [ -z "${OCTOS_BIN:-}" ] && [ ! -x "$ROOT_DIR/target/debug/octos" ] && [ -f "$ROOT_DIR/Cargo.toml" ]; then
-    tmux_log "building octos CLI before starting tmux server"
-    cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p octos-cli --features api --bin octos
-    OCTOS_BIN_CMD="$ROOT_DIR/target/debug/octos"
+  if [ -z "${OCTOS_BIN:-}" ] && [ ! -x "$ROOT_DIR/target/debug/ra" ] && [ -f "$ROOT_DIR/Cargo.toml" ]; then
+    tmux_log "building ra CLI before starting tmux server"
+    cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p ra-cli --features api --bin ra
+    OCTOS_BIN_CMD="$ROOT_DIR/target/debug/ra"
   fi
 
   local host="${OCTOS_TMUX_M9_HOST:-127.0.0.1}"
   local port="${OCTOS_TMUX_M9_PORT:-50191}"
-  local data_dir="${OCTOS_TMUX_M9_DATA_DIR:-${TMPDIR:-/tmp}/octos-m9-data-${OCTOS_TMUX_RUN_ID}}"
+  local data_dir="${OCTOS_TMUX_M9_DATA_DIR:-${TMPDIR:-/tmp}/ra-m9-data-${OCTOS_TMUX_RUN_ID}}"
   local server_session
   local server_cmd
   local server_wrapped
   local server_start_timeout="${OCTOS_TMUX_M9_SERVER_START_TIMEOUT:-120}"
-  local llm_api_key="${OCTOS_TMUX_M9_LLM_API_KEY:-octos-m9-dummy-key}"
+  local llm_api_key="${OCTOS_TMUX_M9_LLM_API_KEY:-ra-m9-dummy-key}"
   server_session="$(tmux_session_name "m9-server")"
   server_cmd="OCTOS_M9_PROTOCOL_FIXTURES=1 OPENAI_API_KEY=$(shell_quote "$llm_api_key") $OCTOS_BIN_CMD serve --host $(shell_quote "$host") --port $(shell_quote "$port") --data-dir $(shell_quote "$data_dir") --cwd $(shell_quote "$ROOT_DIR") --auth-token $(shell_quote "$OCTOS_TMUX_AUTH_TOKEN") --provider openai --model gpt-4o --no-retry"
   printf -v server_wrapped '%s\nrc=$?\nprintf "\\n__OCTOS_TMUX_SERVER_EXIT:%%s__\\n" "$rc"\nwhile :; do sleep 3600; done\n' "$server_cmd"

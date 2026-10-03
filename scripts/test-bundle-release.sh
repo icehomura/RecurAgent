@@ -32,7 +32,7 @@ make_fake_release_tree() {
     # the bundle step, which the script itself enforces loudly).
     local dir="$1"
     mkdir -p "$dir/target/release"
-    for b in octos octos-sandbox news_fetch deep-search deep_crawl send_email \
+    for b in ra ra-sandbox news_fetch deep-search deep_crawl send_email \
         account_manager voice clock weather smart_home; do
         echo "fake $b" >"$dir/target/release/$b"
     done
@@ -54,7 +54,7 @@ assert_checksum_sidecar() {
 }
 
 main() {
-    WORK_DIR="$(mktemp -d /tmp/octos-bundle-release-test.XXXXXX)"
+    WORK_DIR="$(mktemp -d /tmp/ra-bundle-release-test.XXXXXX)"
     trap 'rm -rf "$WORK_DIR"' EXIT
 
     make_fake_release_tree "$WORK_DIR"

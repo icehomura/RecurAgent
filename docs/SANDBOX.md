@@ -1,10 +1,10 @@
 # Sandbox
 
-octos can isolate shell commands inside a sandbox, preventing the AI agent from modifying the host system outside the project workspace. Only the `shell` tool is sandboxed; file tools (`read_file`, `write_file`, `edit_file`) use their own path validation (`O_NOFOLLOW`, traversal checks).
+ra can isolate shell commands inside a sandbox, preventing the AI agent from modifying the host system outside the project workspace. Only the `shell` tool is sandboxed; file tools (`read_file`, `write_file`, `edit_file`) use their own path validation (`O_NOFOLLOW`, traversal checks).
 
 ## Quick Start
 
-Add to `.octos/config.json` (or `~/.config/octos/config.json`):
+Add to `.ra/config.json` (or `~/.config/ra/config.json`):
 
 ```json
 {
@@ -20,15 +20,15 @@ This auto-detects the best available backend for your platform.
 
 ### Auto-Detection Order
 
-When `mode` is `"auto"` (default), octos probes in order, picking the first match for the host OS:
+When `mode` is `"auto"` (default), ra probes in order, picking the first match for the host OS:
 
 1. **bwrap** on Linux (checked via `which bwrap`)
 2. **sandbox-exec** on macOS (checked via `which sandbox-exec`)
-3. **AppContainer** on Windows (uses the `octos-sandbox` helper binary built on `rappct`)
+3. **AppContainer** on Windows (uses the `ra-sandbox` helper binary built on `rappct`)
 4. **docker** on any platform as a fallback (checked via `which docker`)
 5. **none** — pass-through if nothing is found
 
-Sandbox source lives in `crates/octos-agent/src/sandbox/` (`mod.rs`, `bwrap.rs`, `macos.rs`, `docker.rs`, `windows.rs`). The Windows helper binary is the standalone `crates/octos-sandbox/` crate.
+Sandbox source lives in `crates/ra-agent/src/sandbox/` (`mod.rs`, `bwrap.rs`, `macos.rs`, `docker.rs`, `windows.rs`). The Windows helper binary is the standalone `crates/ra-sandbox/` crate.
 
 ### Bwrap (Linux)
 
@@ -58,7 +58,7 @@ sudo pacman -S bubblewrap
 | `/proc` | Mounted |
 | PID namespace | Isolated (`--unshare-pid`) |
 | Network | Blocked by default (`--unshare-net`) |
-| Parent process | `--die-with-parent` (killed if octos exits) |
+| Parent process | `--die-with-parent` (killed if ra exits) |
 
 **Limitations:**
 
@@ -101,9 +101,9 @@ Uses Apple's Seatbelt sandbox framework with a [SBPL](https://reverse.put.as/wp-
 
 ### Windows AppContainer
 
-Uses Windows AppContainer isolation via the `octos-sandbox` helper binary (built on the [`rappct`](https://crates.io/crates/rappct) crate).
+Uses Windows AppContainer isolation via the `ra-sandbox` helper binary (built on the [`rappct`](https://crates.io/crates/rappct) crate).
 
-**No installation needed** — the helper ships with the Octos binary on Windows.
+**No installation needed** — the helper ships with the ra binary on Windows.
 
 **What it does:**
 
@@ -356,11 +356,11 @@ which bwrap           # Linux
 which sandbox-exec    # macOS (should always exist)
 which docker          # Any platform
 
-# Check octos status — currently shows provider/config info
-octos status
+# Check ra status — currently shows provider/config info
+ra status
 
 # Test with verbose logging
-RUST_LOG=octos_agent=debug octos chat --message "Run: echo hello"
+RUST_LOG=octos_agent=debug ra chat --message "Run: echo hello"
 ```
 
 In debug logs, you'll see either:
@@ -384,4 +384,4 @@ In debug logs, you'll see either:
 
 4. **Docker image trust.** The default image is `alpine:3.21`. If you override it, ensure the image is from a trusted source.
 
-5. **`allow_network: true` opens all network access.** There is no fine-grained network filtering (e.g., allow only specific hosts). Use Docker's `--network` options outside of octos if you need more control.
+5. **`allow_network: true` opens all network access.** There is no fine-grained network filtering (e.g., allow only specific hosts). Use Docker's `--network` options outside of ra if you need more control.

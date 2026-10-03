@@ -8,7 +8,7 @@
  * Usage:
  *
  *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-deep-search-quality.spec.ts

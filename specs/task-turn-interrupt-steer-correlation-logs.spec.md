@@ -1,6 +1,6 @@
 spec: task
 name: "interrupt/steer 生命周期的 session/turn 关联日志"
-tags: [ui-protocol, observability, interrupt, steer, octos-cli]
+tags: [ui-protocol, observability, interrupt, steer, ra-cli]
 estimate: 0.5d
 ---
 
@@ -36,9 +36,9 @@ agent 侧所有日志自动携带二者；并在 interrupt 收到/裁决/ack 与
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-cli/src/lib.rs
-- crates/octos-cli/src/turn_trace.rs
-- crates/octos-cli/src/api/ui_protocol_transport.rs
+- crates/ra-cli/src/lib.rs
+- crates/ra-cli/src/turn_trace.rs
+- crates/ra-cli/src/api/ui_protocol_transport.rs
 - specs/task-turn-interrupt-steer-correlation-logs.spec.md
 
 ### Forbidden
@@ -53,7 +53,7 @@ agent 侧所有日志自动携带二者；并在 interrupt 收到/裁决/ack 与
 Scenario: interrupt 收到/裁决/ack 三条日志都带 session 与 turn（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: interrupt_lifecycle_logs_carry_session_and_turn
   Given 一个捕获输出的 tracing 订阅器与 `octos_cli::turn_trace` 模块
   When 依次调用 `log_interrupt_received`、`log_interrupt_outcome("captured")`、`log_interrupt_ack("interrupted")`
@@ -63,7 +63,7 @@ Scenario: interrupt 收到/裁决/ack 三条日志都带 session 与 turn（crit
 
 Scenario: agent 侧日志在 turn span 内自动携带 session/turn
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: agent_logs_inside_turn_span_carry_session_and_turn
   Given `turn_span(session, turn)` 已进入作用域
   When 记录一条不带任何字段的 `tracing::info!`
@@ -71,7 +71,7 @@ Scenario: agent 侧日志在 turn span 内自动携带 session/turn
 
 Scenario: steer 受理日志标明 turn 是否正在 Interrupting
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: steer_accepted_log_marks_interrupting_turns
   When 分别以 `interrupting = false` 与 `true` 调用 `log_steer_accepted`
   Then 两行都包含 `session=`、`turn=` 且分别包含 `interrupting=false`、`interrupting=true`
@@ -79,7 +79,7 @@ Scenario: steer 受理日志标明 turn 是否正在 Interrupting
 ### Rule: no-user-text — 日志不泄露用户内容
 Scenario: 日志函数不接收也不输出用户文本（错误路径）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: correlation_logs_never_contain_user_text
   Given 一个含唯一标记的 steer 文本存在于调用方
   When 调用全部 `turn_trace` 日志函数
@@ -87,13 +87,13 @@ Scenario: 日志函数不接收也不输出用户文本（错误路径）
 
 Scenario: 未知/不匹配裁决同样记录且不升级级别（错误路径）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: interrupt_outcome_logs_cover_rejections_at_info
   When 以 `unknown`、`mismatch`、`already_terminal:interrupted` 调用 `log_interrupt_outcome`
   Then 三行都以 INFO 记录并包含各自的 `outcome=` 值
 
 ## Out of Scope
 
-- 把 span 传播到 octos-agent crate 内部的更细粒度（LLM provider、tool 执行）日志。
+- 把 span 传播到 ra-agent crate 内部的更细粒度（LLM provider、tool 执行）日志。
 - 日志格式/JSON 输出配置。
-- F8：`octos serve` 的 fd 累积。
+- F8：`ra serve` 的 fd 累积。

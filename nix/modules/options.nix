@@ -29,22 +29,22 @@ let
     submodule
     ;
 
-  allChannels = selfPackages.octos.octos-cli.supportedChannels;
+  allChannels = selfPackages.ra.ra-cli.supportedChannels;
 
-  cfg = config.programs.octos;
+  cfg = config.programs.ra;
 in
 
 {
   options = {
-    programs.octos = {
-      enable = mkEnableOption "octos CLI";
+    programs.ra = {
+      enable = mkEnableOption "ra CLI";
 
-      package = mkPackageOption selfPackages "octos" { };
+      package = mkPackageOption selfPackages "ra" { };
 
       finalPackage = mkOption {
         type = package;
         readOnly = true;
-        description = "The final octos package after applying module-level overrides.";
+        description = "The final ra package after applying module-level overrides.";
         default =
           let
             # Determine if any feature-related options are explicitly set in the module.
@@ -69,7 +69,7 @@ in
           in
           # Transparent Override Pattern:
           # If no module-level customizations are requested, return the package as-is.
-          # This ensures that pre-configured packages (like octos-full) remain bit-identical
+          # This ensures that pre-configured packages (like ra-full) remain bit-identical
           # and reuse existing build caches.
           if overrideArgs == { } then cfg.package else cfg.package.override overrideArgs;
       };
@@ -82,7 +82,7 @@ in
         description = "Whether to enable app-skills. If null, preserves the package's default.";
       };
 
-      enableExtraPackages = mkEnableOption "extra runtime dependencies for octos" // {
+      enableExtraPackages = mkEnableOption "extra runtime dependencies for ra" // {
         description = ''
           Whether to install optional runtime dependencies (chromium, nodejs, ffmpeg, libreoffice, poppler-utils).
 
@@ -107,7 +107,7 @@ in
       service = mkOption {
         type = submodule {
           options = {
-            enable = mkEnableOption "octos serve (dashboard + gateway)";
+            enable = mkEnableOption "ra serve (dashboard + gateway)";
             port = mkOption {
               type = int;
               default = 8080;
@@ -120,8 +120,8 @@ in
             };
             dataDir = mkOption {
               type = str;
-              default = "/var/lib/octos";
-              description = "octos data directory";
+              default = "/var/lib/ra";
+              description = "ra data directory";
             };
             authToken = mkOption {
               type = str;
@@ -130,7 +130,7 @@ in
           };
         };
         default = { };
-        description = "octos serve daemon configuration";
+        description = "ra serve daemon configuration";
       };
     };
   };

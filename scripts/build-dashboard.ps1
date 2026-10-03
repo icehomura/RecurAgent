@@ -1,4 +1,4 @@
-# Build the admin dashboard SPA into the octos-cli embed dir.
+# Build the admin dashboard SPA into the ra-cli embed dir.
 #
 # PowerShell equivalent of scripts/build-dashboard.sh.
 #
@@ -30,7 +30,7 @@ foreach ($arg in $RemainingArgs) {
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $DashboardDir = Join-Path $Root "dashboard"
-$OutDir = Join-Path $Root "crates\octos-cli\static\admin"
+$OutDir = Join-Path $Root "crates\ra-cli\static\admin"
 
 function Show-Help {
     Write-Host @"

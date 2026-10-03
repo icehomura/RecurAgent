@@ -18,12 +18,12 @@ divergent approval system.
 ### A. The synchronous in-turn approval bridge
 
 - `ToolApprovalRequester` / `TOOL_APPROVAL_CTX` task-local
-  (`octos-agent/src/tools/mod.rs:329-354`). A tool that hits
+  (`ra-agent/src/tools/mod.rs:329-354`). A tool that hits
   `Decision::Ask` (SafePolicy patterns like `sudo`, `rm -rf`,
   `git push --force` — `policy.rs:277-300`) fetches the per-turn requester
   and **blocks on it inside the running turn** until a decision arrives.
 - Sole production implementor: `UiProtocolApprovalRequester`
-  (`octos-cli/src/api/ui_protocol.rs:3071`), wired only on the serve/WebSocket
+  (`ra-cli/src/api/ui_protocol.rs:3071`), wired only on the serve/WebSocket
   path. It sends `approval/requested` over the socket and blocks on a oneshot
   until the client calls `approval/respond`.
 - Rich supporting machinery, all UI-protocol-side:
@@ -33,7 +33,7 @@ divergent approval system.
     (`api/ui_protocol_scope.rs`)
   - durable audit: append-only JSONL `approvals-*.log` with rotation and
     retention (`api/ui_protocol_audit.rs`)
-- Gate config: `ApprovalPolicy` enum `Ask | Never` (`octos-agent/src/policy.rs:24`),
+- Gate config: `ApprovalPolicy` enum `Ask | Never` (`ra-agent/src/policy.rs:24`),
   derived from `PermissionProfile`.
 
 ### B. What main does NOT have
@@ -65,11 +65,11 @@ The PR's model is **suspend-and-resume**, not block-in-turn:
    loop **terminates the turn** with `ConversationResponse.pending_approval`.
 2. `session_actor` converts the draft to a `PendingApproval`
    (bound to room + requester), sends a Matrix message carrying
-   `org.octos.approval_request` + `org.octos.actions` (Approve/Deny buttons,
+   `org.ra.approval_request` + `org.ra.actions` (Approve/Deny buttons,
    rendered natively by Robrix), stores it in an in-memory
    `PendingApprovalStore`, and spawns an expiry timer.
 3. The human's response arrives later as a **new inbound message** carrying
-   `org.octos.approval_response`. The actor validates it — unknown/consumed
+   `org.ra.approval_response`. The actor validates it — unknown/consumed
    request, wrong room, expired, unauthorized sender, SHA-256
    `tool_args_digest` mismatch — re-runs `before_tool_call` hooks
    (`revalidate_pending_approval`, policy may have changed mid-wait), then
@@ -120,7 +120,7 @@ Adopt the PR's suspend/resume shape for gateway channels, but converge every
 shared concept onto main's existing vocabulary instead of duplicating it:
 
 1. **One rule schema.** Land `ApprovalRuleConfig` (tools / authorized_approvers /
-   expires_in_secs / risk_level / on_timeout) in `octos-cli/src/config.rs` +
+   expires_in_secs / risk_level / on_timeout) in `ra-cli/src/config.rs` +
    `profiles.rs` as *the* config surface for human-approval rules. Rename the
    runtime type from the PR's `ApprovalPolicy` to **`HumanApprovalRules`**
    (avoids colliding with `policy::ApprovalPolicy`). The UI-protocol path may
@@ -139,8 +139,8 @@ shared concept onto main's existing vocabulary instead of duplicating it:
 4. **Port the PR's security invariants verbatim**: args digest binding,
    consumed-set, room binding, authorized-approver validation, post-wait
    `revalidate_pending_approval`.
-5. **Channel projection stays generic.** `org.octos.approval_request` /
-   `org.octos.actions` / `org.octos.approval_response` follow the Phase 1
+5. **Channel projection stays generic.** `org.ra.approval_request` /
+   `org.ra.actions` / `org.ra.approval_response` follow the Phase 1
    app-card pattern (Robrix renders buttons; other clients show the text
    fallback). Telegram/Discord can implement the same metadata contract later
    without touching the agent.
@@ -170,11 +170,11 @@ shared concept onto main's existing vocabulary instead of duplicating it:
 
 | Step | Where | Notes |
 |---|---|---|
-| 1. `HumanApprovalRules` model + drafts + pending store + validation errors | `octos-agent/src/approval.rs` (new) | Port from `pr-345-head`, rename types, keep digest/consume/revalidate |
+| 1. `HumanApprovalRules` model + drafts + pending store + validation errors | `ra-agent/src/approval.rs` (new) | Port from `pr-345-head`, rename types, keep digest/consume/revalidate |
 | 2. `ToolExecutionOutcome::ApprovalRequested` + early return + `execute_approved_tool` / `revalidate_pending_approval` | `agent/execution.rs`, `loop_runner.rs`, `agent/mod.rs` | Adapt to current loop (post-M11) |
-| 3. Config schema + validation + profile passthrough | `octos-cli/src/config.rs`, `profiles.rs` | Include `53fb5c87`'s post-expansion validation |
-| 4. Session-actor bridge: emit request card, pending store, expiry timer, response handling, audit emission | `octos-cli/src/session_actor.rs` | Reuse `ApprovalDecidedEvent` + audit log from `api/ui_protocol_audit.rs` |
-| 5. Matrix projection in/out | `octos-bus/src/matrix_channel.rs` | ~140 lines, mirrors Phase 1 app-card projection |
+| 3. Config schema + validation + profile passthrough | `ra-cli/src/config.rs`, `profiles.rs` | Include `53fb5c87`'s post-expansion validation |
+| 4. Session-actor bridge: emit request card, pending store, expiry timer, response handling, audit emission | `ra-cli/src/session_actor.rs` | Reuse `ApprovalDecidedEvent` + audit log from `api/ui_protocol_audit.rs` |
+| 5. Matrix projection in/out | `ra-bus/src/matrix_channel.rs` | ~140 lines, mirrors Phase 1 app-card projection |
 | 6. Docs | `book/src/configuration.md`, `channels.md` | Rule schema + Robrix card behavior |
 
 TDD per repo convention; mock-homeserver tests for the projection, actor
@@ -182,9 +182,9 @@ tests for validate/consume/expiry, agent tests for rule-match interception.
 
 ## References
 
-- Main approval infra: `octos-agent/src/tools/mod.rs:329-354`,
-  `octos-agent/src/tools/shell.rs:310-369`, `octos-agent/src/policy.rs:24-40`,
-  `octos-cli/src/api/ui_protocol_approvals.rs`, `ui_protocol_scope.rs`,
+- Main approval infra: `ra-agent/src/tools/mod.rs:329-354`,
+  `ra-agent/src/tools/shell.rs:310-369`, `ra-agent/src/policy.rs:24-40`,
+  `ra-cli/src/api/ui_protocol_approvals.rs`, `ui_protocol_scope.rs`,
   `ui_protocol_audit.rs`
 - PR reference: commits `73313637`, `53fb5c87` on `pr-345-head`
 - Related ADRs: `docs/M11-PROFILE-SESSION-RUNTIME-ADR.md`

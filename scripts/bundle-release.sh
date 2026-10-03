@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bundle the release binaries + canonical model catalog into one archive.
 #
-# Single source of truth for WHAT ships in an octos release. Previously this
+# Single source of truth for WHAT ships in an ra release. Previously this
 # list was copy-pasted across ci.yml, release.yml and release-dispatch.yml and
 # had already drifted (skill-evolve was compiled but never bundled;
 # model_catalog.json was only bundled by release-dispatch).
@@ -14,8 +14,8 @@
 set -euo pipefail
 
 BINARIES=(
-  octos
-  octos-sandbox
+  ra
+  ra-sandbox
   news_fetch
   deep-search
   deep_crawl

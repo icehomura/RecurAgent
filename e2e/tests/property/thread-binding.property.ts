@@ -7,7 +7,7 @@ const REGRESSION_DIR = path.resolve(
   __dirname,
   '../../test-fixtures/regressions',
 );
-const REGRESSION_FIXTURE_SCHEMA = 'octos.thread-binding-regression.v1';
+const REGRESSION_FIXTURE_SCHEMA = 'ra.thread-binding-regression.v1';
 
 type Role = 'user' | 'assistant' | 'tool';
 
@@ -34,7 +34,7 @@ interface CompletionCase {
 }
 
 interface ScenarioCase {
-  schema: 'octos.thread-binding.property.v1';
+  schema: 'ra.thread-binding.property.v1';
   seed: number;
   turns: TurnCase[];
   completions: CompletionCase[];
@@ -120,7 +120,7 @@ function generateScenario(seed: number): ScenarioCase {
   );
 
   return {
-    schema: 'octos.thread-binding.property.v1',
+    schema: 'ra.thread-binding.property.v1',
     seed,
     turns,
     completions,

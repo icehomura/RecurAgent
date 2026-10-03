@@ -1,6 +1,6 @@
 spec: task
 name: "turn 退出时把未消费的 steer 输入返还客户端"
-tags: [ui-protocol, steer, turn-lifecycle, octos-cli, octos-core]
+tags: [ui-protocol, steer, turn-lifecycle, ra-cli, ra-core]
 estimate: 1d
 ---
 
@@ -18,7 +18,7 @@ ledger（可 replay），使客户端能确定性地重新入队，而不是靠"
 <!-- lint-ack: decision-coverage — "恢复边界"是范围声明（same-process reconnect only），无对应可执行场景；跨进程恢复列入 Out of Scope -->
 <!-- lint-ack: verification-metadata-suggestion — 两个错误路径场景使用进程内 stdio WsConnection + 内存 ledger fixture，无真实外部 I/O -->
 
-- 新增 `octos-core` 通知 `UiNotification::TurnSteerDropped(TurnSteerDroppedEvent)`，
+- 新增 `ra-core` 通知 `UiNotification::TurnSteerDropped(TurnSteerDroppedEvent)`，
   method 常量 `methods::TURN_STEER_DROPPED = "turn/steer_dropped"`；事件字段
   `session_id`、`topic`（可选，与其他 turn 事件同样走 `set_topic_if_absent`）、
   `turn_id`、`inputs: Vec<String>`（保持 buffer 顺序）、`reason: String`。
@@ -31,8 +31,8 @@ ledger（可 replay），使客户端能确定性地重新入队，而不是靠"
   interrupt_observed) -> usize` 在 `run_standalone_turn` 中 `agent_task.await`
   之后的现有残留 drain 处调用它并发送；有残留才发送，返回返还条数；原 WARN
   日志保留。
-- 验证边界说明：`octos-cli` 的 `api` 模块（`WsConnection`、ledger）在 `api`
-  feature 后面，`agent-spec` 的默认 `cargo test -p octos-cli` 不启用它；因此形状/
+- 验证边界说明：`ra-cli` 的 `api` 模块（`WsConnection`、ledger）在 `api`
+  feature 后面，`agent-spec` 的默认 `cargo test -p ra-cli` 不启用它；因此形状/
   顺序/reason/空残留由纯函数测试机械验证，发送与 ledger 行为由 `--features api`
   下的测试验证并以 `Review: human` 场景登记。
 - 发送方式：`send_notification_durable`（等待容量、写 ledger），因为载荷是用户
@@ -64,13 +64,13 @@ ledger（可 replay），使客户端能确定性地重新入队，而不是靠"
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-core/src/ui_protocol.rs
-- crates/octos-core/src/ui_protocol_tests.rs
-- crates/octos-cli/src/lib.rs
-- crates/octos-cli/src/steer_return.rs
-- crates/octos-cli/src/api/ui_protocol_transport.rs
-- crates/octos-cli/src/api/ui_protocol_ledger.rs
-- crates/octos-cli/src/api/ui_protocol_tests.rs
+- crates/ra-core/src/ui_protocol.rs
+- crates/ra-core/src/ui_protocol_tests.rs
+- crates/ra-cli/src/lib.rs
+- crates/ra-cli/src/steer_return.rs
+- crates/ra-cli/src/api/ui_protocol_transport.rs
+- crates/ra-cli/src/api/ui_protocol_ledger.rs
+- crates/ra-cli/src/api/ui_protocol_tests.rs
 - specs/task-return-unconsumed-steer-inputs.spec.md
 
 ### Forbidden
@@ -85,7 +85,7 @@ ledger（可 replay），使客户端能确定性地重新入队，而不是靠"
 Scenario: 中断后残留的 steer 按顺序生成 turn/steer_dropped 事件（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: leftover_steer_notification_preserves_order_and_labels_interrupted
   Given 两条已受理但未 drain 的输入
   When `leftover_steer_notification` 以 `interrupt_observed = true` 被调用
@@ -95,7 +95,7 @@ Scenario: 中断后残留的 steer 按顺序生成 turn/steer_dropped 事件（c
 
 Scenario: 正常结束时的残留标为 turn_ended
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: leftover_steer_notification_labels_turn_ended_without_interrupt
   Given 一条残留输入
   When `leftover_steer_notification` 以 `interrupt_observed = false` 被调用
@@ -105,7 +105,7 @@ Scenario: steer_dropped 严格先于终态帧且状态已 Terminal（critical；
   Tags: critical
   Review: human
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: steer_dropped_is_emitted_before_the_terminal_frame
   Given 一个 Active 的 turn 状态与含一条残留的 `SteerBuffer`
   When `try_emit_terminal(Interrupted, …, Some(buffer))` 被调用
@@ -117,7 +117,7 @@ Scenario: 连接关闭路径同样先返还再终态（critical；需 --features
   Tags: critical
   Review: human
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: connection_close_settles_steers_before_connection_closed_terminal
   Given 注册表中一个 Active turn 的 `SteerBuffer` 有一条残留，连接随后关闭
   When `abort_connection_turns` 处理该连接
@@ -126,15 +126,15 @@ Scenario: 连接关闭路径同样先返还再终态（critical；需 --features
 
 Scenario: 所有终态出口都经过结算闸门（结构检查）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: every_terminal_outlet_goes_through_the_settling_gate
-  When 扫描 `crates/octos-cli/src/api/ui_protocol_transport.rs`
+  When 扫描 `crates/ra-cli/src/api/ui_protocol_transport.rs`
   Then `transition_to_terminal(` 只在 `transition_to_terminal_settling_steers` 内被调用
 
 Scenario: 状态 Terminal 后不再受理 steer（需 --features api）
   Review: human
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: steer_is_not_accepted_after_terminal_transition
   When `transition_to_terminal` 成功
   Then steer 受理检查读到 `Terminal` 并走 `NoActiveTurn`
@@ -142,14 +142,14 @@ Scenario: 状态 Terminal 后不再受理 steer（需 --features api）
 Scenario: capability 广告（需 --features api）
   Review: human
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: turn_steer_dropped_feature_is_advertised_when_requested_and_by_stdio_default
   When stdio 默认能力或 ws 请求含 `UI_PROTOCOL_FEATURE_TURN_STEER_DROPPED_V1`（`event.turn_steer_dropped.v1`）
   Then `supported_features` 含该 feature；未请求则不含
 
 Scenario: 没有残留时不生成事件（错误路径：不能产生空返还）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: no_leftover_steers_produce_no_notification
   Given 空的残留列表
   When `leftover_steer_notification` 被调用
@@ -159,7 +159,7 @@ Scenario: 没有残留时不生成事件（错误路径：不能产生空返还�
 Scenario: api 侧把事件 durable 发送并写入 ledger、buffer 被清空（需 --features api）
   Review: human
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: leftover_steers_at_turn_end_are_returned_as_turn_steer_dropped
   Given 一个 `SteerBuffer` 里有两条残留输入与一个 stdio `WsConnection`
   When `settle_leftover_steers` 以 `interrupt_observed = true` 被调用
@@ -169,7 +169,7 @@ Scenario: api 侧把事件 durable 发送并写入 ledger、buffer 被清空（�
 Scenario: 连接已失效时残留仍写入 ledger（错误路径：断连不丢文本；需 --features api）
   Review: human
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: leftover_steers_are_ledgered_even_when_connection_write_fails
   Given 连接的 stdio writer 已经关闭
   When `settle_leftover_steers` 处理一条残留输入
@@ -179,7 +179,7 @@ Scenario: 连接已失效时残留仍写入 ledger（错误路径：断连不丢
 ### Rule: protocol-shape — 事件形状与路由
 Scenario: 事件通过 method 与 params 往返编码
   Test:
-    Package: octos-core
+    Package: ra-core
     Filter: turn_steer_dropped_round_trips_through_method_and_params
   Given 一个 `TurnSteerDroppedEvent`
   When 以 `method_name()` + `to_params()` 编码再用 `from_method_params` 解码
@@ -187,7 +187,7 @@ Scenario: 事件通过 method 与 params 往返编码
 
 Scenario: 事件的 topic 路由与其他 turn 事件一致
   Test:
-    Package: octos-core
+    Package: ra-core
     Filter: turn_steer_dropped_topic_routing_matches_other_turn_events
   Given 一个 `session_id` 带 topic 后缀而 `topic` 字段为空的事件
   When 读取 `topic()` 并调用 `set_topic_if_absent`
@@ -198,5 +198,5 @@ Scenario: 事件的 topic 路由与其他 turn 事件一致
 
 - 客户端（octoscode）消费 `turn/steer_dropped`（task-consume-turn-steer-dropped）。
 - 跨客户端进程重启的 durable 恢复（需要 steer 回执 id 与持久化状态；本任务明确为 same-process reconnect only）。
-- interrupt/steer 的 INFO 级关联日志（F7）、`octos serve` fd 累积（F8）。
+- interrupt/steer 的 INFO 级关联日志（F7）、`ra serve` fd 累积（F8）。
 - 把残留输入合并进 `turn/error`/`turn/completed` 载荷。

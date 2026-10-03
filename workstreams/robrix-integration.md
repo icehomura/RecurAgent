@@ -5,7 +5,7 @@
 ## Background
 
 PR #345 (`feat(matrix): bidirectional media support, bot routing & web chat fix`,
-fork `ZhangHanDong/octos`, head `feat/matrix-media-and-fixes`) was closed unmerged.
+fork `ZhangHanDong/ra`, head `feat/matrix-media-and-fixes`) was closed unmerged.
 Its diff (370 files, +110k) was polluted by repeated merges from main; the actual
 work is ~10 commits across 6 features. This workstream re-implements the still-missing
 features on top of current main, one small PR per phase. **No cherry-picks** — the PR
@@ -27,11 +27,11 @@ Already on main (do NOT redo):
 - Channel-side app metadata projection: `CONTENT_APP` / `CONTENT_ACTIONS` /
   `CONTENT_ACTION_RESPONSE` constants, outbound projection into event content,
   inbound `action_response` extraction into `InboundMessage.metadata`
-  (`crates/octos-bus/src/matrix_channel.rs`).
+  (`crates/ra-bus/src/matrix_channel.rs`).
 - Mention routing fixes (boundary-checked `contains_exact_matrix_user_id_mention`),
   `profile_factory.rs`, MSC4357 streaming, BotFather commands
   (`/createbot` `/deletebot` `/listbots` `/bothelp`).
-- `octos-bus/src/media.rs` download helper (reusable for Phase 2).
+- `ra-bus/src/media.rs` download helper (reusable for Phase 2).
 - Web-chat static fix: obsolete, dashboard rewritten in M9–M11.
 
 Missing from main:
@@ -39,15 +39,15 @@ Missing from main:
 - Matrix media upload/download (outbound `media` ignored; inbound non-text dropped).
 - `/allbots` broadcast routing.
 - `/schedule` `/schedules` `/unschedule` NL scheduling (cron_tool NL parsers, tz handling).
-- Config-driven approval flow (`octos-agent/src/approval.rs` + loop integration).
+- Config-driven approval flow (`ra-agent/src/approval.rs` + loop integration).
 
 ## Phases
 
 ### Phase 1 (P0) — app-card tool chain  ✅ DONE (54dcdf73)
 The Robrix-facing core. Producer contract v1 (see `specs/task-agent-to-app-system.spec.md`
 in the robrix2 repo): event content carries `msgtype:"m.text"`, fallback `body`,
-`org.octos.app` `{type, version, initial_state, scope?, app_id?}`, optional
-`org.octos.actions`, `org.octos.action_response`. Unknown `type` ⇒ client falls
+`org.ra.app` `{type, version, initial_state, scope?, app_id?}`, optional
+`org.ra.actions`, `org.ra.action_response`. Unknown `type` ⇒ client falls
 back to plain body.
 
 1. Port `SendAppCardTool` (incl. `mission_room`: requires `scope:"room"` + stable
@@ -70,7 +70,7 @@ back to plain body.
   CJK + English; local-wall-time→UTC; CJK-aware job naming). Pure functions, test-first.
 - `matrix_channel.rs`: `/schedule|/schedules|/unschedule|/allbots` dispatch,
   `BotManager` trait + `schedule_bot_task`/`list_schedules`/`unschedule_bot_task`,
-  `org.octos.broadcast_targets`, stale-binding skip, `MAX_ALLBOTS_TARGETS = 8`.
+  `org.ra.broadcast_targets`, stale-binding skip, `MAX_ALLBOTS_TARGETS = 8`.
 - Wire `matrix_integration.rs`; document in `book/` (channels, cli-reference, advanced).
 
 ### Phase 4 (P2) — approval flow  ✅ DONE
@@ -78,21 +78,21 @@ Decision recorded in
 [docs/ROBRIX-PHASE4-APPROVAL-FLOW-ADR.md](../docs/ROBRIX-PHASE4-APPROVAL-FLOW-ADR.md)
 (suspend-and-resume transport, semantics unified onto main's approval
 vocabulary). Implemented per the ADR's 6-step sketch:
-`octos-agent/src/approval.rs` (`HumanApprovalRules` model), conversation-loop
+`ra-agent/src/approval.rs` (`HumanApprovalRules` model), conversation-loop
 interception (`ConversationResponse.pending_approval`; background loops deny
 instead of suspending), `approval_policy` config schema + per-profile
 passthrough, session-actor bridge (card emit, pending store, expiry timer,
 validate/consume/revalidate/execute, audit), Matrix projection of
-`org.octos.approval_request`/`approval_response`. `approvals_audit` relocated
+`org.ra.approval_request`/`approval_response`. `approvals_audit` relocated
 out of the api feature gate so gateway builds share the JSONL audit trail.
 Hook exit-code-3 deferred as decided.
 
 ## Verification
 
 ```bash
-cargo test -p octos-bus --features matrix
-cargo test -p octos-agent send_app_card
-cargo test -p octos-cli cron_tool        # Phase 3
+cargo test -p ra-bus --features matrix
+cargo test -p ra-agent send_app_card
+cargo test -p ra-cli cron_tool        # Phase 3
 cargo clippy --workspace
 ```
 

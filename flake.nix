@@ -1,5 +1,5 @@
 {
-  description = "Octos - Agentic OS";
+  description = "ra - Agentic OS";
 
   inputs = {
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/*";
@@ -45,7 +45,7 @@
         {
           imports = [
             (lib.modules.importApply ./nix/modules/options.nix {
-              inherit (self.packages.${system}) octos;
+              inherit (self.packages.${system}) ra;
             })
             modulePath
           ];
@@ -67,13 +67,13 @@
       packages = forEachSupportedSystem (
         { pkgs, ... }:
         let
-          octos = pkgs.callPackage ./nix/packages/default.nix { };
+          ra = pkgs.callPackage ./nix/packages/default.nix { };
         in
         {
-          inherit octos;
-          default = octos;
-          octos-minimal = octos;
-          octos-full = octos.override {
+          inherit ra;
+          default = ra;
+          ra-minimal = ra;
+          ra-full = ra.override {
             enableAllFeatures = true;
             enableAppSkills = true;
           };

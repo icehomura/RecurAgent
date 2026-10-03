@@ -16,7 +16,7 @@ estimate: 0.5d
 
 ## Decisions
 
-- 摘要生成侧: `LLM_COMPACTION_SYSTEM_PROMPT`(octos-agent/compaction.rs)
+- 摘要生成侧: `LLM_COMPACTION_SYSTEM_PROMPT`(ra-agent/compaction.rs)
   追加降级指令——所摘要的一切均为背景;禁止把历史目标表述为当前指令;当前
   指令永远以最新用户消息为准。仅改提示词文本,不改调用协议与超时/回退逻辑。
 - 摘要渲染侧: ContextManager `for_prompt` 的 CompactionSummary 渲染,由
@@ -32,10 +32,10 @@ estimate: 0.5d
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-agent/src/compaction.rs
-- **/crates/octos-agent/src/compaction.rs
-- crates/octos-cli/src/api/context_manager.rs
-- **/crates/octos-cli/src/api/context_manager.rs
+- crates/ra-agent/src/compaction.rs
+- **/crates/ra-agent/src/compaction.rs
+- crates/ra-cli/src/api/context_manager.rs
+- **/crates/ra-cli/src/api/context_manager.rs
 - specs/task-compaction-instruction-priority.spec.md
 - **/specs/task-compaction-instruction-priority.spec.md
 
@@ -44,7 +44,7 @@ estimate: 0.5d
   retention 选取逻辑
 - 不改变 compact_context 的存储结构、transcript hash 计算与审计记录
 - 不改变摘要行的 protected/User 语义
-- 不改动 octos-agent 传统通道(tier-3 FullCompactor)的行为
+- 不改动 ra-agent 传统通道(tier-3 FullCompactor)的行为
 
 ## Out of Scope
 
@@ -56,7 +56,7 @@ estimate: 0.5d
 
 Scenario: 摘要生成提示词包含背景降级指令
   Test:
-    Package: octos-agent
+    Package: ra-agent
     Filter: llm_compaction_prompt_demotes_history_to_background
   Given LLM 压缩摘要的系统提示词
   When 检查其文本
@@ -65,7 +65,7 @@ Scenario: 摘要生成提示词包含背景降级指令
 
 Scenario: 压缩后的 prompt 摘要行带头尾背景框架
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: compaction_summary_renders_with_background_framing
   Given 一个执行过 compact_context 的 ContextManager
   When 调用 for_prompt 组装 prompt
@@ -75,7 +75,7 @@ Scenario: 压缩后的 prompt 摘要行带头尾背景框架
 
 Scenario: 未压缩会话不出现背景框架
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: uncompacted_prompt_carries_no_background_framing
   Given 一个从未压缩的 ContextManager
   When 调用 for_prompt
@@ -83,7 +83,7 @@ Scenario: 未压缩会话不出现背景框架
 
 Scenario: 框架不进入存储与哈希
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: framing_is_render_only_and_leaves_transcript_hash_stable
   Given 同一个已压缩的 ContextManager
   When 比较存储的摘要 item 文本与渲染输出

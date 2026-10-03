@@ -37,16 +37,16 @@ jobs:
           fi
           echo "RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=${home_dir}=~ --remap-path-prefix=${cargo_dir}=/cargo --remap-path-prefix=${ws_dir}=." >> "$GITHUB_ENV"
 
-      - name: Build octos CLI and sandbox helper
+      - name: Build ra CLI and sandbox helper
         run: |
-          cargo build --release -p octos-cli --features "api,telegram,discord,feishu,twilio,wecom,wecom-bot,audio_mp3"
-          cargo build --release -p octos-sandbox
+          cargo build --release -p ra-cli --features "api,telegram,discord,feishu,twilio,wecom,wecom-bot,audio_mp3"
+          cargo build --release -p ra-sandbox
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: octos-linux-x86_64
+          name: ra-linux-x86_64
           path: |
-            target/release/octos
-            target/release/octos-sandbox
+            target/release/ra
+            target/release/ra-sandbox
           retention-days: 7

@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-// ── Profile types (minimal mirror of octos-cli profiles) ──────────────
+// ── Profile types (minimal mirror of ra-cli profiles) ──────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UserProfile {
@@ -129,9 +129,9 @@ fn main() {
     let octos_home = match std::env::var("OCTOS_HOME") {
         Ok(v) if !v.is_empty() => PathBuf::from(v),
         _ => {
-            // Fallback: ~/.octos
+            // Fallback: ~/.ra
             match home_dir() {
-                Some(h) => h.join(".octos"),
+                Some(h) => h.join(".ra"),
                 None => {
                     output_error("OCTOS_HOME is not set and cannot determine home directory");
                     return;

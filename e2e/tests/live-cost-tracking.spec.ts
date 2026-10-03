@@ -14,10 +14,10 @@
  * with a diagnostic, so the spec can land before the relevant tracks
  * merge and auto-promote as they ship.
  *
- * Run from ~/home/octos/e2e:
+ * Run from ~/home/ra/e2e:
  *
  *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *     npx playwright test tests/live-cost-tracking.spec.ts --workers=1
  *
@@ -28,7 +28,7 @@ import { test, expect } from '@playwright/test';
 import { chatWS, type ChatWsEvent } from '../lib/m9-ws-client';
 
 const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
 
 if (BASE.includes('dspfac.ocean.ominix.io')) {

@@ -1,35 +1,35 @@
-# 架构文档：octos
+# 架构文档：ra
 
 ## 概述
 
-octos 是一个包含 27 个成员的 Rust 工作区（Edition 2024，rust-version 1.85.0），提供编码 Agent CLI 和多频道消息网关。通过 rustls 实现纯 Rust TLS（无 OpenSSL 依赖）。错误处理使用 `eyre`/`color-eyre`。
+ra 是一个包含 27 个成员的 Rust 工作区（Edition 2024，rust-version 1.85.0），提供编码 Agent CLI 和多频道消息网关。通过 rustls 实现纯 Rust TLS（无 OpenSSL 依赖）。错误处理使用 `eyre`/`color-eyre`。
 
 **工作区成员**（取自 `Cargo.toml`）：
-- **分层核心**（7 个）：`octos-core`（共享类型）→ `octos-memory` + `octos-llm` → `octos-agent`（agent 循环、工具、沙箱、MCP、压缩）→ `octos-cli`（命令、配置、serve/API），外加 `octos-bus`（14 个渠道、会话、合并、cron）与 `octos-diagnostics`（支撑 `octos doctor`）。
-- **agent 周边**（5 个）：`octos-pipeline`（DOT 图工作流）、`octos-plugin`（插件/技能 SDK）、`octos-swarm`（多 agent 契约创作）、`octos-sandbox`、`octos-dora-mcp`。
+- **分层核心**（7 个）：`ra-core`（共享类型）→ `ra-memory` + `ra-llm` → `ra-agent`（agent 循环、工具、沙箱、MCP、压缩）→ `ra-cli`（命令、配置、serve/API），外加 `ra-bus`（14 个渠道、会话、合并、cron）与 `ra-diagnostics`（支撑 `ra doctor`）。
+- **agent 周边**（5 个）：`ra-pipeline`（DOT 图工作流）、`ra-plugin`（插件/技能 SDK）、`ra-swarm`（多 agent 契约创作）、`ra-sandbox`、`ra-dora-mcp`。
 - **内置技能 crate**（15 个）：`crates/app-skills/` 下每个应用技能都是独立 crate——`news`、`deep-search`、`deep-crawl`、`send-email`、`account-manager`、`time`、`weather`、`smart-home`、`wechat-bridge`、`skill-evolve`，以及 `harness-starter-{generic,report,audio,coding}` 模板——再加上 `platform-skills/voice`（ASR/TTS）。
 
 （Web SPA 与终端客户端分别位于独立的 `octos-web` 和 `octoscode` 仓库，通过 UI Protocol 与 `octos serve` 通信。）
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        octos-cli                             │
+│                        ra-cli                             │
 │           (CLI: chat, gateway, init, status)                │
 ├──────────────────────────┬──────────────────────────────────┤
-│       octos-agent         │           octos-bus               │
+│       ra-agent         │           ra-bus               │
 │  (Agent, Tools, Skills)  │  (Channels, Sessions, Cron)     │
 ├──────────┬───────────────┼──────────────────────────────────┤
-│octos-memory│  octos-llm    │       octos-pipeline              │
+│ra-memory│  ra-llm    │       ra-pipeline              │
 │(Episodes) │ (Providers)  │  (DOT-based orchestration)      │
 ├──────────┴───────────────┴──────────────────────────────────┤
-│                       octos-core                             │
+│                       ra-core                             │
 │            (Types, Messages, Gateway Protocol)              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## octos-core — 基础类型
+## ra-core — 基础类型
 
 无内部依赖的共享类型。仅依赖 serde、chrono、uuid、eyre。
 
@@ -150,7 +150,7 @@ pub struct Error {
 
 ---
 
-## octos-llm — LLM 提供商抽象
+## ra-llm — LLM 提供商抽象
 
 ### 提供商 Trait
 
@@ -199,7 +199,7 @@ pub type ChatStream = Pin<Box<dyn Stream<Item = StreamEvent> + Send>>;
 
 ### 提供商注册表（`registry/`）
 
-所有提供商定义在 `octos-llm/src/registry/` 中 — 每个提供商一个文件。每个文件导出一个 `ProviderEntry`，包含元数据（名称、别名、默认模型、API 密钥环境变量、基础 URL）和 `create()` 工厂函数。添加新提供商 = 一个文件 + `mod.rs` 中一行代码。
+所有提供商定义在 `ra-llm/src/registry/` 中 — 每个提供商一个文件。每个文件导出一个 `ProviderEntry`，包含元数据（名称、别名、默认模型、API 密钥环境变量、基础 URL）和 `create()` 工厂函数。添加新提供商 = 一个文件 + `mod.rs` 中一行代码。
 
 ```rust
 pub struct ProviderEntry {
@@ -405,13 +405,13 @@ pub trait EmbeddingProvider: Send + Sync {
 
 **OpenAIEmbedder**：远程，OpenAI 兼容（`provider = "openai"`）。默认模型 `text-embedding-3-small`（1536 维），`text-embedding-3-large` 为 3072 维。可选的 `dimensions` 字段用来固定原生维度不同的服务，例如 DashScope `text-embedding-v4` 默认 1024 维。
 
-**LlamaEmbedder**（`octos-embed-llama`）：进程内，通过 llama.cpp 跑任意 GGUF 嵌入模型（`provider = "llamacpp"`，配 `model_path`）。跨平台，默认用 CPU，`metal` / `cuda` feature 可以走 GPU。需要 `--features embed-llama` 才会编译进来。
+**LlamaEmbedder**（`ra-embed-llama`）：进程内，通过 llama.cpp 跑任意 GGUF 嵌入模型（`provider = "llamacpp"`，配 `model_path`）。跨平台，默认用 CPU，`metal` / `cuda` feature 可以走 GPU。需要 `--features embed-llama` 才会编译进来。
 
 **索引宽度由 embedder 决定。** `EpisodeStore` 的 HNSW 索引只有一个固定宽度，`HybridIndex::insert` 会丢掉维度不匹配的向量，该 episode 退化成只有 BM25。所以打开 store 用的是 `embedder.dimension()`，不是常量。两个后果：Matryoshka 只能向下截断，768 维的模型填不满 1536 维的索引；换 provider 或换模型会让已有索引失效。不同后端的向量不能混用，上面两者实测余弦一致度是 0.96–0.99，和真正相关的文档之间的差距是同一量级。切换之后已存的 episode 必须重新生成向量。
 
 ### 语音转文字
 
-**语音平台技能（voice platform skill）**——语音转文字发生在网关层，而非 `octos-llm`。网关以 `voice_transcribe` 子命令调用已安装的 `voice` 平台技能二进制（gateway home 下的 `platform-skills/voice/main`：有 `--octos-home` 用之，否则 `<cwd>/.octos`），stdin 传入 `{"audio_path", "language"?}` JSON，stdout 返回 `{"success", "output"}` JSON；超时 120 秒。转写文本合并进入站消息内容（`voice_transcript` 元数据），全部转写被拒的纯音频消息会跳过 Agent 分发，按 profile 的 ASR 语言覆盖逐条消息重新解析（`octos-cli/src/commands/gateway/message_preprocessing.rs:515`，接线在 `octos-cli/src/commands/gateway/gateway_runtime.rs:613`）。
+**语音平台技能（voice platform skill）**——语音转文字发生在网关层，而非 `ra-llm`。网关以 `voice_transcribe` 子命令调用已安装的 `voice` 平台技能二进制（gateway home 下的 `platform-skills/voice/main`：有 `--ra-home` 用之，否则 `<cwd>/.ra`），stdin 传入 `{"audio_path", "language"?}` JSON，stdout 返回 `{"success", "output"}` JSON；超时 120 秒。转写文本合并进入站消息内容（`voice_transcript` 元数据），全部转写被拒的纯音频消息会跳过 Agent 分发，按 profile 的 ASR 语言覆盖逐条消息重新解析（`ra-cli/src/commands/gateway/message_preprocessing.rs:515`，接线在 `ra-cli/src/commands/gateway/gateway_runtime.rs:613`）。
 
 ### 视觉
 
@@ -435,11 +435,11 @@ pub trait EmbeddingProvider: Send + Sync {
 
 ---
 
-## octos-memory — 持久化与搜索
+## ra-memory — 持久化与搜索
 
 ### EpisodeStore
 
-redb 数据库位于 `.octos/episodes.redb`，包含三张表：
+redb 数据库位于 `.ra/episodes.redb`，包含三张表：
 
 | 表 | 键 | 值 | 用途 |
 |---|---|---|---|
@@ -516,7 +516,7 @@ pub struct HybridIndex {
 
 ---
 
-## octos-agent — Agent 运行时
+## ra-agent — Agent 运行时
 
 ### Agent 核心
 
@@ -795,11 +795,11 @@ pub const BUILTIN_SKILLS: &[BuiltinSkill] = &[...];
 | tmux | 终端复用器控制 |
 | weather | 天气信息查询 |
 
-#### CLI 管理（`octos skills`）
+#### CLI 管理（`ra skills`）
 
 - `list` — 显示内置技能（附覆盖状态）+ 工作区技能
-- `install <user/repo/skill-name>` — 从 `https://raw.githubusercontent.com/{repo}/main/SKILL.md` 获取（15 秒超时），保存到 `.octos/skills/{name}/SKILL.md`。如果技能已存在则失败。
-- `remove <name>` — 删除 `.octos/skills/{name}/` 目录
+- `install <user/repo/skill-name>` — 从 `https://raw.githubusercontent.com/{repo}/main/SKILL.md` 获取（15 秒超时），保存到 `.ra/skills/{name}/SKILL.md`。如果技能已存在则失败。
+- `remove <name>` — 删除 `.ra/skills/{name}/` 目录
 
 #### 与网关集成
 
@@ -819,13 +819,13 @@ pub const BUILTIN_SKILLS: &[BuiltinSkill] = &[...];
 <octos_home>/plugins/                 # 部署级插件
 <octos_home>/skills/                  # 部署级技能
 <octos_home>/bundled-app-skills/      # 内置应用技能
-~/.octos/profiles/<profile>/data/skills/
+~/.ra/profiles/<profile>/data/skills/
   └── my-plugin/
       ├── manifest.json  # 插件元数据 + 工具定义
       └── my-plugin      # 可执行文件（或 "main" 作为回退）
 ```
 
-**发现顺序**：`Config::plugin_dirs_from_project()` 扫描部署级 `<octos_home>/plugins`、`<octos_home>/skills`、`<octos_home>/bundled-app-skills` 和 `OCTOS_SKILLS_PATH`；托管 profile gateway 再叠加平台技能和当前 profile 的 `data/skills/` 目录。旧的 HOME 全局目录（`~/.octos/plugins`、`~/.octos/skills`）不再作为常规扫描路径，只会触发一次迁移警告。
+**发现顺序**：`Config::plugin_dirs_from_project()` 扫描部署级 `<octos_home>/plugins`、`<octos_home>/skills`、`<octos_home>/bundled-app-skills` 和 `OCTOS_SKILLS_PATH`；托管 profile gateway 再叠加平台技能和当前 profile 的 `data/skills/` 目录。旧的 HOME 全局目录（`~/.ra/plugins`、`~/.ra/skills`）不再作为常规扫描路径，只会触发一次迁移警告。
 
 #### PluginManifest
 
@@ -973,7 +973,7 @@ pub struct ConsoleReporter {
 
 **持续时间格式化**：>1s → `{:.1}s`，≤1s → `{N}ms`。
 
-**EventBroadcaster**（feature：`api`，`octos-cli/src/api/events.rs:32`）— 进程级广播器，将进度事件转换为 JSON 并发布到 `tokio::sync::broadcast` 频道。聊天传输层已无任何 SSE 线路；JSON 帧供 harness/admin `/api/events/harness` 端点、swarm 事件发布器以及 UI Protocol v1 WS 桥接消费：
+**EventBroadcaster**（feature：`api`，`ra-cli/src/api/events.rs:32`）— 进程级广播器，将进度事件转换为 JSON 并发布到 `tokio::sync::broadcast` 频道。聊天传输层已无任何 SSE 线路；JSON 帧供 harness/admin `/api/events/harness` 端点、swarm 事件发布器以及 UI Protocol v1 WS 桥接消费：
 
 ```rust
 pub struct EventBroadcaster {
@@ -1027,7 +1027,7 @@ pub struct EventBroadcaster {
 
 ---
 
-## octos-bus — 网关基础设施
+## ra-bus — 网关基础设施
 
 ### 消息总线
 
@@ -1073,7 +1073,7 @@ pub trait Channel: Send + Sync {
 
 **Markdown 转 HTML**：`markdown_html.rs` 将 Markdown 转换为 Telegram 兼容的 HTML 用于富文本消息格式化。
 
-**媒体**：`download_media()` 辅助函数将照片/语音/音频/文档下载到 `.octos/media/`。
+**媒体**：`download_media()` 辅助函数将照片/语音/音频/文档下载到 `.ra/media/`。
 
 **语音转文字**：语音/音频在 Agent 处理前由语音平台技能自动转录（见「语音转文字」）。
 
@@ -1093,7 +1093,7 @@ MAX_CHUNKS = 50（DoS 限制）。通过 `char_indices()` 实现 UTF-8 安全的
 
 ### 会话管理器
 
-JSONL 持久化位于 `.octos/sessions/{key}.jsonl`。
+JSONL 持久化位于 `.ra/sessions/{key}.jsonl`。
 
 - **内存缓存**：LRU + 写入时同步到磁盘
 - **文件名**：百分号编码的 SessionKey，截断到 183 字符，截断时添加 `_{hash:016X}` 后缀防止冲突
@@ -1103,7 +1103,7 @@ JSONL 持久化位于 `.octos/sessions/{key}.jsonl`。
 
 ### 定时服务
 
-JSON 持久化位于 `.octos/cron.json`。
+JSON 持久化位于 `.ra/cron.json`。
 
 **调度类型**：
 - `Every { seconds: u64 }` — 周期性间隔
@@ -1118,7 +1118,7 @@ JSON 持久化位于 `.octos/cron.json`。
 
 ---
 
-## octos-cli — CLI 与配置
+## ra-cli — CLI 与配置
 
 ### 命令
 
@@ -1126,7 +1126,7 @@ JSON 持久化位于 `.octos/cron.json`。
 |---|---|
 | `chat` | 交互式多轮对话。Readline + 历史。退出：exit/quit/:q |
 | `gateway` | 带会话管理的持久多频道守护进程 |
-| `init` | 初始化 .octos/ 目录，包含配置、模板和子目录 |
+| `init` | 初始化 .ra/ 目录，包含配置、模板和子目录 |
 | `status` | 显示配置、提供商、API 密钥、引导文件 |
 | `auth login/logout/status` | OAuth PKCE（OpenAI）、设备码、粘贴 token |
 | `cron list/add/remove/enable` | CLI 定时任务管理 |
@@ -1141,13 +1141,13 @@ JSON 持久化位于 `.octos/cron.json`。
 
 ### 配置
 
-从 `.octos/config.json`（本地）或 `~/.config/octos/config.json`（全局）加载。本地优先。
+从 `.ra/config.json`（本地）或 `~/.config/ra/config.json`（全局）加载。本地优先。
 
 - **`${VAR}` 展开**：字符串值中的环境变量替换
 - **版本化配置**：版本字段 + 自动 `migrate_config()` 框架
 - **提供商自动检测**（`registry::detect_provider(model)`）：claude→anthropic、gpt/o1/o3/o4→openai、gemini→gemini、deepseek→deepseek、kimi/moonshot→moonshot、qwen→dashscope、glm→zhipu、llama/mixtral→groq。模式在 `registry/` 中按提供商定义。
 
-**API 密钥解析顺序**：认证存储（`~/.octos/auth.json`）→ 环境变量。
+**API 密钥解析顺序**：认证存储（`~/.ra/auth.json`）→ 环境变量。
 
 ### 认证模块
 
@@ -1162,7 +1162,7 @@ JSON 持久化位于 `.octos/cron.json`。
 
 **粘贴 Token**：从 stdin 提示输入 API 密钥，以 `auth_method: "paste_token"` 存储。
 
-**AuthStore**：`~/.octos/auth.json`（mode 0600）。`{credentials: {provider: AuthCredential}}`。
+**AuthStore**：`~/.ra/auth.json`（mode 0600）。`{credentials: {provider: AuthCredential}}`。
 
 ### 配置监视器
 
@@ -1176,7 +1176,7 @@ JSON 持久化位于 `.octos/cron.json`。
 
 | 路由 | 方法 | 说明 |
 |---|---|---|
-| `/api/ui-protocol/ws` | WS | JSON-RPC 2.0 UI Protocol v1——主要的 **HTTP** 聊天 + 控制平面端点（旧的 `POST /api/chat` 已下线）。同一协议也通过 `octos serve --stdio` 提供。见下。 |
+| `/api/ui-protocol/ws` | WS | JSON-RPC 2.0 UI Protocol v1——主要的 **HTTP** 聊天 + 控制平面端点（旧的 `POST /api/chat` 已下线）。同一协议也通过 `ra serve --stdio` 提供。见下。 |
 | `/health` | GET | 存活探针（原 `/api/status`；结构化状态已迁移到 WS `system/status.get`） |
 | `/metrics` | GET | Prometheus 文本指标（无需认证） |
 | `/*`（回退） | GET | 内嵌 Web UI（通过 rust-embed 提供静态文件） |
@@ -1192,13 +1192,13 @@ JSON 持久化位于 `.octos/cron.json`。
 - **配置/profile**：`profile/llm/*`、`profile/skills/*`、`permission/profile/*`、`content/list`、`config/capabilities/list`。
 - **通知**（服务器→客户端）：`message/delta`、`message/persisted`、`tool/*`、`turn/spawn_complete`、`session/goal/updated`、`loop/fired`、`context/compaction_started` 等。
 
-许多方法由一个**协商的能力标志**（约 22 个 `*.v1` token，如 `coding.goal_runtime.v1`、`harness.task_control.v1`、`auxiliary.rest_to_ws.v1`）门控，客户端在连接时声明——WebSocket 通过 `ui_feature`/`X-Octos-Ui-Features`，`serve --stdio` 通过 `client_hello` 的 `supported_features`。核心的聊天/轮次/会话方法始终可用；自主运行、任务产物与辅助方法组位于标志之后。**「声明」与「可调用」**的确切规则较为微妙：某个方法可能出现在默认能力列表中，却仍需其标志才能被*调用*（如 `auxiliary.rest_to_ws.v1` 方法与 `user_question/respond`），因此客户端应以协商后的能力列表为准，并稳妥处理 `method_not_supported`，而非仅凭「已声明」就假定可调用。
+许多方法由一个**协商的能力标志**（约 22 个 `*.v1` token，如 `coding.goal_runtime.v1`、`harness.task_control.v1`、`auxiliary.rest_to_ws.v1`）门控，客户端在连接时声明——WebSocket 通过 `ui_feature`/`X-Ra-Ui-Features`，`serve --stdio` 通过 `client_hello` 的 `supported_features`。核心的聊天/轮次/会话方法始终可用；自主运行、任务产物与辅助方法组位于标志之后。**「声明」与「可调用」**的确切规则较为微妙：某个方法可能出现在默认能力列表中，却仍需其标志才能被*调用*（如 `auxiliary.rest_to_ws.v1` 方法与 `user_question/respond`），因此客户端应以协商后的能力列表为准，并稳妥处理 `method_not_supported`，而非仅凭「已声明」就假定可调用。
 
 **认证**：可选的 bearer token，常量时间比较（仅 API 路由；`/metrics` 和静态文件为公开）。浏览器 Origin 策略在 serve 启动时一次性解析进 `AppState`：既有 OminiX/base-domain 与开发 Origin、规范化后的精确 `appui.allowed_origins`，以及实际 serve 端口的 loopback Origin。router 的 CORS predicate、`/api/ui-protocol/ws` 与 `/v1/session_ingress/ws/*` 两条升级 gate 共用这份列表；认证/work-secret 校验保持独立，CORS 不启用 credentials。托管环境的单层 tenant 子域仍由额外 WS 兼容规则处理。反向代理和 LAN Origin 不会从请求的 `Host`/转发头推导。**最大消息**：1MB。
 
-**Web UI**：通过 `rust-embed` 嵌入的 SPA，作为回退处理器提供服务。会话侧边栏、聊天界面、UI Protocol WebSocket 流式传输以及 dashboard/admin 页面共用同一个 `octos serve` 进程。
+**Web UI**：通过 `rust-embed` 嵌入的 SPA，作为回退处理器提供服务。会话侧边栏、聊天界面、UI Protocol WebSocket 流式传输以及 dashboard/admin 页面共用同一个 `ra serve` 进程。
 
-**Prometheus 指标**：`octos_tool_calls_total`（计数器，标签：tool, success）、`octos_tool_call_duration_seconds`（直方图，标签：tool）、`octos_llm_tokens_total`（计数器，标签：direction）。由 `metrics` + `metrics-exporter-prometheus` crate 驱动。
+**Prometheus 指标**：`ra_tool_calls_total`（计数器，标签：tool, success）、`octos_tool_call_duration_seconds`（直方图，标签：tool）、`ra_llm_tokens_total`（计数器，标签：direction）。由 `metrics` + `metrics-exporter-prometheus` crate 驱动。
 
 ### 会话压缩（网关）
 
@@ -1206,7 +1206,7 @@ JSON 持久化位于 `.octos/cron.json`。
 
 ---
 
-## octos-pipeline — 基于 DOT 的流水线编排
+## ra-pipeline — 基于 DOT 的流水线编排
 
 基于 DOT 的流水线编排引擎，用于定义和执行多步骤工作流。
 
@@ -1267,7 +1267,7 @@ JSON 持久化位于 `.octos/cron.json`。
 ## Feature Flags
 
 ```toml
-# octos-bus
+# ra-bus
 telegram = ["teloxide"]
 discord  = ["serenity"]
 slack    = ["tokio-tungstenite"]
@@ -1275,25 +1275,25 @@ whatsapp = ["tokio-tungstenite"]
 feishu   = ["tokio-tungstenite"]
 email    = ["async-imap", "tokio-rustls", "rustls", "webpki-roots", "lettre", "mailparse"]
 
-# octos-agent (browser is always compiled in, no longer feature-gated)
+# ra-agent (browser is always compiled in, no longer feature-gated)
 git      = ["gix"]                  # git operations via gitoxide
 ast      = ["tree-sitter"]          # code_structure.rs AST analysis
 admin-bot = [...]                   # admin/ directory tools
 
-# octos-bus (additional)
+# ra-bus (additional)
 wecom    = [...]                    # WeCom/WeChat Work channel
 twilio   = [...]                    # Twilio SMS/MMS channel
 
-# octos-cli
+# ra-cli
 api      = ["axum", "tower-http", "futures"]
-telegram = ["octos-bus/telegram"]
-discord  = ["octos-bus/discord"]
-slack    = ["octos-bus/slack"]
-whatsapp = ["octos-bus/whatsapp"]
-feishu   = ["octos-bus/feishu"]
-email    = ["octos-bus/email"]
-wecom    = ["octos-bus/wecom"]
-twilio   = ["octos-bus/twilio"]
+telegram = ["ra-bus/telegram"]
+discord  = ["ra-bus/discord"]
+slack    = ["ra-bus/slack"]
+whatsapp = ["ra-bus/whatsapp"]
+feishu   = ["ra-bus/feishu"]
+email    = ["ra-bus/email"]
+wecom    = ["ra-bus/wecom"]
+twilio   = ["ra-bus/twilio"]
 ```
 
 ---
@@ -1302,9 +1302,9 @@ twilio   = ["octos-bus/twilio"]
 
 ```
 crates/
-├── octos-core/src/
+├── ra-core/src/
 │   ├── lib.rs, task.rs, types.rs, error.rs, gateway.rs, message.rs, utils.rs
-├── octos-llm/src/
+├── ra-llm/src/
 │   ├── lib.rs, provider.rs, config.rs, types.rs, retry.rs, failover.rs, sse.rs
 │   ├── embedding.rs, pricing.rs, context.rs, transcription.rs, vision.rs
 │   ├── adaptive.rs, swappable.rs, router.rs, ominix.rs
@@ -1312,9 +1312,9 @@ crates/
 │   └── registry/ (mod.rs + 14 provider entries: anthropic, openai, gemini,
 │                   openrouter, deepseek, groq, moonshot, dashscope, minimax,
 │                   zhipu, zai, nvidia, ollama, vllm)
-├── octos-memory/src/
+├── ra-memory/src/
 │   ├── lib.rs, episode.rs, store.rs, memory_store.rs, hybrid_search.rs
-├── octos-agent/src/
+├── ra-agent/src/
 │   ├── lib.rs, agent.rs, progress.rs, policy.rs, compaction.rs, sanitize.rs, hooks.rs
 │   ├── sandbox.rs, mcp.rs, skills.rs, builtin_skills.rs
 │   ├── bundled_app_skills.rs, bootstrap.rs, prompt_guard.rs
@@ -1328,20 +1328,20 @@ crates/
 │               deep_research_pipeline, synthesize_research, research_utils,
 │               admin/ (profiles, skills, sub_accounts, system,
 │                       platform_skills, update))
-├── octos-bus/src/
+├── ra-bus/src/
 │   ├── lib.rs, bus.rs, channel.rs, session.rs, coalesce.rs, media.rs
 │   ├── cli_channel.rs, telegram_channel.rs, discord_channel.rs
 │   ├── slack_channel.rs, whatsapp_channel.rs, feishu_channel.rs, email_channel.rs
 │   ├── wecom_channel.rs, twilio_channel.rs, markdown_html.rs
 │   ├── cron_service.rs, cron_types.rs, heartbeat.rs
-└── octos-cli/src/
+└── ra-cli/src/
     ├── main.rs, config.rs, config_watcher.rs, cron_tool.rs, compaction.rs
     ├── auth/ (mod.rs, store.rs, oauth.rs, token.rs)
     ├── api/ (mod.rs, router.rs, handlers.rs, sse.rs, metrics.rs, static_files.rs)
     └── commands/ (mod, chat, init, status, gateway, clean,
                    completions, cron, channels, auth, skills, docs, serve,
                    office, account)
-├── octos-pipeline/src/
+├── ra-pipeline/src/
 │   ├── lib.rs, parser.rs, graph.rs, executor.rs, handler.rs
 │   ├── condition.rs, tool.rs, validate.rs
 ```
@@ -1357,7 +1357,7 @@ crates/
 
 ### 认证与凭据
 
-- API 密钥：认证存储（`~/.octos/auth.json`，mode 0600）优先于环境变量
+- API 密钥：认证存储（`~/.ra/auth.json`，mode 0600）优先于环境变量
 - 带 SHA-256 挑战的 OAuth PKCE，state 参数（CSRF 保护）
 - API bearer token 使用常量时间字节比较（防时序攻击）
 
@@ -1398,9 +1398,9 @@ crates/
 
 ### 为什么选择 Rust
 
-octos 使用 Rust + tokio 异步运行时，与 Python（OpenClaw 等）和 Node.js（NanoCloud 等）Agent 框架相比，在并发会话处理方面具有显著优势：
+ra 使用 Rust + tokio 异步运行时，与 Python（OpenClaw 等）和 Node.js（NanoCloud 等）Agent 框架相比，在并发会话处理方面具有显著优势：
 
-**真正的并行** — Tokio 任务跨所有 CPU 核心同时运行。Python 有 GIL，即使使用 asyncio，CPU 密集型工作（JSON 解析、上下文压缩、token 计数）也是单核的。Node.js 完全是单线程的。在 octos 中，10 个并发会话进行上下文压缩实际上会跨核心并行执行。
+**真正的并行** — Tokio 任务跨所有 CPU 核心同时运行。Python 有 GIL，即使使用 asyncio，CPU 密集型工作（JSON 解析、上下文压缩、token 计数）也是单核的。Node.js 完全是单线程的。在 ra 中，10 个并发会话进行上下文压缩实际上会跨核心并行执行。
 
 **内存效率** — 无垃圾回收器，无每对象运行时开销。Agent 会话是堆上的紧凑结构体。Python Agent 会话携带解释器开销、每个对象的 GC 元数据和基于 dict 的属性查找。在数百个会话和大量对话历史都在内存中时，这一点很重要。
 
@@ -1453,7 +1453,7 @@ LLM 响应：[web_search, read_file, send_email]
 
 ### 子 Agent 与对等 Agent
 
-octos 支持两种归属模型相反的多 Agent 形态。
+ra 支持两种归属模型相反的多 Agent 形态。
 
 **子 Agent**（`spawn` 工具）是当前轮次的子代：
 
@@ -1470,13 +1470,13 @@ octos 支持两种归属模型相反的多 Agent 形态。
 
 ### 多租户仪表板
 
-仪表板（`octos serve`）将每个用户配置文件作为**独立的网关操作系统进程**运行：
+仪表板（`ra serve`）将每个用户配置文件作为**独立的网关操作系统进程**运行：
 
 ```
-Dashboard (octos serve)
-  ├─ Profile "alice" → octos gateway --config alice.json  (deepseek, own semaphore)
-  ├─ Profile "bob"   → octos gateway --config bob.json    (kimi, own semaphore)
-  └─ Profile "carol" → octos gateway --config carol.json  (openai, own semaphore)
+Dashboard (ra serve)
+  ├─ Profile "alice" → ra gateway --config alice.json  (deepseek, own semaphore)
+  ├─ Profile "bob"   → ra gateway --config bob.json    (kimi, own semaphore)
+  └─ Profile "carol" → ra gateway --config carol.json  (openai, own semaphore)
 ```
 
 每个配置文件拥有自己的 LLM 提供商、API 密钥、频道、数据目录和 `max_concurrent_sessions` 信号量。配置文件完全隔离 — 网关进程间无共享状态。

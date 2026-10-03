@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# bootstrap-tenant.sh — Full admin onboarding: create tenant + deploy octos + frpc
-# to a Mac Mini, resulting in a working dashboard at {subdomain}.octos-cloud.org.
+# bootstrap-tenant.sh — Full admin onboarding: create tenant + deploy ra + frpc
+# to a Mac Mini, resulting in a working dashboard at {subdomain}.ra-cloud.org.
 #
-# Run from the admin machine (where octos repo is checked out).
+# Run from the admin machine (where ra repo is checked out).
 # Idempotent: safe to re-run.
 #
 # Usage:
@@ -15,21 +15,21 @@
 # Options:
 #   --password <pw>       SSH password auth (requires sshpass)
 #   --key <keyfile>       SSH key auth
-#   --serve-port <port>   octos serve port on Mini (default: 8080)
-#   --domain <domain>     Base tunnel domain (default: octos-cloud.org)
+#   --serve-port <port>   ra serve port on Mini (default: 8080)
+#   --domain <domain>     Base tunnel domain (default: ra-cloud.org)
 #   --server <addr>       frps relay address (required; or set FRPS_SERVER)
 #   --frps-port <port>    frps control port (default: 7000)
 #   --frps-token <tok>    per-tenant tunnel token (default: read from ~/home/orcl-vps/frps-token.txt)
 #   --auth-token <tok>    Dashboard auth token (default: auto-generated)
 #   --skip-build          Skip local cargo build (use existing binaries)
 #   --skip-tenant         Skip tenant creation (already exists)
-#   --data-dir <path>     Local octos data dir for tenant store (default: ~/.octos)
+#   --data-dir <path>     Local ra data dir for tenant store (default: ~/.ra)
 
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────
 SERVE_PORT=8080
-DOMAIN="octos-cloud.org"
+DOMAIN="ra-cloud.org"
 FRPS_SERVER="${FRPS_SERVER:-}"
 FRPS_PORT=7000
 FRPS_TOKEN=""
@@ -40,8 +40,8 @@ SKIP_BUILD=false
 SKIP_TENANT=false
 LOCAL_DATA_DIR=""
 FRPC_VERSION="0.65.0"
-PLIST_LABEL="io.octos.serve"
-PLIST_FRPC="io.octos.frpc"
+PLIST_LABEL="io.ra.serve"
+PLIST_FRPC="io.ra.frpc"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -53,8 +53,8 @@ if [ $# -lt 2 ]; then
     echo "Options:"
     echo "  --password <pw>       SSH password auth"
     echo "  --key <keyfile>       SSH key auth"
-    echo "  --serve-port <port>   octos serve port (default: 8080)"
-    echo "  --domain <domain>     Tunnel domain (default: octos-cloud.org)"
+    echo "  --serve-port <port>   ra serve port (default: 8080)"
+    echo "  --domain <domain>     Tunnel domain (default: ra-cloud.org)"
     echo "  --server <addr>       frps relay address (required; or set FRPS_SERVER)"
     echo "  --frps-token <tok>    per-tenant tunnel token"
     echo "  --auth-token <tok>    Dashboard auth token"
@@ -143,7 +143,7 @@ if [ "$SKIP_TENANT" = false ]; then
         DATA_DIR_ARGS="--data-dir $LOCAL_DATA_DIR"
     fi
     # shellcheck disable=SC2086
-    cargo run -p octos-cli --quiet -- admin create-tenant \
+    cargo run -p ra-cli --quiet -- admin create-tenant \
         --name "$TENANT_NAME" \
         --domain "$DOMAIN" \
         --server "$FRPS_SERVER" \
@@ -158,13 +158,13 @@ else
     echo "==> Step 1: Skipping tenant creation (--skip-tenant)"
 fi
 
-# ── Step 2: Build octos binaries ──────────────────────────────────────
-BINARIES=(octos news_fetch deep-search deep_crawl send_email account_manager clock weather)
+# ── Step 2: Build ra binaries ──────────────────────────────────────
+BINARIES=(ra news_fetch deep-search deep_crawl send_email account_manager clock weather)
 
 if [ "$SKIP_BUILD" = false ]; then
     echo ""
-    echo "==> Step 2: Building octos (release, all features)..."
-    (cd "$REPO_ROOT" && cargo build --release -p octos-cli \
+    echo "==> Step 2: Building ra (release, all features)..."
+    (cd "$REPO_ROOT" && cargo build --release -p ra-cli \
         --features "api,telegram,whatsapp,feishu,twilio,wecom,audio_mp3" 2>&1 | tail -3)
 
     # Also build app-skills
@@ -184,7 +184,7 @@ read -r REMOTE_HOME REMOTE_OS REMOTE_ARCH <<< "$(ssh_cmd 'echo $HOME $(uname -s)
 echo "    Connected: ${SSH_TARGET} (${REMOTE_OS}/${REMOTE_ARCH}, home=${REMOTE_HOME})"
 
 RBIN="${REMOTE_HOME}/.cargo/bin"
-RDATA="${REMOTE_HOME}/.octos"
+RDATA="${REMOTE_HOME}/.ra"
 
 # ── Step 4: Upload binaries ───────────────────────────────────────────
 echo ""
@@ -205,9 +205,9 @@ for bin in "${BINARIES[@]}"; do
 done
 echo "    Binaries uploaded"
 
-# ── Step 5: Initialize octos data directory ───────────────────────────
+# ── Step 5: Initialize ra data directory ───────────────────────────
 echo ""
-echo "==> Step 5: Initializing octos data..."
+echo "==> Step 5: Initializing ra data..."
 ssh_cmd "mkdir -p ${RDATA}/{profiles,memory,sessions,skills,logs,research,history}"
 
 # Write a minimal config.json if it doesn't exist (user configures via dashboard)
@@ -250,7 +250,7 @@ echo ""
 echo "==> Step 7: Writing frpc config..."
 
 # Get SSH port from tenant JSON file
-TENANT_JSON="${LOCAL_DATA_DIR:-$HOME/.octos}/tenants/${TENANT_NAME}.json"
+TENANT_JSON="${LOCAL_DATA_DIR:-$HOME/.ra}/tenants/${TENANT_NAME}.json"
 if [ -f "$TENANT_JSON" ]; then
     SSH_PORT=$(python3 -c "import json; print(json.load(open('$TENANT_JSON'))['ssh_port'])" 2>/dev/null || echo "6001")
 else
@@ -306,13 +306,13 @@ write_serve_env_file() {
         ssh_cmd "umask 077 && cat > '${RDATA}/serve.env' && chmod 600 '${RDATA}/serve.env'"
 }
 
-# Write the remote octos serve + frpc service definitions. Token hygiene
+# Write the remote ra serve + frpc service definitions. Token hygiene
 # follows #2496: the launchd plist carries the token and is chmod 600
 # over SSH; the systemd unit loads it from the 0600 serve.env via
 # EnvironmentFile.
 write_remote_services() {
     if [ "$REMOTE_OS" = "Darwin" ]; then
-        # --- octos serve launchd plist ---
+        # --- ra serve launchd plist ---
         ssh_cmd "mkdir -p ~/Library/LaunchAgents"
         ssh_cmd "cat > ~/Library/LaunchAgents/${PLIST_LABEL}.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -323,7 +323,7 @@ write_remote_services() {
     <string>${PLIST_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${RBIN}/octos</string>
+        <string>${RBIN}/ra</string>
         <string>serve</string>
         <string>--port</string>
         <string>${SERVE_PORT}</string>
@@ -358,7 +358,7 @@ EOF
         # The explicit chmod also fixes up re-runs, where cat > keeps the
         # previous file's mode.
         ssh_cmd "chmod 600 ~/Library/LaunchAgents/${PLIST_LABEL}.plist"
-        echo "    octos serve plist written"
+        echo "    ra serve plist written"
 
         # --- frpc launchd plist ---
         ssh_cmd "cat > ~/Library/LaunchAgents/${PLIST_FRPC}.plist" << EOF
@@ -399,9 +399,9 @@ EOF
     else
         # --- Linux: systemd ---
         write_serve_env_file
-        ssh_cmd "sudo tee /etc/systemd/system/octos-serve.service > /dev/null" << EOF
+        ssh_cmd "sudo tee /etc/systemd/system/ra-serve.service > /dev/null" << EOF
 [Unit]
-Description=octos serve dashboard
+Description=ra serve dashboard
 After=network.target
 
 [Service]
@@ -411,7 +411,7 @@ Environment=HOME=${REMOTE_HOME}
 Environment=PATH=${RBIN}:${REMOTE_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=OCTOS_DATA_DIR=${RDATA}
 EnvironmentFile=${RDATA}/serve.env
-ExecStart=${RBIN}/octos serve --port ${SERVE_PORT} --host 0.0.0.0
+ExecStart=${RBIN}/ra serve --port ${SERVE_PORT} --host 0.0.0.0
 Restart=always
 RestartSec=5
 WorkingDirectory=${REMOTE_HOME}
@@ -436,8 +436,8 @@ WantedBy=multi-user.target
 EOF
 
         ssh_cmd "sudo systemctl daemon-reload"
-        ssh_cmd "sudo systemctl enable frpc octos-serve"
-        ssh_cmd "sudo systemctl restart frpc octos-serve"
+        ssh_cmd "sudo systemctl enable frpc ra-serve"
+        ssh_cmd "sudo systemctl restart frpc ra-serve"
         echo "    systemd services started"
     fi
 }
@@ -447,12 +447,12 @@ echo ""
 echo "==> Step 9: Verifying..."
 sleep 3
 
-# Check local octos serve. `/api/status` was retired in M12 Phase D-5 — use
+# Check local ra serve. `/api/status` was retired in M12 Phase D-5 — use
 # the public `/health` endpoint for liveness probes.
 if ssh_cmd "curl -sf --max-time 3 http://localhost:${SERVE_PORT}/health" > /dev/null 2>&1; then
-    echo "    octos serve: RUNNING on port ${SERVE_PORT}"
+    echo "    ra serve: RUNNING on port ${SERVE_PORT}"
 else
-    echo "    octos serve: starting up (check ${RDATA}/logs/serve.\$(date +%F).log)"
+    echo "    ra serve: starting up (check ${RDATA}/logs/serve.\$(date +%F).log)"
 fi
 
 # Check frpc

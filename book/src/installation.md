@@ -25,35 +25,35 @@ You also need an API key from at least one supported LLM provider.
 
 ```bash
 git clone https://github.com/octos-org/octos
-cd octos
+cd ra
 
 # Recommended: canonical feature set (matches scripts/milestone-ci.sh).
-# Includes the REST API + dashboard (`octos serve`) and the common
+# Includes the REST API + dashboard (`ra serve`) and the common
 # messaging channel adapters — this is the set CI builds. (Release
 # workflows use a similar set; check .github/workflows for the exact
 # release features.) Add any other channel you need (slack, email,
 # matrix, line, qq-bot, wechat) from the list below.
-cargo install --path crates/octos-cli \
+cargo install --path crates/ra-cli \
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"
 
 # Minimal: CLI + chat + gateway with CLI channel only.
-# This produces a binary that does NOT have `octos serve` (the api
+# This produces a binary that does NOT have `ra serve` (the api
 # feature is what registers that subcommand) and that has no
 # messaging channel adapters compiled in.
-cargo install --path crates/octos-cli
+cargo install --path crates/ra-cli
 
 # Trim the feature list to your needs. Available channel features:
 #   telegram, discord, dingtalk, slack, whatsapp, feishu, email, wecom, wecom-bot,
 #   matrix, line, qq-bot, twilio, wechat
-# Required for `octos serve`: api
+# Required for `ra serve`: api
 # Other features: git (gitoxide), ast (tree-sitter),
 #   audio_mp3 (MP3 decoding for audio workspace-contract validation)
 # Note: the browser tool (headless Chrome via CDP) is always compiled
 # in — there is no `browser` feature.
-cargo install --path crates/octos-cli --features "api,telegram,slack"
+cargo install --path crates/ra-cli --features "api,telegram,slack"
 
 # Verify
-octos --version
+ra --version
 ```
 
 ## Deploy Script
@@ -86,7 +86,7 @@ For cloud signup and managed tenant installs, the node name becomes both the ten
 
 ### NixOS
 
-If you use Nix, Octos provides a flake with packages, a development shell, and NixOS / nix-darwin modules. See the [Nix](nix.md) page for details.
+If you use Nix, ra provides a flake with packages, a development shell, and NixOS / nix-darwin modules. See the [Nix](nix.md) page for details.
 
 ### macOS
 
@@ -101,30 +101,30 @@ brew install --cask libreoffice
 
 # 3. Clone and deploy
 git clone https://github.com/octos-org/octos.git
-cd octos
+cd ra
 ./scripts/local-tenant-deploy.sh --full
 
 # 4. Set API key and run
 export ANTHROPIC_API_KEY=sk-ant-...
-octos chat
+ra chat
 ```
 
 **Background service (launchd system daemon):**
 
-The deploy script creates `/Library/LaunchDaemons/io.octos.serve.plist`.
+The deploy script creates `/Library/LaunchDaemons/io.ra.serve.plist`.
 
 ```bash
 # Start service (requires sudo)
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 
 # Stop service
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
 
 # Check status
-sudo launchctl print system/io.octos.serve
+sudo launchctl print system/io.ra.serve
 
 # View logs
-tail -f ~/.octos/serve.log
+tail -f ~/.ra/serve.log
 ```
 
 ### Linux (Ubuntu/Debian)
@@ -143,33 +143,33 @@ sudo apt install -y nodejs npm ffmpeg poppler-utils
 
 # 4. Clone and deploy
 git clone https://github.com/octos-org/octos.git
-cd octos
+cd ra
 ./scripts/local-tenant-deploy.sh --full
 
 # 5. Set API key and run
 export ANTHROPIC_API_KEY=sk-ant-...
-octos chat
+ra chat
 ```
 
 **Background service (systemd system unit):**
 
-The deploy script creates `/etc/systemd/system/octos-serve.service`.
+The deploy script creates `/etc/systemd/system/ra-serve.service`.
 
 ```bash
 # Start service
-sudo systemctl start octos-serve
+sudo systemctl start ra-serve
 
 # Enable on boot
-sudo systemctl enable octos-serve
+sudo systemctl enable ra-serve
 
 # Check status
-sudo systemctl status octos-serve
+sudo systemctl status ra-serve
 
 # View logs
-sudo journalctl -u octos-serve -f
+sudo journalctl -u ra-serve -f
 
 # Stop service
-sudo systemctl stop octos-serve
+sudo systemctl stop ra-serve
 ```
 
 ### Linux (Fedora/RHEL)
@@ -183,23 +183,23 @@ sudo dnf install -y gcc pkg-config openssl-devel
 
 ### Windows (Native)
 
-Octos builds and runs natively on Windows. Shell commands are executed via `cmd /C`.
+ra builds and runs natively on Windows. Shell commands are executed via `cmd /C`.
 
 ```powershell
 # 1. Install Rust (download rustup-init.exe from https://rustup.rs)
 rustup-init.exe
 
 # 2. Clone and build with the canonical feature set
-#    (omit features only if you just want `octos chat`; `octos serve`
+#    (omit features only if you just want `ra chat`; `ra serve`
 #    requires the `api` feature).
 git clone https://github.com/octos-org/octos.git
-cd octos
-cargo install --path crates/octos-cli `
+cd ra
+cargo install --path crates/ra-cli `
     --features "api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3"
 
 # 3. Set API key and run
 $env:ANTHROPIC_API_KEY = "sk-ant-..."
-octos chat
+ra chat
 ```
 
 **Windows notes:**
@@ -219,7 +219,7 @@ wsl --install -d Ubuntu
 # 2. Open Ubuntu terminal, then follow Linux (Ubuntu) steps above
 ```
 
-When running `octos serve` inside WSL2, the dashboard is accessible from your Windows browser at `http://localhost:50080` (WSL2 auto-forwards ports).
+When running `ra serve` inside WSL2, the dashboard is accessible from your Windows browser at `http://localhost:50080` (WSL2 auto-forwards ports).
 
 ## Docker
 
@@ -248,7 +248,7 @@ Options:
                      e.g. a DNS-only host such as frps.example.com. Also FRPS_SERVER.
                      Without it, tunnel setup is skipped)
   --ssh-port PORT    SSH tunnel remote port (default: 6001)
-  --domain DOMAIN    Tunnel domain (default: octos-cloud.org)
+  --domain DOMAIN    Tunnel domain (default: ra-cloud.org)
   --auth-token TOKEN Dashboard auth token (default: auto-generated)
 ```
 
@@ -257,10 +257,10 @@ For Windows native installs, use `.\scripts\install.ps1` (PowerShell).
 **What the script does:**
 
 1. Checks prerequisites (Rust, platform deps)
-2. Builds the `octos` binary with selected features
+2. Builds the `ra` binary with selected features
 3. Builds app-skill binaries (unless `--no-skills`)
 4. Signs binaries on macOS (ad-hoc codesign)
-5. Creates the runtime data directory and writes `~/.octos/config.json` with `mode = "local"` or `mode = "tenant"`
+5. Creates the runtime data directory and writes `~/.ra/config.json` with `mode = "local"` or `mode = "tenant"`
 6. Creates a background service when dashboard/API features are enabled
 7. Optionally configures the `frpc` tunnel for tenant deployments
 
@@ -274,7 +274,7 @@ For hosted deployments behind Cloudflare, keep the public site on the apex/wildc
 ./scripts/local-tenant-deploy.sh --uninstall --purge
 ```
 
-- `--uninstall` removes binaries, `octos serve`, and `frpc` service files.
+- `--uninstall` removes binaries, `ra serve`, and `frpc` service files.
 - `--purge` removes the local data directory only.
 - `--uninstall --purge` does both.
 
@@ -290,40 +290,40 @@ export ANTHROPIC_API_KEY=sk-ant-...
 # Or
 export OPENAI_API_KEY=sk-...
 # Or use OAuth login
-octos auth login --provider openai
+ra auth login --provider openai
 ```
 
 ### Verify
 
 ```bash
-octos --version              # Check binary
-octos status                 # Check config + API keys
-octos chat --message "Hello" # Quick test
+ra --version              # Check binary
+ra status                 # Check config + API keys
+ra chat --message "Hello" # Quick test
 ```
 
 ## Upgrading
 
 ```bash
-cd octos
+cd ra
 git pull origin main
 ./scripts/local-tenant-deploy.sh --full   # Rebuilds and reinstalls
 
 # If running as a service, restart it:
 # macOS:
-sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
-sudo launchctl load /Library/LaunchDaemons/io.octos.serve.plist
+sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
+sudo launchctl load /Library/LaunchDaemons/io.ra.serve.plist
 # Linux:
-sudo systemctl restart octos-serve
+sudo systemctl restart ra-serve
 ```
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| `octos: command not found` | Add `~/.cargo/bin` to PATH: `export PATH="$HOME/.cargo/bin:$PATH"` |
+| `ra: command not found` | Add `~/.cargo/bin` to PATH: `export PATH="$HOME/.cargo/bin:$PATH"` |
 | Build fails on Linux | Install `build-essential pkg-config libssl-dev` |
-| macOS codesign warning | Run: `codesign -s - ~/.cargo/bin/octos` |
-| Dashboard not accessible | Check port: `octos serve --port 50080`, open `http://localhost:50080` |
+| macOS codesign warning | Run: `codesign -s - ~/.cargo/bin/ra` |
+| Dashboard not accessible | Check port: `ra serve --port 50080`, open `http://localhost:50080` |
 | WSL2 port not forwarded | Restart WSL: `wsl --shutdown` then reopen terminal |
-| Service won't start | Check logs: `tail -f ~/.octos/serve.log` or `journalctl --user -u octos-serve` |
+| Service won't start | Check logs: `tail -f ~/.ra/serve.log` or `journalctl --user -u ra-serve` |
 | API key not found | Ensure env var is set in the service environment, not just your shell |

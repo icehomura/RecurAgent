@@ -1,4 +1,4 @@
-# install.ps1 - Install octos from pre-built binaries on Windows.
+# install.ps1 - Install ra from pre-built binaries on Windows.
 # Self-contained: no repo clone, Rust, or Node.js needed.
 #
 # Usage:
@@ -11,7 +11,7 @@
 #
 # Environment variables (for piped installs):
 #   $env:OCTOS_VERSION   - Release version (default: latest)
-#   $env:OCTOS_PREFIX    - Install prefix (default: ~\.octos\bin)
+#   $env:OCTOS_PREFIX    - Install prefix (default: ~\.ra\bin)
 
 [CmdletBinding(DefaultParameterSetName = 'Install')]
 param(
@@ -70,7 +70,7 @@ $ErrorActionPreference = "Stop"
 # -- Help -------------------------------------------------------------
 if ($Help) {
     Write-Host @"
-install.ps1 - Install octos from pre-built binaries on Windows.
+install.ps1 - Install ra from pre-built binaries on Windows.
 
 USAGE
   Piped:     irm https://github.com/octos-org/octos/releases/latest/download/install.ps1 | iex
@@ -79,11 +79,11 @@ USAGE
 
 OPTIONS
   -Version <tag>       Release version (default: latest)
-  -Prefix <path>       Install prefix (default: ~\.octos\bin)
-  -Port <port>         octos serve port (default: 8080)
-  -AuthToken <token>   Auth token for octos serve (default: auto-generated)
+  -Prefix <path>       Install prefix (default: ~\.ra\bin)
+  -Port <port>         ra serve port (default: 8080)
+  -AuthToken <token>   Auth token for ra serve (default: auto-generated)
   -Doctor              Diagnose installation and service health
-  -Uninstall           Remove octos binaries, services, and PATH entry
+  -Uninstall           Remove ra binaries, services, and PATH entry
   -Help                Show this help message
 
 OPTIONAL FEATURES
@@ -98,12 +98,12 @@ OPTIONAL TUNNEL (frpc)
   -FrpsServer <addr>     frps relay server address (required for the tunnel;
                          or set FRPS_SERVER). Without it, tunnel setup is skipped.
   -SshPort <port>        SSH tunnel remote port (default: 6001)
-  -TunnelDomain <domain> Tunnel domain (default: octos-cloud.org)
+  -TunnelDomain <domain> Tunnel domain (default: ra-cloud.org)
 
 ENVIRONMENT VARIABLES
   OCTOS_VERSION      Release version override
   OCTOS_PREFIX       Install prefix override
-  OCTOS_HOME         Data directory override (default: ~\.octos)
+  OCTOS_HOME         Data directory override (default: ~\.ra)
   OCTOS_AUTH_TOKEN   Auth token override
   OCTOS_DOWNLOAD_URL Local/self-hosted download directory
   FRPS_SERVER        Tunnel relay (frps) server address (no default)
@@ -115,9 +115,9 @@ ENVIRONMENT VARIABLES
 $GithubRepo = "octos-org/octos"
 
 if (-not $Version)   { $Version = if ($env:OCTOS_VERSION) { $env:OCTOS_VERSION } else { "latest" } }
-if (-not $Prefix)    { $Prefix  = if ($env:OCTOS_PREFIX)  { $env:OCTOS_PREFIX }  else { Join-Path $HOME ".octos\bin" } }
+if (-not $Prefix)    { $Prefix  = if ($env:OCTOS_PREFIX)  { $env:OCTOS_PREFIX }  else { Join-Path $HOME ".ra\bin" } }
 
-$DataDir = if ($env:OCTOS_HOME) { $env:OCTOS_HOME } else { Join-Path $HOME ".octos" }
+$DataDir = if ($env:OCTOS_HOME) { $env:OCTOS_HOME } else { Join-Path $HOME ".ra" }
 
 # -- Tunnel defaults --------------------------------------------------
 $FrpcVersion = "0.65.0"
@@ -125,7 +125,7 @@ $FrpcVersion = "0.65.0"
 # or an existing frpc config. Without one the tunnel setup is skipped.
 if (-not $FrpsServer -and $env:FRPS_SERVER) { $FrpsServer = $env:FRPS_SERVER }
 if ($SshPort -eq 0)     { $SshPort      = 6001 }
-if (-not $TunnelDomain) { $TunnelDomain = "octos-cloud.org" }
+if (-not $TunnelDomain) { $TunnelDomain = "ra-cloud.org" }
 
 # Auto-enable tunnel only when frps token is provided (implies intent to connect)
 if ($FrpsToken -or $FrpsTokenFile) { $Tunnel = [switch]::new($true) }
@@ -416,12 +416,12 @@ function Invoke-TunnelPrompts {
 Validate-Inputs
 
 # ======================================================================
-# -- Tunnel-only update (when octos is already installed) -------------
+# -- Tunnel-only update (when ra is already installed) -------------
 # ======================================================================
-# If octos binary exists and tunnel is explicitly enabled,
+# If ra binary exists and tunnel is explicitly enabled,
 # skip the full install and just update the tunnel configuration.
 
-$octosBinCheck = Join-Path $Prefix "octos.exe"
+$octosBinCheck = Join-Path $Prefix "ra.exe"
 if ((Test-Path $octosBinCheck) -and $Tunnel) {
     Section "Updating tunnel configuration"
 
@@ -432,9 +432,9 @@ if ((Test-Path $octosBinCheck) -and $Tunnel) {
             $TenantName = $Matches[1]
             Ok "tenant name from existing config: $TenantName"
         }
-        if ($TunnelDomain -eq "octos-cloud.org" -and $existingConfig -match 'customDomains\s*=\s*\["[^"]+\.([^"]+)"\]') {
+        if ($TunnelDomain -eq "ra-cloud.org" -and $existingConfig -match 'customDomains\s*=\s*\["[^"]+\.([^"]+)"\]') {
             $existingTunnelDomain = $Matches[1]
-            if ($existingTunnelDomain -and $existingTunnelDomain -ne "octos-cloud.org") {
+            if ($existingTunnelDomain -and $existingTunnelDomain -ne "ra-cloud.org") {
                 $TunnelDomain = $existingTunnelDomain
                 Ok "tunnel domain from existing config: $TunnelDomain"
             }
@@ -526,9 +526,9 @@ if ($Doctor) {
     }
 
     # -- Binary -------------------------------------------------------
-    Section "octos binary"
+    Section "ra binary"
 
-    $OctosBin = Join-Path $Prefix "octos.exe"
+    $OctosBin = Join-Path $Prefix "ra.exe"
     if (Test-Path $OctosBin) {
         Ok "found: $OctosBin"
         try {
@@ -539,12 +539,12 @@ if ($Doctor) {
             Hint "Try reinstalling: irm https://github.com/octos-org/octos/releases/latest/download/install.ps1 | iex"
         }
     } else {
-        if (Test-Command "octos") {
-            $found = (Get-Command octos).Source
+        if (Test-Command "ra") {
+            $found = (Get-Command ra).Source
             Warn "not found at $OctosBin, but found at $found"
             Hint "Set `$env:OCTOS_PREFIX or check your PATH"
         } else {
-            Err "octos binary not found"
+            Err "ra binary not found"
             Hint "Run install.ps1 to install"
         }
     }
@@ -559,23 +559,23 @@ if ($Doctor) {
             Ok "config.json exists"
         } else {
             Warn "config.json missing"
-            Hint "Run: octos init"
+            Hint "Run: ra init"
         }
     } else {
         Err "$DataDir does not exist"
-        Hint "Run: octos init --defaults"
+        Hint "Run: ra init --defaults"
     }
 
-    # -- octos serve process ------------------------------------------
-    Section "octos serve"
+    # -- ra serve process ------------------------------------------
+    Section "ra serve"
 
-    $octosProc = Get-Process -Name "octos" -ErrorAction SilentlyContinue |
+    $octosProc = Get-Process -Name "ra" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -match "serve" } |
         Select-Object -First 1
     if ($octosProc) {
         Ok "running (PID: $($octosProc.Id))"
     } else {
-        Err "octos serve is not running"
+        Err "ra serve is not running"
         Hint "Start: Start-ScheduledTask -TaskName OctosServe"
     }
 
@@ -586,17 +586,17 @@ if ($Doctor) {
         Select-Object -First 1
     if ($listener) {
         $proc = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
-        if ($proc -and $proc.ProcessName -match "octos") {
-            Ok "port $Port held by octos (PID: $($proc.Id))"
+        if ($proc -and $proc.ProcessName -match "ra") {
+            Ok "port $Port held by ra (PID: $($proc.Id))"
         } elseif ($proc) {
-            Err "port $Port held by $($proc.ProcessName) (PID: $($proc.Id)) - not octos"
+            Err "port $Port held by $($proc.ProcessName) (PID: $($proc.Id)) - not ra"
             Hint "Stop it: Stop-Process -Id $($proc.Id)"
         } else {
             Warn "port $Port in use but owning process not found"
         }
     } else {
         if ($octosProc) {
-            Err "octos serve is running but nothing is listening on $Port"
+            Err "ra serve is running but nothing is listening on $Port"
         } else {
             Warn "nothing listening on port $Port"
         }
@@ -619,7 +619,7 @@ if ($Doctor) {
             401 { Warn "responds 401 (auth required)"; Hint "Pass auth token in request header" }
             403 { Warn "responds 403 (forbidden)"; Hint "Check auth configuration" }
             404 { Err "responds 404 (admin route not found)"; Hint "Binary may be built without 'api' feature. Rebuild with: cargo build --features api" }
-            default { Err "connection failed (server not reachable on localhost:${Port})"; Hint "Check 'octos serve' section above" }
+            default { Err "connection failed (server not reachable on localhost:${Port})"; Hint "Check 'ra serve' section above" }
         }
     }
 
@@ -721,7 +721,7 @@ if ($Doctor) {
         }
     } else {
         Warn "serve.log not found at $serveLog"
-        Hint "octos serve may not have started yet"
+        Hint "ra serve may not have started yet"
     }
 
     # -- frpc tunnel (only if tunnel was ever configured) -------------
@@ -820,7 +820,7 @@ if ($Doctor) {
                 Hint "Start-Service frpc"
             }
         } elseif (-not $adminOk) {
-            Err "admin portal is not responding locally - fix octos serve first (see above)"
+            Err "admin portal is not responding locally - fix ra serve first (see above)"
             Hint "Remote access depends on the local server working first"
         }
     }
@@ -840,7 +840,7 @@ if ($Doctor) {
 # -- Uninstall mode ---------------------------------------------------
 # ======================================================================
 if ($Uninstall) {
-    Section "Uninstalling octos"
+    Section "Uninstalling ra"
 
     # Remove frpc service and binary
     $FrpcBinUn = Join-Path $Prefix "frpc.exe"
@@ -871,14 +871,14 @@ if ($Uninstall) {
         Ok "removed OctosCaddy scheduled task"
     }
 
-    # Stop octos and caddy processes
-    Get-Process -Name "octos" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Ok "stopped octos processes"
+    # Stop ra and caddy processes
+    Get-Process -Name "ra" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Ok "stopped ra processes"
     Get-Process -Name "caddy" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
-    # Remove firewall rules (octos-serve may exist from older installs)
-    netsh advfirewall firewall delete rule name="octos-serve" >$null 2>&1
-    netsh advfirewall firewall delete rule name="octos-caddy" >$null 2>&1
+    # Remove firewall rules (ra-serve may exist from older installs)
+    netsh advfirewall firewall delete rule name="ra-serve" >$null 2>&1
+    netsh advfirewall firewall delete rule name="ra-caddy" >$null 2>&1
 
     # Remove Caddyfile
     $caddyfileUn = Join-Path $DataDir "Caddyfile"
@@ -1069,7 +1069,7 @@ if (Test-Command "caddy") {
 # -- Resolve download source ------------------------------------------
 Section "Resolving release"
 
-$Zipfile = "octos-bundle-${Triple}.zip"
+$Zipfile = "ra-bundle-${Triple}.zip"
 $DownloadBase = $env:OCTOS_DOWNLOAD_URL
 
 # Auto-detect: check if zip is next to the script or in the current directory
@@ -1104,10 +1104,10 @@ if ($DownloadBase) {
     Ok "version: $Version"
 }
 
-# -- Download and install octos ----------------------------------------
-Section "Installing octos"
+# -- Download and install ra ----------------------------------------
+Section "Installing ra"
 
-$installTmp = Join-Path ([System.IO.Path]::GetTempPath()) "octos-install-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
+$installTmp = Join-Path ([System.IO.Path]::GetTempPath()) "ra-install-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
 New-Item -ItemType Directory -Path $installTmp -Force | Out-Null
 
 try {
@@ -1196,21 +1196,21 @@ if (-not ($userPath -split ";" | Where-Object { $_ -eq $Prefix })) {
     Ok "$Prefix already in PATH"
 }
 
-# -- Initialize octos workspace ----------------------------------------
-Section "Initializing octos"
+# -- Initialize ra workspace ----------------------------------------
+Section "Initializing ra"
 
 $env:OCTOS_HOME = $DataDir
-$octosBin = Join-Path $Prefix "octos.exe"
+$octosBin = Join-Path $Prefix "ra.exe"
 
 if (-not (Test-Path $DataDir)) {
-    if ($DataDir -eq (Join-Path $HOME ".octos")) {
+    if ($DataDir -eq (Join-Path $HOME ".ra")) {
         try {
             & $octosBin init --cwd $HOME --defaults 2>&1 | Out-Null
-            Ok "workspace initialized via octos init"
+            Ok "workspace initialized via ra init"
         } catch {
             try {
                 & $octosBin init --cwd $HOME 2>&1 | Out-Null
-                Ok "workspace initialized via octos init"
+                Ok "workspace initialized via ra init"
             } catch {
                 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
                 Ok "created data directory: $DataDir"
@@ -1311,8 +1311,8 @@ if (-not $AuthToken) {
     $AuthToken = ($bytes | ForEach-Object { $_.ToString("x2") }) -join ""
 }
 
-# -- Set up octos serve as scheduled task -----------------------------
-Section "Setting up octos serve"
+# -- Set up ra serve as scheduled task -----------------------------
+Section "Setting up ra serve"
 
 $serveLog = Join-Path $DataDir "serve.log"
 $taskName = "OctosServe"
@@ -1323,8 +1323,8 @@ if ($existingTask) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 }
 
-# Stop any running octos serve processes before re-registering
-Get-Process -Name "octos" -ErrorAction SilentlyContinue |
+# Stop any running ra serve processes before re-registering
+Get-Process -Name "ra" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -match "serve" } |
     Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -1360,7 +1360,7 @@ try {
     Remove-Item $tokenTmp -ErrorAction SilentlyContinue
 }
 
-# Build a wrapper script that sets env vars and launches octos serve.
+# Build a wrapper script that sets env vars and launches ra serve.
 # The token is read from the ACL-restricted sibling file at launch time,
 # never written inline; a missing file refuses to start rather than run
 # with an empty token.
@@ -1371,7 +1371,7 @@ set "OCTOS_HOME=$DataDir"
 set "OCTOS_DATA_DIR=$DataDir"
 set /p OCTOS_AUTH_TOKEN=<"$DataDir\serve-token"
 if not defined OCTOS_AUTH_TOKEN (
-    echo [octos] serve-token file missing or empty; re-run install.ps1 >> "$serveLog"
+    echo [ra] serve-token file missing or empty; re-run install.ps1 >> "$serveLog"
     exit /b 1
 )
 "$octosBin" serve --port $Port --host 0.0.0.0 >> "$serveLog" 2>&1
@@ -1388,7 +1388,7 @@ Register-ScheduledTask `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
-    -Description "octos serve (dashboard + gateway)" `
+    -Description "ra serve (dashboard + gateway)" `
     -RunLevel Limited `
     -Force | Out-Null
 
@@ -1396,17 +1396,17 @@ Ok "registered scheduled task: $taskName"
 
 # Start the task now
 Start-ScheduledTask -TaskName $taskName
-Ok "octos serve starting"
+Ok "ra serve starting"
 
-# -- Verify octos serve -----------------------------------------------
-Section "Verifying octos serve"
+# -- Verify ra serve -----------------------------------------------
+Section "Verifying ra serve"
 
 $retries = 10
 while ($retries -gt 0) {
     try {
         $resp = Invoke-WebRequest -Uri "http://localhost:${Port}/admin/" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
         if ($resp.StatusCode -eq 200) {
-            Ok "octos serve is running on http://localhost:${Port}"
+            Ok "ra serve is running on http://localhost:${Port}"
             break
         }
     } catch {}
@@ -1414,21 +1414,21 @@ while ($retries -gt 0) {
     Start-Sleep -Seconds 1
 }
 if ($retries -eq 0) {
-    Warn "octos serve did not respond within 10 seconds"
+    Warn "ra serve did not respond within 10 seconds"
     Write-Host "    Check logs: Get-Content '$serveLog' -Tail 20"
 }
 
 # -- Firewall (Caddy only) ---------------------------------------------
 if ($Domain) {
     Section "Configuring firewall for Caddy"
-    Write-Host "    Running: netsh advfirewall firewall add rule name=`"octos-caddy`" dir=in action=allow protocol=TCP localport=80,443"
-    netsh advfirewall firewall delete rule name="octos-caddy" >$null 2>&1
-    netsh advfirewall firewall add rule name="octos-caddy" dir=in action=allow protocol=TCP localport=80,443 >$null 2>&1
+    Write-Host "    Running: netsh advfirewall firewall add rule name=`"ra-caddy`" dir=in action=allow protocol=TCP localport=80,443"
+    netsh advfirewall firewall delete rule name="ra-caddy" >$null 2>&1
+    netsh advfirewall firewall add rule name="ra-caddy" dir=in action=allow protocol=TCP localport=80,443 >$null 2>&1
     if ($LASTEXITCODE -eq 0) {
         Ok "Firewall: ports 80,443 open for Caddy"
     } else {
         Warn "Failed to open Caddy ports (requires elevated privileges)"
-        Hint "Run as Administrator, or manually: netsh advfirewall firewall add rule name=`"octos-caddy`" dir=in action=allow protocol=TCP localport=80,443"
+        Hint "Run as Administrator, or manually: netsh advfirewall firewall add rule name=`"ra-caddy`" dir=in action=allow protocol=TCP localport=80,443"
     }
 }
 
@@ -1464,8 +1464,8 @@ if ($Domain -and (Test-Command "caddy")) {
 }
 
 http:// {
-    @octos host $Domain *.$Domain
-    redir @octos https://{host}{uri} 308
+    @ra host $Domain *.$Domain
+    redir @ra https://{host}{uri} 308
 }
 
 $Domain {
@@ -1543,7 +1543,7 @@ https:// {
 
     $caddyAction = New-ScheduledTaskAction -Execute "caddy" -Argument "run --config `"$caddyfile`""
     $caddyTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-    Register-ScheduledTask -TaskName $caddyTask -Action $caddyAction -Trigger $caddyTrigger -Settings $settings -Description "Caddy reverse proxy for octos" -RunLevel Limited -Force | Out-Null
+    Register-ScheduledTask -TaskName $caddyTask -Action $caddyAction -Trigger $caddyTrigger -Settings $settings -Description "Caddy reverse proxy for ra" -RunLevel Limited -Force | Out-Null
     if (-not $caddyProc) {
         Start-ScheduledTask -TaskName $caddyTask
     }
@@ -1583,9 +1583,9 @@ if ($Tunnel) {
     # endpoint as a daemon liveness check instead.
     try {
         $resp = Invoke-WebRequest -Uri "http://localhost:${Port}/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-        Ok "octos serve is running on port ${Port}"
+        Ok "ra serve is running on port ${Port}"
     } catch {
-        Warn "octos serve is not responding on port ${Port} (tunnel will retry once it starts)"
+        Warn "ra serve is not responding on port ${Port} (tunnel will retry once it starts)"
     }
 }
 
@@ -1599,9 +1599,9 @@ Write-Host "    Auth token: $AuthToken"
 Write-Host "    Serve log:  $serveLog"
 Write-Host ""
 Write-Host "  Next steps:"
-Write-Host "    1. Setup LLM models:  octos init"
-Write-Host "    2. Install skills:    octos skills install --all"
-Write-Host "    3. Start chatting:    octos chat"
+Write-Host "    1. Setup LLM models:  ra init"
+Write-Host "    2. Install skills:    ra skills install --all"
+Write-Host "    3. Start chatting:    ra chat"
 Write-Host "    4. Open local dashboard: http://localhost:${Port}/admin/"
 Write-Host ""
 Write-Host "  Manage service:"

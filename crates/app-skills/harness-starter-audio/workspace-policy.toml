@@ -1,6 +1,6 @@
 # Example workspace policy for harness-starter-audio.
 #
-# Copy to `.octos-workspace.toml` at the workspace root.
+# Copy to `.ra-workspace.toml` at the workspace root.
 
 [workspace]
 kind = "session"

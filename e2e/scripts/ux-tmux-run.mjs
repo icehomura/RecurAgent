@@ -114,7 +114,7 @@ const scenarios = new Map([
       runner: 'task-subagent-tree',
       finalMarker: 'M15CODEREVIEWFINALLINE',
       prompt:
-        'Run M15 code review with live subagent orchestration through octos serve --stdio. Use supervised subagents and produce the final marker.',
+        'Run M15 code review with live subagent orchestration through ra serve --stdio. Use supervised subagents and produce the final marker.',
     },
   ],
   [
@@ -266,7 +266,7 @@ function taskSubagentFixtureEnv(scenario, workdir) {
   if (scenario.runner !== 'task-subagent-tree') return {};
   return {
     OCTOS_M15_LIVE_SUBAGENT_FIXTURE: '1',
-    OCTOSCODE_M15_UX_OUTPUT_DIR: path.join(workdir, '.octos-m15-evidence'),
+    OCTOSCODE_M15_UX_OUTPUT_DIR: path.join(workdir, '.ra-m15-evidence'),
     OCTOSCODE_M15_UX_WORKDIR: workdir,
     OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE:
       process.env.OCTOS_M15_LIVE_SUBAGENT_DELAY_SCALE || '0.25',
@@ -361,7 +361,7 @@ function resolveContext({ scenarioId, selfTest }) {
     process.env.OCTOS_UX_TMUX_OUT_DIR || path.join(outRoot, runId, scenario.id),
   );
   const runtimeRoot = path.resolve(
-    process.env.OCTOS_UX_TMUX_RUNTIME_ROOT || path.join(os.tmpdir(), `octos-ux-tmux-${runKey}`),
+    process.env.OCTOS_UX_TMUX_RUNTIME_ROOT || path.join(os.tmpdir(), `ra-ux-tmux-${runKey}`),
   );
   const dataDir = path.resolve(process.env.OCTOS_UX_TMUX_DATA_DIR || path.join(runtimeRoot, 'data'));
   const workdir = path.resolve(
@@ -376,7 +376,7 @@ function resolveContext({ scenarioId, selfTest }) {
       || process.env.OCTOS_M19_UX_TUI_RUNNER
       || path.join(tuiRepo, 'scripts', 'run-onboarding-tmux-soak.sh'),
   );
-  const octosBin = path.resolve(process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos'));
+  const octosBin = path.resolve(process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra'));
   const tuiBin = path.resolve(process.env.OCTOSCODE_BIN || path.join(tuiRepo, 'target', 'debug', 'octoscode'));
   const cols = positiveIntegerEnv('OCTOS_UX_TMUX_COLS', scenario.id === 'narrow-layout' ? 80 : 120);
   const rows = positiveIntegerEnv('OCTOS_UX_TMUX_ROWS', scenario.id === 'narrow-layout' ? 24 : 40);
@@ -385,7 +385,7 @@ function resolveContext({ scenarioId, selfTest }) {
   const sessionId =
     process.env.OCTOS_UX_TMUX_SESSION_ID || `${profileId}:local:ux:${scenario.id}:${runId}`;
   const sessionName =
-    process.env.OCTOS_UX_TMUX_SESSION || `octos-ux-${safeSlug(runId)}-${safeSlug(scenario.id)}`;
+    process.env.OCTOS_UX_TMUX_SESSION || `ra-ux-${safeSlug(runId)}-${safeSlug(scenario.id)}`;
   const fixtureEnv = taskSubagentFixtureEnv(scenario, workdir);
   const backendEnv = backendFixtureEnv(scenario, workdir);
   const backendServeArgs = scenarioRequiresSoloServe(scenario) ? ['--solo'] : [];
@@ -470,13 +470,13 @@ function writeRuntimePolicyStamp(ctx, generatedAt, { force = false } = {}) {
   const file = path.join(ctx.scenarioDir, 'runtime-policy-stamp.json');
   if (!force && fs.existsSync(file)) return;
   writeJson(file, {
-    schema: 'octos.ux.runtime_policy_stamp.v1',
+    schema: 'ra.ux.runtime_policy_stamp.v1',
     generated_at: generatedAt,
     source: 'harness',
     run_id: ctx.runId,
     scenario_id: ctx.scenario.id,
     transport: ctx.scenario.transport,
-    backend: ctx.scenario.transport === 'websocket' ? 'octos serve --websocket' : 'octos serve --stdio',
+    backend: ctx.scenario.transport === 'websocket' ? 'ra serve --websocket' : 'ra serve --stdio',
     stamp: {
       profile_id: ctx.profileId,
       session_id: ctx.sessionId,
@@ -528,8 +528,8 @@ function writeArtifactSkeleton(ctx, options) {
   writeReplay(ctx);
 
   writeJson(path.join(ctx.scenarioDir, 'scenario.json'), {
-    schema: 'octos.ux.scenario.v1',
-    artifact_abi: 'octos.ux.artifacts.v1',
+    schema: 'ra.ux.scenario.v1',
+    artifact_abi: 'ra.ux.artifacts.v1',
     generated_at: generatedAt,
     id: ctx.scenario.id,
     scenario_id: ctx.scenario.id,
@@ -551,7 +551,7 @@ function writeArtifactSkeleton(ctx, options) {
 
   writeText(path.join(ctx.scenarioDir, 'launch-command.txt'), `${ctx.launchCommand}\n`);
   writeJson(path.join(ctx.scenarioDir, 'terminal-size.json'), {
-    schema: 'octos.ux.terminal_size.v1',
+    schema: 'ra.ux.terminal_size.v1',
     generated_at: generatedAt,
     cols: ctx.cols,
     rows: ctx.rows,
@@ -627,7 +627,7 @@ function writeArtifactSkeleton(ctx, options) {
 
   const summaryPath = path.join(ctx.scenarioDir, 'summary.json');
   const summary = {
-    schema: 'octos.ux.summary.v1',
+    schema: 'ra.ux.summary.v1',
     generated_at: generatedAt,
     ok: Boolean(options.ok),
     status: options.status,
@@ -714,7 +714,7 @@ function tmuxHasSession(sessionName) {
 function launchWebsocketTuiFallback(ctx, env) {
   const outputLog = path.join(ctx.scenarioDir, 'tui-process.log');
   const apiKeyEnv = process.env.OCTOSCODE_SOAK_EXPECT_API_KEY_ENV || 'AUTODL_API_KEY';
-  const apiKey = env.OCTOSCODE_SOAK_API_KEY || 'octos-m19-placeholder-key';
+  const apiKey = env.OCTOSCODE_SOAK_API_KEY || 'ra-m19-placeholder-key';
   const command = [
     'cd',
     shellQuote(ctx.workdir),
@@ -957,12 +957,12 @@ function runLowerRunner(ctx, options = {}) {
     OCTOSCODE_SOAK_TRANSPORT: ctx.scenario.transport === 'websocket' ? 'ws' : ctx.scenario.transport,
     OCTOSCODE_SOAK_PROFILE: ctx.profileId,
     OCTOSCODE_SOAK_SESSION: ctx.sessionId,
-    OCTOSCODE_SOAK_SERVER_SESSION: `octos-onboard-server-${safeSlug(ctx.runKey)}`,
+    OCTOSCODE_SOAK_SERVER_SESSION: `ra-onboard-server-${safeSlug(ctx.runKey)}`,
     OCTOSCODE_SOAK_TUI_SESSION: ctx.sessionName,
     OCTOSCODE_SOAK_LOCAL_NAME: process.env.OCTOSCODE_SOAK_LOCAL_NAME || ctx.profileId,
     OCTOSCODE_SOAK_LOCAL_USERNAME: process.env.OCTOSCODE_SOAK_LOCAL_USERNAME || ctx.profileId,
     OCTOSCODE_SOAK_LOCAL_EMAIL: process.env.OCTOSCODE_SOAK_LOCAL_EMAIL || `${ctx.profileId}@example.invalid`,
-    OCTOSCODE_SOAK_API_KEY: process.env.OCTOSCODE_SOAK_API_KEY || 'octos-m19-placeholder-key',
+    OCTOSCODE_SOAK_API_KEY: process.env.OCTOSCODE_SOAK_API_KEY || 'ra-m19-placeholder-key',
     OCTOSCODE_SOAK_INIT_PROFILE_LLM:
       process.env.OCTOSCODE_SOAK_INIT_PROFILE_LLM || shouldInitProfileLlm,
     OCTOSCODE_SOAK_PORT: String(ctx.port),

@@ -133,7 +133,7 @@ struct Output {
 
 /// v2 result summary: discriminator + headline + sources. Mirrors
 /// `octos_plugin::protocol_v2::ResultSummary` field-for-field. Avoids a
-/// dependency on `octos-plugin` from the standalone plugin binary
+/// dependency on `ra-plugin` from the standalone plugin binary
 /// (plugin binaries should be self-contained per the SDK contract).
 #[derive(Serialize, Deserialize, Default)]
 struct ResultSummary {
@@ -1490,7 +1490,7 @@ async fn run_deep_crawl(
 /// Bing results page rendered in headless Chrome, then scraped.
 ///
 /// On unless `OCTOS_ALLOW_SERP_SCRAPE=0` (ADR 0002 §6). Honest: the
-/// browser's own User-Agent plus the octos token, no stealth; a challenge
+/// browser's own User-Agent plus the ra token, no stealth; a challenge
 /// page is a miss, never solved.
 async fn bing_cdp_search(query: &str, count: u8) -> Result<Vec<SearchHit>, String> {
     if !research::serp_scrape_allowed() {
@@ -2945,7 +2945,7 @@ fn emit_progress_event(phase: ProgressPhase, message: &str, progress_fraction: O
     };
 
     let event = HarnessProgressEvent {
-        schema: "octos.harness.event.v1",
+        schema: "ra.harness.event.v1",
         schema_version: 1,
         kind: "progress",
         session_id: &context.session_id,
@@ -3082,7 +3082,7 @@ mod tests {
 
     fn serp_fixture(name: &str) -> String {
         let path = format!(
-            "{}/../../octos-research/tests/fixtures/serp/{name}",
+            "{}/../../ra-research/tests/fixtures/serp/{name}",
             env!("CARGO_MANIFEST_DIR")
         );
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
@@ -3296,7 +3296,7 @@ mod tests {
         doc.items = vec![item, unread];
         doc.skipped = vec![SkippedUrl::new(gnews.url.clone(), "robots")];
         let v = serde_json::to_value(&doc).unwrap();
-        assert_eq!(v["schema"], "octos.research.items.v1");
+        assert_eq!(v["schema"], "ra.research.items.v1");
         assert_eq!(v["items"].as_array().unwrap().len(), 2);
         assert_eq!(v["items"][0]["summary_kind"], "extractive");
         assert_eq!(v["skipped"][0]["reason"], "robots");
@@ -3629,7 +3629,7 @@ mod tests {
 
         let events = [
             HarnessProgressEvent {
-                schema: "octos.harness.event.v1",
+                schema: "ra.harness.event.v1",
                 schema_version: 1,
                 kind: "progress",
                 session_id: "api:session",
@@ -3640,7 +3640,7 @@ mod tests {
                 progress: Some(0.25),
             },
             HarnessProgressEvent {
-                schema: "octos.harness.event.v1",
+                schema: "ra.harness.event.v1",
                 schema_version: 1,
                 kind: "progress",
                 session_id: "api:session",
@@ -3651,7 +3651,7 @@ mod tests {
                 progress: None,
             },
             HarnessProgressEvent {
-                schema: "octos.harness.event.v1",
+                schema: "ra.harness.event.v1",
                 schema_version: 1,
                 kind: "progress",
                 session_id: "api:session",
@@ -3662,7 +3662,7 @@ mod tests {
                 progress: None,
             },
             HarnessProgressEvent {
-                schema: "octos.harness.event.v1",
+                schema: "ra.harness.event.v1",
                 schema_version: 1,
                 kind: "progress",
                 session_id: "api:session",
@@ -3673,7 +3673,7 @@ mod tests {
                 progress: None,
             },
             HarnessProgressEvent {
-                schema: "octos.harness.event.v1",
+                schema: "ra.harness.event.v1",
                 schema_version: 1,
                 kind: "progress",
                 session_id: "api:session",

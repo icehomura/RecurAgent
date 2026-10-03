@@ -31,9 +31,9 @@ runtime tracks separately from the parent agent loop, including
 
 | Code site                                             | Tracked as                |
 |-------------------------------------------------------|---------------------------|
-| `crates/octos-cli/src/session_actor.rs` (main loop)   | Session task              |
-| `crates/octos-pipeline/src/handler.rs` (worker nodes) | Pipeline node task        |
-| `crates/octos-agent/src/tools/spawn.rs` (subagent)    | Spawn child task          |
+| `crates/ra-cli/src/session_actor.rs` (main loop)   | Session task              |
+| `crates/ra-pipeline/src/handler.rs` (worker nodes) | Pipeline node task        |
+| `crates/ra-agent/src/tools/spawn.rs` (subagent)    | Spawn child task          |
 | `crates/app-skills/deep-search/src/main.rs` (plugin)  | Plugin invocation task    |
 | `crates/app-skills/deep-crawl/src/main.rs` (plugin)   | Plugin invocation task    |
 | External `mofa-fm/fm_tts` plugin                      | Plugin invocation task    |
@@ -53,7 +53,7 @@ workers and spawn children were missing several of these).
 
 ### 2.1 FileStateCache (M8.4)
 
-**Source**: `crates/octos-agent/src/file_state_cache.rs`
+**Source**: `crates/ra-agent/src/file_state_cache.rs`
 **Wire it**: `Agent::with_file_state_cache(parent.file_state_cache.clone())`
 **Why**: short-circuits redundant `read_file` calls when the file content has
 not changed since the last read in this transcript. Without it, a sub-agent
@@ -67,7 +67,7 @@ universes.
 
 ### 2.2 SubAgentOutputRouter (M8.7)
 
-**Source**: `crates/octos-agent/src/subagent_output.rs`
+**Source**: `crates/ra-agent/src/subagent_output.rs`
 **Wire it**: `Agent::with_subagent_output_router(parent.router.clone())`
 **Why**: captures stdout/stderr from `spawn_only` plugin invocations and
 writes them to `<data>/subagent-outputs/<session_id>/<task_id>.out` so the
@@ -78,7 +78,7 @@ surface the per-task tail.
 
 ### 2.3 SubAgentSummaryGenerator (M8.7)
 
-**Source**: `crates/octos-agent/src/subagent_summary.rs`
+**Source**: `crates/ra-agent/src/subagent_summary.rs`
 **Wire it**: `Agent::with_subagent_summary_generator(...)`
 **Why**: emits periodic `subagent_progress` harness events (cheap-lane LLM
 summary over the last N activities). The supervisor folds these into
@@ -87,7 +87,7 @@ of 7" instead of "running...".
 
 ### 2.4 Recovery loop (M8.9)
 
-**Source**: `crates/octos-cli/src/session_actor.rs::build_recovery_prompt`
+**Source**: `crates/ra-cli/src/session_actor.rs::build_recovery_prompt`
 **Wire it**: wrap your task body so on a retryable failure (signal from
 `SpawnOnlyFailureSignal`) you re-engage the LLM with the recovery prompt
 once before bubbling. The session actor sets the canonical example via
@@ -99,7 +99,7 @@ the recovery prompt.
 
 ### 2.5 task_query_store registration
 
-**Source**: `crates/octos-agent/src/task_supervisor.rs::TaskSupervisor::register*`
+**Source**: `crates/ra-agent/src/task_supervisor.rs::TaskSupervisor::register*`
 **Wire it**: register your task with `parent_task_id` set to the
 originating tool_call_id (or session task id for the session actor itself).
 Emit state transitions via the supervisor's `on_change` hook so the B2
@@ -113,7 +113,7 @@ Tasks that don't register here are **invisible** to:
 
 ### 2.6 Cost reservation handle (F-003)
 
-**Source**: `crates/octos-agent/src/cost_ledger.rs`
+**Source**: `crates/ra-agent/src/cost_ledger.rs`
 **Wire it**: each task creates a `CostReservationHandle` from the parent's
 `CostAccountant`, commits on completion (or releases on cancel/error).
 Emits `cost_attribution` harness events keyed by `attribution_id`. The
@@ -170,7 +170,7 @@ Each event is a single line, JSON-encoded, terminated with `\n`. Schema:
 ```jsonc
 // progress event
 {
-  "schema": "octos.harness.event.v1",
+  "schema": "ra.harness.event.v1",
   "kind": "progress",
   "session_id": "<from $OCTOS_HARNESS_SESSION_ID>",
   "task_id":    "<from $OCTOS_HARNESS_TASK_ID>",
@@ -182,7 +182,7 @@ Each event is a single line, JSON-encoded, terminated with `\n`. Schema:
 
 // cost attribution
 {
-  "schema": "octos.harness.event.v1",
+  "schema": "ra.harness.event.v1",
   "kind": "cost_attribution",
   "session_id": "...",
   "task_id":    "...",
@@ -197,7 +197,7 @@ Each event is a single line, JSON-encoded, terminated with `\n`. Schema:
 
 // failure (terminal)
 {
-  "schema": "octos.harness.event.v1",
+  "schema": "ra.harness.event.v1",
   "kind": "failure",
   "session_id": "...",
   "task_id":    "...",
@@ -207,8 +207,8 @@ Each event is a single line, JSON-encoded, terminated with `\n`. Schema:
 }
 ```
 
-The Rust types live in `crates/octos-agent/src/harness_events.rs` and are
-re-exported by the host parser at `crates/octos-agent/src/plugins/tool.rs`.
+The Rust types live in `crates/ra-agent/src/harness_events.rs` and are
+re-exported by the host parser at `crates/ra-agent/src/plugins/tool.rs`.
 
 ### 3.4 Cancel signal (SIGTERM contract)
 
@@ -404,7 +404,7 @@ a new spawn entry point, a new plugin):
 1. Identify the parent context that owns the request. That parent must
    already be M8-compliant — if not, fix it first.
 2. Wire the six required components (§2). Mirror the session actor's
-   pattern in `crates/octos-cli/src/session_actor.rs`.
+   pattern in `crates/ra-cli/src/session_actor.rs`.
 3. Register with the supervisor at task start; deregister (terminal
    transition) on completion / failure / cancel.
 4. If the actor invokes a plugin, the plugin must also be v2-compliant

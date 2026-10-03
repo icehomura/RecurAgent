@@ -23,14 +23,14 @@ require_grep 'param\(' "$SCRIPT" "deploy.ps1 must expose parameters"
 require_grep '\[string\]\$HostName' "$SCRIPT" "deploy.ps1 must accept a target host"
 require_grep '\[switch\]\$DryRun' "$SCRIPT" "deploy.ps1 must support dry-run mode"
 require_grep '\[switch\]\$Uninstall' "$SCRIPT" "deploy.ps1 must support uninstall mode"
-require_grep 'octos-bundle-x86_64-pc-windows-msvc\.zip' "$SCRIPT" "deploy.ps1 must target the Windows release bundle"
+require_grep 'ra-bundle-x86_64-pc-windows-msvc\.zip' "$SCRIPT" "deploy.ps1 must target the Windows release bundle"
 require_grep 'ssh' "$SCRIPT" "deploy.ps1 must use OpenSSH for remote execution"
 require_grep 'scp' "$SCRIPT" "deploy.ps1 must use SCP for local bundle uploads"
 require_grep 'EncodedCommand' "$SCRIPT" "deploy.ps1 must send encoded PowerShell to the remote host"
 require_grep '\$nssmExe install' "$SCRIPT" "deploy.ps1 must register OctosServe through NSSM"
 require_grep 'SERVICE_AUTO_START' "$SCRIPT" "deploy.ps1 must configure auto-start service behavior"
-require_grep 'OCTOS_HOME=' "$SCRIPT" "deploy.ps1 must set the remote Octos data path"
-require_grep 'C:\\octos' "$SCRIPT" "deploy.ps1 must document the default Windows install root"
+require_grep 'OCTOS_HOME=' "$SCRIPT" "deploy.ps1 must set the remote ra data path"
+require_grep 'C:\\ra' "$SCRIPT" "deploy.ps1 must document the default Windows install root"
 
 if grep -q -- '--auth-token' "$SCRIPT"; then
     fail "deploy.ps1 must not pass the bearer token via service argv (#2380)"
@@ -43,7 +43,7 @@ if command -v pwsh >/dev/null 2>&1; then
         -Port 2222 \
         -IdentityFile "$ROOT_DIR/.ssh/test-key" \
         -Version v0.0.0-test \
-        -RemoteRoot 'C:\octos-ci' \
+        -RemoteRoot 'C:\ra-ci' \
         -ServiceName OctosServeTest \
         -ServePort 50080 \
         -AuthToken test-token \
@@ -53,7 +53,7 @@ if command -v pwsh >/dev/null 2>&1; then
         || fail "dry run should print the remote script"
     grep -q '\$nssmExe install' <<<"$out" \
         || fail "dry run should show service registration"
-    grep -q 'C:\\octos-ci' <<<"$out" \
+    grep -q 'C:\\ra-ci' <<<"$out" \
         || fail "dry run should include the requested remote root"
     grep -q 'OctosServeTest' <<<"$out" \
         || fail "dry run should include the requested service name"
@@ -71,7 +71,7 @@ if command -v pwsh >/dev/null 2>&1; then
 
     uninstall_out="$(pwsh -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT" \
         -HostName win.example.invalid \
-        -RemoteRoot 'C:\octos-ci' \
+        -RemoteRoot 'C:\ra-ci' \
         -ServiceName OctosServeTest \
         -Uninstall \
         -Purge \

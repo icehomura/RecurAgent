@@ -17,7 +17,7 @@
  *
  * Required env:
  *   OCTOS_TEST_URL=https://dspfac.bot.ominix.io
- *   OCTOS_AUTH_TOKEN=octos-admin-2026
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026
  *   OCTOS_PROFILE=dspfac
  *
  * NEVER point at mini5 — that host is reserved for coding-green tests.

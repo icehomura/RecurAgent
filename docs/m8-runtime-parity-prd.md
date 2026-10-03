@@ -106,15 +106,15 @@ Four engineers / agent workers run in parallel. Each track owns a clean slice wi
 **Branch**: `feature/m8-parity-w1-pipeline-host`
 
 **Files**:
-- `crates/octos-pipeline/src/handler.rs` — pipeline worker construction (~415 line region)
-- `crates/octos-pipeline/src/executor.rs` — node execution + recovery loop
-- `crates/octos-pipeline/src/lib.rs` — exports
-- New: `crates/octos-pipeline/src/recovery.rs` — M8.9 recovery wrapper for nodes
-- `octos-web/src/store/message-store.ts` — node tree types
-- `octos-web/src/store/message-store-reducers/tool-progress-reducer.ts` — node-tree projection
-- `octos-web/src/components/chat-thread.tsx` — `<NodeCard>` component
-- New: `octos-web/src/components/node-card.tsx`
-- New: `octos-web/src/components/cost-breakdown.tsx`
+- `crates/ra-pipeline/src/handler.rs` — pipeline worker construction (~415 line region)
+- `crates/ra-pipeline/src/executor.rs` — node execution + recovery loop
+- `crates/ra-pipeline/src/lib.rs` — exports
+- New: `crates/ra-pipeline/src/recovery.rs` — M8.9 recovery wrapper for nodes
+- `ra-web/src/store/message-store.ts` — node tree types
+- `ra-web/src/store/message-store-reducers/tool-progress-reducer.ts` — node-tree projection
+- `ra-web/src/components/chat-thread.tsx` — `<NodeCard>` component
+- New: `ra-web/src/components/node-card.tsx`
+- New: `ra-web/src/components/cost-breakdown.tsx`
 
 **Deliverables**:
 - A1 — Pipeline workers wire `with_file_state_cache`, `with_subagent_output_router`, `with_subagent_summary_generator` from session-actor's shared instances (plumbed via `TOOL_CTX`)
@@ -137,14 +137,14 @@ Four engineers / agent workers run in parallel. Each track owns a clean slice wi
 **Branch**: `feature/m8-parity-w2-spawn-host`
 
 **Files**:
-- `crates/octos-agent/src/tools/spawn.rs` — spawn child Agent::new builder chain (~1898 line region)
-- `crates/octos-cli/src/workflows/slides_delivery.rs` — per-phase validator wiring
-- `crates/octos-cli/src/workflows/site_delivery.rs` — same
-- `crates/octos-cli/src/workflows/research_podcast.rs` — same
-- `crates/octos-cli/src/api/handlers.rs` — new endpoints
-- `crates/octos-cli/src/api/router.rs` — route registration
-- `octos-web/src/components/node-card.tsx` (collaborate with W1) — cancel + restart buttons
-- `octos-web/src/api/types.ts` — new POST request types
+- `crates/ra-agent/src/tools/spawn.rs` — spawn child Agent::new builder chain (~1898 line region)
+- `crates/ra-cli/src/workflows/slides_delivery.rs` — per-phase validator wiring
+- `crates/ra-cli/src/workflows/site_delivery.rs` — same
+- `crates/ra-cli/src/workflows/research_podcast.rs` — same
+- `crates/ra-cli/src/api/handlers.rs` — new endpoints
+- `crates/ra-cli/src/api/router.rs` — route registration
+- `ra-web/src/components/node-card.tsx` (collaborate with W1) — cancel + restart buttons
+- `ra-web/src/api/types.ts` — new POST request types
 
 **Deliverables**:
 - B1 — Spawn child agent wires `with_file_state_cache(parent.file_state_cache.clone())`, `with_subagent_output_router(parent.router.clone())`, `with_subagent_summary_generator(...)` — all inherited from parent session
@@ -168,16 +168,16 @@ Four engineers / agent workers run in parallel. Each track owns a clean slice wi
 **Branch**: `feature/m8-parity-w3-search-crawl`
 
 **Files**:
-- `crates/octos-plugin/src/protocol_v2.rs` (new) — v2 spec types
-- `crates/octos-plugin/src/lifecycle.rs` — backward compat shim
-- `crates/octos-plugin/docs/protocol-v2.md` (new) — protocol spec doc
-- `crates/octos-agent/src/plugins/tool.rs` — host-side v2 progress parser (in addition to existing text-line path)
+- `crates/ra-plugin/src/protocol_v2.rs` (new) — v2 spec types
+- `crates/ra-plugin/src/lifecycle.rs` — backward compat shim
+- `crates/ra-plugin/docs/protocol-v2.md` (new) — protocol spec doc
+- `crates/ra-agent/src/plugins/tool.rs` — host-side v2 progress parser (in addition to existing text-line path)
 - `crates/app-skills/deep-search/src/main.rs` (and supporting modules)
 - `crates/app-skills/deep-crawl/src/main.rs` (and supporting modules)
 
 **Deliverables**:
 - F1 — Plugin protocol v2 spec doc + Rust types for: structured progress events, cost-attribution events, output summary, cancel-signal contract
-- F2 — Backward-compat shim in `octos-plugin/src/lifecycle.rs`: parser tries JSON-event first, falls back to legacy text-message; v1 plugins keep working unchanged
+- F2 — Backward-compat shim in `ra-plugin/src/lifecycle.rs`: parser tries JSON-event first, falls back to legacy text-message; v1 plugins keep working unchanged
 - C1 — `deep_search`: replace raw Bing search dump with synthesized multi-source answer. Internal LLM call (model from manifest config) consumes search results + crawl excerpts and emits a structured report: `{summary, sources[], confidence}`. The `_report.md` becomes a real synthesized document, not a search result dump.
 - C2 — `deep_search`: emit structured progress events (`{stage, detail}`) per protocol v2
 - C3 — `deep_search`: SIGTERM handler; cleanup browsers and temp files within 10s; exit cleanly
@@ -231,7 +231,7 @@ All 4 tracks branch from `main@889e5e05`. Tracks rebase on `main` weekly to pick
 
 ### 5.2 Hand-off points
 
-- W1.A1 wires `SubAgentOutputRouter` into pipeline workers — but the router type lives in `octos-agent`. W1 must NOT change router internals; only attach via builder.
+- W1.A1 wires `SubAgentOutputRouter` into pipeline workers — but the router type lives in `ra-agent`. W1 must NOT change router internals; only attach via builder.
 - W2.B1 same constraint for spawn-subagent.
 - W3.F1+F2 lands first (~day 1). Other plugin tracks (W3.C2/D2 and W4) consume v2 protocol after F2 lands.
 - W2.API1+API2 lands by day 3 so W2.G2/G3 can wire up; if API delays, W2 mocks and proceeds with UI-only.
@@ -260,7 +260,7 @@ Each commit must include unit tests for the changed surface. Baseline coverage t
 
 ### 6.2 Integration tests (cross-track)
 
-Live against `mini2` (`https://dspfac.bot.ominix.io`). Token: `octos-admin-2026`. NEVER `mini5`.
+Live against `mini2` (`https://dspfac.bot.ominix.io`). Token: `ra-admin-2026`. NEVER `mini5`.
 
 Test matrix:
 
@@ -295,7 +295,7 @@ All track PRs must pass:
 - `cargo build --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo test --workspace` (sharded per #590)
-- `pnpm typecheck` + `pnpm build` (octos-web)
+- `pnpm typecheck` + `pnpm build` (ra-web)
 - Track's own integration tests pass against staging mini2
 
 ## 7. Rollout plan
@@ -327,7 +327,7 @@ The migration force-push of `c8787472` is preserved in `release/coding-yellow` a
 
 - Re-architecting plugin invocation to be in-process (still binary protocol)
 - Replacing TaskSupervisor with an external scheduler (Kubernetes-style)
-- Changing octos-web from React to anything else
+- Changing ra-web from React to anything else
 - Migrating session storage from JSONL to a database
 - Adding new features beyond the M8 contract (M9 family is separate scope)
 

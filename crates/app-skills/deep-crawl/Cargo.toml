@@ -3,7 +3,7 @@ name = "deep-crawl"
 version = "1.0.0"
 edition = "2021"
 description = "CDP-based recursive site crawler using headless Chrome"
-authors = ["octos"]
+authors = ["ra"]
 
 [[bin]]
 name = "deep_crawl"
@@ -19,7 +19,7 @@ scraper = "0.22"
 url = "2"
 regex = "1"
 chrono = "0.4"
-octos-research = { path = "../../octos-research", default-features = false, features = ["fetch"] }
+ra-research = { path = "../../ra-research", default-features = false, features = ["fetch"] }
 which = "7"
 futures-util = "0.3"
 tempfile = "3"

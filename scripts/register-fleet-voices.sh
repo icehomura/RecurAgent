@@ -74,7 +74,7 @@ else:
     cfg = {}
 voices = cfg.get("voices") if isinstance(cfg.get("voices"), dict) else {}
 added = []
-for wav in sorted(glob.glob(os.path.join(home, ".octos/profiles/*/data/voice_profiles/*.wav"))):
+for wav in sorted(glob.glob(os.path.join(home, ".ra/profiles/*/data/voice_profiles/*.wav"))):
     name = os.path.splitext(os.path.basename(wav))[0]
     if name in voices:
         continue

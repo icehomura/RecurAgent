@@ -1,6 +1,6 @@
-# Octos User Guide
+# ra User Guide
 
-A comprehensive guide for deploying, configuring, and using the Octos AI agent platform.
+A comprehensive guide for deploying, configuring, and using the ra AI agent platform.
 
 ---
 
@@ -38,13 +38,13 @@ A comprehensive guide for deploying, configuring, and using the Octos AI agent p
 
 ## 1. Overview
 
-Octos is a Rust-native AI agent platform that runs in three modes:
+ra is a Rust-native AI agent platform that runs in three modes:
 
-- **`octos serve`** — Control plane with admin dashboard + ~140 REST endpoints. Manages multiple **profiles** (bot instances), each running as an isolated gateway child process with its own config, memory, sessions, and messaging channels. On first launch with no admin profile, the embedded dashboard runs the **setup wizard**.
-- **`octos gateway`** — A single gateway instance serving messaging channels (Telegram, Discord, DingTalk, Slack, WhatsApp, Matrix, Feishu, Email, WeChat, WeCom, WeCom Bot, QQ Bot, Twilio).
-- **`octos chat`** — Interactive CLI chat for development and testing.
+- **`ra serve`** — Control plane with admin dashboard + ~140 REST endpoints. Manages multiple **profiles** (bot instances), each running as an isolated gateway child process with its own config, memory, sessions, and messaging channels. On first launch with no admin profile, the embedded dashboard runs the **setup wizard**.
+- **`ra gateway`** — A single gateway instance serving messaging channels (Telegram, Discord, DingTalk, Slack, WhatsApp, Matrix, Feishu, Email, WeChat, WeCom, WeCom Bot, QQ Bot, Twilio).
+- **`ra chat`** — Interactive CLI chat for development and testing.
 
-Chat and `octos acp` use the same OUP session runtime as OctosCode, via an
+Chat and `ra acp` use the same OUP session runtime as OctosCode, via an
 in-process connection. Both require the default `api` feature; no extra server
 process or network listener is required. They share OUP history, compaction,
 permissions and cancellation. ACP supports `session/load` replay and typed tool
@@ -53,7 +53,7 @@ permissions; structured OUP user questions remain a terminal/OctosCode feature.
 ### Architecture
 
 ```
-octos serve (control plane + dashboard, ~140 REST endpoints)
+ra serve (control plane + dashboard, ~140 REST endpoints)
   ├── First-run wizard /api/admin/setup/{state,step,complete,skip}
   ├── Profile A → gateway process (Telegram, WhatsApp)
   ├── Profile B → gateway process (Feishu, Slack, Matrix)
@@ -78,13 +78,13 @@ Each profile is fully isolated — its own data directory, memory, sessions, ski
 
 ## 2. Dashboard & OTP Onboarding
 
-The admin dashboard is a React web application embedded in the `octos serve` binary. It provides a visual interface for managing profiles, monitoring gateway status, and configuring the system.
+The admin dashboard is a React web application embedded in the `ra serve` binary. It provides a visual interface for managing profiles, monitoring gateway status, and configuring the system.
 
 ### 2.1 Accessing the Dashboard
 
 ```bash
 # Start the control plane
-octos serve --host 0.0.0.0
+ra serve --host 0.0.0.0
 
 # Dashboard is available at:
 # http://localhost:50080
@@ -94,11 +94,11 @@ If you're running behind a reverse proxy (e.g., Caddy or Nginx), configure it to
 
 Deployment behavior depends on `config.mode`:
 
-- `local` — Standalone machine. `/` redirects to `/app/` (the octos-web app); when the web bundle isn't embedded it falls back to `/admin/`.
+- `local` — Standalone machine. `/` redirects to `/app/` (the ra-web app); when the web bundle isn't embedded it falls back to `/admin/`.
 - `tenant` — Default end-user machine setup. Direct installs land on `/app/` the same way; managed registration setup can also configure the machine's public tunnel. `/admin/` remains the admin dashboard.
-- `cloud` — Advanced relay-host setup. `/` serves the landing page, `/app/` serves the octos-web app, and `/admin/` remains the admin dashboard.
+- `cloud` — Advanced relay-host setup. `/` serves the landing page, `/app/` serves the ra-web app, and `/admin/` remains the admin dashboard.
 
-`~/.octos/config.json` is the file that `octos serve` reads at startup. Tenant and local installs create it through the normal installers; host installs can now bootstrap it with `scripts/cloud-host-deploy.sh`, which writes `mode: "cloud"` plus the relay settings used by the landing page and frps plugin.
+`~/.ra/config.json` is the file that `ra serve` reads at startup. Tenant and local installs create it through the normal installers; host installs can now bootstrap it with `scripts/cloud-host-deploy.sh`, which writes `mode: "cloud"` plus the relay settings used by the landing page and frps plugin.
 
 ### 2.1.1 Cloud Host Bootstrap
 
@@ -110,19 +110,19 @@ bash scripts/cloud-host-deploy.sh
 
 That script:
 
-- creates or updates `~/.octos/config.json` for cloud mode
-- installs `octos serve`
+- creates or updates `~/.ra/config.json` for cloud mode
+- installs `ra serve`
 - runs `scripts/frp/setup-frps.sh`
 - runs `scripts/frp/setup-caddy.sh`
-- saves rerun settings to `~/.octos/cloud-bootstrap.env`
+- saves rerun settings to `~/.ra/cloud-bootstrap.env`
 
 For unattended setup, pass `--config <env-file> --non-interactive`.
 
-**Per-tenant frps authentication.** Tenants no longer share a single FRPS auth token. Each tenant gets its own `tunnel_token` (a UUID, generated at registration time) that the frpc client sends in `metadatas.token`; `frps` forwards Login and NewProxy operations to an octos plugin endpoint that validates the token against the tenant store and caches the `run_id → tenant_id` mapping for subsequent proxy requests. Both `frps` and `frpc` are configured with `auth.token = ""` — the built-in token check is a no-op and all tenant identity rides in the metadata field.
+**Per-tenant frps authentication.** Tenants no longer share a single FRPS auth token. Each tenant gets its own `tunnel_token` (a UUID, generated at registration time) that the frpc client sends in `metadatas.token`; `frps` forwards Login and NewProxy operations to an ra plugin endpoint that validates the token against the tenant store and caches the `run_id → tenant_id` mapping for subsequent proxy requests. Both `frps` and `frpc` are configured with `auth.token = ""` — the built-in token check is a no-op and all tenant identity rides in the metadata field.
 
 ### 2.1.2 Tenant Bootstrap
 
-End users register themselves via the cloud host's public signup page (e.g., `https://octos.example.com`) and receive a personalized setup command covering macOS/Linux and Windows. The command embeds the tenant's subdomain, per-tenant tunnel token, SSH port, and dashboard auth token, so no values need to be typed manually.
+End users register themselves via the cloud host's public signup page (e.g., `https://ra.example.com`) and receive a personalized setup command covering macOS/Linux and Windows. The command embeds the tenant's subdomain, per-tenant tunnel token, SSH port, and dashboard auth token, so no values need to be typed manually.
 
 A typical emitted command (macOS/Linux):
 
@@ -132,12 +132,12 @@ curl -fsSL https://github.com/octos-org/octos/releases/latest/download/install.s
     --tenant-name alice \
     --frps-token <per-tenant-uuid> \
     --ssh-port 6001 \
-    --domain octos.example.com \
-    --frps-server frps.octos.example.com \
+    --domain ra.example.com \
+    --frps-server frps.ra.example.com \
     --auth-token <dashboard-token>
 ```
 
-The installer writes `/etc/frp/frpc.toml` with the per-tenant UUID under `metadatas.token`, brings frpc up as a launchd/systemd service, and starts `octos serve` on the configured local port. On reruns (`~/.octos/bin/install.sh --tunnel`), the installer recovers the token from the existing `metadatas.token` entry instead of prompting.
+The installer writes `/etc/frp/frpc.toml` with the per-tenant UUID under `metadatas.token`, brings frpc up as a launchd/systemd service, and starts `ra serve` on the configured local port. On reruns (`~/.ra/bin/install.sh --tunnel`), the installer recovers the token from the existing `metadatas.token` entry instead of prompting.
 
 ### 2.1.3 Uninstall
 
@@ -145,12 +145,12 @@ To remove an installation:
 
 | Machine | Command |
 |---------|---------|
-| Tenant (macOS/Linux) | `~/.octos/bin/install.sh --uninstall` |
-| Tenant (Windows)     | `& "$HOME\.octos\bin\install.ps1" -Uninstall` |
+| Tenant (macOS/Linux) | `~/.ra/bin/install.sh --uninstall` |
+| Tenant (Windows)     | `& "$HOME\.ra\bin\install.ps1" -Uninstall` |
 | Cloud VPS (services) | `bash scripts/cloud-host-deploy.sh --uninstall` |
 | Cloud VPS (+ data)   | `bash scripts/cloud-host-deploy.sh --uninstall --purge` |
 
-On a tenant, the uninstall flag stops and removes both `octos-serve` and `frpc` services, deletes `/etc/frp` and `/usr/local/bin/frpc`, stops Caddy if present, and (on Linux) removes the firewall rules it added. The data directory (`~/.octos`) is always preserved unless you delete it manually.
+On a tenant, the uninstall flag stops and removes both `ra-serve` and `frpc` services, deletes `/etc/frp` and `/usr/local/bin/frpc`, stops Caddy if present, and (on Linux) removes the firewall rules it added. The data directory (`~/.ra`) is always preserved unless you delete it manually.
 
 On the cloud VPS, `cloud-host-deploy.sh --uninstall` calls `install.sh --uninstall` internally and additionally stops and removes `frps.service` and the Caddy host configuration. Using plain `install.sh --uninstall` on the VPS is not recommended because it removes `/etc/frp` and `/usr/local/bin/frpc` without stopping `frps.service`.
 
@@ -160,7 +160,7 @@ The dashboard uses email-based One-Time Password (OTP) authentication. No passwo
 
 #### Configure SMTP for OTP Emails
 
-Add `dashboard_auth` to your serve config (`~/.octos/config.json` or `<cwd>/.octos/config.json`):
+Add `dashboard_auth` to your serve config (`~/.ra/config.json` or `<cwd>/.ra/config.json`):
 
 ```json
 {
@@ -226,9 +226,9 @@ Once logged in, the dashboard provides:
 
 ### 2.4 First-Run Setup Wizard
 
-When `octos serve` boots for the first time without an admin profile, the embedded dashboard launches a **setup wizard** that walks the operator through:
+When `ra serve` boots for the first time without an admin profile, the embedded dashboard launches a **setup wizard** that walks the operator through:
 
-1. **Deployment mode** — choose between local-only, self-hosted cloud + tenant, or Octos Cloud signup. Guidance text differs per mode.
+1. **Deployment mode** — choose between local-only, self-hosted cloud + tenant, or ra Cloud signup. Guidance text differs per mode.
 2. **SMTP configuration** — needed for OTP email login (skippable for local-only deployments).
 3. **LLM provider** — pick a provider, enter the API key, and run a live test before saving.
 4. **Admin profile** — name, channels, and optional Family Plan setup.
@@ -240,22 +240,22 @@ Progress is tracked server-side via:
 - `POST /api/admin/setup/complete` — finalize and create the admin profile
 - `POST /api/admin/setup/skip` — operator escape hatch (skips remaining optional steps)
 
-Source: `crates/octos-cli/src/api/admin_setup.rs`, `dashboard/src/pages/wizard/`.
+Source: `crates/ra-cli/src/api/admin_setup.rs`, `dashboard/src/pages/wizard/`.
 
 ### 2.5 Stopping the Server
 
-- **Ctrl+C** — in the terminal running the foreground `octos serve`.
+- **Ctrl+C** — in the terminal running the foreground `ra serve`.
 - **Service manager** — for installed services:
 
   ```bash
   # Linux (systemd)
-  sudo systemctl stop octos-serve
+  sudo systemctl stop ra-serve
 
   # macOS (launchd)
-  sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist
+  sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist
   ```
 
-- **`server/shutdown` (WebSocket, local solo only)** — a UI Protocol client connected over the authenticated WebSocket at `/api/ui-protocol/ws` can stop the server the same way Ctrl+C does: connections drain, gateways stop, the process exits. The call is idempotent, and the stop fires ~250 ms after the request is handled; under outbound backpressure the client may miss the acknowledgement, but the stop still happens. It is accepted only on a local deployment (`config.mode = "local"`) with solo login opted in (`octos serve --solo` / `OCTOS_SOLO_LOGIN=1`) and only by an HTTP serve (`octos serve` without `--stdio`); fleet/hosted servers and `--stdio` serve answer `invalid_request` (-32600) with `data.kind: "server_shutdown_unavailable"` and keep running, and session-scoped connections can never call it. One call stops the process for every connected client — their running turns are cancelled. On a solo serve this follows the local-solo trust model: any local process that can reach the WebSocket can stop the server. A host-managed serve (`octos serve --host-managed`, see `docs/HOST_MANAGED_SERVE.md`) never offers it: its host stops it by closing stdin.
+- **`server/shutdown` (WebSocket, local solo only)** — a UI Protocol client connected over the authenticated WebSocket at `/api/ui-protocol/ws` can stop the server the same way Ctrl+C does: connections drain, gateways stop, the process exits. The call is idempotent, and the stop fires ~250 ms after the request is handled; under outbound backpressure the client may miss the acknowledgement, but the stop still happens. It is accepted only on a local deployment (`config.mode = "local"`) with solo login opted in (`ra serve --solo` / `OCTOS_SOLO_LOGIN=1`) and only by an HTTP serve (`ra serve` without `--stdio`); fleet/hosted servers and `--stdio` serve answer `invalid_request` (-32600) with `data.kind: "server_shutdown_unavailable"` and keep running, and session-scoped connections can never call it. One call stops the process for every connected client — their running turns are cancelled. On a solo serve this follows the local-solo trust model: any local process that can reach the WebSocket can stop the server. A host-managed serve (`ra serve --host-managed`, see `docs/HOST_MANAGED_SERVE.md`) never offers it: its host stops it by closing stdin.
 
 ### 2.6 Giving an External Agent Session Access (Work Secrets)
 
@@ -263,30 +263,30 @@ An external CLI or scripted agent should not hold your dashboard bearer token. A
 
 ```bash
 # Operator notes go to stderr, the encoded secret to stdout
-octos auth issue-work-secret \
+ra auth issue-work-secret \
   --session "dspfac:local:tui#coding" \
   --profile dspfac \
   --ttl 1h \
   --api-base-url http://127.0.0.1:50080
 
 # List recorded grants (SHA-256 hash prefixes only; the token is never stored)
-octos auth list-work-secrets
+ra auth list-work-secrets
 
 # Revoke before expiry
-octos auth revoke-work-secret '<secret>'
+ra auth revoke-work-secret '<secret>'
 ```
 
 - `--ttl` accepts values like `15m`, `1h`, or `3600s` (default `1h`); re-issuing for the same session replaces the earlier grant.
 - The guest decodes the secret and connects with `Authorization: Bearer <token>`. The `?token=` query form still works for WebSocket clients that cannot set headers, but it is deprecated and logged by the server.
 - The grant is revalidated before every client request; a revoked, expired, or replaced grant closes the live socket with close code 1008. Only methods scoped to the granted session are accepted.
 
-Full walkthrough (including a minimal Python client): `docs/OCTOS_WORK_SECRET_SESSION_INGRESS.md`.
+Full walkthrough (including a minimal Python client): `docs/ra_WORK_SECRET_SESSION_INGRESS.md`.
 
 ---
 
 ## 3. Setting Up LLM Providers
 
-Octos supports 17 LLM provider families out of the box. Cloud providers require an API key set as an environment variable; local servers (see [3.6](#36-local-models-llamacpp-ollama-vllm-lm-studio)) need none.
+ra supports 17 LLM provider families out of the box. Cloud providers require an API key set as an environment variable; local servers (see [3.6](#36-local-models-llamacpp-ollama-vllm-lm-studio)) need none.
 
 ### 3.1 Supported Providers
 
@@ -407,13 +407,13 @@ The `api_key_env` field overrides the default env variable name for the provider
 #### Method 2: CLI Flags
 
 ```bash
-octos chat --provider deepseek --model deepseek-chat
-octos chat --model gpt-4o  # auto-detects provider from model name
+ra chat --provider deepseek --model deepseek-chat
+ra chat --model gpt-4o  # auto-detects provider from model name
 ```
 
 #### Method 3: Auto-Detection
 
-When `provider` is omitted, Octos detects the provider from the model name:
+When `provider` is omitted, ra detects the provider from the model name:
 
 | Model Pattern | Detected Provider |
 |--------------|-------------------|
@@ -477,27 +477,27 @@ Instead of environment variables, you can store API keys via the auth CLI:
 
 ```bash
 # OAuth PKCE (OpenAI only)
-octos auth login --provider openai
+ra auth login --provider openai
 
 # Device code flow (OpenAI only)
-octos auth login --provider openai --device-code
+ra auth login --provider openai --device-code
 
 # Paste-token (all other providers)
-octos auth login --provider anthropic
+ra auth login --provider anthropic
 # → prompts: "Paste your API key:"
 
 # Check stored credentials
-octos auth status
+ra auth status
 
 # Remove credentials
-octos auth logout --provider openai
+ra auth logout --provider openai
 ```
 
-Credentials are stored in `~/.octos/auth.json` (file mode 0600). The auth store is checked **before** environment variables when resolving API keys.
+Credentials are stored in `~/.ra/auth.json` (file mode 0600). The auth store is checked **before** environment variables when resolving API keys.
 
 ### 3.6 Local Models (llama.cpp, Ollama, vLLM, LM Studio)
 
-Every popular local model server speaks the same OpenAI-compatible API, so Octos unifies them under **one provider family: `local`**. You don't need to care which engine serves the model — pick `local`, point `base_url` at the server, done. The engine names also work as aliases (`"provider": "llamacpp"`, `"lmstudio"`, … all resolve to `local`).
+Every popular local model server speaks the same OpenAI-compatible API, so ra unifies them under **one provider family: `local`**. You don't need to care which engine serves the model — pick `local`, point `base_url` at the server, done. The engine names also work as aliases (`"provider": "llamacpp"`, `"lmstudio"`, … all resolve to `local`).
 
 The zero-config default targets llama.cpp's `llama-server` on its standard port:
 
@@ -528,9 +528,9 @@ For other engines, set `base_url` to where the server listens:
 
 If the server was started with an API key (llama.cpp's `--api-key`), supply it via `api_key_env` as usual. On a **shared or multi-user machine**, do start the server with a key: an unauthenticated localhost endpoint can be bound by any local process, which would then receive your full conversation content. The engine-branded `ollama` and `vllm` families remain available and behave identically — `local` is the recommended, engine-agnostic choice.
 
-**Verify the setup with `octos doctor`.** For local families it queries the server's `/v1/models` endpoint, reports which models are actually loaded, and warns when your configured `model` isn't among them or when nothing answers on the configured port (listing the common local endpoints to check).
+**Verify the setup with `ra doctor`.** For local families it queries the server's `/v1/models` endpoint, reports which models are actually loaded, and warns when your configured `model` isn't among them or when nothing answers on the configured port (listing the common local endpoints to check).
 
-**Tool calling caveat:** the agent loop depends on tool/function calling, and with local servers that is a property of the *model and its chat template*, not of Octos. Use a tool-capable model, and for llama.cpp start the server with `--jinja` so the template's tool support is active. If chat works but tools misbehave, this is the first thing to check.
+**Tool calling caveat:** the agent loop depends on tool/function calling, and with local servers that is a property of the *model and its chat template*, not of ra. Use a tool-capable model, and for llama.cpp start the server with `--jinja` so the template's tool support is active. If chat works but tools misbehave, this is the first thing to check.
 
 ---
 
@@ -698,7 +698,7 @@ Tool policies control which tools the agent can use. They can be set globally, p
 
 ### 7.2 Named Groups
 
-Source of truth: `TOOL_GROUPS` in `crates/octos-agent/src/tools/policy.rs:154-223`. The exact tool list:
+Source of truth: `TOOL_GROUPS` in `crates/ra-agent/src/tools/policy.rs:154-223`. The exact tool list:
 
 | Group | Expands To |
 |-------|-----------|
@@ -713,7 +713,7 @@ Source of truth: `TOOL_GROUPS` in `crates/octos-agent/src/tools/policy.rs:154-22
 | `group:media` | `mofa_comic`, `mofa_slides`, `mofa_infographic`, `mofa_cards`, `fm_tts`, `fm_voice_list` |
 | `group:delegated` | `delegate_task`, `spawn`, `send_message`, `message`, `save_memory`, `execute_code` — the canonical deny list every delegated child receives. Adding it to a child's deny list closes re-delegation, background-spawn, user-messaging, memory writes, and arbitrary code execution all at once. |
 
-Robot-tier groups under `group:robot:*` are documented in the robotics architecture (`docs/OCTOS_ROBOTICS_ARCHITECTURE.md`) and resolved by `robot_groups::group_covers_tool` rather than `TOOL_GROUPS`.
+Robot-tier groups under `group:robot:*` are documented in the robotics architecture (`docs/ra_ROBOTICS_ARCHITECTURE.md`) and resolved by `robot_groups::group_covers_tool` rather than `TOOL_GROUPS`.
 
 ### 7.3 Wildcard Matching
 
@@ -1055,7 +1055,7 @@ Model switches are persisted to the profile JSON file. On gateway restart, the b
 
 Each channel:chat_id pair maintains its own session (conversation history).
 
-- **Session persistence:** JSONL files in `.octos/sessions/`
+- **Session persistence:** JSONL files in `.ra/sessions/`
 - **Max history:** Configurable via `gateway.max_history` (default: 50 messages)
 - **Named sessions:** `/new <name>` switches to — or creates — a named session; bare `/new` clears history like `/clear`. If a background seal was interrupted — the history sits in sealed segments with no active file — the session self-heals: opening it, or `/new <name>` on a gateway, rebuilds the active file from the sealed segments and resumes the history instead of starting empty.
 - **Internally-forked child sessions** (e.g. background spawns) carry a `parent_key` field linking them to their origin — user-created named sessions do not.
@@ -1068,7 +1068,7 @@ Each channel:chat_id pair maintains its own session (conversation history).
 The agent maintains long-term memory across sessions:
 
 - **`MEMORY.md`** — Persistent notes, always loaded into context
-- **Daily notes** — `.octos/memory/YYYY-MM-DD.md`, auto-created
+- **Daily notes** — `.ra/memory/YYYY-MM-DD.md`, auto-created
 - **Recent memory** — Last 7 days of daily notes included in context
 - **Episodes** — Task completion summaries stored in `episodes.redb`
 
@@ -1102,13 +1102,13 @@ Bot: [uses cron tool with action="list"]
 Cron jobs can also be managed via CLI:
 
 ```bash
-octos cron list                              # List active jobs
-octos cron list --all                        # Include disabled
-octos cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
-octos cron add --name "check" --message "Check status" --every 3600
-octos cron remove <job-id>
-octos cron enable <job-id>
-octos cron enable <job-id> --disable
+ra cron list                              # List active jobs
+ra cron list --all                        # Include disabled
+ra cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
+ra cron add --name "check" --message "Check status" --every 3600
+ra cron remove <job-id>
+ra cron enable <job-id>
+ra cron enable <job-id> --disable
 ```
 
 ### 11.5 Multi-Turn Tool Use
@@ -1195,9 +1195,9 @@ Sub-agents can use different LLM models via `sub_providers`:
 
 **Sub-agent output router (M8.7)**: long sub-agent transcripts are summarized by `AgentSummaryGenerator` and the compact summary is surfaced in parent context, while the full transcript is persisted to disk for later inspection. This keeps parent context small even when delegating large research tasks.
 
-**Swarm dispatch**: for fan-out workloads use the swarm API instead of multiple spawns. A swarm dispatch fans a contract to N sub-agents, aggregates artifacts, runs them through a validator, and rolls cost up to the parent. State persisted at `crates/octos-swarm/src/persistence.rs`; ledger at `crates/octos-swarm/src/ledger.rs`.
+**Swarm dispatch**: for fan-out workloads use the swarm API instead of multiple spawns. A swarm dispatch fans a contract to N sub-agents, aggregates artifacts, runs them through a validator, and rolls cost up to the parent. State persisted at `crates/ra-swarm/src/persistence.rs`; ledger at `crates/ra-swarm/src/ledger.rs`.
 
-**`spawn_only` skill tools auto-route to background**: any plugin tool whose manifest declares `spawn_only: true` is intercepted at the execution layer (`crates/octos-agent/src/agent/execution.rs`) and forced into background mode regardless of caller intent. The agent gets an immediate "task started" acknowledgement, and the result is delivered later as a new inbound message. Sub-agents cannot spawn further sub-agents (deny-wins via `group:delegated`).
+**`spawn_only` skill tools auto-route to background**: any plugin tool whose manifest declares `spawn_only: true` is intercepted at the execution layer (`crates/ra-agent/src/agent/execution.rs`) and forced into background mode regardless of caller intent. The agent gets an immediate "task started" acknowledgement, and the result is delivered later as a new inbound message. Sub-agents cannot spawn further sub-agents (deny-wins via `group:delegated`).
 
 ### 11.10 Message Queue Modes
 
@@ -1231,10 +1231,10 @@ When a user sends messages while the agent is processing:
 
 ### 11.11 Heartbeat
 
-The heartbeat service reads `.octos/HEARTBEAT.md` every 30 minutes and sends its content to the agent. Use it for background task instructions:
+The heartbeat service reads `.ra/HEARTBEAT.md` every 30 minutes and sends its content to the agent. Use it for background task instructions:
 
 ```markdown
-<!-- .octos/HEARTBEAT.md -->
+<!-- .ra/HEARTBEAT.md -->
 Check for new issues in the GitHub repo and summarize any urgent ones.
 ```
 
@@ -1242,7 +1242,7 @@ Check for new issues in the GitHub repo and summarize any urgent ones.
 
 ## 12. Bundled App Skills
 
-Bundled app skills ship as compiled binaries alongside the `octos` binary. On gateway startup they are written into `<octos_home>/bundled-app-skills/<name>/`, while operator or user customizations are installed into the active profile's `~/.octos/profiles/<profile>/data/skills/` directory so a re-deploy never overwrites them. The full list lives in `BUNDLED_APP_SKILLS` (`crates/octos-agent/src/bundled_app_skills.rs`):
+Bundled app skills ship as compiled binaries alongside the `ra` binary. On gateway startup they are written into `<octos_home>/bundled-app-skills/<name>/`, while operator or user customizations are installed into the active profile's `~/.ra/profiles/<profile>/data/skills/` directory so a re-deploy never overwrites them. The full list lives in `BUNDLED_APP_SKILLS` (`crates/ra-agent/src/bundled_app_skills.rs`):
 
 > **Bundled (auto-installed):** news, deep-search, deep-crawl, send-email, account-manager, time (binary `clock`), weather, smart-home, skill-evolve. Plus the platform-skill `voice`.
 
@@ -1634,7 +1634,7 @@ WebSocket bridge for WeChat personal accounts. Connects to the WeChat client via
 **Requires:** A bridge configured for the profile first (Settings → Smart Home)
 **Context-triggered:** Activated when conversation mentions "smart home", "device", "light", "thermostat", "智能家居", "开灯", "关灯", "空调", "窗帘"
 
-Lists and controls smart-home devices (lights, thermostats, curtains, speakers, etc.) through the bridge configured for the active profile (e.g. Home Assistant). Reads the bridge URL and token directly from the profile — does not proxy through the running gateway. Camera video streaming stays a human-facing, WebSocket-only feature in octos-web and is not exposed to the agent.
+Lists and controls smart-home devices (lights, thermostats, curtains, speakers, etc.) through the bridge configured for the active profile (e.g. Home Assistant). Reads the bridge URL and token directly from the profile — does not proxy through the running gateway. Camera video streaming stays a human-facing, WebSocket-only feature in ra-web and is not exposed to the agent.
 
 #### smart_home_list_devices Parameters
 
@@ -1742,20 +1742,20 @@ curl http://localhost:50080/api/admin/platform-skills/ominix-api/logs?lines=100
 
 Transcribes audio files to text.
 
-Set `ASR_API_URL` to the service base URL before starting `octos serve` or
-`octos gateway` to route AppUI voice turns, gateway voice messages, and the
+Set `ASR_API_URL` to the service base URL before starting `ra serve` or
+`ra gateway` to route AppUI voice turns, gateway voice messages, and the
 `voice_transcribe` tool to a dedicated ASR service:
 
 ```bash
-ASR_API_URL=http://127.0.0.1:8091 octos serve --port 50080
+ASR_API_URL=http://127.0.0.1:8091 ra serve --port 50080
 ```
 
 The service must accept `POST /v1/audio/transcriptions` with JSON fields
 `file` (base64 audio), optional `language`, and `response_format`. It must
 return JSON containing a string `text` field. A successful empty `text` is
-treated as a no-speech rejection. Octos probes `GET /health` for readiness;
+treated as a no-speech rejection. ra probes `GET /health` for readiness;
 services without that route may return `404` or `405`. If `ASR_API_URL` is
-unset or blank, Octos uses the existing OMiniX ASR route.
+unset or blank, ra uses the existing OMiniX ASR route.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -1805,7 +1805,7 @@ If `voice_synthesize` is called with a name that isn't a preset, it returns an e
 
 #### 13.5.1 Registering Cloned Voices on Deploy (#653)
 
-`fm_tts` produces clone reference WAVs under `~/.octos/profiles/<profile>/data/voice_profiles/<name>.wav`. The OminiX-API voice registry that `fm_tts` validates against is in-memory at startup and loads from `~/.OminiX/models/voices.json` — saved profile WAVs are **not** auto-discovered.
+`fm_tts` produces clone reference WAVs under `~/.ra/profiles/<profile>/data/voice_profiles/<name>.wav`. The OminiX-API voice registry that `fm_tts` validates against is in-memory at startup and loads from `~/.OminiX/models/voices.json` — saved profile WAVs are **not** auto-discovered.
 
 `scripts/register-fleet-voices.sh` writes `voices.json` on the remote host so OminiX-API's `/v1/voices` enumerates every saved voice profile, then nudges the daemon to pick up the change. It is idempotent (operator hand-tunes to `ref_text` / aliases are preserved). Run it as part of `./scripts/deploy.sh` post-deploy, or directly to fix a single host:
 
@@ -1868,24 +1868,24 @@ Custom skills extend the agent with new tools and instructions. They can be inst
 
 ```bash
 # Install all skills from a repo
-octos skills install user/repo
+ra skills install user/repo
 
 # Install a specific skill subdirectory
-octos skills install user/repo/skill-name
+ra skills install user/repo/skill-name
 
 # Install from a specific branch
-octos skills install user/repo --branch develop
+ra skills install user/repo --branch develop
 
 # Force overwrite existing
-octos skills install user/repo --force
+ra skills install user/repo --force
 
 # Install into a specific profile
-octos skills --profile my-bot install user/repo
+ra skills --profile my-bot install user/repo
 ```
 
 The path after `user/repo` is resolved against the repository root, so a skill
 kept in a nested directory is addressed by its full path (e.g., a skill at
-`skills/my-skill` installs with `octos skills install user/repo/skills/my-skill`).
+`skills/my-skill` installs with `ra skills install user/repo/skills/my-skill`).
 
 **Installation process:**
 1. Tries to download pre-built binary from the skill registry (SHA-256 verified)
@@ -1897,30 +1897,30 @@ kept in a nested directory is addressed by its full path (e.g., a skill at
 
 ```bash
 # List installed skills
-octos skills list
+ra skills list
 
 # Show detailed skill info
-octos skills info skill-name
+ra skills info skill-name
 
 # Update a specific skill
-octos skills update skill-name
+ra skills update skill-name
 
 # Update all skills
-octos skills update all
+ra skills update all
 
 # Remove a skill
-octos skills remove skill-name
+ra skills remove skill-name
 
 # Search the online registry
-octos skills search "web scraping"
+ra skills search "web scraping"
 ```
 
 ### 14.3 Skill Directory Structure
 
-A skill lives in `.octos/skills/<name>/` and contains:
+A skill lives in `.ra/skills/<name>/` and contains:
 
 ```
-.octos/skills/my-skill/
+.ra/skills/my-skill/
 ├── SKILL.md         # Required: instructions + frontmatter
 ├── manifest.json    # Required for tool skills: tool definitions
 ├── main             # Compiled binary (or script)
@@ -2015,13 +2015,13 @@ The tool binary receives JSON input on stdin and outputs JSON on stdout:
 
 Profile gateways load skills from these directories, in priority order:
 
-1. `~/.octos/profiles/<profile>/data/skills/` (profile-scoped custom skills)
+1. `~/.ra/profiles/<profile>/data/skills/` (profile-scoped custom skills)
 2. `<octos_home>/bundled-app-skills/` (bundled: news, deep-search, etc.)
 3. `<octos_home>/platform-skills/` (admin-loaded platform skills, such as ASR/TTS)
 
-Standalone project runs can also load `<project>/.octos/plugins/` and
-`<project>/.octos/skills/`. The old HOME-rooted global directories
-`~/.octos/plugins/` and `~/.octos/skills/` are migration-only and are no longer
+Standalone project runs can also load `<project>/.ra/plugins/` and
+`<project>/.ra/skills/`. The old HOME-rooted global directories
+`~/.ra/plugins/` and `~/.ra/skills/` are migration-only and are no longer
 part of the normal scan path.
 
 ### 14.7 Creating a Custom Skill
@@ -2031,7 +2031,7 @@ part of the normal scan path.
 1. Create the skill directory:
 
 ```bash
-mkdir -p .octos/skills/translator
+mkdir -p .ra/skills/translator
 ```
 
 2. Create `SKILL.md`:
@@ -2114,7 +2114,7 @@ with urllib.request.urlopen(req) as resp:
 5. Make it executable:
 
 ```bash
-chmod +x .octos/skills/translator/main
+chmod +x .ra/skills/translator/main
 ```
 
 6. Test it:
@@ -2226,7 +2226,7 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
   // Hooks
   "hooks": [],
 
-  // MCP servers — external tool providers octos connects to as a client.
+  // MCP servers — external tool providers ra connects to as a client.
   // stdio: command + args (+ optional env). HTTP: url (+ headers, or oauth).
   "mcp_servers": [
     // {
@@ -2251,7 +2251,7 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 
   // Sandbox — see docs/SANDBOX.md for full reference.
   // Backends: bwrap (Linux), sandbox-exec (macOS), AppContainer (Windows,
-  // via the octos-sandbox helper crate), docker (any OS). Auto picks per-OS.
+  // via the ra-sandbox helper crate), docker (any OS). Auto picks per-OS.
   "sandbox": {
     "enabled": true,
     "mode": "auto",
@@ -2262,7 +2262,7 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
   // Email (for email channel)
   "email": null,
 
-  // Deployment role for octos serve
+  // Deployment role for ra serve
   "mode": "local",           // local | tenant | cloud
   "tunnel_domain": null,      // optional for tenant/cloud tunnel setups
   "frps_server": null,        // optional for tenant/cloud tunnel setups
@@ -2332,14 +2332,14 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 | **System** | |
 | `RUST_LOG` | Log level (error/warn/info/debug/trace) |
 | `OCTOS_LOG_JSON` | Enable JSON-formatted logs (set to any value) |
-| `OCTOS_HOME` | Override the global data/config directory (default: `~/.octos`) |
+| `OCTOS_HOME` | Override the global data/config directory (default: `~/.ra`) |
 | `TUNNEL_DOMAIN` | Tunnel base domain for tenant/cloud deployments |
 | `FRPS_SERVER` | frps relay host for tenant/cloud deployments |
 
 ### 15.3 File Layout
 
 ```
-~/.octos/                        # Global config directory
+~/.ra/                        # Global config directory
 ├── auth.json                   # Stored API credentials (mode 0600)
 ├── profiles/                   # Per-profile data root (serve mode)
 │   └── <profile-id>/
@@ -2351,7 +2351,7 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 ├── skills/                     # Global custom skills
 └── serve.log                   # Serve mode log file
 
-.octos/                          # Project/profile data directory
+.ra/                          # Project/profile data directory
 ├── config.json                 # Configuration
 ├── cron.json                   # Scheduled jobs
 ├── AGENTS.md                   # Agent instructions
@@ -2367,7 +2367,7 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
 ├── bundled-app-skills/         # Auto-installed by gateway bootstrap
 │   │                           # (BUNDLED_APP_SKILLS_DIR = "bundled-app-skills";
 │   │                           #  contents come from
-│   │                           #  crates/octos-agent/src/bundled_app_skills.rs).
+│   │                           #  crates/ra-agent/src/bundled_app_skills.rs).
 │   │                           # Re-deploy refreshes this; user edits here are
 │   │                           # overwritten — put customizations under skills/.
 │   ├── news/                   # news_fetch
@@ -2392,13 +2392,13 @@ Bot: [uses translate tool with text="Hello world", target_lang="JA"]
     └── chat_history            # Readline history (CLI)
 ```
 
-> **Not present in the runtime tree:** `harness-starter-{audio,coding,generic,report}` and `wechat-bridge` are workspace-only example/utility crates under `crates/app-skills/`. They build with `cargo build --workspace` but are not part of `BUNDLED_APP_SKILLS`, so the gateway never copies them into `~/.octos/bundled-app-skills/`. Don't expect to find them at runtime — open the source tree if you want the templates.
+> **Not present in the runtime tree:** `harness-starter-{audio,coding,generic,report}` and `wechat-bridge` are workspace-only example/utility crates under `crates/app-skills/`. They build with `cargo build --workspace` but are not part of `BUNDLED_APP_SKILLS`, so the gateway never copies them into `~/.ra/bundled-app-skills/`. Don't expect to find them at runtime — open the source tree if you want the templates.
 
 ---
 
 ## 16. Matrix Appservice (Palpo)
 
-Octos can run as a [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/) (appservice) behind a Matrix homeserver. This section describes how to deploy Octos alongside [Palpo](https://github.com/palpo-im/palpo) using Docker Compose so that users can talk to the bot from any Matrix client.
+ra can run as a [Matrix Application Service](https://spec.matrix.org/latest/application-service-api/) (appservice) behind a Matrix homeserver. This section describes how to deploy ra alongside [Palpo](https://github.com/palpo-im/palpo) using Docker Compose so that users can talk to the bot from any Matrix client.
 
 ### 16.1 How It Works
 
@@ -2409,13 +2409,13 @@ Matrix Client (Element, etc.)
   Palpo (homeserver :8008)
        │  pushes events via Appservice API
        ▼
-  Octos (appservice listener :8009)
+  ra (appservice listener :8009)
        │  sends responses back via Palpo's client-server API
        ▼
   Palpo ──► Matrix Client
 ```
 
-Palpo loads a **registration YAML** at startup that tells it which user namespaces belong to Octos and where to forward events. Octos listens on a dedicated port (default `8009`) for those events and replies through Palpo's client-server API.
+Palpo loads a **registration YAML** at startup that tells it which user namespaces belong to ra and where to forward events. ra listens on a dedicated port (default `8009`) for those events and replies through Palpo's client-server API.
 
 ### 16.2 Directory Layout
 
@@ -2424,13 +2424,13 @@ palpo_with_octos/
 ├── compose.yml                        # Docker Compose file
 ├── palpo.toml                         # Palpo homeserver config
 ├── appservices/
-│   └── octos-registration.yaml        # Appservice registration
+│   └── ra-registration.yaml        # Appservice registration
 ├── config/
-│   ├── botfather.json                 # Octos profile (Matrix channel)
-│   └── octos.json                     # Octos global config
+│   ├── botfather.json                 # ra profile (Matrix channel)
+│   └── ra.json                     # ra global config
 ├── data/
 │   ├── pgsql/                         # PostgreSQL data
-│   ├── octos/                         # Octos runtime data
+│   ├── ra/                         # ra runtime data
 │   └── media/                         # Palpo media store
 └── static/
     └── index.html                     # Palpo home page
@@ -2440,7 +2440,7 @@ palpo_with_octos/
 
 #### 1. Generate Tokens
 
-The appservice registration and the Octos profile must share two tokens. Generate them once:
+The appservice registration and the ra profile must share two tokens. Generate them once:
 
 ```bash
 # Generate as_token and hs_token (any random hex string works)
@@ -2452,14 +2452,14 @@ Keep them handy — you will paste them into two files below.
 
 #### 2. Create the Appservice Registration
 
-Create `appservices/octos-registration.yaml`:
+Create `appservices/ra-registration.yaml`:
 
 ```yaml
-# Matrix Appservice Registration — octos
-id: octos-matrix-appservice
+# Matrix Appservice Registration — ra
+id: ra-matrix-appservice
 
-# URL where Palpo pushes events to octos (Docker service name, NOT localhost)
-url: "http://octos:8009"
+# URL where Palpo pushes events to ra (Docker service name, NOT localhost)
+url: "http://ra:8009"
 
 # Tokens — must match config/botfather.json
 as_token: "<your-as-token>"
@@ -2482,9 +2482,9 @@ Key fields:
 
 | Field | Description |
 |-------|-------------|
-| `url` | Where Palpo sends events. Use the Docker service name (e.g. `http://octos:8009`), not `localhost`. |
-| `as_token` | Token that Octos uses when calling Palpo's API. |
-| `hs_token` | Token that Palpo uses when pushing events to Octos. |
+| `url` | Where Palpo sends events. Use the Docker service name (e.g. `http://ra:8009`), not `localhost`. |
+| `as_token` | Token that ra uses when calling Palpo's API. |
+| `hs_token` | Token that Palpo uses when pushing events to ra. |
 | `sender_localpart` | The bot's Matrix local username (becomes `@octosbot:your.server.name`). |
 | `namespaces.users` | Regex patterns for user IDs the appservice manages. Include both the bot itself and any bridged-user prefix. |
 
@@ -2511,7 +2511,7 @@ server = "your.server.name"
 client = "https://your.server.name"
 ```
 
-#### 4. Create the Octos Profile
+#### 4. Create the ra Profile
 
 Create `config/botfather.json` with a Matrix channel that uses the same tokens:
 
@@ -2556,9 +2556,9 @@ Matrix channel fields:
 | `server_name` | The Matrix domain (must match `palpo.toml`). |
 | `sender_localpart` | Bot username (must match the registration). |
 | `user_prefix` | Prefix for bridged user IDs managed by this appservice. |
-| `port` | Port Octos listens on for appservice events from Palpo. |
+| `port` | Port ra listens on for appservice events from Palpo. |
 | `allowed_senders` | Matrix user IDs that may talk to the bot. Empty array = allow all. |
-| `mention_only` | Optional, default `true`. Outside a true 1:1 DM, a bot only replies when explicitly addressed (an `m.mentions` entry, an MXID pill/mention, or a client-supplied target). A true 1:1 DM — a single human plus a single managed bot in the room, counted from the appservice's own room map — always replies. Rooms with multiple managed bots require a mention even when only one human is present, so bots don't all answer every message. Set to `false` to make the bot reply to every message in every room (messages carrying `org.octos.explicit_room` are still gated). |
+| `mention_only` | Optional, default `true`. Outside a true 1:1 DM, a bot only replies when explicitly addressed (an `m.mentions` entry, an MXID pill/mention, or a client-supplied target). A true 1:1 DM — a single human plus a single managed bot in the room, counted from the appservice's own room map — always replies. Rooms with multiple managed bots require a mention even when only one human is present, so bots don't all answer every message. Set to `false` to make the bot reply to every message in every room (messages carrying `org.ra.explicit_room` are still gated). |
 
 #### 5. Docker Compose
 
@@ -2600,22 +2600,22 @@ services:
     networks:
       - internal
 
-  octos:
+  ra:
     build:
-      context: /path/to/octos       # Path to Octos source repo
+      context: /path/to/ra       # Path to ra source repo
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - 8009:8009     # Appservice listener (receives events from Palpo)
-      - 8010:8080     # Octos dashboard / admin API
+      - 8010:8080     # ra dashboard / admin API
     environment:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      RUST_LOG: octos=debug,info
+      RUST_LOG: ra=debug,info
     volumes:
-      - ./data/octos:/root/.octos
-      - ./config/botfather.json:/root/.octos/profiles/botfather.json:ro
-      - ./config/octos.json:/config/octos.json:ro
-    command: ["serve", "--host", "0.0.0.0", "--port", "8080", "--config", "/config/octos.json"]
+      - ./data/ra:/root/.ra
+      - ./config/botfather.json:/root/.ra/profiles/botfather.json:ro
+      - ./config/ra.json:/config/ra.json:ro
+    command: ["serve", "--host", "0.0.0.0", "--port", "8080", "--config", "/config/ra.json"]
     depends_on:
       - palpo
     networks:
@@ -2632,13 +2632,13 @@ networks:
 docker compose up -d
 ```
 
-Palpo reads `appservices/octos-registration.yaml` on startup. When a Matrix user sends a message in a room where the bot is invited, Palpo pushes the event to `http://octos:8009`, Octos processes it through the agent loop, and replies via Palpo's client-server API.
+Palpo reads `appservices/ra-registration.yaml` on startup. When a Matrix user sends a message in a room where the bot is invited, Palpo pushes the event to `http://ra:8009`, ra processes it through the agent loop, and replies via Palpo's client-server API.
 
 ### 16.4 Token Matching Checklist
 
 The most common misconfiguration is a token mismatch. All three of these must agree:
 
-| Value | `octos-registration.yaml` | `botfather.json` |
+| Value | `ra-registration.yaml` | `botfather.json` |
 |-------|--------------------------|-------------------|
 | `as_token` | `as_token: "abc..."` | `"as_token": "abc..."` |
 | `hs_token` | `hs_token: "def..."` | `"hs_token": "def..."` |
@@ -2650,7 +2650,7 @@ The most common misconfiguration is a token mismatch. All three of these must ag
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Bot does not respond | Token mismatch between registration and profile | Verify the [token checklist](#164-token-matching-checklist) |
-| `Connection refused` in Palpo logs | Octos not running or wrong `url` in registration | Ensure Octos is up; use Docker service name (`http://octos:8009`), not `localhost` |
+| `Connection refused` in Palpo logs | ra not running or wrong `url` in registration | Ensure ra is up; use Docker service name (`http://ra:8009`), not `localhost` |
 | `User ID not in namespace` | `sender_localpart` doesn't match registration `namespaces.users` regex | Update the regex to include the bot's full user ID |
 | Messages from unauthorized users ignored | `allowed_senders` filtering | Add the user's Matrix ID to the array, or set it to `[]` to allow everyone |
 

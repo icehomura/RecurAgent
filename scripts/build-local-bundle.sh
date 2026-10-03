@@ -13,7 +13,7 @@
 #   ./scripts/build-local-bundle.sh --install --tunnel --tenant-name alice ...
 #
 # Environment (defaults mirror .github/workflows/ci.yml):
-#   FEATURES      cargo features for octos-cli
+#   FEATURES      cargo features for ra-cli
 #   SKILL_CRATES  -p args for skill crate builds
 set -euo pipefail
 
@@ -87,7 +87,7 @@ ensure_cargo() {
 ensure_cargo || exit 1
 
 # ── Dashboard (embedded SPA — must be built before cargo, since ─────
-#    rust_embed bakes crates/octos-cli/static/admin/ into the binary) ─
+#    rust_embed bakes crates/ra-cli/static/admin/ into the binary) ─
 if [ "$SKIP_DASHBOARD" = true ]; then
     echo "==> Skipping dashboard build (--skip-dashboard)"
 else
@@ -95,14 +95,14 @@ else
     [ "$INSTALL_DEPS" = true ] && DASHBOARD_ARGS+=(--install-deps)
     ./scripts/build-dashboard.sh "${DASHBOARD_ARGS[@]}"
 
-    # octos-web SPA (embedded same-origin at /app — also baked in by rust_embed,
+    # ra-web SPA (embedded same-origin at /app — also baked in by rust_embed,
     # so it must be built before cargo). Best-effort: skip with a warning if the
     # submodule isn't checked out, so a bundle still builds (the binary serves a
-    # 503 "web_bundle_missing" at /app until octos-web is built).
-    if [ -f octos-web/package.json ] || git submodule update --init octos-web 2>/dev/null; then
+    # 503 "web_bundle_missing" at /app until ra-web is built).
+    if [ -f ra-web/package.json ] || git submodule update --init ra-web 2>/dev/null; then
         bash scripts/build-web-app.sh
     else
-        echo "==> Skipping octos-web build (submodule not available); /app will 503 until built"
+        echo "==> Skipping ra-web build (submodule not available); /app will 503 until built"
     fi
 fi
 
@@ -110,15 +110,15 @@ fi
 ./scripts/milestone-ci.sh release-bundle
 
 # ── Bundle (same binary list as .github/workflows/ci.yml:179-182) ────
-TARBALL="octos-bundle-${TRIPLE}.tar.gz"
+TARBALL="ra-bundle-${TRIPLE}.tar.gz"
 rm -rf dist && mkdir dist
-for b in octos octos-sandbox news_fetch deep-search deep_crawl send_email account_manager \
+for b in ra ra-sandbox news_fetch deep-search deep_crawl send_email account_manager \
          voice clock weather; do
     cp "target/release/$b" dist/ 2>/dev/null || true
 done
 # Ship the canonical model catalog (the model-provisioning SSOT) next to the
 # binary so a fresh install has the full catalog + accurate context windows
-# without a network fetch (octos resolves `model_catalog.json` beside the exe).
+# without a network fetch (ra resolves `model_catalog.json` beside the exe).
 cp model_catalog.json dist/ 2>/dev/null || true
 (cd dist && tar czf "../scripts/${TARBALL}" ./*)
 echo "==> Wrote scripts/${TARBALL}"

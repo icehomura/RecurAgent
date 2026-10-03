@@ -8,7 +8,7 @@ ADR: `docs/M11-PROFILE-SESSION-RUNTIME-ADR.md`
 ## Goal
 
 Replace the server-wide embedded `state.agent: Option<Arc<Agent>>` in
-`octos serve` with two first-class types — `ProfileRuntime` (per
+`ra serve` with two first-class types — `ProfileRuntime` (per
 profile) and `SessionRuntime` (per `(profile_id, session_key)`) —
 unifying the path serve and gateway take to construct an agent.
 Surface coding-agent's N-isolated-sessions-per-profile model. Delete
@@ -49,7 +49,7 @@ top-level data dir's `skill-output`.
 inline (~500 LOC of setup before its bus loop starts), per-profile,
 inside each subprocess `ProcessManager` spawns. It correctly sets
 `workspace_root` per-session under `<data_dir>/users/<key>/workspace/`
-and writes `.octos-workspace.toml` there.
+and writes `.ra-workspace.toml` there.
 
 The mismatch caused the yangmi-voice incident chain on 2026-05-10
 (four PRs landed; a fifth gap — workspace policy — surfaced after the
@@ -59,28 +59,28 @@ fourth and still requires a hotfix on mini1).
 
 ### M11-A: Runtime types skeleton
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
 - The type signatures of `ProfileRuntime`, `SessionRuntime`, and
   `SessionRuntimeCache`. No behavior yet — types compile, doc
   comments fully specify the contract.
-- A new module `crates/octos-cli/src/runtime/`.
+- A new module `crates/ra-cli/src/runtime/`.
 
 Allowed areas:
 
-- `crates/octos-cli/src/runtime/mod.rs` (new)
-- `crates/octos-cli/src/runtime/profile.rs` (new)
-- `crates/octos-cli/src/runtime/session.rs` (new)
-- `crates/octos-cli/src/runtime/cache.rs` (new)
-- `crates/octos-cli/src/lib.rs` (add `mod runtime;`)
+- `crates/ra-cli/src/runtime/mod.rs` (new)
+- `crates/ra-cli/src/runtime/profile.rs` (new)
+- `crates/ra-cli/src/runtime/session.rs` (new)
+- `crates/ra-cli/src/runtime/cache.rs` (new)
+- `crates/ra-cli/src/lib.rs` (add `mod runtime;`)
 
 Deliverables:
 
 - `pub struct ProfileRuntime` with fields:
   - `profile_id: String`
-  - `data_dir: PathBuf` — `~/.octos/profiles/<id>/data`
+  - `data_dir: PathBuf` — `~/.ra/profiles/<id>/data`
   - `llm: Arc<dyn LlmProvider>`
   - `adaptive_router: Option<Arc<AdaptiveRouter>>` — from `qos_catalog::AdaptiveProviderBundle`
   - `credentials: HashMap<String, String>`
@@ -113,8 +113,8 @@ Deliverables:
 
 Acceptance:
 
-- `cargo check -p octos-cli --features api` clean with `todo!()` bodies.
-- `cargo doc -p octos-cli --no-deps` renders the module docs.
+- `cargo check -p ra-cli --features api` clean with `todo!()` bodies.
+- `cargo doc -p ra-cli --no-deps` renders the module docs.
 - A unit test asserts the type signatures compile and the cache key
   format is `(String, SessionKey)`.
 
@@ -122,7 +122,7 @@ Blocks: M11-B, M11-C, M11-D.
 
 ### M11-B: Extract gateway's profile bootstrap into ProfileRuntime
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -137,9 +137,9 @@ Depends on: M11-A.
 
 Allowed areas:
 
-- `crates/octos-cli/src/runtime/profile.rs`
-- `crates/octos-cli/src/commands/gateway/gateway_runtime.rs`
-- `crates/octos-cli/src/skills_scope.rs` (already exports the helpers
+- `crates/ra-cli/src/runtime/profile.rs`
+- `crates/ra-cli/src/commands/gateway/gateway_runtime.rs`
+- `crates/ra-cli/src/skills_scope.rs` (already exports the helpers
   we need; small re-export tweaks only)
 - tests under these crates
 
@@ -157,11 +157,11 @@ Deliverables:
   9. Opens `EpisodeStore` and `MemoryStore` against `data_dir`.
   10. Returns `Arc<Self>`.
 - `gateway_runtime.rs::run` refactored to call `ProfileRuntime::bootstrap` once, then use its fields for the bus loop, session actors, etc. The bus / channel / cron / heartbeat setup downstream of the agent stays where it is.
-- New module `crates/octos-cli/src/runtime/profile.rs` exports the implementation.
+- New module `crates/ra-cli/src/runtime/profile.rs` exports the implementation.
 
 Acceptance:
 
-- `cargo test -p octos-cli --lib commands::gateway` passes unchanged.
+- `cargo test -p ra-cli --lib commands::gateway` passes unchanged.
 - Manual diff: before-PR and after-PR `gateway run` produces the same
   startup log lines (provider list, adaptive routing, skills loaded,
   plugin env keys, base-tool pin count).
@@ -177,21 +177,21 @@ Blocks: M11-D.
 
 ### M11-C: SessionRuntime + per-session workspace bootstrap
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
 - The implementation of `SessionRuntime::bootstrap` — the per-session
   agent constructor that fixes the yangmi/workspace gap.
-- Per-session workspace dir + `.octos-workspace.toml` creation step.
+- Per-session workspace dir + `.ra-workspace.toml` creation step.
 
 Depends on: M11-A.
 
 Allowed areas:
 
-- `crates/octos-cli/src/runtime/session.rs`
-- `crates/octos-cli/src/runtime/cache.rs`
-- `crates/octos-agent/src/workspace_policy.rs` (helper to write a
+- `crates/ra-cli/src/runtime/session.rs`
+- `crates/ra-cli/src/runtime/cache.rs`
+- `crates/ra-agent/src/workspace_policy.rs` (helper to write a
   default policy; existing `write_workspace_policy` is sufficient —
   no semantic change)
 - tests under the above
@@ -204,7 +204,7 @@ Deliverables:
        `validate_session_workspace_allowed(state, path)` accepts, use
        it (coding-agent path).
      - Else, derive `profile.data_dir.join("users").join(encode(session_key)).join("workspace")` and `create_dir_all`.
-  2. If `workspace_root/.octos-workspace.toml` does not exist, write
+  2. If `workspace_root/.ra-workspace.toml` does not exist, write
      `WorkspacePolicy::for_session()` to it via `write_workspace_policy`.
   3. Compute `plugin_work_dir = workspace_root.join("skill-output")` and `create_dir_all`.
   4. Clone `profile.tool_specs` via `ToolRegistry::snapshot_excluding(&[])` and apply:
@@ -251,7 +251,7 @@ Blocks: M11-D.
 
 ### M11-D: AppState refactor — replace state.agent with profiles/sessions
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -267,9 +267,9 @@ Depends on: M11-A, M11-B, M11-C.
 
 Allowed areas:
 
-- `crates/octos-cli/src/api/mod.rs` (AppState struct)
-- `crates/octos-cli/src/api/handlers.rs`
-- `crates/octos-cli/src/commands/serve.rs`
+- `crates/ra-cli/src/api/mod.rs` (AppState struct)
+- `crates/ra-cli/src/api/handlers.rs`
+- `crates/ra-cli/src/commands/serve.rs`
 - tests under these crates
 
 Deliverables:
@@ -302,19 +302,19 @@ Deliverables:
 
 Acceptance:
 
-- `cargo test -p octos-cli --lib api::handlers` passes.
+- `cargo test -p ra-cli --lib api::handlers` passes.
 - `cargo clippy --workspace --all-targets -- -D warnings` clean.
 - Live `curl -X POST /api/chat` against a dev serve completes a
   one-turn echo against the routed profile's LLM.
 - yangmi voice-clone end-to-end on a dev mini WITHOUT the
-  `/Users/cloud/.octos-workspace.toml` hotfix — the workspace policy
+  `/Users/cloud/.ra-workspace.toml` hotfix — the workspace policy
   is bootstrapped per-session by `SessionRuntime::bootstrap`.
 
 Blocks: M11-E, M11-F.
 
 ### M11-E: UI Protocol per-session workspace wiring
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -328,8 +328,8 @@ Depends on: M11-D.
 
 Allowed areas:
 
-- `crates/octos-cli/src/api/ui_protocol.rs`
-- `crates/octos-cli/src/api/ui_protocol_*.rs` bridges
+- `crates/ra-cli/src/api/ui_protocol.rs`
+- `crates/ra-cli/src/api/ui_protocol_*.rs` bridges
 - tests under the same crates
 
 Deliverables:
@@ -361,7 +361,7 @@ Blocks: M11-G.
 
 ### M11-F: Delete legacy Config transients + overlay machinery
 
-Repository: `octos`
+Repository: `ra`
 
 Owns:
 
@@ -379,12 +379,12 @@ safe).
 
 Allowed areas:
 
-- `crates/octos-cli/src/config.rs`
-- `crates/octos-cli/src/commands/serve.rs`
-- `crates/octos-cli/src/profiles.rs` (only to update
+- `crates/ra-cli/src/config.rs`
+- `crates/ra-cli/src/commands/serve.rs`
+- `crates/ra-cli/src/profiles.rs` (only to update
   `config_from_profile` if it still touches the deleted fields)
-- `crates/octos-cli/src/api/handlers.rs` (consumer migration)
-- `crates/octos-cli/src/api/ui_protocol.rs` (consumer migration)
+- `crates/ra-cli/src/api/handlers.rs` (consumer migration)
+- `crates/ra-cli/src/api/ui_protocol.rs` (consumer migration)
 - tests under these crates
 
 Deliverables:
@@ -396,15 +396,15 @@ Deliverables:
 
 Acceptance:
 
-- `cargo build -p octos-cli --features "api,telegram,discord,whatsapp,feishu,twilio,wecom,wecom-bot"` clean.
-- `cargo test -p octos-cli --lib` clean.
+- `cargo build -p ra-cli --features "api,telegram,discord,whatsapp,feishu,twilio,wecom,wecom-bot"` clean.
+- `cargo test -p ra-cli --lib` clean.
 - `git grep -nE 'profile_skills_dir|profile_plugin_env|overlay_profile_llm|populate_profile_credentials|try_create_agent|Config::credentials\b'` returns 0 hits in non-doc files.
 
 Blocks: M11-H.
 
 ### M11-G: Coding-agent multi-session e2e
 
-Repository: `octos` + `octos-web` (if needed for client driver)
+Repository: `ra` + `ra-web` (if needed for client driver)
 
 Owns:
 
@@ -415,13 +415,13 @@ Depends on: M11-D, M11-E.
 
 Allowed areas:
 
-- `crates/octos-cli/tests/` (new integration test)
+- `crates/ra-cli/tests/` (new integration test)
 - `e2e/` (Playwright spec) — optional
 - the M10 coding-runtime soak harness if reusable
 
 Deliverables:
 
-- An integration test in `crates/octos-cli/tests/coding_multi_session.rs`:
+- An integration test in `crates/ra-cli/tests/coding_multi_session.rs`:
   1. Boot a `serve` instance with two AppUI sessions for the same
      profile.
   2. Session A: `workspace_hint = /tmp/repo-A` (pre-seeded with file `a.txt`).
@@ -431,7 +431,7 @@ Deliverables:
   6. Run a `read_file("b.txt")` turn on session B; expect 200 + content.
   7. Assert session A and session B accumulate independent chat
      history JSONLs under their respective `user_key`s.
-- The test must be `#[tokio::test]` and runnable via `cargo test -p octos-cli --test coding_multi_session`. No external API keys
+- The test must be `#[tokio::test]` and runnable via `cargo test -p ra-cli --test coding_multi_session`. No external API keys
   required — use the `Stub LLM` already used in `qos_catalog.rs`
   tests.
 
@@ -445,12 +445,12 @@ Blocks: M11-H.
 
 ### M11-H: Fleet redeploy + soak gate
 
-Repository: `octos` (deploy + verify; no code change)
+Repository: `ra` (deploy + verify; no code change)
 
 Owns:
 
 - Building the M11 binary, deploying to mini1/2/3, removing the
-  hotfix `.octos-workspace.toml` at `/Users/cloud/.octos-workspace.toml`,
+  hotfix `.ra-workspace.toml` at `/Users/cloud/.ra-workspace.toml`,
   and running a soak that exercises yangmi + a coding-agent-style
   multi-session flow.
 
@@ -503,7 +503,7 @@ be rebased before merge.
    routing log, skills loaded count, plugin env keys, base-tool pin
    count).
 5. **Workspace policy bootstrap is idempotent.** If a file exists at
-   `<workspace_root>/.octos-workspace.toml`, do not overwrite it.
+   `<workspace_root>/.ra-workspace.toml`, do not overwrite it.
 
 ## Swarm Assignment Template
 

@@ -27,7 +27,7 @@
 import { test, expect } from '@playwright/test';
 
 const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
 
 test.setTimeout(180_000);

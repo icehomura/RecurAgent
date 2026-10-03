@@ -5,16 +5,16 @@
 //!
 //! Bridge config comes from `SMART_HOME_BRIDGE_URL` / `SMART_HOME_BRIDGE_TOKEN`
 //! env vars when set (forwarded by the gateway/serve runtime from the resolved
-//! profile, or exported by hand in `octos chat`), falling back to reading the
+//! profile, or exported by hand in `ra chat`), falling back to reading the
 //! profile JSON directly from `$OCTOS_HOME/profiles/<id>.json` (same
 //! convention as the `account-manager` skill). Either way this talks to the
-//! bridge itself rather than proxying through the running octos server,
+//! bridge itself rather than proxying through the running ra server,
 //! mirroring the wire contract in
-//! `crates/octos-cli/src/api/smart_home_bridge.rs` (`GET {base}/devices`,
+//! `crates/ra-cli/src/api/smart_home_bridge.rs` (`GET {base}/devices`,
 //! `POST {base}/devices/{id}` form-encoded, Bearer auth, same
 //! token/token_env resolution precedence). Camera streaming is deliberately
 //! NOT exposed here: an LLM tool call can't consume a live video stream, so
-//! that stays a human-driven, WS-only feature in octos-web
+//! that stays a human-driven, WS-only feature in ra-web
 //! (`smart_home/camera.*`).
 
 use std::collections::HashMap;
@@ -119,7 +119,7 @@ fn home_dir() -> Option<PathBuf> {
 /// 1. `SMART_HOME_BRIDGE_URL` / `SMART_HOME_BRIDGE_TOKEN` env vars — the
 ///    gateway/serve runtime forwards these from the RESOLVED profile
 ///    (parent + defaults merged, keychain markers resolved) via
-///    `profile_plugin_env`, and `octos chat` users can export them by hand.
+///    `profile_plugin_env`, and `ra chat` users can export them by hand.
 /// 2. `$OCTOS_HOME/profiles/$OCTOS_PROFILE_ID.json` read directly (same
 ///    convention as the `account-manager` skill) — fallback for runtimes
 ///    that predate the env forwarding. This path cannot see parent/defaults
@@ -147,7 +147,7 @@ fn resolve_bridge_from_profile() -> Result<BridgeConfig, String> {
     let octos_home = match std::env::var("OCTOS_HOME") {
         Ok(v) if !v.is_empty() => PathBuf::from(v),
         _ => match home_dir() {
-            Some(h) => h.join(".octos"),
+            Some(h) => h.join(".ra"),
             None => {
                 return Err("OCTOS_HOME is not set and cannot determine home directory".to_string())
             }

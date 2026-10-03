@@ -5,7 +5,7 @@
 //   - Malformed envelope rejection (missing fields, wrong types,
 //     unknown payload.type).
 //   - Hard-barrier post-completion drop (with metric labels matching
-//     the server-side `octos_projection_post_completion_drop_total`
+//     the server-side `ra_projection_post_completion_drop_total`
 //     counter).
 //   - Strict per-thread seq monotonicity (gap / backward seq
 //     violations surface AND bump `seqGaps`).

@@ -3,7 +3,7 @@
 #
 # This script is the supervisor-facing release gate for issue #474. It proves
 # that the full structured progress pipeline works end-to-end on a real
-# canary: deep-research emits octos.harness.event.v1 events, the runtime sink
+# canary: deep-research emits ra.harness.event.v1 events, the runtime sink
 # folds them into durable task_status, the UI replays them through chat, and
 # /api/sessions/:id/tasks reflects the same truth as the WS UI Protocol
 # notification stream.
@@ -23,7 +23,7 @@
 # Usage:
 #   ./scripts/validate-m4-1a-live.sh \
 #       --base-url https://dspfac.crew.ominix.io \
-#       --auth-token octos-admin-2026 \
+#       --auth-token ra-admin-2026 \
 #       [--profile dspfac] \
 #       [--test-email dspfac@gmail.com] \
 #       [--skip-e2e] \

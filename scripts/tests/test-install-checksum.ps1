@@ -35,25 +35,25 @@ function Ok([string]$Message) { Write-Host "    OK: $Message" }
 function Warn([string]$Message) { Write-Host "    WARN: $Message" }
 function Err([string]$Message) { throw "Err: $Message" }
 
-$dir = Join-Path ([System.IO.Path]::GetTempPath()) ("octos-checksum-" + [Guid]::NewGuid().ToString("N"))
+$dir = Join-Path ([System.IO.Path]::GetTempPath()) ("ra-checksum-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $dir | Out-Null
 try {
-    $zip = Join-Path $dir "octos-bundle-test.zip"
+    $zip = Join-Path $dir "ra-bundle-test.zip"
     Set-Content -Path $zip -Value "payload" -Encoding ascii
     $sidecar = "$zip.sha256"
     # Sidecar line exactly as bundle-release.sh writes it: "<hex>  <filename>".
     $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
-    Set-Content -Path $sidecar -Value "$hash  octos-bundle-test.zip" -Encoding ascii
+    Set-Content -Path $sidecar -Value "$hash  ra-bundle-test.zip" -Encoding ascii
 
     # Happy path: matching sidecar verifies.
     Test-BundleChecksum $zip $sidecar
 
     # Uppercase hash: what Get-FileHash itself prints. Must verify too.
-    Set-Content -Path $sidecar -Value ("$hash".ToUpper() + "  octos-bundle-test.zip") -Encoding ascii
+    Set-Content -Path $sidecar -Value ("$hash".ToUpper() + "  ra-bundle-test.zip") -Encoding ascii
     Test-BundleChecksum $zip $sidecar
 
     # Mismatched sidecar must abort the install.
-    Set-Content -Path $sidecar -Value (("0" * 64) + "  octos-bundle-test.zip") -Encoding ascii
+    Set-Content -Path $sidecar -Value (("0" * 64) + "  ra-bundle-test.zip") -Encoding ascii
     $refused = $false
     try { Test-BundleChecksum $zip $sidecar } catch { $refused = $true }
     if (-not $refused) {

@@ -1,7 +1,7 @@
 # Handoff: Build + E2E Soaking — 2026-04-30
 
 Audience: another agent (or human) running on a different machine, cold,
-to compile `octos` and run the e2e soaking suite against either a local
+to compile `ra` and run the e2e soaking suite against either a local
 build or the deployed fleet.
 
 Repo: `https://github.com/octos-org/octos`
@@ -51,21 +51,21 @@ System deps (if missing): `cmake`, `pkg-config`, OpenSSL is **not** required (th
 
 ```bash
 git clone https://github.com/octos-org/octos.git
-cd octos
+cd ra
 git checkout e256e6b5   # or current main
 ```
 
 Project layout (top of `CLAUDE.md`):
 
 ```
-octos-cli      # CLI: clap commands, config loading, daemon entry
-octos-agent    # Agent loop, tool system, sandbox, MCP, plugins
-octos-bus      # Message bus (Telegram/Discord/Slack/...), sessions, cron
-octos-pipeline # DOT-graph pipeline engine
-octos-plugin   # Plugin SDK (manifests + discovery)
-octos-memory   # hybrid search + memory store
-octos-llm      # LLM provider trait + native impls
-octos-core     # types: Task, Message, UI Protocol v1
+ra-cli      # CLI: clap commands, config loading, daemon entry
+ra-agent    # Agent loop, tool system, sandbox, MCP, plugins
+ra-bus      # Message bus (Telegram/Discord/Slack/...), sessions, cron
+ra-pipeline # DOT-graph pipeline engine
+ra-plugin   # Plugin SDK (manifests + discovery)
+ra-memory   # hybrid search + memory store
+ra-llm      # LLM provider trait + native impls
+ra-core     # types: Task, Message, UI Protocol v1
 crates/app-skills/         # bundled skills (deep-search, deep-crawl, voice, …)
 crates/platform-skills/    # bundled skills (voice)
 e2e/                       # Playwright tests
@@ -84,37 +84,37 @@ docs/                      # Engineering docs, ADRs, runbooks, audits
 ```
 
 If you skip this step, the embedded admin/chat dashboard is empty and
-the deployed `octos serve` will return blank pages for every dashboard
+the deployed `ra serve` will return blank pages for every dashboard
 route. We learned this the hard way during fleet deploys.
 
 **Step 2**: build the binary with the canonical feature set:
 
 ```bash
-cargo build --release -p octos-cli \
+cargo build --release -p ra-cli \
     --features telegram,whatsapp,feishu,twilio,wecom,api
 ```
 
 **Why every flag matters**:
 
 - `api` — enables the `serve` subcommand. Without it the binary builds
-  but `octos serve` fails with `error: unrecognized subcommand 'serve'`.
+  but `ra serve` fails with `error: unrecognized subcommand 'serve'`.
 - `telegram,whatsapp,feishu,twilio,wecom` — enables the bus channels.
   The mini fleet binary ships with all of these.
 
-The bare `cargo build --release -p octos-cli` (without `--features`)
+The bare `cargo build --release -p ra-cli` (without `--features`)
 **will silently strip the `serve` subcommand** and looks like a
 successful build until the daemon refuses to start. **Don't shortcut
 this.**
 
-Output: `target/release/octos`. Verify with:
+Output: `target/release/ra`. Verify with:
 
 ```bash
-target/release/octos --version
-# → octos 0.1.1+e256e6b5 ...
+target/release/ra --version
+# → ra 0.1.1+e256e6b5 ...
 ```
 
 The version string contains the git short-SHA. If it doesn't match the
-checkout, something is stale — run `cargo clean -p octos-cli` and
+checkout, something is stale — run `cargo clean -p ra-cli` and
 rebuild.
 
 **Build time**: ~5–15 min on a dedicated machine, longer on shared
@@ -127,10 +127,10 @@ seconds-to-minute.
 
 ```bash
 # Should print version info and exit 0
-target/release/octos --version
+target/release/ra --version
 
 # Should list `serve`, `chat`, `init`, `gateway`, etc. in subcommands
-target/release/octos --help
+target/release/ra --help
 ```
 
 If `serve` is missing from `--help`, the `api` feature didn't engage.
@@ -142,9 +142,9 @@ Re-run step 3 with the full `--features` list.
 
 ```bash
 # Pick a free port, e.g. 56831
-target/release/octos serve --host 127.0.0.1 --port 56831 \
+target/release/ra serve --host 127.0.0.1 --port 56831 \
     --auth-token "test-token-please-change" \
-    > /tmp/octos-serve.log 2>&1 &
+    > /tmp/ra-serve.log 2>&1 &
 echo $!  # remember PID for cleanup
 ```
 
@@ -156,14 +156,14 @@ Health check:
 
 ```bash
 curl -s http://127.0.0.1:56831/api/version
-# → {"version":"0.1.1+e256e6b5","build_date":"...","service":"octos",...}
+# → {"version":"0.1.1+e256e6b5","build_date":"...","service":"ra",...}
 ```
 
 Stop the server when done:
 
 ```bash
 kill <PID>
-# or pkill -f 'target/release/octos serve'
+# or pkill -f 'target/release/ra serve'
 ```
 
 ---
@@ -221,7 +221,7 @@ OCTOS_AUTH_TOKEN=test-token-please-change \
     live-tool-retry-collapse.spec.ts \
     --workers=1 \
     --reporter=list \
-    > /tmp/octos-soak-$(date +%Y%m%dT%H%M%S).log 2>&1
+    > /tmp/ra-soak-$(date +%Y%m%dT%H%M%S).log 2>&1
 ```
 
 **Why `--workers=1`**: these specs share daemon state; running in
@@ -233,7 +233,7 @@ parallel introduces cross-test races that aren't real bugs.
 
 ## 8. Running against the deployed fleet (alternative target)
 
-The deployed minis run an `octos serve` daemon built exactly per step 3
+The deployed minis run an `ra serve` daemon built exactly per step 3
 (and deployed via SSH-level operations covered in
 `docs/reference_fleet_deploy_procedure.md` — out of scope for *this*
 doc). This section just covers reaching them as an e2e target.
@@ -247,25 +247,25 @@ out-of-band; they are not committed to the repo.
 
 | Mini | IP | Domain | Daemon | Color | E2E target? |
 |---|---|---|---|---|---|
-| mini1 | `<mini1-ip>` | `dspfac.crew.ominix.io` | root LaunchDaemon `/Library/LaunchDaemons/io.octos.serve.plist` | yellow | ✅ safe |
+| mini1 | `<mini1-ip>` | `dspfac.crew.ominix.io` | root LaunchDaemon `/Library/LaunchDaemons/io.ra.serve.plist` | yellow | ✅ safe |
 | mini2 | `<mini2-ip>` | `dspfac.bot.ominix.io` | root LaunchDaemon | yellow | ⚠️ check with maintainer first (separate auth setup) |
-| mini3 | `<mini3-ip>` | `dspfac.octos.ominix.io` | **USER agent** at `~/Library/LaunchAgents/io.ominix.octos-serve.plist` on port 50080 — root daemon `io.octos.serve` is in pre-existing crash-loop on port 8080, leave it alone | yellow | ✅ safe |
+| mini3 | `<mini3-ip>` | `dspfac.ra.ominix.io` | **USER agent** at `~/Library/LaunchAgents/io.ominix.ra-serve.plist` on port 50080 — root daemon `io.ra.serve` is in pre-existing crash-loop on port 8080, leave it alone | yellow | ✅ safe |
 | mini4 | `<mini4-ip>` | `dspfac.river.ominix.io` | root LaunchDaemon | blue (intentional baseline / rollback target) | ✅ safe |
 | mini5 | `<mini5-ip>` | `dspfac.ocean.ominix.io` | root LaunchDaemon | yellow | ❌ **DO NOT SOAK** — reserved for active sprint work; active deploys will break your run |
-| mini6 | `<mini6-ip>` | (varies — check `~/octos-web` symlink target) | check both root + user daemon | (newer host, profile TBD) | check with maintainer |
+| mini6 | `<mini6-ip>` | (varies — check `~/ra-web` symlink target) | check both root + user daemon | (newer host, profile TBD) | check with maintainer |
 
-**Excluded — do NOT touch**: `cloud@<excluded-host-ip>` (`macmini-31.octos.bot`).
+**Excluded — do NOT touch**: `cloud@<excluded-host-ip>` (`macmini-31.ra.bot`).
 Earlier deploy scripts had it as "mini4"; the river.ominix.io box
 replaced it. It's a separate dev/test box.
 
 ### 8.2 Per-mini daemon binary path
 
-All minis use **`~/.octos/bin/octos`** (not `~/.local/bin/octos`).
+All minis use **`~/.ra/bin/ra`** (not `~/.local/bin/ra`).
 Verify on the target:
 
 ```bash
-ssh cloud@<ip> '~/.octos/bin/octos --version'
-# → octos 0.1.1+<short-sha> ...
+ssh cloud@<ip> '~/.ra/bin/ra --version'
+# → ra 0.1.1+<short-sha> ...
 ```
 
 If the version is older than your local `git rev-parse origin/main`,
@@ -277,13 +277,13 @@ report and ask the maintainer about a redeploy.
 ```bash
 # Pick mini1, mini3, or mini4 — these are the safe-to-soak targets
 
-OCTOS_TEST_URL=https://dspfac.octos.ominix.io \
+OCTOS_TEST_URL=https://dspfac.ra.ominix.io \
 OCTOS_AUTH_TOKEN='<production-token-from-maintainer>' \
   npx playwright test \
     live-overflow-thread-binding.spec.ts \
     live-thread-interleave.spec.ts \
     --workers=1 --reporter=list \
-    > /tmp/octos-soak-mini3-$(date +%Y%m%dT%H%M%S).log 2>&1
+    > /tmp/ra-soak-mini3-$(date +%Y%m%dT%H%M%S).log 2>&1
 ```
 
 The auth token is shared across the fleet for e2e purposes; ask the
@@ -295,14 +295,14 @@ Each mini runs a local TTS/ASR companion service. Voice TTS won't work
 on a mini if its `OMINIX_API_URL` env var (in the launchd plist)
 points to an unreachable endpoint OR if the local ominix-api isn't
 running. If voice-related specs (e.g. fm_tts, mofa-podcast) fail with
-network errors, suspect this companion service rather than the octos
+network errors, suspect this companion service rather than the ra
 daemon itself.
 
 ### 8.5 Web bundle
 
-octos-web has only ONE release branch (`release/coding-blue`). Same web
-bundle deploys to all minis at `~/octos-web/`. **mini4 has no
-`~/octos-web/`** — its admin/chat assets are embedded in the octos
+ra-web has only ONE release branch (`release/coding-blue`). Same web
+bundle deploys to all minis at `~/ra-web/`. **mini4 has no
+`~/ra-web/`** — its admin/chat assets are embedded in the ra
 binary directly (this is by design — `./scripts/build-dashboard.sh`
 embeds them; same step you ran in §3).
 
@@ -342,10 +342,10 @@ For each failure, also look at:
 | Symptom | Likely cause | First check |
 |---|---|---|
 | `Cannot find module '@playwright/test'` | `npm ci` was skipped | `ls e2e/node_modules/@playwright/test` |
-| Daemon refuses to start: `unrecognized subcommand 'serve'` | binary built without `--features api` | `target/release/octos --help` |
+| Daemon refuses to start: `unrecognized subcommand 'serve'` | binary built without `--features api` | `target/release/ra --help` |
 | Empty dashboard / blank `/admin` page | `./scripts/build-dashboard.sh` was skipped | redo step 3 in order |
 | `live-realtime-status` poll times out at 60s | `run_pipeline` not surfacing in `/api/sessions/:id/tasks` | check that the daemon under test is at commit `e256e6b5` or later (PR #688 made `run_pipeline` spawn_only — earlier daemons fail this) |
-| `live-thread-interleave` slow Q has no research-content marker | gemini schema sanitizer or deep_research backend not completing | check daemon log for `Unknown name "x-octos-host-config-keys"` (closed in PR #691) |
+| `live-thread-interleave` slow Q has no research-content marker | gemini schema sanitizer or deep_research backend not completing | check daemon log for `Unknown name "x-ra-host-config-keys"` (closed in PR #691) |
 | Disk fills mid-build, `ENOSPC` errors | cargo target dir / multiple worktrees | `du -sh */target` and `rm -rf` old/merged worktrees' target dirs |
 | Test passes locally, fails against fleet | fleet at older commit than local | check `<URL>/api/version` matches `git rev-parse HEAD` you tested |
 
@@ -367,8 +367,8 @@ This soak set covers the M9 milestone delivery contracts:
 4. **Approval lifecycle** — typed approvals + scope + cancellation +
    audit (m9-protocol-approval-respond, m9-protocol-fault-injection)
 5. **UI Protocol v1 wire contract** — golden round-trip + replay
-   semantics (m9-protocol-* family + the `octos-core ui_protocol` lib
-   tests run via `cargo test -p octos-core ui_protocol`)
+   semantics (m9-protocol-* family + the `ra-core ui_protocol` lib
+   tests run via `cargo test -p ra-core ui_protocol`)
 
 A green soak doesn't prove the system is bug-free; it proves the
 specific regressions the spec authors knew about are still closed.
@@ -443,8 +443,8 @@ worth a deeper investigation.
 
 - Slack/equivalent: ask the maintainer for a current daemon version
   string + a recent passing soak baseline
-- Repo: `docs/OCTOS_HARNESS_AUDIT_M6_M9_2026-04-30.md` lists which
+- Repo: `docs/ra_HARNESS_AUDIT_M6_M9_2026-04-30.md` lists which
   guarantees are tested and which are deferred
-- The 8 UPCR docs at `docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md`
+- The 8 UPCR docs at `docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_*.md`
   describe each accepted protocol change; if a soak is asserting on a
   field, the UPCR explains what it should mean

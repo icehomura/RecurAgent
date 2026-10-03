@@ -17,7 +17,7 @@
  * Usage:
  *   node ws-chat.mjs \
  *     --url http://127.0.0.1:56831 \
- *     --token octos-admin-2026 \
+ *     --token ra-admin-2026 \
  *     --session m4-1a-live-… \
  *     --message "deep research prompt" \
  *     [--profile dspfac] \

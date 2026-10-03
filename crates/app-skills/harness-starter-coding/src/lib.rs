@@ -9,7 +9,7 @@
 //! harness contract shape, not on real code generation. Swap in a real
 //! LLM-driven patch synthesis when adapting.
 //!
-//! See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md`.
+//! See `docs/ra_HARNESS_DEVELOPER_GUIDE.md`.
 
 #![deny(unsafe_code)]
 

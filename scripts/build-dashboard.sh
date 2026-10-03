@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DASHBOARD_DIR="$ROOT/dashboard"
-OUT_DIR="$ROOT/crates/octos-cli/static/admin"
+OUT_DIR="$ROOT/crates/ra-cli/static/admin"
 
 INSTALL_DEPS=false
 while [ $# -gt 0 ]; do

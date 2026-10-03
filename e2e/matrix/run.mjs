@@ -4,7 +4,7 @@
 // M22-H operational matrix runner — first PR skeleton (#1056).
 //
 // Reads a scenario manifest (TOML), filters by `--pack <name> --tier <t>`,
-// and executes each scenario's `steps` against `octos serve --stdio`.
+// and executes each scenario's `steps` against `ra serve --stdio`.
 //
 // Scope of this PR:
 //   - Pack: onboarding (tier=fast only)
@@ -75,8 +75,8 @@ function printUsageAndExit(code) {
     '                    e2e/matrix/<pack>.toml relative to repo root.',
     '',
     'Environment:',
-    '  OCTOS_BIN                  Override path to the octos binary.',
-    '                             Defaults to <repo>/target/debug/octos.',
+    '  OCTOS_BIN                  Override path to the ra binary.',
+    '                             Defaults to <repo>/target/debug/ra.',
     '  OCTOS_MATRIX_DIR           Override run output root.',
     '                             Defaults to e2e/test-results-matrix/<UTC>/.',
     '  OCTOS_MATRIX_RPC_TIMEOUT_MS  Per-RPC timeout. Default 10000.',
@@ -722,7 +722,7 @@ export class StdioClient {
     });
     this.rl = readline.createInterface({ input: this.child.stdout });
     this.rl.on('line', (line) => this._onLine(line));
-    // Codex P2 follow-up: when the spawned `octos serve` crashes,
+    // Codex P2 follow-up: when the spawned `ra serve` crashes,
     // panics, or the wrong binary is at OCTOS_BIN, the child can
     // exit with pending RPCs still in flight. Track exit so we can
     // reject pending requests instead of waiting for them to time
@@ -734,7 +734,7 @@ export class StdioClient {
       this.child.once('exit', (code, signal) => {
         this.exitInfo = { code, signal };
         this._failPending(new Error(
-          `octos serve exited unexpectedly (code=${code}, signal=${signal})`,
+          `ra serve exited unexpectedly (code=${code}, signal=${signal})`,
         ));
         resolve(this.exitInfo);
       });
@@ -750,7 +750,7 @@ export class StdioClient {
       });
     });
     this.spawned = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('octos serve --stdio spawn timeout')), 10_000);
+      const timer = setTimeout(() => reject(new Error('ra serve --stdio spawn timeout')), 10_000);
       this.child.once('spawn', () => { clearTimeout(timer); resolve(); });
       this.child.once('error', reject);
     });
@@ -799,7 +799,7 @@ export class StdioClient {
     if (this.exitInfo) {
       return Promise.resolve({ jsonrpc: '2.0', id, error: {
         code: -32000,
-        message: `octos serve has exited (code=${this.exitInfo.code}, signal=${this.exitInfo.signal})`,
+        message: `ra serve has exited (code=${this.exitInfo.code}, signal=${this.exitInfo.signal})`,
         data: { kind: 'backend_exited' },
       } });
     }
@@ -927,7 +927,7 @@ async function runScenario(scenario, ctx, repoRoot, octosBin, runTimeoutMs) {
   const localCtx = {
     workspace,
     missingPath: path.join(scenarioDir, 'does-not-exist-matrix-fast'),
-    rootEscapePath: '/etc/octos-matrix-fast-not-a-real-dir-1056',
+    rootEscapePath: '/etc/ra-matrix-fast-not-a-real-dir-1056',
     sessionId: `${scenario.name}:local:m22-matrix-fast-${ctx.runStamp}`,
     profileId: `m22-${scenario.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40),
     email: `${scenario.name}@m22-matrix.test`,
@@ -1065,14 +1065,14 @@ async function main() {
   const runRoot = process.env.OCTOS_MATRIX_DIR
     || path.join(repoRoot, 'e2e', 'test-results-matrix', `${args.pack}-${args.tier}`, stamp);
   fs.mkdirSync(runRoot, { recursive: true });
-  const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+  const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
   if (!fs.existsSync(octosBin)) {
     const failure = {
       ok: false,
       pack: args.pack,
       tier: args.tier,
       run_root: runRoot,
-      error: `octos binary not found at ${octosBin}. Build it (\`cargo build -p octos-cli --features api\`) or set OCTOS_BIN.`,
+      error: `ra binary not found at ${octosBin}. Build it (\`cargo build -p ra-cli --features api\`) or set OCTOS_BIN.`,
     };
     writeJson(path.join(runRoot, 'summary.json'), failure);
     console.error(JSON.stringify(failure, null, 2));

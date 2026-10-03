@@ -1,5 +1,5 @@
 {
-  "schema": "octos.thread-binding-regression.v1",
+  "schema": "ra.thread-binding-regression.v1",
   "name": "sticky-map-three-user-overflow",
   "records": [
     {

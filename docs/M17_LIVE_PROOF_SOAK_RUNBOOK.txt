@@ -10,7 +10,7 @@ Harness Map
 
 Requirement: DeepSeek-backed code-review swarm
 Current script/evidence: e2e/scripts/m15-native-review-start-stdio-soak.mjs
-Notes: Runs review/start against octos serve --stdio, configures DeepSeek, and validates 3 native + CLI + MCP specialists.
+Notes: Runs review/start against ra serve --stdio, configures DeepSeek, and validates 3 native + CLI + MCP specialists.
 
 Requirement: Native child agents
 Current script/evidence: m15-native-review-start-stdio-soak.mjs summary queriedAgents
@@ -58,7 +58,7 @@ Notes: Raw provider-key-shaped values fail validation; values are never printed.
 
 Run
 
-From the octos repo:
+From the ra repo:
 
   DEEPSEEK_API_KEY=sk-... npm --prefix e2e run soak:m17:live-proof
 

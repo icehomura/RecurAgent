@@ -3,7 +3,7 @@
 
 The proxy repairs message arrays before forwarding to DeepSeek's
 `/v1/chat/completions` endpoint. It is intentionally scoped to the e2e
-comparison harness and should not be used as Octos production protocol code.
+comparison harness and should not be used as ra production protocol code.
 """
 
 from __future__ import annotations

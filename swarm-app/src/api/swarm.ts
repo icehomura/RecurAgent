@@ -12,7 +12,7 @@
  * progress updates (no new channel, per invariant 3).
  */
 
-// ── Primitive types (mirrored from octos-swarm so validation runs client-side) ──
+// ── Primitive types (mirrored from ra-swarm so validation runs client-side) ──
 
 export type TopologyKind = 'parallel' | 'sequential' | 'pipeline' | 'fanout'
 

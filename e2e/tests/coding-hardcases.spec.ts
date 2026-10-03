@@ -10,7 +10,7 @@
  *
  * Run listing only:
  *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   npx playwright test tests/coding-hardcases.spec.ts --list
  */

@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/ci-api-filter-test.sh <filter>... [-- <libtest args>...]
 
-Run the `api`-gated octos-cli tests selected by one or more name filters,
+Run the `api`-gated ra-cli tests selected by one or more name filters,
 failing when ANY filter selects zero tests.
 
 A bare `cargo test <filter>` reports `ok` for a filter that matches nothing,
@@ -33,7 +33,7 @@ fi
 
 for filter in "${filters[@]}"; do
   # Same selection shape as the real run below; stderr streams to the log.
-  if ! list="$(cargo test -p octos-cli --features api -- "$filter" --list "$@")"; then
+  if ! list="$(cargo test -p ra-cli --features api -- "$filter" --list "$@")"; then
     exit 1
   fi
   count="$(printf '%s\n' "$list" | grep -c ': test$' || true)"
@@ -45,7 +45,7 @@ done
 
 run_log="$(mktemp)"
 trap 'rm -f "$run_log"' EXIT
-cargo test -p octos-cli --features api -- "${filters[@]}" "$@" 2>&1 | tee "$run_log"
+cargo test -p ra-cli --features api -- "${filters[@]}" "$@" 2>&1 | tee "$run_log"
 # `0 passed` per binary is normal for unselected targets; the step only
 # means something if at least one binary actually executed a test. Assert
 # on the passed count rather than the `running N` line — the latter's

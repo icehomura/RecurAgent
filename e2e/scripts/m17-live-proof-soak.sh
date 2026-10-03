@@ -13,7 +13,7 @@ tmux_dir="${OCTOS_M17_TMUX_DIR:-$out_dir/m16-tmux-ux}"
 spawn_dir="${OCTOS_M17_SPAWN_DIR:-}"
 budget_grace_dir="${OCTOS_M17_BUDGET_GRACE_DIR:-}"
 validation_dir="${OCTOS_M17_VALIDATION_DIR:-$out_dir/validation}"
-octos_bin="${OCTOS_BIN:-$repo_root/target/debug/octos}"
+octos_bin="${OCTOS_BIN:-$repo_root/target/debug/ra}"
 
 usage() {
   cat <<'USAGE'
@@ -25,7 +25,7 @@ self-test Syntax-check scripts and exercise the validator with synthetic evidenc
 
 Live key inputs:
   DEEPSEEK_API_KEY or OCTOS_M15_NATIVE_API_KEY     Required for run.
-  OCTOS_BIN                                       Default: target/debug/octos.
+  OCTOS_BIN                                       Default: target/debug/ra.
   OCTOS_M17_SPAWN_DIR                             Optional direct spawn_agent evidence dir.
   OCTOS_M17_BUDGET_GRACE_DIR                      Optional explicit budget grace evidence dir.
   OCTOS_M17_SKIP_TUI=1                            Skip m16 tmux run when octoscode/tmux are unavailable.
@@ -47,9 +47,9 @@ has_provider_key() {
 
 build_octos() {
   if [[ "${OCTOS_M17_BUILD:-1}" == "1" ]]; then
-    (cd "$repo_root" && cargo build -p octos-cli --bin octos --features api)
+    (cd "$repo_root" && cargo build -p ra-cli --bin ra --features api)
   fi
-  [[ -x "$octos_bin" ]] || die "octos binary is not executable: $octos_bin"
+  [[ -x "$octos_bin" ]] || die "ra binary is not executable: $octos_bin"
 }
 
 validator_args=()

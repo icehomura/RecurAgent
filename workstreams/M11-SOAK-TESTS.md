@@ -52,7 +52,7 @@ bootstrapped automatically. The 2026-05-10 incident chain cannot recur.
 **Failure caught**: workspace policy not found; mp3 generated but not
 delivered; mp3 not generated at all.
 
-**Pre-state**: mini1 on M11 binary. No hotfix `/Users/cloud/.octos-workspace.toml`
+**Pre-state**: mini1 on M11 binary. No hotfix `/Users/cloud/.ra-workspace.toml`
 present (delete if it exists). Browser logged in to
 `https://dspfac.crew.ominix.io/chat` as the admin profile.
 
@@ -106,8 +106,8 @@ workspace_root; shared chat history.
 - β's transcript contains `hello-B`, never `hello-A`.
 - α's session jsonl is at `<dspfac_data>/users/<α_key>/sessions/default.jsonl`,
   β's at a distinct user_key directory.
-- `<α_workspace>/.octos-workspace.toml` and
-  `<β_workspace>/.octos-workspace.toml` both exist.
+- `<α_workspace>/.ra-workspace.toml` and
+  `<β_workspace>/.ra-workspace.toml` both exist.
 
 **Telemetry**:
 - α's session_key, β's session_key, both jsonl head + tail lines,
@@ -137,7 +137,7 @@ state. mini1 on M11.
 **Pass criteria**:
 - R1 recalls BLUE42; R2 does not; R3 has its own workspace.
 - Each room's jsonl lives under a distinct `user_key`.
-- Three distinct `<workspace_root>/.octos-workspace.toml` files exist
+- Three distinct `<workspace_root>/.ra-workspace.toml` files exist
   by end of test, one per room.
 
 **Telemetry**:

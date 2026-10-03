@@ -2,7 +2,7 @@
 #
 # Scenario manifest for the TUI Solo Onboarding pack. Each scenario maps a
 # user-visible onboarding flow onto a deterministic JSON-RPC interaction with
-# `octos serve --stdio`.
+# `ra serve --stdio`.
 #
 # Schema (per `[[scenarios]]` table):
 #
@@ -35,7 +35,7 @@
 #                       "${missing_path}" -> a path that DOES NOT exist
 #                       "${root_escape_path}" -> a path that resolves under
 #                                                a banned OS root (e.g.
-#                                                /etc/octos-not-a-real-...).
+#                                                /etc/ra-not-a-real-...).
 #                       "${session_id}" -> per-scenario session id
 #                       "${profile_id}" -> per-scenario profile id
 #                       "${email}"      -> per-scenario seeded email
@@ -54,7 +54,7 @@
 #
 # `artifacts` is the standard bundle the runner writes per scenario:
 #   - rpc-transcript.jsonl     full stdio JSON-RPC trace
-#   - server-stderr.log        captured stderr from `octos serve --stdio`
+#   - server-stderr.log        captured stderr from `ra serve --stdio`
 #   - result.json              {ok, steps, expectations} summary
 #   - data/                    per-scenario --data-dir (profiles, etc.)
 #   - workspace/               per-scenario --cwd workspace tree

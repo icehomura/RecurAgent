@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// postinstall: download the prebuilt octos release bundle for this platform,
+// postinstall: download the prebuilt ra release bundle for this platform,
 // extract every binary into vendor/, and assert the full skill set is present.
 //
-// The bundle ships `octos` alongside its 9 skill binaries. At `octos serve`
+// The bundle ships `ra` alongside its 9 skill binaries. At `ra serve`
 // startup, bootstrap discovers those skills as SIBLINGS of the resolved
-// `octos` executable, so they must all land in the same dir (vendor/).
+// `ra` executable, so they must all land in the same dir (vendor/).
 //
 // Escapes:
 //   OCTOS_SKIP_DOWNLOAD=1   skip the download entirely (CI / offline installs)
@@ -23,10 +23,10 @@ const { URL } = require("url");
 const VENDOR_DIR = path.join(__dirname, "vendor");
 const REPO = "octos-org/octos";
 
-// Every binary the release bundle is expected to contain. `octos` is the
+// Every binary the release bundle is expected to contain. `ra` is the
 // server; the rest are the bundled skills discovered as siblings at runtime.
 const EXPECTED_BINS = [
-  "octos",
+  "ra",
   "news_fetch",
   "deep-search",
   "deep_crawl",
@@ -54,7 +54,7 @@ function resolveTarget() {
       return { triple: "aarch64-apple-darwin", ext: "tar.gz" };
     }
     fail(
-      "octos requires Apple Silicon on macOS; no x86_64 macOS build is published."
+      "ra requires Apple Silicon on macOS; no x86_64 macOS build is published."
     );
   }
   if (platform === "linux") {
@@ -100,7 +100,7 @@ function bundleUrl(target) {
     REPO +
     "/releases/download/" +
     tag +
-    "/octos-bundle-" +
+    "/ra-bundle-" +
     target.triple +
     "." +
     target.ext
@@ -143,7 +143,7 @@ function download(urlStr, destFile, redirects, cb) {
     hostname: url.hostname,
     port: url.port,
     path: url.pathname + url.search,
-    headers: { "User-Agent": "octos-npm-installer" },
+    headers: { "User-Agent": "ra-npm-installer" },
   };
 
   transport
@@ -246,7 +246,7 @@ function main() {
   const url = bundleUrl(target);
   console.log("[@octos-org/octos] downloading " + url);
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "octos-npm-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-npm-"));
   const archiveFile = path.join(tmpDir, "bundle." + target.ext);
 
   download(url, archiveFile, 0, (err) => {

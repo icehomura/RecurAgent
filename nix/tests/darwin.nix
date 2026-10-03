@@ -11,7 +11,7 @@ let
     modules = [
       octosModule
       {
-        programs.octos = {
+        programs.ra = {
           enable = true;
           # enableExtraPackages = true;
           enableAppSkills = true;
@@ -22,7 +22,7 @@ let
           service = {
             enable = true;
             port = 50080;
-            dataDir = "/var/lib/octos-test";
+            dataDir = "/var/lib/ra-test";
             authToken = "test-token";
           };
         };
@@ -33,10 +33,10 @@ let
     ];
   };
 
-  serviceName = "org.octos.serve";
+  serviceName = "org.ra.serve";
 in
 
-pkgs.runCommand "octos-darwin-test" { } ''
+pkgs.runCommand "ra-darwin-test" { } ''
   echo "Checking darwin module evaluation..."
   # Check if the launchd agent is defined
   grep -q "${serviceName}" <<EOF

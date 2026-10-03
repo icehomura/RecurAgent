@@ -2,7 +2,7 @@
 name: harness-starter-audio
 description: Harnessed audio-artifact starter. Synthesizes a minimal WAV file under audio/ and relies on the workspace contract to deliver it.
 version: 1.0.0
-author: octos
+author: ra
 always: false
 ---
 
@@ -21,7 +21,7 @@ etc.).
 - Glob-based resolution (`audio/*.wav`).
 - `on_failure: ["notify_user:..."]` for structured failure reporting.
 
-See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
+See `docs/ra_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
 
 ## Tools
 

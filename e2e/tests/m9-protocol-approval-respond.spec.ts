@@ -2,7 +2,7 @@
  * M9 wire-level e2e: `approval/respond` (error paths).
  *
  * Issue: https://github.com/octos-org/octos/issues/647
- * Spec  : api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
+ * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
  *
  * Happy-path approval lifecycle requires a tool-call that triggers a
  * pending approval (e.g. `shell { command: rm -rf … }`). That requires

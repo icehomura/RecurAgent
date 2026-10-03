@@ -3,9 +3,9 @@ name: Host-managed agent confinement
 on:
   push:
     branches: [main]
-    paths: ['crates/octos-cli/**', 'crates/octos-agent/**', 'crates/octos-core/**', 'crates/octos-llm/**', 'crates/octos-memory/**', 'crates/octos-sandbox/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/host-managed-sandbox.yml', 'scripts/setup-host-managed-linux-ci.sh']
+    paths: ['crates/ra-cli/**', 'crates/ra-agent/**', 'crates/ra-core/**', 'crates/ra-llm/**', 'crates/ra-memory/**', 'crates/ra-sandbox/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/host-managed-sandbox.yml', 'scripts/setup-host-managed-linux-ci.sh']
   pull_request:
-    paths: ['crates/octos-cli/**', 'crates/octos-agent/**', 'crates/octos-core/**', 'crates/octos-llm/**', 'crates/octos-memory/**', 'crates/octos-sandbox/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/host-managed-sandbox.yml', 'scripts/setup-host-managed-linux-ci.sh']
+    paths: ['crates/ra-cli/**', 'crates/ra-agent/**', 'crates/ra-core/**', 'crates/ra-llm/**', 'crates/ra-memory/**', 'crates/ra-sandbox/**', 'Cargo.toml', 'Cargo.lock', '.github/workflows/host-managed-sandbox.yml', 'scripts/setup-host-managed-linux-ci.sh']
   workflow_dispatch:
 
 permissions:
@@ -34,18 +34,18 @@ jobs:
         if: runner.os == 'Linux'
         run: bash scripts/setup-host-managed-linux-ci.sh
       - name: Run actual kernel escape probes
-        run: cargo test -p octos-sandbox --test host_managed --locked
+        run: cargo test -p ra-sandbox --test host_managed --locked
       - name: Validate host protocol and memory-only storage
         run: |
-          cargo test -p octos-llm --lib host:: --locked
-          cargo test -p octos-memory --lib in_memory_stores_are_functional_and_isolated --locked
+          cargo test -p ra-llm --lib host:: --locked
+          cargo test -p ra-memory --lib in_memory_stores_are_functional_and_isolated --locked
       - name: Validate host-managed protocol without ordinary runtime features
-        run: cargo test -p octos-cli --no-default-features --lib commands::acp --locked
+        run: cargo test -p ra-cli --no-default-features --lib commands::acp --locked
       - name: Validate ordinary ACP and host-managed mode together
         run: |
-          cargo test -p octos-cli --no-default-features --features api --lib commands::acp --locked
-          cargo test -p octos-cli --no-default-features --features api --test acp_integration --locked
+          cargo test -p ra-cli --no-default-features --features api --lib commands::acp --locked
+          cargo test -p ra-cli --no-default-features --features api --test acp_integration --locked
       - name: Build actual host-managed worker
-        run: cargo build -p octos-cli --no-default-features --locked
-      - name: Run confined Octos model and tool turns
-        run: OCTOS_HOST_MANAGED_BINARY="$PWD/target/debug/octos" cargo test -p octos-sandbox --test host_managed --locked
+        run: cargo build -p ra-cli --no-default-features --locked
+      - name: Run confined ra model and tool turns
+        run: OCTOS_HOST_MANAGED_BINARY="$PWD/target/debug/ra" cargo test -p ra-sandbox --test host_managed --locked

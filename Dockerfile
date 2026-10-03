@@ -1,5 +1,5 @@
 # ============================================================
-# Stage 1: Build the octos binary
+# Stage 1: Build the ra binary
 # ============================================================
 FROM rust:1.88-alpine AS builder
 
@@ -9,14 +9,14 @@ WORKDIR /src
 
 # Cache dependencies
 COPY Cargo.toml Cargo.lock ./
-COPY crates/octos-core/Cargo.toml crates/octos-core/Cargo.toml
-COPY crates/octos-llm/Cargo.toml crates/octos-llm/Cargo.toml
-COPY crates/octos-memory/Cargo.toml crates/octos-memory/Cargo.toml
-COPY crates/octos-agent/Cargo.toml crates/octos-agent/Cargo.toml
-COPY crates/octos-bus/Cargo.toml crates/octos-bus/Cargo.toml
-COPY crates/octos-cli/Cargo.toml crates/octos-cli/Cargo.toml
-COPY crates/octos-pipeline/Cargo.toml crates/octos-pipeline/Cargo.toml
-COPY crates/octos-plugin/Cargo.toml crates/octos-plugin/Cargo.toml
+COPY crates/ra-core/Cargo.toml crates/ra-core/Cargo.toml
+COPY crates/ra-llm/Cargo.toml crates/ra-llm/Cargo.toml
+COPY crates/ra-memory/Cargo.toml crates/ra-memory/Cargo.toml
+COPY crates/ra-agent/Cargo.toml crates/ra-agent/Cargo.toml
+COPY crates/ra-bus/Cargo.toml crates/ra-bus/Cargo.toml
+COPY crates/ra-cli/Cargo.toml crates/ra-cli/Cargo.toml
+COPY crates/ra-pipeline/Cargo.toml crates/ra-pipeline/Cargo.toml
+COPY crates/ra-plugin/Cargo.toml crates/ra-plugin/Cargo.toml
 COPY crates/app-skills/news/Cargo.toml crates/app-skills/news/Cargo.toml
 COPY crates/app-skills/deep-search/Cargo.toml crates/app-skills/deep-search/Cargo.toml
 COPY crates/app-skills/deep-crawl/Cargo.toml crates/app-skills/deep-crawl/Cargo.toml
@@ -28,14 +28,14 @@ COPY crates/platform-skills/voice/Cargo.toml crates/platform-skills/voice/Cargo.
 
 # Create stub source files for dependency caching
 # Library crates get lib.rs, binary crates get main.rs
-RUN mkdir -p crates/octos-core/src && echo "" > crates/octos-core/src/lib.rs && \
-    mkdir -p crates/octos-llm/src && echo "" > crates/octos-llm/src/lib.rs && \
-    mkdir -p crates/octos-memory/src && echo "" > crates/octos-memory/src/lib.rs && \
-    mkdir -p crates/octos-agent/src && echo "" > crates/octos-agent/src/lib.rs && \
-    mkdir -p crates/octos-bus/src && echo "" > crates/octos-bus/src/lib.rs && \
-    mkdir -p crates/octos-cli/src && echo "fn main() {}" > crates/octos-cli/src/main.rs && \
-    mkdir -p crates/octos-pipeline/src && echo "" > crates/octos-pipeline/src/lib.rs && \
-    mkdir -p crates/octos-plugin/src && echo "" > crates/octos-plugin/src/lib.rs && \
+RUN mkdir -p crates/ra-core/src && echo "" > crates/ra-core/src/lib.rs && \
+    mkdir -p crates/ra-llm/src && echo "" > crates/ra-llm/src/lib.rs && \
+    mkdir -p crates/ra-memory/src && echo "" > crates/ra-memory/src/lib.rs && \
+    mkdir -p crates/ra-agent/src && echo "" > crates/ra-agent/src/lib.rs && \
+    mkdir -p crates/ra-bus/src && echo "" > crates/ra-bus/src/lib.rs && \
+    mkdir -p crates/ra-cli/src && echo "fn main() {}" > crates/ra-cli/src/main.rs && \
+    mkdir -p crates/ra-pipeline/src && echo "" > crates/ra-pipeline/src/lib.rs && \
+    mkdir -p crates/ra-plugin/src && echo "" > crates/ra-plugin/src/lib.rs && \
     mkdir -p crates/app-skills/news/src && echo "fn main() {}" > crates/app-skills/news/src/main.rs && \
     mkdir -p crates/app-skills/deep-search/src && echo "fn main() {}" > crates/app-skills/deep-search/src/main.rs && \
     mkdir -p crates/app-skills/deep-crawl/src && echo "fn main() {}" > crates/app-skills/deep-crawl/src/main.rs && \
@@ -45,16 +45,16 @@ RUN mkdir -p crates/octos-core/src && echo "" > crates/octos-core/src/lib.rs && 
     mkdir -p crates/app-skills/weather/src && echo "fn main() {}" > crates/app-skills/weather/src/main.rs && \
     mkdir -p crates/platform-skills/voice/src && echo "fn main() {}" > crates/platform-skills/voice/src/main.rs
 
-RUN cargo build --release --bin octos \
-      -p octos-cli \
+RUN cargo build --release --bin ra \
+      -p ra-cli \
       --features api,telegram,discord,slack,whatsapp,feishu,email,audio_mp3 \
       2>/dev/null || true
 
 # Copy full source and build
 COPY . .
 RUN find crates -name '*.rs' -exec touch {} + && \
-    cargo build --release --bin octos \
-      -p octos-cli \
+    cargo build --release --bin ra \
+      -p ra-cli \
       --features api,telegram,discord,slack,whatsapp,feishu,email,matrix,audio_mp3
 
 # ============================================================
@@ -74,14 +74,14 @@ RUN apk add --no-cache ca-certificates tzdata \
 RUN npm install -g pptxgenjs react-icons react react-dom sharp
 
 # Copy binary
-COPY --from=builder /src/target/release/octos /usr/local/bin/octos
+COPY --from=builder /src/target/release/ra /usr/local/bin/ra
 
 # Copy builtin skills
-COPY --from=builder /src/crates/octos-agent/skills /opt/octos/skills
+COPY --from=builder /src/crates/ra-agent/skills /opt/ra/skills
 
 # Create workspace
-RUN mkdir -p /root/.octos/skills && \
-    cp -r /opt/octos/skills/* /root/.octos/skills/ 2>/dev/null || true
+RUN mkdir -p /root/.ra/skills && \
+    cp -r /opt/ra/skills/* /root/.ra/skills/ 2>/dev/null || true
 
-ENTRYPOINT ["octos"]
+ENTRYPOINT ["ra"]
 CMD ["gateway"]

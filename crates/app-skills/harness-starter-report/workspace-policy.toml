@@ -1,6 +1,6 @@
 # Example workspace policy for harness-starter-report.
 #
-# Copy this file to `.octos-workspace.toml` at your workspace root when
+# Copy this file to `.ra-workspace.toml` at your workspace root when
 # adopting this starter.
 
 [workspace]

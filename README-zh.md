@@ -11,20 +11,20 @@
 
 </div>
 
-# Octos
+# ra
 
 **用 Rust 编写、可嵌入应用的 AI Agent Harness 内核。**
 
-Octos 为 AI Agent 应用提供执行循环、上下文管理、记忆、工具、技能、工作流和
-Agent 协作能力。你可以将内核编译进自己的应用，也可以通过 **OUP（Octos UI
-Protocol，Octos UI 协议）** 托管和控制它，让原生应用、终端、浏览器或另一个
+ra 为 AI Agent 应用提供执行循环、上下文管理、记忆、工具、技能、工作流和
+Agent 协作能力。你可以将内核编译进自己的应用，也可以通过 **OUP（ra UI
+Protocol，ra UI 协议）** 托管和控制它，让原生应用、终端、浏览器或另一个
 Agent 驱动同一套运行时。
 
-Octos 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用负责界面和产品
-流程，Octos 负责 Agent 执行与运行时状态。面向人的客户端和自动化控制端，都能
+ra 的核心架构是 **可复用的内核 + 可编程的协议边界**。应用负责界面和产品
+流程，ra 负责 Agent 执行与运行时状态。面向人的客户端和自动化控制端，都能
 通过同一套 OUP 契约操作这个内核。
 
-[构建应用](#基于-octos-构建应用) · [通过 OUP 控制内核](#通过-oup-控制内核) ·
+[构建应用](#基于-ra-构建应用) · [通过 OUP 控制内核](#通过-oup-控制内核) ·
 [文档](https://octos-org.github.io/octos/zh/) · [English](README.md)
 
 [OctoSense 集成源码导读](docs/octosense-integration-walkthrough.md)
@@ -44,9 +44,9 @@ Octos 的核心架构是 **可复用的内核 + 可编程的协议边界**。应
 本仓库面向嵌入、扩展或集成 Harness 内核的开发者。应用安装和日常编码操作，
 请查看上面的客户端仓库。
 
-## 基于 Octos 构建应用
+## 基于 ra 构建应用
 
-用 Octos 构建编码应用、带 Agent 能力的桌面应用、研究服务、工作流引擎，或一组
+用 ra 构建编码应用、带 Agent 能力的桌面应用、研究服务、工作流引擎，或一组
 协作 Agent。界面、模型提供者、工具和宿主环境都由你的应用选择。
 
 ### 内核架构
@@ -54,7 +54,7 @@ Octos 的核心架构是 **可复用的内核 + 可编程的协议边界**。应
 将 Rust crates 或任务执行绑定嵌入应用，或通过 OUP 连接托管运行时。
 OUP 将命令传入内核，并将响应与事件返回客户端或控制端。
 
-![Octos Harness 内核架构](docs/assets/readme/architecture-zh.svg)
+![ra Harness 内核架构](docs/assets/readme/architecture-zh.svg)
 
 ### 原生内核与库
 
@@ -62,25 +62,25 @@ Rust workspace 可以按应用需要组合：
 
 | Crate | 在应用中的职责 |
 | --- | --- |
-| [`octos-core`](crates/octos-core) | 共享类型、OUP 命令、通知与协议编解码 |
-| [`octos-agent`](crates/octos-agent) | Agent 执行、上下文处理、工具、hooks、沙箱与任务监督 |
-| [`octos-memory`](crates/octos-memory) | 持久化记忆、任务经验与检索 |
-| [`octos-llm`](crates/octos-llm) | 模型提供者接口、路由、重试与故障转移 |
-| [`octos-plugin`](crates/octos-plugin) | 技能与插件集成 |
-| [`octos-pipeline`](crates/octos-pipeline) / [`octos-swarm`](crates/octos-swarm) | 工作流图、并行执行、验证与结果汇总 |
-| [`octos-bus`](crates/octos-bus) / [`octos-cli`](crates/octos-cli) | 会话基础设施、运行时组装、OUP 托管与适配层 |
+| [`ra-core`](crates/ra-core) | 共享类型、OUP 命令、通知与协议编解码 |
+| [`ra-agent`](crates/ra-agent) | Agent 执行、上下文处理、工具、hooks、沙箱与任务监督 |
+| [`ra-memory`](crates/ra-memory) | 持久化记忆、任务经验与检索 |
+| [`ra-llm`](crates/ra-llm) | 模型提供者接口、路由、重试与故障转移 |
+| [`ra-plugin`](crates/ra-plugin) | 技能与插件集成 |
+| [`ra-pipeline`](crates/ra-pipeline) / [`ra-swarm`](crates/ra-swarm) | 工作流图、并行执行、验证与结果汇总 |
+| [`ra-bus`](crates/ra-bus) / [`ra-cli`](crates/ra-cli) | 会话基础设施、运行时组装、OUP 托管与适配层 |
 
 在源码仓库中，构建原生 Agent 库或供其他语言调用的库：
 
 ```bash
-cargo build --release -p octos-agent
-cargo build --release -p octos-ffi
+cargo build --release -p ra-agent
+cargo build --release -p ra-ffi
 ```
 
-集成到其他 workspace 时，将相关 Octos crates 固定在同一个 Git revision。
-其他宿主语言可以使用 [C ABI](crates/octos-ffi/README.md)、
-[原生 Python 绑定](crates/octos-pyo3/README.md)或
-[Swift/Kotlin 绑定](crates/octos-uniffi/README.md)。C ABI 同时提供动态库和静态库。
+集成到其他 workspace 时，将相关 ra crates 固定在同一个 Git revision。
+其他宿主语言可以使用 [C ABI](crates/ra-ffi/README.md)、
+[原生 Python 绑定](crates/ra-pyo3/README.md)或
+[Swift/Kotlin 绑定](crates/ra-uniffi/README.md)。C ABI 同时提供动态库和静态库。
 这些绑定提供任务执行接口；下文的 OUP 提供会话、轮次、监督与回放接口。
 
 ### 操作系统与处理器架构
@@ -93,28 +93,28 @@ features 和原生依赖，具体支持取决于这一组合。
 其他操作系统上的应用可以通过 OUP 接入，也可以移植内核的平台集成部分，包括
 进程执行、文件系统访问与沙箱；应用和内核之间继续使用同一套协议边界。
 
-浏览器应用可以使用 [WASM crate](crates/octos-wasm/README.md)中的协议与工具类型。
+浏览器应用可以使用 [WASM crate](crates/ra-wasm/README.md)中的协议与工具类型。
 完整 Agent 内核运行在原生环境中，浏览器通过 OUP 与之通信。
 
 ## 通过 OUP 控制内核
 
-**OUP（Octos UI Protocol）** 是面向应用与 Agent 控制端的 JSON-RPC 2.0 接口，
+**OUP（ra UI Protocol）** 是面向应用与 Agent 控制端的 JSON-RPC 2.0 接口，
 通过 WebSocket 或按行分隔的 stdio 传输请求、响应和类型化运行时事件。
 本地运行时适配层也通过进程内连接使用 OUP dispatcher。
 
-本地控制端可以使用参考宿主 `octos serve --stdio`，由启用 `api` feature 的
-`octos-cli` 构建。WebSocket 客户端连接运行中宿主的 `/api/ui-protocol/ws`
+本地控制端可以使用参考宿主 `ra serve --stdio`，由启用 `api` feature 的
+`ra-cli` 构建。WebSocket 客户端连接运行中宿主的 `/api/ui-protocol/ws`
 端点，并使用该宿主的认证配置。JSON-RPC 请求 ID 使用字符串。
 
 Stdio 客户端通过 `client_hello` 协商 features；WebSocket 客户端通过
-`X-Octos-Ui-Features` 或 `ui_feature` 查询参数请求 features。然后查询
+`X-Ra-Ui-Features` 或 `ui_feature` 查询参数请求 features。然后查询
 `config/capabilities/list`，根据运行时公告的方法与能力选择控制方式和事件格式。对话历史、执行状态、压缩、权限与已提交
 结果由运行时管理；客户端通过协议展示这些状态，或据此采取行动。
 
-### 让另一个 Agent 驱动 Octos
+### 让另一个 Agent 驱动 ra
 
 控制端集成可以将 OUP 请求封装成 **Codex、Claude Code 或其他 Agent** 可调用的
-工具，让控制 Agent 向 Octos Agent 分配任务、观察执行、介入过程并收集结果。
+工具，让控制 Agent 向 ra Agent 分配任务、观察执行、介入过程并收集结果。
 OUP 客户端或桥接层由这项集成提供。
 
 典型控制流程：
@@ -155,7 +155,7 @@ OUP 客户端或桥接层由这项集成提供。
 }
 ```
 
-同一个控制端可以让 Octos 执行研究或实现任务，检查结果，再调整下一轮工作。
+同一个控制端可以让 ra 执行研究或实现任务，检查结果，再调整下一轮工作。
 OUP 提供将这种协作方式集成到应用中所需的控制接口与执行证据。
 
 ## 从 OUP 看内核能力
@@ -170,7 +170,7 @@ OUP 让应用能够在任务的整个生命周期中控制 Harness：检查 Agen
 
 ### 上下文管理
 
-长任务会不断积累对话、工具输出与中间结果。Octos 管理模型的上下文预算，压缩较早
+长任务会不断积累对话、工具输出与中间结果。ra 管理模型的上下文预算，压缩较早
 的内容，并保留近期工具调用与结果之间的对应关系。压缩可以采用 LLM 摘要或启发式
 策略；稳定的提示前缀有助于提供者复用缓存，变化中的任务状态则进入持续演进的对话。
 
@@ -200,7 +200,7 @@ OUP 让应用能够在任务的整个生命周期中控制 Harness：检查 Agen
 
 ### 持久化会话与恢复
 
-Octos 管理会话标识、工作区作用域、对话历史和已提交事件。客户端可以在重新加载后
+ra 管理会话标识、工作区作用域、对话历史和已提交事件。客户端可以在重新加载后
 重建运行时中的对话状态，也可以为同一个已存储会话提供不同的交互界面。
 
 - **打开与检查：** `session/open` 建立会话并确认工作区；`session/hydrate`
@@ -261,7 +261,7 @@ Pipeline 库用 DOT 图描述多步骤任务，支持逐节点模型选择、并
 
 ### 子 Agent 与 Peer 协作
 
-Octos 提供多种并行执行方式：子 Agent 接受委派任务并向父 Agent 返回结果；Peer
+ra 提供多种并行执行方式：子 Agent 接受委派任务并向父 Agent 返回结果；Peer
 拥有独立会话，可由客户端或控制端检查和引导；受监督的后台工具任务可以不创建新的
 LLM 循环。
 
@@ -320,16 +320,16 @@ Goal 记录 Agent 要完成什么，Loop 安排周期性轮次，Monitor 观察�
    下一轮修改。
 5. 保存会话标识与持久化 cursor，让界面在重连时重新加载已提交状态。
 
-宿主实现协调策略，Octos 提供执行、状态与控制机制，并通过 OUP 暴露可观察的过程。
+宿主实现协调策略，ra 提供执行、状态与控制机制，并通过 OUP 暴露可观察的过程。
 
 ## 开发者文档
 
-- [OUP 协议规范](api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
-- [OUP 类型与编解码](crates/octos-core/src/ui_protocol.rs)
+- [OUP 协议规范](api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md)
+- [OUP 类型与编解码](crates/ra-core/src/ui_protocol.rs)
 - [运行时架构](docs/ARCHITECTURE.md)
-- [Harness 开发者接口](docs/OCTOS_HARNESS_DEVELOPER_INTERFACE.md)
-- [产物与工作流集成指南](docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md)
-- [Harness 兼容性与版本管理](docs/OCTOS_HARNESS_ABI_VERSIONING.md)
+- [Harness 开发者接口](docs/ra_HARNESS_DEVELOPER_INTERFACE.md)
+- [产物与工作流集成指南](docs/ra_HARNESS_DEVELOPER_GUIDE.md)
+- [Harness 兼容性与版本管理](docs/ra_HARNESS_ABI_VERSIONING.md)
 - [文档站点](https://octos-org.github.io/octos/zh/)
 
 ## 参与开发

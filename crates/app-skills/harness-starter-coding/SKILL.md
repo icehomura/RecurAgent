@@ -2,7 +2,7 @@
 name: harness-starter-coding
 description: Harnessed coding-assistant starter. Produces a unified-diff artifact and a file-list preview under patches/.
 version: 1.0.0
-author: octos
+author: ra
 always: false
 ---
 
@@ -21,7 +21,7 @@ crate when you want to build an app that ships a patch/diff/changeset.
 - Multi-artifact spawn task binding (`artifacts = ["primary", "preview"]`)
   so the runtime delivers both files.
 
-See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
+See `docs/ra_HARNESS_DEVELOPER_GUIDE.md` for the full contract.
 
 ## Tools
 

@@ -2,7 +2,7 @@
 // Run with: `npm --prefix e2e run ux:scenario:list:test`
 //
 // Tests:
-//   1. The real manifest at e2e/matrix/octos-ux.toml parses cleanly and
+//   1. The real manifest at e2e/matrix/ra-ux.toml parses cleanly and
 //      declares all ten scenarios the umbrella issue requires.
 //   2. A malformed manifest raises a typed ManifestSchemaError.
 //   3. Tier filtering: fast subset is contained in local, local in release.
@@ -27,7 +27,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..", "..", "..");
-const MANIFEST = resolve(REPO_ROOT, "e2e", "matrix", "octos-ux.toml");
+const MANIFEST = resolve(REPO_ROOT, "e2e", "matrix", "ra-ux.toml");
 const CAPABILITIES = resolve(REPO_ROOT, "e2e", "matrix", "ux-capabilities.json");
 const CLI = resolve(REPO_ROOT, "e2e", "scripts", "ux-scenario-list.mjs");
 
@@ -68,7 +68,7 @@ function makeEnv({
 
 function checkedInCapabilities() {
   const parsed = JSON.parse(readFileSync(CAPABILITIES, "utf8"));
-  assert.equal(parsed.schema, "octos.ux.capabilities.v1");
+  assert.equal(parsed.schema, "ra.ux.capabilities.v1");
   assert.ok(Array.isArray(parsed.capabilities));
   return new Set(parsed.capabilities);
 }
@@ -76,7 +76,7 @@ function checkedInCapabilities() {
 test("manifest parses and declares all umbrella-required scenarios", () => {
   const manifest = loadManifest({ path: MANIFEST });
   assert.equal(manifest.schemaVersion, 1);
-  assert.equal(manifest.pack, "octos-ux");
+  assert.equal(manifest.pack, "ra-ux");
   const ids = manifest.scenarios.map((s) => s.id).sort();
   assert.deepEqual(ids, [...EXPECTED_IDS].sort());
   for (const s of manifest.scenarios) {
@@ -100,12 +100,12 @@ test("manifest has at least one stdio and one ws transport scenario", () => {
 
 test("malformed manifest raises a typed ManifestSchemaError", () => {
   const dir = mkdtempSync(join(tmpdir(), "ux-manifest-"));
-  const bad = join(dir, "octos-ux.toml");
+  const bad = join(dir, "ra-ux.toml");
   writeFileSync(
     bad,
     [
       'schema_version = 1',
-      'pack = "octos-ux"',
+      'pack = "ra-ux"',
       'owner = "test"',
       "[[scenario]]",
       'id = "missing-fields"',
@@ -121,7 +121,7 @@ test("malformed manifest raises a typed ManifestSchemaError", () => {
 
 test("unsupported schema_version raises typed error", () => {
   const dir = mkdtempSync(join(tmpdir(), "ux-manifest-"));
-  const bad = join(dir, "octos-ux.toml");
+  const bad = join(dir, "ra-ux.toml");
   writeFileSync(
     bad,
     ['schema_version = 999', 'pack = "p"', 'owner = "o"', ""].join("\n"),
@@ -135,7 +135,7 @@ test("unsupported schema_version raises typed error", () => {
 
 test("duplicate scenario id raises typed error", () => {
   const dir = mkdtempSync(join(tmpdir(), "ux-manifest-"));
-  const bad = join(dir, "octos-ux.toml");
+  const bad = join(dir, "ra-ux.toml");
   const body = readFileSync(MANIFEST, "utf8");
   // Append a duplicate of the first scenario id to trigger duplicate detection.
   writeFileSync(
@@ -325,7 +325,7 @@ test("CLI exits 0 on a valid manifest and JSON output round-trips", () => {
   });
   const parsed = JSON.parse(out);
   assert.equal(parsed.tier_filter, "fast");
-  assert.equal(parsed.pack, "octos-ux");
+  assert.equal(parsed.pack, "ra-ux");
   assert.ok(parsed.scenarios.length >= 1);
   for (const s of parsed.scenarios) {
     assert.ok(["runnable", "skipped", "blocked", "quarantined"].includes(s.status));
@@ -346,7 +346,7 @@ test("CLI exits 2 on usage error", () => {
 
 test("CLI exits 3 on a malformed manifest", () => {
   const dir = mkdtempSync(join(tmpdir(), "ux-cli-"));
-  const bad = join(dir, "octos-ux.toml");
+  const bad = join(dir, "ra-ux.toml");
   writeFileSync(bad, 'schema_version = "not-an-int"\n');
   try {
     execFileSync(

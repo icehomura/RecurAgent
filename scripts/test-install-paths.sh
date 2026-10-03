@@ -56,19 +56,19 @@ create_fake_bundle() {
     local triple
     triple="$(host_triple)"
     mkdir -p "$bundle_dir/payload"
-    cat >"$bundle_dir/payload/octos" <<'EOF'
+    cat >"$bundle_dir/payload/ra" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-    chmod +x "$bundle_dir/payload/octos"
-    tar -czf "$bundle_dir/octos-bundle-$triple.tar.gz" -C "$bundle_dir/payload" octos
+    chmod +x "$bundle_dir/payload/ra"
+    tar -czf "$bundle_dir/ra-bundle-$triple.tar.gz" -C "$bundle_dir/payload" ra
     # Sidecar exactly as bundle-release.sh writes it (#2514).
     (
         cd "$bundle_dir"
         if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "octos-bundle-$triple.tar.gz" > "octos-bundle-$triple.tar.gz.sha256"
+            sha256sum "ra-bundle-$triple.tar.gz" > "ra-bundle-$triple.tar.gz.sha256"
         else
-            shasum -a 256 "octos-bundle-$triple.tar.gz" > "octos-bundle-$triple.tar.gz.sha256"
+            shasum -a 256 "ra-bundle-$triple.tar.gz" > "ra-bundle-$triple.tar.gz.sha256"
         fi
     )
 }
@@ -94,7 +94,7 @@ run_corrupt_installer() {
     fi
     grep -q "checksum MISMATCH" "$output_file" \
         || fail "corrupt bundle refused without a checksum diagnostic"
-    [ ! -x "$prefix/octos" ] || fail "corrupt bundle was installed anyway"
+    [ ! -x "$prefix/ra" ] || fail "corrupt bundle was installed anyway"
 }
 
 create_mock_sudo() {
@@ -134,7 +134,7 @@ EOF
 
 main() {
     local test_root
-    test_root="$(mktemp -d /tmp/octos-install-paths.XXXXXX)"
+    test_root="$(mktemp -d /tmp/ra-install-paths.XXXXXX)"
     trap 'rm -rf "${test_root:-}"' EXIT
     local bundle_dir="$test_root/download"
     local mock_bin="$test_root/mock-bin"
@@ -150,7 +150,7 @@ main() {
     if grep -q "invalid prefix" "$test_root/relative.out"; then
         fail "relative prefix was rejected"
     fi
-    [ -x "$rel_workdir/relative-bin/octos" ] || fail "relative prefix did not install into the working directory"
+    [ -x "$rel_workdir/relative-bin/ra" ] || fail "relative prefix did not install into the working directory"
 
     local tilde_workdir="$test_root/tilde"
     local tilde_home="$test_root/home-tilde"
@@ -159,7 +159,7 @@ main() {
     if grep -q "invalid prefix" "$test_root/tilde.out"; then
         fail "tilde prefix was rejected"
     fi
-    [ -x "$tilde_home/tilde-bin/octos" ] || fail "tilde prefix did not expand to HOME"
+    [ -x "$tilde_home/tilde-bin/ra" ] || fail "tilde prefix did not expand to HOME"
     [ ! -e "$tilde_workdir/~/tilde-bin" ] || fail "tilde prefix was treated as a literal path"
 
     # ── Bundle checksum verification (#2514) ─────────────────────────
@@ -176,8 +176,8 @@ main() {
     local corrupt_prefix="$test_root/corrupt-bin"
     mkdir -p "$corrupt_dir"
     create_fake_bundle "$corrupt_dir"
-    printf '%064d  octos-bundle-%s.tar.gz\n' 0 "$(host_triple)" \
-        > "$corrupt_dir/octos-bundle-$(host_triple).tar.gz.sha256"
+    printf '%064d  ra-bundle-%s.tar.gz\n' 0 "$(host_triple)" \
+        > "$corrupt_dir/ra-bundle-$(host_triple).tar.gz.sha256"
     run_corrupt_installer "$test_root" "$test_root/home-corrupt" "$corrupt_prefix" \
         "$test_root/corrupt.out" "$mock_bin" "$corrupt_dir"
 
@@ -187,7 +187,7 @@ main() {
     # only — the recorded filename must stay byte-identical, or a
     # case-sensitive filesystem cannot resolve it.
     local upper_dir="$test_root/upper-sidecar"
-    local upper_sidecar="$upper_dir/octos-bundle-$(host_triple).tar.gz.sha256"
+    local upper_sidecar="$upper_dir/ra-bundle-$(host_triple).tar.gz.sha256"
     DOWNLOAD_BASE="file://$upper_dir"
     mkdir -p "$upper_dir"
     create_fake_bundle "$upper_dir"
@@ -196,7 +196,7 @@ main() {
     mv "$upper_sidecar.up" "$upper_sidecar"
     run_installer "$test_root" "$test_root/home-upper" "$test_root/upper-bin" \
         "$test_root/upper.out" "$mock_bin"
-    [ -x "$test_root/upper-bin/octos" ] \
+    [ -x "$test_root/upper-bin/ra" ] \
         || fail "uppercase sidecar aborted the install"
     grep -q "checksum verified" "$test_root/upper.out" \
         || fail "uppercase sidecar was not verified"
@@ -209,7 +209,7 @@ main() {
     rm -f "$bare_dir"/*.sha256
     run_installer "$test_root" "$test_root/home-bare" "$test_root/bare-bin" \
         "$test_root/bare.out" "$mock_bin"
-    [ -x "$test_root/bare-bin/octos" ] \
+    [ -x "$test_root/bare-bin/ra" ] \
         || fail "missing sidecar aborted the install (pre-rc.12 releases must keep installing)"
     grep -q "skipping checksum verification" "$test_root/bare.out" \
         || fail "missing sidecar was not surfaced to the operator"
@@ -221,10 +221,10 @@ main() {
     mkdir -p "$html_dir"
     create_fake_bundle "$html_dir"
     printf '<html><body>404: not found</body></html>\n' \
-        > "$html_dir/octos-bundle-$(host_triple).tar.gz.sha256"
+        > "$html_dir/ra-bundle-$(host_triple).tar.gz.sha256"
     run_installer "$test_root" "$test_root/home-html" "$test_root/html-bin" \
         "$test_root/html.out" "$mock_bin"
-    [ -x "$test_root/html-bin/octos" ] \
+    [ -x "$test_root/html-bin/ra" ] \
         || fail "unparseable sidecar aborted the install"
     grep -q "malformed.*skipping checksum verification" "$test_root/html.out" \
         || fail "unparseable sidecar was not surfaced to the operator"
@@ -234,10 +234,10 @@ main() {
     DOWNLOAD_BASE="file://$empty_dir"
     mkdir -p "$empty_dir"
     create_fake_bundle "$empty_dir"
-    : > "$empty_dir/octos-bundle-$(host_triple).tar.gz.sha256"
+    : > "$empty_dir/ra-bundle-$(host_triple).tar.gz.sha256"
     run_installer "$test_root" "$test_root/home-empty" "$test_root/empty-bin" \
         "$test_root/empty.out" "$mock_bin"
-    [ -x "$test_root/empty-bin/octos" ] \
+    [ -x "$test_root/empty-bin/ra" ] \
         || fail "empty sidecar aborted the install"
     grep -q "malformed.*skipping checksum verification" "$test_root/empty.out" \
         || fail "empty sidecar was not surfaced to the operator"
@@ -248,11 +248,11 @@ main() {
     DOWNLOAD_BASE="file://$crlf_dir"
     mkdir -p "$crlf_dir"
     create_fake_bundle "$crlf_dir"
-    printf '%s\r\n' "$(cat "$crlf_dir/octos-bundle-$(host_triple).tar.gz.sha256")" \
-        > "$crlf_dir/octos-bundle-$(host_triple).tar.gz.sha256"
+    printf '%s\r\n' "$(cat "$crlf_dir/ra-bundle-$(host_triple).tar.gz.sha256")" \
+        > "$crlf_dir/ra-bundle-$(host_triple).tar.gz.sha256"
     run_installer "$test_root" "$test_root/home-crlf" "$test_root/crlf-bin" \
         "$test_root/crlf.out" "$mock_bin"
-    [ -x "$test_root/crlf-bin/octos" ] \
+    [ -x "$test_root/crlf-bin/ra" ] \
         || fail "CRLF sidecar aborted the install"
     grep -q "checksum verified" "$test_root/crlf.out" \
         || fail "CRLF sidecar was not verified"
@@ -266,7 +266,7 @@ main() {
     export MOCK_HTTP_ROOT="$net_dir"
     run_installer "$test_root" "$test_root/home-net" \
         "$test_root/net-bin" "$test_root/net.out" "$mock_bin"
-    [ -x "$test_root/net-bin/octos" ] \
+    [ -x "$test_root/net-bin/ra" ] \
         || fail "network download arm did not install"
     grep -q "checksum verified" "$test_root/net.out" \
         || fail "network download arm did not verify the sidecar"
@@ -281,7 +281,7 @@ main() {
     export MOCK_HTTP_ROOT="$net404_dir"
     run_installer "$test_root" "$test_root/home-net404" \
         "$test_root/net404-bin" "$test_root/net404.out" "$mock_bin"
-    [ -x "$test_root/net404-bin/octos" ] \
+    [ -x "$test_root/net404-bin/ra" ] \
         || fail "network 404 sidecar aborted the install"
     grep -q "skipping checksum verification" "$test_root/net404.out" \
         || fail "network 404 sidecar was not surfaced to the operator"

@@ -1,4 +1,4 @@
-# REQ-SERVE-BP-001: octos serve 关闭期 BrokenPipe 不阻断 gateway cleanup
+# REQ-SERVE-BP-001: ra serve 关闭期 BrokenPipe 不阻断 gateway cleanup
 
 **Status**: Accepted
 **Date**: 2026-08-26
@@ -7,7 +7,7 @@
 
 ## Statement
 
-`octos serve` 长驻进程在关闭流程中，向已断开的 stdout/stderr 写入控制台输出时
+`ra serve` 长驻进程在关闭流程中，向已断开的 stdout/stderr 写入控制台输出时
 触发 `BrokenPipe` panic，随后 `color_eyre::PanicHook` 的 `eprintln!` 二次 panic，
 形成双重 panic → `std::process::abort()` → SIGABRT core dump，导致
 `process_manager.stop_all().await` gateway 清理路径被跳过。
@@ -18,7 +18,7 @@
 - core 内存保留原始 panic `failed printing to stdout: Broken pipe (os error 32)`。
 - 主线程栈：`ServeCommand::run_async → std::io::stdio::_print → panic`，随后
   `color_eyre::PanicHook → std::io::stdio::_eprint → panic`。
-- 定位到 `crates/octos-cli/src/commands/serve.rs` 中
+- 定位到 `crates/ra-cli/src/commands/serve.rs` 中
   `ServeCommand::run_async` 关闭路径的 `println!("{}", "Stopping gateways...".yellow())`，
   发生在 `axum::serve(...).await?` 返回后、`process_manager.stop_all().await` 之前。
 

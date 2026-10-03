@@ -3,7 +3,7 @@ name = "smart-home"
 version = "1.1.0"
 edition = "2021"
 description = "Standalone smart-home skill: list and control devices via the profile's configured bridge"
-authors = ["octos"]
+authors = ["ra"]
 
 [[bin]]
 name = "smart_home"

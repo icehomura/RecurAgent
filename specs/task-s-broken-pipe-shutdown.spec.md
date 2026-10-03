@@ -1,13 +1,13 @@
 spec: task
-name: "octos serve 关闭期 BrokenPipe 双重 panic / SIGABRT 修复"
-tags: [serve, shutdown, broken-pipe, panic-hook, console-output, octos-cli]
+name: "ra serve 关闭期 BrokenPipe 双重 panic / SIGABRT 修复"
+tags: [serve, shutdown, broken-pipe, panic-hook, console-output, ra-cli]
 estimate: 0.5d
 requirement_id: REQ-SERVE-BP-001
 ---
 
 ## Intent
 
-REQ-SERVE-BP-001：`octos serve` 进入关闭流程后，`ServeCommand::run_async` 中
+REQ-SERVE-BP-001：`ra serve` 进入关闭流程后，`ServeCommand::run_async` 中
 `println!("{}", "Stopping gateways...".yellow())` 向已断开的 stdout 写入触发
 `BrokenPipe` panic；随后 `color_eyre::PanicHook` 用 `eprintln!` 写 stderr 再次
 panic，形成双重 panic → `std::process::abort()` → SIGABRT core dump。这不是
@@ -19,7 +19,7 @@ stderr 写入，确保 `BrokenPipe`（观察者离开）不阻断
 
 ## Decisions
 
-- 新增 `serve_console` helper 模块（`crates/octos-cli/src/commands/serve_console.rs`），
+- 新增 `serve_console` helper 模块（`crates/ra-cli/src/commands/serve_console.rs`），
   提供 fallible 控制台写入函数，核心函数签名
   `fn write_line(w: &mut impl io::Write, msg: &str) -> io::Result<()>`，
   加 stdout/stderr 薄封装 `print_stdout` / `print_stderr`。
@@ -40,12 +40,12 @@ stderr 写入，确保 `BrokenPipe`（观察者离开）不阻断
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-cli/src/commands/serve.rs
-- crates/octos-cli/src/commands/serve_console.rs
-- crates/octos-cli/src/commands/mod.rs
-- crates/octos-cli/src/main.rs
-- crates/octos-cli/tests/serve_broken_pipe.rs
-- crates/octos-cli/Cargo.toml
+- crates/ra-cli/src/commands/serve.rs
+- crates/ra-cli/src/commands/serve_console.rs
+- crates/ra-cli/src/commands/mod.rs
+- crates/ra-cli/src/main.rs
+- crates/ra-cli/tests/serve_broken_pipe.rs
+- crates/ra-cli/Cargo.toml
 - Cargo.toml
 - Cargo.lock
 - specs/task-s-broken-pipe-shutdown.spec.md
@@ -68,10 +68,10 @@ stderr 写入，确保 `BrokenPipe`（观察者离开）不阻断
 
 Scenario: BrokenPipe 写入不 panic 且返回 Ok
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_console_write_line_broken_pipe_returns_ok
   Level: unit
-  Targets: crates/octos-cli/src/commands/serve_console.rs write_line
+  Targets: crates/ra-cli/src/commands/serve_console.rs write_line
   Given 一个实现 io::Write 的 writer 在 write_all 时返回 Err(ErrorKind::BrokenPipe)
   When serve_console::write_line 以该 writer 被调用
   Then 函数返回 Ok(())
@@ -79,10 +79,10 @@ Scenario: BrokenPipe 写入不 panic 且返回 Ok
 
 Scenario: 其他 IO 错误降级为 tracing warn 不 panic
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_console_write_line_other_error_returns_ok
   Level: unit
-  Targets: crates/octos-cli/src/commands/serve_console.rs write_line
+  Targets: crates/ra-cli/src/commands/serve_console.rs write_line
   Given 一个实现 io::Write 的 writer 在 write_all 时返回 Err(ErrorKind::Other)
   When serve_console::write_line 以该 writer 被调用
   Then 函数返回 Ok(())
@@ -90,10 +90,10 @@ Scenario: 其他 IO 错误降级为 tracing warn 不 panic
 
 Scenario: 正常 writer 输出原文
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_console_write_line_normal_writer_verbatim
   Level: unit
-  Targets: crates/octos-cli/src/commands/serve_console.rs write_line
+  Targets: crates/ra-cli/src/commands/serve_console.rs write_line
   Given 一个正常的 Vec<u8> 作为 writer
   When serve_console::write_line(writer, "hello") 被调用
   Then writer 内容为 "hello\n"
@@ -101,10 +101,10 @@ Scenario: 正常 writer 输出原文
 
 Scenario: print_stdout 薄封装调用 write_line 并传入 stdout lock
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_console_print_stdout_delegates_to_write_line
   Level: unit
-  Targets: crates/octos-cli/src/commands/serve_console.rs print_stdout
+  Targets: crates/ra-cli/src/commands/serve_console.rs print_stdout
   Given print_stdout 是 write_line 的薄封装
   When print_stdout("test") 被调用
   Then 内部调用 write_line 并传入 io::stdout().lock()
@@ -114,10 +114,10 @@ Scenario: print_stdout 薄封装调用 write_line 并传入 stdout lock
 
 Scenario: write_panic_report 在 BrokenPipe writer 上不 panic
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: write_panic_report_broken_pipe_no_panic
   Level: unit
-  Targets: crates/octos-cli/src/main.rs write_panic_report
+  Targets: crates/ra-cli/src/main.rs write_panic_report
   Given 一个实现 io::Write 的 writer 在 write_all 时返回 Err(ErrorKind::BrokenPipe)
   When write_panic_report 以该 writer 被调用
   Then 函数返回（不 panic）
@@ -125,10 +125,10 @@ Scenario: write_panic_report 在 BrokenPipe writer 上不 panic
 
 Scenario: write_panic_report 在正常 writer 上输出内容
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: write_panic_report_normal_writer_outputs
   Level: unit
-  Targets: crates/octos-cli/src/main.rs write_panic_report
+  Targets: crates/ra-cli/src/main.rs write_panic_report
   Given 一个正常的 Vec<u8> 作为 writer
   When write_panic_report(writer, "panic message") 被调用
   Then writer 内容非空
@@ -136,10 +136,10 @@ Scenario: write_panic_report 在正常 writer 上输出内容
 
 Scenario: 子进程集成测试 stderr 断管时 panic 不 abort
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: subprocess_panic_stderr_broken_pipe_no_abort
   Level: integration
-  Targets: crates/octos-cli/src/main.rs panic hook 安装路径
+  Targets: crates/ra-cli/src/main.rs panic hook 安装路径
   Given 一个测试二进制安装自定义 panic hook
   And 其 stderr 被重定向到已关闭读取端的 pipe
   When 该进程触发 panic
@@ -150,11 +150,11 @@ Scenario: 子进程集成测试 stderr 断管时 panic 不 abort
 
 Scenario: 断管后 stop_all 仍被执行且 cleanup marker 可观察
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_shutdown_broken_pipe_cleanup_marker_observed
   Level: integration
-  Targets: crates/octos-cli/src/commands/serve.rs ServeCommand::run_async
-  Given `octos serve` 以 pipe 模式运行且 stdout 已断开
+  Targets: crates/ra-cli/src/commands/serve.rs ServeCommand::run_async
+  Given `ra serve` 以 pipe 模式运行且 stdout 已断开
   When SIGINT 触发 graceful shutdown
   Then `process_manager.stop_all().await` 被执行
   And tracing 日志包含 "gateways stopped" 或 "stopping all gateway child processes"
@@ -163,11 +163,11 @@ Scenario: 断管后 stop_all 仍被执行且 cleanup marker 可观察
 
 Scenario: 关闭顺序保持 graceful → stop_all → exit
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_shutdown_order_preserved
   Level: integration
-  Targets: crates/octos-cli/src/commands/serve.rs ServeCommand::run_async
-  Given `octos serve` 正常运行
+  Targets: crates/ra-cli/src/commands/serve.rs ServeCommand::run_async
+  Given `ra serve` 正常运行
   When SIGINT 触发关闭
   Then axum graceful shutdown 先完成
   And `process_manager.stop_all().await` 随后执行
@@ -178,11 +178,11 @@ Scenario: 关闭顺序保持 graceful → stop_all → exit
 
 Scenario: 启动阶段 stdout 断管不 panic
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: serve_startup_broken_pipe_no_panic
   Level: integration
-  Targets: crates/octos-cli/src/commands/serve.rs ServeCommand::run_async
-  Given `octos serve` 以 pipe 模式运行
+  Targets: crates/ra-cli/src/commands/serve.rs ServeCommand::run_async
+  Given `ra serve` 以 pipe 模式运行
   And stdout 在启动输出前已断开
   When serve 输出启动信息（Listening/App/Admin dashboard）
   Then 不 panic

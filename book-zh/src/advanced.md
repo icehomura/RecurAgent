@@ -6,7 +6,7 @@
 
 ## 工具
 
-Octos 在**每一轮**都把**完整的已启用工具集**作为可调用的工具规格发送给 LLM。不存在基于使用时近性的延迟加载：工具是否可用由[工具策略](#工具策略)（allow/deny 列表、命名组）与逐供应商策略控制，而非取决于工具最近是否被使用。
+ra 在**每一轮**都把**完整的已启用工具集**作为可调用的工具规格发送给 LLM。不存在基于使用时近性的延迟加载：工具是否可用由[工具策略](#工具策略)（allow/deny 列表、命名组）与逐供应商策略控制，而非取决于工具最近是否被使用。
 
 有两类工具会被有意排除在每轮的工具列表之外：
 
@@ -317,13 +317,13 @@ Octos 在**每一轮**都把**完整的已启用工具集**作为可调用的工
   "hooks": [
     {
       "event": "before_tool_call",
-      "command": ["python3", "~/.octos/hooks/guard.py"],
+      "command": ["python3", "~/.ra/hooks/guard.py"],
       "timeout_ms": 3000,
       "tool_filter": ["shell", "write_file"]
     },
     {
       "event": "after_llm_call",
-      "command": ["python3", "~/.octos/hooks/cost-tracker.py"],
+      "command": ["python3", "~/.ra/hooks/cost-tracker.py"],
       "timeout_ms": 5000
     }
   ]
@@ -369,7 +369,7 @@ import json, sys
 payload = json.load(sys.stdin)
 if payload.get("event") == "before_llm_call":
     try:
-        with open("/tmp/octos-cost.json") as f:
+        with open("/tmp/ra-cost.json") as f:
             state = json.load(f)
     except FileNotFoundError:
         state = {}
@@ -383,12 +383,12 @@ elif payload.get("event") == "after_llm_call":
     if cost is not None:
         sid = payload.get("session_id", "default")
         try:
-            with open("/tmp/octos-cost.json") as f:
+            with open("/tmp/ra-cost.json") as f:
                 state = json.load(f)
         except FileNotFoundError:
             state = {}
         state[sid] = cost
-        with open("/tmp/octos-cost.json", "w") as f:
+        with open("/tmp/ra-cost.json", "w") as f:
             json.dump(state, f)
 
 sys.exit(0)
@@ -404,7 +404,7 @@ import json, sys, datetime
 payload = json.load(sys.stdin)
 payload["timestamp"] = datetime.datetime.utcnow().isoformat()
 
-with open("/var/log/octos-audit.jsonl", "a") as f:
+with open("/var/log/ra-audit.jsonl", "a") as f:
     f.write(json.dumps(payload) + "\n")
 
 sys.exit(0)
@@ -467,7 +467,7 @@ Shell 命令在沙箱中运行以实现隔离。支持三种后端：
 
 每个 channel:chat_id 对维护各自独立的会话（对话历史）。
 
-- **存储**：`.octos/sessions/` 中的 JSONL 文件
+- **存储**：`.ra/sessions/` 中的 JSONL 文件
 - **最大历史**：通过 `gateway.max_history` 配置（默认：50 条消息）
 - **会话**：裸 `/new` 清空当前会话；具名会话按发送者/渠道建键，并带有用于内部派生子会话的 `parent_key` 字段
 
@@ -523,7 +523,7 @@ Shell 命令在沙箱中运行以实现隔离。支持三种后端：
 
 ### 能力协商
 
-客户端在连接时声明它支持哪些协议特性：WebSocket 通过 `ui_feature` / `ui_features` 查询参数或 `X-Octos-Ui-Features` 头；`serve --stdio` 通过 `client_hello` 的 `supported_features`。服务器对大多数方法按协商集门控，因此旧客户端可继续工作，新能力也能上线。实现客户端时需注意两点：某些方法虽在默认能力列表中被*声明*，但仍需其具体标志才能被*调用*（应以协商列表为准，并稳妥处理 `method_not_supported`）；通知投递为尽力而为——当另一个连接触发自主运行事件（`session/goal/updated`、`loop/*`、`agent/*`）时，本连接仍可能通过实时转发或回放收到它们。代表性标志：
+客户端在连接时声明它支持哪些协议特性：WebSocket 通过 `ui_feature` / `ui_features` 查询参数或 `X-Ra-Ui-Features` 头；`serve --stdio` 通过 `client_hello` 的 `supported_features`。服务器对大多数方法按协商集门控，因此旧客户端可继续工作，新能力也能上线。实现客户端时需注意两点：某些方法虽在默认能力列表中被*声明*，但仍需其具体标志才能被*调用*（应以协商列表为准，并稳妥处理 `method_not_supported`）；通知投递为尽力而为——当另一个连接触发自主运行事件（`session/goal/updated`、`loop/*`、`agent/*`）时，本连接仍可能通过实时转发或回放收到它们。代表性标志：
 
 | 标志 | 解锁 |
 |------|------|
@@ -617,7 +617,7 @@ Bot: Switched to openai/gpt-4o.
 Agent 在会话间维护长期记忆：
 
 - **`MEMORY.md`** -- 持久化笔记，始终加载到上下文中
-- **每日笔记** -- `.octos/memory/YYYY-MM-DD.md`，自动创建
+- **每日笔记** -- `.ra/memory/YYYY-MM-DD.md`，自动创建
 - **近期记忆** -- 最近 7 天的每日笔记包含在上下文中
 - **片段记忆** -- 任务完成摘要存储在 `episodes.redb` 中
 
@@ -655,13 +655,13 @@ Bot: Created cron job "daily-news" running at 8:00 AM Asia/Shanghai every day.
 定时任务也可以通过 CLI 管理：
 
 ```bash
-octos cron list                              # 列出活跃任务
-octos cron list --all                        # 包含已禁用的
-octos cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
-octos cron add --name "check" --message "Check status" --every 3600
-octos cron remove <job-id>
-octos cron enable <job-id>
-octos cron enable <job-id> --disable
+ra cron list                              # 列出活跃任务
+ra cron list --all                        # 包含已禁用的
+ra cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
+ra cron add --name "check" --message "Check status" --every 3600
+ra cron remove <job-id>
+ra cron enable <job-id>
+ra cron enable <job-id> --disable
 ```
 
 ---
@@ -671,8 +671,8 @@ octos cron enable <job-id> --disable
 REST API 服务器包含一个内嵌的 Web 界面：
 
 ```bash
-octos serve                               # 绑定到 127.0.0.1:50080
-octos serve --host 0.0.0.0 --port 50080  # 接受外部连接
+ra serve                               # 绑定到 127.0.0.1:50080
+ra serve --host 0.0.0.0 --port 50080  # 接受外部连接
 # 打开 http://localhost:50080
 ```
 
@@ -683,6 +683,6 @@ octos serve --host 0.0.0.0 --port 50080  # 接受外部连接
 - 暗色主题
 
 `/metrics` 端点提供 Prometheus 格式的指标：
-- `octos_tool_calls_total`
+- `ra_tool_calls_total`
 - `octos_tool_call_duration_seconds`
-- `octos_llm_tokens_total`
+- `ra_llm_tokens_total`

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — Install octos from pre-built binaries on a fresh machine.
+# install.sh — Install ra from pre-built binaries on a fresh machine.
 # Self-contained: no repo clone, Rust, or Node.js needed.
 #
 # Usage:
@@ -8,10 +8,10 @@
 #
 # Options:
 #   --version TAG            Release version to install (default: latest)
-#   --prefix DIR             Install prefix (default: ~/.octos/bin)
-#   --port PORT              octos serve port (default: 8080)
+#   --prefix DIR             Install prefix (default: ~/.ra/bin)
+#   --port PORT              ra serve port (default: 8080)
 #   --auth-token TOKEN       Dashboard auth token (default: auto-generated)
-#   --uninstall              Remove octos and frpc services and binaries
+#   --uninstall              Remove ra and frpc services and binaries
 #   --doctor                 Diagnose installation and service health
 #
 # Optional features:
@@ -27,15 +27,15 @@
 #                            or set FRPS_SERVER). No default: without it the
 #                            tunnel setup is skipped.
 #     --ssh-port PORT        SSH tunnel remote port (default: 6001)
-#     --domain DOMAIN        Tunnel domain (default: octos-cloud.org)
+#     --domain DOMAIN        Tunnel domain (default: ra-cloud.org)
 
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────
 GITHUB_REPO="octos-org/octos"
 VERSION="latest"
-PREFIX="${OCTOS_PREFIX:-$HOME/.octos/bin}"
-DATA_DIR="${OCTOS_HOME:-$HOME/.octos}"
+PREFIX="${OCTOS_PREFIX:-$HOME/.ra/bin}"
+DATA_DIR="${OCTOS_HOME:-$HOME/.ra}"
 FRPC_VERSION="0.65.0"
 
 TENANT_NAME=""
@@ -44,7 +44,7 @@ FRPS_TOKEN_FILE=""
 FRPS_SERVER="${FRPS_SERVER:-}"
 SSH_PORT="6001"
 AUTH_TOKEN=""
-TUNNEL_DOMAIN="octos-cloud.org"
+TUNNEL_DOMAIN="ra-cloud.org"
 ENABLE_TUNNEL=false
 CADDY_DOMAIN=""
 PORT="8080"
@@ -77,7 +77,7 @@ while [ $# -gt 0 ]; do
         --doctor)        RUN_DOCTOR=true; shift ;;
         --help|-h)
             cat << 'HELPEOF'
-install.sh — Install octos from pre-built binaries on a fresh machine.
+install.sh — Install ra from pre-built binaries on a fresh machine.
 Self-contained: no repo clone, Rust, or Node.js needed.
 
 Usage:
@@ -86,10 +86,10 @@ Usage:
 
 Options:
   --version TAG            Release version to install (default: latest)
-  --prefix DIR             Install prefix (default: ~/.octos/bin)
-  --port PORT              octos serve port (default: 8080)
+  --prefix DIR             Install prefix (default: ~/.ra/bin)
+  --port PORT              ra serve port (default: 8080)
   --auth-token TOKEN       Dashboard auth token (default: auto-generated)
-  --uninstall              Remove octos and frpc services and binaries
+  --uninstall              Remove ra and frpc services and binaries
   --doctor                 Diagnose installation and service health
 
 Optional features:
@@ -105,7 +105,7 @@ Optional tunnel (frpc):
   --frps-server ADDR       frps relay server address (required for the tunnel;
                            or set FRPS_SERVER). Without it, tunnel setup is skipped.
   --ssh-port PORT          SSH tunnel remote port (default: 6001)
-  --domain DOMAIN          Tunnel domain (default: octos-cloud.org)
+  --domain DOMAIN          Tunnel domain (default: ra-cloud.org)
 HELPEOF
             exit 0
             ;;
@@ -139,30 +139,30 @@ PREFIX="$(normalize_path "$PREFIX")"
 DATA_DIR="$(normalize_path "$DATA_DIR")"
 
 # ── Config home resolver (bash mirror of resolve_config_context in Rust) ──
-# Keep this EXACTLY consistent with crates/octos-cli/src/config_context.rs.
+# Keep this EXACTLY consistent with crates/ra-cli/src/config_context.rs.
 #
 #   config_home = $OCTOS_CONFIG_DIR                       (if set, non-empty)
 #               | $DATA_DIR                               (if explicit: an
 #                                                          OCTOS_HOME override
-#                                                          != $HOME/.octos)
+#                                                          != $HOME/.ra)
 #               | XDG default                             (otherwise)
 #
 # XDG default (mirror of config_context::xdg_config_home in Rust):
-#   macOS + Linux → ${XDG_CONFIG_HOME:-$HOME/.config}/octos
-#       octos is a CLI, so it uses true XDG ~/.config on macOS too (not Apple's
+#   macOS + Linux → ${XDG_CONFIG_HOME:-$HOME/.config}/ra
+#       ra is a CLI, so it uses true XDG ~/.config on macOS too (not Apple's
 #       ~/Library/Application Support) — the prevailing CLI convention and
 #       consistent with Linux.
 #       NOTE: a RELATIVE $XDG_CONFIG_HOME is ignored (XDG spec only honours
 #       absolute values) — fall back to $HOME/.config in that case.
-#   (Windows uses %APPDATA%\octos in Rust; this installer is unix-only.)
+#   (Windows uses %APPDATA%\ra in Rust; this installer is unix-only.)
 #
 # Empty-string env vars are treated as unset (matching env_nonempty in Rust).
 xdg_config_home() {
     # Honour XDG_CONFIG_HOME only when it is an ABSOLUTE path; else ~/.config.
     if [ -n "${XDG_CONFIG_HOME:-}" ] && [ "${XDG_CONFIG_HOME#/}" != "$XDG_CONFIG_HOME" ]; then
-        printf '%s/octos\n' "$XDG_CONFIG_HOME"
+        printf '%s/ra\n' "$XDG_CONFIG_HOME"
     else
-        printf '%s/octos\n' "$HOME/.config"
+        printf '%s/ra\n' "$HOME/.config"
     fi
 }
 
@@ -195,8 +195,8 @@ compute_config_home() {
     fi
     # Explicit when DATA_DIR (from OCTOS_HOME) is a non-default override.
     # Compare CANONICALIZED paths so symlinked / trailing-slash variants of
-    # ~/.octos still resolve to the default (mirrors normalize_for_compare).
-    if [ "$(canonicalize_path "$DATA_DIR")" != "$(canonicalize_path "$HOME/.octos")" ]; then
+    # ~/.ra still resolve to the default (mirrors normalize_for_compare).
+    if [ "$(canonicalize_path "$DATA_DIR")" != "$(canonicalize_path "$HOME/.ra")" ]; then
         printf '%s\n' "$DATA_DIR"
         return 0
     fi
@@ -236,7 +236,7 @@ validate_inputs() {
     [ -n "$PREFIX" ]        && validate "prefix"      "$PREFIX"      '/[a-zA-Z0-9/._~-]*'
     [ -n "$DATA_DIR" ]      && validate "data-dir"    "$DATA_DIR"    '/[a-zA-Z0-9/._~-]*'
     # CONFIG_HOME may legitimately contain a space (macOS XDG default is
-    # ".../Library/Application Support/octos"). It is only ever used with the
+    # ".../Library/Application Support/ra"). It is only ever used with the
     # shell tools below (quoted), never interpolated into TOML/plist/systemd
     # units, so the space-tolerant pattern is safe here.
     [ -n "${CONFIG_HOME:-}" ] && validate "config-home" "$CONFIG_HOME" '/[a-zA-Z0-9 /._~-]*'
@@ -272,7 +272,7 @@ systemd_env_var_line() {
 }
 
 # Write the SMTP password into `{DATA_DIR}/smtp_secret.json` (mode 0600) so
-# the running `octos serve` can read it without it living in the plist or
+# the running `ra serve` can read it without it living in the plist or
 # systemd unit as a plaintext env var. No-op when SMTP_PASSWORD is empty.
 write_smtp_secret_file() {
     local password="${1:-${SMTP_PASSWORD:-}}"
@@ -442,7 +442,7 @@ install_pkg() {
     fi
     echo "    Installing $pkg..."
     local stderr_log
-    stderr_log=$(mktemp -t octos-install-pkg-stderr.XXXXXX)
+    stderr_log=$(mktemp -t ra-install-pkg-stderr.XXXXXX)
     if eval "$cmd" >/dev/null 2>"$stderr_log"; then
         rm -f "$stderr_log"
         return 0
@@ -467,17 +467,17 @@ svc_hint() {
     local action="$1" service="$2"
     case "$OS" in
         Darwin)
-            local plist="/Library/LaunchDaemons/io.octos.${service}.plist"
+            local plist="/Library/LaunchDaemons/io.ra.${service}.plist"
             case "$action" in
                 start)   echo "sudo launchctl load $plist" ;;
                 stop)    echo "sudo launchctl unload $plist" ;;
                 restart) echo "sudo launchctl unload $plist && sudo launchctl load $plist" ;;
-                status)  echo "sudo launchctl print system/io.octos.${service}" ;;
+                status)  echo "sudo launchctl print system/io.ra.${service}" ;;
             esac
             ;;
         Linux)
             local unit="$service"
-            [ "$service" = "serve" ] && unit="octos-serve"
+            [ "$service" = "serve" ] && unit="ra-serve"
             case "$action" in
                 start)   echo "sudo systemctl start $unit" ;;
                 stop)    echo "sudo systemctl stop $unit" ;;
@@ -500,7 +500,7 @@ serverAddr = "${FRPS_SERVER}"
 serverPort = 7000
 
 # Both sides use empty auth.token so frps's built-in VerifyLogin passes;
-# the octos plugin authenticates the tenant via metadatas.token.
+# the ra plugin authenticates the tenant via metadatas.token.
 auth.method = "token"
 auth.token = ""
 metadatas.token = "${FRPS_TOKEN}"
@@ -559,16 +559,16 @@ install_frpc_binary() {
 write_frpc_service() {
     case "$OS" in
         Darwin)
-            local plist="/Library/LaunchDaemons/io.octos.frpc.plist"
+            local plist="/Library/LaunchDaemons/io.ra.frpc.plist"
             local tmp
-            tmp=$(mktemp /tmp/io.octos.frpc.plist.XXXXXX)
+            tmp=$(mktemp /tmp/io.ra.frpc.plist.XXXXXX)
             cat > "$tmp" << 'PLIST_EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.octos.frpc</string>
+    <string>io.ra.frpc</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/frpc</string>
@@ -587,8 +587,8 @@ write_frpc_service() {
 </plist>
 PLIST_EOF
             # Clean up legacy LaunchAgent
-            launchctl unload "$HOME/Library/LaunchAgents/io.octos.frpc.plist" 2>/dev/null || true
-            rm -f "$HOME/Library/LaunchAgents/io.octos.frpc.plist"
+            launchctl unload "$HOME/Library/LaunchAgents/io.ra.frpc.plist" 2>/dev/null || true
+            rm -f "$HOME/Library/LaunchAgents/io.ra.frpc.plist"
             sudo launchctl unload "$plist" 2>/dev/null || true
             sudo mv "$tmp" "$plist"
             sudo chown root:wheel "$plist"
@@ -601,7 +601,7 @@ PLIST_EOF
             tmp=$(mktemp /tmp/frpc.service.XXXXXX)
             cat > "$tmp" << 'UNIT_EOF'
 [Unit]
-Description=frpc tunnel client for octos
+Description=frpc tunnel client for ra
 After=network.target
 
 [Service]
@@ -627,7 +627,7 @@ UNIT_EOF
     esac
 }
 
-# Write and load the octos serve system service (plist on Darwin, systemd on Linux).
+# Write and load the ra serve system service (plist on Darwin, systemd on Linux).
 # Uses globals: OCTOS_BIN, AUTH_TOKEN, DATA_DIR, PREFIX, HOME
 write_octos_service() {
     # Persist the SMTP password in `$DATA_DIR/smtp_secret.json` (0600) before
@@ -640,27 +640,27 @@ write_octos_service() {
             # Clean up legacy LaunchAgents (old names that conflict with port 8080)
             local legacy
             for legacy in \
-                "$HOME/Library/LaunchAgents/io.octos.octos-serve.plist" \
-                "$HOME/Library/LaunchAgents/io.octos.serve.plist" \
+                "$HOME/Library/LaunchAgents/io.ra.ra-serve.plist" \
+                "$HOME/Library/LaunchAgents/io.ra.serve.plist" \
                 "$HOME/Library/LaunchAgents/io.ominix.crew-serve.plist" \
                 "$HOME/Library/LaunchAgents/io.ominix.ominix-api.plist" \
-                "$HOME/Library/LaunchAgents/io.ominix.octos-serve.plist"; do
+                "$HOME/Library/LaunchAgents/io.ominix.ra-serve.plist"; do
                 if [ -f "$legacy" ]; then
                     launchctl unload "$legacy" 2>/dev/null || true
                     rm -f "$legacy"
                 fi
             done
 
-            local plist="/Library/LaunchDaemons/io.octos.serve.plist"
+            local plist="/Library/LaunchDaemons/io.ra.serve.plist"
             local tmp
-            tmp=$(mktemp /tmp/io.octos.serve.plist.XXXXXX)
+            tmp=$(mktemp /tmp/io.ra.serve.plist.XXXXXX)
             cat > "$tmp" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>io.octos.serve</string>
+    <string>io.ra.serve</string>
     <key>ProgramArguments</key>
     <array>
         <string>$OCTOS_BIN</string>
@@ -679,7 +679,7 @@ write_octos_service() {
       When this installer is run as `sudo ./install.sh`, `whoami` resolves to
       `root` and the daemon would start as root — which then writes its caches
       (e.g. `.main_verified` under skill dirs) with root ownership, locking out
-      the operator's interactive `octos` CLI. Falling back to `whoami` keeps
+      the operator's interactive `ra` CLI. Falling back to `whoami` keeps
       the non-sudo path working unchanged.
     -->
     <key>UserName</key>
@@ -723,7 +723,7 @@ EOF
             sudo chown root:wheel "$plist"
             sudo chmod 600 "$plist"
             sudo launchctl load "$plist"
-            ok "octos serve started via launchd"
+            ok "ra serve started via launchd"
             ;;
 
         Linux)
@@ -731,12 +731,12 @@ EOF
             # installed world-readable (systemctl cat). They land in
             # `{DATA_DIR}/serve.env` (0600) and load via EnvironmentFile.
             write_serve_env_file
-            local unit="/etc/systemd/system/octos-serve.service"
+            local unit="/etc/systemd/system/ra-serve.service"
             local tmp
-            tmp=$(mktemp /tmp/octos-serve.service.XXXXXX)
+            tmp=$(mktemp /tmp/ra-serve.service.XXXXXX)
             cat > "$tmp" << EOF
 [Unit]
-Description=octos serve (dashboard + gateway)
+Description=ra serve (dashboard + gateway)
 After=network-online.target
 Wants=network-online.target
 
@@ -771,41 +771,41 @@ EOF
             sudo chown root:root "$unit"
             sudo chmod 644 "$unit"
             sudo systemctl daemon-reload
-            sudo systemctl enable octos-serve
-            sudo systemctl restart octos-serve
-            ok "octos serve started via systemd"
+            sudo systemctl enable ra-serve
+            sudo systemctl restart ra-serve
+            ok "ra serve started via systemd"
             ;;
 
         *)
-            warn "octos serve service setup not supported on $OS"
+            warn "ra serve service setup not supported on $OS"
             hint "Run manually: OCTOS_AUTH_TOKEN=$AUTH_TOKEN $OCTOS_BIN serve --port $PORT --host 0.0.0.0"
             ;;
     esac
 }
 
-# Stop and remove all octos system services (octos serve + frpc).
+# Stop and remove all ra system services (ra serve + frpc).
 uninstall_services() {
     case "$OS" in
         Darwin)
-            sudo launchctl unload /Library/LaunchDaemons/io.octos.serve.plist 2>/dev/null || true
-            sudo rm -f /Library/LaunchDaemons/io.octos.serve.plist
-            sudo launchctl unload /Library/LaunchDaemons/io.octos.frpc.plist 2>/dev/null || true
-            sudo rm -f /Library/LaunchDaemons/io.octos.frpc.plist
+            sudo launchctl unload /Library/LaunchDaemons/io.ra.serve.plist 2>/dev/null || true
+            sudo rm -f /Library/LaunchDaemons/io.ra.serve.plist
+            sudo launchctl unload /Library/LaunchDaemons/io.ra.frpc.plist 2>/dev/null || true
+            sudo rm -f /Library/LaunchDaemons/io.ra.frpc.plist
             # Clean up legacy LaunchAgents
-            launchctl unload ~/Library/LaunchAgents/io.octos.octos-serve.plist 2>/dev/null || true
-            launchctl unload ~/Library/LaunchAgents/io.octos.serve.plist 2>/dev/null || true
-            launchctl unload ~/Library/LaunchAgents/io.octos.frpc.plist 2>/dev/null || true
+            launchctl unload ~/Library/LaunchAgents/io.ra.ra-serve.plist 2>/dev/null || true
+            launchctl unload ~/Library/LaunchAgents/io.ra.serve.plist 2>/dev/null || true
+            launchctl unload ~/Library/LaunchAgents/io.ra.frpc.plist 2>/dev/null || true
             launchctl unload ~/Library/LaunchAgents/io.ominix.crew-serve.plist 2>/dev/null || true
             launchctl unload ~/Library/LaunchAgents/io.ominix.ominix-api.plist 2>/dev/null || true
-            launchctl unload ~/Library/LaunchAgents/io.ominix.octos-serve.plist 2>/dev/null || true
-            rm -f ~/Library/LaunchAgents/io.octos.*.plist
+            launchctl unload ~/Library/LaunchAgents/io.ominix.ra-serve.plist 2>/dev/null || true
+            rm -f ~/Library/LaunchAgents/io.ra.*.plist
             rm -f ~/Library/LaunchAgents/io.ominix.*.plist
             ok "launchd services removed"
             ;;
         Linux)
-            sudo systemctl stop octos-serve.service 2>/dev/null || true
-            sudo systemctl disable octos-serve.service 2>/dev/null || true
-            sudo rm -f /etc/systemd/system/octos-serve.service
+            sudo systemctl stop ra-serve.service 2>/dev/null || true
+            sudo systemctl disable ra-serve.service 2>/dev/null || true
+            sudo rm -f /etc/systemd/system/ra-serve.service
             sudo systemctl stop frpc.service 2>/dev/null || true
             sudo systemctl disable frpc.service 2>/dev/null || true
             sudo rm -f /etc/systemd/system/frpc.service
@@ -818,13 +818,13 @@ uninstall_services() {
     esac
 }
 
-# Detect the installed octos serve port from the service definition.
+# Detect the installed ra serve port from the service definition.
 # Falls back to the current PORT value when no installed service is present.
 detect_installed_port() {
     local detected=""
     case "$OS" in
         Darwin)
-            local plist="/Library/LaunchDaemons/io.octos.serve.plist"
+            local plist="/Library/LaunchDaemons/io.ra.serve.plist"
             if [ -f "$plist" ]; then
                 detected=$(grep -A1 '>--port<' "$plist" 2>/dev/null | tail -1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
             fi
@@ -832,11 +832,11 @@ detect_installed_port() {
             # read it. Fall back to the running process — its argv is
             # public information (#2371).
             if [ -z "$detected" ]; then
-                detected=$(ps -axo args= | sed -n 's/.*octos serve --port \([0-9][0-9]*\).*/\1/p' | head -1)
+                detected=$(ps -axo args= | sed -n 's/.*ra serve --port \([0-9][0-9]*\).*/\1/p' | head -1)
             fi
             ;;
         Linux)
-            local unit="/etc/systemd/system/octos-serve.service"
+            local unit="/etc/systemd/system/ra-serve.service"
             if [ -f "$unit" ]; then
                 detected=$(grep 'ExecStart=' "$unit" 2>/dev/null | sed -n 's/.*--port \([0-9]*\).*/\1/p')
             fi
@@ -908,9 +908,9 @@ if [ "$RUN_DOCTOR" = true ]; then
     fi
 
     # ── Binary ───────────────────────────────────────────────────────
-    section "octos binary"
+    section "ra binary"
 
-    OCTOS_BIN="$PREFIX/octos"
+    OCTOS_BIN="$PREFIX/ra"
     if [ -f "$OCTOS_BIN" ]; then
         ok "found: $OCTOS_BIN"
         if "$OCTOS_BIN" --version &>/dev/null; then
@@ -926,12 +926,12 @@ if [ "$RUN_DOCTOR" = true ]; then
             hint "Or re-run install.sh"
         fi
     else
-        if command -v octos &>/dev/null; then
-            FOUND="$(command -v octos)"
+        if command -v ra &>/dev/null; then
+            FOUND="$(command -v ra)"
             warn "not found at $OCTOS_BIN, but found at $FOUND"
             hint "Set OCTOS_PREFIX or add $PREFIX to PATH"
         else
-            err "octos binary not found"
+            err "ra binary not found"
             hint "Run install.sh to install"
         fi
     fi
@@ -943,39 +943,39 @@ if [ "$RUN_DOCTOR" = true ]; then
         ok "found: $DATA_DIR"
     else
         err "$DATA_DIR does not exist"
-        hint "Run: octos init --defaults"
+        hint "Run: ra init --defaults"
     fi
 
     # ── Config ────────────────────────────────────────────────────────
     # Report the ACTUAL resolved config_home (XDG by default), with the legacy
-    # ~/.octos/config.json honoured as a back-compat fallback for default
+    # ~/.ra/config.json honoured as a back-compat fallback for default
     # installs (matches the Rust resolver precedence).
     section "Config"
 
-    _DOCTOR_LEGACY_CONFIG="$HOME/.octos/config.json"
+    _DOCTOR_LEGACY_CONFIG="$HOME/.ra/config.json"
     if [ -f "$CONFIG_HOME/config.json" ]; then
         ok "config.json: $CONFIG_HOME/config.json"
     elif [ "$CONFIG_HOME" = "$(xdg_config_home)" ] && [ -z "${OCTOS_CONFIG_DIR:-}" ] \
          && [ -f "$_DOCTOR_LEGACY_CONFIG" ]; then
         ok "config.json (legacy): $_DOCTOR_LEGACY_CONFIG"
-        hint "Run 'octos init' to migrate it to $CONFIG_HOME"
+        hint "Run 'ra init' to migrate it to $CONFIG_HOME"
     else
         warn "config.json missing (expected at $CONFIG_HOME/config.json)"
-        hint "Run: octos init"
+        hint "Run: ra init"
     fi
 
-    # ── octos serve process ──────────────────────────────────────────
-    section "octos serve"
+    # ── ra serve process ──────────────────────────────────────────
+    section "ra serve"
 
-    OCTOS_PID=$(pgrep -f "octos serve" 2>/dev/null | head -1 || true)
+    OCTOS_PID=$(pgrep -f "ra serve" 2>/dev/null | head -1 || true)
     if [ -n "$OCTOS_PID" ]; then
         OCTOS_CMD=$(ps -p "$OCTOS_PID" -o args= 2>/dev/null || true)
         ok "running (PID: $OCTOS_PID)"
         echo "    CMD: $OCTOS_CMD"
     else
-        err "octos serve is not running"
+        err "ra serve is not running"
         hint "Start: $(svc_hint start serve)"
-        hint "Or manually: $PREFIX/octos serve --port $PORT --host 0.0.0.0"
+        hint "Or manually: $PREFIX/ra serve --port $PORT --host 0.0.0.0"
     fi
 
     # ── Port check ───────────────────────────────────────────────────
@@ -996,7 +996,7 @@ if [ "$RUN_DOCTOR" = true ]; then
         PORT_CHECK_AVAILABLE=true
         PORT_OWNER=$(ss -tlnp "sport = :$PORT" 2>/dev/null | tail -n +2 | head -1 || true)
         if [ -n "$PORT_OWNER" ]; then
-            # ss output: users:(("octos",pid=1234,fd=5))
+            # ss output: users:(("ra",pid=1234,fd=5))
             PORT_CMD=$(echo "$PORT_OWNER" | sed -n 's/.*users:(("\([^"]*\)".*/\1/p')
             PORT_PID=$(echo "$PORT_OWNER" | sed -n 's/.*pid=\([0-9]*\).*/\1/p')
         fi
@@ -1004,7 +1004,7 @@ if [ "$RUN_DOCTOR" = true ]; then
         PORT_CHECK_AVAILABLE=true
         PORT_OWNER=$(netstat -tlnp 2>/dev/null | grep ":$PORT " | head -1 || true)
         if [ -n "$PORT_OWNER" ]; then
-            # netstat output: ... 1234/octos
+            # netstat output: ... 1234/ra
             PORT_PID=$(echo "$PORT_OWNER" | awk '{print $NF}' | cut -d/ -f1)
             PORT_CMD=$(echo "$PORT_OWNER" | awk '{print $NF}' | cut -d/ -f2)
         fi
@@ -1017,10 +1017,10 @@ if [ "$RUN_DOCTOR" = true ]; then
     fi
 
     if [ -n "$PORT_CMD" ]; then
-        if echo "$PORT_CMD" | grep -qi octos; then
-            ok "port $PORT held by octos (PID: $PORT_PID)"
+        if echo "$PORT_CMD" | grep -qi ra; then
+            ok "port $PORT held by ra (PID: $PORT_PID)"
         else
-            err "port $PORT held by $PORT_CMD (PID: $PORT_PID) — not octos"
+            err "port $PORT held by $PORT_CMD (PID: $PORT_PID) — not ra"
             hint "Kill it: kill $PORT_PID"
             if [ "$OS" = "Darwin" ]; then
                 hint "If it respawns, find its LaunchAgent/Daemon:"
@@ -1029,7 +1029,7 @@ if [ "$RUN_DOCTOR" = true ]; then
         fi
     elif [ "$PORT_CHECK_AVAILABLE" = true ]; then
         if [ -n "$OCTOS_PID" ]; then
-            err "octos serve is running but nothing is listening on $PORT"
+            err "ra serve is running but nothing is listening on $PORT"
             hint "Check if it's bound to a different port: ps -p $OCTOS_PID -o args="
         else
             warn "nothing listening on port $PORT"
@@ -1046,7 +1046,7 @@ if [ "$RUN_DOCTOR" = true ]; then
             ;;
         000)
             err "connection failed (server not reachable on localhost:${PORT})"
-            hint "Check 'octos serve' and 'Port ${PORT}' sections above"
+            hint "Check 'ra serve' and 'Port ${PORT}' sections above"
             ;;
         401|403)
             warn "responds $HTTP_CODE (auth required)"
@@ -1067,11 +1067,11 @@ if [ "$RUN_DOCTOR" = true ]; then
 
     case "$OS" in
         Darwin)
-            PLIST="/Library/LaunchDaemons/io.octos.serve.plist"
+            PLIST="/Library/LaunchDaemons/io.ra.serve.plist"
             if [ -f "$PLIST" ]; then
                 ok "LaunchDaemon plist exists: $PLIST"
                 # Avoid sudo during diagnostics — check if the process is running instead
-                if pgrep -f "octos serve" &>/dev/null; then
+                if pgrep -f "ra serve" &>/dev/null; then
                     ok "service appears loaded (process running)"
                 else
                     warn "plist exists but service does not appear to be running"
@@ -1086,11 +1086,11 @@ if [ "$RUN_DOCTOR" = true ]; then
             # Check for legacy/conflicting plists
             LEGACY_FOUND=false
             for p in \
-                "$HOME/Library/LaunchAgents/io.octos.octos-serve.plist" \
-                "$HOME/Library/LaunchAgents/io.octos.serve.plist" \
+                "$HOME/Library/LaunchAgents/io.ra.ra-serve.plist" \
+                "$HOME/Library/LaunchAgents/io.ra.serve.plist" \
                 "$HOME/Library/LaunchAgents/io.ominix.crew-serve.plist" \
                 "$HOME/Library/LaunchAgents/io.ominix.ominix-api.plist" \
-                "$HOME/Library/LaunchAgents/io.ominix.octos-serve.plist"; do
+                "$HOME/Library/LaunchAgents/io.ominix.ra-serve.plist"; do
                 if [ -f "$p" ]; then
                     err "legacy plist found: $p"
                     hint "Remove: launchctl unload '$p' && rm -f '$p'"
@@ -1103,10 +1103,10 @@ if [ "$RUN_DOCTOR" = true ]; then
             ;;
 
         Linux)
-            UNIT="/etc/systemd/system/octos-serve.service"
+            UNIT="/etc/systemd/system/ra-serve.service"
             if [ -f "$UNIT" ]; then
                 ok "systemd unit exists: $UNIT"
-                if systemctl is-active octos-serve &>/dev/null; then
+                if systemctl is-active ra-serve &>/dev/null; then
                     ok "service is active"
                 else
                     warn "service is not active"
@@ -1199,7 +1199,7 @@ if [ "$RUN_DOCTOR" = true ]; then
                 hint "  Start: $(svc_hint start frpc)"
             fi
         elif [ "$ADMIN_OK" = false ]; then
-            err "admin portal is not responding locally — fix octos serve first (see above)"
+            err "admin portal is not responding locally — fix ra serve first (see above)"
             hint "Remote access depends on the local server working first"
         fi
     fi
@@ -1267,7 +1267,7 @@ fi
 # ── Uninstall mode ───────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════
 if [ "$UNINSTALL" = true ]; then
-    section "Uninstalling octos"
+    section "Uninstalling ra"
 
     if [ "$PORT" = "8080" ]; then
         PORT="$(detect_installed_port)"
@@ -1334,12 +1334,12 @@ if [ -z "$FRPS_TOKEN" ] && [ -n "$FRPS_TOKEN_FILE" ]; then
 fi
 
 # ══════════════════════════════════════════════════════════════════════
-# ── Tunnel-only update (when octos is already installed) ─────────────
+# ── Tunnel-only update (when ra is already installed) ─────────────
 # ══════════════════════════════════════════════════════════════════════
-# If octos binary exists and tunnel is explicitly enabled,
+# If ra binary exists and tunnel is explicitly enabled,
 # skip the full install and just update the tunnel configuration.
 
-if [ -f "$PREFIX/octos" ] && [ "$ENABLE_TUNNEL" = true ]; then
+if [ -f "$PREFIX/ra" ] && [ "$ENABLE_TUNNEL" = true ]; then
     section "Updating tunnel configuration"
 
     # Fill in missing values from existing frpc config
@@ -1350,9 +1350,9 @@ if [ -f "$PREFIX/octos" ] && [ "$ENABLE_TUNNEL" = true ]; then
                 ok "tenant name from existing config: $TENANT_NAME"
             fi
         fi
-        if [ "$TUNNEL_DOMAIN" = "octos-cloud.org" ]; then
+        if [ "$TUNNEL_DOMAIN" = "ra-cloud.org" ]; then
             EXISTING_TUNNEL_DOMAIN=$(grep 'customDomains' /etc/frp/frpc.toml 2>/dev/null | head -1 | sed 's/.*\["[^"]*\.\([^"]*\)"\].*/\1/')
-            if [ -n "$EXISTING_TUNNEL_DOMAIN" ] && [ "$EXISTING_TUNNEL_DOMAIN" != "octos-cloud.org" ]; then
+            if [ -n "$EXISTING_TUNNEL_DOMAIN" ] && [ "$EXISTING_TUNNEL_DOMAIN" != "ra-cloud.org" ]; then
                 TUNNEL_DOMAIN="$EXISTING_TUNNEL_DOMAIN"
                 ok "tunnel domain from existing config: $TUNNEL_DOMAIN"
             fi
@@ -1396,7 +1396,7 @@ if [ -f "$PREFIX/octos" ] && [ "$ENABLE_TUNNEL" = true ]; then
         [ -z "$TENANT_NAME" ] && err "Tenant name is required"
     fi
     if [ -z "$FRPS_TOKEN" ]; then
-        echo "    Enter the per-tenant tunnel token (from 'octos admin create-tenant'):"
+        echo "    Enter the per-tenant tunnel token (from 'ra admin create-tenant'):"
         printf "    > "
         read -r FRPS_TOKEN < /dev/tty
         [ -z "$FRPS_TOKEN" ] && err "per-tenant tunnel token is required"
@@ -1478,9 +1478,9 @@ case "$TRIPLE" in
     x86_64-apple-darwin)
         err "macOS x86_64 does not have pre-built binaries yet."
         hint "Build from source with the canonical feature set:"
-        hint "  cargo install --path crates/octos-cli \\"
+        hint "  cargo install --path crates/ra-cli \\"
         hint "      --features \"api,telegram,discord,dingtalk,whatsapp,feishu,twilio,wecom,wecom-bot,audio_mp3\""
-        hint "(matches scripts/milestone-ci.sh; \`api\` is required for \`octos serve\`.)"
+        hint "(matches scripts/milestone-ci.sh; \`api\` is required for \`ra serve\`.)"
         ;;
 esac
 
@@ -1500,7 +1500,7 @@ elif [ "$INSTALL_DEPS" = true ]; then
     install_pkg git && ok "git installed" || true
 else
     warn "git not found"
-    echo "    Enables: skill installation (octos skills install)"
+    echo "    Enables: skill installation (ra skills install)"
     echo "    Install:"
     echo "      $(pkg_hint git)"
 fi
@@ -1575,7 +1575,7 @@ fi
 # ── Resolve download source ──────────────────────────────────────────
 section "Resolving release"
 
-TARBALL="octos-bundle-${TRIPLE}.tar.gz"
+TARBALL="ra-bundle-${TRIPLE}.tar.gz"
 DOWNLOAD_BASE="${OCTOS_DOWNLOAD_URL:-}"
 
 # Auto-detect: check if tarball is next to the script or in the current directory
@@ -1605,10 +1605,10 @@ else
     ok "version: $VERSION"
 fi
 
-# ── Download and install octos ────────────────────────────────────────
-section "Installing octos"
+# ── Download and install ra ────────────────────────────────────────
+section "Installing ra"
 
-INSTALL_TMP=$(mktemp -d /tmp/octos-install.XXXXXX)
+INSTALL_TMP=$(mktemp -d /tmp/ra-install.XXXXXX)
 trap 'rm -rf "$INSTALL_TMP"' EXIT
 
 if [[ "$DOWNLOAD_URL" == file://* ]]; then
@@ -1655,12 +1655,12 @@ else
     curl -fsSL -o "$PREFIX/install.sh" "${RELEASE_BASE}/install.sh" 2>/dev/null || true
 fi
 [ -f "$PREFIX/install.sh" ] && chmod +x "$PREFIX/install.sh"
-if [[ "$SCRIPT_SELF" == /* ]] && [ -f "$(dirname "$SCRIPT_SELF")/octos-doctor.sh" ]; then
-    cp "$(dirname "$SCRIPT_SELF")/octos-doctor.sh" "$PREFIX/octos-doctor.sh"
+if [[ "$SCRIPT_SELF" == /* ]] && [ -f "$(dirname "$SCRIPT_SELF")/ra-doctor.sh" ]; then
+    cp "$(dirname "$SCRIPT_SELF")/ra-doctor.sh" "$PREFIX/ra-doctor.sh"
 else
-    curl -fsSL -o "$PREFIX/octos-doctor.sh" "${RELEASE_BASE}/octos-doctor.sh" 2>/dev/null || true
+    curl -fsSL -o "$PREFIX/ra-doctor.sh" "${RELEASE_BASE}/ra-doctor.sh" 2>/dev/null || true
 fi
-[ -f "$PREFIX/octos-doctor.sh" ] && chmod +x "$PREFIX/octos-doctor.sh"
+[ -f "$PREFIX/ra-doctor.sh" ] && chmod +x "$PREFIX/ra-doctor.sh"
 if [ -f "$PREFIX/install.sh" ]; then
     ok "scripts saved to $PREFIX"
 else
@@ -1683,20 +1683,20 @@ if ! echo "$PATH" | grep -q "$PREFIX"; then
     echo "      export PATH=\"$PREFIX:\$PATH\""
 fi
 
-# ── Initialize octos workspace ────────────────────────────────────────
-section "Initializing octos"
+# ── Initialize ra workspace ────────────────────────────────────────
+section "Initializing ra"
 
 # Temporarily add PREFIX to PATH for subsequent commands
 export PATH="$PREFIX:$PATH"
 export OCTOS_HOME="$DATA_DIR"
 
 if [ ! -d "$DATA_DIR" ]; then
-    # octos init always writes to $cwd/.octos/, which won't match a custom
-    # DATA_DIR.  When DATA_DIR is the default ~/.octos we can let init create
+    # ra init always writes to $cwd/.ra/, which won't match a custom
+    # DATA_DIR.  When DATA_DIR is the default ~/.ra we can let init create
     # it; otherwise we set up the directory structure directly.
-    if [ "$DATA_DIR" = "$HOME/.octos" ]; then
-        "$PREFIX/octos" init --cwd "$HOME" --defaults 2>/dev/null || "$PREFIX/octos" init --cwd "$HOME" 2>/dev/null || true
-        ok "workspace initialized via octos init"
+    if [ "$DATA_DIR" = "$HOME/.ra" ]; then
+        "$PREFIX/ra" init --cwd "$HOME" --defaults 2>/dev/null || "$PREFIX/ra" init --cwd "$HOME" 2>/dev/null || true
+        ok "workspace initialized via ra init"
     else
         mkdir -p "$DATA_DIR"
         ok "created custom data directory: $DATA_DIR"
@@ -1706,7 +1706,7 @@ else
 fi
 
 # Ensure required subdirectories, config, and bootstrap files exist.
-# These match what `octos init --defaults` creates (see init.rs).
+# These match what `ra init --defaults` creates (see init.rs).
 #
 # Runtime STATE (profiles/sessions/skills/...) lives under $DATA_DIR. The
 # starter config.json is written to $CONFIG_HOME — the bash mirror of the Rust
@@ -1715,13 +1715,13 @@ fi
 mkdir -p "$DATA_DIR"/{profiles,memory,sessions,skills,logs,research,history}
 
 # Legacy config for the default case: never shadow an existing legacy config.
-_LEGACY_CONFIG="$HOME/.octos/config.json"
+_LEGACY_CONFIG="$HOME/.ra/config.json"
 _CONFIG_FILE="$CONFIG_HOME/config.json"
 
 # Decide whether to write the starter config:
 #   - skip if $CONFIG_HOME/config.json already exists, and
 #   - for the DEFAULT install (CONFIG_HOME == XDG default, i.e. not an explicit
-#     override), also skip if the legacy ~/.octos/config.json exists so the
+#     override), also skip if the legacy ~/.ra/config.json exists so the
 #     resolver's back-compat path keeps loading it (no shadowing).
 _WRITE_CONFIG=true
 if [ -f "$_CONFIG_FILE" ]; then
@@ -1793,25 +1793,25 @@ if [ -z "$AUTH_TOKEN" ]; then
     AUTH_TOKEN=$(openssl rand -hex 32)
 fi
 
-# ── Set up octos serve as system service ──────────────────────────────
-section "Setting up octos serve"
+# ── Set up ra serve as system service ──────────────────────────────
+section "Setting up ra serve"
 
-OCTOS_BIN="$PREFIX/octos"
+OCTOS_BIN="$PREFIX/ra"
 write_octos_service
 
-# ── Verify octos serve ────────────────────────────────────────────────
-section "Verifying octos serve"
+# ── Verify ra serve ────────────────────────────────────────────────
+section "Verifying ra serve"
 RETRIES=10
 while [ $RETRIES -gt 0 ]; do
     if curl -sf --max-time 2 "http://localhost:${PORT}/admin/" > /dev/null 2>&1; then
-        ok "octos serve is running on http://localhost:${PORT}"
+        ok "ra serve is running on http://localhost:${PORT}"
         break
     fi
     RETRIES=$((RETRIES - 1))
     sleep 1
 done
 if [ $RETRIES -eq 0 ]; then
-    warn "octos serve did not respond within 10 seconds"
+    warn "ra serve did not respond within 10 seconds"
     echo "    Check logs: tail -f $DATA_DIR/logs/serve.\$(date +%F).log"
 fi
 
@@ -1957,9 +1957,9 @@ if [ "$ENABLE_TUNNEL" = true ]; then
     # `/api/status` was retired in M12 Phase D-5 (ADR PR #910). Use the
     # public `/health` endpoint as a daemon liveness probe instead.
     if curl -sf --max-time 3 "http://localhost:${PORT}/health" > /dev/null 2>&1; then
-        ok "octos serve is running on port ${PORT}"
+        ok "ra serve is running on port ${PORT}"
     else
-        warn "octos serve is not responding on port ${PORT} (tunnel will retry once it starts)"
+        warn "ra serve is not responding on port ${PORT} (tunnel will retry once it starts)"
     fi
 fi
 
@@ -1986,7 +1986,7 @@ if [ -n "$CADDY_DOMAIN" ]; then
         ok "Caddy already installed: $(caddy version 2>/dev/null | head -1)"
     fi
 
-    # Determine serve port (match what octos serve uses)
+    # Determine serve port (match what ra serve uses)
     CADDY_UPSTREAM="localhost:${PORT}"
 
     # Regex-escape the configured domain so dots match literally
@@ -2019,8 +2019,8 @@ if [ -n "$CADDY_DOMAIN" ]; then
 }
 
 http:// {
-    @octos host ${CADDY_DOMAIN} *.${CADDY_DOMAIN}
-    redir @octos https://{host}{uri} 308
+    @ra host ${CADDY_DOMAIN} *.${CADDY_DOMAIN}
+    redir @ra https://{host}{uri} 308
 }
 
 ${CADDY_DOMAIN} {
@@ -2095,7 +2095,7 @@ CADDYEOF
 
     echo ""
     echo "    Caddy is proxying:"
-    echo "      https://${CADDY_DOMAIN}          → octos dashboard"
+    echo "      https://${CADDY_DOMAIN}          → ra dashboard"
     echo "      https://*.${CADDY_DOMAIN}        → profile subdomains (on-demand TLS)"
     echo ""
     echo "    Prerequisites:"
@@ -2107,16 +2107,16 @@ fi
 # ── Summary ───────────────────────────────────────────────────────────
 section "Installation complete!"
 echo ""
-echo "    Binary:     $PREFIX/octos"
+echo "    Binary:     $PREFIX/ra"
 echo "    Data dir:   $DATA_DIR"
 echo "    Config:     $CONFIG_HOME/config.json"
 echo "    Auth token: $AUTH_TOKEN"
 echo "    Logs:       tail -f $DATA_DIR/logs/serve.\$(date +%F).log"
 echo ""
 echo "  Next steps:"
-echo "    1. Setup LLM models:  octos init"
-echo "    2. Install skills:    octos skills install --all"
-echo "    3. Start chatting:    octos chat"
+echo "    1. Setup LLM models:  ra init"
+echo "    2. Install skills:    ra skills install --all"
+echo "    3. Start chatting:    ra chat"
 echo "    4. Open local dashboard: http://localhost:${PORT}/admin/"
 if [ "$ENABLE_TUNNEL" = true ] && [ -n "$TENANT_NAME" ]; then
     echo ""

@@ -71,11 +71,11 @@ jobs:
           shared-key: nightly-arm64
           save-if: false
       - name: Check the all-feature CLI surface
-        run: cargo check -p octos-cli --features "$FEATURES" --locked
+        run: cargo check -p ra-cli --features "$FEATURES" --locked
       - name: Install Linux sandbox prerequisites
         run: bash scripts/setup-host-managed-linux-ci.sh
       # The serve_sigterm / serve_ws_liveness / serve_solo_gateway_guard e2e
-      # spawn real `octos serve` children that starve under default test
+      # spawn real `ra serve` children that starve under default test
       # parallelism; ci.yml runs them in a dedicated serial step (see the #21
       # outer-loop ruling there).
       - name: Test the workspace
@@ -96,7 +96,7 @@ jobs:
           shared-key: nightly-windows
           save-if: false
       - name: Check the all-feature CLI surface
-        run: cargo check -p octos-cli --features "${{ env.FEATURES }}" --locked
+        run: cargo check -p ra-cli --features "${{ env.FEATURES }}" --locked
       - name: Test the workspace
         run: cargo test --workspace --locked
 
@@ -121,7 +121,7 @@ jobs:
       - name: Build dashboard and server
         run: |
           ./scripts/build-dashboard.sh
-          cargo build --release -p octos-cli --features "$FEATURES" --locked
+          cargo build --release -p ra-cli --features "$FEATURES" --locked
       - name: Install browser test dependencies
         working-directory: e2e
         run: |
@@ -130,21 +130,21 @@ jobs:
       - name: Start deterministic protocol fixture
         run: |
           set -euo pipefail
-          echo '{"allow_admin_shell": true}' > /tmp/octos-nightly-serve.json
+          echo '{"allow_admin_shell": true}' > /tmp/ra-nightly-serve.json
           OCTOS_M9_PROTOCOL_FIXTURES=1 \
           OPENAI_API_KEY=fixture-key-not-a-secret \
           OCTOS_AUTH_TOKEN=ci-test-token \
-            ./target/release/octos serve --port 3000 \
-              --config /tmp/octos-nightly-serve.json \
+            ./target/release/ra serve --port 3000 \
+              --config /tmp/ra-nightly-serve.json \
               --provider openai --model gpt-4o --no-retry \
               > server.log 2>&1 &
           echo $! > server.pid
           for attempt in $(seq 1 45); do
             curl -sf http://localhost:3000/health >/dev/null && exit 0
-            echo "attempt $attempt/45: waiting for octos serve"
+            echo "attempt $attempt/45: waiting for ra serve"
             sleep 1
           done
-          echo "::error::octos serve did not become healthy"
+          echo "::error::ra serve did not become healthy"
           cat server.log
           exit 1
       - name: Run deterministic protocol suite
@@ -220,25 +220,25 @@ jobs:
       - name: Build dashboard and server (required-lane feature set)
         run: |
           ./scripts/build-dashboard.sh
-          cargo build --release -p octos-cli --features "octos-cli/api,octos-cli/telegram" --locked
+          cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram" --locked
       - name: Install Homebrew ffmpeg (macOS)
         run: brew install ffmpeg
       # /api/admin/shell is registered only when allow_admin_shell is true
       # (see the #2031 comment on the required lane). Enabled on an ephemeral
       # runner, bound to loopback, behind an admin token — nowhere else.
-      - name: Start octos serve
+      - name: Start ra serve
         run: |
           set -euo pipefail
-          echo '{"allow_admin_shell": true}' > /tmp/octos-nightly-tool-regression.json
-          OCTOS_AUTH_TOKEN=ci-test-token ./target/release/octos serve --port 3000 \
-            --config /tmp/octos-nightly-tool-regression.json > server.log 2>&1 &
+          echo '{"allow_admin_shell": true}' > /tmp/ra-nightly-tool-regression.json
+          OCTOS_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
+            --config /tmp/ra-nightly-tool-regression.json > server.log 2>&1 &
           echo $! > server.pid
           for attempt in $(seq 1 45); do
             curl -sf http://localhost:3000/health >/dev/null && exit 0
-            echo "attempt $attempt/45: waiting for octos serve"
+            echo "attempt $attempt/45: waiting for ra serve"
             sleep 1
           done
-          echo "::error::octos serve did not become healthy"
+          echo "::error::ra serve did not become healthy"
           cat server.log
           exit 1
       # Fail loudly at the precondition rather than inside four assertions

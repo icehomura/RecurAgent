@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Exercise real chat, ACP and OUP processes against an offline HTTP provider.
 
-Build octos-cli with its default features, then run:
-  OCTOS_BIN=target/debug/octos python3 scripts/tests/test-oup-runtime.py
+Build ra-cli with its default features, then run:
+  OCTOS_BIN=target/debug/ra python3 scripts/tests/test-oup-runtime.py
 Evidence is retained under target/oup-functional (override OUP_TEST_OUTPUT_DIR).
 Only fixture workspaces, profiles and localhost HTTP are used.
 """
@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BINARY = Path(os.environ.get("OCTOS_BIN", ROOT / "target/debug/octos")).resolve()
+BINARY = Path(os.environ.get("OCTOS_BIN", ROOT / "target/debug/ra")).resolve()
 OUTPUT = Path(os.environ.get(
     "OUP_TEST_OUTPUT_DIR",
     ROOT / "target/oup-functional" / datetime.datetime.now(
@@ -209,7 +209,7 @@ class RuntimeContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not BINARY.is_file():
-            raise RuntimeError(f"Build octos-cli first; missing binary: {BINARY}")
+            raise RuntimeError(f"Build ra-cli first; missing binary: {BINARY}")
         OUTPUT.mkdir(parents=True, exist_ok=True)
         (OUTPUT / "binary.json").write_text(json.dumps({
             "path": str(BINARY), "sha256": hashlib.sha256(BINARY.read_bytes()).hexdigest(),
@@ -295,7 +295,7 @@ class RuntimeContract(unittest.TestCase):
                     else:
                         self.assertEqual(result.stdout.count(PARTIAL), 1)
                     self.assertNotIn("Session Summary", result.stdout)
-                    self.assertEqual(list((directory / "temporary").glob("octos-chat-oup-*")), [])
+                    self.assertEqual(list((directory / "temporary").glob("ra-chat-oup-*")), [])
                     transcripts = list((directory / "data").rglob("sessions/*.jsonl"))
                     if ephemeral:
                         self.assertEqual(transcripts, [])
@@ -472,7 +472,7 @@ class RuntimeContract(unittest.TestCase):
                         "OCTOS_CONTEXT_COMPACT_TARGET_TOKENS": "1000",
                         "OCTOS_CONTEXT_COMPACT_KEEP_ITEMS": "2",
                         "OCTOS_PROMPT_CACHE_MANIFEST_JSONL": str(directory / "cache.jsonl"),
-                        "RUST_LOG": "warn,octos.prompt_cache=trace"})
+                        "RUST_LOG": "warn,ra.prompt_cache=trace"})
             session = "oup-ci:local:runtime-compaction"
             client = self.oup_connect(directory, env, args, "before")
             try:

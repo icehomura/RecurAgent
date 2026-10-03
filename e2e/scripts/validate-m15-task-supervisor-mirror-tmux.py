@@ -129,7 +129,7 @@ class Validator:
             ok,
             "octoscode launched against real octos serve --stdio with M9 protocol fixture enabled"
             if ok
-            else "launch command does not prove real octos serve --stdio plus M9 fixture",
+            else "launch command does not prove real ra serve --stdio plus M9 fixture",
             ["launch-command.txt"],
         )
 
@@ -245,7 +245,7 @@ class Validator:
         self.check_visible_tui()
         failures = [check for check in self.checks if check["status"] == "failed"]
         result = {
-            "schema": "octos.m15.task-supervisor-mirror.tmux-validation.v1",
+            "schema": "ra.m15.task-supervisor-mirror.tmux-validation.v1",
             "generated_at": utc_now(),
             "status": "failed" if failures else "passed",
             "output_dir": str(self.out_dir),

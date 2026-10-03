@@ -4,8 +4,8 @@
 
 Configuration files are loaded in order (first found wins):
 
-1. `.octos/config.json` -- project-local configuration
-2. `~/.config/octos/config.json` -- global configuration
+1. `.ra/config.json` -- project-local configuration
+2. `~/.config/ra/config.json` -- global configuration
 
 ## Basic Config
 
@@ -21,7 +21,7 @@ A minimal configuration specifies the LLM provider and model:
 
 ## Gateway Config
 
-To run Octos as a multi-channel daemon, add a `gateway` section:
+To run ra as a multi-channel daemon, add a `gateway` section:
 
 ```json
 {
@@ -191,7 +191,7 @@ The complete configuration structure with all available fields:
 
   // Browser AppUI access (serve mode only)
   "appui": {
-    "allowed_origins": ["https://octos.example.com"]
+    "allowed_origins": ["https://ra.example.com"]
   },
 
   // Dashboard auth (serve mode only)
@@ -202,11 +202,11 @@ The complete configuration structure with all available fields:
 }
 ```
 
-> The `memory.refresh` pipeline is **on by default**. See [Memory & Skills → Automatic Memory Refresh](./memory-skills.md) for the full field list and the `octos memory` command. Opt out with `"enabled": false` or `OCTOS_MEMORY_REFRESH_ENABLED=0`.
+> The `memory.refresh` pipeline is **on by default**. See [Memory & Skills → Automatic Memory Refresh](./memory-skills.md) for the full field list and the `ra memory` command. Opt out with `"enabled": false` or `OCTOS_MEMORY_REFRESH_ENABLED=0`.
 
 ## Browser AppUI Origins
 
-`octos serve` retains the existing OminiX/base-domain and development origins,
+`ra serve` retains the existing OminiX/base-domain and development origins,
 and automatically allows loopback origins on the actual bound port (including
 an OS-selected `--port 0`). Add every other browser origin explicitly—including a LAN address
 or custom hostname used to reach the embedded assets:
@@ -215,8 +215,8 @@ or custom hostname used to reach the embedded assets:
 {
   "appui": {
     "allowed_origins": [
-      "https://octos.example.com",
-      "https://octos.lan.example:50081"
+      "https://ra.example.com",
+      "https://ra.lan.example:50081"
     ]
   }
 }
@@ -227,7 +227,7 @@ Userinfo, paths, queries, fragments, wildcards, `null`, and other schemes make
 startup fail. A non-empty comma-separated `OCTOS_APPUI_ALLOWED_ORIGINS`
 replaces the config list; an empty value does not.
 
-Reverse proxies must configure their public origin explicitly. Octos never
+Reverse proxies must configure their public origin explicitly. ra never
 derives trust from `Host` or `X-Forwarded-*`, and it does not guess LAN
 addresses. Use HTTPS for every non-loopback/production origin. Browser auth
 tokens are stored per origin, so open the public origin and log in there after
@@ -236,7 +236,7 @@ public origin.
 
 ## Runtime Tool Profiles
 
-`octos chat` and `octos acp` resolve a **runtime profile** at startup that
+`ra chat` and `ra acp` resolve a **runtime profile** at startup that
 decides which tools are exposed to the LLM. Every tool schema in the registry
 is serialized into *every* LLM round, so the default profile is deliberately
 lean.
@@ -252,12 +252,12 @@ Built-in profiles:
 Switching profiles:
 
 ```bash
-octos chat --profile coding-full        # one-off: everything back
-ln -s coding-full ~/.octos/profile      # persistent default (name or path)
+ra chat --profile coding-full        # one-off: everything back
+ln -s coding-full ~/.ra/profile      # persistent default (name or path)
 ```
 
 Per-project customization — drop a profile file in
-`~/.octos/profiles/<name>/profile.json` (or pass a path via `--profile`) and
+`~/.ra/profiles/<name>/profile.json` (or pass a path via `--profile`) and
 add tools back with allow-list entries (`group:<id>`, exact names, or
 `prefix*` wildcards):
 
@@ -285,7 +285,7 @@ Notes:
   lean default.
 - `config.json`'s `tool_policy` (below) still applies and can further narrow
   (deny-wins) any profile.
-- `octos gateway` / `octos serve` do not use runtime profiles; their tool
+- `ra gateway` / `ra serve` do not use runtime profiles; their tool
   surface is unchanged.
 
 ## Human Approval Rules
@@ -403,7 +403,7 @@ like Robrix render native Approve/Deny buttons, others show a text fallback):
 ## File Layout
 
 ```
-~/.octos/                        # Global config directory
+~/.ra/                        # Global config directory
 ├── auth.json                   # Stored API credentials (mode 0600)
 ├── profiles/                   # Profile configs (serve mode)
 │   ├── my-bot.json
@@ -411,7 +411,7 @@ like Robrix render native Approve/Deny buttons, others show a text fallback):
 ├── skills/                     # Global custom skills
 └── serve.log                   # Serve mode log file
 
-.octos/                          # Project/profile data directory
+.ra/                          # Project/profile data directory
 ├── config.json                 # Configuration
 ├── cron.json                   # Scheduled jobs
 ├── AGENTS.md                   # Agent instructions

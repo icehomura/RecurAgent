@@ -14,7 +14,7 @@
 //       ]
 //
 // Anything else throws a typed ManifestSchemaError. The manifest in
-// `e2e/matrix/octos-ux.toml` is required to stay within this subset; the
+// `e2e/matrix/ra-ux.toml` is required to stay within this subset; the
 // parser self-tests in `e2e/tests/ux/scenario-list.test.mjs` enforce it.
 
 export class ManifestSchemaError extends Error {

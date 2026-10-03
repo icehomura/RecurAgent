@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# Cross-repo smoke test: octos installs the agibot-a2 skill from the
-# octos-robot-skills bridge, runs the hardware_lifecycle phases (preflight,
+# Cross-repo smoke test: ra installs the agibot-a2 skill from the
+# ra-robot-skills bridge, runs the hardware_lifecycle phases (preflight,
 # init via `dora start ...`, ready_check), discovers tools over HTTP, and
 # fires one round-trip tool call. Not run in CI — requires a real dora
 # coordinator + the private vendor adapter installed locally.
 #
 # Pre-conditions:
 #   - dora CLI on PATH (`brew install dora-rs` or build from source)
-#   - octos-robot-skills cloned somewhere; set $BRIDGE_REPO to its path
+#   - ra-robot-skills cloned somewhere; set $BRIDGE_REPO to its path
 #   - agibot-a2-dora-node pip-installed in the bridge's venv
-#   - this branch (feat/http-tool-transport) installed as the `octos` binary
+#   - this branch (feat/http-tool-transport) installed as the `ra` binary
 #
 # Usage:
-#   BRIDGE_REPO=/path/to/octos-robot-skills scripts/smoke-cross-repo-bridge.sh
+#   BRIDGE_REPO=/path/to/ra-robot-skills scripts/smoke-cross-repo-bridge.sh
 
 set -euo pipefail
 
-BRIDGE_REPO="${BRIDGE_REPO:?BRIDGE_REPO must point to your local octos-robot-skills clone}"
-OCTOS_BIN="${OCTOS_BIN:-$HOME/.cargo/bin/octos}"
+BRIDGE_REPO="${BRIDGE_REPO:?BRIDGE_REPO must point to your local ra-robot-skills clone}"
+OCTOS_BIN="${OCTOS_BIN:-$HOME/.cargo/bin/ra}"
 BRIDGE_HEALTH_URL="${BRIDGE_HEALTH_URL:-http://127.0.0.1:8765/healthz}"
 
-# `octos skills` resolves the skills dir from --cwd (or the configured
+# `ra skills` resolves the skills dir from --cwd (or the configured
 # profile). We use --cwd "$HOME" so the install lands in the canonical
-# "$HOME/.octos/skills" location — the same place `octos chat` reads
+# "$HOME/.ra/skills" location — the same place `ra chat` reads
 # from with no extra config. The PR #1260 reviewer asked us not to
 # introduce a separate --skills-dir flag for this smoke; this matches.
 INSTALL_CWD="$HOME"
@@ -35,22 +35,22 @@ test -f "$BRIDGE_REPO/skills/$SKILL_NAME/SKILL.md" || {
 }
 command -v dora >/dev/null || { echo "  dora CLI not on PATH" >&2; exit 1; }
 test -x "$OCTOS_BIN" || {
-  echo "  octos binary not at $OCTOS_BIN; build with:" >&2
-  echo "    cargo install --path crates/octos-cli --force" >&2
+  echo "  ra binary not at $OCTOS_BIN; build with:" >&2
+  echo "    cargo install --path crates/ra-cli --force" >&2
   exit 1
 }
 
-echo "[2/6] cargo install local octos with this branch's changes"
+echo "[2/6] cargo install local ra with this branch's changes"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-( cd "$REPO_ROOT" && ~/.cargo/bin/cargo install --path crates/octos-cli --force )
+( cd "$REPO_ROOT" && ~/.cargo/bin/cargo install --path crates/ra-cli --force )
 
 echo "[3/6] stage skill + dataflows into a temp source dir"
-STAGING="$(mktemp -d -t octos-smoke-XXXXXX)"
+STAGING="$(mktemp -d -t ra-smoke-XXXXXX)"
 trap 'rm -rf "$STAGING"' EXIT
 cp -r "$BRIDGE_REPO/skills/$SKILL_NAME" "$STAGING/$SKILL_NAME"
 # The lifecycle's `init` step (`dora start dataflows/a2-bridge.yaml`)
 # resolves dataflow paths relative to the installed skill directory,
-# so they must be inside the install source before `octos skills install`
+# so they must be inside the install source before `ra skills install`
 # fires the lifecycle.
 mkdir -p "$STAGING/$SKILL_NAME/dataflows"
 cp "$BRIDGE_REPO/dataflows/a2-bridge.yaml" "$STAGING/$SKILL_NAME/dataflows/a2-bridge.yaml"
@@ -76,10 +76,10 @@ for i in {1..15}; do
   sleep 1
 done
 
-echo "[6/6] fire robot.heartbeat through octos chat"
+echo "[6/6] fire robot.heartbeat through ra chat"
 RESPONSE=$("$OCTOS_BIN" chat --no-interactive --prompt 'call robot.heartbeat once and report the JSON ok flag' 2>&1 || true)
 echo "$RESPONSE" | grep -qE '"ok"\s*:\s*true' || {
-  echo "  octos did not return ok=true; full response below:" >&2
+  echo "  ra did not return ok=true; full response below:" >&2
   echo "$RESPONSE" >&2
   exit 1
 }
@@ -87,5 +87,5 @@ echo "$RESPONSE" | grep -qE '"ok"\s*:\s*true' || {
 echo
 echo "smoke OK"
 echo
-echo "cleanup: octos skills --cwd $INSTALL_CWD remove $SKILL_NAME"
+echo "cleanup: ra skills --cwd $INSTALL_CWD remove $SKILL_NAME"
 "$OCTOS_BIN" skills --cwd "$INSTALL_CWD" remove "$SKILL_NAME" || true

@@ -6,7 +6,7 @@ This chapter covers power-user features: tool management, queue modes, lifecycle
 
 ## Tools
 
-Octos sends the **full set of enabled tools** to the LLM as callable tool specifications on every turn. There is no recency-based deferral: which tools are available is controlled by [Tool Policies](#tool-policies) (allow/deny lists, named groups) and per-provider policy — not by how recently a tool was used.
+ra sends the **full set of enabled tools** to the LLM as callable tool specifications on every turn. There is no recency-based deferral: which tools are available is controlled by [Tool Policies](#tool-policies) (allow/deny lists, named groups) and per-provider policy — not by how recently a tool was used.
 
 Two categories are intentionally kept out of the per-turn tool list:
 
@@ -317,13 +317,13 @@ In `config.json` or per-profile JSON:
   "hooks": [
     {
       "event": "before_tool_call",
-      "command": ["python3", "~/.octos/hooks/guard.py"],
+      "command": ["python3", "~/.ra/hooks/guard.py"],
       "timeout_ms": 3000,
       "tool_filter": ["shell", "write_file"]
     },
     {
       "event": "after_llm_call",
-      "command": ["python3", "~/.octos/hooks/cost-tracker.py"],
+      "command": ["python3", "~/.ra/hooks/cost-tracker.py"],
       "timeout_ms": 5000
     }
   ]
@@ -369,7 +369,7 @@ import json, sys
 payload = json.load(sys.stdin)
 if payload.get("event") == "before_llm_call":
     try:
-        with open("/tmp/octos-cost.json") as f:
+        with open("/tmp/ra-cost.json") as f:
             state = json.load(f)
     except FileNotFoundError:
         state = {}
@@ -383,12 +383,12 @@ elif payload.get("event") == "after_llm_call":
     if cost is not None:
         sid = payload.get("session_id", "default")
         try:
-            with open("/tmp/octos-cost.json") as f:
+            with open("/tmp/ra-cost.json") as f:
                 state = json.load(f)
         except FileNotFoundError:
             state = {}
         state[sid] = cost
-        with open("/tmp/octos-cost.json", "w") as f:
+        with open("/tmp/ra-cost.json", "w") as f:
             json.dump(state, f)
 
 sys.exit(0)
@@ -404,7 +404,7 @@ import json, sys, datetime
 payload = json.load(sys.stdin)
 payload["timestamp"] = datetime.datetime.utcnow().isoformat()
 
-with open("/var/log/octos-audit.jsonl", "a") as f:
+with open("/var/log/ra-audit.jsonl", "a") as f:
     f.write(json.dumps(payload) + "\n")
 
 sys.exit(0)
@@ -467,7 +467,7 @@ Use `/new <name>` to switch to — or create — a **named** session (e.g. `/new
 
 Each channel:chat_id pair maintains its own session (conversation history).
 
-- **Storage**: JSONL files in `.octos/sessions/`
+- **Storage**: JSONL files in `.ra/sessions/`
 - **Max history**: Configurable via `gateway.max_history` (default: 50 messages)
 - **Sessions**: bare `/new` clears the current session; named sessions are keyed by sender/channel, with a `parent_key` field for internally-forked child sessions
 
@@ -511,15 +511,15 @@ Goals are not uniform across the four runtime modes. The protocol surface above 
 
 | Mode | Goals | State lives in | Task rows in the goal ledger | Autonomous continuation |
 |------|-------|----------------|------------------------------|-------------------------|
-| `octos serve` (WebSocket and `--stdio`) | Full protocol surface | SQLite goal ledger + supervisor store | Yes | Yes |
-| `octos gateway` | Inherited from the shared session runtime | SQLite goal ledger + supervisor store | Yes | Not exercised by the channel adapters |
-| `octos chat --goals` | Opt-in, three tools (`goal_get`, `goal_create`, `goal_update`) | Profile supervisor store only | **No** | No — `serve`-only |
-| `octos mcp-serve` | **None** | — | — | — |
+| `ra serve` (WebSocket and `--stdio`) | Full protocol surface | SQLite goal ledger + supervisor store | Yes | Yes |
+| `ra gateway` | Inherited from the shared session runtime | SQLite goal ledger + supervisor store | Yes | Not exercised by the channel adapters |
+| `ra chat --goals` | Opt-in, three tools (`goal_get`, `goal_create`, `goal_update`) | Profile supervisor store only | **No** | No — `serve`-only |
+| `ra mcp-serve` | **None** | — | — | — |
 
 What this means in practice:
 
-- **`octos chat --goals`** carries an objective and a token budget that survive the process: state is written to the profile's supervisor store and rehydrated on the next `octos chat --goals` in the same profile, keyed by a stable per-profile session key. `goal_get` also reads peer findings written by a `serve`-side run when a ledger exists. What it does **not** do is register supervised work as goal-ledger task rows, so a goal's task list and its wall-clock/token accounting stay empty for chat-side work. `--peers` layers peer agents on top and requires `--goals`.
-- **`octos mcp-serve`** wires no goal state at all. Goal tools are not registered and no goal notifications are emitted.
+- **`ra chat --goals`** carries an objective and a token budget that survive the process: state is written to the profile's supervisor store and rehydrated on the next `ra chat --goals` in the same profile, keyed by a stable per-profile session key. `goal_get` also reads peer findings written by a `serve`-side run when a ledger exists. What it does **not** do is register supervised work as goal-ledger task rows, so a goal's task list and its wall-clock/token accounting stay empty for chat-side work. `--peers` layers peer agents on top and requires `--goals`.
+- **`ra mcp-serve`** wires no goal state at all. Goal tools are not registered and no goal notifications are emitted.
 - The **autonomous continuation loop** — the part that re-fires turns on its own until the goal's policy stops it — is `serve`-only. In the other modes a goal is a durable objective and budget, not a self-driving loop.
 
 ### Loops
@@ -540,7 +540,7 @@ A **loop** is a recurring agent run, in one of three modes: **fixed-interval** (
 
 ### Capability negotiation
 
-A client advertises which protocol features it supports when it connects: over WebSocket via the `ui_feature` / `ui_features` query params or the `X-Octos-Ui-Features` header; over `serve --stdio` via `client_hello`'s `supported_features`. The server gates most methods on the negotiated set, so older clients keep working as new capabilities ship. Two caveats worth knowing when implementing a client: some methods are *advertised* in the default capability list but still require their specific flag to actually be *called* (rely on the negotiated list and handle `method_not_supported` defensively); and notification delivery is best-effort — a connection can still observe autonomy events (`session/goal/updated`, `loop/*`, `agent/*`) triggered by another connection via live-forwarding or replay. Representative flags:
+A client advertises which protocol features it supports when it connects: over WebSocket via the `ui_feature` / `ui_features` query params or the `X-Ra-Ui-Features` header; over `serve --stdio` via `client_hello`'s `supported_features`. The server gates most methods on the negotiated set, so older clients keep working as new capabilities ship. Two caveats worth knowing when implementing a client: some methods are *advertised* in the default capability list but still require their specific flag to actually be *called* (rely on the negotiated list and handle `method_not_supported` defensively); and notification delivery is best-effort — a connection can still observe autonomy events (`session/goal/updated`, `loop/*`, `agent/*`) triggered by another connection via live-forwarding or replay. Representative flags:
 
 | Flag | Unlocks |
 |------|---------|
@@ -634,7 +634,7 @@ Model switches are persisted to the profile JSON file. On gateway restart, the b
 The agent maintains long-term memory across sessions:
 
 - **`MEMORY.md`** -- Persistent notes, always loaded into context
-- **Daily notes** -- `.octos/memory/YYYY-MM-DD.md`, auto-created
+- **Daily notes** -- `.ra/memory/YYYY-MM-DD.md`, auto-created
 - **Recent memory** -- Last 7 days of daily notes included in context
 - **Episodes** -- Task completion summaries stored in `episodes.redb`
 
@@ -672,13 +672,13 @@ Bot: Created cron job "daily-news" running at 8:00 AM Asia/Shanghai every day.
 Cron jobs can also be managed via CLI:
 
 ```bash
-octos cron list                              # List active jobs
-octos cron list --all                        # Include disabled
-octos cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
-octos cron add --name "check" --message "Check status" --every 3600
-octos cron remove <job-id>
-octos cron enable <job-id>
-octos cron enable <job-id> --disable
+ra cron list                              # List active jobs
+ra cron list --all                        # Include disabled
+ra cron add --name "report" --message "Generate daily report" --cron "0 0 9 * * * *"
+ra cron add --name "check" --message "Check status" --every 3600
+ra cron remove <job-id>
+ra cron enable <job-id>
+ra cron enable <job-id> --disable
 ```
 
 When the agent is exposed through a Matrix management bot, the same scheduling capability can be presented as BotFather-style chat commands:
@@ -699,8 +699,8 @@ These commands stay bound to the current room/DM context. They do not expose raw
 The REST API server includes an embedded web UI:
 
 ```bash
-octos serve                               # Binds to 127.0.0.1:50080
-octos serve --host 0.0.0.0 --port 50080  # Accept external connections
+ra serve                               # Binds to 127.0.0.1:50080
+ra serve --host 0.0.0.0 --port 50080  # Accept external connections
 # Open http://localhost:50080
 ```
 
@@ -711,6 +711,6 @@ Features:
 - Dark theme
 
 A `/metrics` endpoint provides Prometheus-format metrics:
-- `octos_tool_calls_total`
+- `ra_tool_calls_total`
 - `octos_tool_call_duration_seconds`
-- `octos_llm_tokens_total`
+- `ra_llm_tokens_total`

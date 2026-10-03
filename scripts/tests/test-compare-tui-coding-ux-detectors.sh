@@ -112,14 +112,14 @@ EOF
 
 assert_not_active "idle composer" "$(cat <<'EOF'
 state ◒ idle (ready)
-Ask Octos to change code
+Ask ra to change code
 EOF
 )"
 
 # Ready-state detector recognizes the same idle/done capture.
 assert_ready "ready-state idle composer" "$(cat <<'EOF'
 state ◒ idle (ready)
-Ask Octos to change code
+Ask ra to change code
 EOF
 )"
 

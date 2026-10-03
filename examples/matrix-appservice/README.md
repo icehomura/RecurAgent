@@ -1,12 +1,12 @@
 # Matrix Appservice Configuration
 
-This directory contains example configuration files for running octos as a
+This directory contains example configuration files for running ra as a
 Matrix appservice with the BotFather architecture.
 
 ## Architecture
 
 ```
-Robrix (client)  <-->  Palpo (homeserver)  <-->  octos gateway (appservice :8009)
+Robrix (client)  <-->  Palpo (homeserver)  <-->  ra gateway (appservice :8009)
 ```
 
 One appservice registration, one namespace, multiple virtual users managed by
@@ -17,7 +17,7 @@ BotFather through `/createbot` / `/deletebot` / `/listbots`.
 | File | Purpose |
 |------|---------|
 | `registration.yaml` | Homeserver-side appservice registration |
-| `botfather.json` | octos profile for the BotFather gateway |
+| `botfather.json` | ra profile for the BotFather gateway |
 
 ## Configuration Reference
 
@@ -28,16 +28,16 @@ Place this file in the homeserver's appservice registration directory.
 | Field | Description |
 |-------|-------------|
 | `id` | Unique appservice identifier (arbitrary string, must be unique per homeserver) |
-| `url` | URL where homeserver pushes events to octos (must match gateway's appservice port) |
-| `as_token` | Appservice token — octos uses this when calling homeserver API |
-| `hs_token` | Homeserver token — homeserver uses this when pushing events to octos |
+| `url` | URL where homeserver pushes events to ra (must match gateway's appservice port) |
+| `as_token` | Appservice token — ra uses this when calling homeserver API |
+| `hs_token` | Homeserver token — homeserver uses this when pushing events to ra |
 | `sender_localpart` | Localpart of the main bot user (e.g. `bot` → `@bot:server`) |
 | `rate_limited` | Whether homeserver rate-limits this appservice (recommended: `false`) |
 | `namespaces.users` | Regex defining which user IDs this appservice exclusively controls |
 
-### botfather.json (octos side)
+### botfather.json (ra side)
 
-Place this file at `~/.octos/profiles/botfather.json` or pass via `--profile`.
+Place this file at `~/.ra/profiles/botfather.json` or pass via `--profile`.
 
 #### Profile fields
 
@@ -93,13 +93,13 @@ HS_TOKEN=$(openssl rand -hex 32)
 
 # 2. Copy and edit configs (replace CHANGE_ME with generated tokens)
 cp examples/matrix-appservice/registration.yaml /path/to/palpo/appservices/
-cp examples/matrix-appservice/botfather.json ~/.octos/profiles/
+cp examples/matrix-appservice/botfather.json ~/.ra/profiles/
 
 # 3. Start homeserver (Palpo example)
 cd /path/to/palpo && cargo run --release
 
-# 4. Start octos gateway
+# 4. Start ra gateway
 unset OCTOS_SERVE_URL
 DEEPSEEK_API_KEY="your-key" \
-  octos gateway --profile ~/.octos/profiles/botfather.json --data-dir ~/.octos
+  ra gateway --profile ~/.ra/profiles/botfather.json --data-dir ~/.ra
 ```

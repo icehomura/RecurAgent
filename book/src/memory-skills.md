@@ -1,24 +1,24 @@
 # Memory & Skills
 
-Octos has a layered memory system and an extensible skill framework. Memory gives the agent persistent context across sessions. Skills give the agent new tools and capabilities.
+ra has a layered memory system and an extensible skill framework. Memory gives the agent persistent context across sessions. Skills give the agent new tools and capabilities.
 
 ## Bootstrap Files
 
-These files are loaded into the system prompt at startup. Create them with `octos init`.
+These files are loaded into the system prompt at startup. Create them with `ra init`.
 
 | File | Purpose |
 |------|---------|
-| `.octos/AGENTS.md` | Agent instructions and guidelines |
-| `.octos/SOUL.md` | Personality and values |
-| `.octos/USER.md` | User information and preferences |
-| `.octos/TOOLS.md` | Tool-specific guidance |
-| `.octos/IDENTITY.md` | Custom identity definition |
+| `.ra/AGENTS.md` | Agent instructions and guidelines |
+| `.ra/SOUL.md` | Personality and values |
+| `.ra/USER.md` | User information and preferences |
+| `.ra/TOOLS.md` | Tool-specific guidance |
+| `.ra/IDENTITY.md` | Custom identity definition |
 
 Bootstrap files are hot-reloaded -- edit them and the agent picks up changes without a restart.
 
 ## Memory System
 
-Octos uses a 3-layer memory architecture that combines automatic recording with agent-driven knowledge management:
+ra uses a 3-layer memory architecture that combines automatic recording with agent-driven knowledge management:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -61,34 +61,34 @@ At the start of each new task, the agent queries the episode store for up to **6
 
 When configured, the agent embeds each episode summary in a fire-and-forget background task and stores the vector alongside the episode. At query time, the task instruction is embedded and used for vector search.
 
-When the `embedding` section is omitted, the default build uses the bundled in-process embedder (llama.cpp, feature `embed-llama`, on by default) with **EmbeddingGemma-300M**: the 334 MB GGUF is downloaded once into `<data_dir>/models/` on first use (`octos memory embedder --fetch` does it ahead of time; `embedding.auto_download = false` or `OCTOS_NO_MODEL_DOWNLOAD=1` opts out). Without a model the system falls back to BM25-only keyword matching. Licence and controls: `docs/THIRD_PARTY_MODELS.md`.
+When the `embedding` section is omitted, the default build uses the bundled in-process embedder (llama.cpp, feature `embed-llama`, on by default) with **EmbeddingGemma-300M**: the 334 MB GGUF is downloaded once into `<data_dir>/models/` on first use (`ra memory embedder --fetch` does it ahead of time; `embedding.auto_download = false` or `OCTOS_NO_MODEL_DOWNLOAD=1` opts out). Without a model the system falls back to BM25-only keyword matching. Licence and controls: `docs/THIRD_PARTY_MODELS.md`.
 
 ### Layer 2: Long-Term Memory & Daily Notes (file-based)
 
-**Long-term memory** (`.octos/memory/MEMORY.md`) holds persistent facts and notes that survive across all sessions. Edit this file manually or via the `write_file` tool — it is injected verbatim into the system prompt on every turn.
+**Long-term memory** (`.ra/memory/MEMORY.md`) holds persistent facts and notes that survive across all sessions. Edit this file manually or via the `write_file` tool — it is injected verbatim into the system prompt on every turn.
 
-**Daily notes** (`.octos/memory/YYYY-MM-DD.md`) provide a rolling window of recent activity. The last **7 days** of daily notes are automatically included in the agent's context. These files are created manually or via the `write_file` tool — the memory-refresh pipeline below consolidates into `MEMORY.md`, not the daily notes.
+**Daily notes** (`.ra/memory/YYYY-MM-DD.md`) provide a rolling window of recent activity. The last **7 days** of daily notes are automatically included in the agent's context. These files are created manually or via the `write_file` tool — the memory-refresh pipeline below consolidates into `MEMORY.md`, not the daily notes.
 
-`MEMORY.md` can be edited by hand, but once the refresh pipeline has migrated it, every blank-line-separated block must keep its trailing `^m…` id. Adding an un-id'd block by hand makes the parser treat the file as mixed and fail closed, pausing consolidation until it's repaired — so for new facts prefer `octos memory remember`.
+`MEMORY.md` can be edited by hand, but once the refresh pipeline has migrated it, every blank-line-separated block must keep its trailing `^m…` id. Adding an un-id'd block by hand makes the parser treat the file as mixed and fail closed, pausing consolidation until it's repaired — so for new facts prefer `ra memory remember`.
 
 ### Automatic Memory Refresh (capture + consolidation)
 
-Octos ships an automatic memory pipeline that reads durable facts out of your conversations and consolidates them into `MEMORY.md` — so long-term memory grows without you hand-editing files. It is **on by default**.
+ra ships an automatic memory pipeline that reads durable facts out of your conversations and consolidates them into `MEMORY.md` — so long-term memory grows without you hand-editing files. It is **on by default**.
 
-**Where it runs.** The background sweep runs only inside the long-running process that owns the profile's refresh lock — `octos serve` or `octos gateway`. Plain `octos chat` never runs background passes (it would contend the lock). The pipeline has three parts:
+**Where it runs.** The background sweep runs only inside the long-running process that owns the profile's refresh lock — `ra serve` or `ra gateway`. Plain `ra chat` never runs background passes (it would contend the lock). The pipeline has three parts:
 
 1. **Capture** — during a turn, a lightweight `memory_note` tool + capture policy let the agent jot candidate facts.
 2. **Extraction sweep** — on a timer, idle sessions are scanned and durable facts are extracted (delta cursors mean each message is read at most once, so nothing is re-charged on later sweeps).
 3. **Consolidation** — extracted candidates are merged into `MEMORY.md` (each entry gets a stable id like `^m4k2abq`), stale entries are archived, and the file is kept under a size cap.
 
-**Manual control — `octos memory`:**
+**Manual control — `ra memory`:**
 
 ```bash
-octos memory refresh          # Run one extraction+consolidation pass now
-octos memory status           # Lock holder, staging backlog, daily budgets
-octos memory remember "..."   # Stage a fact locally (no LLM at write; consolidation applies it)
-octos memory forget "..."     # Free-text forget → confirm flow
-octos memory forget --id ^m4k2abq   # Hard-delete an exact MEMORY.md entry
+ra memory refresh          # Run one extraction+consolidation pass now
+ra memory status           # Lock holder, staging backlog, daily budgets
+ra memory remember "..."   # Stage a fact locally (no LLM at write; consolidation applies it)
+ra memory forget "..."     # Free-text forget → confirm flow
+ra memory forget --id ^m4k2abq   # Hard-delete an exact MEMORY.md entry
 ```
 
 `refresh` works even when the background sweep is disabled, but refuses while a running service holds the lock (stop it first, or let it sweep).
@@ -122,7 +122,7 @@ octos memory forget --id ^m4k2abq   # Hard-delete an exact MEMORY.md entry
 
 ### Layer 3: Entity Bank (tool-driven)
 
-The entity bank is a structured knowledge store at `.octos/memory/bank/entities/`. Each entity is a markdown file containing everything the agent knows about a specific topic.
+The entity bank is a structured knowledge store at `.ra/memory/bank/entities/`. Each entity is a markdown file containing everything the agent knows about a specific topic.
 
 **How it works:**
 
@@ -140,7 +140,7 @@ The entity bank is a structured knowledge store at `.octos/memory/bank/entities/
 ## File Layout
 
 ```
-.octos/
+.ra/
 ├── config.json              # Configuration (versioned, auto-migrated)
 ├── cron.json                # Cron job store
 ├── AGENTS.md                # Agent instructions
@@ -154,7 +154,7 @@ The entity bank is a structured knowledge store at `.octos/memory/bank/entities/
 │   └── bank/
 │       └── entities/        # Entity bank (managed by save/recall tools)
 │           ├── alice.md   # Entity: "who is the user"
-│           └── octos.md     # Entity: "what is this project"
+│           └── ra.md     # Entity: "what is this project"
 ├── skills/                  # Custom skills
 ├── episodes.redb            # Episodic memory DB (auto-populated)
 └── history/
@@ -165,7 +165,7 @@ The entity bank is a structured knowledge store at `.octos/memory/bank/entities/
 
 ## Built-in System Skills
 
-Octos bundles 3 system skills at compile time:
+ra bundles 3 system skills at compile time:
 
 | Skill | Description |
 |-------|-------------|
@@ -173,11 +173,11 @@ Octos bundles 3 system skills at compile time:
 | `skill-store` | Skill installation and management |
 | `skill-creator` | Guide for creating custom skills |
 
-Workspace skills in `.octos/skills/` override built-in skills with the same name.
+Workspace skills in `.ra/skills/` override built-in skills with the same name.
 
 ## Bundled App Skills
 
-Eight app skills ship as compiled binaries alongside Octos. They are automatically bootstrapped into `.octos/skills/` on gateway startup -- no installation required.
+Eight app skills ship as compiled binaries alongside ra. They are automatically bootstrapped into `.ra/skills/` on gateway startup -- no installation required.
 
 ### News Fetch
 
@@ -346,19 +346,19 @@ Creates multi-speaker podcast audio from a script of `{speaker, voice, text}` ob
 
 ```bash
 # Install all skills from a repo
-octos skills install user/repo
+ra skills install user/repo
 
 # Install a specific skill
-octos skills install user/repo/skill-name
+ra skills install user/repo/skill-name
 
 # Install from a specific branch
-octos skills install user/repo --branch develop
+ra skills install user/repo --branch develop
 
 # Force overwrite existing
-octos skills install user/repo --force
+ra skills install user/repo --force
 
 # Install into a specific profile
-octos skills --profile my-bot install user/repo
+ra skills --profile my-bot install user/repo
 ```
 
 The installer tries to download a pre-built binary from the skill registry (SHA-256 verified), falls back to `cargo build --release` if a `Cargo.toml` is present, or runs `npm install` if a `package.json` is present.
@@ -366,34 +366,34 @@ The installer tries to download a pre-built binary from the skill registry (SHA-
 ### Managing Skills
 
 ```bash
-octos skills list                    # List installed skills
-octos skills info skill-name         # Show detailed info
-octos skills update skill-name       # Update a specific skill
-octos skills update all              # Update all skills
-octos skills remove skill-name       # Remove a skill
-octos skills search "web scraping"   # Search the online registry
+ra skills list                    # List installed skills
+ra skills info skill-name         # Show detailed info
+ra skills update skill-name       # Update a specific skill
+ra skills update all              # Update all skills
+ra skills remove skill-name       # Remove a skill
+ra skills search "web scraping"   # Search the online registry
 ```
 
 ### Skill Resolution Order
 
 Profile gateways load skills from these directories (highest priority first):
 
-1. `~/.octos/profiles/<profile>/data/skills/` (profile-scoped custom skills)
+1. `~/.ra/profiles/<profile>/data/skills/` (profile-scoped custom skills)
 2. `<octos_home>/bundled-app-skills/` (bundled app skills)
 3. `<octos_home>/platform-skills/` (admin-loaded platform skills)
 
-Standalone project runs can also load `<project>/.octos/plugins/` and
-`<project>/.octos/skills/`. The old HOME-rooted global directories are
+Standalone project runs can also load `<project>/.ra/plugins/` and
+`<project>/.ra/skills/`. The old HOME-rooted global directories are
 migration-only and are no longer part of the normal scan path.
 
 ---
 
 ## Skill Authoring
 
-A custom skill lives in `.octos/skills/<name>/` and contains:
+A custom skill lives in `.ra/skills/<name>/` and contains:
 
 ```
-.octos/skills/my-skill/
+.ra/skills/my-skill/
 ├── SKILL.md         # Required: instructions + frontmatter
 ├── manifest.json    # Required for tool skills: tool definitions
 ├── main             # Compiled binary (or script)

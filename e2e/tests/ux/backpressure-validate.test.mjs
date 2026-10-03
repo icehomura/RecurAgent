@@ -87,19 +87,19 @@ function appuiRows({ terminal = 'legacy' } = {}) {
 }
 
 function makeArtifactDir({ trueDropCoverage, terminal = 'legacy' }) {
-  const dir = mkdtempSync(join(tmpdir(), 'octos-backpressure-validate-'));
+  const dir = mkdtempSync(join(tmpdir(), 'ra-backpressure-validate-'));
   mkdirSync(dir, { recursive: true });
 
   writeJson(join(dir, 'scenario.json'), {
-    schema: 'octos.ux.scenario.v1',
-    artifact_abi: 'octos.ux.artifacts.v1',
+    schema: 'ra.ux.scenario.v1',
+    artifact_abi: 'ra.ux.artifacts.v1',
     id: 'dropped-completion-backpressure',
     scenario_id: 'dropped-completion-backpressure',
     session_id: 'ux-backpressure-session',
     required_artifacts: requiredArtifacts,
   });
   writeJson(join(dir, 'summary.json'), {
-    schema: 'octos.ux.summary.v1',
+    schema: 'ra.ux.summary.v1',
     status: 'passed',
     mode: 'run',
     placeholder_artifacts: false,
@@ -132,12 +132,12 @@ function makeArtifactDir({ trueDropCoverage, terminal = 'legacy' }) {
   writeFileSync(join(dir, 'tui-capture-backpressure-final.txt'), 'Recovered after backpressure\nComposer\n state Idle\n', 'utf8');
   writeFileSync(join(dir, 'tui-capture-backpressure-post-recovery.txt'), 'OK\nDone\nComposer\n state Idle\n', 'utf8');
   writeJson(join(dir, 'terminal-size.json'), {
-    schema: 'octos.ux.terminal_size.v1',
+    schema: 'ra.ux.terminal_size.v1',
     cols: 100,
     rows: 30,
   });
   writeJson(join(dir, 'runtime-policy-stamp.json'), {
-    schema: 'octos.ux.runtime_policy_stamp.v1',
+    schema: 'ra.ux.runtime_policy_stamp.v1',
     stamp: {},
   });
   writeJsonl(join(dir, 'appui-transcript.jsonl'), appuiRows({ terminal }));
@@ -156,7 +156,7 @@ function makeArtifactDir({ trueDropCoverage, terminal = 'legacy' }) {
     frame: { jsonrpc: '2.0', id: `ws-${index}`, method, params: {} },
   })));
   writeJson(join(dir, 'backpressure-report.json'), {
-    schema: 'octos.ux.backpressure_report.v1',
+    schema: 'ra.ux.backpressure_report.v1',
     scenario_id: 'dropped-completion-backpressure',
     coverage: trueDropCoverage
       ? {

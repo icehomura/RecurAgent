@@ -361,7 +361,7 @@ async function main() {
     );
 
     writeJson(reportPath, {
-      schema: 'octos.ux.backpressure_report.v1',
+      schema: 'ra.ux.backpressure_report.v1',
       generated_at: new Date().toISOString(),
       scenario_id: 'dropped-completion-backpressure',
       coverage: {

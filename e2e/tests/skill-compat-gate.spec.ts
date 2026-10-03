@@ -12,7 +12,7 @@
  *
  * Run:
  *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   OCTOS_COMPAT_SKILL_SOURCE=./e2e/fixtures/compat-test-skill \
  *   OCTOS_COMPAT_SKILL_NAME=compat-test-skill \
@@ -24,7 +24,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
-const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const AUTH_TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE_ID = process.env.OCTOS_PROFILE || 'dspfac';
 const SKILL_NAME = process.env.OCTOS_COMPAT_SKILL_NAME || 'compat-test-skill';
 const SKILL_SOURCE =

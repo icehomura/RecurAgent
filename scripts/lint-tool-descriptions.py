@@ -437,13 +437,13 @@ def run_self_test() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Scan Octos tool manifests for ambiguous content noun ownership."
+        description="Scan ra tool manifests for ambiguous content noun ownership."
     )
     parser.add_argument(
         "--root",
         action="append",
         type=Path,
-        help="Manifest root or manifest.json to scan. Repeatable. Defaults to bundled Octos roots.",
+        help="Manifest root or manifest.json to scan. Repeatable. Defaults to bundled ra roots.",
     )
     parser.add_argument(
         "--self-test",

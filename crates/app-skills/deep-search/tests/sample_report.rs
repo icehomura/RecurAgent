@@ -14,7 +14,7 @@ fn dump_sample_synthesized_report() {
     // the same heading/citation conventions. Kept in lockstep with the
     // unit test `build_report_with_synthesis_includes_synthesis_section_and_sources`.
     let report = include_str!("fixtures/sample_synthesized_report.md");
-    let path = std::env::temp_dir().join("octos-w3-sample-report.md");
+    let path = std::env::temp_dir().join("ra-w3-sample-report.md");
     std::fs::write(&path, report).unwrap();
     eprintln!("wrote sample synthesized report to: {}", path.display());
 }

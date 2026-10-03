@@ -7,7 +7,7 @@
 //! This starter is the minimum legal shape for a harnessed custom app. Copy
 //! it and rename when you want to build something more interesting.
 //!
-//! See `docs/OCTOS_HARNESS_DEVELOPER_GUIDE.md`.
+//! See `docs/ra_HARNESS_DEVELOPER_GUIDE.md`.
 
 #![deny(unsafe_code)]
 

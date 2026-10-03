@@ -1,5 +1,5 @@
 {
-  "name": "octos-swarm-app",
+  "name": "ra-swarm-app",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "vite",
     "typecheck": "tsc -b",
     "build": "tsc -b && vite build",
-    "build:embedded": "VITE_BASE_PATH=/swarm/ VITE_OUT_DIR=../crates/octos-cli/static/swarm npm run build",
+    "build:embedded": "VITE_BASE_PATH=/swarm/ VITE_OUT_DIR=../crates/ra-cli/static/swarm npm run build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"

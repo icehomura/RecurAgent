@@ -1,27 +1,27 @@
 # Skill Development
 
-This guide covers the full lifecycle of an Octos skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
+This guide covers the full lifecycle of an ra skill — from development to publication to end-user installation — similar to building an app, submitting it to an app store, and distributing it to users.
 
 ---
 
 ## The Skill Ecosystem
 
 ```
- Developer                    Octos Hub                     User
+ Developer                    ra Hub                     User
  ─────────                    ─────────                     ────
  1. Develop skill        ──▶  3. Publish to registry   ──▶  5. Search & discover
  2. Test locally              4. Pre-built binaries         6. Install
                                                             7. Update
 ```
 
-| Concept | App Store Analogy | Octos Equivalent |
+| Concept | App Store Analogy | ra Equivalent |
 |---------|-------------------|------------------|
 | **App** | iOS/Android app | Skill (binary + manifest + docs) |
 | **SDK** | Xcode / Android Studio | Rust + `manifest.json` + `SKILL.md` |
 | **App Store** | Apple App Store | [octos-hub](https://github.com/octos-org/octos-hub) registry |
 | **Distribution** | App Store binary delivery | Pre-built binaries in GitHub Releases |
-| **Install** | Tap "Get" | `octos skills install user/repo` |
-| **Sideload** | Ad-hoc / TestFlight | `octos skills --profile <profile> install ./my-skill` |
+| **Install** | Tap "Get" | `ra skills install user/repo` |
+| **Sideload** | Ad-hoc / TestFlight | `ra skills --profile <profile> install ./my-skill` |
 
 ---
 
@@ -54,7 +54,7 @@ If **all five** axes point to the same column, build there. Mixed signals → us
 
 ### Where existing surface lives
 
-These belong in **workspace contract** (`workspace_policy.toml`, see `crates/octos-agent/src/workspace_policy.rs::ValidatorSpec`):
+These belong in **workspace contract** (`workspace_policy.toml`, see `crates/ra-agent/src/workspace_policy.rs::ValidatorSpec`):
 
 - **`AudioNonSilent`** / **`PerFileNonSilent`** — TTS output content invariant. The system MUST refuse to claim "audio generated" if the `.wav` is silent. Applies to every TTS-emitting skill regardless of vendor.
 - **`MagicBytes`** — file format integrity. Applies to every tool that emits files.
@@ -65,7 +65,7 @@ These belong in **workspace contract** (`workspace_policy.toml`, see `crates/oct
 These belong as **plugin tools** (this guide):
 
 - **`fm_tts`**, **`mofa_slides`**, **`mofa_publish`**, **`search`** (formerly `deep_search`) — the work itself. Each is the capability implementation, often wraps an external runtime (Python, Chromium, native CLI), ships versioned independently of the host.
-- **`qwen-tts`** voice clone — wraps an external HTTP API with auth; per-tenant credentials; ergonomic to update without recompiling octos.
+- **`qwen-tts`** voice clone — wraps an external HTTP API with auth; per-tenant credentials; ergonomic to update without recompiling ra.
 
 These belong as **plugin hooks** ONLY when they are **optional enrichment** (the tool would still work without them):
 
@@ -90,7 +90,7 @@ Score it against the matrix:
 
 **All five primary axes (and both tiebreakers) point to host / in-process — not plugin.** The lifecycle-hook plumbing is a category mismatch. In practice it's been the failure surface: manifest-parse errors fire on every daemon start, and when they do, the hook silently doesn't run.
 
-**The correct home is inline in `octos-pipeline` itself.** Recommended shape (not yet landed at time of writing):
+**The correct home is inline in `ra-pipeline` itself.** Recommended shape (not yet landed at time of writing):
 
 ```rust
 // In RunPipelineTool::execute, after parse_dot:
@@ -135,7 +135,7 @@ This keeps integrity-critical logic in one in-process channel with a typed failu
    contract  (customized capability)
 ```
 
-If you find yourself reaching for a plugin hook to enforce an invariant the user must never override — stop, file an issue against `octos-agent`, and consider whether a workspace contract variant is the right home instead.
+If you find yourself reaching for a plugin hook to enforce an invariant the user must never override — stop, file an issue against `ra-agent`, and consider whether a workspace contract variant is the right home instead.
 
 ---
 
@@ -148,7 +148,7 @@ A skill is a **standalone executable** that communicates via **stdin/stdout JSON
 ```
 User message → LLM → tool_use("get_weather", {"city": "Paris"})
                         ↓
-             Gateway spawns: ~/.octos/profiles/<profile>/data/skills/weather/main get_weather
+             Gateway spawns: ~/.ra/profiles/<profile>/data/skills/weather/main get_weather
                         ↓
              Stdin:  {"city": "Paris"}
              Stdout: {"output": "25°C, sunny", "success": true}
@@ -361,7 +361,7 @@ fi
 
 ### Step 4: For Bundled Skills (Rust Crate)
 
-If contributing a skill to the core Octos distribution:
+If contributing a skill to the core ra distribution:
 
 ```bash
 mkdir -p crates/app-skills/my-skill/src
@@ -393,7 +393,7 @@ members = [
 ]
 ```
 
-Register in `crates/octos-agent/src/bundled_app_skills.rs`:
+Register in `crates/ra-agent/src/bundled_app_skills.rs`:
 
 ```rust
 pub const BUNDLED_APP_SKILLS: &[(&str, &str, &str, &str)] = &[
@@ -442,14 +442,14 @@ echo '{"param1": "hello"}' | ./my-skill/main my_tool
 cargo build --release --workspace
 
 # Install into the profile you want to test
-octos skills --profile alice install ./my-skill
+ra skills --profile alice install ./my-skill
 
 # Verify skill loaded
-ls ~/.octos/profiles/alice/data/skills/my-skill/
+ls ~/.ra/profiles/alice/data/skills/my-skill/
 # main  manifest.json  SKILL.md
 
 # Start the gateway
-octos gateway
+ra gateway
 
 # Ask the agent to use your skill in conversation
 ```
@@ -467,7 +467,7 @@ octos gateway
 
 ## Part 3: Publish
 
-Publishing makes your skill discoverable to all Octos users — like submitting an app to the App Store.
+Publishing makes your skill discoverable to all ra users — like submitting an app to the App Store.
 
 ### Push to GitHub
 
@@ -537,7 +537,7 @@ The [octos-hub](https://github.com/octos-org/octos-hub) registry is the central 
 Once the PR is merged, users can discover your skill:
 
 ```bash
-octos skills search keyword1
+ra skills search keyword1
 ```
 
 ---
@@ -615,7 +615,7 @@ jobs:
 
 ### Install Resolution Order
 
-When a user runs `octos skills install`, the installer tries these sources in order:
+When a user runs `ra skills install`, the installer tries these sources in order:
 
 1. **manifest.json `binaries`** — skill author's own CI/CD builds
 2. **Registry `binaries`** — registry-audited pre-built binaries
@@ -632,20 +632,20 @@ Pre-built binaries are verified with SHA-256 before installation.
 
 ```bash
 # Search the registry
-octos skills search weather
-octos skills search "deep research"
+ra skills search weather
+ra skills search "deep research"
 
 # Install from GitHub (all skills in repo)
-octos skills install user/repo
+ra skills install user/repo
 
 # Install a specific skill from a multi-skill repo
-octos skills install user/repo/skill-name
+ra skills install user/repo/skill-name
 
 # Install with a specific branch
-octos skills install user/repo --branch dev
+ra skills install user/repo --branch dev
 
 # Force reinstall
-octos skills install user/repo --force
+ra skills install user/repo --force
 ```
 
 ### Per-Profile Installation
@@ -654,13 +654,13 @@ Skills are isolated per profile (like per-user app installs):
 
 ```bash
 # Install to a specific profile
-octos skills --profile alice install user/repo/my-skill
+ra skills --profile alice install user/repo/my-skill
 
 # List skills for a profile
-octos skills --profile alice list
+ra skills --profile alice list
 
 # Remove from a profile
-octos skills --profile alice remove my-skill
+ra skills --profile alice remove my-skill
 ```
 
 ### In-Chat Installation
@@ -695,7 +695,7 @@ Install a local skill directory into the profile that should be allowed to use
 it:
 
 ```bash
-octos skills --profile alice install ./my-skill --force
+ra skills --profile alice install ./my-skill --force
 ```
 
 For one-off debugging you can copy the directory yourself, but keep the target
@@ -703,14 +703,14 @@ profile-scoped:
 
 ```bash
 # Canonical: per-profile install
-cp -r my-skill/ ~/.octos/profiles/alice/data/skills/my-skill/
-chmod +x ~/.octos/profiles/alice/data/skills/my-skill/main
+cp -r my-skill/ ~/.ra/profiles/alice/data/skills/my-skill/
+chmod +x ~/.ra/profiles/alice/data/skills/my-skill/main
 ```
 
 ### Installed Skill Layout
 
 ```
-~/.octos/profiles/alice/data/skills/my-skill/
+~/.ra/profiles/alice/data/skills/my-skill/
 ├── main                # Executable binary
 ├── manifest.json       # Tool definitions
 ├── SKILL.md            # Documentation
@@ -738,7 +738,7 @@ When multiple directories contain a skill with the same name, first match wins:
 | 1 (highest) | `<profile-data>/skills/` | Per-profile install |
 | 2 | `<project-dir>/skills/` | Project-local |
 | 3 | `<project-dir>/bundled-app-skills/` | Bundled app-skills |
-| 4 (lowest, deprecated) | `~/.octos/skills/` | Legacy global install, migration only |
+| 4 (lowest, deprecated) | `~/.ra/skills/` | Legacy global install, migration only |
 
 ---
 
@@ -746,13 +746,13 @@ When multiple directories contain a skill with the same name, first match wins:
 
 ```bash
 # Update a skill from its source repo
-octos skills update my-skill
+ra skills update my-skill
 
 # Update from a specific branch
-octos skills update my-skill --branch main
+ra skills update my-skill --branch main
 
 # View skill details (version, source, tools)
-octos skills info my-skill
+ra skills info my-skill
 ```
 
 The updater reads the `.source` file to know where to pull from, then re-runs the install flow (clone → discover → build/download → copy).
@@ -766,12 +766,12 @@ Skill binaries can be updated without restarting the gateway:
 cargo build --release -p my-skill
 
 # Replace the binary
-cp target/release/my_skill ~/.octos/profiles/alice/data/skills/my-skill/main
+cp target/release/my_skill ~/.ra/profiles/alice/data/skills/my-skill/main
 
 # Next tool call automatically uses the new binary
 ```
 
-> **Note:** If you change `SKILL.md` or `manifest.json` for a *bundled* skill, you must rebuild the `octos` binary too (they're embedded via `include_str!`). External skills reload immediately.
+> **Note:** If you change `SKILL.md` or `manifest.json` for a *bundled* skill, you must rebuild the `ra` binary too (they're embedded via `include_str!`). External skills reload immediately.
 
 ---
 

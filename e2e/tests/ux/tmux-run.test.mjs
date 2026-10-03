@@ -13,7 +13,7 @@ const runner = resolve(repoRoot, 'e2e', 'scripts', 'ux-tmux-run.mjs');
 const validator = resolve(repoRoot, 'e2e', 'scripts', 'ux-tmux-validate.mjs');
 
 function makeEnv(runId) {
-  const root = mkdtempSync(join(tmpdir(), 'octos-ux-tmux-run-test-'));
+  const root = mkdtempSync(join(tmpdir(), 'ra-ux-tmux-run-test-'));
   return {
     env: {
       ...process.env,

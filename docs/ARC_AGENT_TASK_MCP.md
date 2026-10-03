@@ -1,27 +1,27 @@
 # Native ARC Agent Tasks over MCP
 
-Octos can execute a versioned task compiled by the Agentic Requirement
+ra can execute a versioned task compiled by the Agentic Requirement
 Compiler (ARC) without flattening the task into a free-form prompt. The
-integration reuses the existing `run_octos_session` MCP tool and adds an
+integration reuses the existing `run_ra_session` MCP tool and adds an
 optional `input.arc_task` contract.
 
 ## Capability discovery
 
-ARC first initializes `octos mcp-serve` and calls `tools/list`. A compatible
-Octos build advertises this nested field:
+ARC first initializes `ra mcp-serve` and calls `tools/list`. A compatible
+ra build advertises this nested field:
 
 ```text
-run_octos_session.inputSchema
+run_ra_session.inputSchema
 └── properties.input.properties.arc_task
     └── properties.schema.const = "arc.agent-task.v1"
 ```
 
-This explicit capability check prevents an older Octos binary from silently
+This explicit capability check prevents an older ra binary from silently
 running the compiled task through the legacy prompt path.
 
 ## Request shape
 
-`contract` remains the Octos workspace contract name. ARC normally uses
+`contract` remains the ra workspace contract name. ARC normally uses
 `coding`; the versioned ARC package is carried separately:
 
 ```json
@@ -66,10 +66,10 @@ running the compiled task through the legacy prompt path.
 
 ## Native mapping
 
-Octos validates the package before constructing an LLM provider or starting
+ra validates the package before constructing an LLM provider or starting
 the agent loop:
 
-| ARC field | Octos execution behavior |
+| ARC field | ra execution behavior |
 | --- | --- |
 | `system_prompt` | Installed through `Agent::with_system_prompt`; it is not copied into user content |
 | `message` | Stored as the structured custom task instruction |
@@ -81,7 +81,7 @@ the agent loop:
 | `expected_artifact` | Required workspace-relative delivery path |
 
 The declared `skills` are preserved in the task parameters but are not
-automatically installed into Octos. Skill installation and trust remain an
+automatically installed into ra. Skill installation and trust remain an
 operator responsibility.
 
 ## Validation and safety
@@ -108,7 +108,7 @@ Input errors use the `arc_task_invalid:` prefix. Artifact validation errors use
 ## Backward compatibility
 
 Calls without `input.arc_task` retain the existing `input.prompt`,
-`expected_artifact`, and `artifact_name` behavior. Octos continues to expose
+`expected_artifact`, and `artifact_name` behavior. ra continues to expose
 exactly one MCP tool, so existing orchestrators are unaffected.
 
 ## Verification
@@ -116,8 +116,8 @@ exactly one MCP tool, so existing orchestrators are unaffected.
 Run the focused contract and dispatch tests:
 
 ```bash
-cargo test -p octos-agent --test mcp_server arc_agent_task_v1 --no-default-features
-cargo test -p octos-cli --test mcp_serve_integration arc_agent_task
-cargo test -p octos-cli --test mcp_serve_integration legacy_prompt_session_remains_compatible_without_arc_task
+cargo test -p ra-agent --test mcp_server arc_agent_task_v1 --no-default-features
+cargo test -p ra-cli --test mcp_serve_integration arc_agent_task
+cargo test -p ra-cli --test mcp_serve_integration legacy_prompt_session_remains_compatible_without_arc_task
 agent-spec lint specs/arc-agent-task-v1-mcp.spec.md --min-score 0.9
 ```

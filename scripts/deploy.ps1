@@ -1,9 +1,9 @@
-# deploy.ps1 - Deploy Octos to a remote Windows server over OpenSSH.
+# deploy.ps1 - Deploy ra to a remote Windows server over OpenSSH.
 #
 # This is the Windows counterpart to the shell deploy flows. It runs from an
 # operator machine with PowerShell and OpenSSH, connects to a Windows target via
-# ssh/scp, installs the release bundle under C:\octos by default, and registers
-# octos serve as an auto-start Windows service through NSSM.
+# ssh/scp, installs the release bundle under C:\ra by default, and registers
+# ra serve as an auto-start Windows service through NSSM.
 
 [CmdletBinding()]
 param(
@@ -14,7 +14,7 @@ param(
     [int]$Port = 22,
     [string]$IdentityFile = "",
     [string]$Version = "latest",
-    [string]$RemoteRoot = "C:\octos",
+    [string]$RemoteRoot = "C:\ra",
     [string]$ServiceName = "OctosServe",
     [int]$ServePort = 8080,
     [string]$AuthToken = "",
@@ -30,7 +30,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $GithubRepo = "octos-org/octos"
-$BundleName = "octos-bundle-x86_64-pc-windows-msvc.zip"
+$BundleName = "ra-bundle-x86_64-pc-windows-msvc.zip"
 $NssmVersion = "2.24"
 
 function Section([string]$Message) {
@@ -211,7 +211,7 @@ if (-not $authToken) {
     $authToken = New-AuthToken
 }
 
-$octosExe = Join-Path $binDir "octos.exe"
+$octosExe = Join-Path $binDir "ra.exe"
 $nssmExe = Join-Path $binDir "nssm.exe"
 
 if ($installDeps) {
@@ -227,7 +227,7 @@ if ($installDeps) {
 }
 
 if (-not $restartOnly) {
-    Section "Installing Octos bundle"
+    Section "Installing ra bundle"
     $bundleZip = Join-Path $tmpDir $bundleName
     if ($uploadedBundle) {
         Copy-Item -LiteralPath $uploadedBundle -Destination $bundleZip -Force
@@ -242,9 +242,9 @@ if (-not $restartOnly) {
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
     Expand-Archive -Path $bundleZip -DestinationPath $extractDir -Force
 
-    $octosSource = Get-ChildItem -Path $extractDir -Recurse -Filter "octos.exe" | Select-Object -First 1
+    $octosSource = Get-ChildItem -Path $extractDir -Recurse -Filter "ra.exe" | Select-Object -First 1
     if (-not $octosSource) {
-        throw "octos.exe not found in $bundleZip"
+        throw "ra.exe not found in $bundleZip"
     }
     Copy-Item $octosSource.FullName -Destination $octosExe -Force
     Ok "installed $octosExe"
@@ -342,7 +342,7 @@ Write-Utf8NoBom $wrapperPath @"
 @echo off
 set /p OCTOS_AUTH_TOKEN=<"$dataDir\serve-token"
 if not defined OCTOS_AUTH_TOKEN (
-    echo [octos] serve-token file missing or empty; re-run deploy.ps1
+    echo [ra] serve-token file missing or empty; re-run deploy.ps1
     exit /b 1
 )
 "$octosExe" serve --host 0.0.0.0 --port $servePort --data-dir "$dataDir"

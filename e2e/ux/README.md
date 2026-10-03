@@ -1,9 +1,9 @@
 # M19 UX Scenario Manifest
 
 This directory documents the shared scenario format used by the M19 real-tmux
-UX gate. The manifest itself lives at `e2e/matrix/octos-ux.toml`. The list
+UX gate. The manifest itself lives at `e2e/matrix/ra-ux.toml`. The list
 command is wired through `npm --prefix e2e run ux:scenario:list` and runs
-without launching tmux, octos, or any backend.
+without launching tmux, ra, or any backend.
 
 This is the first cut of the gate (umbrella issue #1062, sub-issue #1063).
 Subsequent PRs add:
@@ -24,7 +24,7 @@ sequence of `[[scenario]]` tables:
 
 ```toml
 schema_version = 1
-pack = "octos-ux"
+pack = "ra-ux"
 owner = "M19 UX gate"
 
 [[scenario]]
@@ -60,7 +60,7 @@ replay = "e2e/ux/replays/stdio-happy-path.replay"
 | Field            | Type    | Required | Notes                                                |
 |------------------|---------|----------|------------------------------------------------------|
 | `schema_version` | integer | yes      | Currently `1`. Bump on breaking changes.             |
-| `pack`           | string  | yes      | Logical pack name; `octos-ux` for the M19 gate.      |
+| `pack`           | string  | yes      | Logical pack name; `ra-ux` for the M19 gate.      |
 | `owner`          | string  | yes      | Free-form ownership label for reviewers.             |
 
 ### Scenario fields
@@ -124,7 +124,7 @@ npm --prefix e2e run ux:scenario:list -- --manifest /tmp/alt.toml
 
 The command:
 
-- Reads `e2e/matrix/octos-ux.toml`.
+- Reads `e2e/matrix/ra-ux.toml`.
 - Validates the schema and reports a typed `manifest schema error` on bad input (exit code 3).
 - Classifies each scenario as `runnable`, `skipped`, `blocked`, or `quarantined` without launching tmux or any backend.
 - Prints a deterministic table sorted by scenario id.
@@ -148,7 +148,7 @@ blocked reason instead of marking them runnable too early.
 
 ## Adding a new scenario
 
-1. Append a `[[scenario]]` table to `e2e/matrix/octos-ux.toml`.
+1. Append a `[[scenario]]` table to `e2e/matrix/ra-ux.toml`.
 2. Make sure every required field is present and arrays are non-empty.
 3. Run `npm --prefix e2e run ux:scenario:list:test` to check schema and parser.
 4. Run `npm --prefix e2e run ux:scenario:list -- --tier release` and confirm the new id appears.

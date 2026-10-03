@@ -2,7 +2,7 @@
 #
 # RFC-2 (issue #1291): validate every bundled `crates/app-skills/*/manifest.json`
 # (plus any additional manifest paths passed on the command line) against the
-# strict octos JSON schema validator.
+# strict ra JSON schema validator.
 #
 # Backstory: on 2026-05-25 `mofa-slides v0.5.0` shipped with
 # `input_schema.anyOf[]` branches that lacked `type`. Strict LLM-provider
@@ -32,7 +32,7 @@ APP_SKILLS_DIR="$ROOT/crates/app-skills"
 # so the artefact slots into Swatinem/rust-cache like every other test
 # job's compile cache.
 echo "[validate-skill-manifests] building validate_manifests bin..."
-(cd "$ROOT" && cargo build -p octos-plugin --bin validate_manifests --quiet)
+(cd "$ROOT" && cargo build -p ra-plugin --bin validate_manifests --quiet)
 
 BIN="$ROOT/target/debug/validate_manifests"
 if [ ! -x "$BIN" ]; then

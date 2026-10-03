@@ -1,6 +1,6 @@
 spec: task
 name: "围栏 peer 复用 workspace 构建缓存(issue #2236)"
-tags: [peers, fence, cargo, autonomy, octos-cli]
+tags: [peers, fence, cargo, autonomy, ra-cli]
 estimate: 0.5d
 ---
 
@@ -35,15 +35,15 @@ issue #2236)。本任务让围栏 peer 在不放松 `.git` 隔离的前提下复
 - 沙箱边界:本任务不改沙箱策略。共享 `target/` 在 `--danger-full-access` 与
   workspace-write 且 workspace 根可写的档位下生效;沙箱不放行时 cargo 自己报错,
   `model_note` 已告知路径,peer 可自行 `export CARGO_TARGET_DIR` 回退到克隆内。
-- 测试放 `crates/octos-cli/src/peers/mod.rs` 既有 `#[cfg(test)]` 模块,用临时目录 +
+- 测试放 `crates/ra-cli/src/peers/mod.rs` 既有 `#[cfg(test)]` 模块,用临时目录 +
   `git init` 的真实仓库夹具,不真正运行 cargo。
 
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-cli/src/peers/mod.rs
+- crates/ra-cli/src/peers/mod.rs
 - specs/*.spec.md
-- crates/octos-cli/src/obs_events.rs
+- crates/ra-cli/src/obs_events.rs
 
 ### Forbidden
 - 不改围栏的克隆方式(`git clone --no-hardlinks`)与 `.git` 隔离语义。

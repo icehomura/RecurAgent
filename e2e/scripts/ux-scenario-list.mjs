@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // M19-A: ux:scenario:list
 //
-// Reads e2e/matrix/octos-ux.toml and prints the declared UX scenarios.
-// Does NOT launch tmux, octos, or any backend. The list command must work
-// even when the host has no octos binary installed.
+// Reads e2e/matrix/ra-ux.toml and prints the declared UX scenarios.
+// Does NOT launch tmux, ra, or any backend. The list command must work
+// even when the host has no ra binary installed.
 //
 // Usage:
 //   npm --prefix e2e run ux:scenario:list                # full release tier
@@ -31,7 +31,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..", "..");
-const DEFAULT_MANIFEST = resolve(REPO_ROOT, "e2e", "matrix", "octos-ux.toml");
+const DEFAULT_MANIFEST = resolve(REPO_ROOT, "e2e", "matrix", "ra-ux.toml");
 
 function parseArgs(argv) {
   const opts = { tier: "release", json: false, manifest: DEFAULT_MANIFEST };
@@ -69,7 +69,7 @@ function usage() {
   return [
     "Usage: ux:scenario:list [--tier fast|local|release] [--json] [--manifest path]",
     "",
-    "Lists UX scenarios declared in e2e/matrix/octos-ux.toml without launching",
+    "Lists UX scenarios declared in e2e/matrix/ra-ux.toml without launching",
     "tmux or any backend. See e2e/ux/README.md for the manifest schema.",
   ].join("\n");
 }

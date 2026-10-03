@@ -26,7 +26,7 @@ env:
 jobs:
   fast-linux:
     name: fast-linux
-    runs-on: [self-hosted, linux, x64, octos-fast]
+    runs-on: [self-hosted, linux, x64, ra-fast]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -45,7 +45,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       # The serve_sigterm / serve_ws_liveness / serve_solo_gateway_guard e2e
-      # spawn real `octos serve` children that starve under default test
+      # spawn real `ra serve` children that starve under default test
       # parallelism; ci.yml runs them in a dedicated serial step (see the #21
       # outer-loop ruling there).
       - name: Test
@@ -58,20 +58,20 @@ jobs:
 
       # Feature-gated §6 catalog guard — `cargo test --workspace` above never
       # compiles the `api` module, so run it explicitly to catch spec drift.
-      - name: UI Protocol §6 catalog guard (octos-cli)
+      - name: UI Protocol §6 catalog guard (ra-cli)
         run: ./scripts/ci-api-filter-test.sh spec_section6_catalog_lists_every_advertised_method -- --nocapture
 
       - name: QoS adaptive/runtime catalog regressions
         run: |
-          cargo test -p octos-llm test_qos_ranking_changes_lane_selection -- --nocapture
-          cargo test -p octos-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
-          cargo test -p octos-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
+          cargo test -p ra-llm test_qos_ranking_changes_lane_selection -- --nocapture
+          cargo test -p ra-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
+          cargo test -p ra-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
           ./scripts/ci-api-filter-test.sh gateway_runtime::tests -- --nocapture
 
   linux-arm:
     name: linux-arm
     if: ${{ inputs.include_arm }}
-    runs-on: [self-hosted, linux, arm64, octos-arm]
+    runs-on: [self-hosted, linux, arm64, ra-arm]
     env:
       CARGO_BUILD_JOBS: "2"
     steps:
@@ -87,7 +87,7 @@ jobs:
       - name: Build and test
         run: |
           cargo build --workspace
-          cargo build -p octos-cli --features ${{ env.FEATURES }}
+          cargo build -p ra-cli --features ${{ env.FEATURES }}
           cargo test --workspace --no-run
           # serve_sigterm / serve_ws_liveness / serve_solo_gateway_guard e2e:
           # serial-only (see the ci.yml #21 ruling); the broad run skips them.
@@ -96,7 +96,7 @@ jobs:
   windows:
     name: windows
     if: ${{ inputs.include_windows }}
-    runs-on: [self-hosted, windows, x64, octos-windows]
+    runs-on: [self-hosted, windows, x64, ra-windows]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -110,5 +110,5 @@ jobs:
       - name: Build and test
         run: |
           cargo build --workspace
-          cargo build -p octos-cli --features ${{ env.FEATURES }}
+          cargo build -p ra-cli --features ${{ env.FEATURES }}
           cargo test --workspace

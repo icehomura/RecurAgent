@@ -1,17 +1,17 @@
 # Quick Start
 
-This guide walks you through the essential steps to get Octos running.
+This guide walks you through the essential steps to get ra running.
 
 ## 1. Initialize Your Workspace
 
-Navigate to your project directory and initialize Octos:
+Navigate to your project directory and initialize ra:
 
 ```bash
 cd your-project
-octos init
+ra init
 ```
 
-This creates a `.octos/` directory with default configuration, bootstrap files (AGENTS.md, SOUL.md, USER.md), and directories for memory, sessions, and skills.
+This creates a `.ra/` directory with default configuration, bootstrap files (AGENTS.md, SOUL.md, USER.md), and directories for memory, sessions, and skills.
 
 ## 2. Set Your API Key
 
@@ -23,14 +23,14 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 Other providers follow the same pattern — e.g. `DEEPSEEK_API_KEY`, `MOONSHOT_API_KEY`, or `ZAI_API_KEY` for Z.AI (GLM); the full optional list lives in [Configuration → Environment Variables](./configuration.md#llm-providers).
 
-Add this to your `~/.bashrc` or `~/.zshrc` for persistence. You can also use `octos auth login --provider openai` for OAuth-based login.
+Add this to your `~/.bashrc` or `~/.zshrc` for persistence. You can also use `ra auth login --provider openai` for OAuth-based login.
 
 ## 3. Check Setup
 
 Verify everything is configured correctly:
 
 ```bash
-octos status
+ra status
 ```
 
 This shows your config file location, active provider and model, API key status, and bootstrap file availability.
@@ -40,13 +40,13 @@ This shows your config file location, active provider and model, API key status,
 Launch an interactive multi-turn conversation:
 
 ```bash
-octos chat
+ra chat
 ```
 
 Or send a single message and exit:
 
 ```bash
-octos chat --message "Add a hello function to lib.rs"
+ra chat --message "Add a hello function to lib.rs"
 ```
 
 ## 5. Run the Gateway
@@ -54,7 +54,7 @@ octos chat --message "Add a hello function to lib.rs"
 To serve multiple messaging channels as a persistent daemon:
 
 ```bash
-octos gateway
+ra gateway
 ```
 
 This requires a `gateway` section in your config with at least one channel configured. See the [Configuration](configuration.md) chapter for details.
@@ -64,7 +64,7 @@ This requires a `gateway` section in your config with at least one channel confi
 If you built with the `api` feature, start the web dashboard:
 
 ```bash
-octos serve
+ra serve
 ```
 
-Then open `http://localhost:50080` in your browser — it lands on the octos-web app (`/app/`). The admin dashboard stays available at `/admin/`.
+Then open `http://localhost:50080` in your browser — it lands on the ra-web app (`/app/`). The admin dashboard stays available at `/admin/`.

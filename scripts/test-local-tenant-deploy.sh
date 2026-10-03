@@ -63,7 +63,7 @@ main() {
     grep -Fq 'Installed binaries and services were preserved.' "$SCRIPT" \
         || fail "local tenant deploy should explain standalone purge preserves binaries and services"
 
-    grep -Fq 'io.octos.frpc.plist' "$SCRIPT" \
+    grep -Fq 'io.ra.frpc.plist' "$SCRIPT" \
         || fail "local tenant deploy uninstall should remove the macOS frpc service"
 
     grep -Fq 'frpc.service' "$SCRIPT" \

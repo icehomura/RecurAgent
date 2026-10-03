@@ -63,9 +63,9 @@ run_swarm_app() {
   popd >/dev/null
 
   ./scripts/build-swarm-app.sh
-  if [ -n "$(git status --porcelain -- crates/octos-cli/static/swarm)" ]; then
+  if [ -n "$(git status --porcelain -- crates/ra-cli/static/swarm)" ]; then
     echo "Embedded swarm-app assets are out of date. Run ./scripts/build-swarm-app.sh and commit changes."
-    git status --short -- crates/octos-cli/static/swarm
+    git status --short -- crates/ra-cli/static/swarm
     exit 1
   fi
 }
@@ -78,48 +78,48 @@ run_hosted_fast() {
   cargo clippy --workspace -- -D warnings
   cargo test --workspace
 
-  cargo test -p octos-llm test_qos_ranking_changes_lane_selection -- --nocapture
-  cargo test -p octos-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
-  cargo test -p octos-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
-  cargo test -p octos-cli gateway_runtime::tests --features api -- --nocapture
+  cargo test -p ra-llm test_qos_ranking_changes_lane_selection -- --nocapture
+  cargo test -p ra-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
+  cargo test -p ra-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
+  cargo test -p ra-cli gateway_runtime::tests --features api -- --nocapture
   # #1477: the `api` module (incl. voice_turn rich-output marker/splitter/delta
   # helpers) is feature-gated, so `cargo test --workspace` above never compiles
   # it. Run the api-gated unit tests explicitly so this coverage is real.
-  cargo test -p octos-cli --features api voice_turn -- --nocapture
+  cargo test -p ra-cli --features api voice_turn -- --nocapture
   # §6 catalog guard is in the same feature-gated `api` module; run it
   # explicitly so UI Protocol spec/impl drift is caught here too.
-  cargo test -p octos-cli --features api spec_section6_catalog_lists_every_advertised_method -- --nocapture
-  cargo test -p octos-agent --test activate_tools_regression -- --nocapture
-  cargo test -p octos-bus --test file_handle_resolve_tool_path -- --nocapture
+  cargo test -p ra-cli --features api spec_section6_catalog_lists_every_advertised_method -- --nocapture
+  cargo test -p ra-agent --test activate_tools_regression -- --nocapture
+  cargo test -p ra-bus --test file_handle_resolve_tool_path -- --nocapture
 }
 
 run_workspace_all_features() {
   cargo build --workspace
-  cargo build -p octos-cli --features "$FEATURES"
+  cargo build -p ra-cli --features "$FEATURES"
   cargo test --workspace --no-run
   cargo test --workspace
 }
 
 run_oup_runtime() {
-  cargo build --locked -p octos-cli -p octos-ffi -p octos-uniffi
+  cargo build --locked -p ra-cli -p ra-ffi -p ra-uniffi
   local build_dir="${CARGO_TARGET_DIR:-target}/debug"
-  OCTOS_BIN="$build_dir/octos" python3 scripts/tests/test-oup-runtime.py
+  OCTOS_BIN="$build_dir/ra" python3 scripts/tests/test-oup-runtime.py
   python3 scripts/check-oup-bindings.py --library-dir "$build_dir"
 }
 
 run_oup_minimal() {
   # These server e2e bootstrap API-enabled binaries into separate target dirs.
   # CI runs them in its dedicated API step; still compile every minimal target.
-  cargo test --locked -p octos-cli --no-default-features --all-targets -- \
+  cargo test --locked -p ra-cli --no-default-features --all-targets -- \
     --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard
-  cargo clippy --locked -p octos-cli --no-default-features --all-targets -- -D warnings
-  cargo build --locked -p octos-cli --no-default-features
-  OCTOS_BIN="${CARGO_TARGET_DIR:-target}/debug/octos" python3 scripts/tests/test-oup-runtime.py --minimal
+  cargo clippy --locked -p ra-cli --no-default-features --all-targets -- -D warnings
+  cargo build --locked -p ra-cli --no-default-features
+  OCTOS_BIN="${CARGO_TARGET_DIR:-target}/debug/ra" python3 scripts/tests/test-oup-runtime.py --minimal
 }
 
 run_release_bundle() {
-  cargo build --release -p octos-cli --features "$FEATURES"
-  cargo build --release -p octos-sandbox
+  cargo build --release -p ra-cli --features "$FEATURES"
+  cargo build --release -p ra-sandbox
   # shellcheck disable=SC2086
   cargo build --release ${SKILL_CRATES}
 }

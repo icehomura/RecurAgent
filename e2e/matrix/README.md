@@ -1,10 +1,10 @@
 # M22-H Onboarding Operational Matrix
 
 Issue: [#1056](https://github.com/octos-org/octos/issues/1056)
-Contract: [UPCR-2026-018 Local Solo Onboarding And Policy Inspection](../../docs/OCTOS_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_018_LOCAL_SOLO_ONBOARDING_AND_POLICY.md)
+Contract: [UPCR-2026-018 Local Solo Onboarding And Policy Inspection](../../docs/ra_UI_PROTOCOL_CHANGE_REQUEST_UPCR_2026_018_LOCAL_SOLO_ONBOARDING_AND_POLICY.md)
 
 The matrix is a scenario-driven harness that exercises the AppUI onboarding
-surface against `octos serve --stdio`. The **tier-fast** lane runs
+surface against `ra serve --stdio`. The **tier-fast** lane runs
 deterministic JSON-RPC scenarios and enforces the declared fast onboarding
 validators. **tier-local** and **tier-release** remain placeholder lanes.
 
@@ -24,7 +24,7 @@ Output artifacts land under `e2e/test-results-matrix/<pack>-<tier>/<UTC>/`:
   summary.json                  aggregate run summary
   <scenario-name>/
     rpc-transcript.jsonl        every JSON-RPC frame (redacted)
-    server-stderr.log           captured octos stderr
+    server-stderr.log           captured ra stderr
     result.json                 per-scenario status + step results
     data/                       per-scenario --data-dir
     workspace/                  per-scenario --cwd
@@ -33,8 +33,8 @@ Output artifacts land under `e2e/test-results-matrix/<pack>-<tier>/<UTC>/`:
 ## Running
 
 ```bash
-# Build the octos binary once; the runner refuses to start without it.
-cargo build -p octos-cli --features api
+# Build the ra binary once; the runner refuses to start without it.
+cargo build -p ra-cli --features api
 
 cd e2e
 npm run matrix -- --pack onboarding --tier fast
@@ -51,7 +51,7 @@ Environment knobs:
 
 | Variable                       | Meaning                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| `OCTOS_BIN`                    | Path to the `octos` binary. Defaults to `<repo>/target/debug/octos`.    |
+| `OCTOS_BIN`                    | Path to the `ra` binary. Defaults to `<repo>/target/debug/ra`.    |
 | `OCTOS_MATRIX_DIR`             | Override the output root for this run.                                  |
 | `OCTOS_MATRIX_RPC_TIMEOUT_MS`  | Per-RPC timeout in ms. Defaults to `10000`.                             |
 

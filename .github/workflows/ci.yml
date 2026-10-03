@@ -48,7 +48,7 @@ jobs:
         working-directory: dashboard
         run: npm run build
 
-      # Ephemeral bundle policy: crates/octos-cli/static/admin/ is gitignored
+      # Ephemeral bundle policy: crates/ra-cli/static/admin/ is gitignored
       # and rebuilt by scripts/build-dashboard.sh, CI release jobs, and any
       # source-clone build. We verify the build script runs cleanly; we do
       # not diff a committed bundle against rebuilt output (there is no
@@ -108,9 +108,9 @@ jobs:
       - name: Verify embedded swarm-app assets are up to date
         run: |
           ./scripts/build-swarm-app.sh
-          if [ -n "$(git status --porcelain -- crates/octos-cli/static/swarm)" ]; then
+          if [ -n "$(git status --porcelain -- crates/ra-cli/static/swarm)" ]; then
             echo "Embedded swarm-app assets are out of date. Run ./scripts/build-swarm-app.sh and commit changes."
-            git status --short -- crates/octos-cli/static/swarm
+            git status --short -- crates/ra-cli/static/swarm
             exit 1
           fi
 
@@ -165,7 +165,7 @@ jobs:
             -User deploy `
             -Port 2222 `
             -Version v0.0.0-test `
-            -RemoteRoot 'C:\octos-ci' `
+            -RemoteRoot 'C:\ra-ci' `
             -ServiceName OctosServeTest `
             -ServePort 50080 `
             -AuthToken test-token `
@@ -194,7 +194,7 @@ jobs:
           if ($deployText -match 'auth_token = \$authToken') {
             throw 'deploy dry run still writes the token into config.json (#2496)'
           }
-          if ($deployText -notmatch 'C:\\octos-ci') {
+          if ($deployText -notmatch 'C:\\ra-ci') {
             throw 'deploy dry run did not include the requested remote root'
           }
           if ($deployText -notmatch 'ssh -p 2222') {
@@ -203,7 +203,7 @@ jobs:
 
           $uninstall = & .\scripts\deploy.ps1 `
             -HostName win.example.invalid `
-            -RemoteRoot 'C:\octos-ci' `
+            -RemoteRoot 'C:\ra-ci' `
             -ServiceName OctosServeTest `
             -Uninstall `
             -Purge `
@@ -261,11 +261,11 @@ jobs:
           pwsh scripts/tests/test-install-checksum.ps1
 
   # Classifies a PR's diff so the heavy suites can skip PRs that only touch
-  # the research crates. `octos-research` is a leaf library used by
-  # octos-agent's web_search / site_crawl / deep_search tools, and
+  # the research crates. `ra-research` is a leaf library used by
+  # ra-agent's web_search / site_crawl / deep_search tools, and
   # deep-search / deep-crawl are standalone skill binaries: `check` still
   # runs fmt, clippy over the whole workspace and their tests, and
-  # test-octos-agent runs the tools that use them. Pushes to main always
+  # test-ra-agent runs the tools that use them. Pushes to main always
   # run everything, so anything this lets through is caught on merge.
   #   research_only: every changed file is under a research path.
   #   windows_neutral: research_only and no skill crate changed (the skills
@@ -292,9 +292,9 @@ jobs:
             echo "$FILES"
             # Here-strings, not pipes: under pipefail an early `grep -q` exit
             # can SIGPIPE `echo`, and the negated failure would read as a match.
-            if [ -n "$FILES" ] && ! grep -qvE '^crates/(octos-research|app-skills/deep-search|app-skills/deep-crawl)/' <<<"$FILES"; then
+            if [ -n "$FILES" ] && ! grep -qvE '^crates/(ra-research|app-skills/deep-search|app-skills/deep-crawl)/' <<<"$FILES"; then
               research_only=true
-              if ! grep -qvE '^crates/octos-research/' <<<"$FILES"; then
+              if ! grep -qvE '^crates/ra-research/' <<<"$FILES"; then
                 windows_neutral=true
               fi
             fi
@@ -306,7 +306,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Defense-in-depth OOM caps. Even after sharding the heaviest crates
-      # (octos-agent, octos-cli) into dedicated jobs (#672), the lean `check`
+      # (ra-agent, ra-cli) into dedicated jobs (#672), the lean `check`
       # job still compiles the full workspace for clippy + light-crate tests,
       # so we keep the same caps that PR #672's prior commit established:
       #
@@ -320,9 +320,9 @@ jobs:
       # The actual OOM that JOBS=1 + line-tables-only could not fix was
       # memory accumulation across N sequential heavy-crate test steps in
       # the same runner (run 25137059453, job 73677952504 — runner lost
-      # communication with the server during `Test octos-agent (lib)`,
-      # 54min in). The structural fix is sharding: see test-octos-agent
-      # (matrix: lib + integration) and test-octos-cli below, which each
+      # communication with the server during `Test ra-agent (lib)`,
+      # 54min in). The structural fix is sharding: see test-ra-agent
+      # (matrix: lib + integration) and test-ra-cli below, which each
       # get their own fresh 16GB runner. This `check` job now only handles
       # the light crates and workspace-level checks (fmt, clippy, doc tests).
       CARGO_BUILD_JOBS: "1"
@@ -367,77 +367,77 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       # ── Light-crate tests ───────────────────────────────────────────────────
-      # The two heavy crates (octos-agent, octos-cli) live in their own
-      # dedicated jobs (test-octos-agent, test-octos-cli) so each gets a
+      # The two heavy crates (ra-agent, ra-cli) live in their own
+      # dedicated jobs (test-ra-agent, test-ra-cli) so each gets a
       # fresh 16GB runner — see #672. This `check` job runs the remaining
       # crates plus workspace-level checks.
 
       # Foundation crates (no internal deps, lib-only)
-      - name: Test octos-core
-        run: cargo test -p octos-core
+      - name: Test ra-core
+        run: cargo test -p ra-core
 
-      - name: Test octos-memory
-        run: cargo test -p octos-memory
+      - name: Test ra-memory
+        run: cargo test -p ra-memory
 
       # Mid-tier libs + their integration tests
-      - name: Test octos-llm (lib)
-        run: cargo test -p octos-llm --lib
+      - name: Test ra-llm (lib)
+        run: cargo test -p ra-llm --lib
 
-      - name: Test octos-llm (integration)
-        run: cargo test -p octos-llm --tests
+      - name: Test ra-llm (integration)
+        run: cargo test -p ra-llm --tests
 
-      - name: Test octos-bus
-        run: cargo test -p octos-bus
+      - name: Test ra-bus
+        run: cargo test -p ra-bus
 
-      - name: Test octos-pipeline
-        run: cargo test -p octos-pipeline
+      - name: Test ra-pipeline
+        run: cargo test -p ra-pipeline
 
-      # #2055 — octos-fleet was missing from this list entirely (the #2029
+      # #2055 — ra-fleet was missing from this list entirely (the #2029
       # failure mode at crate granularity: absent coverage prints nothing and
       # looks like passing coverage), so the goal-ledger suite — including the
       # #2054/#2057 task-status writer and the #2055 idempotent task-row
       # upsert — never ran in CI.
-      - name: Test octos-fleet
-        run: cargo test -p octos-fleet
+      - name: Test ra-fleet
+        run: cargo test -p ra-fleet
 
-      # Same #2055 failure mode one crate over: octos-fleet-worker was absent
+      # Same #2055 failure mode one crate over: ra-fleet-worker was absent
       # from this list, so its suite (worker attempt gates — including the
       # sandbox fail-closed terminations — pool, escalation) never ran in CI.
-      - name: Test octos-fleet-worker
-        run: cargo test -p octos-fleet-worker
+      - name: Test ra-fleet-worker
+        run: cargo test -p ra-fleet-worker
 
-      - name: Test octos-plugin
-        run: cargo test -p octos-plugin
+      - name: Test ra-plugin
+        run: cargo test -p ra-plugin
 
       - name: Install Linux sandbox prerequisites
         run: bash scripts/setup-host-managed-linux-ci.sh
 
-      - name: Test octos-sandbox
-        run: cargo test -p octos-sandbox
+      - name: Test ra-sandbox
+        run: cargo test -p ra-sandbox
 
       # RFC-2 (issue #1291): validate every bundled `crates/app-skills/*/manifest.json`
-      # against the strict octos JSON schema validator. A failure here means a
+      # against the strict ra JSON schema validator. A failure here means a
       # bundled skill ships a manifest shape that strict LLM-provider validators
       # (Moonshot Kimi K2.6 etc.) will reject at request time — see the
       # 2026-05-25 mofa-slides v0.5.0 incident write-up.
       - name: RFC-2 bundled manifest schema validation
         run: ./scripts/validate-skill-manifests.sh
 
-      - name: Test octos-swarm
-        run: cargo test -p octos-swarm
+      - name: Test ra-swarm
+        run: cargo test -p ra-swarm
 
-      - name: Test octos-services
-        run: cargo test -p octos-services
+      - name: Test ra-services
+        run: cargo test -p ra-services
 
-      # Same #2055/#2558 failure mode: the research crates (octos-research,
+      # Same #2055/#2558 failure mode: the research crates (ra-research,
       # including the metasearch sandbox and per-engine fixture replays, and
       # the deep-search / deep-crawl skills) were absent from this list, so
       # their suites never ran in PR CI. No network: live engine tests are
       # #[ignore]d and need `--features http`.
       - name: Test research crates
         run: |
-          cargo test -p octos-research
-          cargo test -p octos-research --no-default-features
+          cargo test -p ra-research
+          cargo test -p ra-research --no-default-features
           cargo test -p deep-search
           cargo test -p deep-crawl
 
@@ -454,14 +454,14 @@ jobs:
         run: cargo test --workspace --doc
 
       # ── Targeted regression filters that fit on the lean runner ─────────────
-      # The octos-llm-only regressions stay here (octos-llm already builds
-      # in this job for `Test octos-llm`). The octos-cli regressions and
-      # octos-agent regression test moved to their respective sharded jobs.
-      - name: QoS adaptive/runtime catalog regressions (octos-llm)
+      # The ra-llm-only regressions stay here (ra-llm already builds
+      # in this job for `Test ra-llm`). The ra-cli regressions and
+      # ra-agent regression test moved to their respective sharded jobs.
+      - name: QoS adaptive/runtime catalog regressions (ra-llm)
         run: |
-          cargo test -p octos-llm test_qos_ranking_changes_lane_selection -- --nocapture
-          cargo test -p octos-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
-          cargo test -p octos-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
+          cargo test -p ra-llm test_qos_ranking_changes_lane_selection -- --nocapture
+          cargo test -p ra-llm test_derive_cold_start_catalog_assigns_non_zero_scores -- --nocapture
+          cargo test -p ra-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score -- --nocapture
 
   # ── Sharded heavy-crate test jobs ────────────────────────────────────────
   # These crates each pull in a >100MB rlib closure (chromiumoxide, lettre,
@@ -470,17 +470,17 @@ jobs:
   # 25137059453 — "hosted runner lost communication with the server" 54min
   # in). Each crate now runs on its own fresh runner with its own cache.
   #
-  # octos-agent goes one step further: its lib + integration test compile
+  # ra-agent goes one step further: its lib + integration test compile
   # phases EACH peak around the 16GB ceiling (run on PR #672 — integration
   # step was cancelled after lib step's compile already used a chunk of
   # RAM in the same runner). So lib and integration are split into two
   # SEPARATE jobs (each fresh 16GB runner), via a matrix on `test-mode`.
   #
-  # Cache keys are distinct (shared-key: octos-agent-tests-{lib,integration}
-  # / octos-cli-tests) so they don't fight the lean `check` job's
+  # Cache keys are distinct (shared-key: ra-agent-tests-{lib,integration}
+  # / ra-cli-tests) so they don't fight the lean `check` job's
   # default-keyed cache and don't fight each other.
 
-  test-octos-agent:
+  test-ra-agent:
     strategy:
       fail-fast: false
       matrix:
@@ -510,18 +510,18 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: octos-agent-tests-${{ matrix.test-mode }}
+          shared-key: ra-agent-tests-${{ matrix.test-mode }}
 
-      - name: Test octos-agent (lib)
+      - name: Test ra-agent (lib)
         if: matrix.test-mode == 'lib' && needs.scope.outputs.research_only != 'true'
-        run: cargo test -p octos-agent --lib
+        run: cargo test -p ra-agent --lib
 
-      # Research-only PR: just the tools built on octos-research.
-      - name: Test octos-agent (lib, research tools)
+      # Research-only PR: just the tools built on ra-research.
+      - name: Test ra-agent (lib, research tools)
         if: matrix.test-mode == 'lib' && needs.scope.outputs.research_only == 'true'
-        run: cargo test -p octos-agent --lib -- tools::web_search tools::site_crawl tools::deep_search
+        run: cargo test -p ra-agent --lib -- tools::web_search tools::site_crawl tools::deep_search
 
-      - name: Test octos-agent (integration)
+      - name: Test ra-agent (integration)
         if: matrix.test-mode == 'integration' && needs.scope.outputs.research_only != 'true'
         env:
           # Keep a cache miss viable on the standard runner. This shard links
@@ -539,7 +539,7 @@ jobs:
         # after the preceding test passes). Serialising the integration tests
         # eliminates the pileup. The full integration suite still finishes
         # comfortably within the runner's 6h budget.
-        run: cargo test -p octos-agent --test '*' -- --test-threads=1
+        run: cargo test -p ra-agent --test '*' -- --test-threads=1
 
 
   # Split four ways so the PR wait is the slowest part (integration, ~35 min on
@@ -549,8 +549,8 @@ jobs:
   # process e2e), `oup` (the OUP runtime/C-Python ABI contracts and their
   # evidence), `oup-minimal` (the no-default-features frontend contract and
   # strict lint). Each part keeps its own warm cache.
-  test-octos-cli:
-    name: test-octos-cli (${{ matrix.part }})
+  test-ra-cli:
+    name: test-ra-cli (${{ matrix.part }})
     strategy:
       fail-fast: false
       matrix:
@@ -558,8 +558,8 @@ jobs:
         # --no-default-features fingerprint, so sharing the oup runner paid a
         # second serial full build (~22 min, main run 36430435982) on every
         # PR. The new context is enforced transitively for now — a failure
-        # skips the required security job through the test-octos-cli
-        # needs-aggregate — so add `test-octos-cli (oup-minimal)` to the
+        # skips the required security job through the test-ra-cli
+        # needs-aggregate — so add `test-ra-cli (oup-minimal)` to the
         # branch-protection ruleset's required contexts.
         part: [unit, integration, oup, oup-minimal]
     needs: scope
@@ -581,36 +581,36 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: octos-cli-tests-${{ matrix.part }}
+          shared-key: ra-cli-tests-${{ matrix.part }}
 
-      - name: Test octos-cli (lib)
+      - name: Test ra-cli (lib)
         if: matrix.part == 'unit'
-        run: cargo test -p octos-cli --lib
+        run: cargo test -p ra-cli --lib
 
-      - name: Test octos-cli (integration, excluding serve process e2e)
+      - name: Test ra-cli (integration, excluding serve process e2e)
         if: matrix.part == 'integration'
-        run: cargo test -p octos-cli --tests -- --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard --skip serve_host_managed
+        run: cargo test -p ra-cli --tests -- --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard --skip serve_host_managed
 
       - name: OUP runtime and C/Python contracts
         if: matrix.part == 'oup'
         run: ./scripts/milestone-ci.sh oup-runtime
 
-      # Real-octos-process BrokenPipe/SIGINT e2e (serve_broken_pipe),
+      # Real-ra-process BrokenPipe/SIGINT e2e (serve_broken_pipe),
       # SIGTERM gateway-reap e2e (serve_sigterm), WS half-open
       # liveness e2e (serve_ws_liveness), solo manual-start
       # guard e2e (serve_solo_gateway_guard), and the host-managed ownership
       # e2e (serve_host_managed: stdin EOF, host SIGKILL, inherited listener).
       # These spawn real
-      # `octos serve` children that contend for model catalog / profile
+      # `ra serve` children that contend for model catalog / profile
       # store resources with other test binaries; under the default
       # thread-per-core parallelism the children starve and the 15s port
       # barrier times out. Dedicated serial step per the #21 outer-loop
       # ruling (2026-08-27): layer at the CI command level, never #[ignore].
       - name: serve BrokenPipe/SIGTERM/WS-liveness/solo-guard/host-managed process e2e (serial)
         if: matrix.part == 'integration'
-        run: cargo test -p octos-cli --features api --test serve_broken_pipe --test serve_sigterm --test serve_ws_liveness --test serve_solo_gateway_guard --test serve_host_managed -- --test-threads=1
+        run: cargo test -p ra-cli --features api --test serve_broken_pipe --test serve_sigterm --test serve_ws_liveness --test serve_solo_gateway_guard --test serve_host_managed -- --test-threads=1
 
-      # In the `unit` part, so they reuse its warm octos-cli build cache.
+      # In the `unit` part, so they reuse its warm ra-cli build cache.
       # All api-feature filter steps below go through ci-api-filter-test.sh:
       # a bare `cargo test <filter>` reports `ok` when the filter matches
       # nothing, so a renamed test would silently drop out of CI (#2029).
@@ -622,11 +622,11 @@ jobs:
       # The §6 catalog guard lives in the feature-gated `api` module, so the
       # unfeatured lib/integration runs above never compile it. Run it
       # explicitly so UI Protocol spec/impl drift actually fails CI.
-      - name: UI Protocol §6 catalog guard (octos-cli)
+      - name: UI Protocol §6 catalog guard (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh spec_section6_catalog_lists_every_advertised_method -- --nocapture
 
-      - name: gateway_runtime regression (octos-cli)
+      - name: gateway_runtime regression (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh gateway_runtime::tests -- --nocapture
 
@@ -634,7 +634,7 @@ jobs:
       # module (same reason as the §6 guard): the open-time snapshot must run
       # the pre-turn threshold compaction so a rebuilt ledger never publishes
       # an over-window gauge (`ctx 1.2M/1M` field report, 2026-08-07).
-      - name: Session-open context compaction (octos-cli)
+      - name: Session-open context compaction (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh session_open_snapshot -- --nocapture
 
@@ -643,7 +643,7 @@ jobs:
       # the §6 guard. Its tests matched NONE of the filters on this list
       # (#2029), so the `cached_input_tokens`/`cache_write_input_tokens`
       # mapping had never executed in CI.
-      - name: Session usage status mapping (octos-cli)
+      - name: Session usage status mapping (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh usage
 
@@ -652,7 +652,7 @@ jobs:
       # These cover slug reservation, worktree fencing, and the rollback
       # isolation guard (one peer's cleanup must not delete a SIBLING's
       # worktree, which a repo-global `git worktree prune` used to do).
-      - name: Peer staging + worktree fencing (octos-cli)
+      - name: Peer staging + worktree fencing (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh peer
 
@@ -662,7 +662,7 @@ jobs:
       # unnoticed (its source-scan needle carried the pre-rename module path).
       # ci-api-filter-test.sh now fails any filter that selects zero tests,
       # so absent coverage can no longer masquerade as passing coverage (#2029).
-      - name: serve wiring guards (octos-cli)
+      - name: serve wiring guards (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh commands::serve::tests
 
@@ -671,7 +671,7 @@ jobs:
       # it. Guards the peer-goal convergence fix (#1989): a genuinely-complete
       # goal must verify against the durable ledger findings, not the master's
       # reply alone, or the master loops until its token budget drains.
-      - name: Goal completion verifier ledger evidence (octos-cli)
+      - name: Goal completion verifier ledger evidence (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh completion_evidence goal_update_folds_ledger -- --nocapture
 
@@ -681,7 +681,7 @@ jobs:
       # as the §6 guard. The routing assertion itself is deliberately in
       # non-gated `crate::autonomy` and DOES run in the unfeatured lib step;
       # this covers the two halves that cannot.
-      - name: Background activity human sink (octos-cli)
+      - name: Background activity human sink (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh background_activity -- --nocapture
 
@@ -691,7 +691,7 @@ jobs:
       # gating, and live-forwarder lifecycle hardening. Lives in the
       # `api`-gated ui_protocol module — invisible to the unfeatured runs
       # above, same reason as the §6 guard.
-      - name: Goal-frame scoping + gating + forwarder (octos-cli)
+      - name: Goal-frame scoping + gating + forwarder (ra-cli)
         if: matrix.part == 'unit'
         run: ./scripts/ci-api-filter-test.sh goal_scope_guard session_open_goal -- --nocapture
 
@@ -699,9 +699,9 @@ jobs:
       # integration run above compiles this file to zero tests. Run it
       # explicitly: it is the only end-to-end coverage of the WS dispatch →
       # bridge-config resolution → real HTTP bridge path.
-      - name: Smart-home WS e2e (octos-cli)
+      - name: Smart-home WS e2e (ra-cli)
         if: matrix.part == 'unit'
-        run: cargo test -p octos-cli --features api --test smart_home_ws_e2e
+        run: cargo test -p ra-cli --features api --test smart_home_ws_e2e
 
       # SKILL_CRATES only get `cargo build`ed by the bundle jobs — their
       # tests never ran in CI. smart-home is the one with a real test
@@ -741,11 +741,11 @@ jobs:
   # Without this job, feature-gated compile errors (e.g. an identifier referenced
   # only inside `#[cfg(feature = "matrix")]`) slip past PR CI and only surface
   # during docker builds. It also carries the clippy gate for the feature-gated
-  # channel modules: the non-api channels stay outside octos-cli's default
+  # channel modules: the non-api channels stay outside ra-cli's default
   # features, so the workspace clippy in `check` never lints them — and clippy
-  # subsumes `cargo check`. And it runs the feature-gated octos-bus matrix
+  # subsumes `cargo check`. And it runs the feature-gated ra-bus matrix
   # test suite: with the feature off (as in `check`'s `cargo test -p
-  # octos-bus`) the whole suite is cfg'd out, and the workspace-wide runs that
+  # ra-bus`) the whole suite is cfg'd out, and the workspace-wide runs that
   # do execute it only exist in the nightly and self-hosted lanes.
   check-matrix:
     needs: scope
@@ -768,11 +768,11 @@ jobs:
 
       # Workspace/all-target builds can unify the api or cfg(test) gates and
       # hide missing symbols in FFI consumers of the minimal production lib.
-      - name: Clippy minimal octos-cli production library
-        run: cargo clippy -p octos-cli --lib --no-default-features -- -D warnings
+      - name: Clippy minimal ra-cli production library
+        run: cargo clippy -p ra-cli --lib --no-default-features -- -D warnings
 
-      - name: Clippy octos-cli with matrix feature
-        run: cargo clippy -p octos-cli --all-targets --no-default-features --features api,telegram,discord,dingtalk,slack,whatsapp,feishu,email,matrix,audio_mp3 -- -D warnings
+      - name: Clippy ra-cli with matrix feature
+        run: cargo clippy -p ra-cli --all-targets --no-default-features --features api,telegram,discord,dingtalk,slack,whatsapp,feishu,email,matrix,audio_mp3 -- -D warnings
 
       # The suite itself: its only PR-time execution. Floor-check the listing
       # first so the gate fails loudly if the suite silently drops to zero
@@ -780,14 +780,14 @@ jobs:
       # test_handle_room_query_requires_token (#2267: fails on the slow
       # runner lanes) so the gate stays deterministic; lift the skip with the
       # #2267 fix.
-      - name: Test octos-bus with the matrix feature
+      - name: Test ra-bus with the matrix feature
         run: |
-          count=$(cargo test -p octos-bus --features matrix -- --list matrix_ | grep -c ': test$')
+          count=$(cargo test -p ra-bus --features matrix -- --list matrix_ | grep -c ': test$')
           if [ "$count" -lt 100 ]; then
             echo "::error::only $count matrix-gated tests listed; expected the suite floor of 100"
             exit 1
           fi
-          cargo test -p octos-bus --features matrix -- --skip test_handle_room_query_requires_token
+          cargo test -p ra-bus --features matrix -- --skip test_handle_room_query_requires_token
 
   check-arm:
     # Deliberately NOT on PRs, unlike check-windows: the workspace has ZERO
@@ -815,47 +815,47 @@ jobs:
       - name: Build (workspace + all features)
         run: |
           cargo build --workspace
-          cargo build -p octos-cli --features ${{ env.FEATURES }}
+          cargo build -p ra-cli --features ${{ env.FEATURES }}
 
       - name: Build test binaries
         run: cargo test --workspace --no-run
 
       # Sharded per-crate tests — same rationale as the `check` job.
-      - name: Test octos-core
-        run: cargo test -p octos-core
-      - name: Test octos-memory
-        run: cargo test -p octos-memory
-      - name: Test octos-llm (lib)
-        run: cargo test -p octos-llm --lib
-      - name: Test octos-llm (integration)
-        run: cargo test -p octos-llm --tests
-      - name: Test octos-bus
-        run: cargo test -p octos-bus
-      - name: Test octos-pipeline
-        run: cargo test -p octos-pipeline
-      - name: Test octos-plugin
-        run: cargo test -p octos-plugin
+      - name: Test ra-core
+        run: cargo test -p ra-core
+      - name: Test ra-memory
+        run: cargo test -p ra-memory
+      - name: Test ra-llm (lib)
+        run: cargo test -p ra-llm --lib
+      - name: Test ra-llm (integration)
+        run: cargo test -p ra-llm --tests
+      - name: Test ra-bus
+        run: cargo test -p ra-bus
+      - name: Test ra-pipeline
+        run: cargo test -p ra-pipeline
+      - name: Test ra-plugin
+        run: cargo test -p ra-plugin
       - name: Install Linux sandbox prerequisites
         run: bash scripts/setup-host-managed-linux-ci.sh
-      - name: Test octos-sandbox
-        run: cargo test -p octos-sandbox
-      - name: Test octos-swarm
-        run: cargo test -p octos-swarm
-      - name: Test octos-agent (lib)
-        run: cargo test -p octos-agent --lib
-      - name: Test octos-agent (integration)
-        run: cargo test -p octos-agent --tests
-      - name: Test octos-cli (lib)
-        run: cargo test -p octos-cli --lib
-      # Same serve-process exclusions as the test-octos-cli PR job: the
+      - name: Test ra-sandbox
+        run: cargo test -p ra-sandbox
+      - name: Test ra-swarm
+        run: cargo test -p ra-swarm
+      - name: Test ra-agent (lib)
+        run: cargo test -p ra-agent --lib
+      - name: Test ra-agent (integration)
+        run: cargo test -p ra-agent --tests
+      - name: Test ra-cli (lib)
+        run: cargo test -p ra-cli --lib
+      # Same serve-process exclusions as the test-ra-cli PR job: the
       # serve_broken_pipe / serve_sigterm / serve_ws_liveness /
       # serve_solo_gateway_guard e2e suites
-      # spawn real `octos serve` children that starve under default
+      # spawn real `ra serve` children that starve under default
       # thread-per-core parallelism. They get their dedicated serial run in
-      # test-octos-cli; skipping here keeps this manual lane's coverage
+      # test-ra-cli; skipping here keeps this manual lane's coverage
       # semantics identical to the PR lane's.
-      - name: Test octos-cli (integration, excluding serve process e2e)
-        run: cargo test -p octos-cli --tests -- --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard --skip serve_host_managed
+      - name: Test ra-cli (integration, excluding serve process e2e)
+        run: cargo test -p ra-cli --tests -- --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard --skip serve_host_managed
       - name: Test harness starter skills
         run: |
           cargo test -p harness-starter-generic
@@ -899,42 +899,42 @@ jobs:
       - name: Build (workspace + all features)
         run: |
           cargo build --workspace
-          cargo build -p octos-cli --features ${{ env.FEATURES }}
+          cargo build -p ra-cli --features ${{ env.FEATURES }}
 
       - name: Build test binaries
         run: cargo test --workspace --no-run
 
       # Sharded per-crate tests — same rationale as the `check` job.
-      - name: Test octos-core
-        run: cargo test -p octos-core
-      - name: Test octos-memory
-        run: cargo test -p octos-memory
-      - name: Test octos-llm (lib)
-        run: cargo test -p octos-llm --lib
-      - name: Test octos-llm (integration)
-        run: cargo test -p octos-llm --tests
-      - name: Test octos-bus
-        run: cargo test -p octos-bus
-      - name: Test octos-pipeline
-        run: cargo test -p octos-pipeline
-      - name: Test octos-plugin
-        run: cargo test -p octos-plugin
+      - name: Test ra-core
+        run: cargo test -p ra-core
+      - name: Test ra-memory
+        run: cargo test -p ra-memory
+      - name: Test ra-llm (lib)
+        run: cargo test -p ra-llm --lib
+      - name: Test ra-llm (integration)
+        run: cargo test -p ra-llm --tests
+      - name: Test ra-bus
+        run: cargo test -p ra-bus
+      - name: Test ra-pipeline
+        run: cargo test -p ra-pipeline
+      - name: Test ra-plugin
+        run: cargo test -p ra-plugin
       - name: Install Linux sandbox prerequisites
         run: bash scripts/setup-host-managed-linux-ci.sh
-      - name: Test octos-sandbox
-        run: cargo test -p octos-sandbox
-      - name: Test octos-swarm
-        run: cargo test -p octos-swarm
-      - name: Test octos-agent (lib)
-        run: cargo test -p octos-agent --lib
-      - name: Test octos-agent (integration)
-        run: cargo test -p octos-agent --tests
-      - name: Test octos-cli (lib)
-        run: cargo test -p octos-cli --lib
-      # Same serve-process exclusions as the test-octos-cli PR job (see the
+      - name: Test ra-sandbox
+        run: cargo test -p ra-sandbox
+      - name: Test ra-swarm
+        run: cargo test -p ra-swarm
+      - name: Test ra-agent (lib)
+        run: cargo test -p ra-agent --lib
+      - name: Test ra-agent (integration)
+        run: cargo test -p ra-agent --tests
+      - name: Test ra-cli (lib)
+        run: cargo test -p ra-cli --lib
+      # Same serve-process exclusions as the test-ra-cli PR job (see the
       # matching comment in check-arm).
-      - name: Test octos-cli (integration, excluding serve process e2e)
-        run: cargo test -p octos-cli --tests -- --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard --skip serve_host_managed
+      - name: Test ra-cli (integration, excluding serve process e2e)
+        run: cargo test -p ra-cli --tests -- --skip serve_broken_pipe --skip serve_sigterm --skip serve_ws_liveness --skip serve_solo_gateway_guard --skip serve_host_managed
       - name: Test harness starter skills
         run: |
           cargo test -p harness-starter-generic
@@ -956,7 +956,7 @@ jobs:
     # BLOCKING. This job carried `continue-on-error: ${{ github.event_name ==
     # 'pull_request' }}` while it was red on `main` for pre-existing reasons
     # (`session_scope` → #1838, `run_phase_injects_octos_skill_dir_env` → #1860,
-    # then `git_worktree`'s `GIT_BIN` + `octos-plugin`'s drift guard → #1884).
+    # then `git_worktree`'s `GIT_BIN` + `ra-plugin`'s drift guard → #1884).
     # Those are all fixed and the job is green on `main`, which is the condition
     # that note set for removing the flag.
     #
@@ -976,17 +976,17 @@ jobs:
     runs-on: windows-latest
     env:
       # Test threads run on whatever stack the harness hands out — on Windows
-      # that is too small for the deep agent poll chains in octos-cli's
+      # that is too small for the deep agent poll chains in ra-cli's
       # local-runtime tests, and a stack overflow does not fail one test: it
       # aborts the whole test binary, losing every other test's result with it
-      # (the octos-cli lib step died this way on 6/6 consecutive main pushes,
+      # (the ra-cli lib step died this way on 6/6 consecutive main pushes,
       # #2581). 8 MiB is what every production runtime hands the same futures.
       RUST_MIN_STACK: "8388608"
-    # The full Windows suite runs ~82 min when it passes (octos-cli integration
+    # The full Windows suite runs ~82 min when it passes (ra-cli integration
     # ~19 min and lib ~13 min, two builds ~20 min, doc tests ~6 min), so 90 left
     # almost no headroom: once the stack-overflow abort that used to end the
-    # octos-cli lib step early was fixed, runner variance tipped main past the
-    # cap and the job was cancelled rather than failed. Splitting octos-cli into
+    # ra-cli lib step early was fixed, runner variance tipped main past the
+    # cap and the job was cancelled rather than failed. Splitting ra-cli into
     # its own Windows job would cut the wall-clock; this only stops the kill.
     timeout-minutes: 150
     steps:
@@ -1011,27 +1011,27 @@ jobs:
         if: github.event_name == 'pull_request'
         run: cargo check --workspace
 
-      - name: Check octos-cli + all features (PR)
+      - name: Check ra-cli + all features (PR)
         if: github.event_name == 'pull_request'
-        run: cargo check -p octos-cli --features ${{ env.FEATURES }}
+        run: cargo check -p ra-cli --features ${{ env.FEATURES }}
 
       - name: Build workspace (main/manual)
         if: github.event_name != 'pull_request'
         run: cargo build --workspace
 
-      - name: Build octos-cli + all features (main/manual)
+      - name: Build ra-cli + all features (main/manual)
         if: github.event_name != 'pull_request'
-        run: cargo build -p octos-cli --features ${{ env.FEATURES }}
+        run: cargo build -p ra-cli --features ${{ env.FEATURES }}
 
       # #2239: default-feature tests never compile the API's test-only secret
       # hooks. Exercise those callers on Windows too, using isolated fixtures.
       - name: Test API auth and secret-store fixtures
         if: ${{ !cancelled() }}
-        run: cargo test -p octos-cli --features api --lib auth
+        run: cargo test -p ra-cli --features api --lib auth
 
       - name: Test API credential relocation fixtures
         if: ${{ !cancelled() }}
-        run: cargo test -p octos-cli --features api --lib relocate
+        run: cargo test -p ra-cli --features api --lib relocate
 
       # Sharded per-crate tests — same rationale as the `check` job.
       #
@@ -1045,45 +1045,45 @@ jobs:
       # cancel or job timeout. The job's own conclusion is unchanged: any red
       # step still fails the job, so this weakens no gate — it only makes one
       # run report the whole truth.
-      - name: Test octos-core
+      - name: Test ra-core
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-core
-      - name: Test octos-memory
+        run: cargo test -p ra-core
+      - name: Test ra-memory
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-memory
-      - name: Test octos-llm (lib)
+        run: cargo test -p ra-memory
+      - name: Test ra-llm (lib)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-llm --lib
-      - name: Test octos-llm (integration)
+        run: cargo test -p ra-llm --lib
+      - name: Test ra-llm (integration)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-llm --tests
-      - name: Test octos-bus
+        run: cargo test -p ra-llm --tests
+      - name: Test ra-bus
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-bus
-      - name: Test octos-pipeline
+        run: cargo test -p ra-bus
+      - name: Test ra-pipeline
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-pipeline
-      - name: Test octos-plugin
+        run: cargo test -p ra-pipeline
+      - name: Test ra-plugin
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-plugin
-      - name: Test octos-sandbox
+        run: cargo test -p ra-plugin
+      - name: Test ra-sandbox
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-sandbox
-      - name: Test octos-swarm
+        run: cargo test -p ra-sandbox
+      - name: Test ra-swarm
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-swarm
-      - name: Test octos-agent (lib)
+        run: cargo test -p ra-swarm
+      - name: Test ra-agent (lib)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-agent --lib
-      - name: Test octos-agent (integration)
+        run: cargo test -p ra-agent --lib
+      - name: Test ra-agent (integration)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-agent --tests
-      - name: Test octos-cli (lib)
+        run: cargo test -p ra-agent --tests
+      - name: Test ra-cli (lib)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-cli --lib
-      - name: Test octos-cli (integration)
+        run: cargo test -p ra-cli --lib
+      - name: Test ra-cli (integration)
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
-        run: cargo test -p octos-cli --tests
+        run: cargo test -p ra-cli --tests
       - name: Test harness starter generic
         if: ${{ github.event_name != 'pull_request' && !cancelled() }}
         run: cargo test -p harness-starter-generic
@@ -1113,9 +1113,9 @@ jobs:
     # merge — #2239 alone produced two such breaks (#2258's E0599 in the
     # default build, #2263's E0425 in api-feature test code) while every
     # required check stayed green. The existing macOS jobs do not close this:
-    # e2e-tool-regression builds octos-cli (api+telegram features) but fires
+    # e2e-tool-regression builds ra-cli (api+telegram features) but fires
     # only on e2e path changes, and the security suite compiles one
-    # octos-agent test binary only on security-path changes — so an ordinary
+    # ra-agent test binary only on security-path changes — so an ordinary
     # PR gets no macOS compile signal at all.
     #
     # Compile-only, so the cost is one macos-14 runner for a cargo check, not
@@ -1138,20 +1138,20 @@ jobs:
       - name: Check workspace (all targets)
         run: cargo check --workspace --all-targets
 
-      - name: Check octos-cli + all features (all targets)
-        run: cargo check -p octos-cli --all-targets --features ${{ env.FEATURES }}
+      - name: Check ra-cli + all features (all targets)
+        run: cargo check -p ra-cli --all-targets --features ${{ env.FEATURES }}
 
       # The updater's signature-preservation behavior (#2559) lives in
-      # macOS-gated code, so the ubuntu `cargo test -p octos-services` lane
+      # macOS-gated code, so the ubuntu `cargo test -p ra-services` lane
       # never executes it — coverage that prints nothing and looks like
       # passing coverage (#2055).
-      - name: Test octos-services (macOS behavior)
-        run: cargo test -p octos-services
+      - name: Test ra-services (macOS behavior)
+        run: cargo test -p ra-services
 
   # ── Release artifact builds (main only) ──────────────────────────
   build-macos-arm:
     if: github.event_name == 'push'
-    needs: [check, test-octos-agent, test-octos-cli]
+    needs: [check, test-ra-agent, test-ra-cli]
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v6
@@ -1171,27 +1171,27 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init octos-web
+          git submodule update --init ra-web
           bash scripts/build-web-app.sh
-          cargo build --release -p octos-cli --features ${{ env.FEATURES }}
-          cargo build --release -p octos-sandbox
+          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
+          cargo build --release -p ra-sandbox
           cargo build --release ${{ env.SKILL_CRATES }}
 
       - name: Bundle
         shell: bash
         # Single source of truth for the shipping set: scripts/bundle-release.sh
         # (fails loudly on any missing binary; includes model_catalog.json).
-        run: ./scripts/bundle-release.sh octos-bundle-aarch64-apple-darwin.tar.gz
+        run: ./scripts/bundle-release.sh ra-bundle-aarch64-apple-darwin.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
-          name: octos-bundle-aarch64-apple-darwin
-          path: octos-bundle-aarch64-apple-darwin.tar.gz
+          name: ra-bundle-aarch64-apple-darwin
+          path: ra-bundle-aarch64-apple-darwin.tar.gz
           retention-days: 7
 
   build-linux-x86:
     if: github.event_name == 'push'
-    needs: [check, test-octos-agent, test-octos-cli]
+    needs: [check, test-ra-agent, test-ra-cli]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -1211,22 +1211,22 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init octos-web
+          git submodule update --init ra-web
           bash scripts/build-web-app.sh
-          cargo build --release -p octos-cli --features ${{ env.FEATURES }}
-          cargo build --release -p octos-sandbox
+          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
+          cargo build --release -p ra-sandbox
           cargo build --release ${{ env.SKILL_CRATES }}
 
       - name: Bundle
         shell: bash
         # Single source of truth for the shipping set: scripts/bundle-release.sh
         # (fails loudly on any missing binary; includes model_catalog.json).
-        run: ./scripts/bundle-release.sh octos-bundle-x86_64-unknown-linux-gnu.tar.gz
+        run: ./scripts/bundle-release.sh ra-bundle-x86_64-unknown-linux-gnu.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
-          name: octos-bundle-x86_64-unknown-linux-gnu
-          path: octos-bundle-x86_64-unknown-linux-gnu.tar.gz
+          name: ra-bundle-x86_64-unknown-linux-gnu
+          path: ra-bundle-x86_64-unknown-linux-gnu.tar.gz
           retention-days: 7
 
   build-linux-arm:
@@ -1253,22 +1253,22 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init octos-web
+          git submodule update --init ra-web
           bash scripts/build-web-app.sh
-          cargo build --release -p octos-cli --features ${{ env.FEATURES }}
-          cargo build --release -p octos-sandbox
+          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
+          cargo build --release -p ra-sandbox
           cargo build --release ${{ env.SKILL_CRATES }}
 
       - name: Bundle
         shell: bash
         # Single source of truth for the shipping set: scripts/bundle-release.sh
         # (fails loudly on any missing binary; includes model_catalog.json).
-        run: ./scripts/bundle-release.sh octos-bundle-aarch64-unknown-linux-gnu.tar.gz
+        run: ./scripts/bundle-release.sh ra-bundle-aarch64-unknown-linux-gnu.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
-          name: octos-bundle-aarch64-unknown-linux-gnu
-          path: octos-bundle-aarch64-unknown-linux-gnu.tar.gz
+          name: ra-bundle-aarch64-unknown-linux-gnu
+          path: ra-bundle-aarch64-unknown-linux-gnu.tar.gz
           retention-days: 7
 
   build-windows:
@@ -1295,20 +1295,20 @@ jobs:
           npm ci
           npm run build
           cd ..
-          git submodule update --init octos-web
+          git submodule update --init ra-web
           bash scripts/build-web-app.sh
-          cargo build --release -p octos-cli --features ${{ env.FEATURES }}
-          cargo build --release -p octos-sandbox
+          cargo build --release -p ra-cli --features ${{ env.FEATURES }}
+          cargo build --release -p ra-sandbox
           cargo build --release ${{ env.SKILL_CRATES }}
 
       - name: Bundle
         shell: bash
-        run: ./scripts/bundle-release.sh octos-bundle-x86_64-pc-windows-msvc.zip
+        run: ./scripts/bundle-release.sh ra-bundle-x86_64-pc-windows-msvc.zip
 
       - uses: actions/upload-artifact@v7
         with:
-          name: octos-bundle-x86_64-pc-windows-msvc
-          path: octos-bundle-x86_64-pc-windows-msvc.zip
+          name: ra-bundle-x86_64-pc-windows-msvc
+          path: ra-bundle-x86_64-pc-windows-msvc.zip
           retention-days: 7
 
   # Change detection lives in its OWN job so that "nothing relevant changed"
@@ -1353,7 +1353,7 @@ jobs:
 
   e2e-tool-regression:
     runs-on: macos-14
-    needs: [check, test-octos-agent, test-octos-cli, e2e-changes]
+    needs: [check, test-ra-agent, test-ra-cli, e2e-changes]
     # Run on pushes to main and on every PR whose diff touches the paths in
     # `e2e-changes`. PR-title keyword matching used to gate this job, so a PR
     # that changed tools without saying so in the title skipped e2e entirely.
@@ -1374,7 +1374,7 @@ jobs:
       # MUST precede the cargo build: the admin SPA is embedded into the
       # binary at COMPILE time via `rust_embed::Embed` (api/static_files.rs),
       # not read from disk at runtime, so building it afterwards has no
-      # effect. `crates/octos-cli/static/admin/` is gitignored by the
+      # effect. `crates/ra-cli/static/admin/` is gitignored by the
       # ephemeral-bundle policy and `scripts/build-dashboard.sh` runs in the
       # separate `dashboard` job, whose filesystem this job never sees.
       # Without this, `/admin/login` answers 503 (static_files.rs:169), the
@@ -1384,8 +1384,8 @@ jobs:
       - name: Build dashboard bundle (embedded at compile time)
         run: ./scripts/build-dashboard.sh
 
-      - name: Build octos with all features
-        run: cargo build --release -p octos-cli --features "octos-cli/api,octos-cli/telegram"
+      - name: Build ra with all features
+        run: cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
 
       - name: Install Homebrew ffmpeg (macOS)
         run: brew install ffmpeg
@@ -1404,12 +1404,12 @@ jobs:
       # copy this config to anything long-lived.
       - name: Write CI serve config (enables the admin shell endpoint)
         run: |
-          echo '{"allow_admin_shell": true}' > /tmp/octos-ci-serve.json
+          echo '{"allow_admin_shell": true}' > /tmp/ra-ci-serve.json
 
-      - name: Start octos serve
+      - name: Start ra serve
         run: |
-          OCTOS_AUTH_TOKEN=ci-test-token ./target/release/octos serve --port 3000 \
-            --config /tmp/octos-ci-serve.json &
+          OCTOS_AUTH_TOKEN=ci-test-token ./target/release/ra serve --port 3000 \
+            --config /tmp/ra-ci-serve.json &
           # Wait for server to be ready.
           #
           # `/api/status` is a 404 — this probe has never once succeeded, so the
@@ -1427,7 +1427,7 @@ jobs:
             sleep 1
           done
           if [ -z "$ready" ]; then
-            echo "::error::octos serve never answered /health on port 3000 after 30s."
+            echo "::error::ra serve never answered /health on port 3000 after 30s."
             exit 1
           fi
 
@@ -1502,18 +1502,18 @@ jobs:
         working-directory: e2e
         run: OCTOS_TEST_URL=http://localhost:3000 OCTOS_AUTH_TOKEN=ci-test-token npx playwright test --reporter=line tests/m9-protocol-session-open.spec.ts tests/m9-protocol-diff-preview.spec.ts
 
-      - name: Stop octos serve
+      - name: Stop ra serve
         if: always()
-        run: pkill -f "octos serve" || true
+        run: pkill -f "ra serve" || true
 
   security:
     runs-on: macos-14
-    needs: [check, test-octos-agent, test-octos-cli]
-    # test-octos-cli is skipped on research-only PRs (see `scope`).
+    needs: [check, test-ra-agent, test-ra-cli]
+    # test-ra-cli is skipped on research-only PRs (see `scope`).
     if: >-
       !cancelled() && needs.check.result == 'success'
-      && needs.test-octos-agent.result == 'success'
-      && contains(fromJSON('["success", "skipped"]'), needs.test-octos-cli.result)
+      && needs.test-ra-agent.result == 'success'
+      && contains(fromJSON('["success", "skipped"]'), needs.test-ra-cli.result)
     # Run on pushes and on every PR — the file-level detection below is the
     # only filter (title keyword matching used to let security-relevant PRs
     # slip through when the title didn't say "security"/"sandbox").
@@ -1554,7 +1554,7 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         run: |
           echo "Running 24 security integration tests on macOS (sandbox-exec SBPL)"
-          cargo test -p octos-agent --test security_sandbox -- --nocapture
+          cargo test -p ra-agent --test security_sandbox -- --nocapture
 
   # One stable status for branch protection. Individual jobs can be renamed or
   # conditionally skipped without requiring a repository-ruleset edit, while a
@@ -1571,8 +1571,8 @@ jobs:
       - windows-deploy-script
       - web-app-base-url-windows
       - check
-      - test-octos-agent
-      - test-octos-cli
+      - test-ra-agent
+      - test-ra-cli
       - check-matrix
       - check-windows
       - check-darwin
@@ -1594,12 +1594,12 @@ jobs:
           windows_neutral=$(echo "$RESULTS" | jq -r '.scope.outputs.windows_neutral')
           for job in scope dashboard swarm-app typos ux-gate-report \
             windows-deploy-script web-app-base-url-windows check \
-            test-octos-agent test-octos-cli check-matrix check-windows \
+            test-ra-agent test-ra-cli check-matrix check-windows \
             check-darwin e2e-changes security; do
             result=$(echo "$RESULTS" | jq -r --arg job "$job" '.[$job].result')
             skippable=false
             case "$job" in
-              test-octos-cli|check-matrix|check-darwin) [ "$research_only" = true ] && skippable=true ;;
+              test-ra-cli|check-matrix|check-darwin) [ "$research_only" = true ] && skippable=true ;;
               check-windows) [ "$windows_neutral" = true ] && skippable=true ;;
             esac
             if [ "$result" = skipped ] && [ "$skippable" = true ]; then

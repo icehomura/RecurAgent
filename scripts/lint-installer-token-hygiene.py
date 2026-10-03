@@ -300,7 +300,7 @@ DATA_DIR='{data_dir}'
 CONFIG_HOME='{data_dir / "config"}'
 XDG_CONFIG_HOME=''
 PREFIX='{sandbox / "prefix"}'
-OCTOS_BIN='{sandbox / "prefix" / "octos"}'
+OCTOS_BIN='{sandbox / "prefix" / "ra"}'
 PORT='8080'
 AUTH_TOKEN='{FAKE_TOKEN}'
 FRPS_TOKEN='{frps_token}'
@@ -341,8 +341,8 @@ write_octos_service
 
     artifacts: dict[str, str] = {}
     candidates = [
-        fake_root / "Library" / "LaunchDaemons" / "io.octos.serve.plist",
-        fake_root / "etc" / "systemd" / "system" / "octos-serve.service",
+        fake_root / "Library" / "LaunchDaemons" / "io.ra.serve.plist",
+        fake_root / "etc" / "systemd" / "system" / "ra-serve.service",
         data_dir / "serve.env",
         data_dir / "smtp_secret.json",
     ]
@@ -367,7 +367,7 @@ def check_rendered(os_name: str, frps_token: str, artifacts: dict[str, str], san
     tag = f"render[{os_name}]"
 
     if os_name == "Darwin":
-        plist_rel = "root/Library/LaunchDaemons/io.octos.serve.plist"
+        plist_rel = "root/Library/LaunchDaemons/io.ra.serve.plist"
         plist = sandbox / plist_rel
         if not plist.exists():
             return [f"{tag}: launchd plist was not produced"]
@@ -378,10 +378,10 @@ def check_rendered(os_name: str, frps_token: str, artifacts: dict[str, str], san
         if FAKE_TOKEN not in artifacts.get(plist_rel, ""):
             problems.append(f"{tag}: plist lost the token — macOS serves would silently re-key")
     else:
-        unit = sandbox / "root/etc/systemd/system/octos-serve.service"
+        unit = sandbox / "root/etc/systemd/system/ra-serve.service"
         if not unit.exists():
             return [f"{tag}: systemd unit was not produced"]
-        unit_text = artifacts.get("root/etc/systemd/system/octos-serve.service", "")
+        unit_text = artifacts.get("root/etc/systemd/system/ra-serve.service", "")
         if FAKE_TOKEN in unit_text or "OCTOS_AUTH_TOKEN" in unit_text:
             problems.append(f"{tag}: systemd unit carries the token inline")
         if "FRPS_TOKEN" in unit_text:
@@ -433,8 +433,8 @@ export TMPDIR='{tmpdir}'
 export HOME='{sandbox / "home"}'
 DATA_DIR='{data_dir}'
 PREFIX='{sandbox / "prefix"}'
-OCTOS_BIN='{sandbox / "prefix" / "octos"}'
-PLIST_LABEL='io.octos.serve'
+OCTOS_BIN='{sandbox / "prefix" / "ra"}'
+PLIST_LABEL='io.ra.serve'
 AUTH_TOKEN='{FAKE_TOKEN}'
 OS='{os_name}'
 
@@ -470,8 +470,8 @@ esac
 
     artifacts: dict[str, str] = {}
     candidates = [
-        fake_root / "Library" / "LaunchDaemons" / "io.octos.serve.plist",
-        fake_root / "etc" / "systemd" / "system" / "octos-serve.service",
+        fake_root / "Library" / "LaunchDaemons" / "io.ra.serve.plist",
+        fake_root / "etc" / "systemd" / "system" / "ra-serve.service",
         data_dir / "serve.env",
     ]
     for path in candidates:
@@ -485,7 +485,7 @@ def check_rendered_tenant(os_name: str, artifacts: dict[str, str], sandbox: Path
     tag = f"tenant-render[{os_name}]"
 
     if os_name == "Darwin":
-        plist_rel = "root/Library/LaunchDaemons/io.octos.serve.plist"
+        plist_rel = "root/Library/LaunchDaemons/io.ra.serve.plist"
         plist = sandbox / plist_rel
         if not plist.exists():
             return [f"{tag}: launchd plist was not produced"]
@@ -496,7 +496,7 @@ def check_rendered_tenant(os_name: str, artifacts: dict[str, str], sandbox: Path
         if FAKE_TOKEN not in artifacts.get(plist_rel, ""):
             problems.append(f"{tag}: plist lost the token — macOS serves would silently re-key")
     else:
-        unit_rel = "root/etc/systemd/system/octos-serve.service"
+        unit_rel = "root/etc/systemd/system/ra-serve.service"
         unit = sandbox / unit_rel
         if not unit.exists():
             return [f"{tag}: systemd unit was not produced"]
@@ -543,8 +543,8 @@ def render_bootstrap(source: str, os_name: str, sandbox: Path) -> dict[str, str]
     harness = f"""
 set -euo pipefail
 REMOTE_OS='{os_name}'
-PLIST_LABEL='io.octos.serve'
-PLIST_FRPC='io.octos.frpc'
+PLIST_LABEL='io.ra.serve'
+PLIST_FRPC='io.ra.frpc'
 RBIN='{sandbox / "prefix"}'
 REMOTE_HOME='{fake_home}'
 RDATA='{data_dir}'
@@ -570,8 +570,8 @@ ssh_cmd() {{
             # remote would — its own umask/chmod decide the file's mode.
             # Hard-coding either here would pin nothing.
             eval "( $cmd )" ;;
-        *"tee /etc/systemd/system/octos-serve.service"*)
-            cat > "$FAKE_ROOT/etc/systemd/system/octos-serve.service" ;;
+        *"tee /etc/systemd/system/ra-serve.service"*)
+            cat > "$FAKE_ROOT/etc/systemd/system/ra-serve.service" ;;
         *"tee /etc/systemd/system/frpc.service"*) ;;
         *"mkdir -p ~/Library/LaunchAgents"*) ;;
         *launchctl*|*systemctl*) ;;
@@ -593,8 +593,8 @@ write_remote_services
 
     artifacts: dict[str, str] = {}
     candidates = [
-        fake_home / "Library" / "LaunchAgents" / "io.octos.serve.plist",
-        fake_root / "etc" / "systemd" / "system" / "octos-serve.service",
+        fake_home / "Library" / "LaunchAgents" / "io.ra.serve.plist",
+        fake_root / "etc" / "systemd" / "system" / "ra-serve.service",
         data_dir / "serve.env",
     ]
     for path in candidates:
@@ -608,7 +608,7 @@ def check_rendered_bootstrap(os_name: str, artifacts: dict[str, str], sandbox: P
     tag = f"bootstrap-render[{os_name}]"
 
     if os_name == "Darwin":
-        plist_rel = "home/Library/LaunchAgents/io.octos.serve.plist"
+        plist_rel = "home/Library/LaunchAgents/io.ra.serve.plist"
         plist = sandbox / plist_rel
         if not plist.exists():
             return [f"{tag}: remote launchd plist was not produced"]
@@ -619,7 +619,7 @@ def check_rendered_bootstrap(os_name: str, artifacts: dict[str, str], sandbox: P
         if FAKE_TOKEN not in artifacts.get(plist_rel, ""):
             problems.append(f"{tag}: plist lost the token — macOS serves would silently re-key")
     else:
-        unit_rel = "root/etc/systemd/system/octos-serve.service"
+        unit_rel = "root/etc/systemd/system/ra-serve.service"
         unit = sandbox / unit_rel
         if not unit.exists():
             return [f"{tag}: remote systemd unit was not produced"]

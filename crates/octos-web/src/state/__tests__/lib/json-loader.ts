@@ -50,7 +50,7 @@ import type {
 // ── Wire method → flat-event type mapping ────────────────────────────────
 //
 // Mirrors the UI Protocol `method` strings in
-// `crates/octos-core/src/ui_protocol.rs::ui_protocol_methods`.
+// `crates/ra-core/src/ui_protocol.rs::ui_protocol_methods`.
 
 const METHOD_TO_TYPE: Record<string, string> = {
   'turn/started': 'turn_started',
@@ -71,7 +71,7 @@ const METHOD_TO_TYPE: Record<string, string> = {
 // UI Protocol notifications the reducer doesn't yet model but that are
 // valid wire messages a captured stream may include. We accept them and
 // drop them so a raw capture from PR I doesn't have to be hand-edited.
-// Mirrors the constants in `crates/octos-core/src/ui_protocol.rs`
+// Mirrors the constants in `crates/ra-core/src/ui_protocol.rs`
 // (`ui_protocol_methods` module — `task/updated`, `task/output/delta`,
 // `progress/updated`, `warning`, `approval/*`, `session/*`, etc.).
 const IGNORED_METHODS: Set<string> = new Set([

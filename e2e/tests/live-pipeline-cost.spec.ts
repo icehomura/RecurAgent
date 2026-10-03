@@ -25,7 +25,7 @@
 import { test, expect } from '@playwright/test';
 
 const BASE = process.env.OCTOS_TEST_URL || 'https://dspfac.bot.ominix.io';
-const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'octos-admin-2026';
+const TOKEN = process.env.OCTOS_AUTH_TOKEN || 'ra-admin-2026';
 const PROFILE = process.env.OCTOS_PROFILE || 'dspfac';
 
 test.setTimeout(180_000);
@@ -54,7 +54,7 @@ async function chatViaWs(message: string, sessionId: string, maxWait = 150_000):
 
 function findToken(events: SseEvent[], key: 'input_tokens' | 'output_tokens'): number {
   // Accept BOTH the OpenAI-style `input_tokens`/`output_tokens` shape AND
-  // the octos SSE `done` event's `tokens_in`/`tokens_out` shape. The done
+  // the ra SSE `done` event's `tokens_in`/`tokens_out` shape. The done
   // event today emits `tokens_in`/`tokens_out` (matched by `api_channel.rs`
   // and `handlers.rs`); rather than rename keys broadly (which would touch
   // every existing W4 assertion), the test accepts both vocabularies so

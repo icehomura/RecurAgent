@@ -34,7 +34,7 @@ test("report writes JSON and Markdown summaries without counting skipped or bloc
 
   assert.match(stdout, /ux-summary\.json/);
   const summary = readSummary(outDir);
-  assert.equal(summary.schema, "octos.ux.gate_summary.v1");
+  assert.equal(summary.schema, "ra.ux.gate_summary.v1");
   assert.equal(summary.tier, "fast");
   assert.ok(summary.scenarios.length >= 1);
   assert.equal(
@@ -68,12 +68,12 @@ test("report overlays artifact validation status and first actionable failure", 
   mkdirSync(artifactDir, { recursive: true });
   writeFileSync(
     join(artifactDir, "scenario.json"),
-    JSON.stringify({ schema: "octos.ux.scenario.v1", id: "stdio-happy-path" }),
+    JSON.stringify({ schema: "ra.ux.scenario.v1", id: "stdio-happy-path" }),
   );
   writeFileSync(
     join(artifactDir, "summary.json"),
     JSON.stringify({
-      schema: "octos.ux.summary.v1",
+      schema: "ra.ux.summary.v1",
       status: "failed",
       duration_ms: 1234,
     }),
@@ -81,7 +81,7 @@ test("report overlays artifact validation status and first actionable failure", 
   writeFileSync(
     join(artifactDir, "validation.json"),
     JSON.stringify({
-      schema: "octos.ux.validation.v1",
+      schema: "ra.ux.validation.v1",
       status: "failed",
       checks: [
         {
@@ -150,5 +150,5 @@ test("relative output paths resolve from repo root when invoked through e2e cwd"
   });
 
   const summary = readSummary(resolve(REPO_ROOT, outDir));
-  assert.equal(summary.schema, "octos.ux.gate_summary.v1");
+  assert.equal(summary.schema, "ra.ux.gate_summary.v1");
 });

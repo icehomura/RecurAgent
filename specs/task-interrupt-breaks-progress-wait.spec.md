@@ -1,6 +1,6 @@
 spec: task
 name: "turn/interrupt 立即跳出 progress 等待，不依赖下一条 progress 事件"
-tags: [ui-protocol, interrupt, latency, octos-cli]
+tags: [ui-protocol, interrupt, latency, ra-cli]
 estimate: 0.5d
 ---
 
@@ -33,10 +33,10 @@ estimate: 0.5d
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-cli/src/api/ui_protocol_transport.rs
-- crates/octos-cli/src/api/ui_protocol_tests.rs
-- crates/octos-cli/src/turn_loop.rs
-- crates/octos-cli/src/lib.rs
+- crates/ra-cli/src/api/ui_protocol_transport.rs
+- crates/ra-cli/src/api/ui_protocol_tests.rs
+- crates/ra-cli/src/turn_loop.rs
+- crates/ra-cli/src/lib.rs
 - specs/task-interrupt-breaks-progress-wait.spec.md
 
 ### Forbidden
@@ -50,7 +50,7 @@ estimate: 0.5d
 Scenario: 没有任何 progress 事件时，interrupt 立即返回 Interrupted（critical）
   Tags: critical
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: interrupt_returns_immediately_without_progress_events
   Given progress 通道空闲（模拟无输出的长工具）
   When 发送 interrupt 信号
@@ -59,7 +59,7 @@ Scenario: 没有任何 progress 事件时，interrupt 立即返回 Interrupted�
 
 Scenario: 无 interrupt 时 progress 事件正常返回
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: progress_events_flow_when_no_interrupt
   Given 一条 progress 事件已入队
   When 调用 `next_turn_loop_step`
@@ -67,7 +67,7 @@ Scenario: 无 interrupt 时 progress 事件正常返回
 
 Scenario: interrupt 与 progress 同时就绪时 interrupt 优先（biased）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: interrupt_wins_over_ready_progress
   Given interrupt 与一条 progress 都已就绪
   When 调用 `next_turn_loop_step`
@@ -75,7 +75,7 @@ Scenario: interrupt 与 progress 同时就绪时 interrupt 优先（biased）
 
 Scenario: interrupt 已观察后不再重复报告，progress 关闭返回 Closed（错误路径）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: observed_interrupt_is_not_reported_twice_and_closed_channel_ends_loop
   Given `interrupt_observed = true` 且 progress 通道已关闭
   When 调用 `next_turn_loop_step`
@@ -83,9 +83,9 @@ Scenario: interrupt 已观察后不再重复报告，progress 关闭返回 Close
 
 Scenario: 生产循环使用 helper 且 interrupt 分支直接 break（结构检查）
   Test:
-    Package: octos-cli
+    Package: ra-cli
     Filter: standalone_turn_loop_breaks_on_interrupt_step
-  When 扫描 `crates/octos-cli/src/api/ui_protocol_transport.rs`
+  When 扫描 `crates/ra-cli/src/api/ui_protocol_transport.rs`
   Then `run_standalone_turn` 的循环通过 `next_turn_loop_step` 取事件
   And 不再存在 `interrupt_observed = true;` 后接 `continue;` 的写法
 

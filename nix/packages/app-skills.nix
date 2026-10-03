@@ -39,7 +39,7 @@ in
 
 rustPlatform.buildRustPackage {
   inherit src;
-  pname = "octos-app-skills";
+  pname = "ra-app-skills";
   version = workspaceToml.workspace.package.version;
 
   cargoLock.lockFile = src + "/Cargo.lock";

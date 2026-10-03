@@ -12,7 +12,7 @@
 Error: ANTHROPIC_API_KEY environment variable not set
 ```
 
-**解决方法**：在 shell 中导出密钥或通过 `octos status` 验证：
+**解决方法**：在 shell 中导出密钥或通过 `ra status` 验证：
 
 ```bash
 export ANTHROPIC_API_KEY="your-key"
@@ -31,8 +31,8 @@ export ANTHROPIC_API_KEY="your-key"
 启用详细日志以诊断问题：
 
 ```bash
-RUST_LOG=debug octos chat
-RUST_LOG=octos_agent=trace octos chat --message "task"
+RUST_LOG=debug ra chat
+RUST_LOG=octos_agent=trace ra chat --message "task"
 ```
 
 ---
@@ -42,8 +42,8 @@ RUST_LOG=octos_agent=trace octos chat --message "task"
 | 问题 | 解决方案 |
 |---------|----------|
 | Linux 上构建失败 | 安装构建依赖：`sudo apt install build-essential pkg-config libssl-dev` |
-| macOS 代码签名警告 | 签名二进制文件：`codesign -s - ~/.cargo/bin/octos` |
-| `octos: command not found` | 将 cargo bin 添加到 PATH：`export PATH="$HOME/.cargo/bin:$PATH"` |
+| macOS 代码签名警告 | 签名二进制文件：`codesign -s - ~/.cargo/bin/ra` |
+| `ra: command not found` | 将 cargo bin 添加到 PATH：`export PATH="$HOME/.cargo/bin:$PATH"` |
 
 ---
 
@@ -79,13 +79,13 @@ export WECOM_BOT_SECRET="your_secret"
 **消息未到达**
 
 - 确认上游中继服务正在运行且已关联到你的账号。
-- 检查企业微信群机器人是否与 octos 中配置的一致。
+- 检查企业微信群机器人是否与 ra 中配置的一致。
 - 如果使用了 `allowed_senders`，验证发送者的企业微信用户 ID 是否在列表中。
 - 检查重复消息过滤 -- 频道会对最近 1000 条消息 ID 去重。
 
 **长消息被截断**
 
-超过 4096 字符的消息会被 octos 自动拆分为多个分块。如果仍有截断，检查中继服务本身的消息长度设置。
+超过 4096 字符的消息会被 ra 自动拆分为多个分块。如果仍有截断，检查中继服务本身的消息长度设置。
 
 ---
 
@@ -105,10 +105,10 @@ export WECOM_BOT_SECRET="your_secret"
 
 | 问题 | 解决方案 |
 |---------|----------|
-| 仪表板无法访问 | 检查端口：`octos serve --port 50080`，打开 `http://localhost:50080/admin/` |
+| 仪表板无法访问 | 检查端口：`ra serve --port 50080`，打开 `http://localhost:50080/admin/` |
 | WSL2 端口未转发 | 重启 WSL：`wsl --shutdown` 然后重新打开终端 |
-| 服务无法启动 | 查看日志：`tail -f ~/.octos/serve.log`（macOS）或 `journalctl --user -u octos-serve`（Linux） |
-| Windows: 找不到 `octos` | 确保 `%USERPROFILE%\.cargo\bin` 在 PATH 中 |
+| 服务无法启动 | 查看日志：`tail -f ~/.ra/serve.log`（macOS）或 `journalctl --user -u ra-serve`（Linux） |
+| Windows: 找不到 `ra` | 确保 `%USERPROFILE%\.cargo\bin` 在 PATH 中 |
 | Windows: shell 命令失败 | 命令通过 `cmd /C` 执行；使用 Windows 兼容的语法 |
 | 升级后会话看起来变短了 | 历史现在按新到旧最多加载 `OCTOS_SESSION_LOAD_BUDGET_BYTES`（32 MiB）；更早的轮次存于 `<name>.segments/` 并按需加载——没有删除任何内容 |
 

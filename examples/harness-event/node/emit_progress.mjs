@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dependency-light Octos harness event emitter for Node tools.
+ * Dependency-light ra harness event emitter for Node tools.
  */
 
 import fs from 'node:fs/promises';
@@ -8,7 +8,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
-const SCHEMA = 'octos.harness.event.v1';
+const SCHEMA = 'ra.harness.event.v1';
 
 export function buildProgressEvent(sessionId, taskId, workflow, phase, message, progress) {
   const event = {
@@ -73,7 +73,7 @@ export async function emitEvent(event, sink = process.env.OCTOS_EVENT_SINK || ''
     }
     return true;
   } catch (error) {
-    console.error(`octos event sink write failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`ra event sink write failed: ${error instanceof Error ? error.message : String(error)}`);
     return false;
   }
 }

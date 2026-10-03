@@ -4,11 +4,11 @@
 }:
 
 pkgs.testers.nixosTest {
-  name = "octos-nixos-test";
+  name = "ra-nixos-test";
 
   nodes.machine = {
     imports = [ octosModule ];
-    programs.octos = {
+    programs.ra = {
       enable = true;
       # enableExtraPackages = true;  # Skipped to avoid resource bloat (chromium/ffmpeg/libreoffice/etc.) in VM test
       enableAppSkills = true;
@@ -19,14 +19,14 @@ pkgs.testers.nixosTest {
       service = {
         enable = true;
         port = 50080;
-        dataDir = "/var/lib/octos-test";
+        dataDir = "/var/lib/ra-test";
         authToken = "test-token";
       };
     };
   };
 
   testScript = ''
-    machine.wait_for_unit("octos-serve.service")
+    machine.wait_for_unit("ra-serve.service")
     machine.wait_for_open_port(50080)
 
     # Check if extra packages are installed
@@ -34,10 +34,10 @@ pkgs.testers.nixosTest {
     # machine.succeed("ffmpeg -version")
 
     # Check if custom data directory was created with correct permissions
-    machine.succeed("ls -ld /var/lib/octos-test | grep '^drwxrwx---'")
+    machine.succeed("ls -ld /var/lib/ra-test | grep '^drwxrwx---'")
 
-    # Check if octos version works
-    machine.succeed("octos --version")
+    # Check if ra version works
+    machine.succeed("ra --version")
 
     # Verify app-skills binaries are installed when enableAppSkills = true
     for bin in ["news_fetch", "deep-search", "deep_crawl", "send_email", "account_manager", "clock", "weather"]:

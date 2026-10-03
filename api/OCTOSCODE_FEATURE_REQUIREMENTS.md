@@ -8,7 +8,7 @@ Applies to: mock mode, protocol mode, live coding UX parity runs.
 
 This document defines the user-facing feature requirements that `octoscode`
 must satisfy before it can be treated as a production coding client for the
-Octos AppUI protocol. It is intended to be used by unit tests, snapshot tests,
+ra AppUI protocol. It is intended to be used by unit tests, snapshot tests,
 tmux harnesses, and human review.
 
 The goal is not visual imitation for its own sake. The goal is a terminal UX
@@ -21,7 +21,7 @@ where a coding user can always answer four questions:
 
 ## Non-Negotiable Product Principles
 
-- The TUI is an AppUI client. It must consume shared `octos-core` AppUI/UI
+- The TUI is an AppUI client. It must consume shared `ra-core` AppUI/UI
   Protocol types and must not invent private wire extensions.
 - The first screen is the working coding interface, not a landing page or
   diagnostic page.
@@ -189,7 +189,7 @@ Expected flow:
 
 ### Tmux Harness Tests
 
-The parent Octos tmux harness should keep the state matrix from
+The parent ra tmux harness should keep the state matrix from
 `docs/M9_33_VISUAL_PARITY_HARNESS.md` and add checks for:
 
 - exactly one composer cursor inside the composer input line

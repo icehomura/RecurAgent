@@ -1,12 +1,12 @@
 # Security Architecture
 
-octos multi-tenant AI agent gateway security reference. Last updated: 2026-04-30.
+ra multi-tenant AI agent gateway security reference. Last updated: 2026-04-30.
 
 ---
 
 ## 1. Threat Model
 
-octos runs multiple AI agent profiles on a single host, each with access to shell execution, file I/O, web requests, and LLM APIs. The security surface includes:
+ra runs multiple AI agent profiles on a single host, each with access to shell execution, file I/O, web requests, and LLM APIs. The security surface includes:
 
 | Threat | Vector | Impact |
 |--------|--------|--------|
@@ -55,7 +55,7 @@ Session isolation operates at three levels: **profile** (OS process), **user** (
 
 #### Profile-level isolation (OS process boundary)
 
-Each profile runs as a separate gateway child process with its own `data_dir` (typically `~/.octos/profiles/{id}/`). Profiles share no in-process state — cross-profile access requires filesystem traversal (mitigated by sandboxing, §3.3).
+Each profile runs as a separate gateway child process with its own `data_dir` (typically `~/.ra/profiles/{id}/`). Profiles share no in-process state — cross-profile access requires filesystem traversal (mitigated by sandboxing, §3.3).
 
 #### User-level isolation (per-actor SessionHandle)
 
@@ -76,7 +76,7 @@ Within a profile, each user (identified by `channel:chat_id`) gets a dedicated `
         default.jsonl
 ```
 
-**SessionKey construction** (`octos-core/src/types.rs`): Keys are `{channel}:{chat_id}` (e.g., `telegram:12345`), optionally with topic suffix `#research`. The `base_key` (without topic) determines the user directory. Session filenames are percent-encoded with an FNV-1a hash suffix on truncation to prevent collisions.
+**SessionKey construction** (`ra-core/src/types.rs`): Keys are `{channel}:{chat_id}` (e.g., `telegram:12345`), optionally with topic suffix `#research`. The `base_key` (without topic) determines the user directory. Session filenames are percent-encoded with an FNV-1a hash suffix on truncation to prevent collisions.
 
 **Backward compatibility**: `SessionHandle::open()` tries the new per-user path first, then falls back to the legacy flat path (`{data_dir}/sessions/{encoded_key}.jsonl`). On successful legacy load, the file is auto-migrated to the new path and the old file is removed.
 
@@ -129,7 +129,7 @@ Each user gets a dedicated workspace directory for tool execution:
 
 ### 3.2 File I/O Safety
 
-`resolve_path()` in `octos-agent/src/tools/mod.rs`:
+`resolve_path()` in `ra-agent/src/tools/mod.rs`:
 
 1. **Rejects absolute paths** -- user-provided paths must be relative.
 2. **Normalizes `..` components** without filesystem access (`normalize_path`).
@@ -145,8 +145,8 @@ On non-Unix platforms, a fallback `symlink_metadata()` check is used (TOCTOU win
 
 Four sandbox backends, selectable via `SandboxConfig`:
 
-- `octos-agent/src/sandbox/{bwrap,macos,docker,windows}.rs` — agent-side launcher logic
-- `crates/octos-sandbox/src/main.rs` — Windows AppContainer helper binary (built on `rappct`)
+- `ra-agent/src/sandbox/{bwrap,macos,docker,windows}.rs` — agent-side launcher logic
+- `crates/ra-sandbox/src/main.rs` — Windows AppContainer helper binary (built on `rappct`)
 
 **Bubblewrap (Linux)**:
 - Read-only bind mounts for `/usr`, `/lib`, `/bin`, `/sbin`, `/etc`.
@@ -162,7 +162,7 @@ Four sandbox backends, selectable via `SandboxConfig`:
 - Path injection prevention: rejects paths containing control chars (`< 0x20`, `0x7F`), parentheses, backslash, and double-quote -- all SBPL metacharacters. Fails closed (error, not unsandboxed execution).
 
 **Windows AppContainer**:
-- Wraps the child in a per-process AppContainer via the `octos-sandbox` helper binary (`rappct`).
+- Wraps the child in a per-process AppContainer via the `ra-sandbox` helper binary (`rappct`).
 - Restricted token + low integrity level + per-AppContainer SID for the working directory.
 - Network capabilities denied by default; granted only when `allow_network` is true.
 - No standard Windows capabilities (`lpacAppExperience`, etc.) granted.
@@ -228,7 +228,7 @@ All backends remove these from the child process environment before execution.
 
 ### 3.4 Tool Policy
 
-`ToolPolicy` in `octos-agent/src/tools/policy.rs` provides allow/deny lists with **deny-wins** semantics:
+`ToolPolicy` in `ra-agent/src/tools/policy.rs` provides allow/deny lists with **deny-wins** semantics:
 
 - **Deny list checked first**. If a tool matches any deny entry, it is blocked regardless of allow list.
 - **Empty allow list** = allow everything not denied.
@@ -243,7 +243,7 @@ All backends remove these from the child process environment before execution.
 
 ### 3.5 SSRF Protection
 
-`octos_research::net::check_url` is the workspace's one SSRF validation; `octos-agent/src/tools/ssrf.rs` adapts it for `web_fetch`, `browser`, `site_crawl`, and MCP HTTP transports, and adds the fleet host allowlist `web_fetch` enforces per redirect hop.
+`octos_research::net::check_url` is the workspace's one SSRF validation; `ra-agent/src/tools/ssrf.rs` adapts it for `web_fetch`, `browser`, `site_crawl`, and MCP HTTP transports, and adds the fleet host allowlist `web_fetch` enforces per redirect hop.
 
 **Two-phase check** (`check_url`):
 1. **Hostname validation** (`is_private_host`): Blocks `localhost`, `localhost.`, and any IP literal that resolves to a private range; non-http(s) schemes are refused outright.
@@ -256,7 +256,7 @@ All backends remove these from the child process environment before execution.
 
 ### 3.6 Plugin Integrity
 
-`octos-agent/src/plugins/loader.rs` handles plugin loading with integrity verification:
+`ra-agent/src/plugins/loader.rs` handles plugin loading with integrity verification:
 
 1. **Manifest parsing**: `manifest.json` must exist and contain valid JSON with tool definitions.
 2. **Executable discovery**: Tries manifest name, directory name, `main`, or any executable in directory. Must be executable (`mode & 0o111 != 0` on Unix). Symlinks rejected via `symlink_metadata()`.
@@ -270,7 +270,7 @@ All backends remove these from the child process environment before execution.
 
 ### 3.7 MCP Security
 
-`octos-agent/src/mcp.rs` secures MCP server integration:
+`ra-agent/src/mcp.rs` secures MCP server integration:
 
 **Schema validation** (`validate_schema`):
 - Maximum nesting depth: 10 levels (`MAX_SCHEMA_DEPTH`).
@@ -296,7 +296,7 @@ All backends remove these from the child process environment before execution.
 
 ### 3.8 Auth Middleware
 
-`octos-cli/src/api/router.rs` implements two-tier authentication:
+`ra-cli/src/api/router.rs` implements two-tier authentication:
 
 **Token extraction**: Bearer header (`Authorization: Bearer {token}`) with query parameter fallback (`?token={token}`) for SSE/EventSource.
 
@@ -312,11 +312,11 @@ All backends remove these from the child process environment before execution.
 
 **Unauthenticated routes**: Auth endpoints (`/api/auth/*`), webhook proxy (`/webhook/*`), static files.
 
-**Session-ingress work secrets** (`/v1/session_ingress/ws/{session_id}`): external CLI agents attach to a single session with a short-lived work secret instead of a dashboard bearer (#296). This route sits outside the two middleware layers above and authenticates bearer-header-first against the SHA-256 grant hashes persisted in `work_secrets.json` (the token itself is never stored). Unlike the dashboard `?token=` fallback above, the ingress `?token=` form is a deprecated fallback for header-less WebSocket clients and is logged server-side once the grant validates; the former `_token` / `session_ingress_token` query aliases were removed, and a request that presents only a removed alias is rejected with a remediation message (#2410). The grant is revalidated before every client request — a grant that no longer validates (revoked, expired, or replaced) closes the live socket with close code `1008` — and the method surface is confined to the granted session (non-session global methods and raw non-session-routed requests are refused). Walkthrough: `docs/OCTOS_WORK_SECRET_SESSION_INGRESS.md`.
+**Session-ingress work secrets** (`/v1/session_ingress/ws/{session_id}`): external CLI agents attach to a single session with a short-lived work secret instead of a dashboard bearer (#296). This route sits outside the two middleware layers above and authenticates bearer-header-first against the SHA-256 grant hashes persisted in `work_secrets.json` (the token itself is never stored). Unlike the dashboard `?token=` fallback above, the ingress `?token=` form is a deprecated fallback for header-less WebSocket clients and is logged server-side once the grant validates; the former `_token` / `session_ingress_token` query aliases were removed, and a request that presents only a removed alias is rejected with a remediation message (#2410). The grant is revalidated before every client request — a grant that no longer validates (revoked, expired, or replaced) closes the live socket with close code `1008` — and the method surface is confined to the granted session (non-session global methods and raw non-session-routed requests are refused). Walkthrough: `docs/ra_WORK_SECRET_SESSION_INGRESS.md`.
 
 ### 3.9 Hook Security
 
-`octos-agent/src/hooks.rs` runs lifecycle hooks with multiple safety measures:
+`ra-agent/src/hooks.rs` runs lifecycle hooks with multiple safety measures:
 
 **Argv execution**: Commands are specified as an argv array (not shell strings). No shell interpretation -- prevents command injection via hook configuration.
 
@@ -334,15 +334,15 @@ All backends remove these from the child process environment before execution.
 
 ### 3.10 Per-Profile CWD Isolation
 
-When `octos serve` spawns a gateway subprocess for each profile, the child process now receives `--cwd {data_dir}` (e.g., `~/.octos/profiles/{id}/data/`) instead of inheriting the parent's home directory. This narrows the default working directory from the entire user home to the profile's own data directory, strengthening several existing defenses.
+When `ra serve` spawns a gateway subprocess for each profile, the child process now receives `--cwd {data_dir}` (e.g., `~/.ra/profiles/{id}/data/`) instead of inheriting the parent's home directory. This narrows the default working directory from the entire user home to the profile's own data directory, strengthening several existing defenses.
 
 #### CWD scoping
 
-The gateway `--cwd` flag sets the process working directory before any tool initialization. Since builtin file tools (`read_file`, `write_file`, `edit_file`, `diff_edit`, `glob`, `grep`, `list_dir`, `git`) resolve user-supplied paths via `resolve_path(cwd, user_path)`, setting `cwd = ~/.octos/profiles/{id}/data/` means these tools can only access files within that profile's data directory. Cross-profile file access is blocked because `resolve_path()` verifies the resolved path `starts_with(base_dir)`, and `base_dir` is now the profile's own directory.
+The gateway `--cwd` flag sets the process working directory before any tool initialization. Since builtin file tools (`read_file`, `write_file`, `edit_file`, `diff_edit`, `glob`, `grep`, `list_dir`, `git`) resolve user-supplied paths via `resolve_path(cwd, user_path)`, setting `cwd = ~/.ra/profiles/{id}/data/` means these tools can only access files within that profile's data directory. Cross-profile file access is blocked because `resolve_path()` verifies the resolved path `starts_with(base_dir)`, and `base_dir` is now the profile's own directory.
 
 #### Shell sandbox read restriction
 
-On macOS, the shell sandbox SBPL profile supports a `read_allow_paths` list. When `octos serve` populates `read_allow_paths` with `project_dir` (the `--octos-home` path, typically `~/.octos/`), the SBPL policy replaces the blanket `(allow file-read*)` with per-path rules:
+On macOS, the shell sandbox SBPL profile supports a `read_allow_paths` list. When `ra serve` populates `read_allow_paths` with `project_dir` (the `--ra-home` path, typically `~/.ra/`), the SBPL policy replaces the blanket `(allow file-read*)` with per-path rules:
 
 ```scheme
 ;; Instead of (allow file-read*), generate:
@@ -353,7 +353,7 @@ On macOS, the shell sandbox SBPL profile supports a `read_allow_paths` list. Whe
 ;; ... other system paths
 ```
 
-This restricts shell command reads at the kernel level to the profile's data, shared octos resources, and system paths. A shell command in profile A cannot `cat` files from profile B's data directory.
+This restricts shell command reads at the kernel level to the profile's data, shared ra resources, and system paths. A shell command in profile A cannot `cat` files from profile B's data directory.
 
 #### SendFileTool base_dir validation
 
@@ -365,13 +365,13 @@ This restricts shell command reads at the kernel level to the profile's data, sh
 
 #### project_dir decoupled from cwd
 
-Shared resources such as deployment-scoped skills, platform skills, global config (`~/.octos/config.json`), and bundled app-skills are loaded from `--octos-home` (the `project_dir`) plus the active profile's `data/skills/` directory, not from `cwd`. This decoupling means narrowing `cwd` to the profile's data directory does not break access to shared pipelines and configurations.
+Shared resources such as deployment-scoped skills, platform skills, global config (`~/.ra/config.json`), and bundled app-skills are loaded from `--ra-home` (the `project_dir`) plus the active profile's `data/skills/` directory, not from `cwd`. This decoupling means narrowing `cwd` to the profile's data directory does not break access to shared pipelines and configurations.
 
 #### Remaining gaps
 
 - **SpawnTool and PipelineTool sub-agents**: These use `with_builtins()` without sandbox configuration. `resolve_path()` still enforces path containment, but the shell tool in sub-agents runs unsandboxed.
 - **bwrap `read_allow_paths`**: The Bubblewrap (Linux) sandbox backend does not yet implement `read_allow_paths`. Only macOS SBPL applies read restrictions when `read_allow_paths` is populated.
-- **SBPL read restriction is conditional**: The blanket `(allow file-read*)` is only replaced with per-path rules when `read_allow_paths` is non-empty. If the list is not populated (e.g., standalone `octos chat` without `octos serve`), the old permissive behavior remains.
+- **SBPL read restriction is conditional**: The blanket `(allow file-read*)` is only replaced with per-path rules when `read_allow_paths` is non-empty. If the list is not populated (e.g., standalone `ra chat` without `ra serve`), the old permissive behavior remains.
 
 ---
 
@@ -427,7 +427,7 @@ The M8.1–M8.10 milestones added runtime-level hardening that is security-relev
 
 ### 4a.1 Bounded Supervisor and Orphan-Task Reaper (#609, #610)
 
-`crates/octos-agent/src/task_supervisor.rs` owns the lifecycle of agent tasks per profile and bounds total fan-out across `spawn`, pipeline, and swarm. This blocks a runaway agent (or a malicious prompt) from creating an unbounded number of background tasks and exhausting runner CPU/memory.
+`crates/ra-agent/src/task_supervisor.rs` owns the lifecycle of agent tasks per profile and bounds total fan-out across `spawn`, pipeline, and swarm. This blocks a runaway agent (or a malicious prompt) from creating an unbounded number of background tasks and exhausting runner CPU/memory.
 
 The orphan-task reaper sweeps tasks whose owning session has terminated and frees their resources. Without it, a profile crash mid-spawn could leak memory and tokio handles.
 
@@ -437,25 +437,25 @@ When a `spawn_only` task fails, the supervisor re-engages the LLM with a structu
 
 ### 4a.3 Sticky thread_id and committed_seq (M8.10)
 
-Every SSE event now carries a `thread_id` bound before the first emission, and the `done` event additionally carries `committed_seq`. This eliminates a class of cross-thread leakage bugs where, in flight, an event could be misattributed to the wrong UI thread. Replay-harness fixtures (`crates/octos-agent/tests/`) assert binding correctness.
+Every SSE event now carries a `thread_id` bound before the first emission, and the `done` event additionally carries `committed_seq`. This eliminates a class of cross-thread leakage bugs where, in flight, an event could be misattributed to the wrong UI thread. Replay-harness fixtures (`crates/ra-agent/tests/`) assert binding correctness.
 
 ### 4a.4 Auto-Rotate Admin Token (#650)
 
-On `octos serve` boot, the stored admin bearer token is rotated if it's stale or marked invalid. Rotated value is persisted to `~/.octos/auth.json` (mode 0600). This shortens the window in which a leaked admin token is valid and gives operators a non-disruptive recovery path after suspected compromise.
+On `ra serve` boot, the stored admin bearer token is rotated if it's stale or marked invalid. Rotated value is persisted to `~/.ra/auth.json` (mode 0600). This shortens the window in which a leaked admin token is valid and gives operators a non-disruptive recovery path after suspected compromise.
 
 ### 4a.5 Plugin Protocol v2 Contract Tests
 
-Plugins that opt into protocol v2 emit structured events on stderr (`LogEvent`, `PhaseEvent`, `ProgressEvent`, `CostEvent`, `ArtifactEvent`). Contract tests at `crates/octos-plugin/tests/lifecycle_sandbox.rs` execute plugins under sandbox to verify the event stream — this is also the test point where we can assert that v2 plugins do not bypass the BLOCKED_ENV_VARS list.
+Plugins that opt into protocol v2 emit structured events on stderr (`LogEvent`, `PhaseEvent`, `ProgressEvent`, `CostEvent`, `ArtifactEvent`). Contract tests at `crates/ra-plugin/tests/lifecycle_sandbox.rs` execute plugins under sandbox to verify the event stream — this is also the test point where we can assert that v2 plugins do not bypass the BLOCKED_ENV_VARS list.
 
 ### 4a.6 Audio Attachment Validation
 
-`task_supervisor.rs` validates audio attachments (header + silence + duration) before persisting voice media. Prevents arbitrary-bytes-as-audio media files from being stored under `~/.octos/profiles/<id>/data/media/`.
+`task_supervisor.rs` validates audio attachments (header + silence + duration) before persisting voice media. Prevents arbitrary-bytes-as-audio media files from being stored under `~/.ra/profiles/<id>/data/media/`.
 
 ---
 
 ## 5. Hardening Recommendations
 
-Inspired by LAMP shared hosting's 25-year-old multi-tenant isolation model, which octos is essentially re-solving for AI agents. LAMP's key insight: **the kernel should enforce isolation, not application code**. Application-level checks (`resolve_path()`, tool policy) are defense-in-depth, not the primary boundary.
+Inspired by LAMP shared hosting's 25-year-old multi-tenant isolation model, which ra is essentially re-solving for AI agents. LAMP's key insight: **the kernel should enforce isolation, not application code**. Application-level checks (`resolve_path()`, tool policy) are defense-in-depth, not the primary boundary.
 
 ### 5.1 ~~Enable sandbox by default~~ (DONE)
 
@@ -465,7 +465,7 @@ Completed. `SandboxConfig::default()` now has `enabled: true`. A warning is logg
 
 **LAMP equivalent**: Each PHP-FPM pool runs as a separate Unix user (`webA`, `webB`). The kernel enforces everything — file permissions, process visibility, signal delivery.
 
-**octos target**: `octos serve` spawns each profile's gateway child process as a dedicated Unix user.
+**ra target**: `ra serve` spawns each profile's gateway child process as a dedicated Unix user.
 
 ```rust
 // In process_manager.rs, when spawning a profile gateway:
@@ -474,7 +474,7 @@ pub struct ProfileProcess {
 }
 
 // Spawn with UID switch:
-// Option A: sudo -u octos_profile_abc octos gateway --profile abc
+// Option A: sudo -u octos_profile_abc ra gateway --profile abc
 // Option B: setuid() after fork (requires root parent)
 // Option C: macOS launchd per-user plist
 ```
@@ -486,34 +486,34 @@ pub struct ProfileProcess {
 - Socket isolation: Unix sockets owned by UID
 - `/proc` hiding: `hidepid=2` on Linux hides other UIDs' processes
 
-**Profile user provisioning** (in `octos serve` or admin API):
+**Profile user provisioning** (in `ra serve` or admin API):
 ```bash
 # Create profile user (one-time, requires admin)
 sudo useradd -r -m -d /home/octos_abc -s /usr/sbin/nologin octos_profile_abc
 sudo chown -R octos_profile_abc:octos_profile_abc /home/octos_abc/
 sudo chmod 700 /home/octos_abc/
 
-# octos serve spawns:
-sudo -u octos_profile_abc octos gateway \
-  --data-dir /home/octos_abc/.octos \
+# ra serve spawns:
+sudo -u octos_profile_abc ra gateway \
+  --data-dir /home/octos_abc/.ra \
   --cwd /home/octos_abc/workspace
 ```
 
-**Config** (`~/.octos/profiles/{id}.json`):
+**Config** (`~/.ra/profiles/{id}.json`):
 ```json
 {
   "isolation": {
     "run_as_user": "octos_profile_abc",
-    "data_dir": "/home/octos_abc/.octos",
+    "data_dir": "/home/octos_abc/.ra",
     "cwd": "/home/octos_abc/workspace"
   }
 }
 ```
 
 **Files to modify**:
-- `crates/octos-cli/src/process_manager.rs` — Add `run_as_user` to `Command::new()` via `sudo -u`
-- `crates/octos-cli/src/profiles.rs` — Add `isolation` config section
-- `crates/octos-cli/src/commands/gateway/mod.rs` — Read isolation config
+- `crates/ra-cli/src/process_manager.rs` — Add `run_as_user` to `Command::new()` via `sudo -u`
+- `crates/ra-cli/src/profiles.rs` — Add `isolation` config section
+- `crates/ra-cli/src/commands/gateway/mod.rs` — Read isolation config
 
 ### 5.3 Read isolation (medium-term)
 
@@ -560,7 +560,7 @@ ruleset.restrict_self()?;
 **Risk**: Overly restrictive read lists break commands that need unexpected system paths. Needs a configurable allowlist with sensible defaults and an escape hatch (`sandbox.read_allow_paths` in config).
 
 **Files to modify**:
-- `crates/octos-agent/src/sandbox/mod.rs` — Add `read_paths: Vec<PathBuf>` to `SandboxConfig`, update SBPL generation and bwrap bind mounts
+- `crates/ra-agent/src/sandbox/mod.rs` — Add `read_paths: Vec<PathBuf>` to `SandboxConfig`, update SBPL generation and bwrap bind mounts
 - New: Landlock backend in `sandbox.rs` (Linux 5.13+ detection via `prctl(PR_GET_NO_NEW_PRIVS)`)
 
 ### 5.4 Disk quotas (medium-term)
@@ -636,7 +636,7 @@ fn validate_bind_mount(source: &str) -> Result<()> {
 ```
 
 **Files to modify**:
-- `crates/octos-agent/src/sandbox/mod.rs` — Add validation in `DockerSandbox::wrap_command()`
+- `crates/ra-agent/src/sandbox/mod.rs` — Add validation in `DockerSandbox::wrap_command()`
 
 ### 5.6 Persistent Docker containers (medium-term)
 
@@ -670,8 +670,8 @@ async fn prune_idle_containers(max_idle: Duration, max_age: Duration) { ... }
 **Performance**: First command ~300ms (container creation), subsequent ~5ms (`docker exec`). Filesystem state (installed packages, build artifacts) persists across commands within a session.
 
 **Files to modify**:
-- `crates/octos-agent/src/sandbox/mod.rs` — Add `DockerSessionSandbox` alongside existing `DockerSandbox`
-- `crates/octos-cli/src/session_actor.rs` — Tie container lifecycle to `SessionActor` lifetime
+- `crates/ra-agent/src/sandbox/mod.rs` — Add `DockerSessionSandbox` alongside existing `DockerSandbox`
+- `crates/ra-cli/src/session_actor.rs` — Tie container lifecycle to `SessionActor` lifetime
 
 ### 5.7 Profile containers with network isolation (long-term)
 
@@ -687,24 +687,24 @@ Profile "sales" (host process, PID 1001, uid=alice)
 
 **Target model** (profile container):
 ```
-octos serve (host)
-├── docker run -d --name octos-sales \
-│     --network octos-internal \
+ra serve (host)
+├── docker run -d --name ra-sales \
+│     --network ra-internal \
 │     -v /data/sales:/data \
 │     --cpus 2 --memory 1g \
-│     octos gateway --profile sales
+│     ra gateway --profile sales
 │
-├── docker run -d --name octos-support \
-│     --network octos-internal \
+├── docker run -d --name ra-support \
+│     --network ra-internal \
 │     -v /data/support:/data \
 │     --cpus 1 --memory 512m \
-│     octos gateway --profile support
+│     ra gateway --profile support
 ```
 
 #### The network problem
 
 Profile containers need selective network access:
-- **Must reach**: LLM APIs (api.moonshot.ai), channel APIs (api.telegram.org), control plane (octos serve)
+- **Must reach**: LLM APIs (api.moonshot.ai), channel APIs (api.telegram.org), control plane (ra serve)
 - **Must NOT reach**: cloud metadata (169.254.169.254), local network (192.168.0.0/16), other profile containers
 
 `--network none` blocks everything (broken). `--network bridge` allows everything (no isolation). Neither works.
@@ -714,35 +714,35 @@ Profile containers need selective network access:
 Run a domain-allowlist HTTP proxy on the host. Profile containers route all traffic through it.
 
 ```
-octos serve (host, port 50080)
+ra serve (host, port 50080)
 ├── allowlist proxy (host, port 8888)
 │   ├── sales profile: allow api.moonshot.ai, api.telegram.org
 │   ├── support profile: allow api.deepseek.com, api.telegram.org
 │   └── deny all: 169.254.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
 │
-├── container "octos-sales" (--network=octos-internal)
+├── container "ra-sales" (--network=ra-internal)
 │   └── HTTPS_PROXY=http://host.docker.internal:8888
 │       → proxy allows api.moonshot.ai ✅
 │       → proxy blocks 169.254.169.254 ❌
-│       → proxy blocks octos-support container ❌
+│       → proxy blocks ra-support container ❌
 │
-├── container "octos-support" (--network=octos-internal)
+├── container "ra-support" (--network=ra-internal)
 │   └── HTTPS_PROXY=http://host.docker.internal:8888
 │       → proxy allows api.deepseek.com ✅
-│       → proxy blocks octos-sales container ❌
+│       → proxy blocks ra-sales container ❌
 ```
 
 **Why proxy over iptables**: DNS names resolve to multiple IPs that change. iptables requires static IPs. A domain-allowlist proxy checks the hostname in the HTTP CONNECT request — works regardless of IP changes.
 
 **Proxy options**:
 - **Squid** — mature, widely deployed, ACL-based domain filtering
-- **Custom Rust proxy** — minimal, embedded in `octos serve`, per-profile config
+- **Custom Rust proxy** — minimal, embedded in `ra serve`, per-profile config
 - **Envoy sidecar** — strongest isolation (one proxy per container), but most complex
 
-**Recommended**: Custom Rust proxy embedded in `octos serve`. Reads `allowed_domains` from each profile config. Single process, no external dependencies.
+**Recommended**: Custom Rust proxy embedded in `ra serve`. Reads `allowed_domains` from each profile config. Single process, no external dependencies.
 
 ```rust
-// In octos serve, spawn a lightweight HTTPS CONNECT proxy
+// In ra serve, spawn a lightweight HTTPS CONNECT proxy
 pub struct AllowlistProxy {
     /// Per-profile domain allowlists, keyed by source IP or auth token.
     rules: HashMap<String, Vec<String>>,
@@ -766,12 +766,12 @@ impl AllowlistProxy {
 }
 ```
 
-**Config** (`~/.octos/profiles/{id}.json`):
+**Config** (`~/.ra/profiles/{id}.json`):
 ```json
 {
   "isolation": {
     "run_in_container": true,
-    "image": "octos:latest",
+    "image": "ra:latest",
     "cpus": "2",
     "memory": "1g",
     "allowed_domains": [
@@ -796,10 +796,10 @@ impl AllowlistProxy {
 **SSRF protection upgrade**: With the proxy model, SSRF protection moves from application-level (`ssrf.rs` checking in every tool) to infrastructure-level (proxy rejects private IPs for all traffic). Defense in depth — `ssrf.rs` stays as a second check, but the proxy is the primary gate.
 
 **Files to modify**:
-- `crates/octos-cli/src/process_manager.rs` — Spawn profiles as Docker containers
-- `crates/octos-cli/src/profiles.rs` — Add container isolation config
-- New: `crates/octos-cli/src/proxy.rs` — Domain-allowlist HTTPS CONNECT proxy (~200 LOC)
-- `crates/octos-cli/src/commands/serve.rs` — Start proxy alongside control plane
+- `crates/ra-cli/src/process_manager.rs` — Spawn profiles as Docker containers
+- `crates/ra-cli/src/profiles.rs` — Add container isolation config
+- New: `crates/ra-cli/src/proxy.rs` — Domain-allowlist HTTPS CONNECT proxy (~200 LOC)
+- `crates/ra-cli/src/commands/serve.rs` — Start proxy alongside control plane
 
 ### 5.8 Additional hardening
 
@@ -843,14 +843,14 @@ impl AllowlistProxy {
 
 ## 6. LAMP Stack Comparison
 
-octos is solving the same multi-tenant isolation problem that PHP shared hosting solved 25+ years ago. This comparison identifies gaps and guides the hardening roadmap.
+ra is solving the same multi-tenant isolation problem that PHP shared hosting solved 25+ years ago. This comparison identifies gaps and guides the hardening roadmap.
 
 ### Isolation model comparison
 
 ```
-LAMP shared hosting (1990s):          octos (2026):
+LAMP shared hosting (1990s):          ra (2026):
 
-Apache/nginx (root)                    octos serve (control plane)
+Apache/nginx (root)                    ra serve (control plane)
 ├── PHP-FPM pool for tenant A          ├── Profile A (child process)
 │   ├── runs as Unix user "webA"       │   ├── runs as SAME user (gap)
 │   ├── chroot /home/webA/             │   ├── per-user workspace dir
@@ -864,7 +864,7 @@ Apache/nginx (root)                    octos serve (control plane)
 
 ### Gap analysis
 
-| LAMP Feature | Enforcement | octos Equivalent | Enforcement | Gap | Planned Fix |
+| LAMP Feature | Enforcement | ra Equivalent | Enforcement | Gap | Planned Fix |
 |-------------|-------------|-------------------|-------------|-----|-------------|
 | Per-tenant Unix UID | Kernel (DAC) | Per-profile OS process | Process boundary only | **No UID isolation** | §5.2 per-profile UID |
 | `chroot` / bind mount | Kernel | Per-user workspace | Application + SBPL writes | **Reads not restricted** | §5.3 read isolation (Landlock/SBPL) |
@@ -876,9 +876,9 @@ Apache/nginx (root)                    octos serve (control plane)
 | Network ACL (iptables) | Kernel | SSRF check in app | Application code | **No per-profile network** | §5.7 proxy allowlist |
 | Bandwidth metering | Kernel/iptables | None | — | **No metering** | §5.7 proxy can meter |
 
-### What octos already does better than LAMP
+### What ra already does better than LAMP
 
-| Area | octos Advantage |
+| Area | ra Advantage |
 |------|-------------------|
 | **SSRF protection** | DNS-resolved private IP blocking — PHP has no built-in SSRF guard |
 | **Symlink safety** | `O_NOFOLLOW` atomic rejection — PHP historically vulnerable to symlink races |

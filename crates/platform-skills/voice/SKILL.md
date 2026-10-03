@@ -2,13 +2,13 @@
 name: voice
 description: Batch ASR (via dedicated ASR_API_URL or OminiX fallback), preset-voice TTS with emotion/speed control, and model management via Qwen3 models on Apple Silicon. For voice cloning and custom voice profiles, use mofa-fm. Triggers: voice, transcribe audio, text to speech, speak this, read aloud, model management, download model, 语音识别, 语音合成, 模型管理.
 version: 1.2.0
-author: octos
+author: ra
 always: true
 ---
 
 # Batch ASR / OminiX TTS / Model Management
 
-Speech-to-text uses `ASR_API_URL` when configured (the Octos/OMiniX JSON +
+Speech-to-text uses `ASR_API_URL` when configured (the ra/OMiniX JSON +
 base64 batch-transcription contract at `POST /v1/audio/transcriptions`, such as
 the local Whisper or Nemotron adapter); otherwise it falls back to Qwen3 ASR
 through local OminiX. Preset-voice text-to-speech with emotion control and model

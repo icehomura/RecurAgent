@@ -7,7 +7,7 @@
 // `e2e/fixtures/captured/` when run with `OCTOS_CAPTURE_FIXTURE=1`.
 //
 // Run:
-//   OCTOS_TEST_URL=https://<host>.octos.ominix.io \
+//   OCTOS_TEST_URL=https://<host>.ra.ominix.io \
 //   OCTOS_CAPTURE_FIXTURE=1 \
 //     npx playwright test tests/live-msg-order.spec.ts --reporter=line
 //

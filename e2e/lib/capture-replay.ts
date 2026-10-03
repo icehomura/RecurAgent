@@ -3,7 +3,7 @@
 // Goal: when a live spec fails (or any time `OCTOS_CAPTURE_FIXTURE=1` is set)
 // auto-save the streamed event log + final DOM state + assertion failure to
 // `e2e/fixtures/captured/<test-name>-<timestamp>.json`. Captured fixtures
-// can then be promoted to Layer 1 (`crates/octos-web/src/state/__tests__/
+// can then be promoted to Layer 1 (`crates/ra-web/src/state/__tests__/
 // fixtures/captured/`) via `scripts/promote-captured-fixture.sh` to lock in
 // the regression.
 //
@@ -84,7 +84,7 @@ export interface RawSseEvent {
 }
 
 /** PR H-compatible normalized event. The shape mirrors `SseEvent` from
- *  `crates/octos-web/src/state/__tests__/lib/fixture-types.ts`. We can't
+ *  `crates/ra-web/src/state/__tests__/lib/fixture-types.ts`. We can't
  *  always faithfully populate every field at capture time (e.g. `turn_id`
  *  may be missing from older `{type: "token"}` frames); the promoter
  *  fills in gaps. Type is `unknown` rather than the strict PR H union
@@ -486,7 +486,7 @@ export async function attachCapture(
             document.body;
           const html = (region?.innerHTML || '').slice(0, 4096);
           // The static SPA stores the active session id under
-          // `octos_current_session` (see `crates/octos-cli/static/app.js`).
+          // `octos_current_session` (see `crates/ra-cli/static/app.js`).
           // The richer dashboard SPA may use other keys; we probe both
           // shapes so the helper works against whichever bundle the
           // target host is serving today.

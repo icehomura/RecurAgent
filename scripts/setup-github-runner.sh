@@ -10,7 +10,7 @@ Options:
   --repo OWNER/REPO        GitHub repo to register against (default: octos-org/octos)
   --url URL                Full GitHub repo URL (default: https://github.com/<repo>)
   --name NAME              Runner name
-  --labels LABELS          Comma-separated labels, e.g. self-hosted,linux,x64,octos-fast
+  --labels LABELS          Comma-separated labels, e.g. self-hosted,linux,x64,ra-fast
   --dir DIR                Runner install dir (default: ~/.github-runners/<name>)
   --version VERSION        actions/runner version (default: 2.328.0)
   --token TOKEN            Registration token; if omitted, gh api is used
@@ -24,12 +24,12 @@ Environment:
 
 Examples:
   scripts/setup-github-runner.sh \
-    --name mini3-octos-fast \
-    --labels self-hosted,linux,x64,octos-fast
+    --name mini3-ra-fast \
+    --labels self-hosted,linux,x64,ra-fast
 
   scripts/setup-github-runner.sh \
     --name arm-builder \
-    --labels self-hosted,linux,arm64,octos-arm \
+    --labels self-hosted,linux,arm64,ra-arm \
     --service
 EOF
 }

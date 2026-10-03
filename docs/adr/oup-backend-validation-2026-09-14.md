@@ -19,7 +19,7 @@ session execution.
 ## Repeatable checks
 
 ```sh
-cargo test --locked -p octos-cli --lib peer_resources_follow_cold_and_dynamic_profile_runtime
+cargo test --locked -p ra-cli --lib peer_resources_follow_cold_and_dynamic_profile_runtime
 ./scripts/milestone-ci.sh oup-runtime
 ./scripts/milestone-ci.sh oup-minimal
 ```

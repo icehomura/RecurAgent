@@ -31,7 +31,7 @@ main() {
     require_tool python3
     require_tool node
 
-    WORK_DIR="$(mktemp -d /tmp/octos-harness-event.XXXXXX)"
+    WORK_DIR="$(mktemp -d /tmp/ra-harness-event.XXXXXX)"
     trap 'rm -rf "$WORK_DIR"' EXIT
 
     PY_OUT="$WORK_DIR/python.jsonl"

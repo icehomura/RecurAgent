@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-release smoke test suite for octos.
+# Pre-release smoke test suite for ra.
 # Usage: ./scripts/pre-release.sh [--skip-build] [--skip-e2e] [--release]
 #
 # Runs all checks before a release:
@@ -50,13 +50,13 @@ fi
 # ── 2. Clippy ──────────────────────────────────────────────────────────
 section "Clippy Lint"
 # Only fail on compilation errors, not warnings.
-cargo clippy --workspace --all-targets > /tmp/octos-clippy.log 2>&1 || true
-CLIPPY_ERRS=$(grep -c "^error" /tmp/octos-clippy.log || true)
-CLIPPY_WARNS=$(grep -c "^warning\[" /tmp/octos-clippy.log || true)
+cargo clippy --workspace --all-targets > /tmp/ra-clippy.log 2>&1 || true
+CLIPPY_ERRS=$(grep -c "^error" /tmp/ra-clippy.log || true)
+CLIPPY_WARNS=$(grep -c "^warning\[" /tmp/ra-clippy.log || true)
 if [ "${CLIPPY_ERRS:-0}" -eq 0 ]; then
     pass "cargo clippy (${CLIPPY_WARNS:-0} warnings)"
 else
-    tail -5 /tmp/octos-clippy.log
+    tail -5 /tmp/ra-clippy.log
     fail "cargo clippy (${CLIPPY_ERRS} errors)"
 fi
 
@@ -64,11 +64,11 @@ fi
 section "Unit & Integration Tests"
 
 echo "  Running: cargo test --workspace"
-if cargo test --workspace 2>&1 | tee /tmp/octos-test-workspace.log | tail -5; then
+if cargo test --workspace 2>&1 | tee /tmp/ra-test-workspace.log | tail -5; then
     # Extract totals
-    TOTAL_PASS=$(grep "^test result:" /tmp/octos-test-workspace.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
-    TOTAL_FAIL=$(grep "^test result:" /tmp/octos-test-workspace.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/failed/){gsub(/[^0-9]/,"",$i);f+=$i}}}END{print f+0}')
-    TOTAL_IGN=$(grep "^test result:" /tmp/octos-test-workspace.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/ignored/){gsub(/[^0-9]/,"",$i);ig+=$i}}}END{print ig+0}')
+    TOTAL_PASS=$(grep "^test result:" /tmp/ra-test-workspace.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    TOTAL_FAIL=$(grep "^test result:" /tmp/ra-test-workspace.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/failed/){gsub(/[^0-9]/,"",$i);f+=$i}}}END{print f+0}')
+    TOTAL_IGN=$(grep "^test result:" /tmp/ra-test-workspace.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/ignored/){gsub(/[^0-9]/,"",$i);ig+=$i}}}END{print ig+0}')
     echo "  Totals: ${TOTAL_PASS} passed, ${TOTAL_FAIL} failed, ${TOTAL_IGN} ignored"
     if [ "$TOTAL_FAIL" -eq 0 ]; then
         pass "workspace tests (${TOTAL_PASS} passed)"
@@ -80,17 +80,17 @@ else
 fi
 
 echo ""
-echo "  Running: cargo test -p octos-cli --features api"
-if cargo test -p octos-cli --features api 2>&1 | tee /tmp/octos-test-cli-api.log | tail -3; then
-    CLI_PASS=$(grep "^test result:" /tmp/octos-test-cli-api.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
-    CLI_FAIL=$(grep "^test result:" /tmp/octos-test-cli-api.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/failed/){gsub(/[^0-9]/,"",$i);f+=$i}}}END{print f+0}')
+echo "  Running: cargo test -p ra-cli --features api"
+if cargo test -p ra-cli --features api 2>&1 | tee /tmp/ra-test-cli-api.log | tail -3; then
+    CLI_PASS=$(grep "^test result:" /tmp/ra-test-cli-api.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    CLI_FAIL=$(grep "^test result:" /tmp/ra-test-cli-api.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/failed/){gsub(/[^0-9]/,"",$i);f+=$i}}}END{print f+0}')
     if [ "$CLI_FAIL" -eq 0 ]; then
-        pass "octos-cli API tests (${CLI_PASS} passed)"
+        pass "ra-cli API tests (${CLI_PASS} passed)"
     else
-        fail "octos-cli API tests (${CLI_FAIL} failures)"
+        fail "ra-cli API tests (${CLI_FAIL} failures)"
     fi
 else
-    fail "octos-cli API tests"
+    fail "ra-cli API tests"
 fi
 
 # ── 4. Build ───────────────────────────────────────────────────────────
@@ -100,18 +100,18 @@ if [ "$SKIP_BUILD" = true ]; then
     skip "release build (--skip-build)"
 else
     BUILD_FLAGS="--features telegram,whatsapp,feishu,twilio,api,audio_mp3"
-    echo "  Building octos-cli ($PROFILE) with $BUILD_FLAGS"
+    echo "  Building ra-cli ($PROFILE) with $BUILD_FLAGS"
 
     if [ "$PROFILE" = "release" ]; then
-        BUILD_CMD="cargo build --release -p octos-cli $BUILD_FLAGS"
+        BUILD_CMD="cargo build --release -p ra-cli $BUILD_FLAGS"
     else
-        BUILD_CMD="cargo build -p octos-cli $BUILD_FLAGS"
+        BUILD_CMD="cargo build -p ra-cli $BUILD_FLAGS"
     fi
 
     if $BUILD_CMD 2>&1 | tail -3; then
-        pass "octos-cli build ($PROFILE)"
+        pass "ra-cli build ($PROFILE)"
     else
-        fail "octos-cli build ($PROFILE)"
+        fail "ra-cli build ($PROFILE)"
     fi
 
     echo "  Building app-skills (release)"
@@ -131,9 +131,9 @@ if [ "$SKIP_E2E" = true ]; then
     skip "E2E tests (--skip-e2e)"
 else
     if [ "$PROFILE" = "release" ]; then
-        OCTOS="$ROOT/target/release/octos"
+        OCTOS="$ROOT/target/release/ra"
     else
-        OCTOS="$ROOT/target/debug/octos"
+        OCTOS="$ROOT/target/debug/ra"
     fi
 
     if [ ! -f "$OCTOS" ]; then
@@ -143,79 +143,79 @@ else
         trap 'rm -rf "$E2E_DIR"' EXIT
 
         # 5a. Version output
-        if $OCTOS --version 2>&1 | grep -q "^octos [0-9]"; then
-            pass "octos --version"
+        if $OCTOS --version 2>&1 | grep -q "^ra [0-9]"; then
+            pass "ra --version"
         else
-            fail "octos --version"
+            fail "ra --version"
         fi
 
         # 5b. Help output
         if $OCTOS --help 2>&1 | grep -q "Usage:"; then
-            pass "octos --help"
+            pass "ra --help"
         else
-            fail "octos --help"
+            fail "ra --help"
         fi
 
-        # 5c. Init creates .octos directory
+        # 5c. Init creates .ra directory
         pushd "$E2E_DIR" > /dev/null
-        if $OCTOS init 2>&1 && [ -d ".octos" ]; then
-            pass "octos init (creates .octos/)"
+        if $OCTOS init 2>&1 && [ -d ".ra" ]; then
+            pass "ra init (creates .ra/)"
         else
-            fail "octos init"
+            fail "ra init"
         fi
 
         # 5d. Status runs without crash
         if $OCTOS status 2>/dev/null; then
-            pass "octos status"
+            pass "ra status"
         else
-            fail "octos status"
+            fail "ra status"
         fi
 
         # 5e. Skills list runs without crash
         if $OCTOS skills list 2>/dev/null; then
-            pass "octos skills list"
+            pass "ra skills list"
         else
-            fail "octos skills list"
+            fail "ra skills list"
         fi
 
         # 5f. Cron list runs without crash
         if $OCTOS cron list 2>/dev/null; then
-            pass "octos cron list"
+            pass "ra cron list"
         else
-            fail "octos cron list"
+            fail "ra cron list"
         fi
 
         # 5g. Channels status runs without crash
         if $OCTOS channels status 2>/dev/null; then
-            pass "octos channels status"
+            pass "ra channels status"
         else
-            fail "octos channels status"
+            fail "ra channels status"
         fi
 
         # 5h. Completions generate without error
         if $OCTOS completions bash > /dev/null 2>&1; then
-            pass "octos completions bash"
+            pass "ra completions bash"
         else
-            fail "octos completions bash"
+            fail "ra completions bash"
         fi
 
         # 5i. Docs generates tool documentation
         if $OCTOS docs 2>&1 | grep -qi "tool\|provider\|Available"; then
-            pass "octos docs"
+            pass "ra docs"
         else
-            fail "octos docs"
+            fail "ra docs"
         fi
 
         # 5j. Clean runs without crash
         if $OCTOS clean 2>/dev/null; then
-            pass "octos clean"
+            pass "ra clean"
         else
-            fail "octos clean"
+            fail "ra clean"
         fi
 
         # 5k. Init config is valid JSON
-        if [ -f ".octos/config.json" ]; then
-            if python3 -m json.tool .octos/config.json > /dev/null 2>&1; then
+        if [ -f ".ra/config.json" ]; then
+            if python3 -m json.tool .ra/config.json > /dev/null 2>&1; then
                 pass "config.json is valid JSON"
             else
                 fail "config.json is invalid JSON"
@@ -226,10 +226,10 @@ else
 
         # 5l. Auth status runs (no crash even without auth)
         if $OCTOS auth status 2>&1; then
-            pass "octos auth status"
+            pass "ra auth status"
         else
             # auth status may exit 1 if not logged in, that's fine
-            pass "octos auth status (not logged in)"
+            pass "ra auth status (not logged in)"
         fi
 
         popd > /dev/null

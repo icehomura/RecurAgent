@@ -3,8 +3,8 @@
 - Date: 2026-09-02
 - Updated: 2026-09-14
 - Status: OUP/OctosCode and chat/ACP implemented; final review, local acceptance and mini3 cloud OUP/tmux soak passed with explicit limits
-- Scope: OUP (`octos serve --stdio/--ws`), OctosCode, and local chat/ACP adapters
-- Octos base revision reviewed: `5ea987813de4fd2afdd1d78f2106ad2868f0d923`
+- Scope: OUP (`ra serve --stdio/--ws`), OctosCode, and local chat/ACP adapters
+- ra base revision reviewed: `5ea987813de4fd2afdd1d78f2106ad2868f0d923`
 - OctosCode base revision reviewed: `60376702272c41e024ebcecfbd0a580759c12363`
 - Pi revision reviewed: `5cd93f688aaab89dbb6dfa4aca535f21796ae185`
 - Primary research reference: [FreeToken §3.1, Semantic-Aware State Caching](https://arxiv.org/html/2608.16157v1#S3.SS1)
@@ -95,8 +95,8 @@ semantically similar text can share KV state.
 ## Implementation outcome (2026-09-03)
 
 The OUP milestone described by this record is implemented in the current
-Octos and OctosCode worktrees. The semantic path is the default for
-`octos serve --stdio/--ws`; it is not an optional client-side compactor.
+ra and OctosCode worktrees. The semantic path is the default for
+`ra serve --stdio/--ws`; it is not an optional client-side compactor.
 OctosCode consumes OUP lifecycle state and renders diagnostics, while OUP
 remains the only policy authority.
 
@@ -157,7 +157,7 @@ An independent read-only review of the implemented worktree found defects in
 the delivered milestone. The fixes below are part of the accepted record; where
 they change a contract stated elsewhere in this document, this subsection wins.
 
-Provider layer (`crates/octos-llm`):
+Provider layer (`crates/ra-llm`):
 
 - Every wrapper (`SwappableProvider`, `RetryProvider`, `MiddlewareStack`,
   `ContextWindowOverride`, `ProviderRouter`, `FallbackProvider`) forwards
@@ -173,10 +173,10 @@ Provider layer (`crates/octos-llm`):
   the ContextManager epoch rotation record. Usage that matches no manifest is
   written as an explicit `usage_unmatched` row instead of being dropped, so
   manifest/usage accounting stays auditable. Manifest emission still requires
-  the `octos.prompt_cache=trace` target; this is a documented contract, not an
+  the `ra.prompt_cache=trace` target; this is a documented contract, not an
   accident.
 - Session/turn identifier hashes in observer output use schema
-  `octos.prompt-cache-observer-identifier.v2`, mixed with a per-process random
+  `ra.prompt-cache-observer-identifier.v2`, mixed with a per-process random
   salt. Correlation is stable within a process and deliberately not comparable
   across restarts, so low-entropy channel identifiers cannot be enumerated
   offline from a captured JSONL.
@@ -242,7 +242,7 @@ Durable UI ledger privacy (`octos_core::secret_redaction`):
   client or server frame therefore cannot bypass the scrub by being persisted
   as evidence; ordinary frames remain byte-identical after the scrub.
 
-OUP server (`crates/octos-cli/src/api`):
+OUP server (`crates/ra-cli/src/api`):
 
 - Canonical ContextManager writes survive active turns. The per-turn prompt
   scratch records the canonical source watermark when it is cloned at turn
@@ -300,14 +300,14 @@ OUP server (`crates/octos-cli/src/api`):
 - `context.semantic_cache.v1` is strictly opt-in: the stdio pre-negotiation
   defaults do not advertise it, and `first_server_slice` (the no-header
   baseline and the serde default for a decoded `SessionOpened`) excludes it
-  exactly like `projection.envelope.v2`. `octos doctor`'s structural skew check
+  exactly like `projection.envelope.v2`. `ra doctor`'s structural skew check
   applies the same exclusion.
 - `turn_error` messages built from a typed provider error append the lane
   summary (`[lanes: …]`) when the outermost error context carries
   `api_style=`, so the client sees every failed lane for HTTP-status failures
   as well as transport failures.
 
-Agent loop (`crates/octos-agent`):
+Agent loop (`crates/ra-agent`):
 
 - The convergence checkpoint reflection is re-injected each iteration as a
   User-role typed tail event
@@ -379,7 +379,7 @@ fresh live smoke against the rebuilt binaries, and then re-ran the real
 with a regression test that was observed failing before its fix. Where a
 statement here changes an earlier one in this record, this subsection wins.
 
-Provider layer and epoch identity (`crates/octos-llm`, `crates/octos-cli`):
+Provider layer and epoch identity (`crates/ra-llm`, `crates/ra-cli`):
 
 - The prompt-cache epoch compared two different lane identities. The
   pre-call reconciliation used `provider_name()` — the router label, which
@@ -423,7 +423,7 @@ Provider layer and epoch identity (`crates/octos-llm`, `crates/octos-cli`):
   Anthropic-style lane costs one message-cache miss for that call. This is
   the accepted trade-off against a reflection that can call tools.
 
-Agent loop (`crates/octos-agent`):
+Agent loop (`crates/ra-agent`):
 
 - The checkpoint request derived from the bare `AgentConfig` rather than the
   action call's `ChatConfig`: it dropped the tier-2 `context_management`
@@ -442,7 +442,7 @@ Agent loop (`crates/octos-agent`):
   back to the spawn cap (`DEFAULT_SPAWN_MAX_ITERATIONS`) when the worker
   config is unset or says unlimited.
 
-OUP server (`crates/octos-cli/src/api`):
+OUP server (`crates/ra-cli/src/api`):
 
 - A drained `turn/steer` duplicated every pre-steer row of its turn,
   durably, and — because the host persisted it at drain time — gave the
@@ -556,7 +556,7 @@ Durable UI ledger privacy (`octos_core::secret_redaction`):
 OctosCode client (stdio reconnect):
 
 - The new `client_hello` (3 s) and scoped `session/open` (10 s) barriers
-  measured from spawn, while a real `octos serve --stdio` cold start takes
+  measured from spawn, while a real `ra serve --stdio` cold start takes
   10–15 s on this host (profile store ~6 s, plugin verification ~6 s). The
   live smoke reproduced the consequence: every cold launch reported
   "negotiation timed out; using legacy server defaults", the first restart
@@ -705,33 +705,33 @@ separate mechanisms and are not part of this OUP context design.
 The comparison in this record is based on these concrete implementation
 surfaces rather than README-level descriptions.
 
-### OUP and Octos
+### OUP and ra
 
-- `crates/octos-cli/src/api/context_manager.rs`
+- `crates/ra-cli/src/api/context_manager.rs`
   - `TranscriptItemKind`
   - `record_item_with_source_ref`
   - `record_tool_output_with_source_ref`
   - `for_prompt`
   - `compact_context`
   - `load_or_rebuild_context_manager`
-- `crates/octos-cli/src/api/ui_protocol_transport.rs`
+- `crates/ra-cli/src/api/ui_protocol_transport.rs`
   - `AppUiPromptContextBridge`
   - OUP turn-start context loading and per-turn Agent construction
   - peer, goal-progress, monitor, and active-goal prompt injection
   - compaction lifecycle and final response persistence
-- `crates/octos-agent/src/compaction.rs`
+- `crates/ra-agent/src/compaction.rs`
   - heuristic and LLM summary input rendering
-- `crates/octos-agent/src/agent/compaction.rs`
+- `crates/ra-agent/src/agent/compaction.rs`
   - prompt-context-manager early return from legacy tier-1 compaction
-- `crates/octos-llm/src/config.rs`
+- `crates/ra-llm/src/config.rs`
   - shared `ChatConfig`
-- `crates/octos-llm/src/openai.rs`, `anthropic.rs`, and `gemini.rs`
+- `crates/ra-llm/src/openai.rs`, `anthropic.rs`, and `gemini.rs`
   - final provider request shape and cache usage parsing
 - `specs/kv-cache-friendly-compaction.spec.md`
   - the earlier cache-friendly work and its explicit exclusion of the OUP
     ContextManager/AppUI path
 - OctosCode `src/cli.rs`
-  - default backend command `octos serve --stdio --solo`
+  - default backend command `ra serve --stdio --solo`
 
 ### Pi
 
@@ -811,7 +811,7 @@ a proof that every extension preserves cacheability.
 ### Why “ContextManager is append-only” is incomplete
 
 The old KV-cache-friendly specification intentionally left the
-`octos-cli`/AppUI ContextManager path unchanged and treated observed append-like
+`ra-cli`/AppUI ContextManager path unchanged and treated observed append-like
 behavior as sufficient. That conclusion only covered message-history behavior
 inside the examined loop. It did not compare provider-normalized,
 cache-relevant input streams across OUP turns.
@@ -1230,10 +1230,10 @@ Changes:
 
 Primary files:
 
-- `crates/octos-agent/src/agent/llm_call.rs`
-- `crates/octos-llm/src/config.rs`
-- provider request builders under `crates/octos-llm/src/`
-- `crates/octos-cli/src/api/ui_protocol_transport.rs`
+- `crates/ra-agent/src/agent/llm_call.rs`
+- `crates/ra-llm/src/config.rs`
+- provider request builders under `crates/ra-llm/src/`
+- `crates/ra-cli/src/api/ui_protocol_transport.rs`
 
 Exit criteria:
 
@@ -1257,7 +1257,7 @@ Changes:
 
 Primary file:
 
-- `crates/octos-cli/src/api/context_manager.rs`
+- `crates/ra-cli/src/api/context_manager.rs`
 
 Exit criteria:
 
@@ -1285,9 +1285,9 @@ Changes:
 
 Primary files:
 
-- `crates/octos-cli/src/api/context_manager.rs`
-- `crates/octos-cli/src/api/ui_protocol_transport.rs`
-- `crates/octos-agent/src/compaction.rs`
+- `crates/ra-cli/src/api/context_manager.rs`
+- `crates/ra-cli/src/api/ui_protocol_transport.rs`
+- `crates/ra-agent/src/compaction.rs`
 
 Exit criteria:
 
@@ -1312,8 +1312,8 @@ Changes:
 
 Primary files:
 
-- `crates/octos-cli/src/api/ui_protocol_transport.rs`
-- Agent prompt-segment assembly under `crates/octos-agent/src/`
+- `crates/ra-cli/src/api/ui_protocol_transport.rs`
+- Agent prompt-segment assembly under `crates/ra-agent/src/`
 
 Exit criteria:
 
@@ -1337,10 +1337,10 @@ Changes:
 
 Primary files:
 
-- `crates/octos-llm/src/config.rs`
-- `crates/octos-llm/src/openai.rs`
-- `crates/octos-llm/src/anthropic.rs`
-- `crates/octos-llm/src/gemini.rs`
+- `crates/ra-llm/src/config.rs`
+- `crates/ra-llm/src/openai.rs`
+- `crates/ra-llm/src/anthropic.rs`
+- `crates/ra-llm/src/gemini.rs`
 
 Exit criteria:
 
@@ -1382,7 +1382,7 @@ Changes:
 - Add optional context/cache diagnostics to OUP capability negotiation and
   lifecycle notifications.
 - Render them in OctosCode without moving policy into the client.
-- Route `octos chat` and ACP entry points through OUP rather than copying
+- Route `ra chat` and ACP entry points through OUP rather than copying
   the semantic ledger or compaction implementation.
 
 Exit criteria:
@@ -1442,7 +1442,7 @@ the real adapters against this same lifecycle.
 
 ### Real OctosCode tmux soak
 
-Run the actual `octos serve --stdio --solo` backend, not a fixture, with:
+Run the actual `ra serve --stdio --solo` backend, not a fixture, with:
 
 1. At least 30 foreground turns in one session.
 2. Repeated read/search/shell tool interactions.
@@ -1477,10 +1477,10 @@ The final worktree passed these commands after the last reconnect fix:
 | OctosCode | `cargo test --all-targets --quiet` | No failures. Main unit suite: 1,967 passed, 1 ignored; every integration suite also passed. |
 | OctosCode | `cargo clippy --all-targets -- -D warnings` | Passed. |
 | OctosCode | `cargo build --bin octoscode` | Passed. |
-| Octos | `cargo test -p octos-core -p octos-llm -p octos-agent --quiet` | No failures. Principal library suites included 2,624 passed/3 ignored, 359 passed/1 ignored, and 539 passed/3 ignored; credentialed network tests remained explicitly ignored. |
-| Octos | `cargo test -p octos-cli --quiet -- --test-threads=1` | No failures. Main CLI suite: 1,582 passed, 3 ignored; all following integration/doc suites passed. |
-| Octos | `cargo clippy -p octos-core -p octos-llm -p octos-agent -p octos-cli --all-targets -- -D warnings` | Passed. |
-| Octos | `cargo build -p octos-cli` | Passed. |
+| ra | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. Principal library suites included 2,624 passed/3 ignored, 359 passed/1 ignored, and 539 passed/3 ignored; credentialed network tests remained explicitly ignored. |
+| ra | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. Main CLI suite: 1,582 passed, 3 ignored; all following integration/doc suites passed. |
+| ra | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
+| ra | `cargo build -p ra-cli` | Passed. |
 | Both | formatter check and `git diff --check` | Passed. |
 
 An earlier workspace-wide all-features build reached the optional
@@ -1492,7 +1492,7 @@ limitation rather than silently classified as a passing all-features build.
 ### Post-review re-verification (2026-09-03, after the amendment fixes)
 
 The worktree containing every fix listed under "Post-review amendments" was
-re-verified from scratch. `octos-cli` compiles the OUP transport only under
+re-verified from scratch. `ra-cli` compiles the OUP transport only under
 `--features api` (`default = []`), so both feature sets were run.
 
 | Repository | Command | Result |
@@ -1500,12 +1500,12 @@ re-verified from scratch. `octos-cli` compiles the OUP transport only under
 | OctosCode | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
 | OctosCode | `cargo clippy --all-targets -- -D warnings` | Passed. |
 | OctosCode | `cargo test --all-targets --quiet` | No failures. Main unit suite: 1,977 passed, 1 ignored; every integration suite passed. |
-| Octos | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
-| Octos | `cargo clippy -p octos-core -p octos-llm -p octos-agent -p octos-cli --all-targets -- -D warnings` | Passed. |
-| Octos | `cargo clippy -p octos-cli --features api --all-targets -- -D warnings` | Passed. |
-| Octos | `cargo test -p octos-core -p octos-llm -p octos-agent --quiet` | No failures. Core: 387 passed/1 ignored; LLM: 587 passed/3 ignored; agent: 2,630 passed/3 ignored. Every integration target passed. |
-| Octos | `cargo test -p octos-cli --quiet -- --test-threads=1` | No failures. Main suite: 1,591 passed, 3 ignored. |
-| Octos | `cargo test -p octos-cli --features api --quiet -- --test-threads=1` | No failures. Main suite: 3,117 passed, 6 ignored. Every integration target and doctest passed. |
+| ra | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
+| ra | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
+| ra | `cargo clippy -p ra-cli --features api --all-targets -- -D warnings` | Passed. |
+| ra | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. Core: 387 passed/1 ignored; LLM: 587 passed/3 ignored; agent: 2,630 passed/3 ignored. Every integration target passed. |
+| ra | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. Main suite: 1,591 passed, 3 ignored. |
+| ra | `cargo test -p ra-cli --features api --quiet -- --test-threads=1` | No failures. Main suite: 3,117 passed, 6 ignored. Every integration target and doctest passed. |
 | Both | `cargo build` | Passed with the default feature sets. |
 
 The 2026-09-03 `tmux` soak below predates the amendment fixes. It was
@@ -1517,7 +1517,7 @@ implementation record were each observed failing before their fix.
 ### Final re-verification (2026-09-04, after the final-review amendments)
 
 The worktree containing every fix listed under "Final-review amendments" was
-re-verified from scratch after the last edit. `octos-cli` still compiles the
+re-verified from scratch after the last edit. `ra-cli` still compiles the
 OUP transport only under `--features api`, so both feature sets were run.
 
 | Repository | Command | Result |
@@ -1526,13 +1526,13 @@ OUP transport only under `--features api`, so both feature sets were run.
 | OctosCode | `cargo clippy --all-targets -- -D warnings` | Passed. |
 | OctosCode | `cargo test --all-targets --quiet` | No failures. 2,166 passed, 4 ignored across 33 test binaries. |
 | OctosCode | `cargo build --bin octoscode` | Passed. |
-| Octos | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
-| Octos | `cargo clippy -p octos-cli --features api --all-targets -- -D warnings` | Passed. |
-| Octos | `cargo clippy -p octos-core -p octos-llm -p octos-agent -p octos-cli --all-targets -- -D warnings` | Passed. |
-| Octos | `cargo test -p octos-core -p octos-llm -p octos-agent --quiet` | No failures. 3,949 passed, 49 ignored across 64 test binaries. |
-| Octos | `cargo test -p octos-cli --features api --quiet -- --test-threads=1` | No failures. 3,266 passed, 13 ignored across 22 test binaries. |
-| Octos | `cargo test -p octos-cli --quiet -- --test-threads=1` | No failures. 1,644 passed, 9 ignored across 21 test binaries. |
-| Octos | `cargo build -p octos-cli --features api` | Passed. |
+| ra | `cargo fmt --all -- --check`, `git diff --check` | Clean. |
+| ra | `cargo clippy -p ra-cli --features api --all-targets -- -D warnings` | Passed. |
+| ra | `cargo clippy -p ra-core -p ra-llm -p ra-agent -p ra-cli --all-targets -- -D warnings` | Passed. |
+| ra | `cargo test -p ra-core -p ra-llm -p ra-agent --quiet` | No failures. 3,949 passed, 49 ignored across 64 test binaries. |
+| ra | `cargo test -p ra-cli --features api --quiet -- --test-threads=1` | No failures. 3,266 passed, 13 ignored across 22 test binaries. |
+| ra | `cargo test -p ra-cli --quiet -- --test-threads=1` | No failures. 1,644 passed, 9 ignored across 21 test binaries. |
+| ra | `cargo build -p ra-cli --features api` | Passed. |
 
 Regressions observed RED against the pre-fix behavior:
 `should_not_spend_budget_grace_call_on_convergence_reflection` (re-run with
@@ -1555,12 +1555,12 @@ verification chain above (daemon 2026-09-04 02:29, client 2026-09-04 01:20),
 with the same real PTY harness as the 2026-09-03 run:
 
 - tmux 3.7b (prefix build), 210×58 pane; OctosCode in protocol mode;
-- `octos serve --stdio --solo` with a fresh, isolated instance directory
-  (`/tmp/octos-oup-final-20260904.epW6om/instance`) and an isolated workspace;
+- `ra serve --stdio --solo` with a fresh, isolated instance directory
+  (`/tmp/ra-oup-final-20260904.epW6om/instance`) and an isolated workspace;
 - OUP session `oup-final-20260904f`; semantic mode `on`, 6,000-token test threshold,
   2,000-token target;
 - live K3 (`moonshot-coding`) and GLM-5.3 (`zai-coding`) routes;
-- redacted provider manifests in `/tmp/octos-oup-final-20260904.epW6om/cache-finalpass.jsonl`.
+- redacted provider manifests in `/tmp/ra-oup-final-20260904.epW6om/cache-finalpass.jsonl`.
 
 Five earlier attempts on 2026-09-04 were rejected and are not counted. The
 first (01:20) ran an interim ContextManager variant (twin relocation, since
@@ -1630,7 +1630,7 @@ Result: **FAILS=0 — all 30 turns answered with their exact expected replies.**
 | T02 | pass | 6 s | `T02 OK prior=FINAL-NONCE-20260904F` |
 | T03 | pass | 9 s | `T03 OK readme=PROOF-README-1788422955` |
 | T04 | pass | 9 s | `T04 OK source=PROOF-SOURCE-1788422955` |
-| T05 | pass | 15 s | `T05 OK cwd=/private/tmp/octos-oup-final-20260904.epW6om/workspace` |
+| T05 | pass | 15 s | `T05 OK cwd=/private/tmp/ra-oup-final-20260904.epW6om/workspace` |
 | T06 | pass | 21 s | `T06 OK large-1` |
 | T07 | pass | 18 s | `T07 OK large-2` |
 | T08 | pass | 21 s | `T08 OK large-3` |
@@ -1689,12 +1689,12 @@ transport:
 
 - tmux 3.7b, 210×58 pane;
 - OctosCode in protocol mode;
-- `octos serve --stdio --solo` with an isolated instance directory;
+- `ra serve --stdio --solo` with an isolated instance directory;
 - OUP session `oup-final-20260903b` and an isolated workspace;
 - semantic mode `on`, 6,000-token test threshold, and 2,000-token target;
 - live K3 and GLM-5.3 provider routes;
 - redacted provider manifests written to
-  `/tmp/octos-oup-semantic-proof.sPDred/cache-finalpass.jsonl`.
+  `/tmp/ra-oup-semantic-proof.sPDred/cache-finalpass.jsonl`.
 
 The append-only OUP UI ledger contains exactly one user prompt for every
 label from T01 through T30. The final post-fix capture reached `Done`, and T30
@@ -1951,10 +1951,10 @@ Follow-up verification on a local arm64 dev machine (arm64):
 | --- | --- | --- |
 | OctosCode | `cargo test --all-targets` | 2,169 passed, 4 ignored, no failures (33 test binaries). |
 | OctosCode | strict all-targets clippy, build, fmt, diff check | Passed. |
-| Octos core/LLM/agent | `cargo test -p octos-core -p octos-llm -p octos-agent --all-targets` | 3,944 passed, 49 ignored, no failures (65 test binaries, including the manifest example). |
-| Octos CLI API | `cargo test -p octos-cli --features api -- --test-threads=1` | 3,262 passed, 13 ignored, no failures (22 test/doc-test summaries). |
-| Octos CLI default | `cargo test -p octos-cli -- --test-threads=1` | 1,644 passed, 9 ignored, no failures (21 summaries). |
-| Octos | strict all-targets clippy for CLI API and core/LLM/agent; API build; fmt; diff check | Passed. |
+| ra core/LLM/agent | `cargo test -p ra-core -p ra-llm -p ra-agent --all-targets` | 3,944 passed, 49 ignored, no failures (65 test binaries, including the manifest example). |
+| ra CLI API | `cargo test -p ra-cli --features api -- --test-threads=1` | 3,262 passed, 13 ignored, no failures (22 test/doc-test summaries). |
+| ra CLI default | `cargo test -p ra-cli -- --test-threads=1` | 1,644 passed, 9 ignored, no failures (21 summaries). |
+| ra | strict all-targets clippy for CLI API and core/LLM/agent; API build; fmt; diff check | Passed. |
 
 The first parallel CLI library run was **not** green: two
 `peer_awaiting_wake_tests` failed while inspecting the shared default
@@ -1967,7 +1967,7 @@ link emitted an unwind-table-size warning; strict clippy passed. Optional
 llama-cpp/CUDA all-features coverage remains unclaimed.
 
 A fresh real-tmux attempt at
-`/tmp/octos-six-fixes-soak-20260904.uuSpus` was rejected at T15, after T01–T14
+`/tmp/ra-six-fixes-soak-20260904.uuSpus` was rejected at T15, after T01–T14
 and two automatic plus one manual compaction passed. The background child
 delivered `PROOF-SAMPLE-RS-8734` instead of the unchanged source fixture's
 marker. Its task text was correct, but no actual child file-read evidence
@@ -1981,7 +1981,7 @@ binaries.
 ### Follow-up soak acceptance
 
 The same final binaries completed all 30 scenarios in the fresh instance
-`/tmp/octos-six-fixes-soak-20260904.yoXB2G`, session
+`/tmp/ra-six-fixes-soak-20260904.yoXB2G`, session
 `oup-six-fixes-20260904j` (2026-09-04 14:43–14:56 PDT). The driver reports
 `FAILS=0`; the independent durable-ledger verifier reports `ledger gate OK:
 True`, no violations, exactly one full expected assistant segment per reply
@@ -2034,30 +2034,30 @@ Development tests exposed and fixed runtime-owned ledger isolation, tool-policy
 reapplication, cwd plugin discovery and child pipeline-factory rebinding, named
 ACP channel/profile resolution, duplicate terminal text when canonical persistence
 precedes queued deltas, and ACP stdin-EOF shutdown. RED/GREEN logs and rejected
-development runs remain under `/tmp/octos-oup-migration-*.log`,
-`/tmp/octos-migration-*.log`, and
-`/tmp/octos-oup-migration-soak-20260904.gd4djh`. That development soak is not the
+development runs remain under `/tmp/ra-oup-migration-*.log`,
+`/tmp/ra-migration-*.log`, and
+`/tmp/ra-oup-migration-soak-20260904.gd4djh`. That development soak is not the
 immutable-build acceptance: target binaries changed while defects were fixed.
 
 ### Pinned-build validation
 
 The final binaries were copied to the isolated proof directory
-`/tmp/octos-oup-migration-final-20260904.cWjayX/bin`. SHA-256 checks against
+`/tmp/ra-oup-migration-final-20260904.cWjayX/bin`. SHA-256 checks against
 `binary-sha256.before` passed before and after the tests. This run was performed
 on the current arm64 Mac mini host; no remote login credentials were
 added to this record.
 
 - CLI: 3,241 tests passed across 22 suites, 13 ignored, zero failed
-  (`/tmp/octos-migration-cli-full-v4.log`, serial execution).
+  (`/tmp/ra-migration-cli-full-v4.log`, serial execution).
 - Agent/LLM: 3,551 passed across 62 suites, 48 ignored, zero failed
-  (`/tmp/octos-migration-agent-llm-v1.log`).
+  (`/tmp/ra-migration-agent-llm-v1.log`).
 - Core/bus: 644 passed across eight suites, one ignored, zero failed
-  (`/tmp/octos-migration-core-bus-v1.log`).
+  (`/tmp/ra-migration-core-bus-v1.log`).
 - OctosCode all targets: 2,170 passed across 33 suites, four ignored, zero failed
-  (`/tmp/octos-migration-client-all-v5.log`).
+  (`/tmp/ra-migration-client-all-v5.log`).
 - Strict all-target clippy passed for CLI/Agent/bus and OctosCode; both builds,
   both format checks and both diff checks passed. The final CLI no-default-feature
-  check passed (`/tmp/octos-migration-no-default-final.log`). Optional workspace-wide
+  check passed (`/tmp/ra-migration-no-default-final.log`). Optional workspace-wide
   llama-cpp/CUDA coverage is not claimed. The macOS debug linker emitted its
   unwind-table-size warning.
 
@@ -2109,7 +2109,7 @@ fixtures, without external model calls or image generation:
    exits chat with status zero and emits Completed. An unlimited iteration count
    does not remove the provider's per-response output-token cap.
 
-Evidence is retained in `/tmp/octos-empty-answer-review.rRmwnO/`: `results.jsonl`,
+Evidence is retained in `/tmp/ra-empty-answer-review.rRmwnO/`: `results.jsonl`,
 `anthropic-results.jsonl`, the localhost reproduction fixture and isolated ledgers.
 These mechanisms are independently reproduced, not a claim about the exact
 cause of the operator's historical image-design turn without its provider trace.
@@ -2143,7 +2143,7 @@ fixtures and peer attempt remain historical evidence, not silently relabeled pas
 
 The repeatedly reported “partial live answer” card has a separately verified
 deployment cause. The active design window was still running the installed
-OctosCode `0.3.0-rc.9 (02e6816 2026-09-01)` and Octos
+OctosCode `0.3.0-rc.9 (02e6816 2026-09-01)` and ra
 `2.0.3-rc.9 (5ea98781 2026-08-24)` from `~/.cargo/bin`; executable inode and
 SHA-256 checks matched those installed files. The old client contains the exact
 reported card text. Its successful-tool-activity heuristic classifies a single
@@ -2182,7 +2182,7 @@ Backend repairs are independent of that stale-client diagnosis:
   to opened sessions. This does not implement a general waiting queue for a new
   foreground request when an already-admitted background turn is still active.
 
-Adversarial RED/GREEN evidence is under `/tmp/octos-terminal-*.log`. The original
+Adversarial RED/GREEN evidence is under `/tmp/ra-terminal-*.log`. The original
 four backend response tests failed before repair; three shutdown/outcome tests
 and the unopened-session continuation test also demonstrated their original
 failures. CLI terminal-integrity tests then passed 9/9. Agent terminal-integrity
@@ -2191,7 +2191,7 @@ The partial-output persistence regression closes and opens a new connection
 against the same AppState; it is not described as a cold-process restart test.
 
 New pinned-binary proof directory:
-`/tmp/octos-terminal-integrity-final-20260904.XEjkc9`. Unlike the earlier harness,
+`/tmp/ra-terminal-integrity-final-20260904.XEjkc9`. Unlike the earlier harness,
 this run also isolates `OCTOS_HOME` and the profile registry so model switching
 does not modify the operator's active profile. The operator's design window has
 not been terminated or restarted, and no installed binary has been replaced.
@@ -2215,12 +2215,12 @@ also remains exposed to cancellation of that later cleanup tail.
 ### Repair validation results and remaining soak failure
 
 - CLI: 3,250 passed, zero failed, 13 ignored, 22 suites
-  (`/tmp/octos-terminal-cli-full.log`). The final focused terminal-integrity
+  (`/tmp/ra-terminal-cli-full.log`). The final focused terminal-integrity
   rerun passed 9/9, including exact single-charge assertions.
 - Agent/LLM: 3,563 passed, zero failed, 48 ignored, 62 suites
-  (`/tmp/octos-terminal-agent-llm-full.log`).
+  (`/tmp/ra-terminal-agent-llm-full.log`).
 - OctosCode: 2,171 passed, zero failed, four ignored, 33 all-target suites after
-  the explicit Chinese regression (`/tmp/octos-terminal-client-all-chinese.log`).
+  the explicit Chinese regression (`/tmp/ra-terminal-client-all-chinese.log`).
 - Both strict all-target clippy checks, format/diff checks, the backend build,
   and CLI no-default-feature check passed. The macOS debug linker retained its
   unwind-table-size warning; optional workspace-wide llama-cpp/CUDA is not covered.
@@ -2292,9 +2292,9 @@ at all three terminal call sites: deriving that profile from a bare TUI session
 key previously stranded results that arrived while the master was busy.
 
 TDD evidence: the four initial regressions failed before these repairs
-(`/tmp/octos-peer-wake-red-v2.log`). The first typed terminal guard alone still
+(`/tmp/ra-peer-wake-red-v2.log`). The first typed terminal guard alone still
 failed the real register/gather/close test; correcting the classifier made it
-pass. Five final focused tests pass (`/tmp/octos-peer-wake-green-final.log`),
+pass. Five final focused tests pass (`/tmp/ra-peer-wake-green-final.log`),
 covering real registration and master liveness, close through both supervisor
 hooks, persisted terminal plus new-store reopening, ordinary-worker joins, and
 deferred unread results on a bare master session. The error-result variant uses
@@ -2308,7 +2308,7 @@ scope-checked migration is not part of this change. Names alone are insufficient
 grounds to discard work. The pre-existing crash window between in-memory fleet
 synthesis enqueue and durable synthesized marks is also not claimed repaired.
 
-The next live run, `/tmp/octos-peer-wake-final-20260904.uvgEr7`, used an isolated
+The next live run, `/tmp/ra-peer-wake-final-20260904.uvgEr7`, used an isolated
 `OCTOS_HOME`, a new store, and newly built pinned backend/client binaries. It ran
 20:30–20:39 PDT through all 30 scenarios, five compactions, client restart, three
 daemon restarts and K3 → GLM-5.3 → K3. The driver again reported `FAILS=0`, but
@@ -2339,8 +2339,8 @@ it. The exact winning reset is not identifiable from that log. All six unsafe
 reset calls and their now-unused test-only helpers have been removed; affected
 tests use dedicated profiles/sessions. Default-parallel CLI all-targets then
 passed 3,255 tests, zero failed, nine ignored, 21 suites
-(`/tmp/octos-peer-wake-cli-full-isolated.log`); OctosCode all-targets passed 2,171,
-zero failed, four ignored, 33 suites (`/tmp/octos-peer-wake-client-full.log`).
+(`/tmp/ra-peer-wake-cli-full-isolated.log`); OctosCode all-targets passed 2,171,
+zero failed, four ignored, 33 suites (`/tmp/ra-peer-wake-client-full.log`).
 This isolation cleanup does not change production behavior. Neither passing
 suite overrides the remaining live consumed-result failure.
 
@@ -2378,7 +2378,7 @@ concurrent receipt merges, unseen newer results with a lagging version index,
 nonowner/truncated reads, and boot evaluation after rereading receipts. The queued
 runner test asserts zero provider calls and an empty queue; it does not itself
 reopen SupervisorStore. Focused peer tests pass 154/154 and terminal-integrity
-tests 9/9. Logs are `/tmp/octos-peer-consumption-{red,review-red,final-green,
+tests 9/9. Logs are `/tmp/ra-peer-consumption-{red,review-red,final-green,
 peer-regressions,terminal-regressions}.log`. A second independent read-only
 review found no new blocker in the repair. Production and tests were frozen
 before the next pinned build.
@@ -2390,7 +2390,7 @@ another peer preserves old `.synthesized` marks. Normal named staging rejects an
 existing slug and close does not delete that directory.
 
 The next pinned-binary validation, preserved at
-`/tmp/octos-peer-consumed-final-20260904.BB5vx6`, **was not accepted**, even
+`/tmp/ra-peer-consumed-final-20260904.BB5vx6`, **was not accepted**, even
 though the unchanged 30-scenario driver and once-only reply gate passed.
 T14's foreground turn gathered two pending snapshots, then an argument-only
 preexecution guard blocked its third `peer_gather` and persisted a fabricated
@@ -2430,7 +2430,7 @@ failed 3/3 before the repair and pass afterward for changed third reads,
 unchanged-result reflection followed by a genuine final, and progress resetting
 the threshold. Including detector protection/reset tests, focused GREEN is 5/5;
 existing loop-detector tests pass 24/24 and doom-guard tests 3/3. Evidence:
-`/tmp/octos-peer-polling-{red,final-green,loop-detector-regressions,doom-regressions}.log`.
+`/tmp/ra-peer-polling-{red,final-green,loop-detector-regressions,doom-regressions}.log`.
 
 The preceding CLI all-target run also exposed two ACP integration test lifecycle
 failures when reopening the same episode database. The tests used an SDK helper
@@ -2444,7 +2444,7 @@ clippy, fmt and diff checks. Only the integration test file changed for this
 finding; detached-pump lifecycle guarantees beyond this evidence are not claimed.
 
 The frozen polling repair was subsequently validated with pinned binaries in
-`/tmp/octos-peer-polling-final-20260904.Pj9pLl`, using the unchanged 30-scenario
+`/tmp/ra-peer-polling-final-20260904.Pj9pLl`, using the unchanged 30-scenario
 soak plus both independent gates, four stricter peer lifetime probes (including
 a delayed peer and a cold daemon restart), and the 12-case localhost fixture.
 The additional probes rejected that build, as documented below.
@@ -2569,7 +2569,7 @@ streaming and their two nonstream fallback lanes each persist three exact nonbla
 answers with colliding IDs: the genuine final is absent live but appears once
 on cold replay without another provider call. Alphanumeric answer sentinels
 avoid Markdown formatting ambiguity; echoed prompts are excluded. Evidence is
-`/tmp/octos-segment-tui-preflight-20260904.O3CIGT/red-v2/results.json` and
+`/tmp/ra-segment-tui-preflight-20260904.O3CIGT/red-v2/results.json` and
 `red-anthropic-fallback/results.json`. All four lanes pass against the frozen
 `TlCAyv` pair: live and cold replay final counts are each one, replay makes no
 provider calls, streamed IDs match committed IDs, and terminal references name
@@ -2583,7 +2583,7 @@ independent review identified a concrete attachment-owner crash window between
 the durable assistant append and its second watermark write, and the full CLI
 matrix found a serve-lock guard lifetime failure during parallel execution.
 These are being addressed before a fresh pinned build. The next reserved proof
-is `/tmp/octos-canonical-crash-final-20260904.K1xP8B`; no new all-clear is asserted.
+is `/tmp/ra-canonical-crash-final-20260904.K1xP8B`; no new all-clear is asserted.
 
 The serve-lock failure was reproduced deterministically without fork timing:
 holding a duplicate file descriptor across the guard's drop kept the exclusive
@@ -2591,7 +2591,7 @@ flock alive, preventing immediate reacquisition. The guard now explicitly calls
 the fully qualified `fs2::FileExt::unlock` on drop. Its new regression also proves
 that closing the stale duplicate does not release a subsequently acquired guard.
 RED is 0/1, GREEN 1/1, and all 23 serve tests pass; an independent read-only
-review found no new blocker. Evidence is `/tmp/octos-serve-lock-{red,green,
+review found no new blocker. Evidence is `/tmp/ra-serve-lock-{red,green,
 regressions}.log`. Descriptor inheritance during parallel subprocess creation
 is consistent with the original matrix failure, not a claim that a particular
 child was traced. No retries, sleeps, global serialization, lock-marker changes
@@ -2611,7 +2611,7 @@ cases found no blocker.
 ### Fresh combined build: visible answers fixed, peer restart still rejected
 
 The next immutable pair at
-`/tmp/octos-canonical-crash-final-20260904.K1xP8B` passed the same four real-TUI
+`/tmp/ra-canonical-crash-final-20260904.K1xP8B` passed the same four real-TUI
 localhost lanes again (`green-final-v2/results.json` under the preflight proof),
 and all 12 HTTP terminal cases plus independent ledger audit. The automated
 matrix passes: core 392 tests (1 ignored), Agent/LLM 3,570 (48 ignored), CLI all
@@ -2660,12 +2660,12 @@ reads totaling 1,612,032 tokens, with zero fixture privacy needles in the
 manifest. These bounded successes do not override the semantic rejection.
 Isolated processes were stopped, the private provider profile copy removed,
 and shared profile/pinned binary hashes verified unchanged. The next reserved
-proof is `/tmp/octos-peer-restart-final-20260904.JQzadg`; durable peer-lifetime
+proof is `/tmp/ra-peer-restart-final-20260904.JQzadg`; durable peer-lifetime
 restart recovery and fresh acceptance remain in progress.
 
 A shorter independent localhost regression now reproduces this same lifecycle
 failure through real tmux/stdio OUP without remote provider credentials:
-`/tmp/octos-peer-restart-preflight-20260904.LSa0Pn/red-v1/result.json`.
+`/tmp/ra-peer-restart-preflight-20260904.LSa0Pn/red-v1/result.json`.
 Both actual peer rounds read their expected files and return the correct
 parent answers, but restart creates a third unsolicited main turn and typed
 `peer_handoff` failure. Its fake provider returns a distinct diagnostic for
@@ -2685,7 +2685,7 @@ as do the fresh Agent/LLM matrix (3,570 passed, 48 ignored) and CLI all-target
 matrix (3,296 passed, 9 ignored).
 
 The immutable intermediate backend at
-`/tmp/octos-peer-lifetime-candidate-20260904.jKk9nV` passes the independent real
+`/tmp/ra-peer-lifetime-candidate-20260904.jKk9nV` passes the independent real
 tmux peer-restart lifecycle probe in `LSa0Pn/lifecycle-candidate-v1`: exactly two
 parent turns and two peer turns, two real file reads and owned result gathers,
 zero typed failures and zero unexpected wakes. Fake authentication and unchanged
@@ -2750,7 +2750,7 @@ the first assistant delta but before tool start; this remaining cadence is
 being reproduced separately, not assumed to be the already-fixed ordering.
 The 30-turn remote-provider driver was never started, the isolated profile copy
 was removed and hashes verified unchanged. The next reserved proof is
-`/tmp/octos-native-hydrate-final-20260904.Y5PjxL`; its client is not yet pinned.
+`/tmp/ra-native-hydrate-final-20260904.Y5PjxL`; its client is not yet pinned.
 
 A fake-only temporary diagnostic build then proves the adjacent duplicate is a
 logical reflush, not physical terminal retention. The native tracker first sees
@@ -2766,7 +2766,7 @@ The narrow producer repair removes that synthetic conversation row while
 retaining the existing snapshot connection/read-only status. A regression now
 starts with the actual transport bootstrap, submits a prompt, applies both
 delayed empty hydrates, and checks native scrollback once. It fails before repair
-and passes afterward (`/tmp/octos-client-bootstrap-prompt-{red,green}.log`).
+and passes afterward (`/tmp/ra-client-bootstrap-prompt-{red,green}.log`).
 Temporary diagnostic instrumentation was removed. Fresh immutable real-TUI
 acceptance is still required; no passing unit result relabels the rejected runs.
 
@@ -2779,7 +2779,7 @@ fallback TUI lanes, with fake-only localhost providers. The four lanes perform
 provider calls during replay. Client all-targets passes 2,182 / 4 ignored.
 These component successes remain valid but are not full acceptance.
 
-The next real-provider run at `/tmp/octos-final-acceptance-20260904.zRLtcY`
+The next real-provider run at `/tmp/ra-final-acceptance-20260904.zRLtcY`
 started 23:26 PDT and was stopped at 23:32 after the following failures:
 
 - Opening and closing manual compaction menus clears the visible screen and
@@ -2823,7 +2823,7 @@ The menu fix now clears only the current viewport; it does not invalidate the
 already committed native scrollback tracker. Real resize and genuine canonical
 rewrite handling remain separate. The actual-draw regression reproduces seven
 copies before the repair and one afterward. The final fake-only real-tmux proof
-`/tmp/octos-menu-tui-preflight-20260904.DRPazW/green-verified` passes 15/15 checks:
+`/tmp/ra-menu-tui-preflight-20260904.DRPazW/green-verified` passes 15/15 checks:
 23 full-history captures, nine tool-backed turns, three visible context/confirm
 menu cycles, and bounded vacated space that subsequent output fills. Every old
 prompt, final, and tail remains exactly once. The corresponding preserved old
@@ -2845,7 +2845,7 @@ pass. The full fresh matrix passes Agent/LLM 3,572 / 48 ignored, CLI 3,298 /
 CLI doctests have four pre-existing ignored cases.
 
 The fresh final candidate is
-`/tmp/octos-summary-menu-final-20260904.oK2bDV`, with backend SHA-256
+`/tmp/ra-summary-menu-final-20260904.oK2bDV`, with backend SHA-256
 `37e38378240a495648ca66e0cff8252bacf653606640cbc90306791847914907`
 and client SHA-256
 `a0dd3432cfdddfdc540e0ce3755b8de5888e3290efe7ddc1a74f14068ba937cc`.
@@ -2918,14 +2918,14 @@ new RED/GREEN regressions pass, and all-targets is 2,188 passed / 4 ignored with
 strict clippy, fmt, diff and build passing.
 
 The resulting immutable candidate is
-`/tmp/octos-background-order-final-20260905.MCTTLk`, backend SHA-256
+`/tmp/ra-background-order-final-20260905.MCTTLk`, backend SHA-256
 `fb09be1043117b69c138907f6974f05bc642a851e2986c56e17e7ce1c2b5d31c`,
 client SHA-256
 `f2a22ec16ed798bf0a0152e02779a90b80291c6db2e9b6fe68f179e0f717610f`.
 Its exact-byte peer restart passes 51/51, four streaming/fallback lanes pass,
 and 12 HTTP fault cases pass an independent durable-ledger audit. However,
 combined real-tmux background/history/restart acceptance **fails 19/20** at
-`/tmp/octos-singleton-bg-preflight-20260905.64Lyz1/combined-final-v1`.
+`/tmp/ra-singleton-bg-preflight-20260905.64Lyz1/combined-final-v1`.
 
 The same background event is delivered live and after reconnect with identical
 child thread, thread seq1, cursor148 and canonical message ID. The reducer adds
@@ -2968,7 +2968,7 @@ full matrix and immutable combined real-TUI proof must still pass; this design
 description does not supersede the rejected MCTTLk result.
 
 Fresh acceptance preparation is at
-`/tmp/octos-background-replay-final-20260905.mjh35K`; its private provider profile
+`/tmp/ra-background-replay-final-20260905.mjh35K`; its private provider profile
 has not been copied and no real-provider long run has started. An additional
 `all_admissions_audit.py` now checks every main admission, including unlabelled
 goal/background continuations, for canonical final/terminal identity, explicit
@@ -2990,7 +2990,7 @@ restart passes 51/51, all four streaming/fallback lanes pass, and the fresh 12
 HTTP fault cases pass independent durable-ledger audit (68 fake provider calls).
 
 Combined real-tmux proof
-`/tmp/octos-singleton-bg-preflight-20260905.64Lyz1/combined-replay-final-v1`
+`/tmp/ra-singleton-bg-preflight-20260905.64Lyz1/combined-replay-final-v1`
 nevertheless **fails 19/20**. The exact background projection really is replayed
 twice; the second pre-hydrate card is now suppressed, proving the intended repair
 is exercised. Yet `restart-quiet.txt` has T01 anchors at61/158 and the background
@@ -3021,7 +3021,7 @@ The rejected `mjh35K` client was also exercised with ten additional tool-backed
 foreground turns between background completion and daemon restart. This moves
 the parent beyond the eight-entry completed-live cache while retaining its
 archived activity. The independent fixture
-`/tmp/octos-singleton-bg-preflight-20260905.64Lyz1/aged-replay-red-v1`
+`/tmp/ra-singleton-bg-preflight-20260905.64Lyz1/aged-replay-red-v1`
 fails 25/26 gates: 43 native-history markers are each present once before the
 restart and are duplicated afterwards. All 16 canonical main admissions remain
 correct. This is additional RED evidence, not an acceptance pass.
@@ -3042,11 +3042,11 @@ restored. Unknown unanchored logs and zero-history frames must not acknowledge
 content that has not been displayed. The final independent bounded review
 approved these slices. Full client all-targets v2 passes 2,207 tests with 4
 ignored across 33 suites; strict clippy, fmt and diff checks pass. Logs include
-`/tmp/octos-client-activity-final-all-targets.log` (rejected first run) and
-`/tmp/octos-client-activity-final-all-targets-v2.log` (successful final run).
+`/tmp/ra-client-activity-final-all-targets.log` (rejected first run) and
+`/tmp/ra-client-activity-final-all-targets-v2.log` (successful final run).
 
 Fresh immutable-pair acceptance is being prepared in
-`/tmp/octos-activity-replay-final-20260905.If6Q18`. The unchanged backend is
+`/tmp/ra-activity-replay-final-20260905.If6Q18`. The unchanged backend is
 `fb09be104...b5d31c`; the final client build, original and aged background real-TUI
 proofs, peer restart and streaming/fallback checks, then the original real-provider
 30+4 run remain required. No private provider profile has been copied to this
@@ -3169,7 +3169,7 @@ native-history rejection above.
 ### Whitespace-only segment drift reproduced; cold tool anchoring separated
 
 The next isolated controls in
-`/tmp/octos-cold-history-preflight-20260905.FV1oaK` distinguish lifecycle from
+`/tmp/ra-cold-history-preflight-20260905.FV1oaK` distinguish lifecycle from
 answer representation. V4 performs a real cold-client relaunch, ten new
 tool-backed foreground turns, then a same-client daemon restart: 29/29 passes
 on the rejected If6 bytes. V5 differs only in one tool-call response's assistant
@@ -3200,7 +3200,7 @@ userless continuations must not guess the latest user, and optimistic insertions
 must preserve real projected positions.
 
 Preparation for the next pair is at
-`/tmp/octos-cold-live-replay-final-20260905.eKcjvT`: unchanged backend only, no
+`/tmp/ra-cold-live-replay-final-20260905.eKcjvT`: unchanged backend only, no
 final client or private provider profile yet. In addition to the 50 established
 gate controls, a separate eight-control cold-tool audit requires those three old
 tool results exactly once within their owning prompt-to-next-user interval in all four
@@ -3218,7 +3218,7 @@ these new controls and a fresh original30+4 real-provider acceptance run.
 ### Current review and runtime rejection checkpoint (2026-09-05)
 
 Current worktree acceptance is **not complete**. The latest real-provider run
-at `/tmp/octos-cold-live-replay-final-20260905.eKcjvT` completed the original
+at `/tmp/ra-cold-live-replay-final-20260905.eKcjvT` completed the original
 30 turns and four peer probes with zero driver failures, but is rejected by
 17 of 44 full native-history captures. Background identity changed from row52
 to row55 after the legacy flat/per-user timestamp merge, so later hydrates moved
@@ -3237,7 +3237,7 @@ acceptance of a newly built runtime pair.
 
 Actual Claude Code `fable[1m]` resolved to `claude-fable-5-1` and completed two
 read-only review invocations, with reports and invocation/coverage evidence at
-`/tmp/octos-fable-review-20260905.ofETxe`. Combined source access covers all
+`/tmp/ra-fable-review-20260905.ofETxe`. Combined source access covers all
 34,177 backend diff lines, 13,745 client diff lines and 26 new files. The first
 report prematurely claimed complete coverage while a backend tail remained
 unread; that original report is preserved, and the follow-up closed the gap.
@@ -3282,7 +3282,7 @@ no final source freeze or acceptance is claimed until this control passes.
 The rejected eK run has36 valid main admissions and a passing peer lifecycle
 gate, but T17 actually used cron, not native monitor_create. Its genuine cron
 ID does not satisfy the existing native-monitor final matcher. The next candidate
-at `/tmp/octos-identity-reload-final-20260905.Q8eNRW` explicitly requires native
+at `/tmp/ra-identity-reload-final-20260905.Q8eNRW` explicitly requires native
 monitor_create/list/delete in T17/T18/T19/T29 and adds an identity-correlated
 full-tool-output gate. All95 independent gate controls pass:58 retained controls,
 14 native-monitor,21 background-identity and2 real recorder controls. The old
@@ -3323,7 +3323,7 @@ with123 Read,87 Grep and13 Glob calls and no tool errors or outside-snapshot
 reads. The first pass's omitted1,664-line generated-binding range was explicitly
 closed, not inferred from its initial all-read claim. The final combined source
 comparison has no differences. Verbatim reports and manifests are retained in
-`/tmp/octos-fable-postfix-review-20260905.p76wz6`. Fable confirms the two latest
+`/tmp/ra-fable-postfix-review-20260905.p76wz6`. Fable confirms the two latest
 fixes and reports no new confirmed blocker; this is static review, not soak.
 
 F1 now uses the same effective media for the canonical background envelope and
@@ -3367,7 +3367,7 @@ real-provider30+4 are still running at this checkpoint. The latter started at
 18:32:54UTC, is local-only, and uses an isolated0700 home/0600 copied profile.
 
 The separately read-only pinned-web check establishes that
-`octos-web@1e985386a4dff3dddcee409157f6d36fe2a462c8` uses WS/OUP rather than the
+`ra-web@1e985386a4dff3dddcee409157f6d36fe2a462c8` uses WS/OUP rather than the
 legacy SSE completion bridge. It does not establish deployed versions or external
 old SSE consumers. Other explicit limits remain: retained-ledger hydrate reads
 are not constant-time; ephemeral explicit tool writes share profile state; FFI
@@ -3386,7 +3386,7 @@ The real provider/tmux run used the exact `ec10ce3e…` backend and `95e33d7d…
 client: original 30 rounds ran 18:32:54–18:41:21 UTC, followed by four peer rounds
 through 18:44:38 UTC. All nine orchestration stages passed, including seven
 independent final gates. A separate reviewer reran those seven gates read-only
-in `/tmp/octos-independent-real-final-20260905.x9bNoj`, with unchanged original
+in `/tmp/ra-independent-real-final-20260905.x9bNoj`, with unchanged original
 ledger/capture/result hashes and matching binary/harness hashes:
 
 - 36 unique admissions and 36 successful canonical completions: 29 labelled
@@ -3454,7 +3454,7 @@ hashes match the pre-run baseline. Final source verification matches all 855
 compile inputs plus the tracked deletion; client source/spec hashes also match.
 No commit, installation, user-process restart or PR integration was performed.
 
-Primary proof: `/tmp/octos-identity-reload-final-20260905.Q8eNRW/ACCEPTANCE.md`.
+Primary proof: `/tmp/ra-identity-reload-final-20260905.Q8eNRW/ACCEPTANCE.md`.
 Actual Fable reports remain under `p76wz6`; the JSON proof is under `0fGUYY`.
 Cloud Mac mini soak still requires an explicit authorized SSH target. Historical
 contradictory split-media rows remain unmigrated, and optional llama/CUDA builds
@@ -3538,9 +3538,9 @@ limits, including unmigrated historical split-media rows and optional llama/CUDA
 build coverage, remain in effect.
 
 Cloud proof, mirrored locally:
-`/tmp/octos-mini3-soak-20260905.EOQbPu/ACCEPTANCE.md`.
+`/tmp/ra-mini3-soak-20260905.EOQbPu/ACCEPTANCE.md`.
 Independent replay, credential-scan and cleanup records:
-`/tmp/octos-mini3-coordinator-20260905.qZGJb4/`.
+`/tmp/ra-mini3-coordinator-20260905.qZGJb4/`.
 Original evidence archive SHA256:
 `e8713ee60aac8666590a890c5a3b268ed37e55f79b41f13ab17b40618869c0c4`.
 
@@ -3561,23 +3561,23 @@ The client includes the previously committed paste-editing and mixed-projection
 dedup fixes on which the reviewed worktree depended.
 
 Local integration evidence is retained under
-`~/.octos/outer/oup-rc-20260905.Igc2Dj/`:
+`~/.ra/outer/oup-rc-20260905.Igc2Dj/`:
 
-- `octos-tests-3.log`: 8,354 passing tests across 94 suites, 62 ignored,
+- `ra-tests-3.log`: 8,354 passing tests across 94 suites, 62 ignored,
   covering CLI, agent, core, LLM, bus and services with all targets.
-- `octos-clippy-workspace-1.log`: strict workspace/all-target clippy passed.
+- `ra-clippy-workspace-1.log`: strict workspace/all-target clippy passed.
 - `octoscode-tests-runtime-2.log`: 2,281 passing tests across 43 suites,
   four ignored. Linux-only `olp_evo_*` and `olp_watch_board_harvest_*`
   cases were filtered on this Mac because GNU flock/stat are unavailable;
   unfiltered Ubuntu CI remains required before merge.
 - `octoscode-clippy-1.log`: strict all-target clippy passed.
-- Subsequent `octos-minimal-tests.log`: 1,682 passed, six ignored.
-  `octos-release-matrix-clippy.log`: strict combined channel/release-feature
+- Subsequent `ra-minimal-tests.log`: 1,682 passed, six ignored.
+  `ra-release-matrix-clippy.log`: strict combined channel/release-feature
   clippy passed. The isolated FFI build exposed API-gated peer-registry helpers
   that default-feature and unit-test builds masked. Recovery now keeps its
   shared registry available to non-API gateway actors, and required matrix CI
   separately compiles/lints the minimal production library.
-  `octos-minimal-lib-clippy-2.log` and `octos-abi-tests-2.log` passed after this
+  `ra-minimal-lib-clippy-2.log` and `ra-abi-tests-2.log` passed after this
   fix. The C header compiled with warnings denied; `uniffi-python-test.log`
   passed real localhost C/Python partial-answer and success controls.
 - The additional reserved-sampler and hydration-queue regressions have separate
@@ -3604,7 +3604,7 @@ client restart, four daemon restarts and K3 → GLM-5.3 → K3.
 
 This run used locally built integrated candidates, not published artifacts:
 
-- Octos `2.0.3-rc.11`, source `e6168cf92`, binary SHA256
+- ra `2.0.3-rc.11`, source `e6168cf92`, binary SHA256
   `e4319c6c85fc471479c0f68e6cfe083c1298758133694d080ec67175aacf98c0`.
 - OctosCode `0.3.0-rc.10`, source `7c56b43`, binary SHA256
   `5c9add9b50b4cd5da0f3b0f711df7799c90060aad2190d6241c4598d08880aa0`.
@@ -3648,6 +3648,6 @@ is not a new all-clear:
 - the real OctosCode stdio/tmux soak passes across compaction, peer/background
   delivery, restart, and one deliberate invalidation.
 
-The follow-on frontend convergence routes `octos chat` and ACP through the same
+The follow-on frontend convergence routes `ra chat` and ACP through the same
 OUP dispatcher. Its separate acceptance must cover real adapters and shutdown,
 not merely reuse the earlier OctosCode milestone's test counts.

@@ -2,7 +2,7 @@
  * M9 wire-level e2e: tool event correlation.
  *
  * Issue: https://github.com/octos-org/octos/issues/647
- * Spec  : api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md §8
+ * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §8
  *
  * Asserts that when a turn fires a tool, the wire stream includes a
  * `tool_start` -> `tool_progress`* -> `tool_end` envelope triplet correlated

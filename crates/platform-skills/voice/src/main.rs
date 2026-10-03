@@ -1,7 +1,7 @@
 //! Voice platform skill binary (ASR, preset-voice TTS, model management).
 //!
 //! Protocol: `./main <tool_name>` with JSON on stdin, JSON on stdout.
-//! ASR may use an independent Octos/OMiniX-compatible JSON endpoint via
+//! ASR may use an independent ra/OMiniX-compatible JSON endpoint via
 //! ASR_API_URL.
 //! TTS and model management use OminiX via OMINIX_API_URL, ~/.ominix/api_url,
 //! or the default ports (9090, 8080, 8081).
@@ -67,7 +67,7 @@ const QWEN3_ASR_PATH: &str = "/v1/audio/asr/qwen3";
 const STANDARD_TRANSCRIPTION_PATH: &str = "/v1/audio/transcriptions";
 
 /// ASR route and base URL. `ASR_API_URL` selects the standard transcription
-/// path with Octos' JSON + base64 request contract; omitting it preserves the
+/// path with ra' JSON + base64 request contract; omitting it preserves the
 /// existing Qwen3 route.
 #[derive(Debug, PartialEq, Eq)]
 struct AsrEndpoint {
@@ -408,7 +408,7 @@ fn handle_transcribe(input_json: &str) {
     let endpoint = match discover_asr_endpoint() {
         Some(endpoint) => endpoint,
         None => fail(
-            "ASR service not configured. Set ASR_API_URL for an Octos-compatible \
+            "ASR service not configured. Set ASR_API_URL for an ra-compatible \
              JSON transcription endpoint, or start ominix-api and configure OMINIX_API_URL.",
         ),
     };
@@ -441,7 +441,7 @@ fn handle_transcribe(input_json: &str) {
     });
 
     // A dedicated ASR service uses the standard transcription path with the
-    // Octos JSON contract; otherwise retain OminiX's model-specific Qwen3 path.
+    // ra JSON contract; otherwise retain OminiX's model-specific Qwen3 path.
     let resp = match client
         .post(format!("{}{}", endpoint.base_url, endpoint.path))
         .json(&body)
@@ -695,7 +695,7 @@ fn handle_synthesize(input_json: &str) {
                         // entire rest-of-line as the path). The user-readable
                         // summary stays on the next line so the LLM still
                         // sees the duration/size/follow-up hint.
-                        // octos #1038: replaced legacy `Generated audio: …`
+                        // ra #1038: replaced legacy `Generated audio: …`
                         // single-line text which the detector did not match.
                         succeed(&format!(
                             "Generated: {final_path}\nSynthesized audio ({duration_secs:.1}s, {size} bytes). Use send_file to deliver it to the user."
@@ -742,7 +742,7 @@ fn handle_synthesize(input_json: &str) {
                 let duration_secs = size.saturating_sub(44) as f64 / 48000.0;
                 eprintln!("Converting to MP3...");
                 let final_path = try_convert_to_mp3(&output_path);
-                // octos #1038: `Generated: <path>` on its own line is the
+                // ra #1038: `Generated: <path>` on its own line is the
                 // marker `PluginTool::detect_output_file` parses to populate
                 // `files_to_send`. See the Qwen3 site above for the rationale.
                 succeed(&format!(

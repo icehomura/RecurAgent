@@ -92,14 +92,14 @@ def architecture(zh=False):
     choose = lambda en, cn: cn if zh else en
     c = Canvas(
         790,
-        choose("Octos kernel architecture", "Octos 内核架构"),
+        choose("ra kernel architecture", "ra 内核架构"),
         choose(
-            "Applications and agent controllers use OUP; native hosts embed libraries. Both reach the Octos harness kernel and its state, execution, and coordination capabilities.",
-            "应用和 Agent 控制端通过 OUP 接入；原生宿主嵌入库。两条路径连接 Octos Harness 内核，使用状态、执行与协作能力。",
+            "Applications and agent controllers use OUP; native hosts embed libraries. Both reach the ra harness kernel and its state, execution, and coordination capabilities.",
+            "应用和 Agent 控制端通过 OUP 接入；原生宿主嵌入库。两条路径连接 ra Harness 内核，使用状态、执行与协作能力。",
         ),
     )
     c.text(48, 53, choose("OCTOS / ARCHITECTURE", "OCTOS / 内核架构"), 14, BLUE, 650)
-    c.text(48, 101, choose("Your application, powered by Octos", "用 Octos 内核构建你的应用"), 34, weight=650)
+    c.text(48, 101, choose("Your application, powered by ra", "用 ra 内核构建你的应用"), 34, weight=650)
     c.text(48, 135, choose("Embed the libraries or control a runtime through OUP.", "将库嵌入应用，或通过 OUP 控制运行时。"), 19, MUTED)
 
     entries = [
@@ -133,7 +133,7 @@ def architecture(zh=False):
     c.rect(48, 440, 1104, 100, "url(#kernel)", radius=20)
     c.rect(68, 461, 58, 58, "#2b5280", radius=15)
     c.icon("hub", 82, 475, "#a1eddd", 1.1)
-    c.text(148, 482, choose("Octos harness kernel", "Octos Harness 内核"), 31, "#ffffff", 650)
+    c.text(148, 482, choose("ra harness kernel", "ra Harness 内核"), 31, "#ffffff", 650)
     c.text(148, 516, choose("Agent execution · sessions · supervision", "Agent 执行 · 会话 · 监督"), 19, "#cadbf1")
     c.rect(920, 471, 200, 38, "#29496f", "#4a688c", 19)
     c.text(1020, 496, choose("Written in Rust", "使用 Rust 编写"), 18, "#e2f1ff", 500, "middle")
@@ -206,7 +206,7 @@ def workflow(zh=False):
     c.line("M464 651H356", TEAL, dashed=True)
     c.text(410, 633, choose("Events", "事件"), 15, TEAL, 500, "middle")
     c.rect(470, 416, 650, 288, "url(#kernel)", radius=18)
-    c.text(496, 461, choose("Octos kernel", "Octos 内核"), 25, "#ffffff", 650)
+    c.text(496, 461, choose("ra kernel", "ra 内核"), 25, "#ffffff", 650)
     c.rect(939, 436, 153, 31, "#2b5280", radius=15)
     c.text(1015, 457, choose("Turn running", "轮次执行中"), 16, "#b9f2e1", 500, "middle")
     steps = [

@@ -12,7 +12,7 @@ This chapter covers common issues organized by category, along with environment 
 Error: ANTHROPIC_API_KEY environment variable not set
 ```
 
-**Fix**: Export the key in your shell or verify with `octos status`:
+**Fix**: Export the key in your shell or verify with `ra status`:
 
 ```bash
 export ANTHROPIC_API_KEY="your-key"
@@ -31,8 +31,8 @@ The retry mechanism handles this automatically (3 attempts with exponential back
 Enable detailed logs to diagnose issues:
 
 ```bash
-RUST_LOG=debug octos chat
-RUST_LOG=octos_agent=trace octos chat --message "task"
+RUST_LOG=debug ra chat
+RUST_LOG=octos_agent=trace ra chat --message "task"
 ```
 
 ---
@@ -42,8 +42,8 @@ RUST_LOG=octos_agent=trace octos chat --message "task"
 | Problem | Solution |
 |---------|----------|
 | Build fails on Linux | Install build dependencies: `sudo apt install build-essential pkg-config libssl-dev` |
-| macOS codesign warning | Sign the binary: `codesign -s - ~/.cargo/bin/octos` |
-| `octos: command not found` | Add cargo bin to PATH: `export PATH="$HOME/.cargo/bin:$PATH"` |
+| macOS codesign warning | Sign the binary: `codesign -s - ~/.cargo/bin/ra` |
+| `ra: command not found` | Add cargo bin to PATH: `export PATH="$HOME/.cargo/bin:$PATH"` |
 
 ---
 
@@ -79,13 +79,13 @@ export WECOM_BOT_SECRET="your_secret"
 **Messages not arriving**
 
 - Confirm the upstream relay service is running and linked to your account.
-- Check that the WeCom group robot is the same one configured in octos.
+- Check that the WeCom group robot is the same one configured in ra.
 - If using `allowed_senders`, verify the sender's WeCom user ID is in the list.
 - Check for duplicate message filtering -- the channel deduplicates the last 1000 message IDs.
 
 **Long messages are truncated**
 
-Messages over 4096 characters are automatically split into multiple chunks by octos. If further truncation occurs, check the relay service's own message length settings.
+Messages over 4096 characters are automatically split into multiple chunks by ra. If further truncation occurs, check the relay service's own message length settings.
 
 ---
 
@@ -105,10 +105,10 @@ To start fresh on purpose, use `/clear` (or bare `/new`), which clears the curre
 
 | Problem | Solution |
 |---------|----------|
-| Dashboard not accessible | Check port: `octos serve --port 50080`, open `http://localhost:50080/admin/` |
+| Dashboard not accessible | Check port: `ra serve --port 50080`, open `http://localhost:50080/admin/` |
 | WSL2 port not forwarded | Restart WSL: `wsl --shutdown` then reopen terminal |
-| Service will not start | Check logs: `tail -f ~/.octos/serve.log` (macOS) or `journalctl --user -u octos-serve` (Linux) |
-| Windows: `octos` not found | Ensure `%USERPROFILE%\.cargo\bin` is in your PATH |
+| Service will not start | Check logs: `tail -f ~/.ra/serve.log` (macOS) or `journalctl --user -u ra-serve` (Linux) |
+| Windows: `ra` not found | Ensure `%USERPROFILE%\.cargo\bin` is in your PATH |
 | Windows: shell commands fail | Commands run via `cmd /C`; use Windows-compatible syntax |
 | Sessions look shorter after upgrade | History now loads newest-first up to `OCTOS_SESSION_LOAD_BUDGET_BYTES` (32 MiB); older turns live in `<name>.segments/` and load on demand — nothing was deleted |
 

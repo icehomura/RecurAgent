@@ -146,9 +146,9 @@ class Validator:
         self.add(
             "real_restarted_octos_backend",
             passed,
-            "TUI launched against restarted octos serve --stdio"
+            "TUI launched against restarted ra serve --stdio"
             if passed
-            else "launch command did not prove real octos serve --stdio backend",
+            else "launch command did not prove real ra serve --stdio backend",
             ["launch-command.txt"],
         )
 
@@ -190,7 +190,7 @@ class Validator:
         self.check_appui_status_read()
         failures = [check for check in self.checks if check["status"] == "failed"]
         result = {
-            "schema": "octos.m16.context_restart_tmux_soak.v1",
+            "schema": "ra.m16.context_restart_tmux_soak.v1",
             "generated_at": utc_now(),
             "status": "failed" if failures else "passed",
             "output_dir": str(self.out_dir),

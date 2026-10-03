@@ -67,7 +67,7 @@ const MAX_PAGE_HTML_BYTES: usize = 2 * 1024 * 1024;
 const MAX_CRAWL_DELAY_SECS: u64 = 10;
 
 /// Product token appended to the browser's own User-Agent so sites can tell
-/// this is an automated octos reader (policy: no disguised automation; see
+/// this is an automated ra reader (policy: no disguised automation; see
 /// SKILL.md "Automation policy").
 const UA_SUFFIX: &str = "octos-research/1.0 (+https://github.com/octos-org/octos)";
 
@@ -550,7 +550,7 @@ async fn extract_text(ws: &mut WsStream, session_id: &str) -> Result<String, Str
     let text = evaluate_js(
         ws,
         session_id,
-        "(function(){if(!document.body)return '';var h=[];document.body.querySelectorAll('*').forEach(function(e){if(e.checkVisibility&&!e.checkVisibility()){e.setAttribute('data-octos-hidden','');h.push(e);}});var c=document.body.cloneNode(true);h.forEach(function(e){e.removeAttribute('data-octos-hidden')});c.querySelectorAll('[data-octos-hidden]').forEach(function(e){e.remove()});c.querySelectorAll('nav,footer,aside,[role=navigation],[role=banner],[role=complementary],[role=contentinfo],[class*=cookie],[class*=consent],[class*=gdpr],[class*=sidebar],[class*=newsletter],[class*=advertisement],[id*=cookie],[id*=consent],[id*=sidebar],[class*=popup],[class*=modal],[class*=overlay],iframe,svg,form,script,style,noscript').forEach(function(e){e.remove()});return c.innerText||'';})()",
+        "(function(){if(!document.body)return '';var h=[];document.body.querySelectorAll('*').forEach(function(e){if(e.checkVisibility&&!e.checkVisibility()){e.setAttribute('data-ra-hidden','');h.push(e);}});var c=document.body.cloneNode(true);h.forEach(function(e){e.removeAttribute('data-ra-hidden')});c.querySelectorAll('[data-ra-hidden]').forEach(function(e){e.remove()});c.querySelectorAll('nav,footer,aside,[role=navigation],[role=banner],[role=complementary],[role=contentinfo],[class*=cookie],[class*=consent],[class*=gdpr],[class*=sidebar],[class*=newsletter],[class*=advertisement],[id*=cookie],[id*=consent],[id*=sidebar],[class*=popup],[class*=modal],[class*=overlay],iframe,svg,form,script,style,noscript').forEach(function(e){e.remove()});return c.innerText||'';})()",
     )
     .await?;
     Ok(truncate_string(text, MAX_PAGE_TEXT_CHARS))
@@ -961,7 +961,7 @@ fn robots_enabled(lookup: impl Fn(&str) -> Option<String>) -> bool {
     octos_research::respect_robots(lookup)
 }
 
-/// robots.txt check for one URL (RFC 9309 via `octos-research`), fetched
+/// robots.txt check for one URL (RFC 9309 via `ra-research`), fetched
 /// once per origin with an identifiable User-Agent.
 async fn robots_check(
     cache: &octos_research::RobotsCache,

@@ -98,7 +98,7 @@ const fs = require('node:fs');
 const [path, status, kind, detail, exitCode, baseUrl, profile] = process.argv.slice(2);
 fs.mkdirSync(require('node:path').dirname(path), { recursive: true });
 fs.writeFileSync(path, JSON.stringify({
-  schema: 'octos.swarm.m7.live_gate.diagnostic.v1',
+  schema: 'ra.swarm.m7.live_gate.diagnostic.v1',
   status,
   kind,
   detail,

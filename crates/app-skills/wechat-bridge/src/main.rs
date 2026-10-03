@@ -1,7 +1,7 @@
 //! WeChat Bridge — persistent subprocess that maintains the WeChat long-poll connection.
 //!
 //! Architecture:
-//!   WeChat server <-(HTTP long-poll)-> this bridge <-(WebSocket)-> octos gateway channel
+//!   WeChat server <-(HTTP long-poll)-> this bridge <-(WebSocket)-> ra gateway channel
 //!
 //! The bridge never restarts, so the WeChat session stays alive even when the gateway restarts.
 //!
@@ -94,7 +94,7 @@ impl BridgeState {
     ) -> Result<(), String> {
         let token = self.token.read().await.clone();
         let client_id = format!(
-            "octos-{:016x}",
+            "ra-{:016x}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()

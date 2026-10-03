@@ -1,6 +1,6 @@
 //! Search providers, controls and the polite page reader for deep-search.
 //!
-//! Provider order (see `octos_research::plan`): the octos metasearch first
+//! Provider order (see `octos_research::plan`): the ra metasearch first
 //! (key-less OctoScript engines over official APIs and feeds: GDELT, Hacker
 //! News, Wikipedia, arXiv, ...; disable with `OCTOS_METASEARCH=0` to call
 //! GDELT + Google News RSS directly for news), then a

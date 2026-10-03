@@ -43,7 +43,7 @@ directory (verifier-red2.log / verifier-green.log and the two peer reports).
 - Cargo window (2026-09-10, real exit codes, logs in the recovery
   directory): fmt clean; the targeted set INCLUDING the newly added
   in-memory duplicate assertion passes 4/4 (verifier-final-targeted.log,
-  EXIT0); clippy `-p octos-cli --features api --all-targets -- -D
+  EXIT0); clippy `-p ra-cli --features api --all-targets -- -D
   warnings` EXIT0 (verifier-final-clippy.log). All-targets belongs to the
   outer integration run.
 
@@ -69,7 +69,7 @@ on `!outcome.replayed` and swallowed its own persist error — a crash window
 between the ledger append and the note persist (or a failed note append)
 lost the note forever, and a failed append left a phantom in-memory note.
 
-Fix: `persist_system_note_once_through_canonical_path` (octos-bus) — one
+Fix: `persist_system_note_once_through_canonical_path` (ra-bus) — one
 per-key-locked canonical critical section doing a STRICT read (metadata
 NotFound-only absence, bounded size, valid meta header + supported schema,
 every line a Message or control record, valid UTF-8, mandatory trailing

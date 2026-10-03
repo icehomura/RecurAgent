@@ -1,6 +1,6 @@
 spec: task
 name: "goal_create 准入把 archived 视为终态(issue #2237)"
-tags: [goals, autonomy, agent-orchestrator, octos-cli]
+tags: [goals, autonomy, agent-orchestrator, ra-cli]
 estimate: 0.5d
 ---
 
@@ -30,7 +30,7 @@ peer、收工无法 `/goal stop`(2026-09-04 OLP #45 实证,issue #2237)。本任
 ## Boundaries
 
 ### Allowed Changes
-- crates/octos-cli/src/autonomy/agent_orchestrator.rs
+- crates/ra-cli/src/autonomy/agent_orchestrator.rs
 
 ### Forbidden
 - 不改 goal 状态机的其它转移(archive/reopen/complete/blocked)。

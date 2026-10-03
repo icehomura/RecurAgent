@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Drive the real octoscode protocol client and Codex through tmux on the same
-# coding fixture. The Octos server is only the AppUi/UI Protocol backend; the
+# coding fixture. The ra server is only the AppUi/UI Protocol backend; the
 # sole Octos product client under test is standalone octoscode.
 
 set -euo pipefail
@@ -172,8 +172,8 @@ maybe_write_harness_server_config() {
   [ "$name" = "octoscode" ] || return 0
   [ "$RESOLVED_SERVER_SANDBOX_MODE" = "outer-sandbox-fallback" ] || return 0
 
-  mkdir -p "$dir/.octos"
-  cat >"$dir/.octos/config.json" <<'JSON'
+  mkdir -p "$dir/.ra"
+  cat >"$dir/.ra/config.json" <<'JSON'
 {
   "permission_mode": "danger-full-access",
   "approval_policy": "on-request",
@@ -217,11 +217,11 @@ resolve_octos_bin() {
     printf '%s\n' "$OCTOS_BIN"
     return 0
   fi
-  if [ ! -x "$ROOT_DIR/target/debug/octos" ]; then
-    log "building octos backend"
-    cargo build -p octos-cli --features api --bin octos
+  if [ ! -x "$ROOT_DIR/target/debug/ra" ]; then
+    log "building ra backend"
+    cargo build -p ra-cli --features api --bin ra
   fi
-  printf '%s\n' "$ROOT_DIR/target/debug/octos"
+  printf '%s\n' "$ROOT_DIR/target/debug/ra"
 }
 
 resolve_tui_bin() {
@@ -477,7 +477,7 @@ tui_style_escape_seen() {
 tui_capture_has_ready_state() {
   local capture="$1"
   printf '%s\n' "$capture" | grep -E -q -- \
-    'state[[:space:]]+[^[:space:]]+[[:space:]]+(done|idle|error)|status[[:space:]]+Turn completed|system[[:space:]]+Turn completed|Turn error|Ask Octos to change code'
+    'state[[:space:]]+[^[:space:]]+[[:space:]]+(done|idle|error)|status[[:space:]]+Turn completed|system[[:space:]]+Turn completed|Turn error|Ask ra to change code'
 }
 
 tui_capture_has_active_state() {
@@ -737,7 +737,7 @@ run_detector_self_test() {
 
   working_capture=$'state \u25d2 Working (thinking)\nComposer\n'
   progress_capture=$'status Progress\nComposer\n'
-  idle_capture=$'state \u25d2 idle (ready)\nAsk Octos to change code\nComposer\n'
+  idle_capture=$'state \u25d2 idle (ready)\nAsk ra to change code\nComposer\n'
 
   tui_capture_has_active_state "$working_capture" \
     || { printf 'detector self-test failed: Working was not active\n' >&2; return 1; }
@@ -933,7 +933,7 @@ tmux_paste_line() {
   local session="$1"
   local text="$2"
   local buffer
-  buffer="octos-tmux-paste-${session//[^a-zA-Z0-9_.-]/-}"
+  buffer="ra-tmux-paste-${session//[^a-zA-Z0-9_.-]/-}"
   tmux set-buffer -b "$buffer" "$text"
   tmux paste-buffer -d -t "$session" -b "$buffer"
   sleep "${OCTOSCODE_UX_PASTE_ENTER_GRACE_SECS:-0.2}"
@@ -1112,7 +1112,7 @@ drive_tui() {
   endpoint="ws://127.0.0.1:$PORT/api/ui-protocol/ws"
   server_fifo="$OUT_DIR/octoscode-server-key.fifo"
   server_runner="$OUT_DIR/run-octoscode-server.sh"
-  server_config="$OUT_DIR/octos-server-config.json"
+  server_config="$OUT_DIR/ra-server-config.json"
   transcript="$OUT_DIR/octoscode-transcript.log"
   raw_transcript="$OUT_DIR/octoscode-raw-transcript.log"
   server_log="$OUT_DIR/octoscode-server.log"
@@ -1133,7 +1133,7 @@ EOF
   fi
 
   write_secret_runner "$server_runner" "$server_fifo" \
-    "cd '$ROOT_DIR' && RUST_LOG=off exec '$octos_bin' serve --host 127.0.0.1 --port '$PORT' --cwd '$dir' --data-dir '$OUT_DIR/octos-data'$server_config_arg --provider '$SERVER_PROVIDER' --model '$MODEL' --auth-token '$AUTH_TOKEN' >'$server_log' 2>&1"
+    "cd '$ROOT_DIR' && RUST_LOG=off exec '$octos_bin' serve --host 127.0.0.1 --port '$PORT' --cwd '$dir' --data-dir '$OUT_DIR/ra-data'$server_config_arg --provider '$SERVER_PROVIDER' --model '$MODEL' --auth-token '$AUTH_TOKEN' >'$server_log' 2>&1"
   start_secret_session "$server_session" "$server_runner" "$server_fifo" "$API_KEY_ENV"
 
   local deadline=$((SECONDS + MAX_WAIT_SHORT))
@@ -1144,7 +1144,7 @@ EOF
     sleep 0.5
   done
   if ! grep -q "Listening: http://127.0.0.1:$PORT" "$server_log" 2>/dev/null; then
-    printf 'octos serve did not start. See %s\n' "$server_log" >&2
+    printf 'ra serve did not start. See %s\n' "$server_log" >&2
     return 1
   fi
 
@@ -1153,17 +1153,17 @@ EOF
   start_frame_sampler "$tui_session" octoscode
   frame_sampler_pid="$LAST_FRAME_SAMPLER_PID"
 
-  wait_for_regex_soft "$tui_session" 'Protocol backend connected|Opened .*coding:local|app-ui octos-app-ui|Sessions' "$MAX_WAIT_SHORT" || true
+  wait_for_regex_soft "$tui_session" 'Protocol backend connected|Opened .*coding:local|app-ui ra-app-ui|Sessions' "$MAX_WAIT_SHORT" || true
   if [ "${OCTOSCODE_UX_ATTACH_GRACE_SECS:-0}" -gt 0 ]; then
     log "attach now: tmux attach -r -t $tui_session"
     sleep "${OCTOSCODE_UX_ATTACH_GRACE_SECS:-0}"
   fi
-  if wait_for_regex_soft "$tui_session" 'Ask Octos to change code|›' 10 \
+  if wait_for_regex_soft "$tui_session" 'Ask ra to change code|›' 10 \
     && wait_for_regex_soft "$tui_session" 'Composer' 1 \
     && wait_for_regex_soft "$tui_session" 'Tab inspector' 1; then
     panes_seen=1
   fi
-  if wait_for_regex_soft "$tui_session" 'Status|approval gated|app-ui octos-app-ui' 10; then
+  if wait_for_regex_soft "$tui_session" 'Status|approval gated|app-ui ra-app-ui' 10; then
     status_seen=1
   fi
   if tmux_pane_alive "$tui_session"; then
@@ -1272,7 +1272,7 @@ EOF
     start_plain_session "$tui_session" "$tui_command"
     start_frame_sampler "$tui_session" octoscode
     frame_sampler_pid="$LAST_FRAME_SAMPLER_PID"
-    if wait_for_regex_soft "$tui_session" 'Protocol backend connected|Opened .*coding:local|app-ui octos-app-ui|Sessions|Composer|›' "$MAX_WAIT_SHORT"; then
+    if wait_for_regex_soft "$tui_session" 'Protocol backend connected|Opened .*coding:local|app-ui ra-app-ui|Sessions|Composer|›' "$MAX_WAIT_SHORT"; then
       reconnect_seen=1
     fi
     append_capture_clean_to_file "$tui_session" "$transcript" "octoscode reconnect"
@@ -1594,7 +1594,7 @@ octoscode_chat_first_layout_seen() {
   local transcript="$1"
 
   if ! grep -E -q -- 'Composer' "$transcript" 2>/dev/null \
-    || ! grep -E -q -- 'Ask Octos to change code|^[[:space:]]*›[[:space:]]' "$transcript" 2>/dev/null; then
+    || ! grep -E -q -- 'Ask ra to change code|^[[:space:]]*›[[:space:]]' "$transcript" 2>/dev/null; then
     printf '0'
     return 0
   fi
@@ -1625,8 +1625,8 @@ summary_seen_for_lane() {
   # The TUI transcript is a viewport capture. For long inline diffs, the final
   # summary can be present in the durable AppUi/session ledger while scrolled out
   # of the captured viewport. Count that as summary evidence for the live gate.
-  if [ -d "$OUT_DIR/octos-data/sessions" ] \
-    && grep -R -E -q -- 'Session Summary|Files changed|Validation|All [0-9]+ tests pass|[0-9]+/[0-9]+ tests pass' "$OUT_DIR/octos-data/sessions" 2>/dev/null; then
+  if [ -d "$OUT_DIR/ra-data/sessions" ] \
+    && grep -R -E -q -- 'Session Summary|Files changed|Validation|All [0-9]+ tests pass|[0-9]+/[0-9]+ tests pass' "$OUT_DIR/ra-data/sessions" 2>/dev/null; then
     printf '1'
     return 0
   fi
@@ -1791,7 +1791,7 @@ run_self_tests() {
   RESOLVED_SERVER_SANDBOX_MODE="outer-sandbox-fallback"
   mkdir -p "$OUT_DIR/candidate"
   maybe_write_harness_server_config octoscode "$OUT_DIR/candidate"
-  if ! grep -F -q '"permission_mode": "danger-full-access"' "$OUT_DIR/candidate/.octos/config.json"; then
+  if ! grep -F -q '"permission_mode": "danger-full-access"' "$OUT_DIR/candidate/.ra/config.json"; then
     printf 'self-test failed: outer sandbox fallback config was not written\n' >&2
     rm -rf "$test_root"
     return 1

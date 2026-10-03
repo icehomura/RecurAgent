@@ -18,7 +18,7 @@ main() {
         || fail "setup-frps.sh must leave auth.token empty so the plugin can rewrite privilege_key to md5(\"\" + ts)"
 
     grep -Fq 'ops = ["Login", "NewProxy"]' "$SCRIPT" \
-        || fail "setup-frps.sh must route Login AND NewProxy through the Octos plugin"
+        || fail "setup-frps.sh must route Login AND NewProxy through the ra plugin"
 
     if grep -Eq 'FRPS_TOKEN=.*openssl rand' "$SCRIPT"; then
         fail "setup-frps.sh should not generate a shared FRPS token (per-tenant tokens only)"

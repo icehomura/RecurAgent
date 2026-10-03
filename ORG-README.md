@@ -1,10 +1,10 @@
-# Octos 🐙
+# ra 🐙
 
 > Like an octopus — 9 brains, every arm thinks independently, but they share one brain.
 
-Octos is an open-source AI agent platform built in Rust. It turns any LLM into a multi-channel, multi-user intelligent assistant — deployed as a single 31MB binary with zero runtime dependencies.
+ra is an open-source AI agent platform built in Rust. It turns any LLM into a multi-channel, multi-user intelligent assistant — deployed as a single 31MB binary with zero runtime dependencies.
 
-Connect your LLM API keys and messaging channels. Octos handles conversation routing, tool execution, memory, provider failover, and multi-tenant isolation. Manage hundreds of AI agent profiles through a web dashboard or 91 REST endpoints.
+Connect your LLM API keys and messaging channels. ra handles conversation routing, tool execution, memory, provider failover, and multi-tenant isolation. Manage hundreds of AI agent profiles through a web dashboard or 91 REST endpoints.
 
 ## Repositories
 
@@ -30,9 +30,9 @@ Connect your LLM API keys and messaging channels. Octos handles conversation rou
 ## Quick Start
 
 ```bash
-cargo install --path crates/octos-cli
+cargo install --path crates/ra-cli
 export ANTHROPIC_API_KEY=your-key
-octos chat
+ra chat
 ```
 
 ## Links

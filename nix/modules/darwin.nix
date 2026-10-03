@@ -1,14 +1,14 @@
 { config, lib, ... }:
 let
-  cfg = config.programs.octos;
+  cfg = config.programs.ra;
   serviceCfg = cfg.service;
 
-  serviceName = "org.octos.serve";
+  serviceName = "org.ra.serve";
 in
 {
   config = lib.mkIf cfg.enable {
 
-    system.activationScripts.octos-datadir = lib.mkIf serviceCfg.enable ''
+    system.activationScripts.ra-datadir = lib.mkIf serviceCfg.enable ''
       mkdir -p ${lib.escapeShellArg serviceCfg.dataDir}
       chmod 770 ${lib.escapeShellArg serviceCfg.dataDir}
       chown root:wheel ${lib.escapeShellArg serviceCfg.dataDir}
@@ -16,7 +16,7 @@ in
 
     launchd.daemons.${serviceName} = lib.mkIf serviceCfg.enable {
       script = ''
-        exec ${cfg.finalPackage}/bin/octos serve \
+        exec ${cfg.finalPackage}/bin/ra serve \
           --port ${toString serviceCfg.port} \
           --host ${lib.escapeShellArg serviceCfg.host} \
           --data-dir ${lib.escapeShellArg serviceCfg.dataDir} \
@@ -33,8 +33,8 @@ in
         KeepAlive = true;
         RunAtLoad = true;
         WorkingDirectory = serviceCfg.dataDir;
-        StandardOutPath = "/var/log/octos.out.log";
-        StandardErrorPath = "/var/log/octos.err.log";
+        StandardOutPath = "/var/log/ra.out.log";
+        StandardErrorPath = "/var/log/ra.err.log";
       };
     };
 

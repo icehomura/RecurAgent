@@ -27,7 +27,7 @@ search (fanout, 6 workers) → analyze (synthesize) → synthesize (report)
 
 **`max_iterations = 50` (默认值) 不够用**
 
-`crates/octos-agent/src/agent/mod.rs:188`:
+`crates/ra-agent/src/agent/mod.rs:188`:
 ```rust
 max_iterations: 50,  // 默认 50, 适合交互式对话
 ```
@@ -58,7 +58,7 @@ max_iterations: 50,  // 默认 50, 适合交互式对话
 
 然后在 pipeline executor 中读取并应用:
 
-`crates/octos-agent/src/executor.rs` (或 pipeline runner):
+`crates/ra-agent/src/executor.rs` (或 pipeline runner):
 ```rust
 // 当 spawn analyze worker 时
 let worker_config = AgentConfig {
@@ -81,7 +81,7 @@ let worker_config = AgentConfig {
 
 在 `delegate.rs` 中为 fanout workers 设置更高的默认 max_iterations:
 
-`crates/octos-agent/src/tools/delegate.rs:374`:
+`crates/ra-agent/src/tools/delegate.rs:374`:
 ```rust
 pub fn with_worker_config(mut self, config: AgentConfig) -> Self {
     // Pipeline workers (fanout/synthesize) need more iterations than interactive chat
@@ -109,10 +109,10 @@ run_pipeline pipeline="deep_research" input="..." timeout_secs=1800
 
 ## 相关文件
 
-- `crates/octos-agent/src/agent/mod.rs:188` — 默认 max_iterations = 50
-- `crates/octos-agent/src/assets/pipelines/deep_research.ir.json` — pipeline 定义
-- `crates/octos-agent/src/tools/delegate.rs:374` — worker_config 设置点
-- `crates/octos-agent/src/tools/spawn.rs:1814` — MAX_SPAWN_MAX_ITERATIONS = 300 (上限)
+- `crates/ra-agent/src/agent/mod.rs:188` — 默认 max_iterations = 50
+- `crates/ra-agent/src/assets/pipelines/deep_research.ir.json` — pipeline 定义
+- `crates/ra-agent/src/tools/delegate.rs:374` — worker_config 设置点
+- `crates/ra-agent/src/tools/spawn.rs:1814` — MAX_SPAWN_MAX_ITERATIONS = 300 (上限)
 
 ## 任务日志证据
 

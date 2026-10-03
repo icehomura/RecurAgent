@@ -1,14 +1,14 @@
-# Octos 技能开发指南
+# ra 技能开发指南
 
 [English](app-skill-dev-guide.md) | [中文](app-skill-dev-guide-zh.md)
 
-本指南涵盖构建、注册和部署 octos 技能所需的全部内容。
+本指南涵盖构建、注册和部署 ra 技能所需的全部内容。
 
 ---
 
 ## 架构概述
 
-技能是一个**独立可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 octos 网关通信。网关为每次工具调用生成技能进程，通过 stdin 传递 JSON 参数，从 stdout 读取 JSON 结果。
+技能是一个**独立可执行二进制文件**，通过简单的 **stdin/stdout JSON 协议**与 ra 网关通信。网关为每次工具调用生成技能进程，通过 stdin 传递 JSON 参数，从 stdout 读取 JSON 结果。
 
 ```
 用户消息 → LLM → tool_use("get_weather", {"city": "巴黎"})
@@ -40,7 +40,7 @@ my-skill/
 安装后，技能位于配置文件的数据目录中：
 
 ```
-~/.octos/profiles/alice/data/skills/my-skill/
+~/.ra/profiles/alice/data/skills/my-skill/
 ├── main                # 可执行二进制（自包含，不放在 ~/.cargo/bin）
 ├── manifest.json       # 工具定义
 ├── SKILL.md            # 文档
@@ -80,7 +80,7 @@ requires_env: API_KEY
 | 字段 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `name` | 是 | — | 小写标识符，用连字符（如 `deep-search`） |
-| `description` | 是 | — | 一行描述，显示在 `octos skills list` 中。包含触发关键词 |
+| `description` | 是 | — | 一行描述，显示在 `ra skills list` 中。包含触发关键词 |
 | `version` | 否 | — | 语义化版本号 |
 | `author` | 否 | — | 作者名或组织 |
 | `always` | 否 | `false` | `true` = 始终包含在系统提示中。谨慎使用 |
@@ -122,7 +122,7 @@ requires_env: API_KEY
 | `timeout_secs` | 否 | 30 | 每次工具调用的最大执行时间（1-600） |
 | `protocol_version` | 否 | 1 | `1` = 仅 stdin/stdout（默认）。`2` = 同时通过 stderr 输出结构化事件，详见下文「工具 I/O 协议」。 |
 | `synthesis_config` | 否 | — | 仅 v2：声明合成 LLM 调用，由宿主注入 provider/model 与所需环境变量 |
-| `x-octos-host-config-keys` | 否 | `[]` | 仅 v2：宿主需向技能传递的环境变量名（如合成所需的 provider API key） |
+| `x-ra-host-config-keys` | 否 | `[]` | 仅 v2：宿主需向技能传递的环境变量名（如合成所需的 provider API key） |
 | `tools` | 否 | `[]` | 工具定义数组。每个工具可设置 `spawn_only: true`，由 `agent/execution.rs` 自动转后台执行 |
 | `binaries` | 否 | `{}` | 预编译二进制，按 `{os}-{arch}` 分类 |
 | `mcp_servers` | 否 | `[]` | MCP 服务器声明 |
@@ -208,9 +208,9 @@ console.log(JSON.stringify({ output: result, success: true }));
 
 宿主通过 UI Protocol 的任务/进度事件流把 phase/progress 事件转发给仪表盘/客户端，把 `CostEvent` 累加到父级单轮成本汇总；解析失败的行视为普通日志（按 `info` 级别记入 `LogEvent`）。
 
-合成式技能（`deep-search`、`deep-crawl`）在 `manifest.json` 声明 `synthesis_config` 与 `x-octos-host-config-keys`，宿主据此为合成调用注入正确的 LLM provider/model 并转发 API key 等环境变量。合同测试位于 `crates/octos-plugin/tests/lifecycle_sandbox.rs`。
+合成式技能（`deep-search`、`deep-crawl`）在 `manifest.json` 声明 `synthesis_config` 与 `x-ra-host-config-keys`，宿主据此为合成调用注入正确的 LLM provider/model 并转发 API key 等环境变量。合同测试位于 `crates/ra-plugin/tests/lifecycle_sandbox.rs`。
 
-**spawn_only 拦截机制**：当某工具的清单声明 `spawn_only: true`，Agent 执行循环（`crates/octos-agent/src/agent/execution.rs`）会在 LLM 往返**之前**拦截：
+**spawn_only 拦截机制**：当某工具的清单声明 `spawn_only: true`，Agent 执行循环（`crates/ra-agent/src/agent/execution.rs`）会在 LLM 往返**之前**拦截：
 
 1. 工具调用包入 `tokio::spawn`，立即向 LLM 返回回执；
 2. `task_supervisor.rs` 注册任务，应用每配置扇出上限（#610），并设置孤立任务清理；
@@ -227,8 +227,8 @@ console.log(JSON.stringify({ output: result, success: true }));
 
 | 类型 | 位置 | 安装方式 | 用途 |
 |------|------|----------|------|
-| **内置** | `crates/app-skills/` | 编译进 `octos` 二进制 | 每次发布附带的核心技能 |
-| **外部** | GitHub 仓库 | `octos skills install user/repo` | 社区/自定义技能 |
+| **内置** | `crates/app-skills/` | 编译进 `ra` 二进制 | 每次发布附带的核心技能 |
+| **外部** | GitHub 仓库 | `ra skills install user/repo` | 社区/自定义技能 |
 | **配置文件级** | `<profile-data>/skills/` | 按配置文件安装 | 租户隔离的技能 |
 
 ### 按配置文件管理技能
@@ -236,7 +236,7 @@ console.log(JSON.stringify({ output: result, success: true }));
 技能按配置文件安装，确保租户隔离。每个配置文件有自己的技能目录：
 
 ```
-~/.octos/profiles/alice/data/
+~/.ra/profiles/alice/data/
   skills/
     mofa-comic/
       main              ← 二进制（自包含，不在 ~/.cargo/bin）
@@ -253,9 +253,9 @@ console.log(JSON.stringify({ output: result, success: true }));
 
 ```bash
 # CLI（--profile 标志放在子命令之前）
-octos skills --profile alice install mofa-org/mofa-skills/mofa-comic
-octos skills --profile alice list
-octos skills --profile alice remove mofa-comic
+ra skills --profile alice install mofa-org/mofa-skills/mofa-comic
+ra skills --profile alice list
+ra skills --profile alice remove mofa-comic
 
 # 聊天中（自动使用当前配置文件）
 /skills install mofa-org/mofa-skills/mofa-comic
@@ -280,8 +280,8 @@ manage_skills(action="search", query="comic")
 
 1. `<profile-data>/skills/` — 配置文件级（最高优先级）
 2. `<project-dir>/skills/` — 项目本地
-3. `<project-dir>/bundled-app-skills/` — 内置应用技能（常量 `BUNDLED_APP_SKILLS_DIR`，位于 `octos-agent/src/bootstrap.rs`，由 `Config::plugin_dirs_from_project` 扫描）
-4. `~/.octos/skills/` — 旧版全局目录，仅用于迁移
+3. `<project-dir>/bundled-app-skills/` — 内置应用技能（常量 `BUNDLED_APP_SKILLS_DIR`，位于 `ra-agent/src/bootstrap.rs`，由 `Config::plugin_dirs_from_project` 扫描）
+4. `~/.ra/skills/` — 旧版全局目录，仅用于迁移
 
 ### 发布到注册中心
 
@@ -304,8 +304,8 @@ manage_skills(action="search", query="comic")
 3. 用户即可搜索和安装：
 
 ```bash
-octos skills search 关键词1
-octos skills --profile alice install your-user/your-repo/skill-a
+ra skills search 关键词1
+ra skills --profile alice install your-user/your-repo/skill-a
 ```
 
 ### 预编译二进制分发
@@ -458,8 +458,8 @@ my-skills/
 ```
 
 ```bash
-octos skills install you/my-skills          # 安装全部
-octos skills install you/my-skills/skill-b  # 仅安装 skill-b
+ra skills install you/my-skills          # 安装全部
+ra skills install you/my-skills/skill-b  # 仅安装 skill-b
 ```
 
 ---

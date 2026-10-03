@@ -4,10 +4,10 @@ OctoSense supplies the app UI and app services. Octos runs the agent that
 interprets a request, calls those services and returns an answer. This guide
 follows one Calendar request through that boundary and the Rust tasks behind it.
 
-The host and kernel communicate through **OUP**, the Octos UI Protocol: JSON-RPC
+The host and kernel communicate through **OUP**, the ra UI Protocol: JSON-RPC
 requests, responses and events over a connection. See the
 [runtime architecture](ARCHITECTURE.md) and
-[OUP specification](../api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md) for the wider
+[OUP specification](../api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md) for the wider
 system. OctoSense selects an Octos revision in its root
 [Cargo.toml](https://github.com/OctoSense-org/OctoSense/blob/main/Cargo.toml);
 use that revision when tracing a running integration.
@@ -38,7 +38,7 @@ including its model/provider settings and defaults.
 A host uses `peer/prepare` with a host binding. The durable binding fixes the
 app's canonical working directory (`cwd`) and `memory_namespace`. A **memory
 namespace** scopes which stored agent memories this app/account can capture and
-retrieve. Octos also creates a peer capability token and stores its SHA-256
+retrieve. ra also creates a peer capability token and stores its SHA-256
 digest. The wire field is named `host_token`.
 Control calls require that token; a session ID alone is not accepted. This peer
 token is distinct from the server bearer credentials described below.
@@ -46,7 +46,7 @@ Opening the app peer under a different workspace is refused.
 
 The host then uses `peer/tools/register` to register app operations and an
 optional `generic_tools` list. Registration is versioned and replaced as a
-whole and persisted in `host_tools.json`. `generic_tools` narrows the Octos
+whole and persisted in `host_tools.json`. `generic_tools` narrows the ra
 tools already available to the peer. The code checks the owning host connection
 before allowing a host-driven turn to use the registered tools.
 
@@ -57,7 +57,7 @@ before allowing a host-driven turn to use the registered tools.
 Suppose a person asks Calendar, “What is on my calendar today?” The host has
 prepared Calendar's peer and opened the human conversation session described
 below. Follow the request in
-[the OUP dispatcher](../crates/octos-cli/src/api/ui_protocol_transport.rs):
+[the OUP dispatcher](../crates/ra-cli/src/api/ui_protocol_transport.rs):
 
 1. **Submit and check the turn.** OctoSense sends `turn/start` for that session
    with the person's message and `origin.kind = person`. The dispatcher checks
@@ -79,9 +79,9 @@ below. Follow the request in
    tool with `from`, `to` and `limit` arguments. The model chooses a typed
    operation; it does not open Calendar's database itself.
 4. **Ask the host for the data.**
-   [`HostRoutedTool`](../crates/octos-agent/src/tools/peer_host_tool.rs) applies
+   [`HostRoutedTool`](../crates/ra-agent/src/tools/peer_host_tool.rs) applies
    the tool's risk and approval rules.
-   [`TurnHostToolRouter`](../crates/octos-cli/src/peers/host_tools.rs) sends
+   [`TurnHostToolRouter`](../crates/ra-cli/src/peers/host_tools.rs) sends
    `peer/tool/call` with a call ID to the owning host. OctoSense's Calendar
    service reads the permitted records and sends `peer/tool/result` with that ID.
 5. **Wait without blocking a Tokio worker.** The pending tool call has its own
@@ -147,7 +147,7 @@ correlated to that input and turn, separately from human conversation replies.
 The human can also address the app peer through the app's UI or cards. The
 host submits a turn with `origin.kind = person`; `app` identifies app-initiated
 work. Only the owning connection may set origin on eligible sessions.
-Octos reserves `system_agent` for its own
+ra reserves `system_agent` for its own
 peer-input delivery. `turn_origin::label_prompt` adds speaker markers to the
 prompt. `record_turn_origin` stores the origin by session and turn;
 `is_person_turn` reads it when the dispatcher decides whether a pending question
@@ -192,11 +192,11 @@ purged.
 | --- | --- |
 | `peer/model/set` | Selects a configured model lane, or clears the override. The change applies at the next turn; profile defaults and credentials stay intact. Unknown lanes are refused. |
 | `peer/context/close` | Permanently closes a request context and interrupts its active turn. The transcript and workspace remain on disk under host retention policy. Repeating close is idempotent. |
-| `peer/purge` | Erases transcripts, memory, control files and Octos-owned workspace data; invalidates stale sessions. Tombstones and an audit record survive so a retry with the same token can return `already_purged`. This is separate from deleting the app's business data. |
+| `peer/purge` | Erases transcripts, memory, control files and ra-owned workspace data; invalidates stale sessions. Tombstones and an audit record survive so a retry with the same token can return `already_purged`. This is separate from deleting the app's business data. |
 
 Read `raw_peer_model_set` and `raw_peer_context_close` in the dispatcher,
-[the purge handler](../crates/octos-cli/src/api/ui_protocol_peer_purge.rs)
-and [purge records](../crates/octos-cli/src/peers/purge.rs). A busy purge returns
+[the purge handler](../crates/ra-cli/src/api/ui_protocol_peer_purge.rs)
+and [purge records](../crates/ra-cli/src/peers/purge.rs). A busy purge returns
 `peer_purge_busy` with the peer closed; the host retries to finish cleanup.
 OctoSense selects the model lane during peer preparation, closes released
 contexts and requests purge on account removal. Its broker does not currently
@@ -204,36 +204,36 @@ expose `peer/model/set` as an app operation.
 
 ## Hosting and running
 
-To build the server, run from the Octos root with Rust, Cargo and native build
+To build the server, run from the ra root with Rust, Cargo and native build
 prerequisites installed:
 
 ```sh
-cargo build --release -p octos-cli --no-default-features --features api --bin octos
-target/release/octos --help
-target/release/octos serve --help
+cargo build --release -p ra-cli --no-default-features --features api --bin ra
+target/release/ra --help
+target/release/ra serve --help
 ```
 
 The `api` feature enables OUP serving. Configure a model profile before starting
 a turn. A standalone protocol client can launch
-`target/release/octos serve --stdio` and exchange JSON frames on stdin and
+`target/release/ra serve --stdio` and exchange JSON frames on stdin and
 stdout. The [OctoSense launcher](https://github.com/OctoSense-org/OctoSense/blob/main/crates/kernel/src/launch.rs)
 selects these modes:
 
 | Platform or setting | Launch and transport |
 | --- | --- |
-| Desktop, Talk to Octos off | Explicit program or `OCTOS_APP_CORE_BIN`; `serve --stdio` with the shell's data directory and configuration. |
-| Android, Talk to Octos off | Packaged `liboctos.so` executable; `serve --stdio` with the kernel home. |
-| Desktop or Android, Talk to Octos on | The launcher replaces `--stdio` with `--host 127.0.0.1 --host-managed`. Native and permitted external clients share that child's WebSocket server. |
+| Desktop, Talk to ra off | Explicit program or `OCTOS_APP_CORE_BIN`; `serve --stdio` with the shell's data directory and configuration. |
+| Android, Talk to ra off | Packaged `liboctos.so` executable; `serve --stdio` with the kernel home. |
+| Desktop or Android, Talk to ra on | The launcher replaces `--stdio` with `--host 127.0.0.1 --host-managed`. Native and permitted external clients share that child's WebSocket server. |
 | OpenHarmony | In-process `octos_cli::embedded::serve_io` over a duplex pipe. |
 | iOS | Kernel unavailable in this implementation. |
 
-Talk to Octos is an explicit, persisted host setting. Its host-managed launch
+Talk to ra is an explicit, persisted host setting. Its host-managed launch
 passes two lines on stdin: the server host bearer token, then the external
 client bearer token. Stdin stays open as a process lifeline. The host connects
 to `/api/ui-protocol/ws` with its bearer token; external clients have a restricted
 method and session scope. In particular, they cannot open host-owned app-peer
 sessions. See [host-managed serve](HOST_MANAGED_SERVE.md) and
-[its access checks](../crates/octos-cli/src/api/host_managed.rs).
+[its access checks](../crates/ra-cli/src/api/host_managed.rs).
 
 Keep the credentials distinct:
 
@@ -243,10 +243,10 @@ Keep the credentials distinct:
 | External client bearer token | Second stdin line in host-managed mode; authenticates permitted external clients with restricted access. |
 | Peer capability token (`host_token` field) | Minted by `peer/prepare` for one host-owned peer; its digest is stored in the peer binding and checked on peer control calls. |
 
-For generic in-process embedding, [embedded.rs](../crates/octos-cli/src/embedded.rs)
+For generic in-process embedding, [embedded.rs](../crates/ra-cli/src/embedded.rs)
 exports `serve_io(home, reader, writer)` over caller-supplied I/O. It requires a
 stored `_main` model profile and uses a private home
-(`.octos` and `.config/octos` below it). The caller owns the Tokio runtime.
+(`.ra` and `.config/ra` below it). The caller owns the Tokio runtime.
 Its worker-stack requirement is 8 MiB:
 
 ```rust,ignore
@@ -281,7 +281,7 @@ turn and event-forwarder handles.
 For stdio, including the generic embedded adapter,
 `stdio_connection_with_io_policy` reads newline-delimited JSON asynchronously.
 Output uses a bounded standard-library `sync_channel` and a dedicated OS thread,
-`octos-appui-stdio-writer`. That thread runs the async writer on a current-thread
+`ra-appui-stdio-writer`. That thread runs the async writer on a current-thread
 Tokio runtime; a `oneshot` reports completion. It is an additional thread,
 separate from the turn tasks in the Calendar example.
 
@@ -289,14 +289,14 @@ separate from the turn tasks in the Calendar example.
 
 | Frontend | Task ownership |
 | --- | --- |
-| CLI `chat --peers` | [`OupPeerHost`](../crates/octos-cli/src/commands/oup_peers.rs) stores a `CancellationToken` and `JoinHandle` per presented peer. `serve_peer` opens and listens to a child OUP session, then closes it on cancellation. This frontend task is additional to backend turn tasks. |
-| Gateway | [`ActorFactory`](../crates/octos-cli/src/session_actor.rs) creates a bounded `ActorMessage` inbox and outbound proxy queue. It spawns `actor.run()` and an outbound forwarder; turns and streaming can add tasks. This session-actor path has its own ownership structure, separate from the OUP dispatcher. |
+| CLI `chat --peers` | [`OupPeerHost`](../crates/ra-cli/src/commands/oup_peers.rs) stores a `CancellationToken` and `JoinHandle` per presented peer. `serve_peer` opens and listens to a child OUP session, then closes it on cancellation. This frontend task is additional to backend turn tasks. |
+| Gateway | [`ActorFactory`](../crates/ra-cli/src/session_actor.rs) creates a bounded `ActorMessage` inbox and outbound proxy queue. It spawns `actor.run()` and an outbound forwarder; turns and streaming can add tasks. This session-actor path has its own ownership structure, separate from the OUP dispatcher. |
 
 ### Work that must not hold up the UI
 
 The shared-history registry holds its mutex only briefly and releases it before
 awaiting other work. Blocking SQLite cost-ledger operations use `spawn_blocking`
-in [cost_ledger.rs](../crates/octos-agent/src/cost_ledger.rs). Native hosts keep
+in [cost_ledger.rs](../crates/ra-agent/src/cost_ledger.rs). Native hosts keep
 waits for turns and tool results off the UI thread. These choices let unrelated
 requests and UI events proceed while an agent is waiting.
 
@@ -306,33 +306,33 @@ requests and UI events proceed while an agent is waiting.
 
 Use these entry points when following a specific part of the request:
 
-1. [OUP types](../crates/octos-core/src/ui_protocol.rs): commands, events,
+1. [OUP types](../crates/ra-core/src/ui_protocol.rs): commands, events,
    `SessionKey` references, turn IDs, `TurnOrigin` and peer notifications.
    OUP uses JSON-RPC requests, responses and notifications. `turn/start`
    acknowledges admission; subsequent message events and terminal state carry
    the answer and execution outcome.
-2. [Local runtime bootstrap](../crates/octos-cli/src/runtime/local_oup.rs):
+2. [Local runtime bootstrap](../crates/ra-cli/src/runtime/local_oup.rs):
    builds runtime state from a configured profile and model provider.
-3. [OUP transport and dispatcher](../crates/octos-cli/src/api/ui_protocol_transport.rs):
+3. [OUP transport and dispatcher](../crates/ra-cli/src/api/ui_protocol_transport.rs):
    WebSocket and stdio connection loops, session opening, admission, subscriptions,
    `run_standalone_turn`, event forwarding and shutdown.
-4. [Peer app binding](../crates/octos-cli/src/peers/app_binding.rs): canonical
+4. [Peer app binding](../crates/ra-cli/src/peers/app_binding.rs): canonical
    workspace, memory namespace, peer token and request-context bindings.
-5. [Host tools](../crates/octos-cli/src/peers/host_tools.rs) and
-   [tool wrapper](../crates/octos-agent/src/tools/peer_host_tool.rs): registration,
+5. [Host tools](../crates/ra-cli/src/peers/host_tools.rs) and
+   [tool wrapper](../crates/ra-agent/src/tools/peer_host_tool.rs): registration,
    tool confinement, risk gating, outbound host calls and correlated replies.
-6. [Agent loop](../crates/octos-agent/src/agent/loop_runner.rs): model requests,
+6. [Agent loop](../crates/ra-agent/src/agent/loop_runner.rs): model requests,
    tool batches, history and context updates, convergence, budgets and output.
-7. [Turn origins](../crates/octos-cli/src/peers/turn_origin.rs) and
-   [shared history](../crates/octos-cli/src/peers/shared_history.rs): who is
+7. [Turn origins](../crates/ra-cli/src/peers/turn_origin.rs) and
+   [shared history](../crates/ra-cli/src/peers/shared_history.rs): who is
    speaking and how human and system lanes see bounded context from each other.
 
 ## Tests
 
-[Host-tool protocol tests](../crates/octos-cli/src/api/ui_protocol_peer_host_tools_tests.rs)
+[Host-tool protocol tests](../crates/ra-cli/src/api/ui_protocol_peer_host_tools_tests.rs)
 exercise registration, connection ownership, dispatch and failure boundaries.
-The [embedded module tests](../crates/octos-cli/src/embedded.rs) cover profile
+The [embedded module tests](../crates/ra-cli/src/embedded.rs) cover profile
 requirements, session opening and pipe-close shutdown with 8 MiB stacks.
-[Session actor tests](../crates/octos-cli/src/session_actor_tests.rs) cover the
+[Session actor tests](../crates/ra-cli/src/session_actor_tests.rs) cover the
 separate gateway actor implementation. Select focused tests by name and feature
 gate using the commands in [CLAUDE.md](../CLAUDE.md).

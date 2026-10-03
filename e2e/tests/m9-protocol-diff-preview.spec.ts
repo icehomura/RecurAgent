@@ -2,7 +2,7 @@
  * M9 wire-level e2e: `diff/preview/get`.
  *
  * Issue: https://github.com/octos-org/octos/issues/647
- * Spec  : api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
+ * Spec  : api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md §7 / §8
  *
  * The pending-store population path requires a real tool call that emits
  * a diff approval (e.g. `apply_patch`). That depends on sandbox + diff

@@ -2,7 +2,7 @@
  * M4.1A live progress gate (issue #474).
  *
  * Validates on a real canary that the full M4.1A pipeline works end-to-end:
- *   - deep research emits structured `octos.harness.event.v1` progress events
+ *   - deep research emits structured `ra.harness.event.v1` progress events
  *   - the runtime sink folds them into durable `runtime_detail` on the parent task
  *   - the UI header surfaces phase/workflow/progress before completion
  *   - session switch and browser reload both preserve that progress
@@ -14,7 +14,7 @@
  * canary stack is running locally.
  *
  *   OCTOS_TEST_URL=https://dspfac.crew.ominix.io \
- *   OCTOS_AUTH_TOKEN=octos-admin-2026 \
+ *   OCTOS_AUTH_TOKEN=ra-admin-2026 \
  *   OCTOS_PROFILE=dspfac \
  *   OCTOS_TEST_EMAIL=dspfac@gmail.com \
  *   npx playwright test tests/live-progress-gate.spec.ts

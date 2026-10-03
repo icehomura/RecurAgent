@@ -21,4 +21,4 @@ directory and a one-session active cache cap. It proves:
 
 The script does not start, restart, or reconfigure production daemons, and
 it does not change `idle_ttl`. It writes build output only under
-`CARGO_TARGET_DIR`, defaulting to `/private/tmp/octos-post-eviction-replay-target`.
+`CARGO_TARGET_DIR`, defaulting to `/private/tmp/ra-post-eviction-replay-target`.

@@ -13,14 +13,14 @@ decisions, what's done vs. what remains — erodes as tasks prolong. The objecti
 survives (a 300-char, `active`-only system-prompt pin via `#1697`); the *progress*
 rots. That is the concrete "the goal vanishes as tasks prolong" failure.
 
-Separately, octos already has **three** would-be orchestration stacks that do not
+Separately, ra already has **three** would-be orchestration stacks that do not
 know about each other:
 
 - **peers** — durable, interactive agent *sessions* (`SessionKey`,
   `run_standalone_turn`, blackboard, `MasterContinuationScheduler`);
-- **`octos-swarm`** — idempotent batch *dispatch* to external one-shot agents
+- **`ra-swarm`** — idempotent batch *dispatch* to external one-shot agents
   (`DispatchRecord` in redb, parallel/sequential/pipeline/fanout topologies);
-- **`octos-pipeline`** — a DOT-graph *DAG* workflow engine (checkpoint/resume,
+- **`ra-pipeline`** — a DOT-graph *DAG* workflow engine (checkpoint/resume,
   per-node model selection, one bounded runtime fan-out).
 
 Rebasing goal onto peers naïvely would add a **fourth** incompatible ledger /
@@ -36,7 +36,7 @@ Build **one durable fleet kernel** — the child-state ledger, budget reservatio
 status/retry state machine, policy-gate, and validators — shared by all fleet
 orchestration. Keep **two distinct worker-kinds** on it:
 
-- a **stateless task-worker** (onto which `octos-swarm` and `octos-pipeline`
+- a **stateless task-worker** (onto which `ra-swarm` and `ra-pipeline`
   converge), and
 - a **durable, interactive session-worker** (peers — parkable, scheduler-woken).
 
@@ -54,7 +54,7 @@ This is option **C** below.
 Grounded in the code on `origin/main`. The kernel is **already ~80% shared**; the
 **worker model** is the one thing that genuinely differs.
 
-| Layer | octos-swarm | octos-pipeline | peers (+ goal) | Verdict |
+| Layer | ra-swarm | ra-pipeline | peers (+ goal) | Verdict |
 |---|---|---|---|---|
 | **Worker model** | stateless external one-shot (`claude -p`/MCP, `external_unmanaged`) | stateless in-process one-shot (`Agent.run_task`) | **durable, interactive** session — parks mid-turn | **fault line** |
 | **Human-in-the-loop** | none in-band | defined but **dormant/unwired** (`ir.rs:94`) | **first-class** park + scheduler wake | **fault line** |
@@ -169,7 +169,7 @@ does not resume a live turn), and splits the goal win from the hard part:
 ## References
 
 - Shipped foundations: `peer_respond` (#1843), awaiting-input wake (#1844).
-- Related systems: `octos-swarm` (`DispatchRecord`, topologies), `octos-pipeline`
+- Related systems: `ra-swarm` (`DispatchRecord`, topologies), `ra-pipeline`
   (DAG, checkpoints), goal machinery (`AutonomyGoalRecord`,
   `MasterContinuationScheduler`).
 - Prior ADRs in this repo: `docs/M9-LEDGER-DURABILITY-ADR.md`,

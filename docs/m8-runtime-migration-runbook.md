@@ -48,7 +48,7 @@ Each track's PR follows the same merge-and-deploy template:
 2. PR review by another agent or operator (one approving review minimum).
 3. Self-merge via `gh pr merge --squash` (fast-forward only).
 4. Tag the merge commit: `git tag m8-w<N>-<deliverable>-rc<rev> && git push origin <tag>`.
-5. Build release artifact: `cargo build --release -p octos-cli --features "octos-cli/api,octos-cli/telegram"`.
+5. Build release artifact: `cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"`.
 6. Deploy to **mini1** first (canary).
 7. Smoke test (§5).
 8. If green, deploy to mini2 / mini3 / mini4 (parallel ok).
@@ -59,8 +59,8 @@ Each track's PR follows the same merge-and-deploy template:
 
 **W1 (pipeline host + frontend cards/cost)**
 
-- Merging this changes both backend and `octos-web`. The web bundle is
-  served from `crates/octos-cli/static/admin/`; ensure the new bundle is
+- Merging this changes both backend and `ra-web`. The web bundle is
+  served from `crates/ra-cli/static/admin/`; ensure the new bundle is
   in the release build (cargo wraps it via `build.rs`).
 - Smoke: trigger `run_pipeline` from the chat UI, verify NodeCards appear
   under the run_pipeline pill, verify the cost panel renders.
@@ -77,7 +77,7 @@ Each track's PR follows the same merge-and-deploy template:
 
 **W3 (deep_search/deep_crawl + plugin protocol v2)**
 
-- Lands first. Backward-compat shim in `octos-plugin/src/lifecycle.rs` is
+- Lands first. Backward-compat shim in `ra-plugin/src/lifecycle.rs` is
   load-bearing — without it, v1 plugins (mofa_slides, fm_tts,
   podcast_generate before W4) regress.
 - Smoke: trigger deep research, verify the synthesized `_report.md`
@@ -89,7 +89,7 @@ Each track's PR follows the same merge-and-deploy template:
 
 - Adopts v2 in mofa_slides, podcast_generate, fm_tts (via the external
   mofa-skills repos — separate PR per plugin). When the upstream plugin
-  PR merges, octos picks up the new binary on the next `octos skills
+  PR merges, ra picks up the new binary on the next `ra skills
   upgrade` run.
 - The host-side integration tests in `e2e/tests/live-{pipeline,spawn,cost}-end-to-end.spec.ts`
   require all four tracks merged to fully pass.
@@ -129,46 +129,46 @@ hours before promoting.
 ### 4.1 Build the release artifact
 
 ```bash
-cd ~/home/octos
-cargo build --release -p octos-cli --features "octos-cli/api,octos-cli/telegram"
-# Artifact: target/release/octos
+cd ~/home/ra
+cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
+# Artifact: target/release/ra
 ```
 
 If the merge changes web assets, rebuild the dashboard bundle first:
 
 ```bash
-cd ~/home/octos/dashboard
+cd ~/home/ra/dashboard
 pnpm install --frozen-lockfile
 pnpm build
-# Bundle output is consumed by octos-cli's static admin assets.
+# Bundle output is consumed by ra-cli's static admin assets.
 ```
 
 ### 4.2 Stop the running gateway on a mini
 
 ```bash
-ssh cloud@<mini1-ip> 'sudo launchctl unload /Library/LaunchDaemons/com.octos.gateway.plist'
-ssh cloud@<mini1-ip> 'pkill -TERM -x octos || true'
-ssh cloud@<mini1-ip> 'sleep 5; pgrep -x octos || echo stopped'
+ssh cloud@<mini1-ip> 'sudo launchctl unload /Library/LaunchDaemons/com.ra.gateway.plist'
+ssh cloud@<mini1-ip> 'pkill -TERM -x ra || true'
+ssh cloud@<mini1-ip> 'sleep 5; pgrep -x ra || echo stopped'
 ```
 
 ### 4.3 Push the binary
 
 ```bash
-scp target/release/octos cloud@<mini1-ip>:/tmp/octos.new
-ssh cloud@<mini1-ip> 'sudo install -m 755 /tmp/octos.new /usr/local/bin/octos'
+scp target/release/ra cloud@<mini1-ip>:/tmp/ra.new
+ssh cloud@<mini1-ip> 'sudo install -m 755 /tmp/ra.new /usr/local/bin/ra'
 ```
 
 ### 4.4 Restart
 
 ```bash
-ssh cloud@<mini1-ip> 'sudo launchctl load /Library/LaunchDaemons/com.octos.gateway.plist'
-ssh cloud@<mini1-ip> 'sleep 8; pgrep -x octos && echo running'
+ssh cloud@<mini1-ip> 'sudo launchctl load /Library/LaunchDaemons/com.ra.gateway.plist'
+ssh cloud@<mini1-ip> 'sleep 8; pgrep -x ra && echo running'
 ```
 
 ### 4.5 Confirm health
 
 ```bash
-curl -s -H 'Authorization: Bearer octos-admin-2026' \
+curl -s -H 'Authorization: Bearer ra-admin-2026' \
   https://dspfac.bot.ominix.io/api/health | jq .
 ```
 
@@ -184,9 +184,9 @@ fleet-wide deploy (§6).
 ### 5.1 Quick smoke (5 minutes)
 
 ```bash
-cd ~/home/octos/e2e
+cd ~/home/ra/e2e
 OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
-OCTOS_AUTH_TOKEN=octos-admin-2026 \
+OCTOS_AUTH_TOKEN=ra-admin-2026 \
 OCTOS_PROFILE=dspfac \
   npx playwright test tests/runtime-regression.spec.ts --workers=1
 ```
@@ -197,7 +197,7 @@ events, slides project init, cross-session isolation. ~3 minutes.
 ### 5.2 Targeted M8 invariants (8 minutes)
 
 ```bash
-cd ~/home/octos/e2e
+cd ~/home/ra/e2e
 OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
 OCTOS_PROFILE=dspfac \
   npx playwright test tests/m8-runtime-invariants-live.spec.ts --workers=1
@@ -225,9 +225,9 @@ Run after the fleet-wide deploy (every mini except mini5 has the new
 binary). This is the final gate before declaring the epic done.
 
 ```bash
-cd ~/home/octos/e2e
+cd ~/home/ra/e2e
 OCTOS_TEST_URL=https://dspfac.bot.ominix.io \
-OCTOS_AUTH_TOKEN=octos-admin-2026 \
+OCTOS_AUTH_TOKEN=ra-admin-2026 \
 OCTOS_PROFILE=dspfac \
 OCTOS_TEST_EMAIL=dspfac@gmail.com \
   npx playwright test --workers=2 \
@@ -258,7 +258,7 @@ Pick the merge commit that introduced the regression. Note its hash.
 ### 7.2 Revert (preferred)
 
 ```bash
-cd ~/home/octos
+cd ~/home/ra
 git checkout main
 git pull --ff-only
 git revert <commit-hash>
@@ -293,10 +293,10 @@ If only the binary needs to roll back and the revert is in flight, push
 the previous binary directly:
 
 ```bash
-ssh cloud@<mini1-ip> 'sudo cp /usr/local/bin/octos /usr/local/bin/octos.failed'
-scp target/release/octos.previous cloud@<mini1-ip>:/tmp/octos.rollback
-ssh cloud@<mini1-ip> 'sudo install -m 755 /tmp/octos.rollback /usr/local/bin/octos'
-ssh cloud@<mini1-ip> 'sudo launchctl unload /Library/LaunchDaemons/com.octos.gateway.plist && sudo launchctl load /Library/LaunchDaemons/com.octos.gateway.plist'
+ssh cloud@<mini1-ip> 'sudo cp /usr/local/bin/ra /usr/local/bin/ra.failed'
+scp target/release/ra.previous cloud@<mini1-ip>:/tmp/ra.rollback
+ssh cloud@<mini1-ip> 'sudo install -m 755 /tmp/ra.rollback /usr/local/bin/ra'
+ssh cloud@<mini1-ip> 'sudo launchctl unload /Library/LaunchDaemons/com.ra.gateway.plist && sudo launchctl load /Library/LaunchDaemons/com.ra.gateway.plist'
 ```
 
 Then file a follow-up issue, revert at the source, and re-build cleanly.
@@ -356,7 +356,7 @@ fn emit_progress(phase: &str, message: &str, progress: Option<f64>) {
     let session_id = std::env::var("OCTOS_HARNESS_SESSION_ID").unwrap_or_default();
     let task_id    = std::env::var("OCTOS_HARNESS_TASK_ID").unwrap_or_default();
     let event = serde_json::json!({
-        "schema":   "octos.harness.event.v1",
+        "schema":   "ra.harness.event.v1",
         "kind":     "progress",
         "session_id": session_id,
         "task_id":    task_id,
@@ -379,7 +379,7 @@ fn emit_cost(model: &str, tokens_in: u32, tokens_out: u32, usd: f64) {
     let session_id = std::env::var("OCTOS_HARNESS_SESSION_ID").unwrap_or_default();
     let task_id    = std::env::var("OCTOS_HARNESS_TASK_ID").unwrap_or_default();
     let event = serde_json::json!({
-        "schema":         "octos.harness.event.v1",
+        "schema":         "ra.harness.event.v1",
         "kind":           "cost_attribution",
         "session_id":     session_id,
         "task_id":        task_id,
@@ -436,7 +436,7 @@ echo '{"voice":"vivian","text":"hello"}' | \
 # Send SIGTERM mid-flight and confirm exit within 10s
 ```
 
-The W4 PR adds matching unit tests in `crates/octos-plugin/tests/` that
+The W4 PR adds matching unit tests in `crates/ra-plugin/tests/` that
 parse a representative event from each plugin to ensure the schema is
 honoured.
 
@@ -453,7 +453,7 @@ gh release create v<new> --notes "M8 protocol v2 adoption"
 ```
 
 The `manifest.json` `binaries.<arch>.url` points at the GitHub release
-asset; once the asset is published, the next `octos skills upgrade` run
+asset; once the asset is published, the next `ra skills upgrade` run
 on each mini picks up the new binary automatically.
 
 ---
@@ -465,12 +465,12 @@ After all four tracks merge, redeploy the entire fleet (skip mini5):
 ```bash
 for host in <mini1-ip> <mini2-ip> <mini3-ip> <mini4-ip>; do
   echo "=== deploying to $host ==="
-  scp target/release/octos cloud@$host:/tmp/octos.new
-  ssh cloud@$host 'sudo install -m 755 /tmp/octos.new /usr/local/bin/octos'
-  ssh cloud@$host 'sudo launchctl unload /Library/LaunchDaemons/com.octos.gateway.plist'
-  ssh cloud@$host 'pkill -TERM -x octos || true; sleep 4; pkill -KILL -x octos || true'
-  ssh cloud@$host 'sudo launchctl load /Library/LaunchDaemons/com.octos.gateway.plist'
-  ssh cloud@$host 'sleep 8; pgrep -x octos && echo $host running'
+  scp target/release/ra cloud@$host:/tmp/ra.new
+  ssh cloud@$host 'sudo install -m 755 /tmp/ra.new /usr/local/bin/ra'
+  ssh cloud@$host 'sudo launchctl unload /Library/LaunchDaemons/com.ra.gateway.plist'
+  ssh cloud@$host 'pkill -TERM -x ra || true; sleep 4; pkill -KILL -x ra || true'
+  ssh cloud@$host 'sudo launchctl load /Library/LaunchDaemons/com.ra.gateway.plist'
+  ssh cloud@$host 'sleep 8; pgrep -x ra && echo $host running'
 done
 # DO NOT touch mini5 (<mini5-ip>) — reserved for coding-green tests.
 ```
@@ -479,9 +479,9 @@ Verify all four hosts respond healthy before declaring the deploy done:
 
 ```bash
 for host in dspfac.crew.ominix.io dspfac.bot.ominix.io \
-            dspfac.octos.ominix.io dspfac.river.ominix.io; do
+            dspfac.ra.ominix.io dspfac.river.ominix.io; do
   echo -n "$host: "
-  curl -s -H 'Authorization: Bearer octos-admin-2026' \
+  curl -s -H 'Authorization: Bearer ra-admin-2026' \
     "https://$host/api/health" | jq -r .status
 done
 ```
@@ -495,7 +495,7 @@ All four should print `healthy`.
 Once the fleet-wide deploy is green and the cross-track live spec suite
 (§6) is green:
 
-- [ ] Update `~/home/octos/CLAUDE.md` to reflect any architecture changes.
+- [ ] Update `~/home/ra/CLAUDE.md` to reflect any architecture changes.
 - [ ] Update the maintainers' private host notes
       with anything operationally new.
 - [ ] Close the umbrella issue (`#591`) with the final test matrix.
@@ -522,17 +522,17 @@ Once the fleet-wide deploy is green and the cross-track live spec suite
 
 ```text
 # build a release
-cargo build --release -p octos-cli --features "octos-cli/api,octos-cli/telegram"
+cargo build --release -p ra-cli --features "ra-cli/api,ra-cli/telegram"
 
 # deploy to one mini
-scp target/release/octos cloud@<ip>:/tmp/octos.new
-ssh cloud@<ip> 'sudo install -m 755 /tmp/octos.new /usr/local/bin/octos && \
-  sudo launchctl unload /Library/LaunchDaemons/com.octos.gateway.plist && \
-  pkill -TERM -x octos || true; sleep 4; pkill -KILL -x octos || true; \
-  sudo launchctl load /Library/LaunchDaemons/com.octos.gateway.plist'
+scp target/release/ra cloud@<ip>:/tmp/ra.new
+ssh cloud@<ip> 'sudo install -m 755 /tmp/ra.new /usr/local/bin/ra && \
+  sudo launchctl unload /Library/LaunchDaemons/com.ra.gateway.plist && \
+  pkill -TERM -x ra || true; sleep 4; pkill -KILL -x ra || true; \
+  sudo launchctl load /Library/LaunchDaemons/com.ra.gateway.plist'
 
 # verify health
-curl -s -H 'Authorization: Bearer octos-admin-2026' \
+curl -s -H 'Authorization: Bearer ra-admin-2026' \
   https://dspfac.bot.ominix.io/api/health | jq .
 
 # run the M8 invariants suite

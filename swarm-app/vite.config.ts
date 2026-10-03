@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const base = process.env.VITE_BASE_PATH ?? '/swarm/'
-const outDir = process.env.VITE_OUT_DIR ?? '../crates/octos-cli/static/swarm'
+const outDir = process.env.VITE_OUT_DIR ?? '../crates/ra-cli/static/swarm'
 
 export default defineConfig({
   plugins: [react()],

@@ -1,12 +1,12 @@
 {
-  "contract": "octos peer list / peer_list tool — 完成状态绑定生命周期、当前轮次与执行结果",
+  "contract": "ra peer list / peer_list tool — 完成状态绑定生命周期、当前轮次与执行结果",
   "version": 2,
   "spec": "specs/task-evo-peer-turn-status.spec.md",
   "change_note": "v2 依外层复核：删除并行 turn-state.json 设计，current 执行/身份改为 lifetime.json 只读安全投影；outcome 恒取 turns.txt 终止证据；closed 表现为 execution=closed 而非 idle；身份含 task/generation/turn_id；契约文件移入 tracked docs/。",
   "producer": {
-    "cli_command": "octos peer list [--json] [--data-dir DIR] [--profile ID]",
+    "cli_command": "ra peer list [--json] [--data-dir DIR] [--profile ID]",
     "tool": "peer_list (serve)",
-    "assembly": "crates/octos-cli/src/commands/peer.rs::list_peers（CLI JSON/表格共用）；crates/octos-cli/src/peers/mod.rs（投影 + blackboard + compose_peer_list_text）"
+    "assembly": "crates/ra-cli/src/commands/peer.rs::list_peers（CLI JSON/表格共用）；crates/ra-cli/src/peers/mod.rs（投影 + blackboard + compose_peer_list_text）"
   },
   "evidence_sources": {
     "authority_current": "peers/<slug>/lifetime.json — 只读安全投影（不写不改）。校验（fail-closed）：version==1 && task_id 非空 && registry_key == '<profile>:peer:<slug>' && originator leaf == lifetime.master；idle 还须 result_digest 非空。任一失败 → execution/身份 unknown/null。profile 来源见 profile_resolution（CLI --profile 显式传入，serve 用已知 profile_id）。",
@@ -51,7 +51,7 @@
     "digest_mismatch_test": "反例测试必须包含 nonempty 但不匹配的 digest（peer_list_idle_digest_mismatch_degrades_to_unknown）。",
     "begin_crash_orphan_running": "begin_peer_lifetime_turn 后、terminal 前崩溃 → 盘上残留 phase=Running。跨重启恢复扫描不处理 Running（仅 closed 退休与 Idle 摘要重绑）；孤儿 Running 保持 running 呈现直到真实生命周期更新，无自动降级，可能长期呈 running。"
   },
-  "profile_resolution": "CLI：--profile <id>（默认 octos/DEFAULT_PROFILE_ID）显式传入投影校验；--data-dir 为任意合法路径，不从目录名推导 profile；serve 回调用已知 profile_id。",
+  "profile_resolution": "CLI：--profile <id>（默认 ra/DEFAULT_PROFILE_ID）显式传入投影校验；--data-dir 为任意合法路径，不从目录名推导 profile；serve 回调用已知 profile_id。",
   "idle_binding": "Idle 采信条件：fd-anchored 读 result.md 并计算 SHA256 与 lifetime.result_digest 实际相等；空白/错误/不匹配摘要或文件缺失 → unknown。仅比对摘要，不解析正文。",
   "clarifications": {
     "round_on_terminal_phases": "idle/failed 时若有严格终止证据（turns 尾行 × 最高 result-<n>.md 互证）则取该证据的轮号，否则 rounds_delivered；正常连续编号盘面两者恒等。（GLM 首审 LOW#3 裁决采纳：保留实现的更大信息量，契约措辞对齐）",

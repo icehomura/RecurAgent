@@ -1,6 +1,6 @@
 # Nix
 
-Octos 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和系统级集成（NixOS 与 macOS / nix-darwin）。
+ra 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和系统级集成（NixOS 与 macOS / nix-darwin）。
 
 ## 支持的系统
 
@@ -13,14 +13,14 @@ Octos 提供一流的 Nix Flake 支持，用于可重现构建、开发环境和
 ```
 .
 ├── packages.<system>
-│   ├── default          → octos（最小版本）
-│   ├── octos            → octos CLI（无频道功能）
-│   ├── octos-minimal    → octos 的别名
-│   └── octos-full       → octos（全部频道 + app-skills）
+│   ├── default          → ra（最小版本）
+│   ├── ra            → ra CLI（无频道功能）
+│   ├── ra-minimal    → ra 的别名
+│   └── ra-full       → ra（全部频道 + app-skills）
 ├── devShells.<system>
 │   └── default          → Rust + Nix 工具链的开发环境
-├── nixosModules.default → NixOS 模块（programs.octos）
-├── darwinModules.default → nix-darwin 模块（programs.octos）
+├── nixosModules.default → NixOS 模块（programs.ra）
+├── darwinModules.default → nix-darwin 模块（programs.ra）
 ├── formatter.<system>   → nixfmt-tree
 └── checks.<system>
     ├── darwin-module    → Darwin 模块求值测试
@@ -41,12 +41,12 @@ nix run github:octos-org/octos#octos-full -- chat --message "Hello"
 
 ```bash
 # 最小构建（仅 CLI，无频道功能）
-nix build .#octos
+nix build .#ra
 
 # 完整构建（全部频道 + app-skills）
-nix build .#octos-full
+nix build .#ra-full
 
-# 默认软件包（等同于 octos）
+# 默认软件包（等同于 ra）
 nix build .
 ```
 
@@ -56,11 +56,11 @@ nix build .
 
 ```bash
 # 仅 Telegram + API
-nix build .#octos --override-input features '["api" "telegram"]'
+nix build .#ra --override-input features '["api" "telegram"]'
 
 # 或者在你自己的 flake 中：
 let
-  myOctos = octos.packages.${system}.octos.override {
+  myOctos = ra.packages.${system}.ra.override {
     features = [ "api" "telegram" "discord" ];
     enableAppSkills = true;
   };
@@ -82,11 +82,11 @@ in
 ```
 
 ```nix
-# octos.nix
+# ra.nix
 { inputs, ... }: {
-  imports = [ inputs.octos.nixosModules.default ];
+  imports = [ inputs.ra.nixosModules.default ];
 
-  programs.octos = {
+  programs.ra = {
     enable = true;
   };
 }
@@ -95,7 +95,7 @@ in
 ### 启用频道和技能
 
 ```nix
-programs.octos = {
+programs.ra = {
   enable = true;
   channels = [ "telegram" "discord" ];
   enableAppSkills = true;
@@ -105,7 +105,7 @@ programs.octos = {
 ### 完整配置（含服务）
 
 ```nix
-programs.octos = {
+programs.ra = {
   enable = true;
   enableAllChannels = true;
   enableAppSkills = true;
@@ -115,13 +115,13 @@ programs.octos = {
     enable = true;
     host = "127.0.0.1";
     port = 8080;
-    dataDir = "/var/lib/octos";
+    dataDir = "/var/lib/ra";
     authToken = "your-secret-token";
   };
 };
 ```
 
-这将创建一个 `systemd` 服务（`octos-serve.service`），开机自动运行 `octos serve`。
+这将创建一个 `systemd` 服务（`ra-serve.service`），开机自动运行 `ra serve`。
 
 ## nix-darwin 模块
 
@@ -130,9 +130,9 @@ programs.octos = {
 ```nix
 # darwin-configuration.nix
 { inputs, ... }: {
-  imports = [ inputs.octos.darwinModules.default ];
+  imports = [ inputs.ra.darwinModules.default ];
 
-  programs.octos = {
+  programs.ra = {
     enable = true;
     channels = [ "telegram" ];
     enableAppSkills = true;
@@ -141,31 +141,31 @@ programs.octos = {
       enable = true;
       host = "127.0.0.1";
       port = 8080;
-      dataDir = "/var/lib/octos";
+      dataDir = "/var/lib/ra";
       authToken = "your-secret-token";
     };
   };
 }
 ```
 
-这将创建一个由系统管理的 launchd 守护进程（`org.octos.serve`）。
+这将创建一个由系统管理的 launchd 守护进程（`org.ra.serve`）。
 
 ## 模块选项参考
 
 | 选项                                 | 类型         | 默认值             | 说明                                                      |
 | ------------------------------------ | ------------ | ------------------ | --------------------------------------------------------- |
-| `programs.octos.enable`              | bool         | `false`            | 启用 octos 模块                                           |
-| `programs.octos.package`             | package      | `octos`            | 要使用的基础 octos 软件包                                 |
-| `programs.octos.finalPackage`        | package      | （自动计算）       | 只读；应用覆盖后的最终软件包                              |
-| `programs.octos.channels`            | enum 列表    | `null`             | 要启用的频道。`null` 保留软件包的默认功能                 |
-| `programs.octos.enableAllChannels`   | bool         | `false`            | 启用所有支持的频道                                        |
-| `programs.octos.enableAppSkills`     | bool 或 null | `null`             | 包含 app-skill 二进制文件。`null` 保留软件包默认值        |
-| `programs.octos.enableExtraPackages` | bool         | `false`            | 安装 chromium、nodejs、ffmpeg、libreoffice、poppler-utils |
-| `programs.octos.service.enable`      | bool         | `false`            | 将 `octos serve` 作为系统服务启用                         |
-| `programs.octos.service.host`        | string       | `"127.0.0.1"`      | 面板绑定的主机地址                                        |
-| `programs.octos.service.port`        | int          | `8080`             | 面板端口                                                  |
-| `programs.octos.service.dataDir`     | string       | `"/var/lib/octos"` | 会话、记忆等数据的存储目录                                |
-| `programs.octos.service.authToken`   | string       | （必填）           | 面板访问的认证令牌                                        |
+| `programs.ra.enable`              | bool         | `false`            | 启用 ra 模块                                           |
+| `programs.ra.package`             | package      | `ra`            | 要使用的基础 ra 软件包                                 |
+| `programs.ra.finalPackage`        | package      | （自动计算）       | 只读；应用覆盖后的最终软件包                              |
+| `programs.ra.channels`            | enum 列表    | `null`             | 要启用的频道。`null` 保留软件包的默认功能                 |
+| `programs.ra.enableAllChannels`   | bool         | `false`            | 启用所有支持的频道                                        |
+| `programs.ra.enableAppSkills`     | bool 或 null | `null`             | 包含 app-skill 二进制文件。`null` 保留软件包默认值        |
+| `programs.ra.enableExtraPackages` | bool         | `false`            | 安装 chromium、nodejs、ffmpeg、libreoffice、poppler-utils |
+| `programs.ra.service.enable`      | bool         | `false`            | 将 `ra serve` 作为系统服务启用                         |
+| `programs.ra.service.host`        | string       | `"127.0.0.1"`      | 面板绑定的主机地址                                        |
+| `programs.ra.service.port`        | int          | `8080`             | 面板端口                                                  |
+| `programs.ra.service.dataDir`     | string       | `"/var/lib/ra"` | 会话、记忆等数据的存储目录                                |
+| `programs.ra.service.authToken`   | string       | （必填）           | 面板访问的认证令牌                                        |
 
 ## 贡献指南
 
@@ -177,7 +177,7 @@ Nix 集成遵循三个核心原则：
 
 1. **与 Cargo 功能对等** — 每个 Cargo 功能标志都通过 Nix 包系统暴露。`cli.nix` 派生直接读取 `Cargo.toml`，并将功能映射到 `cargoBuildFlags`。
 
-2. 模块采用**透明覆盖**策略：当未设置任何功能相关的选项（`channels`、`enableAllChannels`、`service.enable`、`enableAppSkills`）时，模块直接返回用户选择的 `package`，不做任何修改。这保证了构建缓存的复用，并确保 `octos-full` 无论是直接使用还是通过模块使用都保持完全一致。一旦设置了任何自定义选项，模块会使用计算出的功能集调用 `.override`。当启用频道或服务时，`api` 功能会自动添加。
+2. 模块采用**透明覆盖**策略：当未设置任何功能相关的选项（`channels`、`enableAllChannels`、`service.enable`、`enableAppSkills`）时，模块直接返回用户选择的 `package`，不做任何修改。这保证了构建缓存的复用，并确保 `ra-full` 无论是直接使用还是通过模块使用都保持完全一致。一旦设置了任何自定义选项，模块会使用计算出的功能集调用 `.override`。当启用频道或服务时，`api` 功能会自动添加。
 
 3. **跨平台一致性** — NixOS 和 nix-darwin 模块共享同一个 `options.nix` 定义。平台差异（systemd vs launchd、tmpfiles vs activationScripts）仅存在于平台特定的模块文件中。
 
@@ -188,7 +188,7 @@ flake.nix                          # 入口点 — 连接所有组件
 ├── nix/
 │   ├── packages/
 │   │   ├── default.nix            # 组合包（CLI + 可选 app-skills）
-│   │   ├── cli.nix                # octos-cli 的 Rust 构建派生
+│   │   ├── cli.nix                # ra-cli 的 Rust 构建派生
 │   │   ├── app-skills.nix         # app-skill 二进制文件的 Rust 构建派生
 │   │   └── admin-dashboard.nix    # Web 面板的 npm 构建
 │   ├── modules/
@@ -224,8 +224,8 @@ nix build .#checks.x86_64-linux.nixos-module-vm --print-build-logs
 
 运行一个完整的 NixOS 虚拟机，它会：
 
-- 安装带有 Telegram + Discord 频道和 app-skills 的 octos
-- 启动 `octos-serve` systemd 服务
+- 安装带有 Telegram + Discord 频道和 app-skills 的 ra
+- 启动 `ra-serve` systemd 服务
 - 验证服务在配置的端口上可访问
 - 检查所有 app-skill 二进制文件是否在 PATH 中
 - 验证数据目录权限

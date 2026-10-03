@@ -3,7 +3,7 @@
 //
 // This module is the canonical CLIENT consumer for the M9-γ
 // `projection/envelope` notification surface. Server emit is in
-// `crates/octos-cli/src/api/ui_protocol*.rs` (Rust); this bridge is the
+// `crates/ra-cli/src/api/ui_protocol*.rs` (Rust); this bridge is the
 // matching TypeScript decode + invariant-check layer.
 //
 // Once the server-emit + per-connection live filter cutover lands
@@ -40,7 +40,7 @@
 //   5. Provides a typed callback API (`onEnvelope`) the projection
 //      function subscribes to.
 //
-// Spec: `api/OCTOS_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 14.
+// Spec: `api/ra_UI_PROTOCOL_V1_SPEC_2026-04-24.md` § 14.
 
 import type { Envelope, ThreadId, Seq } from './ui-protocol-types.js';
 import { UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2 } from './ui-protocol-types.js';
@@ -60,10 +60,10 @@ export interface BridgeMetrics {
    *  `seq` / `payload`, unknown `payload.type`, etc.). */
   malformed: number;
   /** Hard-barrier drops: post-completion envelopes on a closed thread.
-   *  Mirrors `octos_projection_post_completion_drop_total{kind="post_completion"}`. */
+   *  Mirrors `ra_projection_post_completion_drop_total{kind="post_completion"}`. */
   postCompletionDrops: number;
   /** Hard-barrier drops: duplicate `turn_completed` on a closed thread.
-   *  Mirrors `octos_projection_post_completion_drop_total{kind="duplicate_completed"}`. */
+   *  Mirrors `ra_projection_post_completion_drop_total{kind="duplicate_completed"}`. */
   duplicateCompletedDrops: number;
   /** Seq monotonicity violations (gap or backward seq). The bridge
    *  still surfaces the envelope; the projection decides whether to
@@ -280,6 +280,6 @@ export class ProjectionEnvelopeBridge {
 /** Convenience: the wire feature flag the bridge expects to have been
  *  negotiated at session/open. Re-exported from `ui-protocol-types`
  *  for caller ergonomics — passing this string into a `session/open`
- *  request's `X-Octos-Ui-Features` opts the connection into the M9-γ
+ *  request's `X-Ra-Ui-Features` opts the connection into the M9-γ
  *  cutover. */
 export const REQUIRED_FEATURE = UI_PROTOCOL_FEATURE_PROJECTION_ENVELOPE_V2;

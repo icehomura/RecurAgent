@@ -48,7 +48,7 @@ const path = require('path');
 const [file, status, fanoutStatus, crashStatus, pressureStatus] = process.argv.slice(2);
 const outDir = path.dirname(file);
 const value = {
-  schema: 'octos.m16.combined_stress_soak.v1',
+  schema: 'ra.m16.combined_stress_soak.v1',
   generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
   status,
   output_dir: outDir,

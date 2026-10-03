@@ -59,8 +59,8 @@ detect_base_ref() {
 }
 
 detect_base_remote() {
-    if git show-ref --verify --quiet "refs/remotes/octos/$1"; then
-        printf "octos"
+    if git show-ref --verify --quiet "refs/remotes/ra/$1"; then
+        printf "ra"
         return 0
     fi
     if git show-ref --verify --quiet "refs/remotes/origin/$1"; then
@@ -101,9 +101,9 @@ fi
 if [ -n "$SUBSYSTEM" ]; then
     # Focused subsystem test
     section "Subsystem Tests: $SUBSYSTEM"
-    CRATE="octos-$SUBSYSTEM"
-    if cargo test -p "$CRATE" $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-sub.log | tail -5; then
-        SUB_PASS=$(grep "^test result:" /tmp/octos-ci-sub.log | awk '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    CRATE="ra-$SUBSYSTEM"
+    if cargo test -p "$CRATE" $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-sub.log | tail -5; then
+        SUB_PASS=$(grep "^test result:" /tmp/ra-ci-sub.log | awk '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "$CRATE tests ($SUB_PASS passed)"
     else
         fail "$CRATE tests"
@@ -113,8 +113,8 @@ else
 
     # 3a. Workspace tests (all crates)
     echo "  Running: cargo test --workspace"
-    if cargo test --workspace $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-test.log | tail -20; then
-        TOTAL=$(grep "^test result:" /tmp/octos-ci-test.log | \
+    if cargo test --workspace $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-test.log | tail -20; then
+        TOTAL=$(grep "^test result:" /tmp/ra-ci-test.log | \
             awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "cargo test --workspace ($TOTAL passed)"
     else
@@ -126,8 +126,8 @@ else
 
     # Adaptive routing (Off/Hedge/Lane, circuit breaker, scoring, metrics)
     echo "  Running: adaptive routing tests"
-    if cargo test -p octos-llm --lib adaptive::tests $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-adaptive.log | tail -5; then
-        N=$(grep "^test result:" /tmp/octos-ci-adaptive.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    if cargo test -p ra-llm --lib adaptive::tests $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-adaptive.log | tail -5; then
+        N=$(grep "^test result:" /tmp/ra-ci-adaptive.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "adaptive routing ($N tests)"
     else
         fail "adaptive routing"
@@ -135,11 +135,11 @@ else
 
     # QoS cold-start/runtime catalog and pipeline fallback ordering
     echo "  Running: QoS/runtime catalog regression tests"
-    if cargo test -p octos-llm test_qos_ranking_changes_lane_selection $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-qos.log | tail -5 \
-        && cargo test -p octos-llm test_derive_cold_start_catalog_assigns_non_zero_scores $TEST_THREADS_FLAG 2>&1 | tee -a /tmp/octos-ci-qos.log | tail -5 \
-        && cargo test -p octos-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score $TEST_THREADS_FLAG 2>&1 | tee -a /tmp/octos-ci-qos.log | tail -5 \
-        && cargo test -p octos-cli gateway_runtime::tests --features api $TEST_THREADS_FLAG 2>&1 | tee -a /tmp/octos-ci-qos.log | tail -5; then
-        N=$(grep "^test result:" /tmp/octos-ci-qos.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    if cargo test -p ra-llm test_qos_ranking_changes_lane_selection $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-qos.log | tail -5 \
+        && cargo test -p ra-llm test_derive_cold_start_catalog_assigns_non_zero_scores $TEST_THREADS_FLAG 2>&1 | tee -a /tmp/ra-ci-qos.log | tail -5 \
+        && cargo test -p ra-llm test_compatible_fallbacks_prefers_lower_seeded_qos_score $TEST_THREADS_FLAG 2>&1 | tee -a /tmp/ra-ci-qos.log | tail -5 \
+        && cargo test -p ra-cli gateway_runtime::tests --features api $TEST_THREADS_FLAG 2>&1 | tee -a /tmp/ra-ci-qos.log | tail -5; then
+        N=$(grep "^test result:" /tmp/ra-ci-qos.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "QoS/runtime catalog regressions ($N tests)"
     else
         fail "QoS/runtime catalog regressions"
@@ -147,8 +147,8 @@ else
 
     # Responsiveness observer (baseline, degradation, recovery)
     echo "  Running: responsiveness observer tests"
-    if cargo test -p octos-llm --lib responsiveness::tests $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-resp.log | tail -5; then
-        N=$(grep "^test result:" /tmp/octos-ci-resp.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    if cargo test -p ra-llm --lib responsiveness::tests $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-resp.log | tail -5; then
+        N=$(grep "^test result:" /tmp/ra-ci-resp.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "responsiveness observer ($N tests)"
     else
         fail "responsiveness observer"
@@ -156,8 +156,8 @@ else
 
     # Queue modes + speculative overflow + auto-escalation
     echo "  Running: session actor tests (queue modes, speculative, escalation)"
-    if cargo test -p octos-cli session_actor::tests -- --test-threads=1 2>&1 | tee /tmp/octos-ci-actor.log | tail -5; then
-        N=$(grep "^test result:" /tmp/octos-ci-actor.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    if cargo test -p ra-cli session_actor::tests -- --test-threads=1 2>&1 | tee /tmp/ra-ci-actor.log | tail -5; then
+        N=$(grep "^test result:" /tmp/ra-ci-actor.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "session actor ($N tests)"
     else
         fail "session actor"
@@ -165,8 +165,8 @@ else
 
     # Security sandbox (write isolation, /tmp loophole, Python escapes, SSRF, symlinks)
     echo "  Running: security sandbox tests"
-    if cargo test -p octos-agent --test security_sandbox $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-security.log | tail -5; then
-        N=$(grep "^test result:" /tmp/octos-ci-security.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    if cargo test -p ra-agent --test security_sandbox $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-security.log | tail -5; then
+        N=$(grep "^test result:" /tmp/ra-ci-security.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "security sandbox ($N tests)"
     else
         fail "security sandbox"
@@ -174,20 +174,20 @@ else
 
     # Session persistence (JSONL, LRU, fork, rewrite, sort)
     echo "  Running: session persistence tests"
-    if cargo test -p octos-bus session::tests $TEST_THREADS_FLAG 2>&1 | tee /tmp/octos-ci-session.log | tail -5; then
-        N=$(grep "^test result:" /tmp/octos-ci-session.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
+    if cargo test -p ra-bus session::tests $TEST_THREADS_FLAG 2>&1 | tee /tmp/ra-ci-session.log | tail -5; then
+        N=$(grep "^test result:" /tmp/ra-ci-session.log | awk -F'[;.]' '{for(i=1;i<=NF;i++){if($i~/passed/){gsub(/[^0-9]/,"",$i);p+=$i}}}END{print p+0}')
         pass "session persistence ($N tests)"
     else
         fail "session persistence"
     fi
 
-    # octos-cli with API feature
+    # ra-cli with API feature
     if [ "$QUICK" = false ]; then
-        echo "  Running: octos-cli with API feature"
-        if cargo test -p octos-cli --features api $TEST_THREADS_FLAG 2>&1 | tail -3; then
-            pass "octos-cli --features api"
+        echo "  Running: ra-cli with API feature"
+        if cargo test -p ra-cli --features api $TEST_THREADS_FLAG 2>&1 | tail -3; then
+            pass "ra-cli --features api"
         else
-            fail "octos-cli --features api"
+            fail "ra-cli --features api"
         fi
     fi
 fi

@@ -1,6 +1,6 @@
 [book]
-title = "Octos Documentation"
-authors = ["octos contributors"]
+title = "ra Documentation"
+authors = ["ra contributors"]
 language = "en"
 src = "src"
 
@@ -12,5 +12,5 @@ default-theme = "light"
 preferred-dark-theme = "ayu"
 git-repository-url = "https://github.com/octos-org/octos"
 edit-url-template = "https://github.com/octos-org/octos/edit/main/book/src/{path}"
-site-url = "/octos/"
-additional-css = ["theme/octos.css"]
+site-url = "/ra/"
+additional-css = ["theme/ra.css"]

@@ -15,7 +15,7 @@ const runRoot = path.resolve(
 );
 const dataDir = path.join(runRoot, 'data');
 const workspace = path.join(runRoot, 'workspace');
-const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'octos');
+const octosBin = process.env.OCTOS_BIN || path.join(repoRoot, 'target', 'debug', 'ra');
 const profileId = process.env.OCTOS_M15_NATIVE_PROFILE || 'm15-native';
 const sessionId =
   process.env.OCTOS_M15_NATIVE_SESSION || `${profileId}:local:m15-native-review-${stamp}`;
@@ -289,7 +289,7 @@ function agentIdWithPrefix(prefix, agents) {
 async function main() {
   await new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error('octos serve --stdio did not spawn')),
+      () => reject(new Error('ra serve --stdio did not spawn')),
       10_000,
     );
     child.once('spawn', () => {
