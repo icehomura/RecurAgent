@@ -25,6 +25,10 @@ pub const ENV_PREFIX: &str = "RA_";
 pub const LEGACY_ENV_PREFIX: &str = "OCTOS_";
 /// Directory name the product used before the rename.
 pub const LEGACY_SLUG: &str = "ra";
+/// State-home directory inside the user's home: `~/.ra`.
+pub const STATE_DIR: &str = ".ra";
+/// Legacy state-home directory: `~/.ra`.
+pub const LEGACY_STATE_DIR: &str = ".ra";
 
 /// Read `RA_<name>` and fall back to `OCTOS_<name>`.
 ///
@@ -83,8 +87,8 @@ pub fn choose(
 /// The runtime state home: `RA_HOME` → `OCTOS_HOME` → existing `~/.ra` → existing `~/.ra`.
 pub fn state_home() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
-    let new_dir = home.join(APP_SLUG);
-    let legacy_dir = home.join(LEGACY_SLUG);
+    let new_dir = home.join(STATE_DIR);
+    let legacy_dir = home.join(LEGACY_STATE_DIR);
     Some(choose(
         env_compat("HOME").map(PathBuf::from),
         None,
@@ -115,7 +119,7 @@ pub fn config_home() -> Option<PathBuf> {
 /// Join `name` onto [`state_home`].
 pub fn state_path(name: impl AsRef<Path>) -> PathBuf {
     state_home()
-        .unwrap_or_else(|| PathBuf::from(APP_SLUG))
+        .unwrap_or_else(|| PathBuf::from(STATE_DIR))
         .join(name)
 }
 
@@ -206,5 +210,8 @@ mod tests {
         assert_eq!(ENV_PREFIX, "RA_");
         assert_eq!(LEGACY_ENV_PREFIX, "OCTOS_");
         assert_eq!(LEGACY_SLUG, "ra");
+        // the state dir is a dot-directory in $HOME, the config dir is plain
+        assert_eq!(STATE_DIR, ".ra");
+        assert_eq!(LEGACY_STATE_DIR, ".ra");
     }
 }

@@ -25,8 +25,8 @@ mod utils;
 
 pub use abort::{abort_response, is_abort_trigger};
 pub use brand::{
-    APP_NAME, APP_SLUG, ENV_PREFIX, LEGACY_ENV_PREFIX, LEGACY_SLUG, choose, config_home,
-    env_compat, env_compat_of, env_compat_str, state_home, state_path,
+    APP_NAME, APP_SLUG, ENV_PREFIX, LEGACY_ENV_PREFIX, LEGACY_SLUG, LEGACY_STATE_DIR, STATE_DIR,
+    choose, config_home, env_compat, env_compat_of, env_compat_str, state_home, state_path,
 };
 pub use env_hygiene::{
     BLOCKED_ENV_VARS, is_registered_secret_env_name, is_secret_env_name, register_secret_env_names,
