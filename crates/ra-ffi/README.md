@@ -8,7 +8,7 @@ optional embedder.
 ## Build
 
 ```bash
-# Shared library (target/release/liboctos_ffi.{dylib,so} + .a static lib).
+# Shared library (target/release/libra_ffi.{dylib,so} + .a static lib).
 # The default features include `embed-llama`, the in-process GGUF embedder
 # (a CMake build of llama.cpp: needs cmake + a C++ toolchain):
 cargo build -p ra-ffi --release                                  # CPU
@@ -90,7 +90,8 @@ Resolution at `ra_runtime_new`, when `embedding_model_path` is unset:
 
 1. the file is complete under the data dir → it is loaded;
 2. else, if `embedding_auto_download` is not `false` and
-   `OCTOS_NO_MODEL_DOWNLOAD` is not set in the environment → it is
+   `RA_NO_MODEL_DOWNLOAD` (legacy `OCTOS_NO_MODEL_DOWNLOAD`) is not set in
+   the environment → it is
    downloaded **synchronously, blocking `ra_runtime_new`** for the whole
    transfer, then loaded; a failed download is logged (`tracing` warn) and
    the runtime continues keyword-only;
@@ -130,7 +131,8 @@ but not `complete`; `ensure` re-fetches it). Both functions exist in every
 build (they only inspect disk / fetch a file); the model is only *used* when
 the library was built with `embed-llama`. Opt-out summary: per runtime with
 `"embedding_auto_download": false`, or process-wide with
-`OCTOS_NO_MODEL_DOWNLOAD=1` (which also vetoes an explicit
+`RA_NO_MODEL_DOWNLOAD=1` (legacy `OCTOS_NO_MODEL_DOWNLOAD` still honoured;
+it also vetoes an explicit
 `ra_embedding_model_ensure(dir, true)`).
 
 ### Memory: the Recall index
@@ -297,7 +299,7 @@ debug/trace logging with untrusted providers** when embedding ra.
 ```python
 import ctypes, json
 
-lib = ctypes.CDLL("target/release/liboctos_ffi.dylib")  # .so on Linux
+lib = ctypes.CDLL("target/release/libra_ffi.dylib")  # .so on Linux
 lib.ra_runtime_new.restype = ctypes.c_void_p
 lib.ra_runtime_new.argtypes = [ctypes.c_char_p]
 lib.ra_run_task.restype = ctypes.c_void_p   # owned char* (not auto-freed)

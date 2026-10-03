@@ -92,7 +92,8 @@ char *ra_embedding_model_status(const char *data_dir);
 // otherwise blocks on the same download when `embedding_auto_download` is
 // not `false`. Returns owned JSON `{"path"}` that the caller must free,
 // UNMODIFIED, with [`ra_string_free`] — or NULL on error: the file is
-// absent and `download` is false (or `OCTOS_NO_MODEL_DOWNLOAD` is set in the
+// absent and `download` is false (or `RA_NO_MODEL_DOWNLOAD`, legacy
+// `OCTOS_NO_MODEL_DOWNLOAD`, is set in the
 // environment, which vetoes even an explicit `true`), or the download failed
 // or did not verify (the partial file is discarded).
 char *ra_embedding_model_ensure(const char *data_dir, bool download);

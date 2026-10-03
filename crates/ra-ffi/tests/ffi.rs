@@ -319,16 +319,19 @@ fn runtime_without_model_and_downloads_disabled_is_keyword_only() {
 }
 
 /// Real end-to-end run. Ignored: needs a live provider + network. Configure via
-/// env: `OCTOS_FFI_TEST_PROVIDER`, `OCTOS_FFI_TEST_MODEL`, and the provider's
+/// env: `RA_FFI_TEST_PROVIDER` (legacy `OCTOS_FFI_TEST_PROVIDER` still
+/// honoured), `RA_FFI_TEST_MODEL`, and the provider's
 /// key env var (e.g. `OPENAI_API_KEY`). Run with:
 ///   cargo test -p ra-ffi --test ffi -- --ignored e2e_run_task
 #[test]
 #[ignore = "needs a real API key + network"]
 fn e2e_run_task_returns_output_containing_ok() {
-    let provider = std::env::var("OCTOS_FFI_TEST_PROVIDER").unwrap_or_else(|_| "openai".into());
-    let model = std::env::var("OCTOS_FFI_TEST_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
-    let key_env = std::env::var("OCTOS_FFI_TEST_KEY_ENV")
-        .unwrap_or_else(|_| format!("{}_API_KEY", provider.to_uppercase()));
+    let provider = ra_core::brand::env_compat_str("FFI_TEST_PROVIDER")
+        .unwrap_or_else(|| "openai".into());
+    let model =
+        ra_core::brand::env_compat_str("FFI_TEST_MODEL").unwrap_or_else(|| "gpt-4o-mini".into());
+    let key_env = ra_core::brand::env_compat_str("FFI_TEST_KEY_ENV")
+        .unwrap_or_else(|| format!("{}_API_KEY", provider.to_uppercase()));
 
     let cfg_json = serde_json::json!({
         "provider": provider,

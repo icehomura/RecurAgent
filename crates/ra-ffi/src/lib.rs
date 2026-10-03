@@ -209,7 +209,7 @@ fn canonical_provider_name(provider: &str) -> String {
 /// `Config::api_key_env` takes precedence in `get_api_key`'s lookup, pointing it
 /// at this name makes the factory read exactly the pinned value (not any real
 /// process var of the same name — `env_vars` is checked before process env).
-const PINNED_KEY_ENV: &str = "OCTOS_FFI_RESOLVED_KEY";
+const PINNED_KEY_ENV: &str = "RA_FFI_RESOLVED_KEY";
 
 /// Pin the once-resolved effective key into `cli_cfg` so the provider factory's
 /// own `get_api_key` is FULLY determined here — never a SECOND
@@ -292,8 +292,9 @@ pub struct RuntimeConfig {
     /// Whether an `embed-llama` build may download the default embedding
     /// model (334 MB, once, into `<data_dir>/models/`) when
     /// `embedding_model_path` is unset and the file is not already complete.
-    /// Default `true`; `OCTOS_NO_MODEL_DOWNLOAD=1` in the process environment
-    /// overrides it to `false`. When the download is not allowed (or fails)
+    /// Default `true`; `RA_NO_MODEL_DOWNLOAD=1` in the process environment
+    /// (legacy `OCTOS_NO_MODEL_DOWNLOAD` still honoured) overrides it to
+    /// `false`. When the download is not allowed (or fails)
     /// the runtime starts WITHOUT an embedder: memory search is keyword-only
     /// and `embed` reports "no embedder configured". The download blocks
     /// runtime creation, so hosts that want control over timing call
@@ -1297,8 +1298,9 @@ pub fn embedding_model_status(data_dir: &Path) -> Result<String, CoreError> {
 /// return JSON `{"path"}`. Blocks for the whole 334 MB transfer; call it from
 /// a plain thread BEFORE building a runtime so the runtime constructor finds
 /// the file and does not download itself. Fails with [`CoreError::Embed`] when
-/// the file is absent and `download` is false — or `OCTOS_NO_MODEL_DOWNLOAD`
-/// is set in the environment, which vetoes even an explicit `true` — or the
+/// the file is absent and `download` is false — or `RA_NO_MODEL_DOWNLOAD`
+/// (legacy `OCTOS_NO_MODEL_DOWNLOAD`) is set in the environment, which vetoes
+/// even an explicit `true` — or the
 /// download does not verify (the partial file is discarded).
 pub fn embedding_model_ensure(data_dir: &Path, download: bool) -> Result<String, CoreError> {
     let data_dir = checked_data_dir(data_dir)?;
@@ -1538,7 +1540,8 @@ pub extern "C" fn ra_embedding_model_status(data_dir: *const c_char) -> *mut c_c
 /// otherwise blocks on the same download when `embedding_auto_download` is
 /// not `false`. Returns owned JSON `{"path"}` that the caller must free,
 /// UNMODIFIED, with [`ra_string_free`] — or NULL on error: the file is
-/// absent and `download` is false (or `OCTOS_NO_MODEL_DOWNLOAD` is set in the
+/// absent and `download` is false (or `RA_NO_MODEL_DOWNLOAD`, legacy
+/// `OCTOS_NO_MODEL_DOWNLOAD`, is set in the
 /// environment, which vetoes even an explicit `true`), or the download failed
 /// or did not verify (the partial file is discarded).
 #[unsafe(no_mangle)]
