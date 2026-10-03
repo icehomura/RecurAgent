@@ -5785,7 +5785,10 @@ async fn run_prompt_with_retry(
         }
 
         retry_count += 1;
-        let delay_ms = retry_delay_ms(&options.config, retry_count);
+        // The wrapper returns the exponential cap; the wait and the event both
+        // report the jittered value actually slept.
+        let delay_ms =
+            crate::failover::jittered_delay_ms(retry_delay_ms(&options.config, retry_count));
         let error_message = final_error
             .clone()
             .unwrap_or_else(|| "Request error".to_string());
@@ -7708,9 +7711,9 @@ fn rpc_flatten_content_blocks(value: &mut Value) {
     }
 }
 
-/// Exponential retry backoff. Print mode had a byte-identical private copy of
-/// this until bd-u2qv4; both now call the one definition in
-/// [`crate::failover`].
+/// Exponential retry backoff CAP. Print mode had a byte-identical private copy
+/// of this until bd-u2qv4; both now call the one definition in
+/// [`crate::failover`]. The caller jitters the returned cap before sleeping.
 fn retry_delay_ms(config: &Config, attempt: u32) -> u32 {
     crate::failover::retry_delay_ms(
         config.retry_base_delay_ms(),
