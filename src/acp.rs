@@ -563,8 +563,8 @@ async fn run(
                     continue;
                 };
 
-                let message_text = match extract_prompt_text(prompt_blocks) {
-                    Ok(text) => text,
+                let prompt_content = match extract_prompt_blocks(prompt_blocks) {
+                    Ok(content) => content,
                     Err(err) => {
                         let _ = out_tx.send(json_rpc_error(id, INVALID_PARAMS, err));
                         continue;
@@ -624,7 +624,7 @@ async fn run(
                 options.runtime_handle.spawn(async move {
                     let stop_reason = run_prompt(
                         session_state,
-                        message_text,
+                        prompt_content,
                         abort_signal,
                         out_tx_prompt.clone(),
                         prompt_session_id.clone(),
@@ -1391,8 +1391,12 @@ fn handle_initialize() -> Value {
             },
             "promptCapabilities": {
                 "audio": false,
+                // Images are accepted and carried through to the provider, which
+                // decides per model whether one goes out natively or degrades to
+                // a placeholder. `embeddedContext` stays false: a `resource_link`
+                // block is surfaced as its URI rather than fetched.
                 "embeddedContext": false,
-                "image": false,
+                "image": true,
             },
             // `session/list` (GH #245) and `session/resume` are both
             // implemented. `resume` re-attaches a persisted session's context
@@ -2166,7 +2170,7 @@ async fn apply_set_config_option(
 /// `session/prompt` response (which only completes when the turn does).
 async fn run_prompt(
     session_state: Arc<Mutex<AcpSessionState>>,
-    message: String,
+    content: Vec<crate::model::ContentBlock>,
     abort_signal: AbortSignal,
     out_tx: std::sync::mpsc::SyncSender<String>,
     session_id: String,
@@ -2189,7 +2193,7 @@ async fn run_prompt(
     };
 
     let result = agent_session
-        .run_text_with_abort(message, Some(abort_signal), event_handler)
+        .run_with_content_with_abort(content, Some(abort_signal), event_handler)
         .await;
 
     if let Ok(mut guard) = session_state.lock(&cx).await {
@@ -2223,13 +2227,19 @@ const fn map_stop_reason(reason: crate::model::StopReason) -> &'static str {
     }
 }
 
-/// Extract a single text string from an ACP `prompt: ContentBlock[]`.
+/// Map an ACP `prompt: ContentBlock[]` onto the agent's own content blocks.
 ///
-/// Per the spec, baseline support is `text` and `resource_link` blocks. We accept
-/// either, concatenate text and link URIs in order, and reject any block whose
-/// type we did not advertise as supported in `agentCapabilities.promptCapabilities`.
-fn extract_prompt_text(blocks: &[Value]) -> std::result::Result<String, String> {
-    let mut out = String::new();
+/// Per the spec, baseline support is `text` and `resource_link`; `image` is
+/// supported because this server advertises `promptCapabilities.image`. An image
+/// is carried straight through — the provider layer already decides per model
+/// whether it can be sent natively or must degrade to a text placeholder — and
+/// `ImageContent`'s own deserializer sanitizes the MIME label on the way in.
+/// `audio` is still refused: nothing downstream accepts it, so the honest answer
+/// is a capability error rather than a silently dropped attachment.
+fn extract_prompt_blocks(
+    blocks: &[Value],
+) -> std::result::Result<Vec<crate::model::ContentBlock>, String> {
+    let mut out: Vec<crate::model::ContentBlock> = Vec::with_capacity(blocks.len());
     for block in blocks {
         let block_type = block.get("type").and_then(Value::as_str).unwrap_or("");
         match block_type {
@@ -2239,10 +2249,9 @@ fn extract_prompt_text(blocks: &[Value]) -> std::result::Result<String, String> 
                         "Prompt block of type \"text\" missing required field \"text\"".to_string(),
                     );
                 };
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(text);
+                out.push(crate::model::ContentBlock::Text(crate::model::TextContent::new(
+                    text,
+                )));
             }
             "resource_link" => {
                 // Surface the URI inline. Clients that want richer handling can
@@ -2253,10 +2262,14 @@ fn extract_prompt_text(blocks: &[Value]) -> std::result::Result<String, String> 
                             .to_string(),
                     );
                 };
-                if !out.is_empty() {
-                    out.push('\n');
-                }
-                out.push_str(uri);
+                out.push(crate::model::ContentBlock::Text(crate::model::TextContent::new(
+                    uri,
+                )));
+            }
+            "image" => {
+                let image: crate::model::ImageContent = serde_json::from_value(block.clone())
+                    .map_err(|err| format!("Invalid prompt image block: {err}"))?;
+                out.push(crate::model::ContentBlock::Image(image));
             }
             "" => {
                 return Err(
@@ -2265,7 +2278,7 @@ fn extract_prompt_text(blocks: &[Value]) -> std::result::Result<String, String> 
             }
             other => {
                 return Err(format!(
-                    "Prompt block type \"{other}\" is not supported by this agent (advertised capabilities only allow text and resource_link)"
+                    "Prompt block type \"{other}\" is not supported by this agent (advertised capabilities allow text, image and resource_link)"
                 ));
             }
         }
@@ -3135,17 +3148,23 @@ mod tests {
     }
 
     #[test]
-    fn extract_prompt_text_concatenates_text_blocks() {
+    fn extract_prompt_blocks_keeps_text_blocks_in_order() {
         let blocks = vec![
             json!({ "type": "text", "text": "first line" }),
             json!({ "type": "text", "text": "second line" }),
         ];
-        let result = extract_prompt_text(&blocks).expect("extracts text");
-        assert_eq!(result, "first line\nsecond line");
+        let content = extract_prompt_blocks(&blocks).expect("extracts blocks");
+        assert_eq!(content.len(), 2);
+        assert!(
+            matches!(&content[0], crate::model::ContentBlock::Text(t) if t.text == "first line")
+        );
+        assert!(
+            matches!(&content[1], crate::model::ContentBlock::Text(t) if t.text == "second line")
+        );
     }
 
     #[test]
-    fn extract_prompt_text_appends_resource_link_uri() {
+    fn extract_prompt_blocks_surfaces_resource_link_uri() {
         let blocks = vec![
             json!({ "type": "text", "text": "see also" }),
             json!({
@@ -3154,23 +3173,62 @@ mod tests {
                 "name": "notes.md",
             }),
         ];
-        let result = extract_prompt_text(&blocks).expect("extracts text");
-        assert_eq!(result, "see also\nfile:///tmp/notes.md");
+        let content = extract_prompt_blocks(&blocks).expect("extracts blocks");
+        assert!(matches!(&content[0], crate::model::ContentBlock::Text(t) if t.text == "see also"));
+        assert!(
+            matches!(&content[1], crate::model::ContentBlock::Text(t) if t.text == "file:///tmp/notes.md")
+        );
     }
 
     #[test]
-    fn extract_prompt_text_rejects_unsupported_block_type() {
-        // We advertise audio: false / image: false in agentCapabilities, so
-        // the only honest behavior on those blocks is a clear capability error.
-        let blocks = vec![json!({ "type": "image", "data": "base64..." })];
-        let err = extract_prompt_text(&blocks).expect_err("should reject");
+    fn extract_prompt_blocks_carries_images_and_sanitizes_the_mime() {
+        // `promptCapabilities.image` is advertised, so an image block has to
+        // reach the provider layer rather than being refused.
+        let blocks = vec![
+            json!({ "type": "text", "text": "what is this" }),
+            json!({ "type": "image", "data": "aGVsbG8=", "mimeType": "image/png" }),
+        ];
+        let content = extract_prompt_blocks(&blocks).expect("accepts image blocks");
+        assert!(matches!(
+            &content[1],
+            crate::model::ContentBlock::Image(image)
+                if image.data == "aGVsbG8=" && image.mime_type == "image/png"
+        ));
+
+        // A hostile label is sanitized by `ImageContent`'s own deserializer, so
+        // it can never reach a provider or the transcript.
+        let hostile = vec![json!({
+            "type": "image",
+            "data": "aGVsbG8=",
+            "mimeType": "image/png\u{001b}[2J",
+        })];
+        let content = extract_prompt_blocks(&hostile).expect("accepts image blocks");
+        assert!(matches!(
+            &content[0],
+            crate::model::ContentBlock::Image(image) if !image.mime_type.contains('\u{1b}')
+        ));
+    }
+
+    #[test]
+    fn extract_prompt_blocks_rejects_audio_blocks() {
+        // `audio` stays false in agentCapabilities, so the honest answer on an
+        // audio block is a capability error rather than a dropped attachment.
+        let blocks = vec![json!({ "type": "audio", "data": "base64..." })];
+        let err = extract_prompt_blocks(&blocks).expect_err("should reject");
         assert!(err.contains("not supported"), "got: {err}");
     }
 
     #[test]
-    fn extract_prompt_text_rejects_text_block_without_text_field() {
+    fn extract_prompt_blocks_rejects_malformed_image() {
+        let blocks = vec![json!({ "type": "image", "mimeType": "image/png" })];
+        let err = extract_prompt_blocks(&blocks).expect_err("should reject");
+        assert!(err.contains("Invalid prompt image block"), "got: {err}");
+    }
+
+    #[test]
+    fn extract_prompt_blocks_rejects_text_block_without_text_field() {
         let blocks = vec![json!({ "type": "text" })];
-        let err = extract_prompt_text(&blocks).expect_err("should reject");
+        let err = extract_prompt_blocks(&blocks).expect_err("should reject");
         assert!(
             err.contains("missing required field \"text\""),
             "got: {err}"
@@ -3178,9 +3236,9 @@ mod tests {
     }
 
     #[test]
-    fn extract_prompt_text_rejects_block_without_type_discriminator() {
+    fn extract_prompt_blocks_rejects_block_without_type_discriminator() {
         let blocks = vec![json!({ "text": "no type" })];
-        let err = extract_prompt_text(&blocks).expect_err("should reject");
+        let err = extract_prompt_blocks(&blocks).expect_err("should reject");
         assert!(err.contains("missing required discriminator"), "got: {err}");
     }
 
