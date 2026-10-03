@@ -37,8 +37,14 @@ and is why the TUI can be rebuilt without touching the kernel.
 2. **Brand/env sweep** — `OCTOSCODE_*` / `OCTOS_*` env vars → `RA_TUI_*` / `RA_*` with dual-read
    fallback; `~/.ra` and `.ra/` → `~/.ra` and `.ra/` with legacy fallback; user-visible
    strings (`octoscode`, `Octos`) → `ra`/`ra`.
-3. **Protocol opt-ins** the alignment defaults skipped: `client_commands` on session open (slash-command
-   discovery for the agent), `origin: TurnOriginKind::Person` on user turns, and rendering
-   `HydratedMessage.tool_calls` from rehydrated history.
+3. ~~**Protocol opt-ins**~~ — **done.** The client now uses the three fields the kernel gained after the
+   imported pin: (a) `SessionOpenParams.client_commands` is populated from the client's own slash-command
+   registry (`menu::registry::client_command_names()`), so the kernel can list the client-handled commands
+   in the session prompt; (b) a person-started turn (composer submit, startup `--prompt`) carries
+   `TurnStartParams.origin = Some(TurnOrigin { kind: Person, label: None })` — the shape the kernel's own
+   host client uses (`crates/ra-cli/src/api/ui_protocol_transport.rs`); reconnect re-issues are not
+   stamped; (c) rehydrated `HydratedMessage.tool_calls`/`tool_call_id`/`tool_name` are mapped into the
+   message model and rebuilt as the same activity chips the live stream produces, so a resumed session
+   keeps its tool-call rows.
 4. **Smoke test** the interactive path against a locally built `ra` (`ra serve --stdio` attach, plus
    the WS path against `ra serve`).
