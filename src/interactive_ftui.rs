@@ -1384,8 +1384,10 @@ const DAG_NODE_OUTPUT_MAX_CHARS: usize = 400;
 /// Live progress for one `dag` tool call. The card detail renders the graph
 /// with [`dag_view::render_compact`]: a flat, boxless layout — a virtual “开始”
 /// root, the nodes in dependency order joined by connector lines, and the
-/// virtual “结束” sink, plus a full-name legend below. Node names are capped at
-/// [`dag_view::COMPACT_NAME_CAP`] columns.
+/// virtual “结束” sink, plus a capped full-name legend below. Node names stay
+/// whole up to [`dag_view::COMPACT_NAME_CAP`] columns, shorten to fit the pane,
+/// and the graph folds with an explicit `… 其余 N 个节点已省略` note when even
+/// the tightest form is too wide to survive the transcript's word wrap.
 #[derive(Debug, Default)]
 struct DagProgress {
     /// Nodes in topology order (`nodes` of `ra.dag.topology.v1`).
@@ -3503,19 +3505,26 @@ impl RaFtuiModel {
     fn refresh_dag_card(&mut self, key: &str, name: &str) {
         // Render head / plain tree / styled tree inside the borrow so the
         // immutable look-up never overlaps the `&mut self` revisions below.
+        let width = self.card_width();
+        let frame = self.spinner.current_frame;
+        let palette = self.palette;
         let (head, detail, styled) = {
             let Some(progress) = self.dag_progress.get(key) else {
                 return;
             };
             // One compact, boxless rendering for both the copyable `detail`
-            // and the visible card. There is no orientation search any more:
-            // the flat layout reads the same at every width, and the frame
-            // clips what does not fit.
-            let rows = dag_view::render_compact(&dag_view_input(progress), 0);
+            // and the visible card. The card must pre-fit the pane: the
+            // transcript *word-wraps* every block at the body width, it does
+            // not clip, and a wrapped continuation holding only connector ink
+            // collapses to a couple of visible cells — so an over-wide diagram
+            // is shredded, not truncated. `render_compact` therefore takes the
+            // body width as a budget, shortens names, and folds what still
+            // does not fit.
+            let rows = dag_view::render_compact(&dag_view_input(progress), frame, width);
             (
                 sanitize(&dag_card_head(progress)).into_owned(),
                 sanitize(&dag_view_text(&rows)).into_owned(),
-                dag_view_styled(&rows, &self.palette),
+                dag_view_styled(&rows, &palette),
             )
         };
         let revision = self.next_revision();
@@ -3548,12 +3557,15 @@ impl RaFtuiModel {
     /// last write for the card, so the graph survives after the run instead of
     /// being shadowed by the report. Caller removes the progress entry after.
     fn finalize_dag_card(&mut self, key: &str, report: Option<String>) {
+        let width = self.card_width();
+        let frame = self.spinner.current_frame;
+        let palette = self.palette;
         let (tree_text, mut styled) = {
             let Some(progress) = self.dag_progress.get(key) else {
                 return;
             };
-            let rows = dag_view::render_compact(&dag_view_input(progress), 0);
-            (dag_view_text(&rows), dag_view_styled(&rows, &self.palette))
+            let rows = dag_view::render_compact(&dag_view_input(progress), frame, width);
+            (dag_view_text(&rows), dag_view_styled(&rows, &palette))
         };
         let detail = match report {
             Some(text) if !text.is_empty() => {
@@ -6063,6 +6075,15 @@ impl RaFtuiModel {
         if usable < 20 { 20 } else { usable }
     }
 
+    /// Width budget for the DAG card: the conversation body width of the last
+    /// rendered frame — the frame is authoritative, see
+    /// [`RaFtuiModel::conversation_text`] — falling back to the terminal width
+    /// we know about before the first frame lands.
+    fn card_width(&self) -> usize {
+        let recorded = self.render_cache_width.get();
+        usize::from(if recorded == 0 { self.term.0 } else { recorded })
+    }
+
     /// Build the styled conversation, wrapped to `width` cells. Assistant
     /// content renders as markdown (auto-detected; plain text stays plain);
     /// other roles get their prefix on the first line, matching indent on
@@ -6118,8 +6139,7 @@ impl RaFtuiModel {
                 rendered_blocks += 1;
                 let mut block_lines: Vec<ftui::text::Line<'static>> = Vec::new();
                 // A live `dag` card re-renders every frame so the running
-                // node's braille spinner animates; `render_auto` picks the
-                // horizontal layout when the body is wide enough.
+                // node's braille spinner animates.
                 let live_styled = entry
                     .pair_key
                     .as_deref()
@@ -6128,6 +6148,7 @@ impl RaFtuiModel {
                         let rows = dag_view::render_compact(
                             &dag_view_input(progress),
                             self.spinner.current_frame,
+                            usize::from(width),
                         );
                         dag_view_styled(&rows, &palette)
                     });
@@ -14452,6 +14473,145 @@ mod tests {
             !text.contains("more lines (ctrl+o"),
             "the dag card must never fold behind ctrl+o: {text:?}"
         );
+    }
+
+    /// A `ra.dag.topology.v1` payload for the DAG card measurements: a
+    /// 100-layer chain, a 128-node two-layer fan, and a 256-node mixed graph
+    /// (100-chain + 64-fan + 92 joins) — the last is the shape the unreadable
+    /// card was reported on.
+    fn dag_shape_payload(shape: &str) -> serde_json::Value {
+        let (nodes, layers) = match shape {
+            "chain" => {
+                let nodes: Vec<serde_json::Value> = (1..=100)
+                    .map(|i| {
+                        serde_json::json!({
+                            "id": i,
+                            "toolName": format!("read_file_{i:03}"),
+                            "name": format!("step{i:03}"),
+                            "dependsOn": if i == 1 { Vec::<u32>::new() } else { vec![i - 1] },
+                            "layer": i - 1,
+                        })
+                    })
+                    .collect();
+                let layers: Vec<Vec<u32>> = (1..=100).map(|i| vec![i]).collect();
+                (nodes, layers)
+            }
+            "wide" => {
+                let mut nodes: Vec<serde_json::Value> = Vec::new();
+                for i in 0..64u32 {
+                    nodes.push(serde_json::json!({
+                        "id": i + 1,
+                        "toolName": format!("task_{i:03}"),
+                        "name": format!("wide{i:03}"),
+                        "dependsOn": Vec::<u32>::new(),
+                        "layer": 0,
+                    }));
+                }
+                for i in 0..64u32 {
+                    nodes.push(serde_json::json!({
+                        "id": i + 65,
+                        "toolName": format!("join_{i:03}"),
+                        "name": format!("sink{i:03}"),
+                        "dependsOn": [i + 1],
+                        "layer": 1,
+                    }));
+                }
+                let layers = vec![
+                    (1..=64u32).collect::<Vec<_>>(),
+                    (65..=128u32).collect::<Vec<_>>(),
+                ];
+                (nodes, layers)
+            }
+            _ => {
+                let mut nodes: Vec<serde_json::Value> = Vec::new();
+                let mut layers: Vec<Vec<u32>> = Vec::new();
+                for i in 1..=100u32 {
+                    nodes.push(serde_json::json!({
+                        "id": i,
+                        "toolName": format!("chain_tool_{i:03}"),
+                        "name": format!("chain{i:03}"),
+                        "dependsOn": if i == 1 { Vec::<u32>::new() } else { vec![i - 1] },
+                        "layer": i - 1,
+                    }));
+                    layers.push(vec![i]);
+                }
+                for i in 0..64u32 {
+                    nodes.push(serde_json::json!({
+                        "id": 101 + i,
+                        "toolName": format!("fan_tool_{i:03}"),
+                        "name": format!("fan{i:03}"),
+                        "dependsOn": [1],
+                        "layer": 1,
+                    }));
+                }
+                layers[1].extend(101..=164u32);
+                for i in 0..92u32 {
+                    nodes.push(serde_json::json!({
+                        "id": 165 + i,
+                        "toolName": format!("mix_tool_{i:03}"),
+                        "name": format!("mixed{i:03}"),
+                        "dependsOn": [1, 2],
+                        "layer": 2 + (i % 50),
+                    }));
+                    layers[2 + (i as usize % 50)].push(165 + i);
+                }
+                (nodes, layers)
+            }
+        };
+        serde_json::json!({
+            "schema": "ra.dag.topology.v1",
+            "graphId": "t1",
+            "nodes": nodes,
+            "layers": layers,
+        })
+    }
+
+    /// Rows the card itself renders at `width`.
+    fn dag_card_line_count(model: &RaFtuiModel, key: &str, width: u16) -> usize {
+        let progress = model.dag_progress.get(key).expect("dag progress");
+        dag_view::render_compact(&dag_view_input(progress), 0, usize::from(width)).len()
+    }
+
+    /// The reported defect: the 256-node card emitted rows over 2 000 cells
+    /// wide, and the transcript's word wrap — a *wrap*, not a clip — shredded
+    /// them: 618 card rows became 5 395 lines at width 80, with 457 rows
+    /// collapsed to ≤3 visible cells (the "2-3 characters per line" report).
+    /// The card must now pre-fit the pane, so wrapping adds nothing and the
+    /// diagram stays readable.
+    #[test]
+    fn dag_card_wraps_to_the_pane_without_shredding_the_diagram() {
+        for shape in ["chain", "wide", "mixed"] {
+            for width in [80u16, 120, 200] {
+                let (_tx, mut model) = new_model();
+                model.apply_tool_update("dag", "t1", Some(&dag_shape_payload(shape)));
+                let card_lines = dag_card_line_count(&model, "t1", width);
+                let text = model.conversation_text(width);
+                let lines = plain_lines(&text);
+                let widths: Vec<usize> = lines.iter().map(|l| display_width(l)).collect();
+                let slivers = lines
+                    .iter()
+                    .filter(|l| {
+                        let visible = l.chars().filter(|c| !c.is_whitespace()).count();
+                        visible > 0 && visible <= 3
+                    })
+                    .count();
+                eprintln!(
+                    "WRAP {shape} @{width}: card_lines={card_lines} wrapped_lines={} maxw={} sliver_rows={slivers}",
+                    lines.len(),
+                    widths.iter().copied().max().unwrap_or(0),
+                );
+                assert!(
+                    widths.iter().all(|&w| w <= usize::from(width)),
+                    "{shape}@{width}: a card row overflows the pane ({:?})",
+                    widths.iter().copied().max().unwrap_or(0)
+                );
+                assert_eq!(
+                    lines.len(),
+                    card_lines + 1,
+                    "{shape}@{width}: the transcript wrapped the card (head + {card_lines} rows)"
+                );
+            }
+        }
     }
 
     /// A finished `dag` card keeps its terminal tree and appends the

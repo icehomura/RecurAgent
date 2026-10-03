@@ -34,9 +34,19 @@ const MAX_VIEW_NODES: usize = 1024;
 
 /// Longest node name the compact (boxless) card shows before eliding. The
 /// boxed tree searched 4..=10 to fit a width budget, which cut ordinary tool
-/// names in half; the compact form is one line that the frame clips, so names
-/// stay whole up to this many columns.
+/// names in half; the compact form keeps names whole up to this many columns
+/// and only shortens them when the pane width demands it (see
+/// [`render_compact`]).
 pub const COMPACT_NAME_CAP: usize = 30;
+
+/// Tightest in-graph name cap [`render_compact`] shrinks to before it folds
+/// whole nodes out of the diagram.
+const COMPACT_MIN_NAME_CAP: usize = 4;
+
+/// Full names the compact card's legend lists before rolling the tail into
+/// `… +N`. The legend is a lookup aid, not the graph: a 256-node call used to
+/// append 256 rows under the diagram.
+pub const COMPACT_LEGEND_CAP: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DagViewState {
@@ -241,8 +251,8 @@ fn render_layout(
     cap: usize,
     gap: usize,
 ) -> Vec<Vec<DagViewCell>> {
-    let truncated = src.len() > MAX_VIEW_NODES;
-    let src = &src[..src.len().min(MAX_VIEW_NODES)];
+    let total = src.len();
+    let src = &src[..total.min(MAX_VIEW_NODES)];
     let Prepared {
         mut ln,
         layers,
@@ -326,27 +336,8 @@ fn render_layout(
     }
 
     let mut rows: Vec<Vec<DagViewCell>> = grid.iter().map(|row| rle(row)).collect();
-    if !src.is_empty() {
-        rows.push(Vec::new());
-        for node in src {
-            let text = if node.name.is_empty() {
-                node.tool_name.clone()
-            } else {
-                format!("{} ({})", node.name, node.tool_name)
-            };
-            rows.push(vec![DagViewCell {
-                text,
-                state: DagViewCellState::Neutral,
-            }]);
-        }
-    }
-    if truncated {
-        let omitted = src.len().saturating_sub(MAX_VIEW_NODES);
-        rows.push(vec![DagViewCell {
-            text: format!("… 其余 {omitted} 个节点已省略"),
-            state: DagViewCellState::Neutral,
-        }]);
-    }
+    push_legend(&mut rows, src, usize::MAX, 0);
+    push_omitted(&mut rows, total - src.len());
     rows
 }
 
@@ -689,7 +680,15 @@ const V_GAP: usize = 1; // 横排：同层节点上下间距
 /// 横排（左→右）：层变列，同层节点竖着堆、垂直居中，开始/结束左右居中。
 #[must_use]
 pub fn render_horizontal(nodes: &[DagViewNode], frame: usize, cap: usize) -> Vec<Vec<DagViewCell>> {
-    render_horizontal_cfg(nodes, frame, cap, COL_GAP, true)
+    let mut out = render_horizontal_cfg(nodes, frame, cap, COL_GAP, true);
+    push_legend(
+        &mut out,
+        &nodes[..nodes.len().min(MAX_VIEW_NODES)],
+        usize::MAX,
+        0,
+    );
+    push_omitted(&mut out, nodes.len().saturating_sub(MAX_VIEW_NODES));
+    out
 }
 
 /// Compact, boxless rendering for the DAG card: connector lines and node
@@ -698,15 +697,229 @@ pub fn render_horizontal(nodes: &[DagViewNode], frame: usize, cap: usize) -> Vec
 /// through a shared shaft (`┌─` / `└─` into the children) and a merge joins the
 /// parents on one shaft (`├─` into the target), so a linear chain reads as a
 /// single `开始 ─ read ─ 结束` line.
+///
+/// The card must **pre-fit** `max_width`: a transcript block is word-wrapped
+/// at the pane width, not clipped, and a wrapped continuation holding only
+/// connector ink collapses to a couple of visible cells — an over-wide
+/// diagram is shredded, not truncated. So names shrink (down to
+/// [`COMPACT_MIN_NAME_CAP`] columns) and, when even that is too wide, the
+/// graph folds to the longest node prefix that fits and says how many nodes it
+/// dropped. `max_width == 0` means the width is unknown and returns the
+/// natural compact form.
 #[must_use]
-pub fn render_compact(nodes: &[DagViewNode], frame: usize) -> Vec<Vec<DagViewCell>> {
-    let rows = render_horizontal_cfg(nodes, frame, COMPACT_NAME_CAP, 1, false);
+pub fn render_compact(
+    nodes: &[DagViewNode],
+    frame: usize,
+    max_width: usize,
+) -> Vec<Vec<DagViewCell>> {
+    let total = nodes.len();
+    let src = &nodes[..total.min(MAX_VIEW_NODES)];
+    let (mut out, shown) = compact_body(src, frame, max_width);
+    push_legend(&mut out, &src[..shown], COMPACT_LEGEND_CAP, max_width);
+    push_omitted(&mut out, total - shown);
+    out
+}
+
+/// Marker columns: `[ ]`, `[✓]` and `[⠋]` are all three cells wide — which is
+/// why a cached layout survives a spinner frame.
+const MARKER_CELLS: usize = 3;
+
+/// Lower bound on the compact width `src` needs at name cap `cap`, computed
+/// without laying anything out.
+///
+/// Every layer is at least as wide as its widest label (marker + space + name
+/// + one cell of padding on each side), and each inter-column gap is at least
+/// one cell; connector shafts and dummy lanes only ever *add* columns, so a
+/// graph whose bound exceeds the budget cannot fit at that cap. The fit search
+/// needs this: sweeping 27 name caps across a 256-node canvas, each a full
+/// render, cost seconds per call.
+fn min_card_width(src: &[DagViewNode], cap: usize) -> usize {
+    let n = src.len();
+    let mut by_id: HashMap<u32, usize> = HashMap::with_capacity(n);
+    for (i, node) in src.iter().enumerate() {
+        by_id.insert(node.id, i);
+    }
+    let mut deps: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (i, node) in src.iter().enumerate() {
+        for d in &node.depends_on {
+            if let Some(&j) = by_id.get(d) {
+                deps[i].push(j);
+            }
+        }
+    }
+    let mut dependents: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (i, ds) in deps.iter().enumerate() {
+        for &d in ds {
+            dependents[d].push(i);
+        }
+    }
+    let real = compute_layers(n, &deps, &dependents);
+    // 开始 | the real layers (dummy lane columns ignored) | 结束.
+    let mut cols = vec![0usize; real.iter().copied().max().map_or(0, |m| m + 1) + 2];
+    let last = cols.len() - 1;
+    cols[0] = display_width(START_LABEL) + 1;
+    cols[last] = display_width(END_LABEL) + 1;
+    for (i, node) in src.iter().enumerate() {
+        let display = if node.name.is_empty() {
+            node.tool_name.as_str()
+        } else {
+            node.name.as_str()
+        };
+        let label = MARKER_CELLS + 1 + display_width(display).min(cap) + 2;
+        cols[real[i] + 1] = cols[real[i] + 1].max(label);
+    }
+    cols.iter().sum::<usize>() + cols.len() - 1
+}
+
+/// The compact diagram for `src` within `max_width`, trimmed, plus how many
+/// nodes it shows.
+///
+/// Names are shortened first; only if the tightest cap is still too wide does
+/// it fold, keeping the longest prefix that fits (the node list arrives in
+/// topology order, so a prefix is still a valid DAG). Both searches probe
+/// [`min_card_width`] before rendering, so a graph too wide for the budget is
+/// rejected without a layout.
+fn compact_body(
+    src: &[DagViewNode],
+    frame: usize,
+    max_width: usize,
+) -> (Vec<Vec<DagViewCell>>, usize) {
+    if max_width == 0 {
+        return (
+            trim_compact_rows(&render_horizontal_cfg(
+                src,
+                frame,
+                COMPACT_NAME_CAP,
+                1,
+                false,
+            )),
+            src.len(),
+        );
+    }
+    // Nothing above the widest cap whose bound still fits can fit; the bound
+    // is monotone in the cap, so it is binary-searched rather than scanned.
+    let (mut lo, mut hi) = (COMPACT_MIN_NAME_CAP, COMPACT_NAME_CAP);
+    let mut widest = 0usize;
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        if min_card_width(src, mid) <= max_width {
+            widest = mid;
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if widest >= COMPACT_MIN_NAME_CAP {
+        for cap in (COMPACT_MIN_NAME_CAP..=widest).rev() {
+            let rows = trim_compact_rows(&render_horizontal_cfg(src, frame, cap, 1, false));
+            if width_of_rows(&rows) <= max_width {
+                return (rows, src.len());
+            }
+        }
+    }
+    // Fit is monotone in the prefix length (a longer prefix can only add a
+    // column or widen one), so the largest fitting prefix is binary-searched.
+    let (mut lo, mut hi) = (1usize, src.len());
+    let mut best: (Vec<Vec<DagViewCell>>, usize) = (Vec::new(), 0);
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let candidate = &src[..mid];
+        let (rows, fits) = if min_card_width(candidate, COMPACT_MIN_NAME_CAP) <= max_width {
+            let rows = trim_compact_rows(&render_horizontal_cfg(
+                candidate,
+                frame,
+                COMPACT_MIN_NAME_CAP,
+                1,
+                false,
+            ));
+            let fits = width_of_rows(&rows) <= max_width;
+            (rows, fits)
+        } else {
+            (Vec::new(), false)
+        };
+        if fits {
+            best = (rows, mid);
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    best
+}
+
+/// Drop the grid's empty leading/trailing rows.
+fn trim_compact_rows(rows: &[Vec<DagViewCell>]) -> Vec<Vec<DagViewCell>> {
     let first = rows.iter().position(|row| !row.is_empty());
     let last = rows.iter().rposition(|row| !row.is_empty());
     match (first, last) {
         (Some(first), Some(last)) => rows[first..=last].to_vec(),
         _ => Vec::new(),
     }
+}
+
+/// Append the blank separator and the full-name legend under a rendered
+/// graph: at most `cap` rows, each elided to `max_width`, then a `… +N`
+/// rollup for the rest.
+fn push_legend(
+    out: &mut Vec<Vec<DagViewCell>>,
+    nodes: &[DagViewNode],
+    cap: usize,
+    max_width: usize,
+) {
+    if nodes.is_empty() {
+        return;
+    }
+    out.push(Vec::new());
+    for node in nodes.iter().take(cap) {
+        let text = if node.name.is_empty() {
+            node.tool_name.clone()
+        } else {
+            format!("{} ({})", node.name, node.tool_name)
+        };
+        out.push(vec![DagViewCell {
+            text: elide_to_width(&text, max_width),
+            state: DagViewCellState::Neutral,
+        }]);
+    }
+    if nodes.len() > cap {
+        out.push(vec![DagViewCell {
+            text: format!("… +{}", nodes.len() - cap),
+            state: DagViewCellState::Neutral,
+        }]);
+    }
+}
+
+/// The `… 其余 N 个节点已省略` line for nodes the card did not draw.
+fn push_omitted(out: &mut Vec<Vec<DagViewCell>>, omitted: usize) {
+    if omitted == 0 {
+        return;
+    }
+    out.push(vec![DagViewCell {
+        text: format!("… 其余 {omitted} 个节点已省略"),
+        state: DagViewCellState::Neutral,
+    }]);
+}
+
+/// Cut `text` to at most `max_width` display columns, ending in `…` when it
+/// does not fit. `max_width == 0` means "no budget". The legend prints full
+/// names, which can outrun the pane on their own.
+fn elide_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 || display_width(text) <= max_width {
+        return text.to_string();
+    }
+    let room = max_width.saturating_sub(1);
+    let mut out = String::new();
+    let mut w = 0usize;
+    for ch in text.chars() {
+        let cw = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if w + cw > room {
+            break;
+        }
+        out.push(ch);
+        w += cw;
+    }
+    out.push('…');
+    out
 }
 
 fn render_horizontal_cfg(
@@ -716,7 +929,6 @@ fn render_horizontal_cfg(
     col_gap: usize,
     boxed: bool,
 ) -> Vec<Vec<DagViewCell>> {
-    let truncated = nodes.len() > MAX_VIEW_NODES;
     let src = &nodes[..nodes.len().min(MAX_VIEW_NODES)];
     let Prepared {
         mut ln,
@@ -963,27 +1175,6 @@ fn render_horizontal_cfg(
     // card shows two blank lines between the graph and the name list.
     while out.last().is_some_and(Vec::is_empty) {
         out.pop();
-    }
-    if !src.is_empty() {
-        out.push(Vec::new());
-        for node in src {
-            let text = if node.name.is_empty() {
-                node.tool_name.clone()
-            } else {
-                format!("{} ({})", node.name, node.tool_name)
-            };
-            out.push(vec![DagViewCell {
-                text,
-                state: DagViewCellState::Neutral,
-            }]);
-        }
-    }
-    if truncated {
-        let omitted = nodes.len().saturating_sub(MAX_VIEW_NODES);
-        out.push(vec![DagViewCell {
-            text: format!("… 其余 {omitted} 个节点已省略"),
-            state: DagViewCellState::Neutral,
-        }]);
     }
     out
 }
@@ -1236,6 +1427,55 @@ mod tests {
 
     fn leading_spaces(line: &str) -> usize {
         line.chars().take_while(|c| *c == ' ').count()
+    }
+
+    fn shape_nodes(shape: &str) -> Vec<DagViewNode> {
+        match shape {
+            "chain" => (1..=100u32)
+                .map(|i| {
+                    let deps: Vec<u32> = if i == 1 { Vec::new() } else { vec![i - 1] };
+                    n(
+                        i,
+                        &format!("read_file_{i:03}"),
+                        &deps,
+                        DagViewState::Pending,
+                    )
+                })
+                .collect(),
+            "wide" => {
+                let mut out: Vec<DagViewNode> = (1..=64u32)
+                    .map(|i| n(i, &format!("task_{i:03}"), &[], DagViewState::Pending))
+                    .collect();
+                out.extend(
+                    (65..=128u32).map(|i| {
+                        n(i, &format!("join_{i:03}"), &[i - 64], DagViewState::Pending)
+                    }),
+                );
+                out
+            }
+            _ => {
+                let mut out: Vec<DagViewNode> = (1..=100u32)
+                    .map(|i| {
+                        let deps: Vec<u32> = if i == 1 { Vec::new() } else { vec![i - 1] };
+                        n(
+                            i,
+                            &format!("chain_tool_{i:03}"),
+                            &deps,
+                            DagViewState::Pending,
+                        )
+                    })
+                    .collect();
+                out.extend(
+                    (101..=164u32)
+                        .map(|i| n(i, &format!("fan_tool_{i:03}"), &[1], DagViewState::Pending)),
+                );
+                out.extend(
+                    (165..=256u32)
+                        .map(|i| n(i, &format!("mix_tool_{i:03}"), &[1, 2], DagViewState::Pending)),
+                );
+                out
+            }
+        }
     }
 
     #[test]
@@ -1561,7 +1801,7 @@ mod tests {
             n(2, "parse", &[1], DagViewState::Succeeded),
             n(3, "write", &[2], DagViewState::Running),
         ];
-        let chain_rows = rows_to_string(&render_compact(&chain, 0));
+        let chain_rows = rows_to_string(&render_compact(&chain, 0, 0));
         let compact = chain_rows.join("\n");
         println!("compact chain:\n{compact}");
         for box_glyph in ["┌", "┐", "└", "┘", "├", "┤", "┬", "┴", "┼"] {
@@ -1592,7 +1832,7 @@ mod tests {
             n(3, "fetch", &[1], DagViewState::Pending),
             n(4, "write", &[2, 3], DagViewState::Pending),
         ];
-        let branchy_rows = rows_to_string(&render_compact(&branchy, 0));
+        let branchy_rows = rows_to_string(&render_compact(&branchy, 0, 0));
         let compact = branchy_rows.join("\n");
         println!("compact branchy:\n{compact}");
         // The old near-side lane produced a wrap whose merge junctions were
@@ -1621,5 +1861,97 @@ mod tests {
         assert_eq!(col_of(bottom, '└'), col_of(mid, '┤'), "fan-out shaft");
         assert_eq!(col_of(top, '┐'), col_of(mid, '├'), "fan-in shaft");
         assert_eq!(col_of(bottom, '┘'), col_of(mid, '├'), "fan-in shaft");
+    }
+
+    /// The card's own chrome: a lone connector lane (`│ ├ ─ …`) or an elision
+    /// row (`… +N`). Sparse by design, unlike a wrap fragment of a label.
+    fn is_card_chrome(line: &str) -> bool {
+        let visible: Vec<char> = line.chars().filter(|c| !c.is_whitespace()).collect();
+        visible.is_empty()
+            || visible[0] == '…'
+            || visible.iter().all(|c| "─│┌┐└┘├┤┬┴┼━┃".contains(*c))
+    }
+
+    /// The compact card must pre-fit its pane. The transcript *word-wraps*
+    /// every block at the body width (it does not clip), and a wrapped
+    /// continuation holding only connector ink collapses to a couple of
+    /// visible cells — an over-wide diagram is shredded into a wall of `───`
+    /// slivers, which is exactly how the 256-node card was reported unreadable.
+    ///
+    /// Legibility floor: a row with fewer than four visible cells is only
+    /// acceptable when it is the card's own chrome (a connector lane or an
+    /// elision row); any row that carries text must carry a whole `[x] name`,
+    /// never a wrap fragment of one.
+    ///
+    /// Prints the measurement table (rows, widest row, grid cells and bytes,
+    /// fastest call) under `--nocapture`.
+    #[test]
+    fn compact_card_fits_the_pane_width() {
+        eprintln!(
+            "Cell = {} bytes, DagViewCell = {} bytes",
+            std::mem::size_of::<Cell>(),
+            std::mem::size_of::<DagViewCell>()
+        );
+        for shape in ["chain", "wide", "mixed"] {
+            let nodes = shape_nodes(shape);
+            for width in [80usize, 120, 200] {
+                let mut fastest = std::time::Duration::MAX;
+                let mut rows = Vec::new();
+                for _ in 0..5 {
+                    let t = std::time::Instant::now();
+                    rows = render_compact(&nodes, 0, width);
+                    fastest = fastest.min(t.elapsed());
+                }
+                let lines = rows_to_string(&rows);
+                let widths: Vec<usize> = lines.iter().map(|l| display_width(l)).collect();
+                let maxw = widths.iter().copied().max().unwrap_or(0);
+                let graph_rows = lines
+                    .iter()
+                    .position(String::is_empty)
+                    .unwrap_or(lines.len());
+                let grid = maxw * graph_rows;
+                eprintln!(
+                    "card {shape} @{width}: rows={} maxw={} over_budget={} sparse={} grid_cells>={} est_bytes>={} us={}",
+                    lines.len(),
+                    maxw,
+                    widths.iter().filter(|&&w| w > width).count(),
+                    lines
+                        .iter()
+                        .filter(|l| l.chars().filter(|c| !c.is_whitespace()).count() <= 3)
+                        .count(),
+                    grid,
+                    grid * std::mem::size_of::<Cell>(),
+                    fastest.as_micros(),
+                );
+                assert!(!lines.is_empty(), "{shape}@{width}: rendered nothing");
+                for line in &lines {
+                    let keep = display_width(line);
+                    assert!(
+                        keep <= width,
+                        "{shape}@{width}: row of {keep} cells would be wrapped: {line:?}"
+                    );
+                    assert!(
+                        is_card_chrome(line)
+                            || line.chars().filter(|c| !c.is_whitespace()).count() >= 4,
+                        "{shape}@{width}: row below the legibility floor: {line:?}"
+                    );
+                }
+                if shape == "mixed" && width == 120 {
+                    assert!(
+                        lines.len() <= 32,
+                        "256-node card must fold, not sprawl: {} rows",
+                        lines.len()
+                    );
+                }
+            }
+        }
+        // The natural (unbounded) form is what the card used to emit, so this
+        // also records how far outside the pane it was: folding is not
+        // optional for a deep graph.
+        let natural = rows_to_string(&render_compact(&shape_nodes("mixed"), 0, 0));
+        assert!(
+            natural.iter().any(|l| display_width(l) > 200),
+            "expected the unbounded form to overflow any pane"
+        );
     }
 }
